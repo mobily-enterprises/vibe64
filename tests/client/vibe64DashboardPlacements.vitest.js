@@ -5,6 +5,7 @@ import {
   mdiCogOutline,
   mdiConnection,
   mdiFileCogOutline,
+  mdiFileDocumentMultipleOutline,
   mdiFolderMultipleOutline,
   mdiHeartPulse,
   mdiHistory,
@@ -40,13 +41,14 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(11);
+    expect(labels).toHaveLength(12);
     expect(labels).toEqual(expect.arrayContaining([
       "App access",
       "Env",
       "Health",
       "Integrations",
       "Issues/PR",
+      "Pages",
       "Project settings",
       "Git log",
       "Incoming changes",
@@ -64,6 +66,7 @@ describe("Vibe64 dashboard placements", () => {
       ["Health", mdiHeartPulse],
       ["Integrations", mdiConnection],
       ["Project settings", mdiCogOutline],
+      ["Pages", mdiFileDocumentMultipleOutline],
       ["Project files", mdiFolderMultipleOutline],
       ["Session History", mdiHistory],
       ["Issues/PR", mdiGithub],

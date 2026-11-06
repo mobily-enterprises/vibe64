@@ -10,6 +10,12 @@
         </template>
       </Vibe64ConversationStatus>
     </template>
+    <template #message-actions="{ message }">
+      <Vibe64PageLinkCards :text="message.text || ''" />
+    </template>
+    <template #user-message-actions="{ message }">
+      <Vibe64PageLinkCards :text="message.text || ''" />
+    </template>
     <template v-if="$slots.hints" #hints>
       <slot name="hints" />
     </template>
@@ -21,6 +27,7 @@
 <script setup>
 import { computed } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
+import { Vibe64PageLinkCards } from "@local/vibe64-pages/client";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
 import { temporaryAiTranscript } from "@/lib/vibe64TemporaryAiTasks.js";

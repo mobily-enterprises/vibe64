@@ -41,7 +41,8 @@ const incoming = useEndpointResource({ path: incomingPath, readQuery: incomingQu
 });
 const incomingCount = computed(() => incoming.loadError.value ? null : incoming.data.value?.pendingCount ?? null);
 provide(VIBE64_INCOMING_PENDING_COUNT_KEY, incomingCount);
-const githubBrowserOpen = computed(() => /\/dashboard\/(issues|pull-requests)\/?$/u.test(route.path));
+// The GitHub browser and an open page use the whole panel.
+const wideSectionOpen = computed(() => /\/dashboard\/(?:issues|pull-requests|pages\/[^/]+)\/?$/u.test(route.path));
 
 const { dashboardSectionLinks } = useVibe64DashboardPage({
   dashboardContext: () => props.dashboardContext
@@ -62,7 +63,7 @@ provide(VIBE64_ACTIVE_SESSION_NAV_KEY, activeSessionNav);
 <template>
   <SectionContainerShell
     :mobile-section-links="mobileDashboardSectionLinks"
-    :navigation-collapsed="githubBrowserOpen"
+    :navigation-collapsed="wideSectionOpen"
     navigation-guide-pane="dashboard"
   >
     <template #tabs>

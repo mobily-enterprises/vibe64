@@ -5,6 +5,7 @@ import {
   mdiCogOutline,
   mdiConnection,
   mdiFileCogOutline,
+  mdiFileDocumentMultipleOutline,
   mdiFolderMultipleOutline,
   mdiHeartPulse,
   mdiHistory,
@@ -179,6 +180,23 @@ addPlacement({
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/settings",
     unscopedSuffix: "/project/[slug]/dashboard/settings",
+    to: ""
+  }
+});
+
+addPlacement({
+  id: "vibe64.pages.link",
+  target: "page.section-nav",
+  owner: "app-dashboard",
+  kind: "link",
+  surfaces: ["app"],
+  order: 290,
+  props: {
+    label: "Pages",
+    icon: mdiFileDocumentMultipleOutline,
+    surface: "app",
+    scopedSuffix: "/project/[slug]/dashboard/pages",
+    unscopedSuffix: "/project/[slug]/dashboard/pages",
     to: ""
   }
 });

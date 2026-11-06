@@ -42,7 +42,7 @@
       <Vibe64ProjectMessage v-if="message.projectMessage" :details="message.projectMessage" :at="message.displayAt" />
       <Vibe64ConversationStatus v-else :message="message" @check-delivery="emit('resend-turn', $event)" @link-click="adapter.actions.openLink" />
     </template>
-    <template #user-message-actions="{ turn }">
+    <template #user-message-actions="{ message, turn }">
       <div
         v-if="turn.metadata?.sender"
         class="vibe64-conversation-log__sender text-label-small"
@@ -54,6 +54,7 @@
       <v-chip v-if="turn.metadata?.source === 'lesson'" size="x-small" variant="tonal" class="mt-1 align-self-start" data-test="lesson-sent-chip">
         Sent by the lesson
       </v-chip>
+      <Vibe64PageLinkCards :text="message.text || ''" />
     </template>
     <template #attachments="{ items }">
       <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
@@ -125,6 +126,7 @@
           {{ integrationActionError.message }}
         </v-card-text>
       </v-card>
+      <Vibe64PageLinkCards :text="message.text || ''" />
     </template>
     <template v-if="$slots.hints || voiceSession || voiceError" #hints>
       <div v-if="voiceSession && voiceBinding.presentation === 'inline'" v-show="!voice.controller.state.nextTarget">
@@ -154,6 +156,7 @@ import { computed, ref, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { VoiceAvatar, VoiceConversationControls, VoiceConversationHost, VoiceConversationSettings } from "@jskit-ai/assistant-voice/client";
 import { useVibe64Voice } from "@local/vibe64-voice/client";
+import { Vibe64PageLinkCards } from "@local/vibe64-pages/client";
 import { mdiAccountCheckOutline, mdiMicrophone, mdiMicrophoneOff, mdiVolumeHigh, mdiVolumeOff } from "@mdi/js";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
 import Vibe64ProjectMessage from "./Vibe64ProjectMessage.vue";

@@ -88,6 +88,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
   const imports = {
     vue, "@mdi/js": mdi,
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
+    "@local/vibe64-pages/client": { Vibe64PageLinkCards: {} },
     // The one catalogue read that decides whether a lesson may speak unprompted.
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: vi.fn(async url => {
       expect(url).toBe("/api/vibe64/voice/voices");
