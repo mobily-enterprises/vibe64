@@ -29,6 +29,7 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/productionEnvironment.js`
 - `packages/vibe64-terminals/src/server/savedEnvValueLinks.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `packages/vibe64-terminals/src/server/agentSessionStatus.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `packages/vibe64-core/src/server/envUserValues.js`
 - `packages/vibe64-core/src/server/runtimeConfig.js`
@@ -42,7 +43,7 @@ host provide managed system values separately.
 
 ## Public contract
 
-The bound session helper's `session status --json` reports current environment
+The bound session helper's `session status --json` (`readAgentSessionStatus`) reports current environment
 names and resource configuration separately from host-confirmed preparation,
 plus the existing workspace preparation state, declared argv and known managed
 tool entry points. It reads the exact session source through the existing broker

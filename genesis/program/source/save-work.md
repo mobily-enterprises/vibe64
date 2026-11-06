@@ -82,6 +82,7 @@ Git commands.
 - `packages/vibe64-terminals/src/server/sessionWorkUpdateRecovery.js`
 - `packages/vibe64-terminals/src/shared/sessionWorkProblem.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `packages/vibe64-terminals/src/server/agentSessionStatus.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `packages/vibe64-terminals/src/server/sessionConnectedCopies.js`
 - `packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js`
@@ -198,7 +199,8 @@ session's own.
 The update probe reads each copy's main head with the session heads, grouped by
 repository and branch, and rechecks a session when any of them moved; the check
 records each copy's observed main. Work inspection includes every copy
-(`inspectConnectedCopies`), and `vibe64-helper session status --json` lists them
+(`inspectConnectedCopies`), and `vibe64-helper session status --json`
+(`readAgentSessionStatus`) lists them
 under `repository.connected` with `name`, `path`, `behind` and `unsaved`. Each
 outer assistant turn's checkpoint is also taken in every copy. Sources:
 `tests/server/vibe64ConnectedCopies.unit.test.js`,
