@@ -470,3 +470,20 @@
     transition: none;
   }
 }
+
+/* A still face, such as the minimised thumbnail, holds one pose: useVoiceAvatar stops its
+   blinking, gestures and mouth, and this stops its CSS motion. Last, so it wins equal selectors. */
+.merc-avatar--still .merc-avatar__head-gesture,
+.merc-avatar--still .merc-avatar__head,
+.merc-avatar--still .merc-avatar__body,
+.merc-avatar--still .merc-avatar__shirt,
+.merc-avatar--still .merc-avatar__mouth,
+.merc-avatar--still .merc-avatar__brow,
+.merc-avatar--still .merc-avatar__earring,
+.merc-avatar--still .merc-avatar__eyes,
+.merc-avatar--still .merc-avatar__iris,
+.merc-avatar--still .merc-avatar__pupil,
+.merc-avatar--still .merc-avatar__eye-light {
+  animation: none;
+  transition: none;
+}

@@ -10,8 +10,8 @@ Recording requires a configured
 speech service and browser microphone permission. For a project's Main coding
 conversation, use the microphone beneath the face at the upper-right of the
 message area. Main keeps its original transcript and message box, with the same
-avatar and voice controls as Colleague. After hiding the face, choose **Show avatar**
-at the top-right to restore it; messages scroll behind it. Showing the face does
+avatar and voice controls as Colleague. After hiding the face, choose **Show avatar**,
+a small still picture of the same face at the top-right, to restore it; messages scroll behind it. Showing the face does
 not start recording or enable spoken replies. Each assistant starts every later
 page load and session the way you last left its face; see
 [Keep the face shown or minimised](voice-face-and-speaking-voice.md#keep-the-face-shown-or-minimised). The message box has no separate
@@ -56,8 +56,9 @@ off. An explicit saved choice takes precedence. A host with saved speech
 preferences keeps the speaker choice personal and separate for Colleague and
 coding assistants. Both idle controls stay available while
 Talk is connecting. The fourth small round button, the minus after microphone,
-speaker and settings, tucks away the face; speech continues. The collapsed anonymous icon in the
-top-right corner is **Show avatar** and restores it. While hidden, a passive
+speaker and settings, tucks away the face; speech continues. Collapsed, the
+top-right corner shows **Show avatar**, which restores it: a small still picture of a project
+agent's face (it does not blink or move), or Colleague's anonymous icon. While hidden, a passive
 **Listening** microphone appears only during unmuted capture, and a passive
 **Speaking** speaker appears only while audio plays. These indicators are not
 buttons; Show avatar is the only action in the collapsed row. Expand it to use

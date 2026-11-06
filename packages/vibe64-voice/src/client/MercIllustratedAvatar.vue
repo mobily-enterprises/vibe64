@@ -13,6 +13,10 @@ const props = defineProps({
   state: {
     default: "idle",
     type: String
+  },
+  still: {
+    default: false,
+    type: Boolean
   }
 });
 
@@ -29,7 +33,8 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
       idleGesture ? `merc-avatar--gesture-${idleGesture}` : '',
       activeExpression ? `merc-avatar--${expression}-${activeExpression}` : '',
       {
-        'merc-avatar--blinking': blinking
+        'merc-avatar--blinking': blinking,
+        'merc-avatar--still': still
       }
     ]"
     role="img"

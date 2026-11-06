@@ -18,6 +18,10 @@ defineProps({
   state: {
     default: "idle",
     type: String
+  },
+  still: {
+    default: false,
+    type: Boolean
   }
 });
 </script>
@@ -28,11 +32,13 @@ defineProps({
     :mouth-level="mouthLevel"
     :mouth-pose="mouthPose"
     :state="state"
+    :still="still"
   />
   <MercBlueMangaIllustratedAvatar
     v-else
     :mouth-level="mouthLevel"
     :mouth-pose="mouthPose"
     :state="state"
+    :still="still"
   />
 </template>

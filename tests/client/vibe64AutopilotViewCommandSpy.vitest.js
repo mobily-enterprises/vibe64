@@ -107,7 +107,11 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
   };
   const controls = [];
   const avatarRenders = [];
+  const thumbnails = [];
   if (render) {
+    imports["@jskit-ai/assistant-voice/client"].VoiceAvatar = {
+      props: ["state", "still", "binding"], setup(props) { thumbnails.push({ ...props }); return () => null; }
+    };
     imports["@jskit-ai/assistant-voice/client"].VoiceConversationControls = {
       ...VoiceConversationControls,
       setup(props, context) {
@@ -123,7 +127,10 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
     imports["@jskit-ai/assistant-core/client/conversation"].AssistantConversationElement = {
       inheritAttrs: false, props: ["avatarSize"], setup: (props, { slots }) => () => {
         if (slots.avatar) avatarRenders.push(props.avatarSize);
-        return vue.h("section", [slots["avatar-tools"]?.(), slots["avatar-control"]?.({ size: props.avatarSize }), slots.hints?.()]);
+        return vue.h("section", [
+          slots["avatar-tools"]?.(), slots["avatar-control"]?.({ size: props.avatarSize }),
+          slots["avatar-thumbnail"]?.({ size: props.avatarSize, height: 0 }), slots.hints?.()
+        ]);
       }
     };
   }
@@ -187,7 +194,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
   const root = {};
   app.mount(root);
   if (render) exposed = app._instance.subTree.component.exposed;
-  return { app, root, state: { ...voiceParts, ...state }, exposed, props, voice, runtime, controls, emit, avatarRenders };
+  return { app, root, state: { ...voiceParts, ...state }, exposed, props, voice, runtime, controls, emit, avatarRenders, thumbnails };
 }
 
 describe("Vibe64 direct session view", () => {
@@ -320,6 +327,15 @@ describe("Vibe64 direct session view", () => {
       main = mountMainConversationLog({ render: true, avatarPreferences });
       await vue.nextTick();
       expect(renderedSizes(main), "a remount restores the saved Minimise").toEqual(["hidden"]);
+    } finally { main.app.unmount(); }
+  });
+
+  it("draws Main's minimised Show avatar as the same face, small and still", async () => {
+    const main = mountMainConversationLog({ render: true, avatarPreferences: vue.reactive({ coding: { avatar: "yu", avatarVisible: false } }) });
+    try {
+      await vue.nextTick();
+      expect(main.state.avatarSize.value).toBe("hidden");
+      expect(main.thumbnails.at(-1)).toMatchObject({ state: "idle", still: true, binding: { preferenceTarget: "coding" } });
     } finally { main.app.unmount(); }
   });
 

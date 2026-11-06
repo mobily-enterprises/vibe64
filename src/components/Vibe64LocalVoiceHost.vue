@@ -14,7 +14,7 @@ const preferences = computed(() => Object.fromEntries(Object.entries(avatars.val
 
 <template>
   <Vibe64VoiceHost :preferences="preferences" @avatar-visibility-change="(visible, { target }) => setAvatarVisible(target, visible)">
-    <template #avatar="{ mouthLevel, mouthPose, state, binding }"><Vibe64ColleagueAvatar :avatar="avatars[binding?.preferenceTarget] || avatars.coding" :mouth-level="mouthLevel" :mouth-pose="mouthPose" :state="state" /></template>
+    <template #avatar="{ mouthLevel, mouthPose, state, still, binding }"><Vibe64ColleagueAvatar :avatar="avatars[binding?.preferenceTarget] || avatars.coding" :mouth-level="mouthLevel" :mouth-pose="mouthPose" :state="state" :still="still" /></template>
     <template #settings="{ binding, voice }"><Vibe64LocalVoiceSettings :binding="binding" :voice="voice" /></template>
     <slot />
   </Vibe64VoiceHost>

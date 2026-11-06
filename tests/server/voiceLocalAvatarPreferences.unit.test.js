@@ -105,11 +105,12 @@ test("the standalone voice host supplies the chosen artwork, mouth animation and
     return () => [
       slots.avatar({ mouthLevel: 0.4, mouthPose: "open", state: "speaking", binding: { preferenceTarget: "colleague" } }),
       slots.avatar({ mouthLevel: 0, mouthPose: "closed", state: "idle", binding: { preferenceTarget: "coding" } }),
+      slots.avatar({ state: "idle", still: true, binding: { preferenceTarget: "coding" } }),
       slots.settings({ voice: null, binding: { preferenceTarget: "coding" } }),
       slots.default()
     ];
   } };
-  const Vibe64ColleagueAvatar = { props: ["avatar", "mouthLevel", "mouthPose", "state"], setup(props) { avatars.push({ ...props }); return () => null; } };
+  const Vibe64ColleagueAvatar = { props: ["avatar", "mouthLevel", "mouthPose", "state", "still"], setup(props) { avatars.push({ ...props }); return () => null; } };
   const Vibe64LocalVoiceSettings = { props: ["binding", "voice"], setup(props) { settings.push({ ...props }); return () => null; } };
   const host = await loadModule("../../src/components/Vibe64LocalVoiceHost.vue", {
     vue, "@local/vibe64-voice/client": { Vibe64ColleagueAvatar, Vibe64VoiceHost },
@@ -120,9 +121,10 @@ test("the standalone voice host supplies the chosen artwork, mouth animation and
   await renderToString(vue.createSSRApp({ render: () => vue.h(host.default, null, { default: () => { children += 1; return null; } }) }));
   assert.deepEqual(hostProps[0].preferences, { colleague: { avatar: "yu", avatarVisible: true }, coding: { avatar: "yu", avatarVisible: true } });
   assert.deepEqual(avatars, [
-    { avatar: "yu", mouthLevel: 0.4, mouthPose: "open", state: "speaking" },
-    { avatar: "yu", mouthLevel: 0, mouthPose: "closed", state: "idle" }
-  ]);
+    { avatar: "yu", mouthLevel: 0.4, mouthPose: "open", state: "speaking", still: undefined },
+    { avatar: "yu", mouthLevel: 0, mouthPose: "closed", state: "idle", still: undefined },
+    { avatar: "yu", mouthLevel: undefined, mouthPose: undefined, state: "idle", still: true }
+  ], "a minimised chat's still thumbnail reaches the face");
   assert.deepEqual(settings, [{ binding: { preferenceTarget: "coding" }, voice: null }]);
   assert.equal(children, 1, "the application content stays inside the one voice host");
 });

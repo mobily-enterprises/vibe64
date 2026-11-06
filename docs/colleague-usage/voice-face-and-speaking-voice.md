@@ -12,7 +12,7 @@ beside the microphone and speaker controls (below its face when expanded) and
 choose **Avatar**. Colleague and project agents keep separate choices. A project
 agent's cog works without starting voice; Colleague shows its cog once its voice
 controls are active (tap **Talk**). The face changes immediately, in the header
-button, chat and voice window. On a phone the cog sits in the same row below
+button, chat, voice window and a project agent's minimised **Show avatar** picture. On a phone the cog sits in the same row below
 the face. Colleague can explain this but cannot choose for you: pick the
 avatar yourself. In standalone Vibe64 the choice is saved in this browser only
 (**Saved in this browser for this assistant type.**); another browser, a private
@@ -22,8 +22,10 @@ is blocked, the choice lasts until the page reloads.
 ## Keep the face shown or minimised
 
 Each assistant remembers whether you last left its face shown or minimised.
-Choose the round minus, **Minimise avatar**, to hide it, or the anonymous
-**Show avatar** icon to bring it back; there is no separate setting. Your last
+Choose the round minus, **Minimise avatar**, to hide it, or **Show avatar** to
+bring it back; there is no separate setting. A project agent's **Show avatar** is
+a small still picture of its chosen face, so a minimised agent stays easy to find;
+Colleague's is an anonymous icon. Your last
 choice is where every later page load and session starts, so a minimised face
 stays minimised after a reload or when you open another session. Colleague and
 project agents keep separate choices. Opening voice or tapping **Talk** does not

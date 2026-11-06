@@ -3,6 +3,12 @@
     <template v-if="voiceBinding && visible && avatarVisible !== null" #avatar="size">
       <component :is="voice.Avatar || VoiceAvatar" v-bind="avatarVisual" :binding="voiceBinding" :size="size.size" :height="size.height" />
     </template>
+    <!-- Minimised, Show avatar draws the same face, small and still, so it is not missed. -->
+    <template v-if="voiceBinding && visible && avatarVisible !== null" #avatar-thumbnail>
+      <span class="vibe64-conversation-log__thumbnail" aria-hidden="true">
+        <component :is="voice.Avatar || VoiceAvatar" state="idle" :still="true" :binding="voiceBinding" />
+      </span>
+    </template>
     <template v-if="voiceBinding && visible && avatarVisible !== null" #avatar-tools>
       <div ref="voiceToolsTarget" class="vibe64-main-conversation__voice-tools" :class="{ 'vibe64-main-conversation__voice-tools--opening': holdingVoice }">
         <v-btn
@@ -383,6 +389,7 @@ const adapter = computed(() => ({
 :deep(.assistant-transcript__system:has(.vibe64-project-message) .assistant-transcript__system-body) { width: 100%; }
 :deep(.assistant-transcript__system:has(.vibe64-project-message)) { display: block; width: 100%; max-width: none; padding: 0; }
 .vibe64-main-conversation__voice-tools { display: flex; align-items: center; gap: 0; }
+.vibe64-conversation-log__thumbnail { display: block; width: 28px; height: 28px; }
 /* The avatar tools float over the transcript as one M3 toolbar pill. */
 :deep(.assistant-conversation__avatar-tools) {
   background: var(--v64-surface-container-high, rgb(var(--v-theme-surface)));

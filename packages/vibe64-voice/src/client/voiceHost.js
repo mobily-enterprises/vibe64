@@ -10,7 +10,8 @@ import { inject } from "vue";
  * @property {(conversation: object) => boolean} readAloudChangePendingFor
  * @property {(target: string) => boolean | null} avatarVisibleFor
  * @property {(target: string, visible: boolean) => void} setAvatarVisible
- * @property {import("vue").FunctionalComponent | null} Avatar the host's avatar slot, when it has one
+ * @property {import("vue").FunctionalComponent | null} Avatar the host's avatar slot, when it has one; it forwards
+ * `still` to its face, which a minimised chat's Show avatar thumbnail sets so the face never moves
  * @property {import("vue").FunctionalComponent | null} Settings the host's settings slot, when it has one
  * @property {(conversation: object) => Promise<unknown>} open
  */
