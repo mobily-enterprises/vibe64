@@ -105,7 +105,9 @@ works is a new version of the page. It reads the project as last saved with
 it. There are two kinds:
 
 - **A script** (the usual kind): the AI writes a small script that collects the
-  data. Vibe64 runs it on its own on each refresh; no AI is used.
+  data. Vibe64 runs it on its own on each refresh; no AI is used. Where Vibe64
+  doesn't run refresh scripts, the AI sets an AI refresh instead, and a script
+  refresh already set pauses and says why.
 - **An AI refresh** (**· AI** in the list): for data that needs judgement, such
   as a summary of the week's work. Each refresh is a short AI task in the session
   the refresh was set from, with the AI that session uses, and shows there like
@@ -121,6 +123,8 @@ how it stands. An open page shows the same beside its version.
 - **Refresh failed** and a time, in red: the last refresh failed. The page keeps
   its last good version.
 - **Paused:** and why, in red: it refreshes no more until someone resumes it.
+  A refresh also pauses when the person who set it can no longer run it, for
+  example once they can no longer open the project; resuming makes it yours.
 - **Stopped while archived**: an archived page doesn't refresh.
 
 Under it:

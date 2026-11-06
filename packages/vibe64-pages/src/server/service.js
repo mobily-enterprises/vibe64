@@ -241,6 +241,9 @@ function createPagesService({ now, clock, project, logger, runCommand, refreshTa
     const text = String(prompt || "").trim();
     if (kind !== "command" && kind !== "prompt") throw refreshRefusal("A refresh runs a --command script or a --prompt.");
     if (kind === "prompt" && (!text || text.length > PROMPT_MAX_LENGTH)) throw refreshRefusal("A prompt refresh needs its prompt, at most 4000 characters.");
+    if (kind === "command" && refreshes.scriptRefusal()) {
+      throw vibe64Error(`${refreshes.scriptRefusal()} Set an AI refresh with --prompt instead.`, "vibe64_pages_refresh_scripts_unavailable", { status: 409 });
+    }
     const folder = pageFolder(pagesRoot, page.id);
     if (refreshes.running(slug, page.id)) await refreshes.cancel(slug, page.id);
     const scheduledAt = clock();
@@ -410,6 +413,8 @@ function createPagesService({ now, clock, project, logger, runCommand, refreshTa
     setPageRefresh,
     // readable-check: allow setter-seam - not a slot: setPageStar stars a page for one person
     setPageStar,
+    // readable-check: allow setter-seam - cross-repository slot vibe64.pages: a host decides who may run a scheduled refresh, as whom, and whether scripts run
+    setRefreshHost: refreshes.setHost,
     // readable-check: allow setter-seam - cycle: vibe64.ai-tasks requires vibe64.pages, and runs a prompt refresh as an AI task
     setRefreshTasks: refreshes.setTasks,
     starredPages,

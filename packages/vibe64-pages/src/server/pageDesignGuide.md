@@ -160,6 +160,9 @@ Then set the refresh, at most every 15 minutes:
   refresh is a short AI task in this session, run with the AI account of the
   person who asked for the page.
 
+Where Vibe64 doesn't run refresh scripts, `--command` is refused and says so:
+set a `--prompt` refresh instead.
+
 A refresh runs as the person who asked for it. A failed refresh keeps the last
 good version and shows its log in the Pages list; three failures in a row pause
 the schedule. `--off` stops the refreshes.

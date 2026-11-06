@@ -31,6 +31,11 @@ const DATA_SHOWN_TO_AI = 16 * 1024;
 const SCRATCH_DIR = ".refresh-runs";
 const INTERPRETERS = Object.freeze({ ".mjs": "node", ".js": "node", ".cjs": "node", ".py": "python3", ".sh": "bash" });
 
+// What a host that decides nothing allows: the person who set a refresh may always run it, an AI
+// refresh's task starts with no person, as a task the local person starts from the browser does,
+// and refresh scripts run.
+const LOCAL_HOST = Object.freeze({ runAs: async () => ({ user: null, blocked: "" }), scriptRefusal: "" });
+
 const keyOf = (slug, pageId) => `${slug}/${pageId}`;
 const failure = (message, log = "") => ({ outcome: "failed", message, log });
 
@@ -80,6 +85,7 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
   // The prompt refreshes whose AI task is followed until it ends.
   const watched = new Map();
   let tasks = null;
+  let host = LOCAL_HOST;
   let timer = null;
   let pollTimer = null;
   let closed = false;
@@ -193,7 +199,7 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
     });
   }
 
-  async function startPromptRefresh({ slug, folder, pagesRoot, page, record, run, signal }) {
+  async function startPromptRefresh({ slug, folder, pagesRoot, page, record, run, user, signal }) {
     if (!tasks) return failure("AI refreshes are unavailable here.");
     const saved = await readSavedSource(project).catch(() => null);
     const current = await store.currentVersion(pagesRoot, page.id);
@@ -209,7 +215,7 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
         startVersion: page.version,
         saved: saved ? { branch: saved.branch, commit: saved.commit } : null,
         data: data.length > DATA_SHOWN_TO_AI ? `${data.slice(0, DATA_SHOWN_TO_AI)}\n…` : data
-      });
+      }, user);
     } catch (error) {
       if (error?.code === "vibe64_ai_task_open") {
         return { outcome: "skipped", message: "Skipped: another AI task was open in the session that runs this refresh." };
@@ -232,6 +238,19 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
   }
 
   /**
+   * Whether this refresh may run now, and as whom: a host that doesn't run refresh scripts, or a
+   * person who can no longer run what they set, pauses the schedule with why.
+   * @returns {Promise<{ user: object | null, refusal: string }>}
+   */
+  async function access(slug, record) {
+    if (record.kind === "command" && host.scriptRefusal) {
+      return { user: null, refusal: `${host.scriptRefusal} Ask the AI to refresh this page with AI instead.` };
+    }
+    const { user, blocked } = await host.runAs(record.scheduledBy, slug);
+    return { user, refusal: blocked };
+  }
+
+  /**
    * Runs one refresh that `begin` recorded as running, and records how it ended.
    */
   async function perform(slug, pageId, record, run) {
@@ -244,9 +263,10 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
     try {
       const page = await readPage(pagesRoot, pageId);
       if (!page) return;
-      result = record.kind === "command"
-        ? await runCommandRefresh({ slug, pagesRoot, folder, page, record, signal: stop.signal })
-        : await startPromptRefresh({ slug, folder, pagesRoot, page, record, run, signal: stop.signal });
+      const { user, refusal } = await access(slug, record);
+      if (refusal) result = { ...failure(refusal), pause: refusal };
+      else if (record.kind === "command") result = await runCommandRefresh({ slug, pagesRoot, folder, page, record, signal: stop.signal });
+      else result = await startPromptRefresh({ slug, folder, pagesRoot, page, record, run, user, signal: stop.signal });
     } catch (error) {
       result = stop.signal.aborted ? { outcome: "cancelled", message: "The refresh was cancelled." } : failure(error?.message || "The refresh failed.");
     } finally {
@@ -433,12 +453,28 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
     tasks = value;
   }
 
+  /**
+   * What the host decides about refreshes; the local default decides nothing.
+   * @param {import("./types.js").PageRefreshHost | null} value
+   */
+  function setHost(value) {
+    host = value || LOCAL_HOST;
+  }
+
+  /** Why refresh scripts don't run on this host, or "". */
+  function scriptRefusal() {
+    return host.scriptRefusal;
+  }
+
   return Object.freeze({
     begin,
     cancel,
     close,
     resume,
     running,
+    scriptRefusal,
+    // readable-check: allow setter-seam - cross-repository slot vibe64.pages: a host decides who may run a scheduled refresh, as whom, and whether scripts run
+    setHost,
     // readable-check: allow setter-seam - cycle: vibe64.ai-tasks requires vibe64.pages, and runs a prompt refresh as an AI task
     setTasks,
     track

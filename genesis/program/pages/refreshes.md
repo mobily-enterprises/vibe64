@@ -55,13 +55,17 @@ schedule, from the project as last saved. Nothing runs between refreshes.
   is cancelled, because nobody is there, and the run fails. Another AI task open
   in that session skips the turn. A session that is no longer open, or an AI
   account that isn't available, fails the run and pauses the schedule with why.
-- The task starts with no `vibe64User`, as a task the local person starts from
-  the browser does, so it routes with the installation's own AI access. The
-  stored scheduler is a name and id without a role, and routing a role-less
-  person would treat them as a team member. A host that signs people in starts
-  it as the scheduler, resolved at run time; where its assistant resolver
-  refuses a task with no person, the run fails and the schedule pauses, so no
-  one's access widens.
+- Before every run the pages host, set with the service's `setRefreshHost`,
+  says whom it runs as (`runAs(scheduledBy, slug)`): the user an AI refresh's
+  task starts as, or why that person can't run it now, which fails the run and
+  pauses the schedule with that reason. A host can also refuse refresh scripts
+  (`scriptRefusal`): `pages refresh --command` is then refused with the reason
+  and a pointer to `--prompt`, and a script refresh already set pauses at its
+  next run without running. With no host, nothing is refused and the task starts
+  with no `vibe64User`, as a task the local person starts from the browser
+  does. The stored scheduler is a name and id without a role, so a host that
+  signs people in names the person read afresh, role included; a role-less
+  person would route as a team member.
 - A refresh never piles up: a turn that falls due while one runs, or while the
   page is archived or paused, is skipped and the next time is kept. A run that
   fails keeps the page's version as it was; three failures in a row pause the

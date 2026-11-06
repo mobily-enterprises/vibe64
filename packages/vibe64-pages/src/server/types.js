@@ -74,9 +74,19 @@
  */
 
 /**
+ * What a host decides about scheduled refreshes, through the pages service's setRefreshHost; with
+ * none, nothing is refused and an AI refresh's task starts with no person.
+ * @typedef {object} PageRefreshHost
+ * @property {(person: PageAuthor, slug: string) => Promise<{ user: object | null, blocked: string }>} runAs
+ *   whom a refresh this person set runs as now: the user its AI task starts as (null for none), or why
+ *   it can't run, which pauses the schedule
+ * @property {string} scriptRefusal why refresh scripts don't run on this host, or ""
+ */
+
+/**
  * How the pages scheduler runs a prompt refresh as an AI task; vibe64.ai-tasks supplies it.
  * @typedef {object} PageRefreshTasks
- * @property {(sessionId: string, input: object) => Promise<PageRefreshTaskState>} start
+ * @property {(sessionId: string, input: object, vibe64User: object | null) => Promise<PageRefreshTaskState>} start as that user, or as no one
  * @property {(sessionId: string, taskId: string) => Promise<PageRefreshTaskState | null>} read null once the task is closed
  * @property {(sessionId: string, taskId: string) => Promise<void>} cancel
  * @property {(sessionId: string, taskId: string) => Promise<void>} close

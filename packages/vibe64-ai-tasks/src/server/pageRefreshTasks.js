@@ -24,21 +24,25 @@ function refreshTaskState(task) {
 
 /**
  * A prompt refresh as an AI task of the session it was set from, for the pages scheduler. It
- * starts only in an open session and, like every task, waits for none that is open there. It
- * starts with no person, as a task the local person starts from the browser does: the stored
- * scheduler is a name and id without a role, and routing a role-less person treats them as a
- * team member. A host that signs people in starts it as the scheduler instead.
+ * starts only in an open session and, like every task, waits for none that is open there, as
+ * the user the pages host names: none locally, as a task the local person starts from the
+ * browser has none, or the person who scheduled it, read afresh, on a host that signs people in.
  * @param {{ aiTasks: AiTasksService, project: ProjectService }} dependencies
  * @returns {PageRefreshTasks}
  */
 function createPageRefreshTasks({ aiTasks, project }) {
-  async function start(sessionId, input) {
+  /**
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {object | null} vibe64User
+   */
+  async function start(sessionId, input, vibe64User) {
     const runtime = await project.createRuntimeWithoutSource();
     const open = await runtime.listSessionSummaries({ statusGroup: "open" });
     if (!open.some((session) => session.sessionId === sessionId)) {
       throw new AppError(409, "The session that runs this refresh is no longer open.", { code: "vibe64_ai_task_session_closed" });
     }
-    const { task } = await aiTasks.start(sessionId, { kind: "page-refresh", input });
+    const { task } = await aiTasks.start(sessionId, { kind: "page-refresh", input, vibe64User });
     return refreshTaskState(task);
   }
 
