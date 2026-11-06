@@ -1,4 +1,9 @@
-import { nativeAiModel, nativeAiProvider } from "@jskit-ai/assistant-core/shared/native-providers";
+import {
+  CUSTOM_AI_PROVIDER_ID,
+  customAiProvider,
+  nativeAiModel,
+  nativeAiProvider
+} from "@jskit-ai/assistant-core/shared/native-providers";
 
 /**
  * Product choices and presentation. JSKIT owns native routes and capabilities.
@@ -49,8 +54,39 @@ const CURATED_CODEX_PROVIDERS = Object.freeze([
     models: Object.freeze([
       curatedModel("zai", "glm-5.3", "GLM 5.3", "max")
     ])
+  }),
+  // A model server the owner runs or reaches. Its one model comes from the
+  // saved connection, so this entry lists none.
+  Object.freeze({
+    id: CUSTOM_AI_PROVIDER_ID,
+    custom: true,
+    label: "Custom endpoint",
+    shortLabel: "Custom",
+    description: "Your own model server · no Vibe64 billing",
+    ownerOnly: true,
+    models: Object.freeze([])
   })
 ]);
+
+/** Each engine a provider connects; only a custom endpoint also connects OpenCode. */
+function curatedProviderEngines(providerId) {
+  return providerId === CUSTOM_AI_PROVIDER_ID ? ["codex", "claude", "opencode"] : ["codex", "claude"];
+}
+
+/**
+ * The custom endpoint as one engine's provider, from its saved connection.
+ * @param {"codex" | "claude" | "opencode"} engineId
+ * @param {{ baseUrl: string, model: string, contextWindow: number }} endpoint
+ */
+function customEndpointProvider(engineId, { baseUrl, model, contextWindow }) {
+  const { models, ...route } = customAiProvider({ engineId, baseUrl, model, contextWindow, label: "Custom endpoint" });
+  return Object.freeze({
+    ...curatedCodexProvider(CUSTOM_AI_PROVIDER_ID),
+    ...route,
+    label: "Custom endpoint",
+    models
+  });
+}
 
 function curatedCodexProvider(id) {
   return CURATED_CODEX_PROVIDERS.find((provider) => provider.id === id) || null;
@@ -65,4 +101,11 @@ function curatedCodexModel(id, providerId = "") {
   return null;
 }
 
-export { CURATED_CODEX_PROVIDERS, curatedCodexProvider, curatedCodexModel };
+export {
+  CURATED_CODEX_PROVIDERS,
+  CUSTOM_AI_PROVIDER_ID,
+  curatedCodexProvider,
+  curatedCodexModel,
+  curatedProviderEngines,
+  customEndpointProvider
+};

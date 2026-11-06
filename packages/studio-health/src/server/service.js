@@ -310,6 +310,28 @@ async function inspectAccounts({ connections, input, packs }) {
   }
 }
 
+const ENGINE_LABELS = Object.freeze({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode" });
+
+/**
+ * One optional row per saved custom model endpoint: whether its server
+ * answers now. A stopped server warns; it never blocks a project.
+ */
+async function inspectCustomEndpoints({ connections }) {
+  const endpoints = await connections.checkCustomEndpoints();
+  return endpoints.map(({ engineId, baseUrl, model, answers }) => {
+    const check = {
+      id: `custom-endpoint-${engineId}`,
+      label: `Custom endpoint · ${ENGINE_LABELS[engineId] || engineId}`,
+      group: "Credentials",
+      expected: `The model server at ${baseUrl} answers.`,
+      observed: answers ? `It answers. ${ENGINE_LABELS[engineId] || engineId} uses ${model} there.`
+        : `Nothing answers at ${baseUrl}.`,
+      explanation: "Start your model server, then refresh Health. Vibe64 never starts it."
+    };
+    return { ...(answers ? passedCheck(check) : failedCheck(check)), need: "optional" };
+  });
+}
+
 /**
  * The pinned runtime packs' own tools, checked only when the packs exist.
  */
@@ -450,18 +472,20 @@ function createService({
       })
     ];
 
-    const [workspace, accounts, local, commands] = await Promise.all([
+    const [workspace, accounts, endpoints, local, commands] = await Promise.all([
       inspectWorkspace({ packs, project, studioRoot }),
       inspectAccounts({ connections, input, packs }),
+      inspectCustomEndpoints({ connections }),
       packs ? [] : inspectLocalTools({ env, nodeMajor, runCommand, studioRoot }),
       Promise.all(commandChecks)
     ]);
     // Without packs the person's own tools lead; Vibe64's own parts follow.
-    const ordered = packs ? [workspace, ...accounts, ...commands] : [...local, ...accounts, workspace, ...commands];
+    const ordered = packs ? [workspace, ...accounts, ...endpoints, ...commands]
+      : [...local, ...accounts, ...endpoints, workspace, ...commands];
     // One Playwright row is enough: the browser can't run without Playwright.
     const playwrightMissing = !packs && ordered.some((entry) => entry?.id === "playwright" && entry.status !== "pass");
     const checks = ordered.filter((entry) => entry && !(playwrightMissing && entry.id === "playwright-browser")).map((entry) => {
-      if (packs) return { ...entry, need: "needed" };
+      if (packs && !entry.need) return { ...entry, need: "needed" };
       const need = entry.need || (OPTIONAL_CHECKS.has(entry.id) ? "optional" : "needed");
       const optionalMiss = need === "optional" && entry.status === "fail";
       return {

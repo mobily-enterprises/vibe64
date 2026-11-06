@@ -32,7 +32,7 @@ async function fixture(t) {
 
 test("only the curated DeepSeek and GLM routes can receive a saved key", async (t) => {
   const f = await fixture(t);
-  assert.deepEqual(CURATED_CODEX_PROVIDERS.map(({ label }) => label), ["DeepSeek", "GLM · Coding Plan", "GLM · Pay-as-you-go API"]);
+  assert.deepEqual(CURATED_CODEX_PROVIDERS.map(({ label }) => label), ["DeepSeek", "GLM · Coding Plan", "GLM · Pay-as-you-go API", "Custom endpoint"]);
   const rows = await f.store.change("deepseek", { apiKey: "fixture-secret", label: "My key", baseUrl: "https://attacker.invalid" });
   assert.equal(f.requests[0].url, "https://api.deepseek.com/responses");
   assert.equal(f.requests[0].input.redirect, "error");

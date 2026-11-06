@@ -170,9 +170,13 @@ const personalAiProfileInputValidator = deepFreeze({
 const codexProviderInputValidator = deepFreeze({
   schema: createSchema({
     modelProviderId: { type: "string", enum: CURATED_CODEX_PROVIDERS.map(({ id }) => id), required: true },
-    engineId: { type: "string", enum: ["codex", "claude"], required: true },
+    // OpenCode connects only the custom endpoint; the store refuses other pairs.
+    engineId: { type: "string", enum: ["codex", "claude", "opencode"], required: true },
     useSavedKey: { type: "boolean", required: false },
-    apiKey: { type: "string", maxLength: 16384, required: false }
+    apiKey: { type: "string", maxLength: 16384, required: false },
+    baseUrl: { type: "string", maxLength: 2048, required: false },
+    model: { type: "string", maxLength: 256, required: false },
+    contextWindow: { type: "integer", min: 1, max: 10000000, required: false }
   }),
   mode: "create"
 });

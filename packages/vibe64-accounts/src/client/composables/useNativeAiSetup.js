@@ -1,5 +1,5 @@
 import { computed, ref, watch } from "vue";
-import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { CURATED_CODEX_PROVIDERS, CUSTOM_AI_PROVIDER_ID } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { cliProblem } from "../studio/CliInstallNotice.vue";
 import { nativeAccountConfigured } from "../lib/aiConnectionChoices.js";
 
@@ -30,7 +30,14 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
   const claudeConnected = computed(() => claudeAccount.value?.connected === true);
   const nativeSetupAccount = computed(() => nativeSetupProviderId.value === "claude" ? claudeAccount.value : codexAccount.value);
   const nativeSetupConnected = computed(() => nativeSetupAccount.value?.connected === true);
-  const nativeSetupDetails = computed(() => nativeSetupProviderId.value === "claude" ? {
+  const nativeSetupDetails = computed(() => nativeSetupProviderId.value === "opencode" ? {
+    // OpenCode reaches only the custom endpoint through this dialog.
+    label: "OpenCode",
+    authLabel: "",
+    authMode: "",
+    deviceAuth: false,
+    message: "Connect a model server you run or reach."
+  } : nativeSetupProviderId.value === "claude" ? {
     label: "Claude Code",
     authLabel: "Sign in with Claude",
     authMode: "browser",
@@ -55,6 +62,10 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
       ))
     ]
   })).filter((engine) => engine.providers.length));
+  // OpenCode's own catalogue never lists a custom endpoint, so its picker offers one.
+  const openCodeCustomAvailable = computed(() => !codexProviders.connections.value.some(
+    (connection) => connection.id === CUSTOM_AI_PROVIDER_ID && connection.configuredEngines?.includes("opencode")
+  ));
   const nativeAvailableProviders = computed(() => nativeChoices.value.find((engine) => engine.id === nativeSetupProviderId.value)?.providers || []);
   // A missing or broken CLI keeps the tool's own name and the server's plain explanation.
   const nativeSetupToolProblem = computed(() => cliProblem(nativeSetupAccount.value) ? nativeSetupAccount.value.status : "");
@@ -74,6 +85,15 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
     nativeModelProviderId.value = providerId;
     nativeSetupOrigin.value = "add";
     nativeProviderPickerOpen.value = false;
+    nativeSetupOpen.value = true;
+  }
+
+  /** Opens the custom endpoint form for OpenCode from its provider picker. */
+  function chooseOpenCodeCustomEndpoint() {
+    if (!openCodeCustomAvailable.value) return;
+    nativeSetupProviderId.value = "opencode";
+    nativeModelProviderId.value = CUSTOM_AI_PROVIDER_ID;
+    nativeSetupOrigin.value = "add";
     nativeSetupOpen.value = true;
   }
 
@@ -99,6 +119,7 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
   return {
     backFromNativeSetup,
     chooseNativeProvider,
+    chooseOpenCodeCustomEndpoint,
     claudeAccount,
     claudeConnected,
     codexAccount,
@@ -119,7 +140,8 @@ function useNativeAiSetup({ owner, nativeAccounts, codexProviders }) {
     nativeSetupOrigin,
     nativeSetupProviderId,
     nativeSetupRows,
-    nativeSetupToolProblem
+    nativeSetupToolProblem,
+    openCodeCustomAvailable
   };
 }
 

@@ -62,6 +62,7 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
   const service = createService({
     env: process.env,
     connections: {
+      checkCustomEndpoints: async () => [],
       async getStatus(input) {
         assert.equal(input.providerIds, undefined);
         return {
@@ -118,6 +119,40 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
   assert.equal(commandCalls.every((call) => call.purpose === "health"), true);
 });
 
+test("Studio Health shows a stopped custom model endpoint as a warning that never blocks", async (t) => {
+  const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-custom-"));
+  t.after(() => rm(studioRoot, { recursive: true, force: true }));
+  await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
+  withRuntimePacks(t, studioRoot);
+  let reads = 0;
+  const service = createService({
+    env: process.env,
+    connections: {
+      async checkCustomEndpoints() {
+        reads += 1;
+        return [
+          { engineId: "codex", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen3.5:4b", answers: true },
+          { engineId: "claude", baseUrl: "http://192.168.1.20:11434", model: "qwen3.5:4b", answers: false }
+        ];
+      },
+      getStatus: async () => ({ ok: true, connections: [{ connected: true, id: "ai", label: "AI connection" }] })
+    },
+    project: { listProjects: async () => ({ ok: true, projects: [{ slug: "example" }] }) },
+    runCommand: async ({ args, command }) => successfulCommandResult(command, args),
+    studioRoot
+  });
+
+  const result = await service.inspect({ vibe64User: { role: "owner" } });
+  assert.equal(reads, 1);
+  assert.equal(result.healthy, true);
+  const codex = result.checks.find((check) => check.id === "custom-endpoint-codex");
+  assert.deepEqual([codex.label, codex.status, codex.need], ["Custom endpoint · Codex", "pass", "optional"]);
+  assert.equal(codex.observed, "It answers. Codex uses qwen3.5:4b there.");
+  const claude = result.checks.find((check) => check.id === "custom-endpoint-claude");
+  assert.deepEqual([claude.status, claude.need, claude.observed], ["warn", "optional", "Nothing answers at http://192.168.1.20:11434."]);
+  assert.equal(claude.explanation, "Start your model server, then refresh Health. Vibe64 never starts it.");
+});
+
 test("Studio Health reports unavailable checks without inventing readiness", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-fail-"));
   t.after(() => rm(studioRoot, { recursive: true, force: true }));
@@ -126,6 +161,7 @@ test("Studio Health reports unavailable checks without inventing readiness", asy
   const service = createService({
     env: process.env,
     connections: {
+      checkCustomEndpoints: async () => [],
       async getStatus() {
         throw new Error("Account service unavailable.");
       }
@@ -173,7 +209,7 @@ test("without runtime packs Health counts only what is needed; one AI tool is en
   const versions = { node: "v26.12.1", git: "git version 2.53.0", codex: "codex-cli 0.163.0" };
   const service = createService({
     env: process.env,
-    connections: { getStatus: async () => ({ ok: true, connections: [
+    connections: { checkCustomEndpoints: async () => [], getStatus: async () => ({ ok: true, connections: [
       { connected: true, id: "ai", status: "connected" },
       { connected: false, required: false, id: "github", status: "signed_out" }
     ] }) },
@@ -222,7 +258,7 @@ test("without runtime packs a tool that is there but fails is not counted as ins
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const service = createService({
     env: process.env,
-    connections: { getStatus: async () => ({ ok: true, connections: [] }) },
+    connections: { checkCustomEndpoints: async () => [], getStatus: async () => ({ ok: true, connections: [] }) },
     project: { listProjects: async () => ({ ok: true, projects: [] }) },
     async runCommand({ args, command }) {
       return isProbe(command, args)
@@ -265,7 +301,7 @@ test("Health prioritizes a failed execution's reason ahead of incidental browser
   withRuntimePacks(t, studioRoot);
   const service = createService({
     env: process.env,
-    connections: { getStatus: async () => ({ ok: true, connections: [] }) },
+    connections: { checkCustomEndpoints: async () => [], getStatus: async () => ({ ok: true, connections: [] }) },
     project: { listProjects: async () => ({ ok: true, projects: [] }) },
     async runCommand({ args, command }) {
       return args.join(" ").includes("Playwright browser launched:")
@@ -302,7 +338,7 @@ test("without runtime packs Health shows the name commits get and how to set you
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const inspect = async (ident) => {
     const service = createService({
-      connections: { getStatus: async () => ({ ok: true, connections: [] }) },
+      connections: { checkCustomEndpoints: async () => [], getStatus: async () => ({ ok: true, connections: [] }) },
       env: { HOME: path.join(studioRoot, "home"), PATH: path.join(studioRoot, "empty") },
       project: { listProjects: async () => ({ ok: true, projects: [] }) },
       async runCommand({ args, command }) {

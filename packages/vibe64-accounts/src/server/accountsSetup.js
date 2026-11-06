@@ -94,7 +94,8 @@ function setupAccounts({
   const connections = createConnections({
     accounts,
     project,
-    terminals
+    terminals,
+    systemRoot: resolvedAccountRuntime.systemRoot
   });
 
   // Project admission's team AI gate reads the team setup through live access.

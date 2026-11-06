@@ -1,5 +1,6 @@
 // Prepares the OpenCode host for a session: its saved connection, private configuration and seeded state.
 
+import { CUSTOM_AI_PROVIDER_ID } from "@jskit-ai/assistant-core/shared/native-providers";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { genesisCommandShimDirectory, vibe64HostContextResolverPath } from "@local/vibe64-genesis/server";
@@ -42,7 +43,10 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
   const actualProviderId = toText(
     connection.modelProviderId || connection.providerId || connection.id || modelProviderId
   );
-  if (!apiKey || actualProviderId !== toText(modelProviderId)) {
+  // The custom endpoint may need no key; it carries its own provider definition.
+  const customProvider = actualProviderId === CUSTOM_AI_PROVIDER_ID && connection.customProvider?.custom === true
+    ? connection.customProvider : null;
+  if ((!apiKey && !customProvider) || actualProviderId !== toText(modelProviderId)) {
     throw openCodeError(
       "vibe64_assistant_connection_required",
       `Connect ${toText(modelProviderId) || "this provider"} with an API key before using OpenCode.`,
@@ -64,6 +68,7 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
   return {
     apiKey,
     canonicalUrl,
+    ...(customProvider ? { customProvider } : {}),
     defaultModelId: toText(connection.defaultModelId),
     endpointCode,
     fingerprint: connectionIdentity(connection, apiKey),

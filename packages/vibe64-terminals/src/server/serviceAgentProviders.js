@@ -1,3 +1,4 @@
+import { CUSTOM_AI_PROVIDER_ID } from "@jskit-ai/assistant-core/shared/native-providers";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
@@ -9,6 +10,7 @@ import { CLAUDE_PREPARATION_DELIVERY_STAGES } from "./mainConversationBinding.js
 import { createOpenCodeSessionRegistration } from "./openCodeSessionRegistration.js";
 import { createServiceProviderAccess } from "./serviceProviderAccess.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
+import { createHash } from "node:crypto";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -130,6 +132,32 @@ function createServiceAgentProviders({
     runNativeDetachedConversation,
     runtimeProfile
   });
+  // OpenCode lists and resolves the owner's custom endpoint beside its own saved
+  // connections. A change of address, model or context is a new route.
+  async function openCodeCustomConnection() {
+    const endpoint = await codexProviderConnections.openCodeEndpoint();
+    if (!endpoint) return null;
+    const route = createHash("sha256").update(JSON.stringify([endpoint.baseUrl, endpoint.model, endpoint.contextWindow])).digest("hex");
+    return {
+      modelProviderId: CUSTOM_AI_PROVIDER_ID,
+      connected: true,
+      productLabel: endpoint.provider.label,
+      billingLabel: "Your own model server",
+      defaultModelId: endpoint.model,
+      apiKey: endpoint.apiKey,
+      canonicalUrl: "",
+      endpointCode: `custom-${route.slice(0, 16)}`,
+      fingerprint: `sha256:${createHash("sha256").update(JSON.stringify([route, endpoint.apiKey])).digest("hex")}`,
+      customProvider: endpoint.provider
+    };
+  }
+  async function listOpenCodeConnections(context) {
+    const listed = await state.assistantRuntime.listConnections(context);
+    const custom = await openCodeCustomConnection();
+    if (!custom) return listed;
+    const { apiKey: _key, ...row } = custom;
+    return [...(Array.isArray(listed) ? listed : []), row];
+  }
   // OpenCode's registration reaches the session agent manager that routes to it.
   let sessionAgent;
   const opencode = createOpenCodeSessionRegistration({
@@ -142,12 +170,13 @@ function createServiceAgentProviders({
     codexGitCommand,
     env,
     getAssistantManager: () => sessionAgent,
-    listConnections: (context) => state.assistantRuntime.listConnections(context),
+    listConnections: listOpenCodeConnections,
     logger,
     project,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation,
-    resolveConnection: (context) => state.assistantRuntime.resolveConnection(context),
+    resolveConnection: (context) => context?.modelProviderId === CUSTOM_AI_PROVIDER_ID
+      ? openCodeCustomConnection() : state.assistantRuntime.resolveConnection(context),
     runNativeDetachedConversation
   });
   const sessionAttachments = createSessionAttachments({ project, env });

@@ -12,6 +12,8 @@ import {
   normalizeCodexAppServerTerminalEnv
 } from "@jskit-ai/assistant-core/server/codex-process";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { CODEX_CUSTOM_HOME_ENV, codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
+import { CUSTOM_AI_PROVIDER_ID } from "@jskit-ai/assistant-core/shared/native-providers";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { codexAppServerRuntimeBaseDir } from "./agentProviderRuntimePaths.js";
@@ -351,6 +353,20 @@ function codexAppServerExecutionContextHash({
   }));
 }
 
+/**
+ * An OpenAI-home runtime also serves the owner's custom endpoint through its
+ * thread settings; its process adds that endpoint's catalogue row at start.
+ */
+function codexAppServerEnvironment(options = {}) {
+  if (!options.env || !options.systemRoot || (options.modelProviderId && options.modelProviderId !== "openai")) {
+    return options.env;
+  }
+  return {
+    ...options.env,
+    [CODEX_CUSTOM_HOME_ENV]: codexProviderPaths(options.systemRoot, CUSTOM_AI_PROVIDER_ID, "codex").codexHome
+  };
+}
+
 function codexAppServerRuntimeHost(options = {}) {
   const helper = codexAppServerIsHelper(options);
   const effective = codexAppServerEffectiveRuntimeInput(options);
@@ -449,7 +465,7 @@ function codexAppServerRuntimeHost(options = {}) {
     accountIdentitySignature: options.accountIdentitySignature,
     authStateSignature: options.authStateSignature,
     codexCommand: options.codexCommand === undefined ? operatorCliCommand("codex", { env: process.env }) : options.codexCommand,
-    env: options.env,
+    env: codexAppServerEnvironment(options),
     executionRoot: options.executionRoot,
     executionMode: options.executionMode,
     killTimeoutMs: options.killTimeoutMs,

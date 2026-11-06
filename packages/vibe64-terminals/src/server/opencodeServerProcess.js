@@ -174,6 +174,11 @@ function openCodeInlineConfig({
   if ([...routes].some(([providerId]) => !providerId)) {
     throw new TypeError("OpenCode provider URL overrides require a provider id.");
   }
+  // The owner's own model server: OpenCode's OpenAI-compatible provider with
+  // the one model and context its saved connection names.
+  const custom = (Array.isArray(providerConnections) ? providerConnections : [])
+    .find((connection) => connection?.customProvider?.custom === true)?.customProvider;
+  const customModel = custom?.models?.[0];
   const helperSubagents = openCodeHelperSubagents(providerConnections);
   const applicationToolDenials = Object.fromEntries(openCodeApplicationToolSchemas.map(({ function: tool }) => [tool.name, "deny"]));
   // OpenCode applies an agent's last matching rule, so "*": "ask" would override the
@@ -213,14 +218,30 @@ function openCodeInlineConfig({
     ...(toText(sessionEnvironmentRegistry)
       ? { plugin: [OPENCODE_SESSION_ENVIRONMENT_PLUGIN_URL] }
       : {}),
-    ...(routes.size > 0
+    ...(routes.size > 0 || customModel
       ? {
-          provider: Object.fromEntries([...routes].map(([providerId, baseURL]) => [
-            providerId,
-            {
-              options: { baseURL }
-            }
-          ]))
+          provider: {
+            ...Object.fromEntries([...routes].map(([providerId, baseURL]) => [
+              providerId,
+              {
+                options: { baseURL }
+              }
+            ])),
+            ...(customModel ? {
+              [custom.id]: {
+                npm: "@ai-sdk/openai-compatible",
+                name: custom.label,
+                options: { baseURL: custom.baseUrl },
+                models: {
+                  [customModel.id]: {
+                    name: customModel.id,
+                    tool_call: true,
+                    limit: { context: customModel.contextWindow, output: Math.min(8192, Math.floor(customModel.contextWindow / 4)) }
+                  }
+                }
+              }
+            } : {})
+          }
         }
       : {})
   });

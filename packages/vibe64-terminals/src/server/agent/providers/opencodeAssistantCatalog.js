@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { CUSTOM_AI_PROVIDER_ID } from "@jskit-ai/assistant-core/shared/native-providers";
 
 import {
   VIBE64_ASSISTANT_ENGINE_IDS,
@@ -90,32 +91,37 @@ function openCodeHasConnection(connections = []) {
   return normalizedConnections(connections).some((connection) => connection.connected);
 }
 
+/** A connected provider with only its saved default model, as a read that starts no OpenCode server lists it. */
+function configuredProviderRow(connection) {
+  return {
+    apiKeyCompatible: true,
+    connected: true,
+    connectionMessage: "",
+    connectionStatus: "connected",
+    defaultModelId: connection.defaultModelId,
+    definitionRevision: connection.providerRevision,
+    description: [connection.billingLabel, connection.accessLabel].filter(Boolean).join(" · "),
+    id: connection.id,
+    label: connection.label || connection.id,
+    modelAccess: connection.modelAccess,
+    models: [{
+      capabilities: {},
+      description: "Saved default model",
+      id: connection.defaultModelId,
+      label: connection.defaultModelId,
+      status: "available",
+      variants: []
+    }],
+    preferred: connection.preferred
+  };
+}
+
 function openCodeConfiguredAssistantCapabilities({ connections = [] } = {}) {
   const providers = normalizedConnections(connections)
     .filter((connection) => connection.connected && connection.defaultModelId)
     .sort((left, right) => Number(right.preferred) - Number(left.preferred) ||
       left.label.localeCompare(right.label) || left.id.localeCompare(right.id))
-    .map((connection) => ({
-      apiKeyCompatible: true,
-      connected: true,
-      connectionMessage: "",
-      connectionStatus: "connected",
-      defaultModelId: connection.defaultModelId,
-      definitionRevision: connection.providerRevision,
-      description: [connection.billingLabel, connection.accessLabel].filter(Boolean).join(" · "),
-      id: connection.id,
-      label: connection.label || connection.id,
-      modelAccess: connection.modelAccess,
-      models: [{
-        capabilities: {},
-        description: "Saved default model",
-        id: connection.defaultModelId,
-        label: connection.defaultModelId,
-        status: "available",
-        variants: []
-      }],
-      preferred: connection.preferred
-    }));
+    .map(configuredProviderRow);
   const defaultProvider = providers[0] || null;
   const revision = `sha256:${createHash("sha256").update(JSON.stringify(
     normalizedConnections(connections).map((connection) => ({
@@ -320,8 +326,13 @@ function openCodeAssistantCapabilities({
       providerResult?.default?.[toText(provider?.id)],
       toText(provider?.id) === "opencode" ? currentZenModelIds : null
     ))
-    .filter((provider) => provider.id)
+    .filter((provider) => provider.id && provider.id !== CUSTOM_AI_PROVIDER_ID)
     .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
+  // OpenCode's catalogue never lists the owner's own model server; its saved
+  // connection names the one model, after every catalogue provider.
+  const custom = normalizedConnectionRows.find((connection) =>
+    connection.id === CUSTOM_AI_PROVIDER_ID && connection.connected && connection.defaultModelId);
+  if (custom) providers.push(configuredProviderRow(custom));
   const agents = (Array.isArray(agentRows) ? agentRows : [])
     .map(normalizedAgent)
     .filter(Boolean)

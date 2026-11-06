@@ -4,6 +4,7 @@ import { mdiArrowLeft, mdiCheckCircleOutline, mdiClose, mdiEyeOutline, mdiEyeOff
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
+import CustomEndpointForm from "./CustomEndpointForm.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 import AiPersonalUse from "./AiPersonalUse.vue";
 import AiWaitStatus from "./AiWaitStatus.vue";
@@ -34,9 +35,15 @@ watch(busy, (value) => emit("busy", value), { immediate: true });
 const cliBlocked = computed(() => cliProblem(props.cliAccount));
 const provider = computed(() => curatedCodexProvider(providerId.value));
 const connection = computed(() => connections.value.find(({ id }) => id === providerId.value));
-const engineLabel = computed(() => props.engineId === "claude" ? "Claude Code" : "Codex");
-const connected = computed(() => props.engineId === "claude" ? connection.value?.claudeReady : connection.value?.connected);
-const connectionStatus = computed(() => connection.value?.engineStates?.[props.engineId]?.status || "not_connected");
+const engineLabel = computed(() => ({ claude: "Claude Code", opencode: "OpenCode" })[props.engineId] || "Codex");
+const engineState = computed(() => connection.value?.engineStates?.[props.engineId]);
+const connected = computed(() => props.engineId === "opencode" ? engineState.value?.connected === true
+  : props.engineId === "claude" ? connection.value?.claudeReady : connection.value?.connected);
+const connectionStatus = computed(() => engineState.value?.status || "not_connected");
+// A custom endpoint shows the one model its saved connection names.
+const models = computed(() => provider.value?.custom
+  ? engineState.value?.endpoint ? [{ id: engineState.value.endpoint.model, label: engineState.value.endpoint.model }] : []
+  : provider.value?.models || []);
 const useExistingKey = computed(() => props.adding && connectionStatus.value === "connected");
 const choices = computed(() => [
   props.engineId === "claude" ? { id: "anthropic", label: "Claude Code - Claude · Claude subscription" }
@@ -50,6 +57,9 @@ const choices = computed(() => [
 const apiKey = ref("");
 const visible = ref(false);
 const confirmRemove = ref(false);
+const waitLabel = computed(() => confirmRemove.value ? `Disconnecting ${provider.value?.label}…`
+  : provider.value?.custom ? "Checking your model server. Loading the model can take up to 2 minutes."
+    : `Checking the key with ${provider.value?.label}. This can take up to a minute.`);
 const routingProposal = ref(false);
 const routingSetupError = ref("");
 watch([providerId, () => props.engineId], () => {
@@ -59,10 +69,10 @@ watch([providerId, () => props.engineId], () => {
   routingProposal.value = false;
   routingSetupError.value = "";
 }, { immediate: true });
-async function save({ remove = false, useSavedKey = false } = {}) {
+async function save({ remove = false, useSavedKey = false, endpoint = null, key = apiKey.value } = {}) {
   try {
     const result = await change({ modelProviderId: providerId.value, engineId: props.engineId,
-      apiKey: apiKey.value, remove, useSavedKey: useSavedKey || useExistingKey.value });
+      apiKey: key, remove, useSavedKey: useSavedKey || (!endpoint && useExistingKey.value), ...(endpoint ? { endpoint } : {}) });
     if (result?.ok !== true) return;
     apiKey.value = "";
     visible.value = false;
@@ -106,14 +116,27 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         <p v-if="connectionStatus === 'connected' && !embedded" class="text-body-small mb-3">
           Saved for {{ engineLabel }} only. Each tool has its own connection.
         </p>
-        <div v-if="!embedded" class="d-flex flex-wrap ga-1 mb-4" aria-label="Available models">
-          <v-chip v-for="model in provider.models" :key="model.id" size="small" variant="tonal">{{ model.label }}</v-chip>
+        <div v-if="!embedded && models.length" class="d-flex flex-wrap ga-1 mb-4" aria-label="Available models">
+          <v-chip v-for="model in models" :key="model.id" size="small" variant="tonal">{{ model.label }}</v-chip>
         </div>
         <v-alert v-if="loadError" type="error" variant="tonal" class="mb-3">
           {{ loadError }} <v-btn variant="text" @click="resource.reload()">Retry</v-btn>
         </v-alert>
         <CliInstallNotice :account="cliAccount" :checking="cliChecking" class="mb-3" @check="emit('check-cli')" />
         <v-skeleton-loader v-if="resource.isInitialLoading.value" type="article, actions" />
+        <template v-else-if="!cliBlocked && provider.custom">
+          <CustomEndpointForm
+            :engine-id="engineId" :endpoint="engineState?.endpoint || null" :connected="connectionStatus === 'connected'"
+            :busy="busy && !confirmRemove" :disabled="!actionsEnabled || (busy && confirmRemove)"
+            @submit="save({ endpoint: $event.endpoint, key: $event.apiKey, useSavedKey: $event.useSavedKey })"
+          />
+          <v-btn
+            v-if="!adding && !embedded && connectionStatus !== 'not_connected'" variant="text" class="mt-2"
+            :disabled="!actionsEnabled || busy" @click="confirmRemove = true"
+          >
+            Disconnect
+          </v-btn>
+        </template>
         <v-form v-else-if="!cliBlocked" :disabled="!actionsEnabled || busy" @submit.prevent="save()">
           <v-text-field
             v-if="!useExistingKey"
@@ -140,10 +163,7 @@ async function save({ remove = false, useSavedKey = false } = {}) {
             </v-btn>
           </div>
         </v-form>
-        <AiWaitStatus
-          class="mt-3" :active="busy"
-          :label="confirmRemove ? `Disconnecting ${provider.label}…` : `Checking the key with ${provider.label}. This can take up to a minute.`"
-        />
+        <AiWaitStatus class="mt-3" :active="busy" :label="waitLabel" :slow-after-ms="provider.custom ? 60_000 : 20_000" />
         <AiPersonalUse v-if="provider.ownerOnly" :provider-id="providerId" variant="note" class="text-body-small mt-3" />
         <v-alert v-if="confirmRemove" variant="tonal" class="mt-3">
           Disconnect {{ provider.label }} from {{ engineLabel }}? Work using this connection will stop. Your conversations and files remain.

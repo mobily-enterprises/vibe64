@@ -1,3 +1,4 @@
+import { CUSTOM_AI_PROVIDER_ID } from "@jskit-ai/assistant-core/shared/native-providers";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "./agentExecutionProfiles.js";
 import { canUseVibe64Assistant, VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "./assistantAccess.js";
@@ -33,7 +34,9 @@ function routingModelChoices(engine, options = {}) {
       const agent = engine.agents.find((item) => ["primary", "all"].includes(item.mode) &&
         (!item.modelProviderId || item.modelProviderId === provider.id) && (!item.modelId || item.modelId === model.id));
       if (!agent) return [];
-      const curated = curatedCodexModel(model.id, provider.id);
+      // A custom endpoint's one model routes through the history adapter like the curated ones.
+      const curated = provider.id === CUSTOM_AI_PROVIDER_ID ? { modelProviderId: provider.id, codexHistoryRouting: true }
+        : curatedCodexModel(model.id, provider.id);
       const isolated = Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).includes(purpose);
       const compatibilityError = engine.engineId === "codex" && provider.id !== "openai" &&
         !(curated?.modelProviderId === provider.id && (isolated || curated.codexHistoryRouting === true))

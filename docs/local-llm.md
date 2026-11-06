@@ -4,7 +4,8 @@ A person can point Claude Code, Codex or OpenCode at a model server they already
 such as Ollama, LM Studio, llama.cpp's `llama-server` or vLLM. They enter the server's base URL,
 the model name and, optionally, a key they type themselves. Vibe64 never installs, downloads,
 hosts or starts a model or a model server. It sends requests only for turns, connection checks
-and Health reads. Status: design, awaiting approval.
+and Health reads. Status: built (2026-11-06) as decided at the end; how to use it is in the
+[AI accounts guide](colleague-usage/ai-accounts.md#use-a-model-server-you-run-custom-endpoint).
 
 ## 1. What was proved (2026-11-06)
 
@@ -45,8 +46,9 @@ Vibe64's own instructions.
 
 ## 2. What the person enters
 
-The connection is one row per engine, named **Custom endpoint through Codex** and so on. It
-appears under **Advanced → Add a connection** for each orchestrator, after its other providers.
+The connection is one row per engine, named **Codex - Custom endpoint** and so on. It appears
+only under **Advanced → Add a connection**: Codex and Claude Code list it after their other
+providers, and OpenCode's provider picker offers it above the OpenCode catalogue.
 
 | Field | Codex | OpenCode | Claude Code |
 | --- | --- | --- | --- |
@@ -64,10 +66,9 @@ Ollama uses 4,096 on most GPUs and silently cuts longer prompts. Start it with
 `--max-model-len`." It also says the model must support tool calling, and that the address must
 be reachable from the computer Vibe64 runs on.
 
-In **Models** and **Custom**, the model appears as **qwen3.5:4b · Custom endpoint**. It is
-**Personal use** (owner only) and has no billing label. Usage shows tokens only, never Claude
-Code's cost estimate for unknown models. Recommendations rank a custom endpoint below any
-connected cloud AI.
+In **Models** and **Custom**, the model appears as **qwen3.5:4b** with **Custom endpoint**. It is
+**Personal use** (owner only) and has no billing label. Recommendations rank a custom endpoint
+below any connected cloud AI (score 1 in every role).
 
 ## 3. One more provider connection, not a new system
 
@@ -78,6 +79,12 @@ connected cloud AI.
 - **Codex** gets `config.toml` and `models.json` as for DeepSeek: `wire_api = "responses"`,
   `requires_openai_auth = false`, no bearer token unless a key was entered, the entered context
   window, no freeform patch, and no parallel tool calls.
+  - Session Codex runs every model in its OpenAI-home runtime and reaches curated providers
+    through the history adapter. A custom thread's adapter route carries its upstream as
+    `custom~<base64url(baseUrl)>`, so any runtime can serve it and resumed threads keep it. The
+    adapter accepts only plain `http(s)` upstreams without credentials, query or fragment.
+  - That runtime reads the saved custom model's catalogue row from the custom Codex home when
+    its process starts.
 - **Claude Code** gets `claudeModelConfiguration` with the base URL and the model in every model
   slot, including background and subagent models.
   - The token is always set: the entered key, or the placeholder `local`. Claude Code's docs say
@@ -107,17 +114,23 @@ loads the model) and shows **Loading the model…**. Errors name the fix:
   without an error. Restart it with `OLLAMA_CONTEXT_LENGTH=65536`, then **Check again**." Other
   servers rely on the form's warning.
 
-A turn whose endpoint is down ends with "Your model server at … isn't answering. Start it, then
-send your message again." **Dashboard → Health** shows a **Custom endpoint** row, but only when
-one is saved; each Health read checks reachability once. Nothing polls in the background.
-Vibe64 configures each engine itself; it does not use `codex --oss` or `ollama launch`.
+A Codex turn whose endpoint is down ends with "Your model server at … isn't answering. Start it,
+then send your message again." Claude Code and OpenCode show their own connection error.
+**Dashboard → Health** shows an optional **Custom endpoint · Codex** (or Claude Code, OpenCode)
+row for each saved endpoint: "It answers. Codex uses qwen3.5:4b there." or "Nothing answers at
+…", explained as "Start your model server, then refresh Health. Vibe64 never starts it." Each
+Health read sends one model-list request (`/models`, or `/v1/models` for Claude Code), which
+loads no model; any HTTP answer counts. A stopped server is a warning, never a blocker. Nothing
+polls in the background. Vibe64 configures each engine itself; it does not use `codex --oss` or
+`ollama launch`.
 
-## 5. Hosted
+## 5. Where Vibe64 runs
 
 Nothing extra is needed. The same form works wherever Vibe64 runs, and the address only has to
-be reachable from there. On a hosted VPS, `127.0.0.1` is the VPS, which cannot run a model.
-The useful case there is a server the person runs elsewhere, reached over HTTPS with a key. The
-VPS has one owner by design, so this proposes no address restrictions. Public code names no host.
+be reachable from there. When Vibe64 runs on a server, `127.0.0.1` is that server, which may not
+be able to run a model. The useful case there is a model server the person runs elsewhere,
+reached over HTTPS with a key. Only the owner connects an endpoint, so there are no address
+restrictions.
 
 ## 6. Scope
 
@@ -130,47 +143,63 @@ VPS has one owner by design, so this proposes no address restrictions. Public co
   - images and voice through custom endpoints;
   - team members using the owner's endpoint.
 
-## 7. JSKIT changes (commit only)
+## 7. JSKIT changes (`@jskit-ai/assistant-core`)
 
-- `nativeProviders.js` gains `customAiProvider({ baseUrl, model, contextWindow })`. It returns
-  the same native shape as the fixed providers. Every `nativeAiProvider` caller accepts this
-  host-supplied provider: the Codex and Claude configuration writers, the Colleague drivers, and
-  the Codex history adapter, whose upstream then comes from the connection.
-- The Codex configuration writers omit the token when there is none, and never declare freeform
-  patching.
-- `claudeModelConfiguration` uses a placeholder token, no `[1m]` suffix, and context-based
-  windows.
-- The verification helpers work without a key and allow a longer time limit.
-- A small `readOllamaLoadedContext(baseUrl, model)` reads Ollama's `/api/ps`. It has time and size
-  limits and refuses redirects.
-- OpenCode connections accept an HTTP base URL for `custom`.
+- `shared/native-providers` exports `CUSTOM_AI_PROVIDER_ID`, `CUSTOM_AI_MINIMUM_CONTEXT`,
+  `CUSTOM_AI_PLACEHOLDER_TOKEN`, `customAiProvider({ engineId, baseUrl, model, contextWindow })`,
+  which returns the native provider shape, and `connectionAiProvider(id, connection)`. The Codex
+  and Claude configuration writers and the Colleague drivers take a connection's provider.
+- The Codex writers omit the token without a key, never declare freeform patching, and turn off
+  parallel tool calls when the model says so. `readCodexCustomModels(codexHome)` reads a custom
+  home's catalogue.
+- `claudeModelConfiguration` uses the placeholder token, no `[1m]` suffix, and an output limit of
+  a quarter of the context, at most 32,000.
+- The history adapter routes `custom~<base64url>` upstreams and maps a refused connection to the
+  server-down message above.
+- `server/custom-endpoint` exports `checkCustomEndpoint`, `verifyCustomEndpoint`,
+  `readOllamaLoadedContext` (`/api/ps`, with time and size limits, no redirects) and
+  `probeCustomEndpoint` for Health.
+
+The public packages need the JSKIT release that contains these and a pin bump.
 
 ## 8. Tests
 
-Each new test fails on today's code.
+The new tests fail on the code before this change. No test runs a model.
 
-- **JSKIT**:
-  - The Codex TOML has no token and no freeform patch.
-  - The Claude environment always has a token and fills every model slot.
-  - OpenCode's inline provider accepts an HTTP URL.
-  - The Ollama context read against a fake server: a 4,096 context, refused, redirect, oversized.
+- **JSKIT** (`test/customEndpoint.test.js`), against a fake model server that replays the
+  recorded Ollama 0.40.15 answers in `test/fixtures/customEndpoint/`:
+  - each engine's check request, with and without a key, and every refusal, including a
+    redirect;
+  - the Ollama context read: its 4,096 default refused, 65,536 accepted;
+  - the Codex files have no token and no freeform patch; the Claude environment always has a
+    token and fills every model slot;
+  - the history adapter's custom route, kept on resume, refusing unsafe upstreams, and the
+    server-down message; the Health probe.
 - **Public**:
-  - Connect, list and remove `custom` for each engine: no key, the saved fields, and runtimes
-    stopped on a change.
-  - Routing offers the saved model.
-  - Check errors for each case above.
-  - The Health row.
-  - One Playwright run (`--max-failures=2`) against a fake endpoint: connect, then choose the
-    model in Models.
-- **Live**: one main-chat turn per engine through Vibe64, against a real model server, where the
-  person allows it.
+  - `tests/server/customModelEndpoints.unit.test.js`: connect, list and remove a custom endpoint
+    for each engine against a fake Ollama (no key, the saved fields, runtimes stopped on a
+    change), a kept key that is never listed, the check errors, the Health row, the model in
+    routing, Claude and OpenCode capabilities, and OpenCode's inline provider.
+  - `tests/server/studioHealth.unit.test.js`: a stopped endpoint warns and never blocks.
+  - `tests/client/nativeProviderConnections.vitest.js` and `aiConnectionManager.vitest.js`: the
+    form's fields, kept key and context limit, OpenCode's picker entry and Back, and the
+    configured row.
 
-## Questions for the owner
+## Decisions (2026-11-06)
 
-1. All three engines in the first version (recommended)?
-2. Should hosted get the same form unchanged (recommended), or should it be hidden there for now?
-3. Owner only (recommended), or may team members' helpers use the owner's endpoint?
-4. Should it be reachable only under **Advanced → Add a connection** (recommended), or should it
-   also get a card in **Your AI setup**?
-5. Where may live model runs happen now that the desktop is off-limits: the remaining OpenCode
-   shell step, and the build's final checks?
+1. All three engines in the first version.
+2. Every installation gets the same form, with no address restrictions.
+3. Owner only.
+4. Only under **Advanced → Add a connection**; no card in **Your AI setup**.
+5. No more live model runs for now; tests use a fake endpoint that replays the recorded runs.
+
+## Not yet proven, and known limits
+
+- OpenCode's shell step has not been proven live (section 1). Codex and Claude Code have not run
+  a turn through Vibe64 itself against a real server; each engine's configuration was proven
+  live outside Vibe64, and the Vibe64 wiring through the fake endpoint.
+- A session Codex process that was running before the endpoint was saved or changed uses Codex's
+  fallback model metadata until it next starts.
+- Saving or changing OpenCode's endpoint restarts the shared OpenCode server on its next custom
+  turn, as every OpenCode route change does.
+- Claude Code and OpenCode show their own error when the server is down.

@@ -45,18 +45,24 @@ function useConfiguredAiRows({
     }] : []),
     ...codexProviders.connections.value.flatMap((connection) => {
       const provider = curatedCodexProvider(connection.id);
-      return (connection.configuredEngines || []).map((engineId) => ({
-        ...connection,
-        engineId,
-        connected: engineId === "claude" ? connection.claudeReady : connection.connected,
-        kind: "codex-provider",
-        modelProviderId: connection.id,
-        providerLabel: provider.label,
-        billingLabel: provider.description,
-        ownerOnly: Boolean(provider.ownerOnly),
-        keyHint: (engineId === "claude" ? connection.claudeReady : connection.connected) ? "Connected" : "Reconnect required",
-        modelLabel: provider.models.map(({ label }) => label).join(" · ")
-      }));
+      return (connection.configuredEngines || []).map((engineId) => {
+        const state = connection.engineStates?.[engineId];
+        const connected = engineId === "opencode" ? state?.connected === true
+          : engineId === "claude" ? connection.claudeReady : connection.connected;
+        return {
+          ...connection,
+          engineId,
+          connected,
+          kind: "codex-provider",
+          modelProviderId: connection.id,
+          providerLabel: provider.label,
+          billingLabel: provider.description,
+          ownerOnly: Boolean(provider.ownerOnly),
+          keyHint: connected ? "Connected" : "Reconnect required",
+          // A custom endpoint names the one model its server serves.
+          modelLabel: state?.endpoint ? state.endpoint.model : provider.models.map(({ label }) => label).join(" · ")
+        };
+      });
     }),
     ...connections.value.map((connection) => ({
       ...connection,

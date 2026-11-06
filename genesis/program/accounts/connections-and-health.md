@@ -93,6 +93,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-core/src/server/codexCacheUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261029-codex-unused-caches.js`
 - `packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue`
+- `packages/vibe64-accounts/src/client/studio/CustomEndpointForm.vue`
+- `tests/server/customModelEndpoints.unit.test.js`
 - `packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js`
 - `src/components/studio/Vibe64AuthSettingsButton.vue`
 
@@ -581,9 +583,29 @@ performing discovery. This subsystem retains offered choices, product labels,
 recommended effort, account policy, credential storage and verification before
 replacement. Its curated filtering and preferred defaults use the original native
 row identity/default fields; native metadata alone never grants connection access.
-The browser submits only a provider id and key. Connections use the provider's
-name automatically, and the browser cannot set an endpoint. The existing host Codex-management policy authorizes reads and
-mutations, and lists never return keys.
+For a fixed provider the browser submits only a provider id and key. Connections
+use the provider's name automatically, and the browser cannot set its endpoint.
+The existing host Codex-management policy authorizes reads and mutations, and
+lists never return keys.
+
+The `custom` provider is the one exception: a model server the owner already runs
+or reaches (`docs/local-llm.md`). Under Advanced only, Codex, Claude Code and,
+for this provider alone, OpenCode each save their own `{ baseUrl, model,
+contextWindow, apiKey }` under `ai-connections/<engine>/custom`. The server
+accepts only an `http(s)` base URL without credentials, query or fragment, a model
+name and a context of at least 32,768 tokens; the key is optional and an empty
+field keeps a saved one. Before saving, JSKIT's `checkCustomEndpoint` sends one
+request on that engine's own API (Responses, Messages or Chat Completions) for up
+to 2 minutes and, when the server is Ollama, refuses a loaded context below the
+entered one; each refusal keeps the check's own fix-it wording. Lists return the
+endpoint without the key. The connection is owner-only Personal use, ranks below
+cloud AI in recommendations, and is never installed, started or polled by
+Vibe64: Codex reaches it through the history adapter's `custom~<base64url>`
+route, Claude Code through its provider environment with a placeholder token,
+and OpenCode through an inline `@ai-sdk/openai-compatible` provider. Studio
+Health adds an optional **Custom endpoint · <engine>** row per saved endpoint
+from one model-list read (`probeCustomEndpoint`); a stopped server warns and
+never blocks, even with runtime packs.
 
 The connection store delegates Codex's private `config.toml` serialization and
 Responses key probe to JSKIT's existing Codex configuration owner, and its

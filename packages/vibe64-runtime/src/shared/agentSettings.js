@@ -1,3 +1,4 @@
+import { CUSTOM_AI_PROVIDER_ID } from "@jskit-ai/assistant-core/shared/native-providers";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS
@@ -261,9 +262,12 @@ function agentOptionRequestValue(option = {}, name = "", fallback = true) {
 }
 
 function effectiveVibe64AgentExecutionSettings(value = {}) {
-  const curated = (value.providerId || value.provider || VIBE64_ASSISTANT_ENGINE_IDS.CODEX) === VIBE64_ASSISTANT_ENGINE_IDS.CODEX
-    ? curatedCodexModel(value.model, value.modelProviderId)
-    : null;
+  const codex = (value.providerId || value.provider || VIBE64_ASSISTANT_ENGINE_IDS.CODEX) === VIBE64_ASSISTANT_ENGINE_IDS.CODEX;
+  // The custom endpoint's model is whatever the owner's server names; it gets
+  // the curated routes' request shape, without reasoning summaries.
+  const custom = codex && value.modelProviderId === CUSTOM_AI_PROVIDER_ID && normalizeAgentSettingText(value.model);
+  const curated = custom ? { id: custom, modelProviderId: CUSTOM_AI_PROVIDER_ID, defaultThinking: "medium" }
+    : codex ? curatedCodexModel(value.model, value.modelProviderId) : null;
   if (curated) {
     return {
       model: curated.id,

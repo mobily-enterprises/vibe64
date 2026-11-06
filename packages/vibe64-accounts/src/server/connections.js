@@ -1,3 +1,4 @@
+import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { projectRequiresGithubConnection } from "@local/vibe64-core/server/projectRepository";
 import { blockedReason, hasAccountSelection } from "./accountRecords.js";
 
@@ -25,16 +26,19 @@ async function connectionAccountStatusInput(input, project) {
 }
 
 /**
- * The `vibe64.connections` capability: whether this person's accounts and AI connection let a project start.
+ * The `vibe64.connections` capability: whether this person's accounts and AI connection let a project start,
+ * and whether a saved custom model endpoint answers.
  * @param {object} dependencies
  * @param {AccountsService} dependencies.accounts
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
+ * @param {string} [dependencies.systemRoot] where saved provider connections live
  */
 function createConnections({
   accounts,
   project,
-  terminals
+  terminals,
+  systemRoot = ""
 }) {
   /**
    * @param {object} input
@@ -77,7 +81,16 @@ function createConnections({
     };
   }
 
+  /**
+   * Whether each saved custom model endpoint answers; it never decides
+   * readiness, and only Health asks.
+   */
+  async function checkCustomEndpoints() {
+    return systemRoot ? createCodexProviderConnectionStore({ systemRoot }).customEndpointReachability() : [];
+  }
+
   return Object.freeze({
+    checkCustomEndpoints,
     getStatus
   });
 }

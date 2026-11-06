@@ -88,6 +88,9 @@ AI Accounts: your Claude plan's models, such as **Opus 5.5**, show **Claude**,
 and DeepSeek's models, which also run in Claude Code, show **DeepSeek**. **Recommended** marks the
 suggested model; unavailable choices show their reason and cannot be chosen.
 Type to search. Choose thinking in the separate thinking control beside it.
+A [custom endpoint](ai-accounts.md#use-a-model-server-you-run-custom-endpoint)'s
+model shows the name its server uses, such as **qwen3.5:4b**, with **Custom
+endpoint** and the **Personal use** badge.
 Models from your own Codex sign-in, such as **GPT-5.5**, show **Codex (OpenAI)**,
 and a session that needs that sign-in while it is disconnected says **Connect
 Codex (OpenAI) before creating or continuing this session.**
@@ -115,7 +118,7 @@ otherwise uses the new model's usual tool.
 
 Roles nobody chose get recommended models when an AI is first connected,
 preferring Claude Code, then Codex/OpenAI, DeepSeek and GLM among models you may
-use. The owner's gold standard is Opus 5.5 · High for Senior, Opus 5.5 · Medium
+use; a custom endpoint's model comes last. The owner's gold standard is Opus 5.5 · High for Senior, Opus 5.5 · Medium
 for Junior and Haiku 5.5 · Low for Router and Quick helper; the team's is
 DeepSeek V4 Pro · High for Colleague and DeepSeek V4.1 Flash · Low for Quick
 helper. Connecting or reconnecting never replaces saved choices.

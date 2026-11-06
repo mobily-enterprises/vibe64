@@ -18,8 +18,13 @@ missing, and how many optional extras aren't set up. Only **Needed** checks coun
 | Vibe64, Genesis | Vibe64's own parts can't be read. This is not something a project setting fixes. |
 
 **Optional** (nice to have; nothing depends on them): GitHub CLI, ripgrep, the AI
-tools you don't use, **Your name in Git** and the Playwright browser for automated
-browser checks. **Your name in Git** comes first when it needs you; an extra that
+tools you don't use, **Your name in Git**, the Playwright browser for automated
+browser checks, and **Custom endpoint · Codex** (or Claude Code, OpenCode) for each
+saved [custom model endpoint](ai-accounts.md#use-a-model-server-you-run-custom-endpoint).
+That row asks the server for its model list once per Health read, which loads no
+model; nothing checks it in the background. A stopped server is a warning, even
+where every other check is needed: **Nothing answers at …**, with "Start your model
+server, then refresh Health. Vibe64 never starts it." **Your name in Git** comes first when it needs you; an extra that
 simply isn't installed folds to one line, "Not installed", with **How to install**
 to open its install command.
 

@@ -1,5 +1,5 @@
 import { claudeCatalogueModels } from "@jskit-ai/assistant-core/server/claude-process";
-import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { CURATED_CODEX_PROVIDERS, curatedCodexProvider, customEndpointProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
@@ -31,19 +31,25 @@ function claudeProviderAccountIdentity(configRoot, providerId, apiKey) {
 }
 function claudeCapabilities(initialization, connected, connections = []) {
   const models = claudeCatalogueModels(initialization);
-  const external = CURATED_CODEX_PROVIDERS.map((provider) => ({
-    id: provider.id,
-    label: provider.label,
-    description: provider.description,
-    connected: connections.some((item) => item.id === provider.id && item.claudeReady),
-    models: provider.models.map((model) => ({
-      id: model.id,
-      label: model.label,
-      status: "available",
-      variants: model.variants.map((id) => ({ id, label: id })),
-      capabilities: { images: model.images === true }
-    }))
-  }));
+  const external = CURATED_CODEX_PROVIDERS.flatMap((provider) => {
+    const connection = connections.find((item) => item.id === provider.id);
+    // The custom endpoint lists the one model its saved connection names.
+    const endpoint = provider.custom ? connection?.engineStates?.claude?.endpoint : null;
+    if (provider.custom && !endpoint) return [];
+    return [{
+      id: provider.id,
+      label: provider.label,
+      description: provider.description,
+      connected: connection?.claudeReady === true,
+      models: (endpoint ? customEndpointProvider("claude", endpoint) : provider).models.map((model) => ({
+        id: model.id,
+        label: model.label,
+        status: "available",
+        variants: model.variants.map((id) => ({ id, label: id })),
+        capabilities: { images: model.images === true }
+      }))
+    }];
+  });
   const defaultProvider = connected ? { id: "anthropic", models } : external.find((provider) => provider.connected);
   const selected = defaultProvider?.models.find((model) => model.id === "default") || defaultProvider?.models[0];
   const available = connected || external.some((provider) => provider.connected);
@@ -117,7 +123,9 @@ function createClaudeConversationAccounts({
     const selection = context.selection || context.assistantSelection;
     if (curatedCodexProvider(selection?.modelProviderId)) {
       const settings = await providerConnections.claudeProviderSettings(selection.modelProviderId);
-      return claudeProviderAccountIdentity(configRoot, settings.providerId, settings.apiKey);
+      // A custom endpoint may have no key: its address is part of what it is.
+      const secret = settings.provider ? JSON.stringify([settings.baseUrl, settings.apiKey]) : settings.apiKey;
+      return claudeProviderAccountIdentity(configRoot, settings.providerId, secret);
     }
     const account = await accountStatus(context);
     if (account.error) {

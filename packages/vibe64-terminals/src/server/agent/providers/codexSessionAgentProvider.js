@@ -11,7 +11,8 @@ import {
 import { withCodexState } from "../../codexConversationStorage.js";
 import { prepareCodexModelRouting } from "../../nativeConversationRetirement.js";
 import { codexTerminalNamespace, vibe64Result } from "../../terminalShared.js";
-import { CURATED_CODEX_PROVIDERS, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { CURATED_CODEX_PROVIDERS, curatedCodexModel, customEndpointProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { CUSTOM_AI_PROVIDER_ID } from "@jskit-ai/assistant-core/shared/native-providers";
 import { createHash } from "node:crypto";
 
 import {
@@ -70,16 +71,22 @@ function codexAssistantSettings(context = {}, input = {}) {
 function codexAssistantCapabilities(connected = true, catalog = codexConfiguredModelCatalog(false), connections = []) {
   // The native process knows all routable models. Account choices still belong
   // to their own credential routes; knowing metadata does not grant access.
-  const rows = codexCatalogRows(catalog).filter((model) => model.hidden !== true && !curatedCodexModel(model.model));
+  const custom = connections.find(({ id }) => id === CUSTOM_AI_PROVIDER_ID)?.engineStates?.codex?.endpoint;
+  // The native process knows the custom endpoint's model too; it belongs to that endpoint.
+  const rows = codexCatalogRows(catalog).filter((model) => model.hidden !== true && !curatedCodexModel(model.model) &&
+    model.model !== custom?.model);
   const models = codexCatalogModels(rows);
   const defaultModel = rows.find((model) => model.model === VIBE64_CODEX_DEFAULT_MODEL) ||
     rows.find((model) => model.isDefault === true) || rows[0];
   const defaultThinking = codexCatalogReasoningEfforts(defaultModel).has(VIBE64_CODEX_DEFAULT_THINKING)
     ? VIBE64_CODEX_DEFAULT_THINKING
     : toText(defaultModel?.defaultReasoningEffort);
-  const curated = CURATED_CODEX_PROVIDERS.map((provider) => {
+  const curated = CURATED_CODEX_PROVIDERS.flatMap((listed) => {
+    // A custom endpoint offers the one model its saved connection names.
+    const provider = listed.custom ? custom && customEndpointProvider("codex", custom) : listed;
+    if (!provider) return [];
     const connection = connections.find(({ id }) => id === provider.id);
-    return {
+    return [{
       id: provider.id,
       label: provider.label,
       description: provider.description,
@@ -93,7 +100,7 @@ function codexAssistantCapabilities(connected = true, catalog = codexConfiguredM
         capabilities: { images: model.images === true, defaultVariantId: model.defaultThinking },
         variants: model.variants.map((id) => ({ id, label: id[0].toUpperCase() + id.slice(1) }))
       }))
-    };
+    }];
   });
   const defaultCuratedProvider = curated.find((provider) => provider.connected);
   const available = connected || Boolean(defaultCuratedProvider);
@@ -720,7 +727,7 @@ function createCodexSessionAgentProvider({
   });
 }
 
-const __testables = Object.freeze({ CODEX_HELPER_PROFILE_REVISION, resolveCodexHelperExecutionProfile });
+const __testables = Object.freeze({ CODEX_HELPER_PROFILE_REVISION, codexAssistantCapabilities, resolveCodexHelperExecutionProfile });
 
 export {
   createCodexSessionAgentProvider,

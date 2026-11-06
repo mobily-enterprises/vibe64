@@ -25,16 +25,19 @@ function createServiceProviderAccess({
     if (context.engineId === "claude") {
       return claudeProvider.assistantAccess(context);
     }
-    if (context.engineId !== "codex") {
+    const curated = curatedCodexProvider(context.assistantSelection?.modelProviderId || context.modelProviderId);
+    // OpenCode reaches the custom endpoint through the same saved connections.
+    const openCodeCustom = context.engineId === "opencode" && curated?.custom === true;
+    if (context.engineId !== "codex" && !openCodeCustom) {
       return state.assistantRuntime.readAssistantAccess(context);
     }
-    const curated = curatedCodexProvider(context.assistantSelection?.modelProviderId || context.modelProviderId);
     if (curated) {
       const connection = (await codexProviderConnections.list()).find(({ id }) => id === curated.id);
-      const available = connection?.connected === true;
+      const engineState = connection?.engineStates?.[openCodeCustom ? "opencode" : "codex"];
+      const available = engineState?.connected === true;
       return {
         available,
-        connectionIdentity: connection?.connectionIdentity || "",
+        connectionIdentity: engineState?.connectionIdentity || "",
         missingAccountLabel: available ? "" : curated.label,
         ownerOnly: curated.ownerOnly,
         endpointCode: curated.id

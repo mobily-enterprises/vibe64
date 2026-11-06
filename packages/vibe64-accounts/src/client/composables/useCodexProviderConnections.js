@@ -5,7 +5,8 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { ACCOUNTS_ENDPOINT, VIBE64_ACCOUNTS_CHANGED_EVENT } from "../lib/accountsGateApi.js";
 
 /**
- * The provider keys the owner connected in Codex and Claude Code, and changing them.
+ * The provider keys and custom endpoints the owner connected in Codex, Claude Code
+ * and OpenCode, and changing them.
  * @param {{ enabled?: import("vue").MaybeRef<boolean> }} [options]
  */
 function useCodexProviderConnections({ enabled = true } = {}) {
@@ -29,7 +30,9 @@ function useCodexProviderConnections({ enabled = true } = {}) {
     buildRawPayload: (_model, { context }) => ({
       modelProviderId: context.modelProviderId,
       engineId: context.engineId,
-      ...(!context.remove ? { apiKey: context.apiKey, useSavedKey: context.useSavedKey } : {})
+      ...(!context.remove ? { apiKey: context.apiKey, useSavedKey: context.useSavedKey } : {}),
+      // A custom endpoint's address, model and context, entered by the owner.
+      ...(!context.remove && context.endpoint ? context.endpoint : {})
     }),
     onRunSuccess(response) {
       if (response?.ok !== true) throw new Error(response?.error || "The connection could not be updated.");

@@ -637,7 +637,7 @@ automatic handoff or review. These names describe the model roles, not limits
 on the kinds of work they can do.
 Unavailable modes explain why and are identified as disabled to screen readers.
 Recommendations rank connected, permitted models for every job in the order
-Claude, Codex/OpenAI, DeepSeek, then GLM. Within native providers, Senior favours
+Claude, Codex/OpenAI, DeepSeek, GLM, then a custom endpoint. Within native providers, Senior favours
 Opus/Astra, Junior Opus with Medium thinking/Sol, and Quick helper/Router Haiku/Luna. Model dropdowns group
 indented models beneath orchestrator headings, with provider/access details and
 recommended or unavailable markers. Their separate thinking control shows the
@@ -1123,7 +1123,11 @@ message or stopping the main assistant.
 
 Every Vibe64 editor uses the same AI Accounts screen and provider
 configuration. Account settings offers Codex with OpenAI, DeepSeek and GLM, Claude
-Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. Vibe64
+Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. Under
+Advanced, the owner can also point each of the three tools at a model server they
+already run or reach (a custom endpoint: base URL, model name, context length and
+an optional key), which Vibe64 checks with one request but never installs, starts
+or polls. Vibe64
 includes no AI of its own and never falls back to a free model; the free option
 is GLM-4.7 Flash with a free Z.AI account. Connections are grouped by orchestrator, with each independently configured provider
 listed under its owning orchestrator. Manage opens that exact pair with

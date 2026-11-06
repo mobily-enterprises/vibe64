@@ -1,4 +1,6 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { CUSTOM_AI_PROVIDER_ID } from "@jskit-ai/assistant-core/shared/native-providers";
+import { customEndpointProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { conversationConfiguration } from "./conversationConfiguration.js";
 import {
   appCredentialContext,
@@ -228,15 +230,18 @@ function createServiceAssistant({
       throw new Error("The requested connection differs from the authorized assistant selection.");
     }
     let connection;
+    const custom = integrationId === CUSTOM_AI_PROVIDER_ID;
     if (assistantSelection.engineId === "opencode") {
-      connection = await state.assistantRuntime.resolveConnection(assistantSelection);
+      connection = await (custom ? codexProviderConnections.openCodeEndpoint()
+        : state.assistantRuntime.resolveConnection(assistantSelection));
     } else if (assistantSelection.engineId === "claude") {
       connection = await codexProviderConnections.claudeProviderSettings(integrationId);
     } else {
       await codexProviderConnections.runtimeOptions(integrationId);
-      connection = await codexProviderConnections.read(integrationId, "codex");
+      const saved = await codexProviderConnections.read(integrationId, "codex");
+      connection = custom && saved ? { ...saved, provider: customEndpointProvider("codex", saved) } : saved;
     }
-    if (!connection?.apiKey) {
+    if (!connection?.apiKey && !connection?.provider?.custom) {
       throw new AppError(409, "Reconnect the selected AI account before continuing.", {
         code: "vibe64_assistant_account_reconnect_required"
       });
@@ -245,6 +250,7 @@ function createServiceAssistant({
       providerId: integrationId,
       model: assistantSelection.modelId,
       apiKey: connection.apiKey,
+      ...(custom ? { provider: connection.provider, baseURL: connection.provider.baseUrl } : {}),
       ...(connection.canonicalUrl ? { baseURL: connection.canonicalUrl } : {})
     };
   }

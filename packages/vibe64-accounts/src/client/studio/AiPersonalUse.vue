@@ -4,7 +4,11 @@
 const PERSONAL_PLANS = Object.freeze({
   anthropic: Object.freeze({ provider: "Anthropic", plan: "Claude subscription (Pro or Max)" }),
   openai: Object.freeze({ provider: "OpenAI", plan: "ChatGPT subscription" }),
-  "zai-coding-plan": Object.freeze({ provider: "Z.AI", plan: "GLM Coding Plan" })
+  "zai-coding-plan": Object.freeze({ provider: "Z.AI", plan: "GLM Coding Plan" }),
+  custom: Object.freeze({
+    provider: "your model server", plan: "custom endpoint",
+    reason: "This custom endpoint is the owner's own model server, so Vibe64 lets only the workspace owner work with it."
+  })
 });
 
 export function personalUsePlan(providerId = "") {
@@ -47,7 +51,7 @@ const plan = computed(() => personalUsePlan(props.providerId));
           <v-icon :icon="mdiAccountLock" color="warning" aria-hidden="true" />Personal use: only the owner can use it
         </v-card-title>
         <v-card-text>
-          <p class="mb-3">This {{ plan.plan }} is a personal plan. Under {{ plan.provider }}'s terms only the person who subscribed may use it, so Vibe64 lets only the workspace owner work with it.</p>
+          <p class="mb-3">{{ plan.reason || `This ${plan.plan} is a personal plan. Under ${plan.provider}'s terms only the person who subscribed may use it, so Vibe64 lets only the workspace owner work with it.` }}</p>
           <p class="mb-3">Other people in this workspace cannot use it, even in the owner's projects. For them, the owner can connect a Workspace-use account, such as an API key billed by use.</p>
           <p>In Models, the <strong>Team members</strong> setup chooses the Workspace-use models they use.</p>
         </v-card-text>

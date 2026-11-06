@@ -109,6 +109,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   const {
     backFromNativeSetup,
     chooseNativeProvider,
+    chooseOpenCodeCustomEndpoint,
     claudeAccount,
     claudeConnected,
     codexAccount,
@@ -129,7 +130,8 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     nativeSetupOrigin,
     nativeSetupProviderId,
     nativeSetupRows,
-    nativeSetupToolProblem
+    nativeSetupToolProblem,
+    openCodeCustomAvailable
   } = useNativeAiSetup({ owner, nativeAccounts, codexProviders });
   const {
     accountsInitialLoading,
@@ -218,7 +220,9 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     requestRemove
   } = useAiConnectionRemoval({ codexProviders, nativeAccounts, removingProviderId, removeConnection, emit });
 
-  const canAddConnection = computed(() => nativeChoices.value.length > 0 || openCodeAddAvailable.value);
+  // OpenCode stays on offer while its custom endpoint is unset, even with its catalogue exhausted.
+  const openCodeChoiceAvailable = computed(() => openCodeAddAvailable.value || openCodeCustomAvailable.value);
+  const canAddConnection = computed(() => nativeChoices.value.length > 0 || openCodeChoiceAvailable.value);
 
   /** Add a connection's choice: an orchestrator's provider picker, or OpenCode's. */
   function chooseAiType(type = "") {
@@ -233,6 +237,23 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     if (type === "opencode") {
       void openProviderPicker();
     }
+  }
+
+  /** OpenCode's provider picker leads to the custom endpoint form. */
+  function chooseOpenCodeCustom() {
+    nativeSetupActivator.value = document.activeElement;
+    providerPickerOpen.value = false;
+    chooseOpenCodeCustomEndpoint();
+  }
+
+  /** Back from a setup dialog: OpenCode's returns to its own provider picker. */
+  function backFromSetup() {
+    if (nativeSetupProviderId.value !== "opencode") {
+      backFromNativeSetup();
+      return;
+    }
+    nativeSetupOpen.value = false;
+    providerPickerOpen.value = true;
   }
 
   /** Reloads every connection list at once. */
@@ -286,7 +307,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     applyModelAccess,
     applyZenModelAccess,
     availableProviders,
-    backFromNativeSetup,
+    backFromNativeSetup: backFromSetup,
     busy,
     canAddConnection,
     catalogEngine,
@@ -298,6 +319,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     checkOpenCodeAgain,
     chooseAiType,
     chooseNativeProvider,
+    chooseOpenCodeCustom,
     chooseProvider,
     claudeAccount,
     claudeConnected,
@@ -366,7 +388,8 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     nativeSetupProviderId,
     nativeSetupRows,
     nativeSetupToolProblem,
-    openCodeAddAvailable,
+    openCodeAddAvailable: openCodeChoiceAvailable,
+    openCodeCustomAvailable,
     openProvider,
     openProviderPicker,
     pendingProvider,

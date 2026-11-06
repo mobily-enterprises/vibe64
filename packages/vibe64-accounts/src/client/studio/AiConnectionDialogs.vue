@@ -29,6 +29,7 @@ const {
   checkOpenCodeAgain,
   chooseAiType,
   chooseNativeProvider,
+  chooseOpenCodeCustom,
   chooseProvider,
   closeEditor,
   codexProviders,
@@ -72,6 +73,7 @@ const {
   nativeSetupRows,
   nativeSetupToolProblem,
   openCodeAddAvailable,
+  openCodeCustomAvailable,
   openProviderPicker,
   providerPickerLoading,
   providerPickerOpen,
@@ -208,6 +210,22 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
             placeholder="Try OpenAI, Anthropic, GLM…"
             variant="outlined"
           />
+
+          <v-sheet v-if="openCodeCustomAvailable" border class="vibe64-provider-picker__list mt-3" rounded="xl">
+            <v-list lines="two" aria-label="Your own model server">
+              <v-list-item
+                class="vibe64-provider-picker__item" title="Custom endpoint"
+                subtitle="custom · A model server you run or reach, such as Ollama or LM Studio" @click="chooseOpenCodeCustom"
+              >
+                <template #prepend>
+                  <v-avatar color="primary" size="44" variant="tonal">
+                    <v-icon :icon="mdiRobotOutline" size="22" />
+                  </v-avatar>
+                </template>
+                <template #append><span class="text-label-large text-primary">Connect</span></template>
+              </v-list-item>
+            </v-list>
+          </v-sheet>
 
           <div
             v-if="providerPickerLoading"
@@ -449,7 +467,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
       </v-card-title>
       <v-card-text>
         <template v-if="removeTarget?.kind === 'codex-provider'">
-          Remove the {{ removeTarget.providerLabel }} connection from {{ removeTarget.engineId === "claude" ? "Claude Code" : "Codex" }}?
+          Remove the {{ removeTarget.providerLabel }} connection from {{ ({ claude: "Claude Code", opencode: "OpenCode" })[removeTarget.engineId] || "Codex" }}?
           Turns using this key will stop. Conversations and files remain.
         </template>
         <template v-else>

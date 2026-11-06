@@ -5,7 +5,8 @@
     "openai": { "senior": 5, "junior": 5, "quickHelper": 5, "router": 5 },
     "deepseek": { "senior": 4, "junior": 4, "quickHelper": 4, "router": 4 },
     "zai": { "senior": 3, "junior": 3, "quickHelper": 3, "router": 3 },
-    "zai-coding-plan": { "senior": 3, "junior": 3, "quickHelper": 3, "router": 3 }
+    "zai-coding-plan": { "senior": 3, "junior": 3, "quickHelper": 3, "router": 3 },
+    "custom": { "senior": 1, "junior": 1, "quickHelper": 1, "router": 1 }
   },
   "models": [
     { "engineId": "codex", "modelProviderId": "openai", "modelId": "gpt-6-astra", "scores": { "senior": 7, "junior": 6, "quickHelper": 5, "router": 5 } },

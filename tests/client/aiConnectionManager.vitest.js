@@ -70,8 +70,11 @@ it("groups configured pairs by orchestrator", () => {
     ["OpenCode", ["opencode"]]
   ]);
   expect(state.configuredAiGroups[2].accounts[0]).toMatchObject({ id: "opencode", preferred: true });
-  expect(state.nativeChoices).toEqual([]);
-  expect(state.canAddConnection).toBe(false);
+  // A custom endpoint stays on offer for each tool until it is set.
+  expect(state.nativeChoices.map(({ id, providers }) => [id, providers.map(({ id }) => id)])).toEqual([
+    ["claude", ["custom"]], ["codex", ["custom"]]
+  ]);
+  expect(state.canAddConnection).toBe(true);
 });
 
 it("names the Claude plan Claude, as AI setup does, beside DeepSeek in the Claude Code group", () => {
@@ -99,6 +102,8 @@ it("opens settings for the exact orchestrator and provider without checking or c
 
 it("offers only missing pairs, then opens a fixed Add form and returns to its provider list", () => {
   mocks.providers.connections.value.find(({ id }) => id === "deepseek").configuredEngines = ["codex"];
+  mocks.providers.connections.value.push({ id: "custom", status: "connected", connected: true, claudeReady: true,
+    configuredEngines: ["codex", "claude", "opencode"], engineStates: { opencode: { connected: true } } });
   const state = mount();
   expect(state.nativeChoices.map(({ id, providers }) => [id, providers.map(({ id }) => id)])).toEqual([
     ["claude", ["deepseek"]]
@@ -123,6 +128,8 @@ it("offers only missing pairs, then opens a fixed Add form and returns to its pr
 
 it("keeps native login reconnection under Manage instead of offering it as new", () => {
   mocks.accounts.status.value.accounts[0] = { id: "codex", connected: false, status: "reconnect_required" };
+  mocks.providers.connections.value.push({ id: "custom", status: "connected", connected: true, claudeReady: true,
+    configuredEngines: ["codex", "claude", "opencode"], engineStates: { opencode: { connected: true } } });
   const state = mount();
   expect(state.nativeChoices).toEqual([]);
   const account = engineGroup(state, "codex").accounts[0];
@@ -141,6 +148,8 @@ it("names Codex's own sign-in's provider OpenAI in its row and in Add a connecti
 });
 
 it("updates Add availability with warm connection data and refreshed OpenCode providers", async () => {
+  mocks.providers.connections.value.push({ id: "custom", status: "connected", connected: true, claudeReady: true,
+    configuredEngines: ["codex", "claude", "opencode"], engineStates: { opencode: { connected: true } } });
   const state = mount();
   state.addAiOpen = true;
   await nextTick();
@@ -244,4 +253,22 @@ it("reports busy while a removal runs so Redo onboarding cannot interrupt it", (
   expect(state.busy).toBe(false);
   mocks.providers.busy.value = true;
   expect(state.busy).toBe(true);
+});
+
+it("offers OpenCode a custom endpoint from its provider picker until one is saved, and Back returns there", () => {
+  const state = mount();
+  expect(state.openCodeCustomAvailable).toBe(true);
+  state.providerPickerOpen = true;
+  state.chooseOpenCodeCustom();
+  expect([state.providerPickerOpen, state.nativeSetupOpen, state.nativeSetupProviderId, state.nativeModelProviderId])
+    .toEqual([false, true, "opencode", "custom"]);
+  expect(state.nativeSetupDetails.label).toBe("OpenCode");
+  state.backFromNativeSetup();
+  expect([state.nativeSetupOpen, state.providerPickerOpen]).toEqual([false, true]);
+  mocks.providers.connections.value = [{ id: "custom", status: "not_connected", connected: false, claudeReady: false,
+    configuredEngines: ["opencode"], engineStates: { opencode: { status: "connected", connected: true,
+      endpoint: { baseUrl: "http://127.0.0.1:11434/v1", model: "qwen3.5:4b", contextWindow: 65536, keySaved: false } } } }];
+  expect(state.openCodeCustomAvailable).toBe(false);
+  const account = engineGroup(state, "opencode").accounts.find((row) => row.id === "custom");
+  expect(account).toMatchObject({ engineId: "opencode", connected: true, keyHint: "Connected", modelLabel: "qwen3.5:4b", providerLabel: "Custom endpoint" });
 });
