@@ -96,14 +96,29 @@ const WORKSPACE_OWNER_OPERATION = Object.freeze({
 /** The extensions of an action that is never offered to an assistant as a tool. */
 const NOT_A_TOOL = Object.freeze({ assistant: Object.freeze({ exclude: true }) });
 
+/** The identity fields only the Vibe64 action context supplies to an operation. */
+const CONTEXT_IDENTITY_FIELDS = Object.freeze(["vibe64User"]);
+
 /**
  * The input a Vibe64 operation is registered with: transport never supplies
- * the acting user, and a project's operation may name its project.
+ * the acting user, and a project's operation may name its project. An action
+ * without the Vibe64 scope runs with its input as sent, so it may not declare
+ * a field the context would otherwise strip and set.
  * @param {ActionDefinition} definition
  */
 function vibe64ActionInput(definition) {
-  const scope = definition.extensions.vibe64;
-  if (!scope) return definition.input;
+  const scope = definition.extensions?.vibe64;
+  if (!scope) {
+    // JSKIT registers every action with an input schema.
+    const fields = definition.input.schema.getFieldDefinitions();
+    const declared = CONTEXT_IDENTITY_FIELDS.filter((field) => Object.hasOwn(fields, field));
+    if (declared.length) {
+      throw new TypeError(
+        `Action ${definition.id} declares ${declared.join(", ")} without extensions.vibe64; only the Vibe64 action context supplies it.`
+      );
+    }
+    return definition.input;
+  }
   const fields = { ...definition.input.schema.getFieldDefinitions() };
   delete fields.vibe64User;
   if (scope.projectScoped) {
@@ -287,6 +302,7 @@ function registerVibe64ActionContext(actions, {
 
 export {
   authenticatedVibe64User,
+  CONTEXT_IDENTITY_FIELDS,
   NOT_A_TOOL,
   PROJECT_OPERATION,
   PROJECT_OWNER_OPERATION,

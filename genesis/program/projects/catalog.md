@@ -17,6 +17,7 @@ workspace.
 - `packages/vibe64-project/src/shared/onboardingRequest.js`
 - `tests/server/vibe64OnboardingActionTools.unit.test.js`
 - `tests/server/vibe64ProjectActionDispatch.unit.test.js`
+- `tests/server/vibe64ActionIdentityFields.unit.test.js`
 - `packages/vibe64-project/src/server/managedProject.js`
 - `packages/vibe64-project/src/server/managedRepository.js`
 - `packages/vibe64-training/src/server/preparation.js`
@@ -361,14 +362,19 @@ Each Vibe64 action declares its scope as data, `extensions.vibe64`
 `Vibe64ActionPolicyProvider` supplies the one rule that applies it to JSKIT's
 action catalogue as `runtime.actions.policy`. At registration the rule removes
 `vibe64User` from the input and gives a project action an optional
-`projectSlug`; at each execution, after JSKIT's checks, it refuses a non-owner
-an owner operation (`vibe64_owner_required`, except a standalone local owner;
-`isWorkspaceOwner()` is that check, exported for a host that changes the same
-things outside an operation), replaces any transport user with the authenticated one, resolves and checks the
-project slug (`vibe64_action_project_mismatch` when the input's slug differs
-from the URL's, `vibe64_action_authorized_project_mismatch` when the
-host-resolved project differs), applies the Colleague mode and
-team AI gates, and runs the action inside the project request context.
+`projectSlug`, and it refuses to register an action without `extensions.vibe64`
+whose input declares an identity only the context supplies
+(`CONTEXT_IDENTITY_FIELDS`, `vibe64User`), since nothing would strip a caller's;
+`tests/server/vibe64ActionIdentityFields.unit.test.js` walks every feature's
+action definitions through that rule; at each execution, after JSKIT's checks,
+it refuses a non-owner an owner operation (`vibe64_owner_required`, except a
+standalone local owner; `isWorkspaceOwner()` is that check, exported for a host
+that changes the same things outside an operation), replaces any transport user
+with the authenticated one, resolves and checks the project slug
+(`vibe64_action_project_mismatch` when the input's slug differs from the URL's,
+`vibe64_action_authorized_project_mismatch` when the host-resolved project
+differs), applies the Colleague mode and team AI gates, and runs the action
+inside the project request context.
 An action that resolves its own project (the policy without a host-resolved
 project) keeps the person's original request, so a local browser action is
 admitted only for that person's own practice project; only an action with no
