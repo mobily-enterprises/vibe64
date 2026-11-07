@@ -16,7 +16,7 @@ models read-only.
 
 **Main chat**
 
-- **Senior**: Plans, reviews and Deslop in main chat. Your most capable model.
+- **Senior**: Plans, reviews, Deslop and UI passes in main chat. Your most capable model.
 - **Junior**: Everyday changes in main chat.
 - **Router**: Chooses Senior or Junior when main chat is on Auto.
 

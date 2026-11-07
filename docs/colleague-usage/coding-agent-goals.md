@@ -9,9 +9,10 @@ and mobile; an objective written in chat alone does not create a goal.
 
 A paused goal stays unfinished until you choose **Resume goal** or **Cancel
 goal**, even when later chat replies say the work is done. While any goal is
-open, a message that is just “Deslop” is refused because Deslop runs in its own
-turn: open **Goal**, choose **Resume goal** to finish it or **Cancel goal** to
-end it, then send Deslop again. The refused message is marked as not sent, so
+open, a message that is just “Deslop”, or a [UI pass](ui-pass.md) message such
+as “UI pass”, is refused because each runs in its own turn: open **Goal**,
+choose **Resume goal** to finish it or **Cancel goal** to end it, then send it
+again. The refused message is marked as not sent, so
 **Cancel** or **Edit** on it works at once and the goal controls stay usable.
 **Pause goal** and **Cancel goal** work even while a chat message is still
 sending or its delivery is unconfirmed. **Set goal** and **Resume goal** wait

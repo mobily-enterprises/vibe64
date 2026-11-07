@@ -623,15 +623,15 @@ and unfinished goals must finish before switching.
 A switch into Codex prepares its conversation for model routing before it opens,
 even when the session already has an OpenCode or Claude conversation.
 While the assistant starts or reconnects, the chat-mode menu shows connection
-progress; mode and model choices stay available, while the Deslop and automatic-save
-switches wait for the connection.
+progress; mode and model choices stay available, while the Deslop, automatic UI
+pass and automatic-save switches wait for the connection.
 Switching tools uses the existing conversation handoff. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
 mode and comes first. Its menu shows
 effective model and thinking assignments and the selected role, including Router
 in Auto. It uses the conversation's saved assignments and current account access
 without loading provider model catalogues. Configuration and Send still validate
 the selected models against their catalogues. Auto alone offers
-automatic Senior review and Deslop. Direct Senior and Junior conversations
+automatic Senior review, Deslop and the UI pass. Direct Senior and Junior conversations
 answer questions or implement requested changes without a temporary plan,
 automatic handoff or review. These names describe the model roles, not limits
 on the kinds of work they can do.
@@ -1575,6 +1575,13 @@ in chat for the current task's changes, including unsaved work, or explicitly
 select commits. Auto can include it in the automatic Senior review when the
 optional Deslop setting is enabled. Saving work does not show a cleanup offer.
 
+The UI pass is Deslop's counterpart for screens: it brings them in line with the
+project's UI guidance while preserving their behavior. People request it in
+chat for the current task's changes, a named section of the app or the whole
+app, and Genesis's ui-pass task receives that scope as its request. Auto adds it
+to the automatic Senior review, after any Deslop, only when the chat's Automatic
+UI pass setting is on; it is off unless the owner turns it on.
+
 People can choose how cautiously the AI engineers a project. The choice follows
 the project's source, always keeps ordinary work simple and targeted, and makes
 the AI ask before a real requirement forces materially greater complexity.
@@ -1913,7 +1920,9 @@ Auto reviews implementation by either role, even when both use the same model.
 Senior can fix scoped defects or save substantial necessary rework for Junior,
 then review again. Deslop is on by default within review; turning it off asks
 for confirmation (code quality suffers unless Deslop is run by hand, so it suits
-only quick throwaway projects), and disabling cleanup cannot disable review. The person's pause or cancellation takes precedence. Ordinary
+only quick throwaway projects), and disabling cleanup cannot disable review. The automatic UI pass
+is off by default; turning it off also asks first, since the screens a plan changes then lose their
+design review. The person's pause or cancellation takes precedence. Ordinary
 discussion and Stop never reopen, archive or complete a plan. Direct Senior and
 Junior still work from the person's request; Junior can update Progress and existing checklist ticks but cannot
 complete the plan.
@@ -1922,7 +1931,8 @@ Deslop defaults to the configured Senior model for behavior-preserving cleanup.
 Auto honors an explicit request for Junior cleanup. The command and saved-commit
 action go straight to Senior. System-generated review and optional Deslop always
 use Senior. Direct cleanup does not schedule review or change the selected chat
-mode. Ordinary answers and planning do not start implementation themselves.
+mode. A requested UI pass is direct in the same way, on the configured Senior
+model, in its own turn. Ordinary answers and planning do not start implementation themselves.
 
 Independent editors sharing a Preview domain can have separate route
 namespaces, so cloned projects and sessions do not contend for one Preview address.

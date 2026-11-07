@@ -22,6 +22,9 @@ When you request **Deslop** for UI changes, its JSKIT audit also checks Back's
 position and navigational meaning. Deslop preserves behavior: navigation defects
 outside the requested correction scope remain findings for a separate fix.
 To authorize repairs, explicitly ask the coding agent to fix those findings.
+A [UI pass](ui-pass.md) on those screens follows the project's UI guidance the
+same way and likewise reports, rather than changes, a navigation defect that
+would alter behavior.
 
 Colleague can explain these steps and offer to send the request to a coding
 conversation through its existing authorized chat operations. A how-to question

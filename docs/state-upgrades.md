@@ -506,6 +506,12 @@ that review; the persisted shape is unchanged. Existing request records retain
 their captured handoff decision and are not replayed or backfilled. This is a
 new-request policy change and requires no historical transformation.
 
+The optional `assistant_routing.uiPass` preference adds the UI pass to that
+review. It is written only as `true`, while the owner has it on; an absent
+field reads as off, so existing preferences load unchanged with it off. An
+explicit UI pass is a new request with `task: "ui-pass"`, and its turns carry
+the `ui_pass` resolved mode; neither changes an existing record. No upgrade is
+needed.
 
 ## Auto implementation continuation
 

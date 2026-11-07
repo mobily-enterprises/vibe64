@@ -1710,7 +1710,15 @@ runs the ordinary Save once, connected copies included, and routing writes
 its short result note to chat. Turning the switch off first opens a confirmation explaining that
 code quality will suffer unless the person runs Deslop themselves; Cancel keeps
 it on. Existing saved preferences are not rewritten: an off value cannot be told
-apart from a deliberate choice. A role resolves to a live, available
+apart from a deliberate choice. The automatic UI pass (`uiPass`) is the
+opposite default: off unless the chat turned it on, saved only as `true`, so
+preferences written before it read as off. With it on, Senior's automatic
+review message adds the UI pass on the changed screens after any Deslop, in the
+same turn. Turning it off is confirmed through the same dialog as Deslop's,
+which says that the screens a plan changes lose their design review and that a
+typed “UI pass” still runs one; Cancel keeps it on. A line under each switch
+names its chat command (“Deslop”, “UI pass” with an optional “: <section>” or
+“: the whole app”). A role resolves to a live, available
 selection through the owner's setup, independently of the last native engine;
 main chat runs in the Senior's tool.
 The mode menu consumes the session's access decisions, including their loading,
@@ -2028,6 +2036,18 @@ Combined implementation and cleanup remains an implementation request, receives
 Senior review and uses the optional automatic Deslop setting; it is not rejected
 as a special mixed routing state. Classifier output is a validated role/reason
 pair, never a model, executable command or generated rejection message.
+
+The UI pass is the same kind of task for screens, Genesis's `ui-pass` task.
+`assistantExplicitTask` names the task a message starts: a `genesisTask` of
+`deslop` or `ui-pass`, a bare “Deslop”, or a UI pass message that
+`uiPassRequest` reads — “UI pass” alone for the current task's changes,
+“UI pass: <section>” (or on/of/for) for a named section, and “UI pass: the
+whole app”. Both tasks share Deslop's admission, Senior resolution, refusals
+(each with its own code) and `task` record; `assistantTaskPurpose` maps the
+task to its purpose (`deslop`, `ui_pass`), which is also the turn's resolved
+mode. Delivery sends the UI pass's scope sentence as the request Genesis
+renders, as Deslop's message carries its commit range. A question about the
+UI pass is ordinary chat.
 
 Auto captures Router and the effective Senior–Junior pair, the actor, connection
 identities and configuration revision before invoking the existing tool-free

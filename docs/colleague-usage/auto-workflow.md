@@ -8,7 +8,7 @@ for that request. For example, “Junior developer: say hello” needs no plan, 
 “Senior, implement the current plan” uses Senior for implementation.
 
 Without an explicit role, Senior handles discussing, writing and improving plans,
-review and Deslop. Junior implements an existing plan: say “Execute the plan” or
+review, Deslop and the [UI pass](ui-pass.md). Junior implements an existing plan: say “Execute the plan” or
 ask it to continue implementation. Answering the plan's open questions so coding
 can proceed also defaults to Junior; recording accepted choices or implementation
 progress does not change that default. An explicit Senior or Junior request
@@ -27,7 +27,7 @@ The working agent reports one of four outcomes:
 - **Handoff** moves finished implementation to Senior review. If Senior discovers
   substantial necessary rework, Senior updates the technical plan and Progress
   within the agreed outcome and hands that work back to Junior. Junior finishes
-  it, then Senior reviews again and performs any enabled Deslop.
+  it, then Senior reviews again and performs any enabled Deslop and UI pass.
 - **Wait** retains the stage for a real blocker, your required decision or an
   explicit pause. A status question or clarification is incorporated into the
   ongoing work; it does not abandon review.
@@ -61,7 +61,7 @@ Senior records the deferred requirement and its agreed timing under **Deferred
 work** in Progress before removing it from the current acceptance scope, keeping
 the completed implementation evidence. When every remaining item is checked and
 supported by evidence, Senior hands the revised implementation to separate Senior review
-and any enabled **Deslop**. Missing resources for the explicitly deferred work
+and any enabled **Deslop** and **UI pass**. Missing resources for the explicitly deferred work
 do not block that review. Remaining implementation continues; a pause or missing
 evidence can still stop the handoff. Ordinary draft-plan edits do not trigger
 review just because all their items are checked.
@@ -102,10 +102,23 @@ crash and burn over time, unless you ask the AI to “Deslop” in the chat your
 Skip it only for quick throwaway projects. **Cancel** keeps Deslop on; **Turn off
 Deslop** saves it off for this chat. Turning it off does not disable review.
 A chat with no saved choice, or one coming back to Auto from **Custom**, has
-Deslop on; a chat that turned it off keeps it off.
+Deslop on; a chat that turned it off keeps it off. The line under the switch
+reads **Or tell the agent “Deslop” any time.**: a message that is just “Deslop”
+runs it whatever the switch says.
 
-The **Automatic save after completing a plan** switch below it is also on by
-default. When Auto's final Senior review (with any enabled Deslop) completes a
+The **Automatic UI pass** switch below it is off by default, including for chats
+saved before it existed. Turned on, Senior's review also runs the
+[UI pass](ui-pass.md) on the screens the work changed, after any Deslop, in the
+same review turn. Turning it on saves at once. Turning it off opens **Turn off
+Automatic UI pass?**: without it, the screens a plan changes no longer get a
+design review, though typing “UI pass” in the chat still runs one. **Cancel**
+keeps it on; **Turn off Automatic UI pass** saves it off for this chat. The line
+under the switch reads **Or tell the agent “UI pass” any time — add “:
+<section>” or “: the whole app”.**
+
+The **Automatic save after completing a plan** switch below them is on by
+default. When Auto's final Senior review (with any enabled Deslop and UI pass)
+completes a
 plan and that turn ends, Vibe64 archives the plan and then runs the session's
 ordinary **Save** once, exactly as the **Save** button would, without its review
 dialog. Its usual Save progress and result appear in the Save activity panel, and
@@ -117,10 +130,10 @@ chat shows a short note: **Automatic save: nothing new to save.**, or
 Update is needed, a conflict, a required pull request or an unavailable
 repository). In a session with connected repositories it saves their copies too,
 as **Save** does. Turn the switch off to review and
-Save by hand. Like Deslop, it is the owner's Main chat choice, changes take effect
-for the next completed plan, and the switch is disabled while a goal is active.
-Colleague can explain both switches and, for the owner, change either through
-the chat mode action.
+Save by hand. Like Deslop and the UI pass, it is the owner's Main chat choice,
+changes take effect for the next completed plan, and the switch is disabled
+while a goal is active. Colleague can explain all three switches and, for the
+owner, change any of them through the chat mode action.
 
 Unfinished checks continue in Senior review; substantial necessary rework
 returns to Junior and comes back for another review. A changed product requirement

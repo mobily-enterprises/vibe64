@@ -43,7 +43,7 @@ A message that fails before it reaches the assistant shows its error at once
 and is marked **failed**, not uncertain, for example when the assistant's memory
 is too full. Fix the cause and choose **Retry**; nothing was sent. The same
 applies when the chat refuses a new request before sending it, such as Deslop
-while a goal is open, or when another assistant operation in the session is
+or a [UI pass](ui-pass.md) while a goal is open, or when another assistant operation in the session is
 still starting. **Cancel** removes it once the server confirms; **Edit** returns
 its text to the composer.
 

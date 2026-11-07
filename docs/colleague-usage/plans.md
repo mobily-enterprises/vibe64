@@ -61,7 +61,7 @@ Updates appear while the viewer is open.
 
 ## Automatic completion and archival
 
-After Auto's final Senior review and any enabled Deslop finish successfully,
+After Auto's final Senior review and any enabled Deslop and UI pass finish successfully,
 Senior explicitly marks the involved plan Completed. Once the final explanation
 has been delivered and that review turn finishes, Vibe64 automatically moves
 that exact Plan and Progress pair into History. Chat shows **Completed plan
@@ -160,7 +160,7 @@ chat to continue a plan made current. Replacing a current plan with an archive
 
 ## Auto roles and workflow
 
-For Senior/Junior routing, implementation, review, Deslop, scope deferral and
+For Senior/Junior routing, implementation, review, Deslop, the UI pass, scope deferral and
 Stop or stage-specific Continue recovery, read [Choose Auto roles and follow the
 workflow](auto-workflow.md). Plan and Progress remain one paired artifact.
 
