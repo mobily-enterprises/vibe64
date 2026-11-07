@@ -67,6 +67,8 @@ export default defineConfig({
     include: ["tests/client/**/*.vitest.js"],
     // As many test files at once as the machine's test budget allows.
     maxWorkers: testConcurrency(),
+    // The time budget reporter fails a run that went over tooling/test-time-budgets.json.
+    reporters: ["default", "./tooling/vitest-time-budget-reporter.mjs"],
     setupFiles: ["./tooling/test-host-path-guard.mjs"],
     server: {
       // The published assistant ships Vue source that needs the Vue transform.

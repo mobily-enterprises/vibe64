@@ -54,7 +54,7 @@ jobs:
           --max-failures=0
           --forbid-only
           --global-timeout=3600000
-          --reporter=list,blob
+          --reporter=list,blob,./tests/e2e/support/time-budget-reporter.mjs
       - id: upload-shard-report
         name: Upload shard report
         if: ${{ !cancelled() }}

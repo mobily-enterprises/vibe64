@@ -18,7 +18,8 @@ export default defineConfig({
   expect: {
     timeout: 10_000
   },
-  reporter: process.env.CI ? "github" : "list",
+  // The time budget reporter fails a run that went over tooling/test-time-budgets.json.
+  reporter: [[process.env.CI ? "github" : "list"], ["./tests/e2e/support/time-budget-reporter.mjs"]],
   // Every test sets up its own page, mocks and folders; none depends on another.
   fullyParallel: true,
   workers: useRunningServer ? 1 : e2eServerCount(),
