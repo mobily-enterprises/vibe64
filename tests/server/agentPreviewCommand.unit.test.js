@@ -182,6 +182,11 @@ async function writeExecutable(filePath, source) {
   await chmod(filePath, 0o755);
 }
 
+/** Where the fake browser of createFakePlaywrightRuntime records, per process id, a SIGTERM it acted on. */
+function fakeBrowserSignalsRoot(runtimeRoot) {
+  return path.join(runtimeRoot, "browser-signals");
+}
+
 async function createFakePlaywrightRuntime(runtimeRoot) {
   const nodePath = path.join(runtimeRoot, "node26", "bin", "node");
   const npmPath = path.join(runtimeRoot, "node26", "bin", "npm");
@@ -193,6 +198,9 @@ async function createFakePlaywrightRuntime(runtimeRoot) {
     recursive: true
   });
   await mkdir(path.join(playwrightRoot, "browsers"), {
+    recursive: true
+  });
+  await mkdir(fakeBrowserSignalsRoot(runtimeRoot), {
     recursive: true
   });
   await writeExecutable(path.join(playwrightRoot, "bin", "playwright"), "#!/bin/sh\nexit 0\n");
@@ -210,6 +218,12 @@ function processState(pid) {
 }
 const screenshotBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAHdElNRQfqBw4XCBDl8xb+AAAAFklEQVQI12NgYGD4//8/4////xkYGAAp6wX8D0F0QAAAAABJRU5ErkJggg==", "base64");
 const identityControlPath = ${JSON.stringify(PREVIEW_IDENTITY_CONTROL_PATH)};
+// The fake browser records a SIGTERM it acts on, so a test can tell a drain
+// that ended it from the SIGKILL that follows a drain's timeout.
+const browserSignalsRoot = ${JSON.stringify(fakeBrowserSignalsRoot(runtimeRoot))};
+const browserSource = "process.on('SIGTERM', () => { " +
+  "require('node:fs').writeFileSync(require('node:path').join(process.argv[1], String(process.pid)), 'SIGTERM'); " +
+  "process.exit(0); }); setInterval(() => {}, 1000);";
 function identityRequestContext() {
   let selectedIdentity = null;
   return {
@@ -279,7 +293,7 @@ let launchCount = 0;
 exports.chromium = {
   async launch() {
     const launchId = ++launchCount;
-    const browserChild = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    const browserChild = spawn(process.execPath, ["-e", browserSource, browserSignalsRoot], {
       detached: true,
       stdio: "ignore"
     });
@@ -2366,10 +2380,14 @@ test("managed preview browser keeps running briefly after a command, then stops 
     for (let attempt = 0; attempt < 40 && processRunning(metadata.pid); attempt += 1) {
       await wait(25);
     }
-    const cleanupStartedAt = Date.now();
     await commandService.closeAllForSession(sessionId);
     assert.equal(processRunning(first.result.childPid), false);
-    assert.ok(Date.now() - cleanupStartedAt < 2000, "a stopped browser drains on SIGTERM");
+    // Continued for its SIGTERM, it ended on that, not on the SIGKILL a drain sends after 3 s.
+    assert.equal(
+      await readFile(path.join(fakeBrowserSignalsRoot(runtimeRoot), String(first.result.childPid)), "utf8"),
+      "SIGTERM",
+      "a stopped browser drains on SIGTERM"
+    );
   } finally {
     await commandService.closeAllForSession(sessionId);
     await rm(root, {
