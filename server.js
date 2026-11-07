@@ -571,7 +571,7 @@ async function startServer(options = {}) {
   }
   let listenAddress = "";
   if (listenTarget.transport === "socket") {
-    await prepareListenSocket(listenTarget.socketPath);
+    await prepareListenSocket(listenTarget.socketPath, { privateDirectory: listenTarget.privateDirectory });
     try {
       listenAddress = await app.listen({
         path: listenTarget.socketPath

@@ -19,6 +19,13 @@ A tab opened without the key, or left open from before a restart, shows
 **Open Vibe64 from the address it printed when it started.** Open the newly
 printed address to continue. Don't share the address.
 
+Started with `--no-open` and without `PORT`, Vibe64 listens on a private socket
+file instead of an address. Without `XDG_RUNTIME_DIR` that file goes in the
+temporary folder's `vibe64-<your user id>` folder, and Vibe64 stops with
+**Refusing to listen in …** when that folder is not yours, is a link, or other
+accounts can write to it. Remove the folder, or set `XDG_RUNTIME_DIR`, and start
+again.
+
 Nothing needs configuring. Vibe64 runs as you, with your own tools and folders.
 
 Setting up a computer for the first time? Follow the step-by-step guide for
