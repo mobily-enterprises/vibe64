@@ -1,4 +1,3 @@
-import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
 import { isRecord, normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -180,6 +179,11 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
         const integrationId = turn.integrationSetup.integrationId;
         const integration = config?.configuration?.integrations?.[integrationId];
         if (!integration) throw new Error("Choose Configure to set up this integration first.");
+        // The connector catalog (about 2.5 MB of script with its AI model list) loads
+        // with the Integrations page, or here when a chat's request needs it, not with
+        // every session page.
+        const { connectorDefinitions } = await import("@jskit-ai/connectors-catalog/shared");
+        if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
         if (connectorDefinitions.some((provider) => provider.id === integration.provider && (provider.configurationOnly ||
           // readable-check: allow optional-call - optional operation: only a connector whose settings decide whether it has an account defines configurationOnlyForSettings
           provider.configurationOnlyForSettings?.(integration?.settings || {})))) {

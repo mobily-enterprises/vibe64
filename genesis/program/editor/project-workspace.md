@@ -43,6 +43,9 @@ file browser and conversation dock; its source links remain in the canvas and
 Back restores the previous Program, source file or subsystem. A Program is a
 capability explanation with an explicitly authored main source and supporting
 files; opening it never opens its Genesis Markdown as a source file.
+Files and the source viewer, with CodeMirror and the file browser (about 1.2 MB
+of script), load when a session first opens Files or a source file, not with
+every project page.
 
 File interfaces use the native language facts, distinguishing recorded exports
 from intended subsystem API and externally observed imports. Opening a file or

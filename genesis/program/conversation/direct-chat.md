@@ -4038,7 +4038,9 @@ uses the existing continuation action. When the card becomes visible after navig
 status once for each pending request, sequentially. This restores the current
 consent link without creating another attempt or persisting it in browser
 storage. Archived/hidden cards do not initiate recovery. Check connection uses
-status too; only Connect may start a new attempt.
+status too; only Connect may start a new attempt. The connector catalog that
+tells a configuration-only integration apart (about 2.5 MB of script with its AI
+model list) loads when such an action first needs it, not with every session page.
 
 If continuation delivery is unconfirmed, the card retains the completed
 connection, reports the continuation error and reloads the durable request.

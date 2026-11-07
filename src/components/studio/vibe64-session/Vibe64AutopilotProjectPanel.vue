@@ -216,8 +216,6 @@ import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
 import { AI_TASK_PHASES } from "@local/vibe64-ai-tasks/shared";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
-import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
-import Vibe64SessionFiles from "@/components/studio/vibe64-session/Vibe64SessionFiles.vue";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 import Vibe64LessonSheet from "@/components/learning/Vibe64LessonSheet.vue";
 import { vibe64SessionToolGuideId } from "@/lib/vibe64SessionToolDefinitions.js";
@@ -279,6 +277,11 @@ function openSubsystemTextLink({ event, href }, sourcePath, openSource) {
   event?.preventDefault();
   openSource(target);
 }
+// Files and the source viewer bring CodeMirror and the file browser (about 1.2 MB of
+// script), so they load when a session first opens Files or a source file rather
+// than with every project page.
+const Vibe64SessionFiles = defineAsyncComponent(() => import("@/components/studio/vibe64-session/Vibe64SessionFiles.vue"));
+const Vibe64SessionSourceEditor = defineAsyncComponent(() => import("@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue"));
 const Vibe64ArchitectureView = defineAsyncComponent(() => (
   import("@local/vibe64-system-graph/client").then((module) => module.loadVibe64ArchitectureView())
 ));
