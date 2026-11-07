@@ -1047,6 +1047,10 @@ for (const width of [390, 1440]) {
     await expect(failedIdentityButton).toBeVisible();
     await failedIdentityButton.click();
 
+    // A host may keep the selected conversation in the address's query, so
+    // the address the page had before the fix started is what must not change.
+    const developmentUrl = page.url();
+    expect(new URL(developmentUrl).pathname).toBe(DEVELOPMENT_PATH);
     await page.locator(".vibe64-launch-controls__identity-menu")
       .getByRole("button", {
         name: "Fix it with AI",
@@ -1062,7 +1066,7 @@ for (const width of [390, 1440]) {
         identity: expect.objectContaining({ name: "missing", type: "email", value: "missing@example.com" })
       }
     }]);
-    await expect(page).toHaveURL(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    await expect(page).toHaveURL(developmentUrl);
     await page.screenshot({
       path: testInfo.outputPath(`preview-identity-recovery-${width}.png`),
       animations: "disabled"
