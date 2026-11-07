@@ -41,7 +41,7 @@ async function mockGithubIssues(page: Page) {
     ok: true, labels, canEditLabels: false, canCreateWithLabels: false
   }));
   await routeApiEndpoint(page, "/vibe64/issue-mentions", (route) => fulfillJson(route, {
-    ok: true, users: [{ login: "alice" }, { login: "tamiastewart123", name: "Tamia Stewart" },
+    ok: true, users: [{ login: "alice" }, { login: "tamtest-octocat", name: "Tam Test" },
       ...(new URL(route.request().url()).searchParams.has("number") ? [{ login: "early-commenter", name: "Early participant" }] : [])]
   }));
   await routeApiEndpoint(page, "/vibe64/settings", (route) => fulfillJson(route, { ok: true }));
@@ -225,16 +225,16 @@ for (const viewport of viewports) {
     await comment.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(14, 14));
     await comment.press("ArrowLeft");
     await comment.press("ArrowRight");
-    const tamia = openMenu(page).getByRole("option", { name: /@tamiastewart123/u });
-    await expect(tamia).toBeVisible();
+    const tam = openMenu(page).getByRole("option", { name: /@tamtest-octocat/u });
+    await expect(tam).toBeVisible();
     await expect(comment).toBeFocused();
     await expectNoHorizontalOverflow(page);
     await page.screenshot({ path: testInfo.outputPath(`mention-${viewport.name}.png`) });
     await comment.press("Enter");
-    await expect(comment).toHaveValue("Please ask @tamiastewart123 about this.");
+    await expect(comment).toHaveValue("Please ask @tamtest-octocat about this.");
     await expect(comment).toBeFocused();
     expect(await comment.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(28);
-    await expect(tamia).not.toBeVisible();
+    await expect(tam).not.toBeVisible();
 
     await comment.fill("Thanks @early");
     await openMenu(page).getByRole("option", { name: /@early-commenter/u }).click();
@@ -245,19 +245,19 @@ for (const viewport of viewports) {
     await comment.press("Tab");
     await expect(comment).toHaveValue("Thanks @early-commenter ");
     await comment.fill("@TAM");
-    await expect(tamia).toBeVisible();
+    await expect(tam).toBeVisible();
     await comment.press("Escape");
-    await expect(tamia).not.toBeVisible();
+    await expect(tam).not.toBeVisible();
     await expect(comment).toHaveValue("@TAM");
     await comment.press("Enter");
     await expect(comment).toHaveValue("@TAM\n");
-    await comment.fill("person@tamiastewart123.com");
+    await comment.fill("person@tamtest-octocat.example");
     await expect(page.getByRole("listbox", { name: "Mention suggestions" })).not.toBeVisible();
     expect(mentionRequests).toHaveLength(1);
 
     await page.getByRole("button", { name: "All issues", exact: true }).click();
     await page.getByRole("link", { name: /An issue beyond the first thousand/u }).click();
-    await expect(comment).toHaveValue("person@tamiastewart123.com");
+    await expect(comment).toHaveValue("person@tamtest-octocat.example");
     await comment.fill("@early");
     await expect(openMenu(page).getByRole("option", { name: /@early-commenter/u })).toBeVisible();
     await comment.press("Escape");
@@ -268,9 +268,9 @@ for (const viewport of viewports) {
     const description = dialog.getByRole("textbox", { name: "Description", exact: true });
     await expect(dialog.getByRole("textbox", { name: "Title", exact: true })).toBeFocused();
     await description.fill("Please review @tam");
-    await expect(tamia).toBeVisible();
-    await tamia.click();
-    await expect(description).toHaveValue("Please review @tamiastewart123 ");
+    await expect(tam).toBeVisible();
+    await tam.click();
+    await expect(description).toHaveValue("Please review @tamtest-octocat ");
     await expect(description).toBeFocused();
     await description.fill("@early");
     await expect(page.getByText("No matching people", { exact: true })).toBeVisible();
@@ -302,7 +302,7 @@ test("mention loading failure retains local authors and typing, and Retry restor
   let unavailable = true;
   await routeApiEndpoint(page, "/vibe64/issue-mentions", async (route) => {
     if (unavailable) await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Suggestions unavailable" }) });
-    else await fulfillJson(route, { ok: true, users: [{ login: "tamiastewart123" }] });
+    else await fulfillJson(route, { ok: true, users: [{ login: "tamtest-octocat" }] });
   });
   await page.goto(`${DASHBOARD_PATH}/issues?issue=1001`);
   const comment = page.getByRole("textbox", { name: "Add a comment", exact: true });
@@ -312,11 +312,11 @@ test("mention loading failure retains local authors and typing, and Retry restor
   await expect(retry).toBeVisible();
   unavailable = false;
   await retry.click();
-  await expect(openMenu(page).getByRole("option", { name: /@tamiastewart123/u })).toBeVisible();
+  await expect(openMenu(page).getByRole("option", { name: /@tamtest-octocat/u })).toBeVisible();
   await expect(comment).toHaveValue("Hello @");
   await comment.fill("Hello @t");
   await comment.press("Tab");
-  await expect(comment).toHaveValue("Hello @tamiastewart123 ");
+  await expect(comment).toHaveValue("Hello @tamtest-octocat ");
 });
 
 test("GitHub tabs return to lists and keep the project mounted when clicked again", async ({ page }) => {

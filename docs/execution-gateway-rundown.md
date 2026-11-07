@@ -453,8 +453,8 @@ Preferred explicit identity:
 {
   project: {
     gitIdentity: {
-      name: "Merc Mobily",
-      email: "merc@example.com"
+      name: "Octo Cat",
+      email: "octo@example.test"
     }
   }
 }
@@ -479,8 +479,8 @@ GitHub identity:
 {
   session: {
     githubUser: {
-      login: "mercmobily",
-      email: "merc@example.com"
+      login: "octocat",
+      email: "octo@example.test"
     }
   }
 }
@@ -490,8 +490,8 @@ Fallback identity:
 
 ```js
 {
-  GIT_AUTHOR_NAME: "merc via Vibe64",
-  GIT_AUTHOR_EMAIL: "merc@local.users.vibe64.invalid",
+  GIT_AUTHOR_NAME: "octo via Vibe64",
+  GIT_AUTHOR_EMAIL: "octo@local.users.vibe64.invalid",
   GIT_COMMITTER_NAME: "Vibe64",
   GIT_COMMITTER_EMAIL: "vibe64@local.users.vibe64.invalid"
 }

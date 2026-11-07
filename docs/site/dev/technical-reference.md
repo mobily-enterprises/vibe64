@@ -332,7 +332,7 @@ control, not a production sign-in API.
 ## Host runtime naming
 
 Runtime names and paths are deterministic, daemon-scoped, and project-scoped.
-For namespace `tonymobily` and project `beepollen`, the layout is:
+For namespace `octocat` and project `beepollen`, the layout is:
 
 ```text
 daemon runtime bucket    <systemRoot>/runtime/<namespace>

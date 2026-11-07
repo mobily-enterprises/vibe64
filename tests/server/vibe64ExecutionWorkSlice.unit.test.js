@@ -13,7 +13,7 @@ import {
 } from "../../packages/vibe64-execution/src/host/managedWorkflows.js";
 import { execHelperSource } from "../fixtures/execHelperSource.js";
 
-// v64-mercmobily's work slice on 2026-10-29: every execution's payload asked
+// A production workspace's work slice on 2026-10-29: every execution's payload asked
 // for these limits, and the slice's cgroup already enforced them.
 const MEMORY_MAX = 18369105920;
 const TASKS_MAX = 2048;

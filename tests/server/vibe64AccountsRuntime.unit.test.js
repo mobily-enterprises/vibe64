@@ -908,7 +908,7 @@ test("GitHub identity save updates Git config without starting an auth terminal"
         if (args[0] === "gh" && args[1] === "api") {
           return {
             ok: true,
-            stdout: "mercmobily"
+            stdout: "octocat"
           };
         }
         if (args[0] === "git" && args.includes("credential.helper")) {
@@ -946,7 +946,7 @@ test("GitHub identity save updates Git config without starting an auth terminal"
 
     assert.equal(result.ok, true);
     assert.equal(result.account.connected, true);
-    assert.equal(result.account.username, "mercmobily");
+    assert.equal(result.account.username, "octocat");
     assert.equal(terminalStarts.length, 0);
     assert.equal(commands[0][0], "bash");
     assert.match(commands[0][2], /git config --global user\.name Tony/u);
@@ -1424,17 +1424,17 @@ test("accounts service delegates account host commands to runtime override", asy
 test("GitHub status retries transient host read failures before requiring reconnect", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const githubHome = path.join(root, "homes", "mercmobily");
+    const githubHome = path.join(root, "homes", "octocat");
     const vibe64User = {
       github: {
         connectedAt: "2026-07-05T16:11:03.389Z",
-        id: 2128734,
-        login: "mercmobily"
+        id: 1,
+        login: "octocat"
       },
       home: githubHome,
       gid: 1001,
       uid: 1001,
-      username: "mercmobily"
+      username: "octocat"
     };
     let statusAttempts = 0;
     const service = createTestService({ logger: silentLogger,
@@ -1466,8 +1466,8 @@ test("GitHub status retries transient host read failures before requiring reconn
         if (args[0] === "gh" && args[1] === "api") {
           return {
             ok: true,
-            output: "mercmobily",
-            stdout: "mercmobily"
+            output: "octocat",
+            stdout: "octocat"
           };
         }
         if (args[0] === "git" && args.includes("credential.helper")) {
@@ -1480,15 +1480,15 @@ test("GitHub status retries transient host read failures before requiring reconn
         if (args[0] === "git" && args.at(-1) === "user.name") {
           return {
             ok: true,
-            output: "mercmobily",
-            stdout: "mercmobily"
+            output: "octocat",
+            stdout: "octocat"
           };
         }
         if (args[0] === "git" && args.at(-1) === "user.email") {
           return {
             ok: true,
-            output: "tonymobily@gmail.com",
-            stdout: "tonymobily@gmail.com"
+            output: "owner@example.test",
+            stdout: "owner@example.test"
           };
         }
         throw new Error(`Unexpected host command: ${args.join(" ")}`);
@@ -1505,7 +1505,7 @@ test("GitHub status retries transient host read failures before requiring reconn
     assert.equal(statusAttempts, 2);
     assert.equal(github.connected, true);
     assert.equal(github.status, "connected");
-    assert.equal(github.username, "mercmobily");
+    assert.equal(github.username, "octocat");
   });
 });
 
@@ -1514,11 +1514,11 @@ test("GitHub status retries transient host read failures before requiring reconn
 test("a GitHub card shows the person's current Git name and email", async () => {
   await withTempDir(async (root) => {
     const vibe64User = {
-      github: { connectedAt: "2026-07-05T16:11:03.389Z", id: 2128734, login: "mercmobily" },
-      home: path.join(root, "homes", "mercmobily"),
+      github: { connectedAt: "2026-07-05T16:11:03.389Z", id: 1, login: "octocat" },
+      home: path.join(root, "homes", "octocat"),
       gid: 1001,
       uid: 1001,
-      username: "mercmobily"
+      username: "octocat"
     };
     const reads = [];
     const service = createTestService({ logger: silentLogger,
@@ -1534,8 +1534,8 @@ test("a GitHub card shows the person's current Git name and email", async () => 
       }),
       runHostToolCommand: async (args = [], options = {}) => {
         reads.push({ args, username: options.username });
-        if (args.join(" ") === "git config --global --get user.name") return { ok: true, stdout: "Merc Mobily\n" };
-        if (args.join(" ") === "git config --global --get user.email") return { ok: true, stdout: "merc@example.test\n" };
+        if (args.join(" ") === "git config --global --get user.name") return { ok: true, stdout: "Octo Cat\n" };
+        if (args.join(" ") === "git config --global --get user.email") return { ok: true, stdout: "octo@example.test\n" };
         throw new Error(`Unexpected host command: ${args.join(" ")}`);
       }
     });
@@ -1544,26 +1544,26 @@ test("a GitHub card shows the person's current Git name and email", async () => 
     const github = status.accounts.find((account) => account.id === "github");
 
     assert.equal(github.status, "connected");
-    assert.equal(github.username, "mercmobily");
-    assert.deepEqual(github.gitIdentity, { email: "merc@example.test", name: "Merc Mobily" });
-    assert.deepEqual(reads.map(({ username }) => username), ["mercmobily", "mercmobily"]);
+    assert.equal(github.username, "octocat");
+    assert.deepEqual(github.gitIdentity, { email: "octo@example.test", name: "Octo Cat" });
+    assert.deepEqual(reads.map(({ username }) => username), ["octocat", "octocat"]);
   });
 });
 
 test("GitHub transient host read failures are not classified as reconnect-required", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const githubHome = path.join(root, "homes", "mercmobily");
+    const githubHome = path.join(root, "homes", "octocat");
     const vibe64User = {
       github: {
         connectedAt: "2026-07-05T16:11:03.389Z",
-        id: 2128734,
-        login: "mercmobily"
+        id: 1,
+        login: "octocat"
       },
       home: githubHome,
       gid: 1001,
       uid: 1001,
-      username: "mercmobily"
+      username: "octocat"
     };
     let statusAttempts = 0;
     const service = createTestService({ logger: silentLogger,
@@ -1589,8 +1589,8 @@ test("GitHub transient host read failures are not classified as reconnect-requir
         if (args[0] === "gh" && args[1] === "api") {
           return {
             ok: true,
-            output: "mercmobily",
-            stdout: "mercmobily"
+            output: "octocat",
+            stdout: "octocat"
           };
         }
         if (args[0] === "git" && args.includes("credential.helper")) {
@@ -1603,15 +1603,15 @@ test("GitHub transient host read failures are not classified as reconnect-requir
         if (args[0] === "git" && args.at(-1) === "user.name") {
           return {
             ok: true,
-            output: "mercmobily",
-            stdout: "mercmobily"
+            output: "octocat",
+            stdout: "octocat"
           };
         }
         if (args[0] === "git" && args.at(-1) === "user.email") {
           return {
             ok: true,
-            output: "tonymobily@gmail.com",
-            stdout: "tonymobily@gmail.com"
+            output: "owner@example.test",
+            stdout: "owner@example.test"
           };
         }
         throw new Error(`Unexpected host command: ${args.join(" ")}`);
@@ -1629,7 +1629,7 @@ test("GitHub transient host read failures are not classified as reconnect-requir
     assert.equal(github.connected, false);
     assert.equal(github.code, "vibe64_github_status_temporarily_unavailable");
     assert.equal(github.status, "not_connected");
-    assert.equal(github.previousUsername, "mercmobily");
+    assert.equal(github.previousUsername, "octocat");
     assert.doesNotMatch(github.message, /Reconnect GitHub/u);
   });
 });
@@ -1652,7 +1652,7 @@ test("cached GitHub status preserves proven invalid and logout states until live
     const vibe64User = {
       github: {
         connectedAt: "2026-07-05T16:11:03.389Z",
-        id: 2128734,
+        id: 1,
         login: "local-user"
       },
       home: githubHome,

@@ -27,7 +27,7 @@ describe("Vibe64 preview routes", () => {
       pathTemplate: "/w/:workspaceSlug/admin/jobs/:jobId",
       params: [
         {
-          defaultValue: "mercmobily",
+          defaultValue: "octocat",
           name: "workspaceSlug"
         },
         {
@@ -40,18 +40,18 @@ describe("Vibe64 preview routes", () => {
     expect(previewRouteHasParams(route)).toBe(true);
     expect(previewRouteInitialFormValues(route)).toEqual({
       jobId: "",
-      workspaceSlug: "mercmobily"
+      workspaceSlug: "octocat"
     });
     expect(previewRoutePath(route, {
       jobId: "11514",
-      workspaceSlug: "merc mobily"
+      workspaceSlug: "octo cat"
     })).toEqual({
       missingParam: "",
       ok: true,
-      path: "/w/merc%20mobily/admin/jobs/11514"
+      path: "/w/octo%20cat/admin/jobs/11514"
     });
     expect(previewRoutePath(route, {
-      workspaceSlug: "mercmobily"
+      workspaceSlug: "octocat"
     })).toMatchObject({
       missingParam: "jobId",
       ok: false

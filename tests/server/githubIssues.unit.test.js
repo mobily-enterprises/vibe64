@@ -38,11 +38,11 @@ test("mention suggestions paginate participants and collaborators using the acti
     success({ data: { repository: { issue: { participants: page([{ login: "alice" }, null], "older-people") } } } }),
     success({ data: { repository: { issue: { participants: page([{ login: "early-commenter", name: "Early commenter" }]) } } } }),
     success({ data: { repository: { collaborators: page([{ login: "Alice" }], "more-collaborators") } } }),
-    success({ data: { repository: { collaborators: page([{ login: "tamiastewart123", name: "Tamia" }]) } } })
+    success({ data: { repository: { collaborators: page([{ login: "tamtest-octocat", name: "Tam Test" }]) } } })
   ]);
   const result = await githubIssues(project, { operation: "mentions", number: 7, vibe64User: user }, f.options);
   assert.deepEqual(result.users, [
-    { login: "Alice", name: "" }, { login: "early-commenter", name: "Early commenter" }, { login: "tamiastewart123", name: "Tamia" }
+    { login: "Alice", name: "" }, { login: "early-commenter", name: "Early commenter" }, { login: "tamtest-octocat", name: "Tam Test" }
   ]);
   assert.equal(result.warning, "");
   const queries = f.calls.map((call) => JSON.parse(call.input));
@@ -60,10 +60,10 @@ test("mention suggestions paginate participants and collaborators using the acti
 
 test("new issue mentions load collaborators without an issue, and validate supplied issue numbers", async () => {
   const f = fixture([success({ data: { repository: { collaborators: {
-    nodes: [{ login: "tamiastewart123" }], pageInfo: { hasNextPage: false }
+    nodes: [{ login: "tamtest-octocat" }], pageInfo: { hasNextPage: false }
   } } } })]);
   const result = await githubIssues(project, { operation: "mentions", vibe64User: user }, f.options);
-  assert.equal(result.users[0].login, "tamiastewart123");
+  assert.equal(result.users[0].login, "tamtest-octocat");
   assert.doesNotMatch(JSON.parse(f.calls[0].input).query, /participants|\$number/u);
   const invalid = fixture([]);
   for (const number of [0, -1, "", "../../7", 1.5]) {
