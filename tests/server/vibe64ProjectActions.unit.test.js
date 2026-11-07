@@ -24,11 +24,16 @@ const { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE } = __testa
 
 const localUser = { username: "local", role: "owner" };
 
+/**
+ * A project action as an authorized request runs it: for the project in its
+ * URL, `catalogue` unless `context.projectSlug` names another.
+ */
 function featureAction(project, actionId = "") {
   const declared = createProjectActions({ project }).find((candidate) => candidate.id === actionId);
   assert.ok(declared, `Expected feature action ${actionId} to be registered.`);
   const action = underActionPolicy(declared);
-  return { ...action, execute: (input, context = {}) => action.execute(input, { ...context, projectSlug: "catalogue", vibe64Action: { user: localUser, project: { slug: "catalogue" } } }) };
+  return { ...action, execute: (input, { projectSlug = "catalogue", ...context } = {}) =>
+    action.execute(input, { ...context, projectSlug, vibe64Action: { user: localUser, project: { slug: projectSlug } } }) };
 }
 
 test("Env read action forwards its input", async () => {
@@ -293,19 +298,24 @@ test("Learn mode creates no projects and selects only the practice project; Deve
     selectWorkspaceProject: input => { calls.push(["select", input.slug]); return { ok: true }; }
   } });
   const create = featureAction(project, ACTION_CREATE_PROJECT);
-  const select = featureAction(project, ACTION_SELECT_PROJECT);
+  const selectAction = featureAction(project, ACTION_SELECT_PROJECT);
+  // A selection posts to the chosen project's own URL.
+  const select = slug => selectAction.execute({ slug }, { projectSlug: slug });
   const practiceSlug = "training-12345678123442348234123456789abc";
   let mode = { on: true, currentAttemptId: "12345678-1234-4234-8234-123456789abc", lessonCode: "INTRO-01", practiceSlug };
   releaseMode = registerLearningModeReader(() => mode);
   const learn = { code: "vibe64_learning_mode_project", statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE };
   await assert.rejects(create.execute({ name: "shop" }), learn);
-  await assert.rejects(select.execute({ slug: "shop" }), learn);
-  await select.execute({ slug: practiceSlug });
+  await assert.rejects(select("shop"), learn);
+  // Learn mode never lets another project's URL select the practice project.
+  await assert.rejects(selectAction.execute({ slug: practiceSlug }, { projectSlug: "shop" }),
+    { code: "vibe64_action_project_mismatch", statusCode: 403 });
+  await select(practiceSlug);
   mode = { ...mode, on: false };
-  await assert.rejects(select.execute({ slug: practiceSlug }),
+  await assert.rejects(select(practiceSlug),
     { code: "vibe64_learning_mode_project", statusCode: 403, message: PRACTICE_PROJECT_MODE_MESSAGE });
   await create.execute({ name: "shop" });
-  await select.execute({ slug: "shop" });
+  await select("shop");
   assert.deepEqual(calls, [["select", practiceSlug], ["create", "shop"], ["select", "shop"]]);
 });
 
