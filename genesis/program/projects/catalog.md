@@ -151,8 +151,12 @@ the existing project service. GitHub credentials, repository/PR review checks,
 source mutation locks and resource admission remain with their existing owners.
 Secret reveal keeps its uncached HTTP response around the same owner-only action.
 Project refresh events identify the affected result project, including creation
-or selection from a different requesting project. Action registration alone does
-not expose these operations to Colleague; bounded assistant contracts are separate.
+from a different requesting project. Selection selects only the project its URL
+authorized: a body `slug` naming any other project is refused with
+`vibe64_action_project_mismatch` before anything is selected, and the project
+picker (`useProjectSelectionGate.js`) posts each selection to that project's own
+address. Action registration alone does not expose these operations to
+Colleague; bounded assistant contracts are separate.
 
 Colleague can read the current Project settings and change the requested GitHub
 pull-request requirement or managed development database scope through the same

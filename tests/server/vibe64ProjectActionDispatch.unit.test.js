@@ -38,7 +38,7 @@ test("all project HTTP operations share canonical actions and current authority 
       ["POST", "/pull-requests/:number/merge", "pull-requests.merge", "mergeGithubPullRequest", { review, mergeMethod: "squash" }],
       ["GET", "/projects", "projects.list", "listProjectsFor", {}],
       ["POST", "/projects", "projects.create", "createDevelopProject", { name: "Example", slug: "example" }],
-      ["POST", "/projects/select", "projects.select", "selectProjectInMode", { slug: "example" }],
+      ["POST", "/projects/select", "projects.select", "selectProjectInMode", { slug }],
       ["GET", "/onboarding", "onboarding.read", "readOnboarding", { sessionId: "session-1", templateOffset: 10, templateId: "official:jskit/public", purpose: "An invoice CLI" }],
       ["POST", "/templates/apply", "templates.apply", "applyTemplate", { sessionId: "session-1", templateId: "jskit:public" }],
       ["GET", "/env", "env.read", "readEnv", { environment: "dev", sessionId: "session-1" }],
@@ -96,8 +96,9 @@ test("all project HTTP operations share canonical actions and current authority 
         assert.equal(events.at(-1).entityId, events.at(-2).entityId, operation);
         assert.deepEqual(events.at(-1).realtime, events.at(-2).realtime, operation);
         if (["projects.create", "projects.select"].includes(operation)) {
-          assert.equal(events.at(-1).entityId, "example");
-          assert.equal(events.at(-1).realtime.payload.projectSlug, "example");
+          const named = operation === "projects.create" ? "example" : slug;
+          assert.equal(events.at(-1).entityId, named);
+          assert.equal(events.at(-1).realtime.payload.projectSlug, named);
         }
       }
       assert.equal(actions.getDefinition(actionId).input.mode, "create");
@@ -134,6 +135,56 @@ test("all project HTTP operations share canonical actions and current authority 
       ["onboarding.read", { sessionId: "session-1", templateId: " " }], ["templates.apply", { sessionId: "", templateId: "starter" }]
     ]) await assert.rejects(actions.execute({ actionId: `vibe64.project.${operation}`, input: { ...input, projectSlug: slug }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
     assert.equal(calls.length, count);
+    assert.equal(currentProjectRequestContext(), null);
+  });
+});
+
+test("project select refuses a body that names another project than the one its URL authorized", async () => {
+  await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+    const owner = { username: "owner", role: "owner" };
+    const authorized = [];
+    const selected = [];
+    const events = [];
+    const project = {
+      async selectProjectInMode(input) {
+        selected.push({ slug: input.slug, project: currentProjectRequestContext().slug });
+        return { ok: true, project: { slug: input.slug } };
+      }
+    };
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }), events: { async publish(event) { events.push(event); } } });
+    actions.register({ contributorId: "project", domain: "project", actions: createProjectActions({ project })
+      .filter(({ id }) => id === "vibe64.project.projects.select")
+      .map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+    registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => owner,
+      async authorizeProject({ slug: requested }) { authorized.push(requested); }
+    });
+    const app = testRouteApp();
+    registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
+    const route = findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/projects/select` });
+    const httpSelect = (body) => {
+      const request = { params: routeProjectParams(), input: { body },
+        executeAction({ actionId, input }) {
+          return actions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
+        }
+      };
+      return route.handler(request, { ...testReply(), header() { return this; } });
+    };
+    const automationSelect = (input) => actions.execute({
+      actionId: "vibe64.project.projects.select", input, context: { channel: "automation", surface: "app" }
+    });
+
+    await assert.rejects(httpSelect({ slug: "other_project" }), { code: "vibe64_action_project_mismatch", statusCode: 403 });
+    await assert.rejects(httpSelect({ slug: " other_project " }), { code: "vibe64_action_project_mismatch", statusCode: 403 });
+    await assert.rejects(automationSelect({ projectSlug: slug, slug: "other_project" }),
+      { code: "vibe64_action_project_mismatch", statusCode: 403 });
+    assert.deepEqual(selected, []);
+    assert.deepEqual(events, []);
+    assert.equal(authorized.includes("other_project"), false);
+
+    await httpSelect({ slug: ` ${slug} ` });
+    await automationSelect({ projectSlug: slug, slug });
+    assert.deepEqual(selected, [{ slug, project: slug }, { slug, project: slug }]);
+    assert.deepEqual(events.map(({ entityId }) => entityId), [slug, slug]);
     assert.equal(currentProjectRequestContext(), null);
   });
 });

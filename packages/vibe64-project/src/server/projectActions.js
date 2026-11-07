@@ -1,4 +1,5 @@
 import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, PROJECT_OPERATION, PROJECT_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -182,6 +183,20 @@ function createVibe64ProjectChangedPublisher({ events }) {
   };
 }
 
+/**
+ * The project a select names: the action context authorized only the project
+ * in its URL, so a body that names another one is refused rather than selected.
+ * @param {{ slug: string }} input
+ */
+function authorizedSelectInput(input) {
+  const slug = currentProjectRequestContext()?.slug;
+  if (!slug || String(input.slug || "").trim() !== slug) {
+    throw new AppError(403, "The operation must target the project in its URL.", {
+      code: "vibe64_action_project_mismatch"
+    });
+  }
+  return { ...input, slug };
+}
 
 /**
  * @param {object} dependencies
@@ -421,7 +436,7 @@ function createProjectActions({ project }) {
       input: projectSelectInputValidator,
       events: [projectChangedEvent()],
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => project.selectProjectInMode(input)
+      execute: (input) => project.selectProjectInMode(authorizedSelectInput(input))
     }),
     Object.freeze({
       ...VIBE64_QUERY,

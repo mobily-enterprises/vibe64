@@ -4,7 +4,7 @@ import { renderToString } from "vue/server-renderer";
 import { createVuetify } from "vuetify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resources: [], next: {}, listPath: "", dialogs: [] }));
+const mocks = vi.hoisted(() => ({ resources: [], commands: [], next: {}, listPath: "", dialogs: [] }));
 vi.mock("@/lib/vibe64ProjectScope.js", async (importOriginal) => ({
   ...await importOriginal(), projectListPath: () => mocks.listPath
 }));
@@ -27,7 +27,10 @@ vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   }
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
-  useCommand: (options) => Vue.reactive({ options, messageType: "", message: "", async run() { return { ok: true }; } })
+  useCommand: (options) => {
+    mocks.commands.push(options);
+    return Vue.reactive({ options, messageType: "", message: "", async run() { return { ok: true }; } });
+  }
 }));
 vi.mock("../../src/lib/vibe64AccountConnectionsDialog.js", () => ({
   requestVibe64AccountConnectionsDialog: (detail) => mocks.dialogs.push(detail)
@@ -45,6 +48,7 @@ const text = (html) => html.replace(/<!--[\s\S]*?-->/gu, "").replace(/<[^>]+>/gu
 
 afterEach(() => {
   mocks.resources.length = 0;
+  mocks.commands.length = 0;
   mocks.listPath = "";
   mocks.dialogs.length = 0;
   mocks.next = {};
@@ -145,6 +149,15 @@ describe("the owner's project list", () => {
     const { state, unmount } = mountGate({ data: { hasSelection: false, projects, teamAi: teamAi() } });
     state.openTeamAiSetup();
     expect(mocks.dialogs).toEqual([{ providerId: "ai", section: "team" }]);
+    unmount();
+  });
+
+  it("selects a project at that project's own address, the only project the server selects", () => {
+    const { unmount } = mountGate({ data: { hasSelection: false, projects } });
+    const select = mocks.commands.find((options) => options.placementSource === "vibe64.projects.select");
+    const context = { slug: "shop" };
+    expect(select.buildCommandOptions({}, { context })).toEqual({ method: "POST", path: "/api/app/shop/vibe64/projects/select" });
+    expect(select.buildRawPayload({}, { context })).toEqual({ slug: "shop" });
     unmount();
   });
 

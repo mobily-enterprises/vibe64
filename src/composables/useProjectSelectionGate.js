@@ -106,9 +106,12 @@ function useProjectSelectionGate(emit, {
   const selectProjectCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_PROJECT_SELECT_API_SUFFIX,
-    buildCommandOptions: () => ({
+    // The server selects only the project in the request's address.
+    buildCommandOptions: (_input, { context }) => ({
       method: "POST",
-      path: `${PROJECT_SELECTION_ENDPOINT}/select`
+      path: scopedDevelopmentApiUrl(`${PROJECT_SELECTION_ENDPOINT}/select`, context.slug, {
+        scopeGlobalPaths: true
+      })
     }),
     buildRawPayload: (_model, { context }) => ({
       slug: context.slug || ""
