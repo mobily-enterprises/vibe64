@@ -20,7 +20,11 @@ async function openCompactDashboardSection(page: Page, name: string) {
 async function addIntegration(panel: Locator, name: string) {
   const search = panel.getByRole("textbox", { name: "Search integrations", exact: true });
   await search.fill(name);
-  await panel.getByRole("button", { name: `Add ${name}`, exact: true }).click();
+  const add = panel.getByRole("button", { name: `Add ${name}`, exact: true });
+  // A search expands every category it matches, and a click into a category that is still expanding misses (see
+  // expandPanel), so the click waits until Vuetify's expand transition has removed its inline height.
+  await expect(add.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' v-expansion-panel-text ')][1]")).not.toHaveAttribute("style", /height/u);
+  await add.click();
   await search.fill("");
 }
 
