@@ -246,6 +246,12 @@ The app font, Roboto, ships inside the build: `src/styles/vibe64-font.css`
 self-hosts the variable latin subset from `@fontsource-variable/roboto` under
 the family name Vuetify and the `--v64-font-family` token already use, so every
 first launch renders it even where the system has no Roboto.
+A device's reduced-motion setting reaches every screen: `src/styles/vibe64-m3.css`
+then gives every CSS transition no duration and every animation a single
+near-instant run, and turns off smooth scrolling. `src/main.js` opens Vuetify's
+menus, selects and dialogs without their JavaScript fade, which no stylesheet
+can end. Browser tests ask for reduced motion, so no step waits out an
+animation.
 
 
 The numbered `20261016-claude-rejected-input` repair joins the exact original

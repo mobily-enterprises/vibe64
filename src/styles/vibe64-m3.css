@@ -129,11 +129,30 @@
   --v64-elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.24), 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
+/* A person who asks their device for reduced motion gets screens that change
+   without entrance, exit, expand or route animations and without smooth
+   scrolling; src/main.js also opens Vuetify's menus and dialogs without their
+   fade. Transitions take no time at all, so none starts: Vue's transitions end
+   at once without a duration, while one of 0.01 ms would start on every
+   property of every element that changes (transition-property defaults to all)
+   and keep visibility at its old value for a frame, so a control shown and
+   focused at once would not take focus. Animations stay just above zero, so
+   their end events still fire. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --v64-duration-short: 0ms;
     --v64-duration-medium: 0ms;
     --v64-duration-long: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
   }
 }
 

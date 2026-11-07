@@ -31,5 +31,12 @@ private window starts in Light until you choose again; clearing site data also
 resets it. It does not change the appearance of the app shown inside
 **Preview**, which belongs to the project.
 
+Vibe64 also follows the device's **reduce motion** setting (for example
+**Reduce motion** on macOS and iOS, **Animation effects** off on Windows, or
+**Remove animations** on Android). With it on, screens, panels, menus and dialogs
+change at once instead of sliding, fading or expanding, and pages scroll without
+smooth scrolling. Vibe64 has no setting of its own for this; change it on the
+device.
+
 Colleague can explain these steps but cannot change your name or appearance for
 you: they are your own choices in the dialog.

@@ -28,6 +28,7 @@ import {
 import { resolveStudioRequestUrl } from "./lib/studioUrls.js";
 import { readAppearance } from "./lib/appearance.js";
 import { vibe64Themes } from "./lib/vibe64Theme.js";
+import { hasWindowFunction } from "./lib/browser.js";
 
 configureHttpWebClient({
   csrf: {
@@ -61,6 +62,15 @@ const { router, fallbackRoute } = createShellRouter({
   }
 });
 
+// With the device's reduced-motion setting, menus, selects and dialogs open and
+// close at once, as the rest of the app's transitions do (src/styles/vibe64-m3.css).
+// Vuetify still fades them from JavaScript then, which no stylesheet can end, and
+// a menu ignores taps until its fade ends: 125 ms as it opens, 85 ms as it closes.
+function menuAndDialogMotion() {
+  if (!hasWindowFunction("matchMedia") || !window.matchMedia("(prefers-reduced-motion: reduce)").matches) return {};
+  return Object.fromEntries(["VMenu", "VSelect", "VAutocomplete", "VCombobox", "VDialog"].map((name) => [name, { transition: false }]));
+}
+
 const vuetify = createVuetify({
   theme: {
     defaultTheme: readAppearance(),
@@ -70,7 +80,8 @@ const vuetify = createVuetify({
   // component props still win.
   defaults: {
     VCard: { rounded: "lg" },
-    VAlert: { rounded: "lg" }
+    VAlert: { rounded: "lg" },
+    ...menuAndDialogMotion()
   },
   icons: {
     defaultSet: "mdi",
