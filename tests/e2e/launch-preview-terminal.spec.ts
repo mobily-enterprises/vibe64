@@ -2120,6 +2120,20 @@ for (const width of [1440, 390]) {
   }
 }
 
+function pageTime(page: Page) {
+  return page.evaluate(() => Date.now());
+}
+
+// A busy start's retry waits out the client's own 7-second cooldown. The page
+// clock runs through all but its last half second while the start count holds,
+// then moves past it; the 750 ms stability delay that follows runs in real time.
+async function passAutoStartCooldown(page: Page, startTimes: number[]) {
+  const starts = startTimes.length;
+  await page.clock.runFor(Math.max(0, startTimes[starts - 1] + 6_500 - await pageTime(page)));
+  await expectSteady(() => startTimes.length, starts, 500);
+  await page.clock.fastForward(1_000);
+}
+
 for (const width of [1440, 390]) {
   test(`@preview-contention repeated busy starts recover automatically at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
@@ -2135,10 +2149,11 @@ for (const width of [1440, 390]) {
     await mockLaunchSession(page, {
       initialLaunchStatus: idleLaunchStatusPayload(launchStatusPayload().outputTargets)
     });
+    await page.clock.install();
     let starts = 0;
     const startTimes: number[] = [];
     await page.route("**/output-runs", async (route) => {
-      startTimes.push(Date.now());
+      startTimes.push(await pageTime(page));
       if (++starts > 3) {
         await route.fallback();
         return;
@@ -2154,9 +2169,16 @@ for (const width of [1440, 390]) {
     if (width < 600) {
       await page.getByRole("button", { name: "Show project" }).click();
     }
-    await expect(page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.")).toBeVisible();
+    const waiting = page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.");
+    await expect(waiting).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("waiting.png") });
-    await expect(page.locator(".vibe64-launch-controls__preview-frame")).toBeVisible({ timeout: 35_000 });
+    for (let retry = 1; retry <= 3; retry += 1) {
+      await passAutoStartCooldown(page, startTimes);
+      await expect.poll(() => starts).toBe(retry + 1);
+      // A start shows its own progress until its busy answer returns the page to waiting.
+      if (retry < 3) await expect(waiting).toBeVisible();
+    }
+    await expect(page.locator(".vibe64-launch-controls__preview-frame")).toBeVisible();
     await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
     await expect(page.locator("strong").filter({ hasText: "Preview could not be started" })).toHaveCount(0);
     expect(await page.evaluate(() => (window as typeof window & { busyErrorShown?: boolean }).busyErrorShown)).toBe(false);
@@ -2170,6 +2192,7 @@ for (const width of [1440, 390]) {
 }
 
 test("@preview-contention a genuine startup failure appears once and waits for an explicit retry", async ({ page }) => {
+  await page.clock.install();
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
     initialLaunchStatus: idleLaunchStatusPayload(launchStatusPayload().outputTargets)
@@ -2183,7 +2206,9 @@ test("@preview-contention a genuine startup failure appears once and waits for a
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
   await expect(page.getByText(message, { exact: true })).toHaveCount(1);
   await expect(page.getByText(message, { exact: true })).toBeVisible();
-  await expectSteady(() => starts, 1, 8500);
+  // The page clock runs past a busy start's cooldown and stability delay; a genuine failure still waits.
+  await page.clock.runFor(8_500);
+  await expectSteady(() => starts, 1, 500);
   await page.getByRole("button", { name: "Restart preview", exact: true }).click();
   await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
   await expect(page.getByText(message, { exact: true })).toHaveCount(0);
@@ -2191,13 +2216,14 @@ test("@preview-contention a genuine startup failure appears once and waits for a
 });
 
 test("@preview-contention reload preserves the retry cooldown and recovers", async ({ page }) => {
+  await page.clock.install();
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
     initialLaunchStatus: idleLaunchStatusPayload(launchStatusPayload().outputTargets)
   });
   const startTimes: number[] = [];
   await page.route("**/output-runs", async (route) => {
-    startTimes.push(Date.now());
+    startTimes.push(await pageTime(page));
     if (startTimes.length > 1) return route.fallback();
     await fulfillJson(route, {
       code: "vibe64_agent_write_mode_busy", error: "Another assistant operation is starting. Try again in a moment.",
@@ -2207,7 +2233,10 @@ test("@preview-contention reload preserves the retry cooldown and recovers", asy
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
   await expect(page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.")).toBeVisible();
   await page.reload();
-  await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible({ timeout: 15_000 });
+  // The reloaded page has read its targets and decided about auto-start before its clock moves.
+  await expect(page.getByText("Preview is not running. Start it to see the app.")).toBeVisible();
+  await passAutoStartCooldown(page, startTimes);
+  await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
   expect(startTimes).toHaveLength(2);
   expect(startTimes[1] - startTimes[0]).toBeGreaterThanOrEqual(6500);
 });
