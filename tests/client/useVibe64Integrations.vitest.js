@@ -2,13 +2,14 @@ import { afterEach, expect, it, vi } from "vitest";
 import { effectScope, nextTick, reactive, ref } from "vue";
 import { useVibe64Integrations } from "@/composables/useVibe64Integrations.js";
 
-const mocks = vi.hoisted(() => ({ resource: null, save: null, saveOptions: null, setup: null }));
+const mocks = vi.hoisted(() => ({ resource: null, save: null, saveOptions: null, registrationOptions: null, setup: null }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: () => mocks.resource
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
   useCommand: (options) => {
     if (options.writeMethod === "PUT") mocks.saveOptions = options;
+    if (options.placementSource === "vibe64.integrations.registration") mocks.registrationOptions = options;
     return reactive({ isRunning: false,
       run: options.writeMethod === "PUT" ? (...args) => mocks.save(...args) : (...args) => mocks.setup(...args) });
   }
@@ -260,6 +261,14 @@ it("saving shows only a failure: the footer already says the configuration was s
   fixture();
   expect(mocks.saveOptions.suppressSuccessMessage).toBe(true);
   expect(mocks.saveOptions.messages).toEqual({ error: "Integration configuration could not be saved." });
+});
+
+it("client registration shows only a failure: Client ID already shows the registered client", () => {
+  fixture();
+  expect(mocks.registrationOptions.suppressSuccessMessage).toBe(true);
+  expect(mocks.registrationOptions.messages).toEqual({
+    error: "Client registration did not finish. Check the provider and project Env before trying again."
+  });
 });
 
 it("a busy save keeps the draft editable and allows retry without reloading", async () => {

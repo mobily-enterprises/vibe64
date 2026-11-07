@@ -1521,6 +1521,9 @@ automatic status reads; they no longer show “Completed.” on opening or
 refreshing an integration. **Save configuration** suppresses it too: the
 footer already says the configuration matches `integrations.json`, and the
 message covered the Save button at the bottom end for its five seconds.
+**Register client and connect** suppresses it as well: Client ID shows the
+registered client, and on a narrow screen the message covered Save, the next
+step, staying while the pointer rested on it.
 Error feedback remains enabled. Provider setup
 links can resolve from connection settings before the existing authentication
 fallback, so Notion links to the internal, public or MCP guide as appropriate.

@@ -30,6 +30,8 @@ disconnecting its account. Check those different effects before confirming.
 Unsaved configuration must be saved or deliberately discarded before reloading.
 For client-registration or OAuth-discovery controls, review the displayed provider,
 callback, scopes and previous attempt before authorizing creation or retry.
+A successful client registration fills in **Client ID** without a separate
+message; a failed one says so. Save the configuration afterwards.
 
 For an app-user connection, **Prepare app user connection request** places the
 setup request in the chat draft for review. It does not send it automatically or

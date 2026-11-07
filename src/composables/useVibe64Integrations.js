@@ -122,7 +122,10 @@ export function useVibe64Integrations(context, selectedId) {
   const registrationCommand = useIntegrationCommand("POST", {
     apiSuffix: "/vibe64/integrations/oauth-client",
     messages: { error: "Client registration did not finish. Check the provider and project Env before trying again." },
-    placementSource: "vibe64.integrations.registration"
+    placementSource: "vibe64.integrations.registration",
+    // The form shows the registered client in Client ID, so a success message
+    // would only repeat it while covering Save, the next step.
+    suppressSuccessMessage: true
   });
   watch([path, selectedId], () => { registrationError.value = ""; registrationNeedsReview.value = false; });
   async function registerOAuthClient(callbackUrl) {
