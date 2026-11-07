@@ -1,5 +1,6 @@
 import knexFactory from "knex";
 import path from "node:path";
+import { BoundedMysqlClient, BoundedPostgresClient } from "./boundedResultClients.js";
 import { SQLiteClient } from "./sqliteClient.js";
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
@@ -127,10 +128,16 @@ function resolveDatabaseConnection(endpoint = {}) {
   });
 }
 
+const KNEX_CLIENTS = Object.freeze({
+  mysql: BoundedMysqlClient,
+  postgresql: BoundedPostgresClient,
+  sqlite: SQLiteClient
+});
+
 function createSessionKnex(connection = {}) {
   return knexFactory({
     acquireConnectionTimeout: DATABASE_POOL_ACQUIRE_TIMEOUT_MS,
-    client: connection.engine === "sqlite" ? SQLiteClient : connection.client,
+    client: KNEX_CLIENTS[connection.engine] || connection.client,
     connection: connection.connection,
     ...(connection.engine === "sqlite" ? { useNullAsDefault: true } : {}),
     pool: {

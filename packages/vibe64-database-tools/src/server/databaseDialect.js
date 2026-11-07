@@ -125,7 +125,8 @@ const MYSQL_DIALECT = Object.freeze({
     return Array.isArray(rows) && Array.isArray(fields)
       ? {
           fields,
-          fullRowCount: rows.length,
+          // A streamed result keeps its first rows and counts all of them.
+          fullRowCount: Number(raw[2] ?? rows.length),
           rows
         }
       : null;

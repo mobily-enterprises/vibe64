@@ -380,7 +380,8 @@ async function executeDatabaseQuery({
       await beginReadOnly(knex, connection, descriptor.engine);
       readTransaction = true;
     }
-    const options = databaseDialect(descriptor.engine).queryOptions;
+    // One row past the limit tells the result it was cut.
+    const options = { ...databaseDialect(descriptor.engine).queryOptions, resultRowLimit: QUERY_ROW_LIMIT + 1 };
     signal?.throwIfAborted();
     const raw = await knex.raw(statement)
       .options(options)

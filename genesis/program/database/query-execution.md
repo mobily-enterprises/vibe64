@@ -33,6 +33,8 @@ connection and share one query-ownership boundary.
 - Main: `packages/vibe64-database-tools/src/server/queryExecutor.js`
 - `packages/vibe64-database-tools/src/server/sqlPolicy.js`
 - `packages/vibe64-database-tools/src/server/databaseDialect.js`
+- `packages/vibe64-database-tools/src/server/boundedResultClients.js`
+- `tests/server/databaseBoundedResults.unit.test.js`
 - `packages/vibe64-database-tools/src/server/sqliteClient.js`
 - `packages/vibe64-database-tools/src/server/sqliteWorker.js`
 - `packages/vibe64-database-tools/src/server/schemaInspector.js`
@@ -181,6 +183,13 @@ a WITH statement counted as SELECT only when no data-changing keyword appears in
 it. After a cell edit, row insert or row delete the editor re-runs its SQL only
 for SELECT, SHOW, DESCRIBE or EXPLAIN results, so a row-returning write such as
 `INSERT ... RETURNING` or `CALL` is never repeated; otherwise it reloads state.
+A manual or Copilot query keeps at most 500 rows and 2 MB of its result. For
+PostgreSQL and MySQL, the session's Knex clients (`boundedResultClients.js`)
+stream that statement's rows from the driver and keep only the first 501, so a
+large result is never held whole in the editor's memory; the statement itself
+still runs to completion, so a write is never cut short, and `fullRowCount`
+counts every row it returned. Other Knex queries (schema inspection, lookups,
+edits) use the drivers' normal buffered reads.
 Copilot resolves the submitting user's Explain & check role (`database_assistant`)
 before inference: the owner's setup for the owner, the team setup for everyone
 else. It may use another orchestrator, and a team member's question uses the team

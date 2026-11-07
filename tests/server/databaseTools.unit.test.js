@@ -465,7 +465,7 @@ test("MySQL assistant queries use the adapter's read-only transaction and row mo
     "SELECT 1 AS value;",
     "ROLLBACK"
   ]);
-  assert.deepEqual(options, [{ rowsAsArray: true }]);
+  assert.deepEqual(options, [{ resultRowLimit: 501, rowsAsArray: true }]);
 });
 
 test("database values restore binary payloads and serialize JSON for Knex bindings", () => {
@@ -1532,7 +1532,7 @@ for (const { name, scenario } of [
                 return ["BEGIN READ ONLY", "ROLLBACK"].includes(sql) ? Promise.resolve() : chain;
               },
               options(options) {
-                assert.deepEqual(options, { rowMode: "array" });
+                assert.deepEqual(options, { resultRowLimit: 501, rowMode: "array" });
                 return chain;
               },
               timeout(milliseconds, options) {
