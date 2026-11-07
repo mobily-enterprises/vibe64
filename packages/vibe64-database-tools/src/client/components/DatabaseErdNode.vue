@@ -4,15 +4,16 @@
     :class="{ 'database-erd-node--selected': data.highlighted, 'database-erd-node--dimmed': data.dimmed }"
     :style="{ width: ERD_NODE_WIDTH + 'px' }"
   >
-    <Handle
+    <!-- Vue Flow measures a node's handles from these classes and data attributes. Ports never start connections,
+         so plain elements stand in for its Handle component, which costs a component per relationship end. -->
+    <div
       v-for="port in data.relationshipPorts"
-      :id="port.id"
       :key="port.id"
-      class="database-erd-node__port"
-      :class="`database-erd-node__port--${port.type}`"
-      :position="port.position"
+      class="vue-flow__handle nodrag nopan database-erd-node__port"
+      :class="[`vue-flow__handle-${port.position}`, port.type, `database-erd-node__port--${port.type}`]"
+      :data-handleid="port.id"
+      :data-handlepos="port.position"
       :style="{ top: port.y + 'px' }"
-      :type="port.type"
     />
     <header :style="{ height: ERD_HEADER_HEIGHT + 'px' }">
       <div class="database-erd-node__title" :title="data.table.qualifiedName">
@@ -70,7 +71,6 @@
 </template>
 
 <script setup>
-import { Handle } from "@vue-flow/core";
 import { mdiChevronDown, mdiChevronUp, mdiPin, mdiPinOutline } from "@mdi/js";
 import { ERD_NODE_WIDTH, ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT, ERD_FOOTER_HEIGHT } from "../../shared/erdModel.js";
 
@@ -118,8 +118,10 @@ defineProps({
 .database-erd-node__column--highlighted { background: rgba(var(--v-theme-primary), 0.18); font-weight: 700; }
 .database-erd-node__empty { padding: 0 12px; font-size: 11px; opacity: 0.6; }
 .database-erd-node__port { width: 6px; min-width: 6px; height: 6px; min-height: 6px; pointer-events: none; border: 1px solid rgb(var(--v-theme-surface)); }
-.database-erd-node__port.vue-flow__handle-left { left: 0; transform: translate(-50%, -50%); }
-.database-erd-node__port.vue-flow__handle-right { right: 0; transform: translate(50%, -50%); }
+/* Centred on the card edge by half the 6px dot. Margins rather than transforms: each transform gives its dot a paint
+   layer of its own, and with hundreds of them every repaint of a dense diagram slows down. */
+.database-erd-node__port.vue-flow__handle-left { left: 0; margin: -3px 0 0 -3px; transform: none; }
+.database-erd-node__port.vue-flow__handle-right { right: 0; margin: -3px -3px 0 0; transform: none; }
 .database-erd-node__port--source { background: rgb(var(--v-theme-secondary)); }
 .database-erd-node__port--target { background: rgb(var(--v-theme-primary)); }
 .database-erd-node footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 12px; border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12); font-size: 10px; }

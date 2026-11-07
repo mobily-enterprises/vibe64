@@ -55,9 +55,9 @@ function erdFlowNodes({ tables, relationships, saved, columnMode, groups, dragga
       data: {
         ...node.data, table: markRaw(table), columns: markRaw(columns),
         columnMode, keyColumnCount: erdColumns(table, relationships).length,
-        primaryColumns: new Set((table.keys || []).filter((key) => key.primary).flatMap((key) => key.columns)),
-        uniqueColumns: new Set((table.keys || []).flatMap((key) => key.columns)),
-        foreignColumns: new Set(relationships.filter((relationship) => relationship.sourceTable === table.qualifiedName).flatMap((relationship) => relationship.columns)),
+        primaryColumns: markRaw(new Set((table.keys || []).filter((key) => key.primary).flatMap((key) => key.columns))),
+        uniqueColumns: markRaw(new Set((table.keys || []).flatMap((key) => key.columns))),
+        foreignColumns: markRaw(new Set(relationships.filter((relationship) => relationship.sourceTable === table.qualifiedName).flatMap((relationship) => relationship.columns))),
         onToggle, onExpand, onPin
       }
     };
@@ -120,7 +120,7 @@ function erdFlowEdges(routes, tableName) {
     id: route.id, type: "relationship", source: route.source, target: route.target,
     sourceHandle: route.sourceHandle, targetHandle: route.targetHandle,
     ariaLabel: `${tableName(route.source)}.${route.sourceColumn || "(collapsed)"} → ${tableName(route.target)}.${route.targetColumn || "(collapsed)"}; ${route.cardinality.parent} parent(s) per child; ${route.cardinality.child} children per parent; ${route.relationship.constraintName}`,
-    data: { relationshipId: route.relationshipId, points: route.points, cardinality: route.cardinality }
+    data: { relationshipId: route.relationshipId, points: markRaw(route.points), cardinality: markRaw(route.cardinality) }
   }));
 }
 

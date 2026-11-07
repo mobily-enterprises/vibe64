@@ -312,8 +312,15 @@ neighbourhood grouping, and collision placement. The layout worker supplies
 ELK fixed-port routes as well as node coordinates. `erdRelationships.js` assigns
 per-column handles and accepts clear worker routes; `erdRouting.js` repairs
 cross-group and moved routes using obstacle-aware orthogonal routing with
-lane-sharing penalties. `sessionState.js` normalizes bounded layout/view data
-and stores the shared diagram through the existing session artifact boundary.
+lane-sharing penalties. Applying routes keeps typing responsive on dense schemas
+by drawing each connection once: the cards' ports are set on the data Vue Flow
+shares and measured first, and only then are the connections handed over. Ports
+are plain elements Vue Flow measures as handles, connection ends are looked up in
+strict mode among their own kind of port, cards and connections receive only the
+values they draw, each connection draws its two paths itself, and immutable key
+sets, ports and route points stay outside Vue's deep reactivity.
+`sessionState.js` normalizes bounded layout/view data and stores the shared
+diagram through the existing session artifact boundary.
 
 ## Data navigation and agent layout access
 

@@ -37,7 +37,7 @@ describe("Database ERD fullscreen controls", () => {
     expect(componentSource).toContain('v-model="viewDialog" :attach="erdRoot"');
     expect(componentSource).toContain('v-model="groupDialog" :attach="erdRoot"');
     expect(nodeSource).toContain('v-if="controlsVisible"');
-    expect(nodeSource).toContain(':position="port.position"');
-    expect(nodeSource).toContain(':type="port.type"');
+    expect(nodeSource).toContain(':data-handlepos="port.position"');
+    expect(nodeSource).toContain(':class="[`vue-flow__handle-${port.position}`, port.type, `database-erd-node__port--${port.type}`]"');
   });
 });

@@ -1,11 +1,7 @@
 <template>
-  <BaseEdge
-    :id="id"
-    :interaction-width="20"
-    :marker-end="markerEnd"
-    :path="edgePath[0]"
-    :style="style"
-  />
+  <!-- The two paths Vue Flow's BaseEdge draws, drawn here: hundreds of connections then need no BaseEdge each. -->
+  <path :id="id" class="vue-flow__edge-path" :d="edgePath[0]" :marker-end="markerEnd" :style="style" />
+  <path class="vue-flow__edge-interaction" :d="edgePath[0]" fill="none" stroke-opacity="0" stroke-width="20" />
   <EdgeText
     v-if="data.emphasized"
     :x="sourceX + (sourcePosition === 'left' ? -38 : 38)"
@@ -26,7 +22,7 @@
 
 <script setup>
 import { computed } from "vue";
-import { BaseEdge, EdgeText } from "@vue-flow/core";
+import { EdgeText } from "@vue-flow/core";
 import { erdPolylinePath } from "../../shared/erdRouting.js";
 
 defineOptions({ inheritAttrs: false });

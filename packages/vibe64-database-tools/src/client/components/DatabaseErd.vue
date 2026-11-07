@@ -72,12 +72,15 @@
         <v-skeleton-loader class="database-erd__loading-preview" type="heading, text@2" :width="180" color="transparent" boilerplate aria-hidden="true" />
         <span>Preparing diagram…</span>
       </div>
+      <!-- Strict connection mode looks each connection end up among its own kind of port only, not among all of
+           a card's ports, which on a hub table means hundreds of them per connection. -->
       <VueFlow
         class="database-erd__flow"
         :class="{ 'database-erd__flow--ready': diagramReady }"
         :inert="!diagramReady ? true : undefined"
         v-model:edges="edges"
         v-model:nodes="nodes"
+        connection-mode="strict"
         :default-edge-options="defaultEdgeOptions"
         default-marker-color="rgb(var(--v-theme-primary))"
         :edges-updatable="false"
@@ -98,8 +101,16 @@
         @move-start="clearViewportSave"
         @move-end="onViewportMove"
       >
-        <template #node-table="nodeProps"><DatabaseErdNode v-bind="nodeProps" /></template>
-        <template #edge-relationship="edgeProps"><DatabaseErdEdge v-bind="edgeProps" /></template>
+        <!-- Only what cards and connections draw: Vue Flow's other element props cost every one of hundreds of them
+             a props pass on each render, and would re-render every card on each move. -->
+        <template #node-table="nodeProps"><DatabaseErdNode :id="nodeProps.id" :data="nodeProps.data" /></template>
+        <template #edge-relationship="edgeProps">
+          <DatabaseErdEdge
+            :id="edgeProps.id" :data="edgeProps.data" :marker-end="edgeProps.markerEnd" :style="edgeProps.style"
+            :source-x="edgeProps.sourceX" :source-y="edgeProps.sourceY" :source-position="edgeProps.sourcePosition"
+            :target-x="edgeProps.targetX" :target-y="edgeProps.targetY" :target-position="edgeProps.targetPosition"
+          />
+        </template>
         <MiniMap pannable zoomable />
       </VueFlow>
       <div v-if="layoutPending && diagramReady" class="database-erd__notice" role="status">Arranging tables…</div>

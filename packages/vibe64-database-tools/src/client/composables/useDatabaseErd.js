@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw } from "vue";
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, toRaw } from "vue";
 
 import { buildErdRelationshipRoutes, erdRouteSnapshot } from "../../shared/erdRelationships.js";
 import { erdLayoutGroups, placeErdNodes, visibleErdNodes } from "../../shared/erdModel.js";
@@ -118,13 +118,17 @@ function useDatabaseErd({ props, emit, feedback }) {
     if (disposed || request !== graphRefreshId) return false;
     layoutError.value = "";
     routes = graph.routes;
-    nodes.value = nodes.value.map((node) => ({ ...node, data: { ...node.data, relationshipPorts: graph.portsByNode.get(node.id) || [] } }));
-    edges.value = erdFlowEdges(routes, tableName);
+    // Vue Flow's nodes share their data with these, so only the cards redraw their ports: replacing every
+    // node would also have Vue Flow re-read and redraw all of them.
+    for (const node of nodes.value) node.data.relationshipPorts = markRaw(graph.portsByNode.get(node.id) || []);
     obstructedCount.value = routes.filter((route) => route.obstructed).length;
-    emphasize();
+    // Vue Flow anchors connections at measured ports. Measuring the new ports before handing it the
+    // connections renders each connection once, in the same task, rather than again after measurement.
     await nextTick();
     if (disposed || request !== graphRefreshId) return false;
     flow?.updateNodeInternals(nodes.value.filter((node) => !node.hidden).map((node) => node.id));
+    edges.value = erdFlowEdges(routes, tableName);
+    emphasize();
     return true;
   }
   async function rebuild({ force = false } = {}) {
