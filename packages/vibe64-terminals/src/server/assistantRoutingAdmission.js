@@ -4,7 +4,8 @@ import {
   assistantRoutingStatusIsPending,
   assistantRoutingRequestCanBeReplaced,
   assistantRoutingFromMetadata,
-  assistantGoalIsActive
+  assistantGoalIsActive,
+  assistantExplicitTask
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { failure, readCancelled, read, usesWorkPlan } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
@@ -16,6 +17,12 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 /** @typedef {import("./types.js").AssistantRoutingDelivery} AssistantRoutingDelivery */
 /** @typedef {ReturnType<typeof import("./assistantRoutingCancellation.js").createAssistantRoutingCancellation>} AssistantRoutingCancellation */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
+// What a refusal calls each explicit task, and the suffix of its codes.
+const EXPLICIT_TASKS = Object.freeze({
+  deslop: { name: "Deslop", code: "deslop" },
+  "ui-pass": { name: "UI pass", code: "ui_pass" }
+});
 
 /**
  * Sending: a message's admission into a new or resumed request, its routing and delivery, and the
@@ -69,7 +76,9 @@ function createAssistantRoutingAdmission({
 
   async function route(sessionId, input, options) {
     if (options.purpose && options.purpose !== "junior") throw new TypeError("Generated main-chat work must declare Junior.");
-    const explicitDeslop = !options.purpose && (input.genesisTask === "deslop" || /^\s*deslop[.!]?\s*$/iu.test(input.message));
+    // Deslop and the UI pass each run in their own Senior turn.
+    const explicitTask = options.purpose ? "" : assistantExplicitTask(input);
+    const explicit = EXPLICIT_TASKS[explicitTask];
     let context;
     let state;
     let direct;
@@ -100,7 +109,7 @@ function createAssistantRoutingAdmission({
         );
       }
       const preferences = assistantRoutingFromMetadata(context.session.metadata) ||
-        (options.purpose || explicitDeslop ? { mode: options.purpose || "senior", review: false } : null);
+        (options.purpose || explicitTask ? { mode: options.purpose || "senior", review: false } : null);
       if (!routingState.allowAuto && preferences?.mode === "auto") {
         throw failure("Auto is available in Main chat only. Choose Senior or Junior.", "vibe64_assistant_routing_auto_main_chat_only");
       }
@@ -181,8 +190,11 @@ function createAssistantRoutingAdmission({
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
-        if (explicitDeslop) {
-          throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.", "vibe64_assistant_routing_deslop_turn_active");
+        if (explicit) {
+          throw failure(
+            `${explicit.name} uses the Senior model in its own turn. Finish or stop the current turn, then send ${explicit.name} again.`,
+            `vibe64_assistant_routing_${explicit.code}_turn_active`
+          );
         }
         if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.", "vibe64_assistant_routing_turn_started");
         // A steered message joins the running turn on that turn's mode and model,
@@ -237,10 +249,10 @@ function createAssistantRoutingAdmission({
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned: savedGoal } = await records.currentGoal(sessionId, context);
         records.mark(input.messageId, "goal-read");
-        if (explicitDeslop && assistantGoalIsActive(goal)) {
+        if (explicit && assistantGoalIsActive(goal)) {
           throw failure(
-            "Deslop can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send Deslop again.",
-            "vibe64_assistant_goal_deslop_blocked"
+            `${explicit.name} can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send ${explicit.name} again.`,
+            `vibe64_assistant_goal_${explicit.code}_blocked`
           );
         }
         if (!options.purpose && preferences.mode === "auto" && assistantGoalIsActive(goal) && !savedGoal) {
@@ -259,9 +271,9 @@ function createAssistantRoutingAdmission({
           throw failure("The active plan changed. Read the current plan before sending your request.", "vibe64_assistant_routing_plan_changed");
         }
         let resolvedMode = mode;
-        if (explicitDeslop) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
+        if (explicitTask) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
-        const review = mode === "auto" && !explicitDeslop && !options.purpose && !assistantGoalIsActive(goal);
+        const review = mode === "auto" && !explicitTask && !options.purpose && !assistantGoalIsActive(goal);
         state = {
           messageId: input.messageId,
           input: {
@@ -278,8 +290,8 @@ function createAssistantRoutingAdmission({
           },
           mode,
           resolvedMode,
-          ...(explicitDeslop ? { task: "deslop" } : {}),
-          reason: explicitDeslop ? "review" : "",
+          ...(explicitTask ? { task: explicitTask } : {}),
+          reason: explicitTask ? "review" : "",
           workPlan: plan,
           schemaVersion: 5,
           observedSelection: selection,
@@ -305,13 +317,20 @@ function createAssistantRoutingAdmission({
             .filter((name) => context.vibe64User[name] !== undefined)
             .map((name) => [name, context.vibe64User[name]])) : null,
           reviewMessage: [
-            preferences.review ? "Automatic review and Deslop:" : "Automatic review:",
+            preferences.review && preferences.uiPass ? "Automatic review, Deslop and UI pass:"
+              : preferences.review ? "Automatic review and Deslop:"
+                : preferences.uiPass ? "Automatic review and UI pass:" : "Automatic review:",
             "Check the preceding implementation against my request, accepted steering and any plan explicitly involved in that work. Inspect the implementation and evidence, fix in-scope issues, and run relevant checks. Read every page of BOTH Plan and Progress before reviewing, including the complete technical implementation plan; checklist marks do not establish completion. Leave unrelated plans unchanged. Do not ask for permission merely to review or complete verified work.",
             ...(preferences.review ? [
-              "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance. Keep that cleanup behavior-preserving and preserve unrelated work and staging.",
-              "Perform both parts yourself in this turn; do not delegate cleanup or start a separate Deslop turn. Run relevant checks after cleanup."
+              "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance. Keep that cleanup behavior-preserving and preserve unrelated work and staging."
             ] : []),
-            "Only after review, any enabled Deslop and their checks are finished: Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Report findings, fixes, actual checks and anything unverified."
+            ...(preferences.uiPass ? [
+              "Then run the UI pass on the screens those changes touched, following the project's UI pass guidance. Keep each screen's behavior and preserve unrelated work and staging."
+            ] : []),
+            ...(preferences.review || preferences.uiPass ? [
+              "Perform every part yourself in this turn; do not delegate cleanup or start a separate Deslop or UI pass turn. Run relevant checks after cleanup."
+            ] : []),
+            "Only after review, any enabled Deslop and UI pass and their checks are finished: Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Report findings, fixes, actual checks and anything unverified."
           ].join(" ")
         };
         state.decision = await decisions.resolve(context, state);

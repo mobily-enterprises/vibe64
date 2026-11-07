@@ -237,7 +237,7 @@ function createTemporaryConversationInteraction({
         const override = selectingModel
           ? await sessionAgent.resolveSelection(requested.override, ctx) : requested.override;
         if (selectingModel) await sessionAgent.requireAssistantAccessForSelection(override, ctx);
-        const preferences = assistantRoutingPreferences({ ...requested, override, review: false, autoSave: false });
+        const preferences = assistantRoutingPreferences({ ...requested, override, review: false, autoSave: false, uiPass: false });
         fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
       }
       if (settingsChanged && !input.assistantRouting) {

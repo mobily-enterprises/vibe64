@@ -10,7 +10,9 @@ import {
   assistantModePrompt,
   assistantWorkflowInstructions,
   assistantGoalIsActive,
-  assistantWorkflowRole
+  assistantWorkflowRole,
+  assistantTaskPurpose,
+  uiPassRequest
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   failure,
@@ -156,9 +158,13 @@ function createAssistantRoutingDelivery({
         throw failure("The active plan changed before execution started. Read it and send your execution request again.", "vibe64_assistant_routing_execution_plan_changed");
       }
     }
-    const includePlanInstructions = state.task !== "deslop" && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
-    let message = assistantModePrompt(role, input.message, {
-      intent: state.task || (state.mode === "auto" ? state.stage === "review" ? "review" : state.reason : ""),
+    const taskPurpose = assistantTaskPurpose(state.task);
+    const includePlanInstructions = !taskPurpose && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
+    // A UI pass's scope is the request its Genesis task receives, as a commit
+    // range in the message is Deslop's.
+    const request = state.task === "ui-pass" ? uiPassRequest(input.message, { explicit: true }) : input.message;
+    let message = assistantModePrompt(role, request, {
+      intent: taskPurpose || (state.mode === "auto" ? state.stage === "review" ? "review" : state.reason : ""),
       browserReview: state.workflow && implementing,
       planInstructions: includePlanInstructions ? workPlanInstructions(role) : ""
     });
@@ -183,7 +189,7 @@ function createAssistantRoutingDelivery({
       messageId,
       message,
       displayMessage,
-      ...(state.task === "deslop" ? { genesisTask: "deslop" } : {}),
+      ...(taskPurpose ? { genesisTask: state.task } : {}),
       turnMetadata: {
         ...(!followup ? state.input.turnMetadata : {}),
         assistantRouting: attribution(state, followup),
@@ -231,7 +237,7 @@ function createAssistantRoutingDelivery({
     const destination = decisions.destinations(state.decision || {})[modelRole];
     let resolvedMode = state.resolvedMode;
     if (state.stage === "review") resolvedMode = "review";
-    else if (state.task === "deslop" && resolvedMode === "senior") resolvedMode = "deslop";
+    else if (assistantTaskPurpose(state.task) && resolvedMode === "senior") resolvedMode = assistantTaskPurpose(state.task);
     return {
       requestedMode: state.mode,
       resolvedMode,

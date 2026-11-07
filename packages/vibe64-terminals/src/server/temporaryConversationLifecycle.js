@@ -82,7 +82,7 @@ function createTemporaryConversationLifecycle({
       const requestedPreferences = fixRequired ? { mode: "fix" } : input.assistantRouting || inheritedPreferences;
       if (requestedPreferences.mode === "auto") throw temporaryAutoModeRefusal();
       if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw teamTemporaryModesRefusal();
-      const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false, autoSave: false });
+      const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false, autoSave: false, uiPass: false });
       const initialPresentation = presentation(input.presentation);
       const recentContext = input.includeRecentChatContext === true
         ? await ctx.runtime.store.mutateSession(sessionId, () => recentChatContext(ctx.runtime.store, sessionId)) : null;

@@ -12,7 +12,8 @@ import {
   ROUTING_REASONS,
   assistantRoutingPrompt,
   parseRoutingDecision,
-  assistantWorkflowRole
+  assistantWorkflowRole,
+  assistantTaskPurpose
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { read, failure, recentVisibleMessages } from "./assistantRoutingRequests.js";
 
@@ -183,13 +184,13 @@ function createAssistantRoutingDecisions({
     let purpose = state.mode;
     if (followup) {
       purpose = state.stage === "review" ? "review" : assistantWorkflowRole(state);
-    } else if (state.mode !== "custom" && state.task === "deslop") {
-      purpose = state.resolvedMode === "senior" ? "deslop" : state.resolvedMode;
+    } else if (state.mode !== "custom" && assistantTaskPurpose(state.task)) {
+      purpose = state.resolvedMode === "senior" ? assistantTaskPurpose(state.task) : state.resolvedMode;
     }
     const decision = await agent.resolveAssistantPurpose({
       purpose,
       reviewEnabled: state.review,
-      override: state.task === "deslop" && state.mode !== "custom" ? undefined : state.override
+      override: assistantTaskPurpose(state.task) && state.mode !== "custom" ? undefined : state.override
     }, {
       ...context,
       vibe64User: state.submittedBy,
@@ -215,7 +216,7 @@ function createAssistantRoutingDecisions({
     if (!state.decision || state.admissionRequired) throw failure("This request needs fresh admission. Retry it before continuing.", "vibe64_assistant_routing_admission_required");
     const current = destinations(await resolve(context, state, followup));
     for (const [role, captured] of Object.entries(destinations(state.decision))) {
-      if ((followup || state.task === "deslop") && role === "router") continue;
+      if ((followup || assistantTaskPurpose(state.task)) && role === "router") continue;
       if (!sameVibe64AssistantSelection(current[role]?.effectiveSelection, captured.effectiveSelection) ||
           current[role]?.connectionIdentity !== captured.connectionIdentity) {
         throw failure("The selected AI connection changed. Cancel this request and send it again.", "vibe64_assistant_routing_connection_changed");

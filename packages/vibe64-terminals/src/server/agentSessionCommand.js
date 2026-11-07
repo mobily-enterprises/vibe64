@@ -66,6 +66,7 @@ import {
   waitForCommandResult
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantRouting";
 import { commandLineFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -360,7 +361,7 @@ function createAgentSessionCommandService({
       }
       let role = "";
       if (request?.reason !== "conversation" &&
-          request?.task !== "deslop" &&
+          !assistantTaskPurpose(request?.task) &&
           request?.status === "working" &&
           request.delivery === "accepted") {
         role = request.stage === "review" && request.followup ? "review" : request.resolvedMode;
