@@ -145,7 +145,7 @@ const agentMessageFields = {
   },
   genesisTask: {
     type: "string",
-    enum: ["deslop"],
+    enum: ["deslop", "ui-pass"],
     noTrim: false,
     required: false
   },
@@ -365,6 +365,7 @@ const assistantRoutingField = {
     mode: { type: "string", enum: ASSISTANT_MODES.map(({ id }) => id), required: true },
     review: { type: "boolean", required: false },
     autoSave: { type: "boolean", required: false },
+    uiPass: { type: "boolean", required: false },
     override: assistantSelectionField
   })
 };

@@ -96,8 +96,8 @@ function createSessionAssistant({
       : null;
     const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
     const startMode = previous && !["custom", "fix"].includes(previous.mode) ? previous.mode : mode;
-    // Deslop and automatic save start on (their shared default); the chat-mode
-    // controls can turn them off.
+    // Deslop and automatic save start on (their shared default) and the UI pass
+    // off; the chat-mode controls can change each.
     const preferences = assistantRoutingPreferences(explicitSelection ? { mode: "custom", override: explicitSelection }
       : { mode: startMode });
     const routingSetup = await initializeModelRouting({ vibe64User });
@@ -189,7 +189,7 @@ function createSessionAssistant({
             return nativeState;
           };
           if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
-            // An omitted Deslop or automatic save choice keeps the chat's own.
+            // An omitted Deslop, UI pass or automatic save choice keeps the chat's own.
             preferences = assistantRoutingPreferences({
               ...assistantRoutingAutomation(assistantRoutingFromMetadata(session.metadata)),
               ...input.assistantRouting
