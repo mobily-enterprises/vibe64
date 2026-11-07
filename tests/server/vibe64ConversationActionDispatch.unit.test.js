@@ -128,6 +128,37 @@ test("the existing assistant catalogue is actor-authorized without a project or 
   assert.equal(calls.length, 2);
 });
 
+test("a Main conversation message that names another person still runs as the signed-in person", async () => {
+  await withRouteProject(async ({ projectContext, slug }) => {
+    const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
+    const member = { username: "member", uid: 42, role: "member" };
+    const forged = { username: "owner", uid: 1, role: "owner" };
+    const sends = [];
+    registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => member, authorizeProject() {} });
+    actions.register({ contributorId: "forged-actor", domain: "sessions", actions:
+      createSessionActions({ sessions: withMainChatOperations({
+        sendAgentMessage(sessionId, input) {
+          sends.push({ sessionId, input, actor: currentProjectRequestContext().vibe64User });
+          return { ok: true, delivered: true, messageId: input.messageId };
+        }
+      }) }).filter(({ id }) => [ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE].includes(id))
+        .map(definition => ({ channels: ["internal"], surfaces: ["app"], ...definition })) });
+    const conversations = createMainBrowserConversations({ actions, terminals: {} });
+    const conversation = await conversations.open({ id: mainConversationId({ projectSlug: slug, sessionId: "session-1" }),
+      context: { surface: "app", channel: "internal" } });
+    await conversation.send({ text: "Hello", messageId: "forged-1", vibe64User: forged,
+      data: { clientId: "client-1", vibe64User: forged } });
+    assert.equal(sends.length, 1);
+    assert.equal(sends[0].actor, member);
+    assert.equal(sends[0].input.vibe64User, member);
+    assert.equal(sends[0].input.clientId, "client-1");
+    await assert.rejects(actions.execute({ actionId: ACTION_SEND_AGENT_MESSAGE, input: {
+      projectSlug: slug, sessionId: "session-1", message: "Hello", messageId: "forged-2", vibe64User: forged
+    }, context: { surface: "app", channel: "internal" } }), { code: "ACTION_VALIDATION_FAILED" });
+    assert.equal(sends.length, 1, "a forged person never reaches the session");
+  });
+});
+
 test("conversation HTTP handlers and automation execute the same authorized actions", async () => {
   await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const app = testRouteApp();
