@@ -41,6 +41,28 @@ async function openChat(page: Page) {
   await expect(composer(page)).toBeVisible();
 }
 
+// The assistant check starts once Socket.IO connects. The Socket.IO client takes
+// the browser's own timers when it is created, before its WebSocket opens, so
+// holding that WebSocket until the page clock is installed puts the check's
+// timers on the page clock while Socket.IO's heartbeat stays real. A paused clock
+// moves only when the test moves it.
+async function openChatOnPageClock(page: Page, { paused = false } = {}) {
+  const requested = Promise.withResolvers<void>();
+  const released = Promise.withResolvers<void>();
+  await page.routeWebSocket(/\/socket\.io\//u, async (socket) => {
+    requested.resolve();
+    await released.promise;
+    socket.connectToServer();
+  });
+  const opened = openChat(page);
+  await requested.promise;
+  await page.clock.install();
+  // A second ahead of the browser's time, so the pause cannot fall behind it.
+  if (paused) await page.clock.pauseAt(Date.now() + 1_000);
+  released.resolve();
+  await opened;
+}
+
 async function expectCanonicalConversation({ sends = 0, goals = 0, connections = 1, httpRead = true } = {}) {
   const route = `/api/assistant/app/conversations/${encodeURIComponent(server.conversationId)}`;
   if (httpRead) await expect.poll(() => server.state.requests.some(request => request === `GET ${route}` || request.startsWith(`GET ${route}?`))).toBe(true);
@@ -338,12 +360,28 @@ for (const failure of ["http-503", "connection-reset", "invalid-json"]) {
 
 test("repeated failures back off instead of flooding the server", async ({ page }) => {
   server.state.checks.push(busy, busy, busy, busy);
-  await openChat(page);
+  // Each check's time on the page clock, which moves only when the test moves it.
+  const checkTimes: number[] = [];
+  await page.route("**/agent-session", async (route) => {
+    if (route.request().method() === "POST") checkTimes.push(await page.evaluate(() => Date.now()));
+    await route.fallback();
+  });
+  await openChatOnPageClock(page, { paused: true });
   await composer(page).fill("Waiting for recovery.");
-  await expect(steer(page)).toBeEnabled({ timeout: 25_000 });
+  for (let index = 1; index < 5; index += 1) {
+    await expect.poll(() => checkTimes.length).toBe(index);
+    // The busy answer is handled and the next check scheduled.
+    await expect(warning(page)).toBeVisible();
+    const wait = 1_000 * 2 ** (index - 1);
+    await page.clock.runFor(wait * 0.9);
+    await expectSteady(() => checkTimes.length, index, 500);
+    await page.clock.runFor(wait * 0.2);
+  }
+  await page.clock.resume();
+  await expect(steer(page)).toBeEnabled();
   expect(server.state.checkCount).toBe(5);
   for (let index = 1; index < 5; index += 1) {
-    expect(server.state.checkTimes[index] - server.state.checkTimes[index - 1]).toBeGreaterThanOrEqual(900 * 2 ** (index - 1));
+    expect(checkTimes[index] - checkTimes[index - 1]).toBeGreaterThanOrEqual(900 * 2 ** (index - 1));
   }
 });
 
@@ -383,21 +421,7 @@ for (const viewport of viewports) {
 test("hung provider check times out and a late response cannot undo recovery", async ({ page }) => {
   let heldResponse;
   server.state.checks.push((response) => { heldResponse = response; });
-  // The check starts once Socket.IO connects. Holding the client's WebSocket until
-  // the page clock is installed puts the check's 45-second timeout on that clock,
-  // while the Socket.IO client, created before it, keeps the browser's own timers.
-  const handshakeRequested = Promise.withResolvers<void>();
-  const handshakeReleased = Promise.withResolvers<void>();
-  await page.routeWebSocket(/\/socket\.io\//u, async (socket) => {
-    handshakeRequested.resolve();
-    await handshakeReleased.promise;
-    socket.connectToServer();
-  });
-  const opened = openChat(page);
-  await handshakeRequested.promise;
-  await page.clock.install();
-  handshakeReleased.resolve();
-  await opened;
+  await openChatOnPageClock(page);
   await composer(page).fill("Preserve this through the timeout.");
   await expect.poll(() => server.state.checkCount).toBe(1);
   await page.clock.fastForward(45_000);
