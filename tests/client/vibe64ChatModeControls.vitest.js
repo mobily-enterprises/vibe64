@@ -29,7 +29,7 @@ afterEach(() => { app?.unmount(); });
 
 for (const temporary of [false, true]) {
   it(`${temporary ? "temporary" : "main"} direct roles retain their custom model; only Auto offers review`, async () => {
-    const main = temporary ? {} : { autoSave: true };
+    const main = temporary ? {} : { autoSave: true, uiPass: false };
     const state = mount(temporary ? mocks.save : undefined, temporary);
     expect(state.modeLabel).toBe("Junior");
     expect(state.reviewAvailable).toBe(false);
@@ -43,7 +43,7 @@ for (const temporary of [false, true]) {
     expect(state.reviewAvailable).toBe(false);
     await state.save("auto", true);
     expect(state.reviewAvailable).toBe(!temporary);
-    expect(mocks.save).toHaveBeenLastCalledWith(temporary ? { mode: "senior", review: false } : { mode: "auto", review: true, autoSave: true });
+    expect(mocks.save).toHaveBeenLastCalledWith(temporary ? { mode: "senior", review: false } : { mode: "auto", review: true, autoSave: true, uiPass: false });
     expect(state.modes.map(({ id }) => id)).toEqual(temporary ? ["custom", "senior", "junior", "fix"] : ["custom", "senior", "junior", "auto"]);
   });
 }
@@ -56,25 +56,49 @@ it("a failed switch to Auto keeps the direct role and custom model", async () =>
   expect(state.mode).toBe("junior");
   expect(state.saveError).toBe("Connection interrupted.");
   await state.save("auto", true);
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true, uiPass: false });
 });
 
 it("turning Deslop off asks first; Cancel keeps it on", async () => {
   const state = mount();
   await state.save("auto", true);
   mocks.save.mockClear();
-  state.changeDeslop(false);
-  expect(state.deslopConfirmOpen).toBe(true);
+  state.changeSwitch("review", false);
+  expect(state.offConfirmOpen).toBe(true);
+  expect(state.offConfirmSwitch).toBe("review");
   expect(mocks.save).not.toHaveBeenCalled();
-  state.deslopConfirmOpen = false;
+  state.offConfirmOpen = false;
   expect(state.review).toBe(true);
-  state.changeDeslop(false);
-  await state.confirmDeslopOff();
-  expect(state.deslopConfirmOpen).toBe(false);
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: false, autoSave: true });
-  state.changeDeslop(true);
-  expect(state.deslopConfirmOpen).toBe(false);
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true });
+  state.changeSwitch("review", false);
+  await state.confirmSwitchOff();
+  expect(state.offConfirmOpen).toBe(false);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: false, autoSave: true, uiPass: false });
+  await state.changeSwitch("review", true);
+  expect(state.offConfirmOpen).toBe(false);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true, uiPass: false });
+});
+
+it("turning the Automatic UI pass on saves at once; turning it off asks first and Cancel keeps it on", async () => {
+  const state = mount(undefined, false, { session: { sessionId: "session-1", metadata: { assistant_routing: JSON.stringify({
+    mode: "auto", review: true, autoSave: true }) } } });
+  await state.changeSwitch("uiPass", true);
+  expect(state.offConfirmOpen).toBe(false);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true, uiPass: true });
+  mocks.save.mockClear();
+  state.changeSwitch("uiPass", false);
+  expect(state.offConfirmOpen).toBe(true);
+  expect(state.offConfirmSwitch).toBe("uiPass");
+  expect(mocks.save).not.toHaveBeenCalled();
+  state.offConfirmOpen = false;
+  expect(state.uiPass).toBe(true);
+  expect(state.review).toBe(true);
+  state.changeSwitch("uiPass", false);
+  await state.confirmSwitchOff();
+  expect(state.offConfirmOpen).toBe(false);
+  expect(state.uiPass).toBe(false);
+  // Turning the UI pass off leaves Deslop on.
+  expect(state.review).toBe(true);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true, uiPass: false });
 });
 
 it("starts with Deslop and automatic save on when the chat has no saved preferences", () => {
@@ -87,10 +111,32 @@ it("Auto after a Custom model starts with Deslop and automatic save on; turning 
   const state = mount(undefined, false, { session: { sessionId: "session-1", metadata: { assistant_routing: JSON.stringify({
     mode: "custom", review: false, autoSave: false, override }) } } });
   await state.save("auto");
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true, uiPass: false });
   await state.save("auto", state.review, false);
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: false });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: false, uiPass: false });
   expect(state.triggerLabel).toMatch(/Automatic deslop by Senior on$/);
+});
+
+it("the Automatic UI pass starts off, saves on and off, and older saved preferences read as off", async () => {
+  const state = mount(undefined, false, { session: { sessionId: "session-1", metadata: { assistant_routing: JSON.stringify({
+    mode: "auto", review: true, autoSave: true }) } } });
+  expect(state.uiPass).toBe(false);
+  expect(state.triggerLabel).not.toMatch(/UI pass/);
+  await state.save("auto", state.review, state.autoSave, true);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true, uiPass: true });
+  expect(state.triggerLabel).toMatch(/Automatic deslop by Senior on\. Automatic UI pass by Senior on\. Automatic save after plans on$/);
+  await state.save("auto", state.review, state.autoSave, false);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, autoSave: true, uiPass: false });
+  mocks.save.mockRejectedValueOnce(new Error("Connection interrupted."));
+  await state.save("auto", state.review, state.autoSave, true);
+  expect(state.uiPass).toBe(false);
+});
+
+it("a temporary chat never carries the Automatic UI pass", async () => {
+  const state = mount(mocks.save, true);
+  await state.save("senior", false, true, true);
+  expect(state.uiPass).toBe(false);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false });
 });
 
 it("ends each sentence of the mode label with one period", () => {
@@ -152,7 +198,7 @@ it("a failed save restores the mode and exact override", async () => {
   await state.save("senior", false);
   expect(state.mode).toBe("junior");
   expect(state.saveError).toBe("Previous assistant could not stop.");
-  expect(state.updatedPreferences).toEqual({ mode: "junior", review: false, autoSave: true, override });
+  expect(state.updatedPreferences).toEqual({ mode: "junior", review: false, autoSave: true, uiPass: false, override });
 });
 
 for (const temporary of [false, true]) {
@@ -165,7 +211,7 @@ for (const temporary of [false, true]) {
       expect(openPicker).toHaveBeenCalledOnce();
       expect(state.detailsOpen).toBe(false);
       await state.save("senior", false);
-      expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, ...(temporary ? {} : { autoSave: true }) });
+      expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, ...(temporary ? {} : { autoSave: true, uiPass: false }) });
     });
   }
 }
@@ -179,9 +225,9 @@ for (const status of ["paused", "active"]) {
     state.openCustom();
     expect(openPicker).toHaveBeenCalledOnce();
     await state.save("senior");
-    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, autoSave: true });
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, autoSave: true, uiPass: false });
     await state.save("auto");
-    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: false, autoSave: true });
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: false, autoSave: true, uiPass: false });
     expect(goal).toEqual({ status, objective: "Finish the agreed work", tokenBudget: 20000 });
   });
 }
@@ -193,7 +239,7 @@ it("uses the shared native goal rather than stale session and routing snapshots"
         assistant_routing_goal: JSON.stringify({ status: "active" }) } } });
   expect(state.hasGoal).toBe(true);
   await state.save("junior");
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: true, autoSave: true });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: true, autoSave: true, uiPass: false });
   app._instance.props.goal = null;
   await nextTick();
   expect(state.hasGoal).toBe(false);

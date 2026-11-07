@@ -30,10 +30,13 @@ const props = defineProps({
 const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
-// Deslop and automatic save follow the shared defaults unless this chat turned them off.
+// Deslop, automatic save and the UI pass follow the shared defaults unless this chat changed them.
 const review = ref(true);
 const autoSave = ref(true);
-const deslopConfirmOpen = ref(false);
+const uiPass = ref(false);
+// The switch, review (Deslop) or uiPass, whose turning off is being confirmed.
+const offConfirmOpen = ref(false);
+const offConfirmSwitch = ref("review");
 const modelOverride = ref(null);
 const saving = ref(false);
 const saveError = ref("");
@@ -59,11 +62,11 @@ const hasGoal = computed(() => Boolean(props.goal && !["completed", "complete"].
 const ownerOnly = computed(() => !props.temporary && decisions.value.senior?.approvalRequired === true);
 const reviewAvailable = computed(() => !props.temporary && !ownerOnly.value && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
-  ...(props.temporary ? {} : { autoSave: autoSave.value }),
+  ...(props.temporary ? {} : { autoSave: autoSave.value, uiPass: uiPass.value }),
   ...(modelOverride.value ? { override: modelOverride.value } : {}) }));
 watch(preferences, (value) => {
   mode.value = value?.mode || ""; modelOverride.value = value?.override || null;
-  ({ review: review.value, autoSave: autoSave.value } = assistantRoutingAutomation(value));
+  ({ review: review.value, autoSave: autoSave.value, uiPass: uiPass.value } = assistantRoutingAutomation(value));
 }, { immediate: true });
 function roleLabel(role) {
   if (role === "custom" && preferences.value?.mode !== "custom") return "Choose a model and thinking level.";
@@ -88,6 +91,7 @@ const description = computed(() => {
 // One sentence per part: a description may already end with a period.
 const triggerLabel = computed(() => [`Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}`, description.value,
   review.value && reviewAvailable.value && 'Automatic deslop by Senior on',
+  uiPass.value && reviewAvailable.value && 'Automatic UI pass by Senior on',
   autoSave.value && reviewAvailable.value && 'Automatic save after plans on'
 ].filter(Boolean).map(part => part.replace(/\.$/u, '')).join('. '));
 const reviewDescription = computed(() => {
@@ -110,11 +114,12 @@ function openCustom() {
   detailsOpen.value = false;
   emit("custom", modeMenu.value?.activatorEl);
 }
-async function save(nextMode = mode.value, nextReview = review.value, nextAutoSave = autoSave.value) {
+async function save(nextMode = mode.value, nextReview = review.value, nextAutoSave = autoSave.value, nextUiPass = uiPass.value) {
   if (saving.value || props.disabled || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && props.temporary) return;
-  const previous = { mode: mode.value, review: review.value, autoSave: autoSave.value, override: modelOverride.value };
+  const previous = { mode: mode.value, review: review.value, autoSave: autoSave.value, uiPass: uiPass.value, override: modelOverride.value };
   if (nextMode !== mode.value) modelOverride.value = null;
-  mode.value = nextMode; review.value = !props.temporary && nextReview; autoSave.value = !props.temporary && nextAutoSave; saving.value = true;
+  mode.value = nextMode; review.value = !props.temporary && nextReview; autoSave.value = !props.temporary && nextAutoSave;
+  uiPass.value = !props.temporary && nextUiPass; saving.value = true;
   saveError.value = "";
   try {
     const result = props.savePreferences ? await props.savePreferences(updatedPreferences.value) : await command.run();
@@ -122,20 +127,24 @@ async function save(nextMode = mode.value, nextReview = review.value, nextAutoSa
     emit("saved");
   }
   catch (error) {
-    mode.value = previous.mode; review.value = previous.review; autoSave.value = previous.autoSave;
+    mode.value = previous.mode; review.value = previous.review; autoSave.value = previous.autoSave; uiPass.value = previous.uiPass;
     modelOverride.value = previous.override;
     saveError.value = error.message || "Chat mode could not be saved.";
   }
   finally { saving.value = false; }
 }
-// Turning Deslop off is confirmed first; Cancel leaves it on.
-function changeDeslop(enabled) {
-  if (enabled) save(mode.value, true);
-  else deslopConfirmOpen.value = true;
+function saveSwitch(name, enabled) {
+  return save(mode.value, name === "review" ? enabled : review.value, autoSave.value, name === "uiPass" ? enabled : uiPass.value);
 }
-function confirmDeslopOff() {
-  deslopConfirmOpen.value = false;
-  save(mode.value, false);
+// Turning Deslop or the automatic UI pass off is confirmed first; Cancel leaves it on.
+function changeSwitch(name, enabled) {
+  if (enabled) return saveSwitch(name, true);
+  offConfirmSwitch.value = name;
+  offConfirmOpen.value = true;
+}
+function confirmSwitchOff() {
+  offConfirmOpen.value = false;
+  return saveSwitch(offConfirmSwitch.value, false);
 }
 function configure() {
   if (!props.canConfigure) return;
@@ -204,8 +213,11 @@ function configure() {
           <div class="px-4 pb-3">
             <p v-if="requiredMode" class="text-body-small">Repair chats use Fix it with AI, or a model you choose. Model changes apply to the next turn.</p>
             <template v-if="!temporary && mode === 'auto'">
-              <p class="text-body-small">Senior always reviews Junior's completed work and, with Deslop on, cleans it up. Keep Deslop on unless this is a quick throwaway project. Automatic save runs Save once Senior completes a plan.</p>
-              <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable" label="Deslop during Senior review" hide-details color="primary" density="compact" @update:model-value="changeDeslop($event)" />
+              <p class="text-body-small">Senior always reviews Junior's completed work and, with Deslop on, cleans it up. Keep Deslop on unless this is a quick throwaway project. With Automatic UI pass on, Senior also brings the screens the work changed in line with the project's UI guidance. Automatic save runs Save once Senior completes a plan.</p>
+              <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable" label="Deslop during Senior review" hide-details color="primary" density="compact" @update:model-value="changeSwitch('review', $event)" />
+              <p class="text-body-small">Or tell the agent “Deslop” any time.</p>
+              <v-switch :model-value="uiPass" :disabled="disabled || saving || connecting || !reviewAvailable" label="Automatic UI pass" hide-details color="primary" density="compact" @update:model-value="changeSwitch('uiPass', $event)" />
+              <p class="text-body-small">Or tell the agent “UI pass” any time — add “: &lt;section&gt;” or “: the whole app”.</p>
               <v-switch :model-value="autoSave" :disabled="disabled || saving || connecting || !reviewAvailable" label="Automatic save after completing a plan" hide-details color="primary" density="compact" @update:model-value="save(mode, review, $event)" />
               <p v-if="reviewDescription" class="text-body-small">{{ reviewDescription }}</p>
             </template>
@@ -215,18 +227,23 @@ function configure() {
       </div>
     </v-card>
   </v-menu>
-  <v-dialog v-model="deslopConfirmOpen" max-width="30rem" aria-labelledby="chat-modes-deslop-off-title">
+  <v-dialog v-model="offConfirmOpen" max-width="30rem" aria-labelledby="chat-modes-off-title">
     <v-card>
-      <v-card-title id="chat-modes-deslop-off-title" class="text-wrap">Turn off Deslop?</v-card-title>
-      <v-card-text>
+      <v-card-title id="chat-modes-off-title" class="text-wrap">{{ offConfirmSwitch === 'uiPass' ? 'Turn off Automatic UI pass?' : 'Turn off Deslop?' }}</v-card-title>
+      <v-card-text v-if="offConfirmSwitch === 'uiPass'">
+        <p class="mb-3">The automatic UI pass is the design review Senior does while reviewing: it brings the screens a plan changes in line with the project's UI guidance.</p>
+        <p class="mb-3"><strong>Without it, screens a plan changes no longer get a design review.</strong> You can still run one yourself by telling the agent “UI pass” in the chat.</p>
+        <p>Cancel keeps it on.</p>
+      </v-card-text>
+      <v-card-text v-else>
         <p class="mb-3">Deslop is the clean-up Senior does while reviewing: it removes duplicated helpers, dead code and muddled structure that AI-written code collects.</p>
         <p class="mb-3"><strong>Without it, code quality will suffer.</strong> Over time the project gets harder to change and may crash and burn, unless you run Deslop yourself regularly by asking the AI to “Deslop” in the chat.</p>
         <p>Only skip Deslop for a quick throwaway project. Cancel keeps it on.</p>
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="flat" color="primary" autofocus @click="deslopConfirmOpen = false">Cancel</v-btn>
-        <v-btn variant="text" color="error" @click="confirmDeslopOff">Turn off Deslop</v-btn>
+        <v-btn variant="flat" color="primary" autofocus @click="offConfirmOpen = false">Cancel</v-btn>
+        <v-btn variant="text" color="error" @click="confirmSwitchOff">{{ offConfirmSwitch === 'uiPass' ? 'Turn off Automatic UI pass' : 'Turn off Deslop' }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

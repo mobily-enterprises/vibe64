@@ -2395,14 +2395,25 @@ for (const width of [390, 820, 1280]) {
       expect(mainReads).toBeGreaterThan(0);
       expect(configurationReads).toBe(0);
       const deslop = page.getByRole("checkbox", { name: "Deslop during Senior review", exact: true });
+      const uiPass = page.getByRole("checkbox", { name: "Automatic UI pass", exact: true });
       await expect(deslop).toHaveCount(0);
+      await expect(uiPass).toHaveCount(0);
       await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
       await modes.getByRole("button", { name: /^Auto/ }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Auto\./);
       await expect(deslop).toBeChecked();
+      await expect(uiPass).not.toBeChecked();
+      await expect(page.getByText("Or tell the agent “Deslop” any time.", { exact: true })).toBeVisible();
+      await expect(page.getByText("Or tell the agent “UI pass” any time — add “: <section>” or “: the whole app”.", { exact: true })).toBeVisible();
+      await uiPass.click();
+      await expect(uiPass).toBeChecked();
+      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass by Senior on/);
+      await expect.poll(() => JSON.parse(session.metadata.assistant_routing)).toMatchObject({ mode: "auto", review: true, uiPass: true });
+      await page.screenshot({ path: info.outputPath(`ui-pass-${width}.png`), animations: "disabled" });
       await modes.getByRole("button", { name: /^Senior/ }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
       await expect(deslop).toHaveCount(0);
+      await expect(uiPass).toHaveCount(0);
       expect(JSON.parse(session.metadata.assistant_routing).mode).toBe("senior");
 
       routerChosen = false;
