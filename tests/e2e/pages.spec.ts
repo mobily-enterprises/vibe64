@@ -528,7 +528,7 @@ test.describe("Vibe64 pages", () => {
       await log.getByRole("button", { name: "Close", exact: true }).click();
       await page.screenshot({ path: testInfo.outputPath(`refresh-viewer-${width}.png`) });
 
-      await page.getByRole("link", { name: "All pages" }).click();
+      await page.locator("[data-testid=jskit-shell-back]").click();
       if (width < 600 && await page.getByRole("button", { name: "Show project", exact: true }).isVisible()) {
         await page.getByRole("button", { name: "Show project", exact: true }).click();
       }
