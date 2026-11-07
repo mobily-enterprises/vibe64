@@ -68,6 +68,14 @@ Vite's proxy then sends for you. Without either, the page shows **Open Vibe64
 from the address it printed when it started.** `npm run dev:example` starts its
 own server and needs neither.
 
+`npm run dev` with `--bypass-localhost-check` (or
+`VIBE64_BYPASS_LOCALHOST_CHECK=1`) lets this computer's own browser reach the
+editor however the request is addressed. It stops at start with "The localhost
+check bypass is only for local development on this computer" when Vite or the
+server would listen beyond loopback (for example `--host 0.0.0.0`), when the
+server is not a local editor, or on a host that shares or provisions its
+machine. Remove the flag and variable, or listen on `127.0.0.1`, to start.
+
 To run two local examples at once, give each a different `--state-dir` and
 `--port`. Each state directory supplies its own runtime namespace, so starting
 Codex in one example does not replace the other's shared Codex server.

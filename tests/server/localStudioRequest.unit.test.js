@@ -3,9 +3,15 @@ import test from "node:test";
 import {
   __testables,
   LOCALHOST_CHECK_BYPASS_ENV,
+  LOCALHOST_CHECK_BYPASS_REFUSED,
+  assertLocalhostCheckBypassAllowed,
   isLocalhostCheckBypassEnabled,
+  launchHostArg,
   stripLocalhostCheckBypassArgs
 } from "@local/vibe64-core/server/localhostCheckBypass";
+import { VIBE64_RUNTIME_NAMESPACE_ENV } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
+import { createServer, startServer } from "../../server.js";
 import {
   isLocalStudioRequest,
   isLoopbackAddress,
@@ -72,6 +78,53 @@ test("localhost check bypass is enabled by the explicit environment variable", (
       [LOCALHOST_CHECK_BYPASS_ENV]: "true"
     }
   }), true);
+});
+
+test("localhost check bypass refuses a host that shares or provisions its machine", (t) => {
+  t.after(() => configureVibe64Host(null));
+  const env = { [LOCALHOST_CHECK_BYPASS_ENV]: "1" };
+  for (const profile of [{ sharedGroupAccess: true }, { execHelperPath: "/usr/local/libexec/vibe64-exec" }]) {
+    configureVibe64Host(profile);
+    assert.throws(() => isLocalhostCheckBypassEnabled({ argv: [], env }), { code: LOCALHOST_CHECK_BYPASS_REFUSED });
+    assert.equal(isLocalhostCheckBypassEnabled({ argv: [], env: {} }), false, "without the bypass the host starts");
+  }
+  configureVibe64Host(null);
+  assert.equal(isLocalhostCheckBypassEnabled({ argv: [], env }), true, "a developer's own computer keeps it");
+});
+
+test("localhost check bypass refuses a listener beyond loopback or a server that is not a local editor", () => {
+  for (const host of ["", "127.0.0.1", "localhost", "::1", "[::1]"]) {
+    assert.doesNotThrow(() => assertLocalhostCheckBypassAllowed({ host }), host);
+  }
+  for (const host of ["0.0.0.0", "::", "192.168.1.20", "studio.example.test"]) {
+    assert.throws(() => assertLocalhostCheckBypassAllowed({ host }), { code: LOCALHOST_CHECK_BYPASS_REFUSED }, host);
+  }
+  assert.throws(() => assertLocalhostCheckBypassAllowed({ local: false }), { code: LOCALHOST_CHECK_BYPASS_REFUSED });
+  assert.equal(launchHostArg(["--port", "5174"]), "");
+  assert.equal(launchHostArg(["--host", "0.0.0.0"]), "0.0.0.0");
+  assert.equal(launchHostArg(["--host=localhost"]), "localhost");
+  assert.equal(launchHostArg(["--host"]), "0.0.0.0", "a bare --host listens on every interface");
+  assert.equal(launchHostArg(["--host", "--port", "5174"]), "0.0.0.0");
+});
+
+test("a server with the localhost check bypassed refuses to start on a public host or as a shared server", async () => {
+  const keys = ["HOST", "PORT", LOCALHOST_CHECK_BYPASS_ENV, VIBE64_RUNTIME_NAMESPACE_ENV];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+  process.env[LOCALHOST_CHECK_BYPASS_ENV] = "1";
+  process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-bypass";
+  delete process.env.HOST;
+  delete process.env.PORT;
+  try {
+    await assert.rejects(startServer({ host: "0.0.0.0", port: 0, strictPort: false }), { code: LOCALHOST_CHECK_BYPASS_REFUSED });
+    await assert.rejects(createServer({
+      runtimeProfile: Object.freeze({ local: false, mode: "composed", projectCatalogEnabled: true, singleTargetRoot: "" })
+    }), { code: LOCALHOST_CHECK_BYPASS_REFUSED });
+  } finally {
+    for (const [key, value] of previous) {
+      if (value == null) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 
 test("localhost check bypass flag is stripped before launching Vite", () => {

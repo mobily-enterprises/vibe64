@@ -34,6 +34,7 @@ import {
   normalizeGithubAccountMode
 } from "@local/vibe64-execution/server";
 import {
+  assertLocalhostCheckBypassAllowed,
   isLocalhostCheckBypassEnabled
 } from "@local/vibe64-core/server/localhostCheckBypass";
 import {
@@ -303,6 +304,10 @@ async function createServer(options = {}) {
   });
   const runtimeProfile = resolveServerRuntimeProfile(options);
   const requestedTargetRoot = targetRootForRuntimeProfile(options, runtimeProfile);
+  const localhostCheckBypassed = isLocalhostCheckBypassEnabled({ env: runtimeEnv });
+  if (localhostCheckBypassed) {
+    assertLocalhostCheckBypassAllowed({ local: runtimeProfile.local === true });
+  }
   if (runtimeProfile.local) {
     if (!runtimeProfile.singleTargetRoot) {
       const error = new Error("Local editor mode requires a target directory.");
@@ -374,7 +379,6 @@ async function createServer(options = {}) {
     await closeTerminalSessionsForNamespacePrefix("");
   });
 
-  const localhostCheckBypassed = isLocalhostCheckBypassEnabled({ env: runtimeEnv });
   registerBrowserLifecycleWebSocketRoute(app, browserLifecycleMonitor, { localhostCheckBypassed });
 
   app.get("/api/health", async () => {
@@ -517,6 +521,12 @@ async function startServer(options = {}) {
     env: runtimeEnv,
     options
   });
+  if (isLocalhostCheckBypassEnabled({ env: runtimeEnv })) {
+    assertLocalhostCheckBypassAllowed({
+      host: listenTarget.transport === "tcp" ? listenTarget.host : "",
+      local: runtimeProfile.local === true
+    });
+  }
   assertSafeLocalModeListenTarget(runtimeProfile, listenTarget);
   const localAccessToken = localAccessTokenForStart({
     env: runtimeEnv,

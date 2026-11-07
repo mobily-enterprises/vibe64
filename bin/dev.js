@@ -5,7 +5,9 @@ import path from "node:path";
 import process from "node:process";
 import {
   LOCALHOST_CHECK_BYPASS_ENV,
-  hasLocalhostCheckBypassArg,
+  assertLocalhostCheckBypassAllowed,
+  isLocalhostCheckBypassEnabled,
+  launchHostArg,
   stripLocalhostCheckBypassArgs
 } from "@local/vibe64-core/server/localhostCheckBypass";
 
@@ -21,13 +23,14 @@ if (sourceDevelopmentSelected()) {
   const require = createRequire(import.meta.url);
   const viteBin = path.join(path.dirname(require.resolve("vite/package.json")), "bin", "vite.js");
   const rawArgs = process.argv.slice(2);
-  const bypassLocalhostCheck = hasLocalhostCheckBypassArg(rawArgs);
+  const bypassLocalhostCheck = isLocalhostCheckBypassEnabled({ argv: rawArgs, env: process.env });
   const viteArgs = stripLocalhostCheckBypassArgs(rawArgs);
   const env = {
     ...process.env
   };
 
   if (bypassLocalhostCheck) {
+    assertLocalhostCheckBypassAllowed({ host: launchHostArg(viteArgs) });
     env[LOCALHOST_CHECK_BYPASS_ENV] = "1";
   }
 
