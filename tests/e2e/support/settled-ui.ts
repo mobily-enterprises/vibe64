@@ -21,11 +21,15 @@ async function dismissFeedbackIfShown(page: Page) {
 /**
  * Waits until feedback has timed out, so a control it covered receives the next click. The pointer leaves first: a
  * message stays while the pointer rests on it, and a click aimed at a control it covers parks the pointer there.
+ * Each message times out on the page's own timer, so the caller installs the page clock before the feedback appears
+ * and this moves that clock through one message's five seconds at a time.
  */
 async function waitForFeedbackToClear(page: Page) {
   await page.mouse.move(0, 0);
-  // Two queued messages show for five seconds each.
-  await expect(page.locator(".v-snackbar__content")).toBeHidden({ timeout: 15_000 });
+  await expect(async () => {
+    await page.clock.fastForward(5_000);
+    await expect(page.locator(".v-snackbar__content")).toBeHidden({ timeout: 500 });
+  }).toPass({ intervals: [100], timeout: 15_000 });
 }
 
 /**

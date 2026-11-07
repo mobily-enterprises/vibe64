@@ -1028,6 +1028,8 @@ for (const { viewport, providerBatch } of [
         await panel.getByRole("button", { name: "Save configuration" }).click();
         await expect(panel.getByRole("button", { name: "Save configuration" })).toBeDisabled();
         if (id === "resend" && ["existing", "responsive"].includes(providerBatch)) {
+          // The connection checks below leave feedback that times out on the page's own timers (see waitForFeedbackToClear).
+          await page.clock.install();
           const connectionPanel = panel.getByRole("region", { name: "Application connection" });
           setupIssues.resend = "credentials-missing";
           await connectionPanel.getByRole("button", { name: "Check connection", exact: true }).click();
