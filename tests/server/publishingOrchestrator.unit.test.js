@@ -297,6 +297,33 @@ test("preflight blocks a release whose checks did not pass, and a dry run publis
   assert.equal(state.targets.find(({ id }) => id === "sdk-npm").latest, null, "a dry run is never a published version");
 });
 
+test("the last successful release still counts after 51 dry runs since it", async (t) => {
+  const { orchestrator, runtimeRoot } = await fixture(t);
+  let clock = Date.parse("2026-10-01T10:00:00.000Z");
+  const earlier = createReleaseHistoryStore({ runtimeRoot, now: () => new Date(clock += 60_000).toISOString() });
+  const release = await earlier.create({
+    kind: "release",
+    status: "succeeded",
+    tags: ["v1.2.0"],
+    versions: { sdk: "1.2.0" },
+    toolchain: { node: "0.0.1-earlier" },
+    targets: { "sdk-npm": { status: "proven", version: "1.2.0" } }
+  });
+  for (let index = 0; index < 51; index += 1) {
+    await earlier.create({ kind: "dry-run", status: "succeeded" });
+  }
+
+  const plan = await orchestrator.plan({ targetIds: ["sdk-npm"] });
+  assert.ok(
+    plan.preflight.acknowledgementsNeeded.includes("toolchain-unchanged"),
+    "the toolchain check compares with the last successful release"
+  );
+  const suggestion = await orchestrator.suggestRelease();
+  assert.equal(suggestion.packages.find(({ id }) => id === "sdk").released, true, "1.2.0 is already published");
+  const state = await orchestrator.readState();
+  assert.equal(state.targets.find(({ id }) => id === "sdk-npm").latest.releaseId, release.id);
+});
+
 test("prepare writes the version change into the session; release notes come from the changelog", async (t) => {
   const { orchestrator } = await fixture(t);
   const prepared = await orchestrator.prepareRelease({ sessionId: "s1", versions: { sdk: "1.3.0" }, notes: "- Faster sync." });

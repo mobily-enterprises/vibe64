@@ -481,7 +481,11 @@ the Packaging contract owned by the Genesis boundary.
 It keeps files rather than tables: project runtime `publishing/` (targets,
 release history, confirmations, verification and build results) and the
 personal `publishing/` folder (the age-encrypted keys file and its index, and
-licence acceptances). It reads the project's saved Git commit and Packaging
+licence acceptances). Preflight's toolchain check, version suggestions and each
+target's latest outcome look through the whole release history, not only its
+newest records, so dry runs never push the last successful release out of
+view; the history store reads each record file once per process. It reads the
+project's saved Git commit and Packaging
 section, and session source through the source editor for prepared version
 changes.
 

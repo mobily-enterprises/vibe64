@@ -73,7 +73,8 @@ Vibe64 for this project on this computer, not in the project's files.
    checks passed, every sign-in valid, install key and recovery kit, Android
    requirements. What needs attention comes first; the rest folds into **All
    N checks passed**. A red line stops the release and the footer says so; an
-   amber one (a changed toolchain) needs **I understand**. Failed checks name
+   amber one (tools changed since the last successful release, however many
+   dry runs or failed releases came after it) needs **I understand**. Failed checks name
    the check, **Show output** shows the end of its output and **Run again**
    reruns it; a refused sign-in offers **Fix sign-in**; saved work that is
    not on the remote yet offers **Push to origin** (fast-forward only, never

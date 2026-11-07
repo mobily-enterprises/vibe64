@@ -101,7 +101,7 @@ function createReleaseOrchestrator({
   }
 
   async function lastOutcomes() {
-    const records = (await history.list({ limit: 100 })).map(runs.interruptedOr);
+    const records = (await history.list({ limit: Infinity })).map(runs.interruptedOr);
     const latest = {};
     for (const record of records.filter((entry) => entry.kind === "release")) {
       for (const [targetId, outcome] of Object.entries(record.targets || {})) {
@@ -182,7 +182,7 @@ function createReleaseOrchestrator({
     const baseline = await repository.baseline();
     const release = await savedRelease(baseline);
     if (!release || release.packaging.status !== "ready") return { packages: [], notes: "" };
-    const releases = (await history.list({ limit: 50 })).filter((record) => record.kind === "release" && record.status === "succeeded");
+    const releases = (await history.list({ limit: Infinity })).filter((record) => record.kind === "release" && record.status === "succeeded");
     const lastTag = releases[0]?.tags?.[0] || null;
     const subjects = await repository.subjectsSince(baseline.repositoryRoot, baseline.commit, lastTag);
     return {
@@ -303,7 +303,8 @@ function createReleaseOrchestrator({
       templates: hasAndroid ? { [packaging.androidTemplate.id]: packaging.androidTemplate.capacitor } : {}
     });
     const keyStatus = await keys.status();
-    const previousRelease = (await history.list({ limit: 50 })).find((record) =>
+    // However many dry runs and failures came after it.
+    const previousRelease = (await history.list({ limit: Infinity })).find((record) =>
       record.kind === "release" && record.status === "succeeded") ||
       null;
     const runtimeTargets = await Promise.all(publishPlan.targets.map((target) => runs.runtimeTarget(target)));
