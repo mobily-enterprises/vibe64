@@ -1159,7 +1159,10 @@ for (const view of ["Overview", "ERD"] as const) {
       const solidTables = () => cards.evaluateAll(elements => elements.filter(element => getComputedStyle(element).opacity === "1").map(element => element.querySelector("strong")!.textContent).sort());
       const allTables = (await cards.locator("strong").allTextContents()).sort();
       await expect.poll(solidTables).toEqual(allTables);
-      for (const card of await cards.all()) await expect(card).toHaveCSS("background-color", "rgb(255, 255, 255)");
+      // Unselected cards stay the theme's solid surface colour.
+      const surface = await cards.first().evaluate(element => `rgb(${getComputedStyle(element).getPropertyValue("--v-theme-surface").split(",").map(part => part.trim()).join(", ")})`);
+      expect(surface).toMatch(/^rgb\(\d+, \d+, \d+\)$/u);
+      for (const card of await cards.all()) await expect(card).toHaveCSS("background-color", surface);
 
       // Move the real pointer onto a visible section of an unrelated connection.
       const edge = diagram.getByRole("group", { name: /transactions_invoice_groups_fk$/ });

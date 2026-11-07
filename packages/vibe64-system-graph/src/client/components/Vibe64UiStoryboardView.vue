@@ -92,7 +92,7 @@
       </VueFlow>
       <Vibe64SubsystemInspector v-if="outline?.owner.opaque" :outline="outline" @close="closeDetail" @inspect="emit('inspect-file', $event)" />
       <div v-if="!contentCount" class="ui-storyboard__empty" role="status">
-        <h2>{{ error ? 'Architecture could not be loaded' : loading ? 'Loading architecture…' : 'Architecture needs evidence' }}</h2>
+        <h3>{{ error ? 'Architecture could not be loaded' : loading ? 'Loading architecture…' : 'Architecture needs evidence' }}</h3>
         <p v-if="error">{{ error }}</p>
         <p v-else-if="!loading">{{ coverage === 'complete' ? 'The configured inspector found no UI entry points.' : 'Re-scan project to create the project index. Check Genesis subsystem declarations and Stack inspection settings if it remains empty.' }}</p>
         <v-btn v-if="error" size="small" variant="tonal" :disabled="loading" @click="reload">Retry loading</v-btn>
@@ -199,7 +199,7 @@ function showUsageForDetail(owner) {
 .ui-storyboard__error { position: absolute; z-index: 12; top: 12px; left: 12px; max-width: min(520px, calc(100% - 24px)); flex: none; font-size: 12px; }
 .ui-storyboard__empty { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; text-align: center; padding: 24px; pointer-events: none; }
 .ui-storyboard__empty button { pointer-events: auto; }
-.ui-storyboard__empty h2 { margin: 0 0 8px; font-size: 20px; }
+.ui-storyboard__empty h3 { margin: 0 0 8px; font-size: 20px; }
 .ui-storyboard__empty p { max-width: 420px; margin: 0; font-size: 14px; }
 .external-dependencies { width: 100%; height: 100%; border: 1px solid rgb(var(--v-theme-outline-variant)); border-radius: 10px; background: rgb(var(--v-theme-surface-container)); color: rgb(var(--v-theme-on-surface)); overflow: hidden; }
 .external-dependencies header { height: 98px; padding: 18px 20px; border-bottom: 1px solid rgb(var(--v-theme-outline-variant)); }
