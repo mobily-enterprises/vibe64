@@ -228,7 +228,10 @@ Each SQLite connection runs Node's native SQLite API in a child process. Native
 queries do not block the editor event loop; timeout or cancellation terminates
 that connection. The release bundles its worker explicitly. Manual query results
 have the same row/byte bounds as other engines, and internal schema queries are
-also bounded. This is file-backed SQLite support, not access to another process's
+also bounded. The worker stops reading a manual result past 500 rows or 2 MB and
+says so; that result's `fullRowCount` is `null` and `rowCountMoreThan` gives the
+count it is known to exceed (500 at the row bound), never the cut length as a
+total. The editor titles it "More than 500 rows". This is file-backed SQLite support, not access to another process's
 in-memory database or arbitrary attached files.
 
 A query id belongs to one project/session and is reserved before connection acquisition.

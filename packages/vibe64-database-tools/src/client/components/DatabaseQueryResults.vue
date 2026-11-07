@@ -131,6 +131,9 @@ const filteredResultRows = computed(() => {
 const resultTitle = computed(() => {
   if (!props.queryResult) return "Results";
   if (props.queryResult.kind === "command") return "Statement complete";
+  if (props.queryResult.fullRowCount == null && props.queryResult.rowCountMoreThan != null) {
+    return `More than ${props.queryResult.rowCountMoreThan} rows`;
+  }
   return `${props.queryResult.fullRowCount ?? props.queryResult.rows?.length ?? 0} rows`;
 });
 const resultEditHint = computed(() => {

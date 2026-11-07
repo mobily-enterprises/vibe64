@@ -161,8 +161,9 @@ function assistantQueryView(result = {}) {
   }
   return {
     columns: Array.isArray(result.columns) ? result.columns : [],
-    fullRowCount: Number(result.fullRowCount || 0),
+    fullRowCount: result.fullRowCount == null ? null : Number(result.fullRowCount),
     kind: "result-set",
+    ...(result.rowCountMoreThan != null ? { rowCountMoreThan: Number(result.rowCountMoreThan) } : {}),
     rows: Array.isArray(result.rows) ? result.rows : [],
     truncated: result.truncated === true
   };

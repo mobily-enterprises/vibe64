@@ -48,6 +48,13 @@ test("SQLite schema, results, edits, read isolation and cancellation use real da
         "WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1000) SELECT x FROM n" });
       assert.equal(bounded.rows.length, 500);
       assert.equal(bounded.truncated, true);
+      assert.equal(bounded.fullRowCount, null, "a capped SQLite result does not know its full row count");
+      assert.equal(bounded.rowCountMoreThan, 500);
+      const complete = await executeDatabaseQuery({ connection, knex, schema, sql:
+        "WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<300) SELECT x FROM n" });
+      assert.equal(complete.fullRowCount, 300);
+      assert.equal(complete.truncated, false);
+      assert.equal("rowCountMoreThan" in complete, false);
       const teamRelationship = schema.relationships.find((relation) => relation.sourceTable === "main.people");
       const lookup = await searchDatabaseLookup({ engine: "sqlite", knex, relationshipId: teamRelationship.id, schema, search: "edit" });
       assert.deepEqual(lookup, {

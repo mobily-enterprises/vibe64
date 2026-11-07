@@ -55,13 +55,17 @@ process.on("message", async ({ id, operation, filename, readOnly, sql, bindings 
         statement.setReturnArrays(resultSet);
         const rows = [];
         let bytes = 0;
+        let limited = false;
         for (const row of statement.iterate(...bindings)) {
           bytes += Buffer.byteLength(JSON.stringify(row, (_key, value) => typeof value === "bigint" ? String(value) : value));
           rows.push(row);
-          if (resultSet && (rows.length > 500 || bytes > 2 * 1024 * 1024)) break;
+          if (resultSet && (rows.length > 500 || bytes > 2 * 1024 * 1024)) {
+            limited = true;
+            break;
+          }
           if (rows.length > 100_000 || bytes > 16 * 1024 * 1024) throw new Error("SQLite inspection result is too large.");
         }
-        result = { fields, rows, changes: 0 };
+        result = { fields, rows, changes: 0, limited };
       } else {
         result = { ...statement.run(...bindings), fields: [], rows: [] };
       }

@@ -333,6 +333,7 @@ function normalizeRawResponse(raw, schema = {}, connection = {}, sql = "") {
       command: resultSet.command || statementCommand(sql),
       fullRowCount: resultSet.fullRowCount,
       kind: "result-set",
+      ...(resultSet.rowCountMoreThan != null ? { rowCountMoreThan: resultSet.rowCountMoreThan } : {}),
       rowMeta: bounded.rows.map((row) => rowEditMetadata(row, columns))
     };
   }

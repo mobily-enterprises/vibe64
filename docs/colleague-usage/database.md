@@ -33,6 +33,12 @@ schemas remain distinct. **Reset to SELECT \*** restores the same default query.
 The automatic read that opens a table is not added to query history on any
 engine; running the same SQL yourself is.
 
+A query result shows at most its first 500 rows and says **limited result** when
+there were more. Its title gives the full row count when the database reported
+one; a SQLite result stops reading after 500 rows, so its title says **More than
+500 rows** instead. To see other rows, narrow the query with `WHERE`, `ORDER BY`
+or `LIMIT ... OFFSET`.
+
 Queries and deliberate edits use Database's existing controls, unlock rules and
 confirmations. Check the exact selected database and table before changing data.
 Cancellation targets the active query; a cancellation receipt does not prove the

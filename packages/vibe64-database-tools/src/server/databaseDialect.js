@@ -164,9 +164,12 @@ const DATABASE_DIALECTS = Object.freeze({
     },
     queryOptions: Object.freeze({ sqliteResultSet: true }),
     readOnlyBeginSql: "BEGIN",
+    // The worker stops reading a result past its bounds, so a limited result
+    // knows only that it has more rows than the ones it kept before the last.
     resultSet: (raw = {}) => raw.fields?.length ? {
       fields: raw.fields,
-      fullRowCount: raw.rows.length,
+      fullRowCount: raw.limited ? null : raw.rows.length,
+      ...(raw.limited ? { rowCountMoreThan: raw.rows.length - 1 } : {}),
       rows: raw.rows
     } : null,
     sanitizeConnectionUrl: (value) => value,
