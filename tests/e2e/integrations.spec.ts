@@ -3810,7 +3810,6 @@ for (const { viewport, providerBatch } of [
         let file = JSON.parse(await readFile(filePath, "utf8"));
         expect(file.integrations.semrush).toEqual({ provider: "semrush", displayName: "Semrush", accountMode: "shared", scopes: [], authentication: { method: "api-key", secretRef: "env:SEMRUSH_V4_KEY" }, settings: {} });
         expect(file.registrations.semrush).toBeUndefined();
-        await page.getByRole("button", { name: "Dismiss", exact: true }).click();
         const v3 = panel.getByRole("textbox", { name: "V3 API key reference (optional)", exact: true });
         await v3.fill("raw-v3-secret"); await save.click();
         await expect(panel.locator(".v-input--error")).toHaveCount(1);
