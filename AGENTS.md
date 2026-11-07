@@ -197,8 +197,15 @@ overlap a test run already active for this checkout.
   arguments in `--option=value` form.
 - Do not pass a glob, directory, or multiple test files to `npm test`, and do
   not bypass this guard with a direct broad `node --test` command.
-- Every repository-owned Node test command fixes test-file concurrency at one.
-  Do not raise or bypass this limit.
+- Test suites run in parallel by default, bounded by the machine. `npm run
+  test:full`, `npm run test:client` and Playwright run as many test files (or
+  Playwright workers) at once as `tooling/test-concurrency.mjs` allows:
+  `V64_TEST_CONCURRENCY` when set (a test runner sharing a machine sets it for
+  each of its slots), otherwise half the CPUs, at least one, so a 2-CPU computer
+  runs one at a time. No script or command fixes its own concurrency. Every test
+  file owns its ports, temporary folders, databases and other state, so it can
+  run beside any other; fix a collision where it happens instead of making a
+  file run alone.
 - A test removes every temporary folder it creates by the time it ends, so a
   passing run leaves nothing in the temp directory. It keeps an evidence folder
   (screenshots, traces, logs) only when it fails, and prints where it is.

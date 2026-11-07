@@ -27,22 +27,14 @@ export function targetedTestArguments(cliArguments) {
     ].join("\n"));
   }
 
-  const requestedConcurrency = cliArguments.find((argument) => (
-    argument === "--test-concurrency" || argument.startsWith("--test-concurrency=")
-  ));
-  if (requestedConcurrency && requestedConcurrency !== "--test-concurrency=1") {
-    throw new Error("Test file concurrency is fixed at 1 for machine safety.");
-  }
-
   const runnerOptions = cliArguments
     .filter((argument) => (
       argument.startsWith("-")
       && argument !== "--"
       && argument !== "--runInBand"
-      && argument !== "--test-concurrency=1"
     ));
 
-  return ["--test-concurrency=1", ...runnerOptions, target];
+  return [...runnerOptions, target];
 }
 
 async function run() {

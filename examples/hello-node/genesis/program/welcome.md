@@ -16,4 +16,4 @@ to choose an address. `GET /` serves the page; `GET /api/health` returns HTTP 20
 and `{"ok":true}`. Unknown paths return 404 and methods other than GET or HEAD
 return 405. No application setup, secrets, or database preparation is needed.
 
-`npm test` checks the real HTTP responses with one test file at a time.
+`npm test` checks the real HTTP responses.

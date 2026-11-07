@@ -15,6 +15,9 @@ for (const viewport of [{ name: "desktop", width: 1440, height: 1000 }, { name: 
         ok: true, creation: { canCreate: true, mode: "direct" }, limits: { openSessionCount: 1 },
         sessions: [{ ...directChatSessionPayload, sessionName }]
       }));
+      // Without this answer, selecting the session shows an error snackbar, and
+      // a snackbar shown while the dialog is open keeps Escape from closing it.
+      await routeApiEndpoint(page, "/vibe64/sessions/current", (route) => fulfillJson(route, { ok: true, sessionId: directChatSessionId }));
       await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}`, (route) => fulfillJson(route, { ...directChatSessionPayload, sessionName }));
       await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/name`, async (route) => {
         expect(route.request().method()).toBe("PATCH");

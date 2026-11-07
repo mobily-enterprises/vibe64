@@ -19,7 +19,7 @@ if (extra.length || !/^tests\/client\/[a-zA-Z0-9_-]+\.vitest\.js$/u.test(target 
       command: process.execPath, args: ["tooling/run-targeted-client-tests.mjs", target], env
     });
   } else {
-    const result = spawnSync(process.execPath, [join(dirname(require.resolve("vitest/package.json")), "vitest.mjs"), "run", target, "--maxWorkers=1", "--no-file-parallelism"], { env, stdio: "inherit" });
+    const result = spawnSync(process.execPath, [join(dirname(require.resolve("vitest/package.json")), "vitest.mjs"), "run", target], { env, stdio: "inherit" });
     if (result.error) throw result.error;
     process.exitCode = result.status ?? 1;
   }

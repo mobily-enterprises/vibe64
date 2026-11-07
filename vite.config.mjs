@@ -4,6 +4,7 @@ import vue from "@vitejs/plugin-vue";
 import vuetify from "vite-plugin-vuetify";
 import VueRouter from "vue-router/vite";
 import { createJskitClientBootstrapPlugin } from "@jskit-ai/kernel/client/vite";
+import { testConcurrency } from "./tooling/test-concurrency.mjs";
 
 function toPositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -64,6 +65,8 @@ export default defineConfig({
   ],
   test: {
     include: ["tests/client/**/*.vitest.js"],
+    // As many test files at once as the machine's test budget allows.
+    maxWorkers: testConcurrency(),
     setupFiles: ["./tooling/test-host-path-guard.mjs"],
     server: {
       // The published assistant ships Vue source that needs the Vue transform.

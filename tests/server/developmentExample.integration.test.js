@@ -70,6 +70,9 @@ test("Vibe64 declares native installation tools and its complete example preview
 
 test("the development preview serves its own backend, frontend and project", { timeout: 180_000 }, async () => {
   const root = await mkdtemp(path.join(tmpdir(), "v64-example-preview-"));
+  // A Unix socket path holds at most 107 bytes and TMPDIR can be a long path (macOS
+  // gives each user one), so the sockets get a folder under /tmp, as Vibe64's own fallback does.
+  const runtimeDir = await mkdtemp(path.join(process.platform === "win32" ? tmpdir() : "/tmp", "v64-xdg-"));
   const port = await getPort();
   const claudeCommand = path.join(root, "claude.cjs");
   await writeFile(claudeCommand, `#!${process.execPath}
@@ -100,7 +103,7 @@ process.exit(1);
       VIBE64_WORKSPACE: "example", VIBE64_PUBLIC_USER_DOMAIN: "users.example.test",
       VIBE64_PUBLIC_PROTOCOL: "https", VIBE64_PREVIEW_PUBLIC_DOMAIN: "preview.example.test",
       VIBE64_PREVIEW_PUBLIC_NAMESPACE: "parent-editor",
-      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "", XDG_RUNTIME_DIR: path.join(root, "runtime") } });
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "", XDG_RUNTIME_DIR: runtimeDir } });
   const child = spawn(process.execPath, ["tooling/dev-example.mjs", "--port", String(port), "--state-dir", root], {
     cwd: path.resolve(import.meta.dirname, "../.."),
     env: { ...env, PATH: `${fakeBin}${path.delimiter}${env.PATH}` },
@@ -198,7 +201,7 @@ process.exit(1);
     }
     assert.equal(output.preview?.state, "ready", JSON.stringify(output));
     const preview = new URL(output.previewTarget.href);
-    const socketPath = previewPublicSocketPath(preview.origin, { XDG_RUNTIME_DIR: path.join(root, "runtime") });
+    const socketPath = previewPublicSocketPath(preview.origin, { XDG_RUNTIME_DIR: runtimeDir });
     const nestedPage = await new Promise((resolve, reject) => {
       const request = http.get({ socketPath, path: preview.pathname + preview.search,
         headers: { host: preview.host } }, response => {
@@ -219,5 +222,6 @@ process.exit(1);
     await exited;
     clearTimeout(killTimer);
     await rm(root, { recursive: true, force: true });
+    await rm(runtimeDir, { recursive: true, force: true });
   }
 });

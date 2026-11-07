@@ -6,6 +6,14 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  SERVER_COUNT_ENV,
+  commandLineWorkers,
+  e2eServerCount,
+  e2eServerPorts,
+  e2eWorkerPort,
+  workerCount
+} from "../e2e/support/e2e-servers.mjs";
+import {
   playwrightServerStartOptions
 } from "../e2e/support/start-web-server.mjs";
 
@@ -29,4 +37,38 @@ test("Playwright starts the local app without browser-disconnect shutdown", () =
     env[VIBE64_RUNTIME_NAMESPACE_ENV],
     VIBE64_LOCAL_RUNTIME_NAMESPACE
   );
+});
+
+test("Playwright reads a worker count as a number or a share of the CPUs", () => {
+  assert.equal(workerCount("3"), 3);
+  assert.equal(workerCount("50%", 8), 4);
+  assert.equal(workerCount("10%", 8), 1);
+  assert.equal(workerCount(""), 0);
+  assert.equal(workerCount("0"), 0);
+  assert.equal(workerCount("many"), 0);
+});
+
+test("the last --workers or -j on the command line is the one Playwright uses", () => {
+  assert.equal(commandLineWorkers(["node", "playwright", "test", "--workers=2", "a.spec.ts"]), "2");
+  assert.equal(commandLineWorkers(["node", "playwright", "test", "--workers", "3"]), "3");
+  assert.equal(commandLineWorkers(["node", "playwright", "test", "-j", "4", "-j2"]), "2");
+  assert.equal(commandLineWorkers(["node", "playwright", "test", "-j=50%"]), "50%");
+  assert.equal(commandLineWorkers(["node", "playwright", "test"]), "");
+});
+
+test("the main process settles one server per worker and its workers read that count", () => {
+  const env = { PLAYWRIGHT_PORT: "4183", V64_TEST_CONCURRENCY: "2" };
+  assert.equal(e2eServerCount({ argv: ["node", "playwright", "test", "--workers=3"], env }), 3);
+  assert.equal(env[SERVER_COUNT_ENV], "3");
+  assert.deepEqual(e2eServerPorts(env), [4183, 4184, 4185]);
+  // A worker sees no --workers of its own, only the recorded count and its index.
+  assert.equal(e2eWorkerPort({ ...env, TEST_PARALLEL_INDEX: "0" }), 4183);
+  assert.equal(e2eWorkerPort({ ...env, TEST_PARALLEL_INDEX: "2" }), 4185);
+  // Without --workers, the machine's test budget sets the count.
+  assert.equal(e2eServerCount({ argv: ["node", "playwright", "test"], env: { V64_TEST_CONCURRENCY: "2" } }), 2);
+  assert.ok(e2eServerCount({ argv: ["node", "playwright", "test"], env: {} }) >= 1);
+});
+
+test("a server the person started is one server on PLAYWRIGHT_PORT", () => {
+  assert.equal(e2eWorkerPort({ PLAYWRIGHT_PORT: "4200", VIBE64_LIVE_E2E: "1", TEST_PARALLEL_INDEX: "3" }), 4200);
 });

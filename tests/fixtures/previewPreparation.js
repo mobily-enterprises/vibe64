@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import getPort from "get-port";
 
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
@@ -25,6 +26,9 @@ export async function createPreviewPreparationFixture({
   await execFileAsync("git", ["init", "--initial-branch=main", sourceRoot]);
   await initializeGenesisProject({ projectRoot: sourceRoot });
   const stackPath = path.join(sourceRoot, "genesis", "stack.md");
+  // Its own free port, not the default 4100: test files run at the same time,
+  // and a port another file's Preview chose between its check and its start is lost.
+  const previewPort = await getPort();
   await writeFile(stackPath, `# Stack
 
 ## Stack packages
@@ -55,6 +59,7 @@ export async function createPreviewPreparationFixture({
 
 #### Presentation
 - Kind: \`web\`
+- Preferred port: \`${previewPort}\`
 - URL path: \`/\`
 - Ready when: \`GET\` \`/\` returns \`200\`
 `);

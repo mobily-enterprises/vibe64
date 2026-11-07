@@ -39,8 +39,8 @@ jobs:
       # --max-failures=0: every other browser run stops at 2 failures to save
       #   time. This one exists to be the full record, so it runs every test.
       # --fully-parallel: shards split by test instead of by file, because
-      #   integrations.spec.ts alone takes about an hour. Each shard keeps the
-      #   config's one worker, so its tests still run one at a time.
+      #   integrations.spec.ts alone takes about an hour. Each shard runs the
+      #   config's workers, each against its own server.
       # --forbid-only: a stray test.only would otherwise shrink the record and pass.
       # --global-timeout: a shard holds 54 tests of at most 60 s, so only a hang
       #   reaches this. It stops the run with a failure and keeps its report.

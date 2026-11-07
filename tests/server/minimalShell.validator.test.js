@@ -182,7 +182,7 @@ test("Playwright uses the direct managed-preview environment contract", async ()
   assert.match(configSource, /PLAYWRIGHT_BASE_URL/u);
   assert.match(configSource, /PLAYWRIGHT_STORAGE_STATE/u);
   assert.match(configSource, /VIBE64_LIVE_E2E/u);
-  assert.match(configSource, /tests\/e2e\/support\/start-web-server\.mjs/u);
+  assert.match(configSource, /node \.\/tests\/e2e\/support\/start-web-servers\.mjs/u);
   assert.doesNotMatch(configSource, /node \.\/bin\/server\.js/u);
   assert.doesNotMatch(configSource, /@jskit-ai\/jskit-cli|createJskitPlaywrightConfig/u);
 });

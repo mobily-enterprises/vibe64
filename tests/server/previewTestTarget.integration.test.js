@@ -8,6 +8,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { promisify } from "node:util";
+import getPort from "get-port";
 import { initializeGenesisProject, inspectVibe64Outputs, inspectVibe64WorkspaceSetup } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createOutputTargetTerminalController } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import { createAgentPreviewCommandService, prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
@@ -52,6 +53,9 @@ async function fixture(t, name, workflowHooks = {}) {
   initializeGit.child.stdin.end();
   await initializeGit;
   await initializeGenesisProject({ projectRoot: sourceRoot });
+  // Its own free port, not the default 4100: test files run at the same time,
+  // and a port another file's Preview chose between its check and its start is lost.
+  const previewPort = await getPort();
   const target = (id, mode = id) => `### Target \`${id}\`: ${id}
 ${id === "app" ? "- Default.\n" : ""}- Mode: \`interactive\`
 - Data: \`${id === "app" ? "development" : "test"}\`
@@ -62,6 +66,7 @@ ${id === "app" ? "- Default.\n" : ""}- Mode: \`interactive\`
 - Required.
 #### Presentation
 - Kind: \`web\`
+- Preferred port: \`${previewPort}\`
 - URL path: \`/\`
 - Ready when: \`GET\` \`/api/health\` returns \`200\`
 `;

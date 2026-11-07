@@ -1300,7 +1300,6 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/assistantPlanLifecycle.test.js`
 - `tests/client/vibe64WorkPlan.vitest.js`
-- `tests/server/vibe64WorkPlanClient.test.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingAssignments.js`

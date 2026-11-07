@@ -612,7 +612,9 @@ test("launch preview proxy republishes a public socket removed outside its regis
 });
 
 test("launch preview proxy places its public socket under the env's XDG runtime directory", async () => {
-  const runtimeDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-runtime-"));
+  // A Unix socket path holds at most 107 bytes and TMPDIR can be a long path (macOS
+  // gives each user one), so the sockets get a folder under /tmp, as Vibe64's own fallback does.
+  const runtimeDir = await mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "v64-xdg-"));
   await withTargetServer(async (target) => {
     const publicOrigin = "https://v64preview-feedface1234.workspace.users.example.test";
     const socketPath = previewPublicSocketPath(publicOrigin, {

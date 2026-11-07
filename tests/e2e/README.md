@@ -1,17 +1,23 @@
 # Vibe64 E2E Tests
 
 `npm run test:e2e` runs the self-contained smoke, direct-chat, and managed-preview specs. The JSKIT Playwright config uses the managed
-`PLAYWRIGHT_BASE_URL` when supplied; otherwise it builds and starts the local app server. The spec
-mocks Studio API responses before loading the app.
-That server keeps its state and project folders in a temporary directory, never the person's own
-Vibe64 state. Playwright stops it with SIGTERM, and the directory is removed whenever the server
-exits, including when Playwright itself ends without stopping it. `PLAYWRIGHT_PORT` (default
-`4173`) selects its port, so concurrent checkouts each start their own server.
+`PLAYWRIGHT_BASE_URL` when supplied, with one worker; otherwise it builds the app once and starts one
+local app server per worker. The specs mock Studio API responses before loading the app.
+
+Tests run in parallel, spread across the workers one test at a time (`fullyParallel`): no test
+depends on another's order or state. The worker count is `--workers` (or `-j`) when given, else the
+machine's test budget: `V64_TEST_CONCURRENCY`, else half the CPUs. Worker N tests against its own server on
+port `PLAYWRIGHT_PORT + N` (`PLAYWRIGHT_PORT` defaults to `4173`), so no two tests running at once
+share a server, and concurrent checkouts choose different `PLAYWRIGHT_PORT`s.
+
+Each server keeps its state and project folders in its own temporary directory, never the person's
+own Vibe64 state. Playwright stops the servers with SIGTERM, and each directory is removed whenever
+its server exits, including when Playwright itself ends without stopping them.
 
 Every run builds the app first and tests that build, so the pages load bundled client code that
 matches the installed JSKIT packages; no development-server dependency cache is involved. The run
-never reuses a server already listening on its port, because that server may serve a build from
-before the last install: stop it, or choose another `PLAYWRIGHT_PORT`.
+never reuses a server already listening on one of its ports, because that server may serve a build
+from before the last install: stop it, or choose another `PLAYWRIGHT_PORT`.
 
 The large `base-shell.spec.ts` file covers the Studio shell and is not part of the default E2E command.
 Run it explicitly with `npm run test:e2e:shell` when changing the shell behaviors it covers.
@@ -20,7 +26,7 @@ Run it explicitly with `npm run test:e2e:shell` when changing the shell behavior
 
 `.github/workflows/nightly-browser.yml` runs the whole suite every night, and on demand with **Run
 workflow** on the Actions page. It splits the suite into 12 shards that run at once on separate
-GitHub runners, each with its own server and one worker. It is the one browser run that does not
+GitHub runners, each with the config's workers and a server for each. It is the one browser run that does not
 stop at 2 failures, because it exists to record every result.
 
 A failed night shows as a failed `Vibe64 Nightly Browser` run. Its `playwright-report` artifact

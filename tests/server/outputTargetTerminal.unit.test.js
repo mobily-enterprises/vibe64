@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import getPort from "get-port";
 
 import {
   __testables as launchTargetTerminalTestables,
@@ -435,7 +436,9 @@ test("launch start awaits preparation, publishes proxied ingress, and cannot ret
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-workspace-"));
   const sessionId = "session-workspace";
   const projectContextRoot = path.join(root, "project-namespace");
-  const previewSocketDir = path.join(root, "preview-sockets");
+  // A Unix socket path holds at most 107 bytes and TMPDIR can be a long path (macOS
+  // gives each user one), so the sockets get a folder under /tmp, as Vibe64's own fallback does.
+  const previewSocketDir = await mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "v64-sockets-"));
   const sourceRoot = path.join(root, "sessions", "active", sessionId, "source");
   const sessionRoot = path.join(root, "state", sessionId);
   await mkdir(sourceRoot, {
@@ -463,13 +466,16 @@ test("launch start awaits preparation, publishes proxied ingress, and cannot ret
     });
     const stackPath = path.join(sourceRoot, "genesis", "stack.md");
     const stack = await readFile(stackPath, "utf8");
+    // The Preview gets its own free port, not a shared fixed one: test files run
+    // at the same time, and a port another file's Preview chose between its check
+    // and its start is lost.
     const outputsStart = stack.indexOf("## Outputs\n");
     const outputsEnd = stack.indexOf("\n## ", outputsStart + 1);
     assert.notEqual(outputsStart, -1);
     assert.notEqual(outputsEnd, -1);
     await writeFile(
       stackPath,
-      `${stack.slice(0, outputsStart)}## Outputs\n\n### Target \`app\`: Run app\n\n- Default.\n- Mode: \`interactive\`\n- Runtimes: \`nodejs\`\n- Run \`Develop\`: \`npm\` \`run\` \`develop\`\n\n#### Presentation\n\n- Kind: \`web\`\n- Preferred port: \`3000\`\n- URL path: \`/\`\n- Ready when: \`GET\` \`/api/health\` returns \`200\`\n${stack.slice(outputsEnd)}`,
+      `${stack.slice(0, outputsStart)}## Outputs\n\n### Target \`app\`: Run app\n\n- Default.\n- Mode: \`interactive\`\n- Runtimes: \`nodejs\`\n- Run \`Develop\`: \`npm\` \`run\` \`develop\`\n\n#### Presentation\n\n- Kind: \`web\`\n- Preferred port: \`${await getPort()}\`\n- URL path: \`/\`\n- Ready when: \`GET\` \`/api/health\` returns \`200\`\n${stack.slice(outputsEnd)}`,
       "utf8"
     );
     const currentSetup = await inspectVibe64WorkspaceSetup({
@@ -830,6 +836,10 @@ test("launch start awaits preparation, publishes proxied ingress, and cannot ret
     releaseLaunchCleanupPublication?.();
     await controller?.close();
     await rm(root, {
+      force: true,
+      recursive: true
+    });
+    await rm(previewSocketDir, {
       force: true,
       recursive: true
     });

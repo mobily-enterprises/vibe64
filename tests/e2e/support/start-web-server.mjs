@@ -49,7 +49,7 @@ function isolatedServerRoots() {
 // config's gracefulShutdown): the server's own shutdown handles it once
 // started, and this harness until then. If Playwright dies without stopping it
 // (a timeout's SIGTERM, which Playwright does not handle), the stdin pipe
-// Playwright holds closes, and that stops the server the same way.
+// start-web-servers.mjs holds closes, and that stops the server the same way.
 async function main() {
   const exitOnStopSignal = (signal) => process.exit(128 + os.constants.signals[signal]);
   for (const signal of STOP_SIGNALS) process.once(signal, exitOnStopSignal);
@@ -64,10 +64,17 @@ async function main() {
       // cookie; the access key has its own TCP server test.
       localAccessKey: false
     });
+    // The server's shutdown handles the first stop signal and forces its own
+    // exit when it overruns. A later one (Playwright signals the whole process
+    // group while start-web-servers.mjs closes this stdin) must not end the
+    // process before that shutdown has removed the temporary folder.
+    for (const signal of STOP_SIGNALS) process.on(signal, ignoreRepeatedStop);
   } finally {
     for (const signal of STOP_SIGNALS) process.off(signal, exitOnStopSignal);
   }
 }
+
+function ignoreRepeatedStop() {}
 
 if (isDirectServerExecution({
   entrypointPath: PLAYWRIGHT_SERVER_ENTRYPOINT

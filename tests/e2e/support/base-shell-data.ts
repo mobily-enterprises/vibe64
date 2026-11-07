@@ -1,5 +1,7 @@
-const PLAYWRIGHT_PORT = String(process.env.PLAYWRIGHT_PORT || "4173").trim() || "4173";
-const DEFAULT_BASE_URL = `http://127.0.0.1:${PLAYWRIGHT_PORT}`;
+import { e2eWorkerPort } from "./e2e-servers.mjs";
+
+// The server of the worker running this test (playwright.config.mjs).
+const DEFAULT_BASE_URL = `http://127.0.0.1:${e2eWorkerPort()}`;
 const BASE_URL = String(process.env.PLAYWRIGHT_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/u, "");
 const WORKSPACE_SLUG = "example-target-app";
 const DEVELOPMENT_PATH = `/app/project/${WORKSPACE_SLUG}`;
