@@ -9,6 +9,7 @@ import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { mockIntegrationShellReads } from "./support/integration-shell-mocks";
 import { DASHBOARD_PATH, directChatSessionId, viewports } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
+import { INTEGRATIONS_AFTER_CALENDAR_FLOW } from "./support/integration-calendar-flow";
 
 // On a compact screen the Dashboard's sections are a "Dashboard section" select.
 async function openCompactDashboardSection(page: Page, name: string) {
@@ -467,6 +468,10 @@ for (const { viewport, providerBatch } of [
           } : {})
         });
       });
+      const calendarFlow = ["calendar", "existing", "responsive"].includes(providerBatch);
+      if (!calendarFlow && !["google-ads-search", "analytics", "bigquery", "aws"].includes(providerBatch)) {
+        await writeFile(path.join(source, "integrations.json"), INTEGRATIONS_AFTER_CALENDAR_FLOW);
+      }
       await page.goto(`${DASHBOARD_PATH}/integrations`);
       const showProject = page.getByRole("button", { name: "Show project", exact: true });
       if (viewport.name !== "expanded") await showProject.click();
@@ -782,126 +787,135 @@ for (const { viewport, providerBatch } of [
         expect(errors).toEqual([]);
         return;
       }
-      await addIntegration(panel, "Google Calendar");
-      if (providerBatch === "calendar") {
-        await panel.getByRole("button", { name: "Set up Google Calendar", exact: true }).click();
-        await expect(panel.getByText(/To create, edit or cancel events, select Manage events/)).toBeVisible();
-        await expect(panel.getByText(/All-day end dates are exclusive/)).toBeVisible();
-        const eventScope = panel.getByRole("checkbox", { name: "Manage events", exact: true });
-        if (!await eventScope.isVisible()) await expandPanel(panel.getByRole("button", { name: "Permissions", exact: true }));
-        await eventScope.check();
-      }
-      await panel.getByRole("button", { name: "Save configuration" }).click();
-      await expect(panel.getByText("Length must be at least 1 characters.", { exact: true })).toBeVisible();
-      await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture.apps.googleusercontent.com");
-      await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Team calendar");
-      await panel.getByRole("button", { name: "Save configuration" }).click();
-      await expect(panel.getByRole("button", { name: "Save configuration" })).toBeDisabled();
       const filePath = path.join(source, "integrations.json");
-      const saved = JSON.parse(await readFile(filePath, "utf8"));
-      expect(saved.integrations["google-calendar"].displayName).toBe("Team calendar");
-      expect(saved.registrations["google-calendar"].clientSecretRef).toBe("env:GOOGLE_CALENDAR_CLIENT_SECRET");
-      expect(JSON.stringify(saved)).not.toContain('"clientSecret":');
-      await page.reload();
-      if (viewport.name !== "expanded") await showProject.click();
-      await panel.getByRole("list", { name: "Configured integrations" }).getByText("Team calendar", { exact: true }).click();
-      await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("Team calendar");
-      if (["existing", "responsive"].includes(providerBatch)) {
-        const connectionPanel = panel.getByRole("region", { name: "Application connection" });
-        for (const [issue, instruction] of [
-          ["credentials-missing", "Complete the required provider settings and credentials."],
-          ["callback-invalid", "Set a valid application callback URL in Env"]
-        ]) {
-          setupIssues["google-calendar"] = issue;
-          await connectionPanel.getByRole("button", { name: "Check connection", exact: true }).click();
-          await expect(connectionPanel.getByText(instruction, { exact: false })).toBeVisible();
-          await expect(connectionPanel.getByText(/Ask the project assistant to implement/)).toHaveCount(0);
-          await expect(connectionPanel.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
+      // The Google Calendar flow: add, validate, save, reload, a CLI edit beside an
+      // unsaved draft, discard and save again. It runs in full in the calendar,
+      // existing and responsive tests, on every viewport, and pins the file it leaves;
+      // every other provider test starts from that file instead of repeating it.
+      const runCalendarFlow = async () => {
+        await addIntegration(panel, "Google Calendar");
+        if (providerBatch === "calendar") {
+          await panel.getByRole("button", { name: "Set up Google Calendar", exact: true }).click();
+          await expect(panel.getByText(/To create, edit or cancel events, select Manage events/)).toBeVisible();
+          await expect(panel.getByText(/All-day end dates are exclusive/)).toBeVisible();
+          const eventScope = panel.getByRole("checkbox", { name: "Manage events", exact: true });
+          if (!await eventScope.isVisible()) await expandPanel(panel.getByRole("button", { name: "Permissions", exact: true }));
+          await eventScope.check();
         }
-        delete setupIssues["google-calendar"];
-        if (viewport.name === "compact") {
-          connectionStatuses["google-calendar"] = "unconfigured";
-          await connectionPanel.getByRole("button", { name: "Check connection", exact: true }).click();
-          await expect(connectionPanel.getByRole("button", { name: "Prepare setup request", exact: true })).toBeVisible();
-          await page.getByRole("button", { name: "Show chat", exact: true }).click();
-          const composer = page.getByLabel("Message AI assistant");
-          await composer.fill("Keep my existing request.");
-          await showProject.click();
-          await connectionPanel.getByRole("button", { name: "Prepare setup request", exact: true }).click();
-          await expect(composer).toBeVisible();
-          await expect(composer).toHaveValue(/^Keep my existing request\.\n\nImplement the saved integration "google-calendar"/);
-          await expect(composer).toHaveValue(/Use this project's selected framework/);
-          expect(await readFile(filePath, "utf8")).not.toContain("Keep my existing request");
-          await composer.fill("");
-          await showProject.click();
-          connectionStatuses["google-calendar"] = "disconnected";
-        }
-        await connectionPanel.getByRole("button", { name: "Check connection", exact: true }).click();
-        await expect(connectionPanel.getByText("Not connected", { exact: true })).toBeVisible();
-        await connectionPanel.getByRole("button", { name: "Connect account", exact: true }).click();
-        await expect(connectionPanel.getByText("Waiting for provider approval", { exact: true })).toBeVisible();
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("calendar");
-        await expect(panel.getByRole("list", { name: "Configured integrations" }).getByText("Team calendar", { exact: true })).toBeVisible();
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("no-matching-integration");
-        await expect(panel.getByText("No configured integrations match your search.", { exact: true })).toBeVisible();
-        await expect(panel.getByText("No services match your search.", { exact: true })).toBeVisible();
-        await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("Team calendar");
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("calendar");
+        await panel.getByRole("button", { name: "Save configuration" }).click();
+        await expect(panel.getByText("Length must be at least 1 characters.", { exact: true })).toBeVisible();
+        await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture.apps.googleusercontent.com");
+        await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Team calendar");
+        await panel.getByRole("button", { name: "Save configuration" }).click();
+        await expect(panel.getByRole("button", { name: "Save configuration" })).toBeDisabled();
+        const saved = JSON.parse(await readFile(filePath, "utf8"));
+        expect(saved.integrations["google-calendar"].displayName).toBe("Team calendar");
+        expect(saved.registrations["google-calendar"].clientSecretRef).toBe("env:GOOGLE_CALENDAR_CLIENT_SECRET");
+        expect(JSON.stringify(saved)).not.toContain('"clientSecret":');
         await page.reload();
         if (viewport.name !== "expanded") await showProject.click();
+        await panel.getByRole("list", { name: "Configured integrations" }).getByText("Team calendar", { exact: true }).click();
         await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("Team calendar");
-        await expect(panel.getByRole("textbox", { name: "Search integrations", exact: true })).toHaveValue("calendar");
-        await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("");
-        await expect(connectionPanel.getByRole("link", { name: "Continue with provider" })).toHaveAttribute("href", "https://accounts.example/consent");
-        await connectionPanel.getByRole("button", { name: "Cancel connection", exact: true }).click();
-        await expect(connectionPanel.getByText("Not connected", { exact: true })).toBeVisible();
-        await connectionPanel.getByRole("button", { name: "Connect account", exact: true }).click();
-        await expect(connectionPanel.getByText("Waiting for provider approval", { exact: true })).toBeVisible();
-        connectionStatuses["google-calendar"] = "connected";
-        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-        await expect(connectionPanel.getByText("Connected", { exact: true })).toBeVisible();
-        await expect(connectionPanel.getByText("List calendars", { exact: true })).toBeVisible();
-        await expect(connectionPanel.getByText("provider:future-permission", { exact: true })).toBeVisible();
-        await expect(connectionPanel.locator("time")).toHaveAttribute("datetime", "2026-09-11T03:00:00.000Z");
-        await expect(connectionPanel.locator("time")).not.toHaveText("Invalid Date");
-        await connectionPanel.getByRole("button", { name: "Reconnect", exact: true }).click();
-        await expect(connectionPanel.getByText("Waiting for provider approval", { exact: true })).toBeVisible();
-        await connectionPanel.getByRole("button", { name: "Cancel connection", exact: true }).click();
-        await expect(connectionPanel.getByText("Connected", { exact: true })).toBeVisible();
-        await connectionPanel.getByRole("button", { name: "Disconnect", exact: true }).click();
-        await expect(page.getByText(/Provider permissions are not revoked\./)).toBeVisible();
-        await page.getByRole("button", { name: "Disconnect account", exact: true }).click();
-        await expect(connectionPanel.getByText("Not connected", { exact: true })).toBeVisible();
-        await expect(connectionPanel.getByText(/disconnecting here does not revoke them\./)).toBeVisible();
-      }
-      await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Unsaved form draft");
-      if (providerBatch === "responsive" && viewport.name === "compact") {
-        await routeApiEndpoint(page, "/vibe64/env", (route) => fulfillJson(route, {
-          ok: true, env: { environment: "dev", records: [], unavailable: null }
-        }));
-        const setupGuide = panel.getByRole("button", { name: "Set up Google Calendar", exact: true });
-        await expandPanel(setupGuide);
-        await panel.getByRole("link", { name: "Open Env", exact: true }).click();
-        await expect(page.locator(".env-panel")).toBeVisible();
-        await page.goBack();
+        if (["existing", "responsive"].includes(providerBatch)) {
+          const connectionPanel = panel.getByRole("region", { name: "Application connection" });
+          for (const [issue, instruction] of [
+            ["credentials-missing", "Complete the required provider settings and credentials."],
+            ["callback-invalid", "Set a valid application callback URL in Env"]
+          ]) {
+            setupIssues["google-calendar"] = issue;
+            await connectionPanel.getByRole("button", { name: "Check connection", exact: true }).click();
+            await expect(connectionPanel.getByText(instruction, { exact: false })).toBeVisible();
+            await expect(connectionPanel.getByText(/Ask the project assistant to implement/)).toHaveCount(0);
+            await expect(connectionPanel.getByRole("button", { name: "Connect account", exact: true })).toHaveCount(0);
+          }
+          delete setupIssues["google-calendar"];
+          if (viewport.name === "compact") {
+            connectionStatuses["google-calendar"] = "unconfigured";
+            await connectionPanel.getByRole("button", { name: "Check connection", exact: true }).click();
+            await expect(connectionPanel.getByRole("button", { name: "Prepare setup request", exact: true })).toBeVisible();
+            await page.getByRole("button", { name: "Show chat", exact: true }).click();
+            const composer = page.getByLabel("Message AI assistant");
+            await composer.fill("Keep my existing request.");
+            await showProject.click();
+            await connectionPanel.getByRole("button", { name: "Prepare setup request", exact: true }).click();
+            await expect(composer).toBeVisible();
+            await expect(composer).toHaveValue(/^Keep my existing request\.\n\nImplement the saved integration "google-calendar"/);
+            await expect(composer).toHaveValue(/Use this project's selected framework/);
+            expect(await readFile(filePath, "utf8")).not.toContain("Keep my existing request");
+            await composer.fill("");
+            await showProject.click();
+            connectionStatuses["google-calendar"] = "disconnected";
+          }
+          await connectionPanel.getByRole("button", { name: "Check connection", exact: true }).click();
+          await expect(connectionPanel.getByText("Not connected", { exact: true })).toBeVisible();
+          await connectionPanel.getByRole("button", { name: "Connect account", exact: true }).click();
+          await expect(connectionPanel.getByText("Waiting for provider approval", { exact: true })).toBeVisible();
+          await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("calendar");
+          await expect(panel.getByRole("list", { name: "Configured integrations" }).getByText("Team calendar", { exact: true })).toBeVisible();
+          await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("no-matching-integration");
+          await expect(panel.getByText("No configured integrations match your search.", { exact: true })).toBeVisible();
+          await expect(panel.getByText("No services match your search.", { exact: true })).toBeVisible();
+          await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("Team calendar");
+          await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("calendar");
+          await page.reload();
+          if (viewport.name !== "expanded") await showProject.click();
+          await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("Team calendar");
+          await expect(panel.getByRole("textbox", { name: "Search integrations", exact: true })).toHaveValue("calendar");
+          await panel.getByRole("textbox", { name: "Search integrations", exact: true }).fill("");
+          await expect(connectionPanel.getByRole("link", { name: "Continue with provider" })).toHaveAttribute("href", "https://accounts.example/consent");
+          await connectionPanel.getByRole("button", { name: "Cancel connection", exact: true }).click();
+          await expect(connectionPanel.getByText("Not connected", { exact: true })).toBeVisible();
+          await connectionPanel.getByRole("button", { name: "Connect account", exact: true }).click();
+          await expect(connectionPanel.getByText("Waiting for provider approval", { exact: true })).toBeVisible();
+          connectionStatuses["google-calendar"] = "connected";
+          await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+          await expect(connectionPanel.getByText("Connected", { exact: true })).toBeVisible();
+          await expect(connectionPanel.getByText("List calendars", { exact: true })).toBeVisible();
+          await expect(connectionPanel.getByText("provider:future-permission", { exact: true })).toBeVisible();
+          await expect(connectionPanel.locator("time")).toHaveAttribute("datetime", "2026-09-11T03:00:00.000Z");
+          await expect(connectionPanel.locator("time")).not.toHaveText("Invalid Date");
+          await connectionPanel.getByRole("button", { name: "Reconnect", exact: true }).click();
+          await expect(connectionPanel.getByText("Waiting for provider approval", { exact: true })).toBeVisible();
+          await connectionPanel.getByRole("button", { name: "Cancel connection", exact: true }).click();
+          await expect(connectionPanel.getByText("Connected", { exact: true })).toBeVisible();
+          await connectionPanel.getByRole("button", { name: "Disconnect", exact: true }).click();
+          await expect(page.getByText(/Provider permissions are not revoked\./)).toBeVisible();
+          await page.getByRole("button", { name: "Disconnect account", exact: true }).click();
+          await expect(connectionPanel.getByText("Not connected", { exact: true })).toBeVisible();
+          await expect(connectionPanel.getByText(/disconnecting here does not revoke them\./)).toBeVisible();
+        }
+        await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("Unsaved form draft");
+        if (providerBatch === "responsive" && viewport.name === "compact") {
+          await routeApiEndpoint(page, "/vibe64/env", (route) => fulfillJson(route, {
+            ok: true, env: { environment: "dev", records: [], unavailable: null }
+          }));
+          const setupGuide = panel.getByRole("button", { name: "Set up Google Calendar", exact: true });
+          await expandPanel(setupGuide);
+          await panel.getByRole("link", { name: "Open Env", exact: true }).click();
+          await expect(page.locator(".env-panel")).toBeVisible();
+          await page.goBack();
+          await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("Unsaved form draft");
+          await expect(panel.getByRole("button", { name: "Save configuration", exact: true })).toBeEnabled();
+          expect(JSON.parse(await readFile(filePath, "utf8")).integrations["google-calendar"].displayName).toBe("Team calendar");
+        }
+        saved.integrations["google-calendar"].displayName = "CLI update";
+        saved.extensions = { application: { keep: true } };
+        await writeFile(filePath, JSON.stringify(saved));
+        await panel.getByRole("button", { name: "Save configuration" }).click();
         await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("Unsaved form draft");
-        await expect(panel.getByRole("button", { name: "Save configuration", exact: true })).toBeEnabled();
-        expect(JSON.parse(await readFile(filePath, "utf8")).integrations["google-calendar"].displayName).toBe("Team calendar");
-      }
-      saved.integrations["google-calendar"].displayName = "CLI update";
-      saved.extensions = { application: { keep: true } };
-      await writeFile(filePath, JSON.stringify(saved));
-      await panel.getByRole("button", { name: "Save configuration" }).click();
-      await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("Unsaved form draft");
-      expect(JSON.parse(await readFile(filePath, "utf8")).integrations["google-calendar"].displayName).toBe("CLI update");
-      await page.getByRole("button", { name: "Dismiss", exact: true }).click();
-      await panel.getByRole("button", { name: "Discard", exact: true }).click();
-      await page.getByRole("button", { name: "Discard and reload" }).click();
-      await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("CLI update");
-      await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("After CLI update");
-      await panel.getByRole("button", { name: "Save configuration" }).click();
-      await expect(panel.getByRole("button", { name: "Save configuration" })).toBeDisabled();
-      expect(JSON.parse(await readFile(filePath, "utf8")).extensions).toEqual(saved.extensions);
+        expect(JSON.parse(await readFile(filePath, "utf8")).integrations["google-calendar"].displayName).toBe("CLI update");
+        await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+        await panel.getByRole("button", { name: "Discard", exact: true }).click();
+        await page.getByRole("button", { name: "Discard and reload" }).click();
+        await expect(panel.getByRole("textbox", { name: "Display name", exact: true })).toHaveValue("CLI update");
+        await panel.getByRole("textbox", { name: "Display name", exact: true }).fill("After CLI update");
+        await panel.getByRole("button", { name: "Save configuration" }).click();
+        await expect(panel.getByRole("button", { name: "Save configuration" })).toBeDisabled();
+        expect(JSON.parse(await readFile(filePath, "utf8")).extensions).toEqual(saved.extensions);
+        if (providerBatch !== "calendar") expect(await readFile(filePath, "utf8")).toBe(INTEGRATIONS_AFTER_CALENDAR_FLOW);
+        return saved;
+      };
+      const saved = calendarFlow ? await runCalendarFlow() : JSON.parse(INTEGRATIONS_AFTER_CALENDAR_FLOW);
       if (providerBatch === "calendar") {
         expect(saved.integrations["google-calendar"].scopes).toContain("https://www.googleapis.com/auth/calendar.events");
         expect(errors).toEqual([]);
