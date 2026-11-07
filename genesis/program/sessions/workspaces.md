@@ -630,7 +630,9 @@ panel shares click suppression across its retained session toolbars; revealing
 a toolbar under a stationary pointer does not reset it. Hidden toolbars dismiss
 their details and cannot open pending tooltips. A new keyboard-visible focus also
 reenables the tooltip, while mouse-induced focus does not; the explicit info
-button still works.
+button still works. Closing the details with that button suppresses them the
+same way, so the hover delay that began when the pointer (or a tap's emulated
+mouse) reached the tab cannot reopen them a second later.
 
 Renewal creates a fresh native assistant conversation. Its review step
 initially selects main chat's Senior and can choose another model instead.

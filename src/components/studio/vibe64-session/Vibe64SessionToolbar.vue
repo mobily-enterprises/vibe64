@@ -48,7 +48,7 @@
             :icon="mdiInformationOutline"
             size="x-small"
             variant="text"
-            @click.stop="setSessionInfo(sessionItem.sessionId, infoSessionId !== sessionItem.sessionId)"
+            @click.stop="toggleSessionInfo(sessionItem.sessionId)"
           />
         </span>
         <span
@@ -254,6 +254,15 @@ function setSessionInfo(sessionId, visible) {
   if (visible || infoSessionId.value === sessionId) {
     infoSessionId.value = visible ? sessionId : "";
   }
+}
+
+// Details closed with their button stay closed while the pointer stays on that
+// tab: the tooltip's hover delay, which began when the pointer (or a tap's
+// emulated mouse) reached the tab, would otherwise reopen them a second later.
+function toggleSessionInfo(sessionId) {
+  const visible = infoSessionId.value !== sessionId;
+  if (!visible) sessionTooltip.suppressedSessionId.value = sessionId;
+  setSessionInfo(sessionId, visible);
 }
 
 watch(() => props.toolbar.sessionsApiPath, () => {

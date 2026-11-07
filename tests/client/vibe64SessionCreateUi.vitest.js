@@ -294,6 +294,33 @@ describe("session creation controls", () => {
     }
   });
 
+  it("keeps details closed with their button closed while the pointer stays on that tab", async () => {
+    const { app, nodes, requestOpen, visible, movePointer } = mountSessionToolbars();
+    try {
+      const info = nodes.find((node) => node.props["aria-label"] === "Session info: Session session-1");
+      info.props.onClick({ stopPropagation() {} });
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(true);
+      info.props.onClick({ stopPropagation() {} });
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(false);
+      requestOpen(0); // The hover delay that began when the pointer reached the tab ends after the click.
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(false);
+      info.props.onClick({ stopPropagation() {} }); // The button itself still opens them.
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(true);
+      info.props.onClick({ stopPropagation() {} });
+      await VueRuntime.nextTick();
+      movePointer("session-2"); // Moving to another tab lets a later hover open them again.
+      requestOpen(0);
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(true);
+    } finally {
+      app.unmount();
+    }
+  });
+
   it("does not share click suppression between project panels", () => {
     const first = createVibe64SessionTooltipState();
     const second = createVibe64SessionTooltipState();
