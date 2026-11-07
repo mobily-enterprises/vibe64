@@ -91,6 +91,7 @@ const ENV_POLICY_ALLOWLIST = new Map([
   ["packages/vibe64-packaging/src/server/toolchains/androidSdk.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
   ["packages/vibe64-packaging/src/server/toolchains/download.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
   ["packages/vibe64-publishing/src/server/verificationRunner.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
+  ["packages/vibe64-pages/src/server/pageRefreshes.js", { "HOME object key": { count: 1, reason: "A page refresh script runs with a private HOME inside its temporary copy of the saved version, so it never reads or writes the person's own configuration." } }],
   ...["packages/vibe64-packaging/src/server/destinations/registryCommon.js", "packages/vibe64-packaging/src/server/stages.js"].map((filePath) => [filePath, {
     "HOME object key": { count: 1, reason: TOOL_HOME },
     "XDG_CACHE_HOME object key": { count: 1, reason: TOOL_HOME },
