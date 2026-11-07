@@ -381,14 +381,31 @@ for (const viewport of viewports) {
 }
 
 test("hung provider check times out and a late response cannot undo recovery", async ({ page }) => {
-  test.setTimeout(75_000);
   let heldResponse;
   server.state.checks.push((response) => { heldResponse = response; });
-  await openChat(page);
+  // The check starts once Socket.IO connects. Holding the client's WebSocket until
+  // the page clock is installed puts the check's 45-second timeout on that clock,
+  // while the Socket.IO client, created before it, keeps the browser's own timers.
+  const handshakeRequested = Promise.withResolvers<void>();
+  const handshakeReleased = Promise.withResolvers<void>();
+  await page.routeWebSocket(/\/socket\.io\//u, async (socket) => {
+    handshakeRequested.resolve();
+    await handshakeReleased.promise;
+    socket.connectToServer();
+  });
+  const opened = openChat(page);
+  await handshakeRequested.promise;
+  await page.clock.install();
+  handshakeReleased.resolve();
+  await opened;
   await composer(page).fill("Preserve this through the timeout.");
-  await expect(steer(page)).toBeEnabled({ timeout: 55_000 });
+  await expect.poll(() => server.state.checkCount).toBe(1);
+  await page.clock.fastForward(45_000);
+  await expect(steer(page)).toBeEnabled();
   expect(server.state.checkCount).toBe(2);
   expect(heldResponse.destroyed).toBe(true);
+  // The timeout, not a reconnect, ended the hung check.
+  expect(server.state.connectionAttempts).toBe(1);
   json(heldResponse, { ok: false, error: "Late obsolete failure" });
   await expect(steer(page)).toBeEnabled();
   await expect(warning(page)).toHaveCount(0);
