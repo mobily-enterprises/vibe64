@@ -466,10 +466,17 @@ test.describe("Vibe64 pages", () => {
       const runs = log.locator('[data-test="page-refresh-run"]');
       await expect(cell).toContainText("Every 30 minutes");
       await expect(state).toHaveText(/^Next /u);
+      // While a refresh runs, the list looks again every 5 s on its own timer. The
+      // page clock, installed once the page has loaded, moves those looks along.
+      await page.clock.install();
+      const listShows = (expectation: () => Promise<void>) => expect(async () => {
+        await page.clock.fastForward(5_000);
+        await expectation();
+      }).toPass({ intervals: [100], timeout: 15_000 });
 
       await button("Refresh now").click();
       await expect.poll(version, { timeout: 15_000 }).toBe(2);
-      await expect(button("Refresh now")).toBeVisible({ timeout: 15_000 });
+      await listShows(() => expect(button("Refresh now")).toBeVisible({ timeout: 1_000 }));
       await button("Log").click();
       await expect(log).toContainText("Every 30 minutes · a script, no AI · runs as Alice Example");
       await expect(runs).toHaveCount(1);
@@ -482,7 +489,7 @@ test.describe("Vibe64 pages", () => {
       expect(await setRefresh("broken.mjs")).toContain("by running broken.mjs");
       await page.getByRole("button", { name: "Refresh pages", exact: true }).click();
       await button("Refresh now").click();
-      await expect(state).toHaveText(/^Refresh failed /u, { timeout: 15_000 });
+      await listShows(() => expect(state).toHaveText(/^Refresh failed /u, { timeout: 1_000 }));
       await expect(state).toHaveClass(/vibe64-pages-list__refresh-alert/u);
       expect(await version()).toBe(2);
       await page.screenshot({ path: testInfo.outputPath(`refresh-failed-${width}.png`) });
@@ -505,7 +512,7 @@ test.describe("Vibe64 pages", () => {
       await expect(button("Cancel")).toBeEnabled();
       await page.screenshot({ path: testInfo.outputPath(`refresh-running-${width}.png`) });
       await button("Cancel").click();
-      await expect(button("Refresh now")).toBeVisible({ timeout: 15_000 });
+      await listShows(() => expect(button("Refresh now")).toBeVisible({ timeout: 1_000 }));
       await button("Log").click();
       await expect(runs.first()).toContainText("The refresh was cancelled.");
       await log.getByRole("button", { name: "Close", exact: true }).click();
