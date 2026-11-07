@@ -13,6 +13,10 @@ function toPositiveInt(value, fallback) {
 const devPort = toPositiveInt(process.env.VITE_DEV_PORT, 5173);
 const developmentPackages = JSON.parse(process.env.VIBE64_DEVELOPMENT_LOCAL_PACKAGES || "[]");
 const apiProxyTarget = String(process.env.VITE_API_PROXY_TARGET || "").trim() || "http://localhost:3000";
+// A server started with PORT needs its start's access key; the same
+// VIBE64_LOCAL_ACCESS_TOKEN given to both lets this proxy send it.
+const localAccessToken = String(process.env.VIBE64_LOCAL_ACCESS_TOKEN || "").trim();
+const localAccessHeaders = localAccessToken ? { "x-vibe64-local-access": localAccessToken } : {};
 const clientEntry = (() => {
   const normalized = String(process.env.VITE_CLIENT_ENTRY || "").trim();
   if (!normalized) {
@@ -98,16 +102,19 @@ export default defineConfig({
     proxy: {
       "^/app/?(?:\\?.*)?$": {
         target: apiProxyTarget,
-        changeOrigin: false
+        changeOrigin: false,
+        headers: localAccessHeaders
       },
       "/api": {
         target: apiProxyTarget,
         changeOrigin: false,
+        headers: localAccessHeaders,
         ws: true
       },
       "/socket.io": {
         target: apiProxyTarget,
         changeOrigin: false,
+        headers: localAccessHeaders,
         ws: true
       }
     }

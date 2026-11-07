@@ -81,6 +81,11 @@ import {
   startupBrowserPath,
   startupRedirectPathForRequest
 } from "./server/lib/startupUrls.js";
+import {
+  localAccessTokenForStart,
+  requireLocalAccessToken,
+  urlWithLocalAccessToken
+} from "./server/lib/localAccess.js";
 
 /** @typedef {ReturnType<typeof import("@jskit-ai/kernel/shared/capabilities").createCapabilityRuntime>} CapabilityRuntime */
 
@@ -513,6 +518,12 @@ async function startServer(options = {}) {
     options
   });
   assertSafeLocalModeListenTarget(runtimeProfile, listenTarget);
+  const localAccessToken = localAccessTokenForStart({
+    env: runtimeEnv,
+    listenTarget,
+    required: options.localAccessKey !== false,
+    runtimeProfile
+  });
   const strictPort = options.strictPort ?? (
     listenTarget.transport === "tcp" &&
     (hasExplicitPortOption(options) || runtimeEnv.PORT !== "")
@@ -569,6 +580,9 @@ async function startServer(options = {}) {
     const selectedPort = strictPort ? listenTarget.port : await getPort({
       port: preferredPortRange(listenTarget.port)
     });
+    if (localAccessToken) {
+      requireLocalAccessToken(app.server, { token: localAccessToken });
+    }
     listenAddress = await app.listen({
       host: listenTarget.host,
       port: selectedPort
@@ -581,7 +595,7 @@ async function startServer(options = {}) {
     };
   }
   const publicOrigin = String(options.publicOrigin || "").trim();
-  app.vibe64Url = publicOrigin
+  const browserUrl = publicOrigin
     ? browserUrlForPublicOrigin(publicOrigin, {
       startupSlug: options.startupSlug
     })
@@ -590,6 +604,7 @@ async function startServer(options = {}) {
         startupSlug: options.startupSlug
       })
       : "";
+  app.vibe64Url = localAccessToken && browserUrl ? urlWithLocalAccessToken(browserUrl, localAccessToken) : browserUrl;
   return app;
 }
 

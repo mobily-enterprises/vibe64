@@ -57,6 +57,17 @@ the prepared map or explicitly selected manual sources and composes a disposable
 and release lockfile remain unchanged. The example project's source and state
 remain in the original development location, outside that disposable app.
 
+`npm run dev` serves the editor from Vite and sends its API to a server started
+on port 3000 (`PORT=3000 npm start`). That server lets in only requests that
+carry the access key it prints after **Vibe64 is running at** (see
+[Running Vibe64 on your computer](running-vibe64-on-your-computer.md)). Either
+open the Vite address once with that `?vibe64-access=…` added, for example
+`http://localhost:5173/app?vibe64-access=…`, or start both with the same
+`VIBE64_LOCAL_ACCESS_TOKEN` (at least 32 letters, digits, `-` or `_`), which
+Vite's proxy then sends for you. Without either, the page shows **Open Vibe64
+from the address it printed when it started.** `npm run dev:example` starts its
+own server and needs neither.
+
 To run two local examples at once, give each a different `--state-dir` and
 `--port`. Each state directory supplies its own runtime namespace, so starting
 Codex in one example does not replace the other's shared Codex server.

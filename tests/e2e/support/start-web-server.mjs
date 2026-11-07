@@ -59,7 +59,10 @@ async function main() {
   try {
     await startServer({
       ...playwrightServerStartOptions(),
-      ...isolatedServerRoots()
+      ...isolatedServerRoots(),
+      // Specs open browser contexts of their own, which carry no access
+      // cookie; the access key has its own TCP server test.
+      localAccessKey: false
     });
   } finally {
     for (const signal of STOP_SIGNALS) process.off(signal, exitOnStopSignal);

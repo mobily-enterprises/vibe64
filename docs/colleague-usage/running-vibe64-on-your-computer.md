@@ -8,7 +8,16 @@ npx vibe64
 
 Vibe64 opens in your browser. To start it for a different folder, run
 `npx vibe64 --project /path/to/folder`. To start it without opening a browser,
-run `PORT=3001 npx vibe64 --no-open` and open `http://127.0.0.1:3001` yourself.
+run `PORT=3001 npx vibe64 --no-open` and open the address it prints after
+**Vibe64 is running at** yourself.
+
+The address Vibe64 opens or prints ends with a private access key
+(`?vibe64-access=…`) that is new each time Vibe64 starts, so other programs and
+other accounts on this computer can't use your Vibe64. Opening it once lets that
+browser in until Vibe64 stops; `npx vibe64` opens it for you.
+A tab opened without the key, or left open from before a restart, shows
+**Open Vibe64 from the address it printed when it started.** Open the newly
+printed address to continue. Don't share the address.
 
 Nothing needs configuring. Vibe64 runs as you, with your own tools and folders.
 
