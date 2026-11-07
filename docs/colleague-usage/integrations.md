@@ -13,6 +13,8 @@ detail to its configuration and **Application connection** controls.
    and scopes, then save configuration before checking or connecting. The **AI**
    integration preselects no model: choose one in **AI model**, then enter its
    key reference (for example `env:APP_AI_API_KEY`) before **Save configuration**.
+   Once it is saved, the footer says the configuration matches
+   `integrations.json`; until then it says there are unsaved changes.
 3. Enter credentials through the indicated Env flow. Use the exact variable names
    shown by that provider; do not put secrets into a conversation. When the host
    offers saved values, the credential step can link one instead of entering a

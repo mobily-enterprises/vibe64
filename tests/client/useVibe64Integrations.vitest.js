@@ -2,13 +2,16 @@ import { afterEach, expect, it, vi } from "vitest";
 import { effectScope, nextTick, reactive, ref } from "vue";
 import { useVibe64Integrations } from "@/composables/useVibe64Integrations.js";
 
-const mocks = vi.hoisted(() => ({ resource: null, save: null, setup: null }));
+const mocks = vi.hoisted(() => ({ resource: null, save: null, saveOptions: null, setup: null }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: () => mocks.resource
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
-  useCommand: (options) => reactive({ isRunning: false,
-    run: options.writeMethod === "PUT" ? (...args) => mocks.save(...args) : (...args) => mocks.setup(...args) })
+  useCommand: (options) => {
+    if (options.writeMethod === "PUT") mocks.saveOptions = options;
+    return reactive({ isRunning: false,
+      run: options.writeMethod === "PUT" ? (...args) => mocks.save(...args) : (...args) => mocks.setup(...args) });
+  }
 }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent: () => {} }));
 
@@ -251,6 +254,12 @@ it("a confirmed session switch clears the previous draft before accepting the ne
   await nextTick();
   expect(model.configuration.value.extensions.name).toBe("second");
   expect(model.changedElsewhere.value).toBe(false);
+});
+
+it("saving shows only a failure: the footer already says the configuration was saved", () => {
+  fixture();
+  expect(mocks.saveOptions.suppressSuccessMessage).toBe(true);
+  expect(mocks.saveOptions.messages).toEqual({ error: "Integration configuration could not be saved." });
 });
 
 it("a busy save keeps the draft editable and allows retry without reloading", async () => {

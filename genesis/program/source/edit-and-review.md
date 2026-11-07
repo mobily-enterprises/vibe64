@@ -1518,7 +1518,10 @@ three modes, their guide links, saved settings and connection lifecycle.
 Connection lifecycle commands suppress the generic success snackbar because
 the panel already displays their resulting connection state. This includes
 automatic status reads; they no longer show “Completed.” on opening or
-refreshing an integration. Error feedback remains enabled. Provider setup
+refreshing an integration. **Save configuration** suppresses it too: the
+footer already says the configuration matches `integrations.json`, and the
+message covered the Save button at the bottom end for its five seconds.
+Error feedback remains enabled. Provider setup
 links can resolve from connection settings before the existing authentication
 fallback, so Notion links to the internal, public or MCP guide as appropriate.
 

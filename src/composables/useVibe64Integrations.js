@@ -80,10 +80,13 @@ export function useVibe64Integrations(context, selectedId) {
     requestRecoveryLabel: "Integrations",
     fallbackLoadError: "Integrations could not load."
   });
+  // The footer says the configuration matches integrations.json once it is
+  // saved, so a success message would only repeat it while covering Save.
   const command = useIntegrationCommand("PUT", {
     apiSuffix: "/vibe64/integrations",
-    messages: { success: "Integration configuration saved.", error: "Integration configuration could not be saved." },
-    placementSource: "vibe64.integrations.save"
+    messages: { error: "Integration configuration could not be saved." },
+    placementSource: "vibe64.integrations.save",
+    suppressSuccessMessage: true
   });
   const discoveryError = ref("");
   const discoveryCommand = useIntegrationCommand("POST", {
