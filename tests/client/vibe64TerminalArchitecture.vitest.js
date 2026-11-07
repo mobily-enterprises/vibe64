@@ -112,7 +112,8 @@ describe("Vibe64 terminal architecture", () => {
     expect(takeover).toContain("takeoverRestoreTarget = takeoverPendingRestoreTarget || document.activeElement;");
     expect(takeover).toContain('event.key === "Escape"');
     expect(surface).toContain('default: false');
-    expect(surface).toContain('@media (pointer: coarse)');
+    // JSKIT draws the buttons' 48dp touch target, so the surface keeps no coarse-pointer button sizes of its own.
+    expect(surface).not.toContain('@media (pointer: coarse)');
     expect(surface).not.toContain(':loading="starting"');
 
     expect(element).toContain('mobileTakeover: props.mobileTakeover');

@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { parse } from "@vue/compiler-sfc";
-import { effectScope, nextTick, reactive, watch } from "vue";
+import { computed, effectScope, nextTick, reactive, ref, watch } from "vue";
 
 const { descriptor } = parse(await readFile(new URL("../../src/components/StudioAppShellLayout.vue", import.meta.url), "utf8"));
-const setup = new Function("defineProps", "defineEmits", "watch", "window",
+const setup = new Function("defineProps", "defineEmits", "computed", "watch", "useShellAppBar", "useShellNavigation", "window",
   descriptor.scriptSetup.content.replace(/^import .*;$/gmu, "")
   + "\nreturn { startPaneSwipe, movePaneSwipe, endPaneSwipe, cancelPaneSwipe };");
 
@@ -22,7 +22,7 @@ function fixture(t, overrides = {}) {
   const handlers = scope.run(() => setup(() => props, () => (name, value) => {
     assert.equal(name, "update:chatCollapsed");
     changes.push(value);
-  }, watch, window));
+  }, computed, watch, () => {}, () => ({ upTarget: ref("") }), window));
   t.after(() => scope.stop());
 
   function event(x, y = 100, options = {}) {

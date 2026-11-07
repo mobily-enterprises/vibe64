@@ -695,6 +695,12 @@ const visibleSessions = computed(() => {
     display: inline-flex;
   }
 
+  /* The selected chip's Archive follows Info, and JSKIT's 48dp touch target of the later button covers its
+     neighbour, so a small gap keeps Info's centre outside Archive's target and a tap on Info opens the session info. */
+  .studio-ai-sessions__tab--active .studio-ai-sessions__tab-info {
+    margin-inline-end: 0.3rem;
+  }
+
   .studio-ai-sessions__repository-state--desktop {
     display: none;
   }

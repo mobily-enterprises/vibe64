@@ -933,7 +933,9 @@ describe("Vibe64 direct session view", () => {
     expect(sessionHeader).toContain('<v-icon v-else icon="$save" />');
     // The header's icon buttons are JSKIT's 40dp icon buttons with their 48dp touch target, with no size of their own.
     expect(sessionHeader).not.toContain("--session-action-size");
-    expect(sessionHeader).not.toMatch(/\s(?:min-)?(?:height|width)="/u);
+    const headerButtons = sessionHeader.match(/<v-btn\b[^>]*>/gu) ?? [];
+    expect(headerButtons.length).toBeGreaterThan(0);
+    for (const button of headerButtons) expect(button).not.toMatch(/\s(?:min-)?(?:height|width)="/u);
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");
   });
 
