@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import { conversationAgentRunRecord } from "@jskit-ai/assistant-core/server/conversation";
 import { isMissingPathError, isPlainObject, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
@@ -29,12 +30,17 @@ import {
   revisionNumber,
   sortedFileNames
 } from "./sessionStoreLayout.js";
+import { fileIdentity } from "./sessionFiles.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
 
 const agentRunFileCache = createParsedFileCache(256);
+// Whether a session has an active agent run, by its runs folder, for the
+// session list's every refresh. A run write here forgets its folder's answer
+// and a change from elsewhere changes the folder, so only then are runs reread.
+const agentRunActivityCache = new Map();
 
 /**
  * Reads a session's files from its paths: status, metadata, manifest, agent
@@ -142,6 +148,32 @@ function createSessionRecordFiles({ state, storePaths }) {
         const timeComparison = toText(left.updatedAt).localeCompare(toText(right.updatedAt));
         return timeComparison || toText(left.id).localeCompare(toText(right.id));
       });
+  }
+
+  async function readAgentRunActivityFromPaths(sessionPaths) {
+    const folder = sessionPaths.agentRunsRoot;
+    const generation = agentRunActivityCache.get(folder)?.generation || 0;
+    let identity = "";
+    try {
+      identity = fileIdentity(await stat(folder, { bigint: true }));
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+    }
+    const cached = agentRunActivityCache.get(folder);
+    if (cached && "active" in cached && cached.generation === generation && cached.identity === identity) {
+      return { active: cached.active };
+    }
+    const active = (await readAgentRunsFromPaths(sessionPaths)).some((run) => run.active);
+    // A run written while these were read leaves the answer to the next reader.
+    if ((agentRunActivityCache.get(folder)?.generation || 0) === generation) {
+      agentRunActivityCache.set(folder, { active, generation, identity });
+    }
+    return { active };
+  }
+
+  function forgetAgentRunActivity(sessionPaths) {
+    const folder = sessionPaths.agentRunsRoot;
+    agentRunActivityCache.set(folder, { generation: (agentRunActivityCache.get(folder)?.generation || 0) + 1 });
   }
 
   async function readBackgroundTaskFromPath(sessionPaths, taskId) {
@@ -295,6 +327,8 @@ function createSessionRecordFiles({ state, storePaths }) {
     assertSessionNotPinned,
     assertStoredLearningScope,
     conversationPaths,
+    forgetAgentRunActivity,
+    readAgentRunActivityFromPaths,
     readAgentRunFromPath,
     readAgentRunsFromPaths,
     readBackgroundTaskFromPath,

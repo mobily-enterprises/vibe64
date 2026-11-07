@@ -163,6 +163,7 @@ function createVibe64SessionStore(options = {}) {
     withReadableSessionPathsForRenewal: archiveAccess.withReadableSessionPathsForRenewal,
     readArtifactForRenewal: sessionRecords.readArtifactForRenewal,
     readAgentRun: sessionRecords.readAgentRun,
+    readAgentRunActivity: sessionRecords.readAgentRunActivity,
     readAgentRuns: sessionRecords.readAgentRuns,
     readBackgroundTask: sessionRecords.readBackgroundTask,
     readBackgroundTasks: sessionRecords.readBackgroundTasks,

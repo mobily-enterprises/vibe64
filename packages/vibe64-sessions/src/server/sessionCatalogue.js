@@ -156,7 +156,7 @@ function createSessionCatalogue({
       const openSessions = await sessionsOccupyingPolicySlots(runtime, sessions);
       const policy = await project.developmentDatabasePolicy({ openSessions });
       const activityReads = await Promise.allSettled(sessions.map(async (session) => (
-        runtime.store.readAgentRuns(session.sessionId)
+        runtime.store.readAgentRunActivity(session.sessionId)
       )));
       return {
         creation: policy.creation,
@@ -169,7 +169,7 @@ function createSessionCatalogue({
           return {
             ...session,
             agentActivity: {
-              active: activity.status === "fulfilled" ? activity.value.some((run) => run.active) : null,
+              active: activity.status === "fulfilled" ? activity.value.active : null,
               revision: session.revision
             }
           };

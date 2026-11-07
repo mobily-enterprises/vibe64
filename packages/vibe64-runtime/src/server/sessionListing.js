@@ -155,6 +155,10 @@ function createSessionListing({
     ].sort((left, right) => toText(left.sessionId).localeCompare(toText(right.sessionId)));
   }
 
+  /**
+   * Summaries (status and metadata, no agent runs or background tasks) of the
+   * sessions renewal and session limits consider.
+   */
   async function listSessionsForRenewal() {
     const sessions = await Promise.all(
       (await readUnarchivedSessionRecords())
@@ -166,7 +170,7 @@ function createSessionListing({
           VIBE64_SESSION_STATUS.RENEWAL_PENDING,
           VIBE64_SESSION_STATUS.RENEWAL_QUIESCED
         ].includes(status))
-        .map(({ sessionId }) => sessionRecords.readSessionForRenewal(sessionId))
+        .map(({ sessionId }) => sessionRecords.readSessionSummaryForRenewalList(sessionId))
     );
     return sessions.filter((session) => (
       [

@@ -284,7 +284,13 @@ Escape, Close and Cancel dismissal until creation succeeds or fails. Success
 closes the dialog; failure leaves the selection available for retry or dismissal.
 
 Session listing projects saved agent-run activity and its session revision into
-`agentActivity`; unreadable activity remains unknown. The session-data owner
+`agentActivity`; unreadable activity remains unknown. Agent-run files are kept
+for a session's whole life, so the store remembers each session's answer by its
+`agent-runs` folder (`readAgentRunActivity`) and reads that session's runs again
+only after the store writes one of them or the folder itself changes; a refresh
+reads no run files. The session limit's renewal reservations come from session
+summaries (`listSessionsForRenewal`), which read no runs or background tasks.
+The session-data owner
 applies newer turn events to every listed session and refreshes on reconnect.
 These project-scoped updates cannot be replaced by older responses or events.
 Mounted runtimes still supply live conversation activity, and each toolbar

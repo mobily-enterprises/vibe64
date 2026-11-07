@@ -3795,7 +3795,7 @@ test("session listing reports unavailable sessions separately without changing c
     project: {
       async createRuntime() {
         return {
-          store: { async listSessionsForRenewal() { return []; }, async readAgentRuns() { return []; } },
+          store: { async listSessionsForRenewal() { return []; }, async readAgentRunActivity() { return { active: false }; } },
           async listSessionSummaries(options) {
             assert.deepEqual(options, { statusGroup: "open", includeUnavailable: true });
             return [unavailable, healthy];
@@ -3836,9 +3836,9 @@ test("session listing reads saved activity without opening chats and isolates un
       listSessionSummaries: store.listSessionSummaries,
       store: {
         async listSessionsForRenewal() { return []; },
-        async readAgentRuns(id) {
+        async readAgentRunActivity(id) {
           if (id === "unreadable") throw new Error("Activity record unreadable");
-          return store.readAgentRuns(id);
+          return store.readAgentRunActivity(id);
         }
       }
     };

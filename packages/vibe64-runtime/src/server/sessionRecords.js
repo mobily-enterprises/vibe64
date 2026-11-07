@@ -376,6 +376,14 @@ function createSessionRecords({
     return archiveAccess.withReadableSessionPaths(sessionId, recordFiles.readAgentRunsFromPaths);
   }
 
+  /**
+   * `{ active }`: whether any of the session's agent runs is active, reading
+   * its runs again only after one of them changed.
+   */
+  async function readAgentRunActivity(sessionId) {
+    return archiveAccess.withReadableSessionPaths(sessionId, recordFiles.readAgentRunActivityFromPaths);
+  }
+
   async function writeAgentRunEvent(sessionId, runId, options = {}) {
     const {
       event = {},
@@ -393,6 +401,7 @@ function createSessionRecords({
         isTerminal: vibe64AgentRunStateIsTerminal
       });
       await writeJsonFile(agentRunFilePath(sessionPaths, normalizedRunId), record);
+      recordFiles.forgetAgentRunActivity(sessionPaths);
       return record;
     });
   }
@@ -489,6 +498,14 @@ function createSessionRecords({
     return archiveAccess.withReadableSessionPathsForRenewal(sessionId, recordFiles.readSessionFromPaths);
   }
 
+  /**
+   * The session's manifest, status and metadata, without its agent runs and
+   * background tasks, wherever renewal may have left it.
+   */
+  async function readSessionSummaryForRenewalList(sessionId) {
+    return archiveAccess.withReadableSessionPathsForRenewal(sessionId, recordFiles.readSessionSummaryFromPaths);
+  }
+
   async function readSessionSummary(sessionId) {
     return assertNormalSessionIsReadable(await readSessionSummaryForRenewal(sessionId));
   }
@@ -517,6 +534,7 @@ function createSessionRecords({
     mutateSession,
     mutateSessionForRenewal,
     readAgentRun,
+    readAgentRunActivity,
     readAgentRuns,
     readArtifact,
     readArtifactForRenewal,
@@ -530,6 +548,7 @@ function createSessionRecords({
     readSessionNativeDescriptor,
     readSessionSourceDescriptor,
     readSessionSummary,
+    readSessionSummaryForRenewalList,
     readStatus,
     readStatusForRenewal,
     runSessionExclusive,

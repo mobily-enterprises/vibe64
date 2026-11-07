@@ -32,7 +32,7 @@ function project(stateRoot, { pinned = "", sessionIds = ["s1", "s2", "s3"] } = {
     async createRuntime() {
       return {
         stateRoot,
-        store: { async listSessionsForRenewal() { return []; }, async readAgentRuns() { return []; } },
+        store: { async listSessionsForRenewal() { return []; }, async readAgentRunActivity() { return { active: false }; } },
         async listSessionSummaries() {
           return projectRecord.sessionIds.map((sessionId) => ({ sessionId, status: "active", revision: 1 }));
         },
