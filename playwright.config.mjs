@@ -26,6 +26,12 @@ export default defineConfig({
   use: {
     baseURL,
     headless: true,
+    // The app's reduced-motion setting (src/styles/vibe64-m3.css, and src/main.js
+    // for Vuetify's menus and dialogs) ends transitions at once, so no step waits
+    // out a menu, dialog, expand or route animation, measures an element still
+    // moving into place, or taps a menu still fading in. Playwright reads this
+    // only from contextOptions, not from use itself.
+    contextOptions: { reducedMotion: "reduce" },
     ...(storageState ? { storageState } : {}),
     // A failed test keeps its trace with a DOM snapshot of every action. The
     // trace's screencast is off: recording frames for every test took about a

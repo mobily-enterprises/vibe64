@@ -2859,6 +2859,8 @@ for (const width of [390, 820, 1280]) {
 for (const width of [390, 820, 1280]) {
   hintTest(`@reasoning-activity shows dots only during native reasoning at ${width}px`, async ({ page, hintRealtime }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
+    // The dots' animation is the subject, and reduced motion, which the browser tests ask for, stops it.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     const agentTurn = { active: true, id: "reasoning-turn", state: "active", phase: "reasoning" };
     hintRealtime.state.conversationLog = [scrollTestTurn(1)];
     await mockDirectChat(page, { agentTurn });
