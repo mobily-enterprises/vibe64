@@ -941,12 +941,25 @@ for (const saved of [false, true]) {
       const started = Date.now();
       const search = page.getByRole("combobox", { name: "Find table or column" });
       await search.fill("table_1");
-      expect(Date.now() - started).toBeLessThan(1500);
+      // A clearly-broken bound, not a benchmark: typing here lands while the routed connections are
+      // drawn. It takes about 0.3-1.1 s on a busy 8-thread host; a main-thread freeze like the one that
+      // held it for over 4 s at 4 workers fails, while load and Playwright's trace snapshots do not.
+      expect(Date.now() - started).toBeLessThan(3_000);
       await search.press("Escape");
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__node")).toHaveCount(130, { timeout: 15_000 });
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479, { timeout: 15_000 });
       const reset = page.getByRole("button", { name: "Fit", exact: true });
       await expect(reset).toBeEnabled({ timeout: 15_000 });
+      // The cost itself, independent of load: every DOM node drawing the cards and connections. Ports
+      // are plain elements and connections draw their own paths; a component per port or per
+      // connection adds about 1,900 or 1,400 nodes here and fails this ceiling.
+      const diagramNodes = await page.locator(".database-workspace__main > .database-erd .vue-flow__transformationpane").evaluate((pane) => {
+        const walker = document.createTreeWalker(pane, NodeFilter.SHOW_ALL);
+        let count = 0;
+        while (walker.nextNode()) count += 1;
+        return count;
+      });
+      expect(diagramNodes).toBeLessThan(19_000);
       await expect.poll(() => server.saves.length).toBe(1);
       const positions = () => page.locator(".database-workspace__main > .database-erd .vue-flow__node").evaluateAll((nodes: HTMLElement[]) => nodes.map(node => ({ id: node.dataset.id, position: node.style.transform })));
       const initial = await positions();
