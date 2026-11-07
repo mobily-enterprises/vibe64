@@ -14,6 +14,9 @@ import {
 import {
   createStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
+import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
+import { createServiceSessionTerminals } from "../../packages/vibe64-terminals/src/server/serviceSessionTerminals.js";
+import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
 async function withProjectRequestContext(callback) {
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-ws-projects-"));
@@ -414,4 +417,66 @@ test("terminal websocket releases a late observer exactly once without snapshot 
   assert.equal(releases, 1);
   assert.equal(writes, 0);
   assert.deepEqual(socket.sent, []);
+});
+
+test("global Codex terminal stream and resize refuse a member without Codex access", async () => {
+  const owner = { email: "owner@example.com", role: "owner" };
+  const member = { email: "member@example.com", role: "member" };
+  const codexCalls = [];
+  const terminals = createServiceSessionTerminals({
+    codex: { terminals: {
+      subscribeGlobalTerminal(terminalSessionId) {
+        codexCalls.push(["subscribe", terminalSessionId]);
+        return { terminalSessionId, unsubscribe() {} };
+      },
+      resizeGlobalTerminal(terminalSessionId, size) {
+        codexCalls.push(["resize", terminalSessionId, size.cols, size.rows]);
+        return { ok: true };
+      }
+    } },
+    sessionAgent: {
+      async requireAssistantAccessForEngine(engineId, options) {
+        assert.equal(engineId, "codex");
+        if (options.vibe64User?.role !== "owner") {
+          throw Object.assign(new Error("Only the workspace owner can use this personal AI connection."), {
+            code: "vibe64_assistant_owner_required"
+          });
+        }
+      }
+    }
+  });
+  const app = testRouteApp();
+  await withProjectRequestContext(async ({ projectContext, slug }) => {
+    registerRoutes(app.http, { fastify: app.fastify, localhostCheckBypassed: false, projectContext, terminals });
+    const route = app.registeredRoutes.find(({ path: routePath }) => routePath.endsWith("/codex-terminal/:terminalSessionId/ws"));
+    const request = (vibe64User) => ({
+      protocol: "https",
+      headers: { host: "example.com", origin: "https://example.com" },
+      ip: "10.0.0.8",
+      params: { slug, terminalSessionId: "terminal-1" },
+      vibe64User
+    });
+
+    const refused = testSocket();
+    route.handler(refused, request(member));
+    await waitForSocketMessages(refused, 1);
+    assert.equal(refused.closed?.code, 1008);
+    assert.equal(refused.sent[0].code, "vibe64_assistant_owner_required");
+    assert.deepEqual(codexCalls, [], "a member never sees the terminal's snapshot or output");
+
+    const watched = testSocket();
+    route.handler(watched, request(owner));
+    await waitForSocketMessages(watched, 1);
+    assert.equal(watched.closed, null);
+    assert.deepEqual(watched.sent, [{ session: { terminalSessionId: "terminal-1" }, type: "snapshot" }]);
+    await watched.handlers.message(Buffer.from(JSON.stringify({ cols: 120, rows: 40, type: "resize" })));
+    watched.handlers.close();
+    assert.deepEqual(codexCalls, [["subscribe", "terminal-1"], ["resize", "terminal-1", 120, 40]]);
+  });
+
+  await assert.rejects(
+    terminals.resizeGlobalCodexTerminal("terminal-1", { cols: 80, rows: 24 }, { vibe64User: member }),
+    { code: "vibe64_assistant_owner_required" }
+  );
+  assert.equal(codexCalls.length, 2, "a member cannot resize the owner's terminal");
 });

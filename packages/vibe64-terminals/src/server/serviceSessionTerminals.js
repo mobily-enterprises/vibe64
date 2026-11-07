@@ -1,7 +1,7 @@
 import { closeAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { removeCodexGitCommandSession } from "./codexGitCommand.js";
 import { cleanupSessionSaveCommitMessage } from "./sessionSaveCommitMessage.js";
-import { codexTerminalNamespace, outputTargetTerminalNamespace } from "./terminalShared.js";
+import { codexTerminalNamespace, outputTargetTerminalNamespace, vibe64Result } from "./terminalShared.js";
 import {
   closeTerminalSessionsForNamespace,
   freezeTerminalNamespaceAdmission,
@@ -497,8 +497,12 @@ function createServiceSessionTerminals({
     return sessionAgent.subscribeTerminal(sessionId, terminalSessionId, subscriber, options);
   }
 
-  function subscribeGlobalCodexTerminal(terminalSessionId, subscriber) {
-    return codex.terminals.subscribeGlobalTerminal(terminalSessionId, subscriber);
+  // Watching and resizing the global Codex terminal need the same Codex access as opening and writing it.
+  function subscribeGlobalCodexTerminal(terminalSessionId, subscriber, options = {}) {
+    return vibe64Result(async () => {
+      await authorizeGlobalCodexTerminal(options);
+      return codex.terminals.subscribeGlobalTerminal(terminalSessionId, subscriber);
+    });
   }
 
   function subscribeOutputTargetTerminal(sessionId, terminalSessionId, subscriber) {
@@ -537,7 +541,8 @@ function createServiceSessionTerminals({
     return sessionAgent.resizeTerminal(sessionId, terminalSessionId, size, options);
   }
 
-  function resizeGlobalCodexTerminal(terminalSessionId, size) {
+  async function resizeGlobalCodexTerminal(terminalSessionId, size, options = {}) {
+    await authorizeGlobalCodexTerminal(options);
     return codex.terminals.resizeGlobalTerminal(terminalSessionId, size);
   }
 

@@ -397,7 +397,7 @@ function withoutVibe64User(input) {
 }
 
 /**
- * The authenticated user a global terminal write runs as.
+ * The authenticated user a global terminal is watched, resized or written as.
  * @param {{ vibe64User?: object }} request
  */
 function vibe64UserOptions(request) {
@@ -441,11 +441,11 @@ function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { loc
     routePath: `${routes.routeBase}/codex-terminal/:terminalSessionId/ws`,
     service: terminals,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
-    subscribe(service, { subscriber, terminalSessionId }) {
-      return service.subscribeGlobalCodexTerminal(terminalSessionId, subscriber);
+    subscribe(service, { request, subscriber, terminalSessionId }) {
+      return service.subscribeGlobalCodexTerminal(terminalSessionId, subscriber, vibe64UserOptions(request));
     },
-    resize(service, { cols, rows, terminalSessionId }) {
-      return service.resizeGlobalCodexTerminal(terminalSessionId, { cols, rows });
+    resize(service, { cols, request, rows, terminalSessionId }) {
+      return service.resizeGlobalCodexTerminal(terminalSessionId, { cols, rows }, vibe64UserOptions(request));
     },
     write(service, { data, request, terminalSessionId }) {
       return service.writeGlobalCodexTerminal(
