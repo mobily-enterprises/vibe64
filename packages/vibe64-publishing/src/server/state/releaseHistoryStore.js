@@ -35,6 +35,14 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("The release history needs the project's publishing folder.");
   const directory = path.join(runtimeRoot, "releases");
   const exclusive = serialized();
+  // Every record this store has read or written, without its log. The store is
+  // its folder's only writer in this process, so a list reads only the records
+  // it has not seen yet; read(id) still reads the file, log included.
+  const known = new Map();
+  const remember = ({ log: _log, ...record }) => {
+    // A copy: the caller may go on changing the record it was given.
+    known.set(record.id, structuredClone(record));
+  };
   const fileOf = (id) => {
     if (!RELEASE_ID.test(id || "")) throw historyError("That is not a release id.", { messageCode: "vibe64_publishing_release_id_unknown" });
     return path.join(directory, `${id}.json`);
@@ -55,6 +63,7 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
       const next = (await change(structuredClone(record))) || record;
       next.log = (next.log || []).slice(-LOG_LIMIT);
       await writeJsonFile(fileOf(id), next);
+      remember(next);
       return next;
     });
   }
@@ -71,6 +80,7 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
       ...fields
     };
     await writeJsonFile(fileOf(record.id), record);
+    remember(record);
     return record;
   }
 
@@ -81,6 +91,9 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
     });
   }
 
+  /**
+   * Records without their logs, newest activity first.
+   */
   async function list({ limit = 50 } = {}) {
     let names = [];
     try {
@@ -88,17 +101,24 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    const ids = names.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).filter((id) => RELEASE_ID.test(id));
-    const records = [];
+    const ids = new Set(names.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).filter((id) => RELEASE_ID.test(id)));
+    for (const id of known.keys()) {
+      if (!ids.has(id)) known.delete(id);
+    }
     for (const id of ids) {
+      if (known.has(id)) continue;
       const record = await readJsonFile(fileOf(id), () => null);
-      if (record?.contract === RELEASE_RECORD_CONTRACT) records.push(record);
+      // A write that finished while this read was pending is newer.
+      if (record?.contract === RELEASE_RECORD_CONTRACT && !known.has(id)) remember(record);
     }
     /**
      * Newest activity first: a release resumed by a new confirmation moves up.
      */
     const activity = (record) => record.resumedAt || record.createdAt;
-    return records.sort((left, right) => activity(right).localeCompare(activity(left)) || right.id.localeCompare(left.id)).slice(0, limit);
+    return [...known.values()]
+      .sort((left, right) => activity(right).localeCompare(activity(left)) || right.id.localeCompare(left.id))
+      .slice(0, limit)
+      .map((record) => structuredClone(record));
   }
 
   return Object.freeze({
