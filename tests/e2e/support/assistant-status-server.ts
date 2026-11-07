@@ -197,9 +197,11 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     },
     // What a person's own Fix it with AI sends, for a kind whose notice this fixture doesn't draw.
     start: (kind: string, input: Record<string, unknown>) => aiTaskService.start(session.sessionId, { kind, input, vibe64User: owner }),
-    // A new server over the same records and the same AI, as a restart leaves them.
-    async restart() {
+    // A new server over the same records and the same AI, as a restart leaves them. whileDown is what happens to
+    // the AI while Vibe64 is down: it runs once the old server has stopped, so that server cannot read it first.
+    async restart(whileDown: () => Promise<unknown> = async () => {}) {
       aiTaskService.closeRunner();
+      await whileDown();
       aiTaskWorld.boot();
       await aiTaskService.resumeInterruptedTasks();
     },

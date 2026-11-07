@@ -299,8 +299,9 @@ for (const viewport of [VIEWPORTS[5], VIEWPORTS[1]]) {
       await aiTaskWorld(page, shared.server);
       const taskId = await openFix(page, shared.server);
       await expectPhase(page, "working");
-      await shared.server.temporary!.setNativeStatus(taskId, "interrupted");
-      await shared.server.aiTasks.restart();
+      // The turn is interrupted while Vibe64 is down. Marked while the old server still ran, a read the page made
+      // in between woke that server, which read the interrupted turn as one the person stopped.
+      await shared.server.aiTasks.restart(() => shared.server.temporary!.setNativeStatus(taskId, "interrupted"));
       await expectPhase(page, "needs_you", "interrupted");
       await expect(taskWindow(page).locator("[data-vibe64-ai-task-status]")).toHaveText("Vibe64 restarted while the AI was working");
       const turns = shared.server.temporary!.captured.temporaryTurns.length;
