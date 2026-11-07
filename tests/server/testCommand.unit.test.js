@@ -66,7 +66,7 @@ test("the full suites run under the machine's test budget", async () => {
   assert.equal(manifest.scripts["test:client"], "vitest run tests/client");
   for (const [scriptName, command] of Object.entries(manifest.scripts)) {
     assert.doesNotMatch(command, /node --test /u, `${scriptName} must run Node tests through a budgeted runner`);
-    assert.doesNotMatch(command, /--test-concurrency|--maxWorkers|--no-file-parallelism/u, `${scriptName} must not fix its own concurrency`);
+    assert.doesNotMatch(command, /--test-concurrency|--maxWorkers|--no-file-parallelism|--workers|\s-j\s*\d/u, `${scriptName} must not fix its own concurrency`);
   }
   assert.equal(
     manifest.scripts.verify,

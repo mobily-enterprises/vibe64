@@ -1,6 +1,7 @@
 {
   "server": {
     "totalMs": 20340000,
+    "wallMs": 2700000,
     "defaultFileMs": 60000,
     "fileMs": {
       "tests/server/agentPlaywrightCommand.unit.test.js": 240000,
@@ -75,6 +76,7 @@
   },
   "client": {
     "totalMs": 1920000,
+    "wallMs": 600000,
     "defaultFileMs": 30000,
     "fileMs": {
       "tests/client/databaseErdLayout.vitest.js": 40000,
@@ -96,6 +98,7 @@
   },
   "browser": {
     "totalMs": 24300000,
+    "wallMs": 3600000,
     "defaultFileMs": 120000,
     "fileMs": {
       "tests/e2e/ai-task-kinds.spec.ts": 130000,

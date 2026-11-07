@@ -208,11 +208,12 @@ overlap a test run already active for this checkout.
   file run alone.
 - Every test file, and each suite's files together, have a coarse time budget
   in `tooling/test-time-budgets.json`: about five times the measured time, with
-  a floor for small files, so it fails only a run that is clearly broken, never
-  normal variation on a busy machine. Each suite prints its ten slowest files
-  against their budgets; look there for waste. When a run is over budget, find
-  what got slow and fix it. Change a budget only when the work itself grew,
-  with the new measurement, in the same change.
+  a floor for small files, and each suite's run a wall-clock bound of about
+  three times its parallel run on a busy test host. They fail only a run that
+  is clearly broken, never normal variation. Each suite prints its ten slowest
+  files against their budgets; look there for waste. When a run is over
+  budget, find what got slow and fix it. Change a budget only when the work
+  itself grew, with the new measurement, in the same change.
 - A test removes every temporary folder it creates by the time it ends, so a
   passing run leaves nothing in the temp directory. It keeps an evidence folder
   (screenshots, traces, logs) only when it fails, and prints where it is.
