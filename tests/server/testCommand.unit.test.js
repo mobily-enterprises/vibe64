@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { serverTestRun } from "../../tooling/run-server-tests.mjs";
 import { targetedTestArguments } from "../../tooling/run-targeted-tests.mjs";
 import { TEST_CONCURRENCY_ENV, testConcurrency } from "../../tooling/test-concurrency.mjs";
 
@@ -58,6 +59,16 @@ test("test files run as many at once as the machine's test budget allows", () =>
   for (const value of ["0", "-1", "1.5", "two"]) {
     assert.throws(() => testConcurrency({ env: { [TEST_CONCURRENCY_ENV]: value }, cpus: 8 }), /V64_TEST_CONCURRENCY must be a whole number/u);
   }
+});
+
+test("the full server suite loads the host path guard a single-file run loads", () => {
+  const guard = `--import=${new URL("../../tooling/test-host-path-guard.mjs", import.meta.url).href}`;
+  const { args, env } = serverTestRun({ [TEST_CONCURRENCY_ENV]: "3", NODE_OPTIONS: "--no-warnings" });
+  assert.equal(env.NODE_OPTIONS, `--no-warnings ${guard}`);
+  assert.ok(args.includes("--test-concurrency=3"));
+  assert.equal(args.at(-1), "tests/server/*.test.js");
+  // A guard already in NODE_OPTIONS is not added twice.
+  assert.equal(serverTestRun({ NODE_OPTIONS: guard }).env.NODE_OPTIONS, guard);
 });
 
 test("the full suites run under the machine's test budget", async () => {

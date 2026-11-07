@@ -214,6 +214,8 @@ overlap a test run already active for this checkout.
   files against their budgets; look there for waste. When a run is over
   budget, find what got slow and fix it. Change a budget only when the work
   itself grew, with the new measurement, in the same change.
+- Every test process, `npm run test:full` included, loads
+  `tooling/test-host-path-guard.mjs`.
 - A test removes every temporary folder it creates by the time it ends, so a
   passing run leaves nothing in the temp directory. It keeps an evidence folder
   (screenshots, traces, logs) only when it fails, and prints where it is.
