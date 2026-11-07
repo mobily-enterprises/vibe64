@@ -58,15 +58,20 @@ test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
     }
   });
 
+  await page.clock.install();
   await page.goto(DEVELOPMENT_PATH);
 
   const recoveryMessage = "Projects could not reach the server or network. Check the connection and try again.";
   const recoveryBanner = page.locator(".shell-error-host__banner").filter({
     hasText: recoveryMessage
   });
-  await expect(recoveryBanner).toBeVisible({
-    timeout: 15_000
-  });
+  // JSKIT retries the failed read on the client's own timers, in its HTTP client
+  // and again in the query, before it offers recovery. Each wait follows a failed
+  // request, so the test moves the page clock through one wait (at most 3 s) at a time.
+  await expect(async () => {
+    await page.clock.runFor(3_000);
+    await expect(recoveryBanner).toBeVisible({ timeout: 250 });
+  }).toPass({ intervals: [100], timeout: 15_000 });
 
   projectSelectionRecovered = true;
   await recoveryBanner.getByRole("button", { name: "Retry" }).click();
