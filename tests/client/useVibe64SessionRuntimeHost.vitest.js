@@ -250,6 +250,12 @@ describe("Vibe64 direct session runtime host", () => {
     })).not.toThrow();
     expect(() => validateSchemaPayload(agentMessageInputValidator, {
       ...message,
+      genesisTask: "ui-pass"
+    }, {
+      context: "explicit UI pass message request contract"
+    })).not.toThrow();
+    expect(() => validateSchemaPayload(agentMessageInputValidator, {
+      ...message,
       genesisTask: "work"
     }, {
       context: "unsupported Genesis message request contract"

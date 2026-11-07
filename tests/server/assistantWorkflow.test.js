@@ -47,6 +47,28 @@ for (const deslop of [true, false]) test(`implementation, review and explicit co
   assert.match([...f.notices.values()].map(turn => JSON.stringify(turn)).join("\n"), /Saved automatically after completing the plan/);
 });
 
+for (const [preferences, heading] of [
+  [{ mode: "auto", review: true }, "Automatic review and Deslop:"],
+  [{ mode: "auto", review: true, uiPass: true }, "Automatic review, Deslop and UI pass:"],
+  [{ mode: "auto", review: false, uiPass: true }, "Automatic review and UI pass:"],
+  [{ mode: "auto", review: false }, "Automatic review:"]
+]) test(`Senior's automatic review runs the UI pass in the same turn only when it is on: ${JSON.stringify(preferences)}`, async t => {
+  const f = await fixture(t, preferences);
+  await publishPlanFixture(f.context, planDocument() + "\n- [x] Required-name validation verified\n");
+  await review(f);
+  assert.equal(f.state().stage, "review");
+  assert.equal(f.sends.length, 2, "the UI pass starts no turn of its own");
+  assert.equal(f.sends[1].selection.modelId, f.assignments.senior.modelId);
+  assert.equal(f.sends[1].input.genesisTask, undefined);
+  const message = f.sends[1].input.message;
+  assert.ok(message.includes(heading), message);
+  assert.equal(message.includes("Then run the UI pass on the screens those changes touched"), preferences.uiPass === true);
+  assert.equal(message.includes("Then perform Deslop"), preferences.review);
+  if (preferences.review && preferences.uiPass) {
+    assert.ok(message.indexOf("Then perform Deslop") < message.indexOf("Then run the UI pass"), "the UI pass follows Deslop");
+  }
+});
+
 test("a refused automatic save leaves a short note and keeps the completed plan", async t => {
   const f = await fixture(t, { mode: "auto", review: true }, { onPlanCompleted: async () => { throw new Error("Nothing changed."); } });
   await publishPlanFixture(f.context, planDocument() + "\n- [x] Required-name validation verified\n");

@@ -19,6 +19,10 @@ import {
   parseRoutingDecision,
   assistantRoutingPreferences,
   assistantRoutingAutomation,
+  uiPassRequest,
+  ASSISTANT_TASK_PURPOSES,
+  assistantTaskPurpose,
+  assistantExplicitTask,
   assistantRoutingSetupFor,
   assistantMainAiChanged,
   ASSISTANT_PURPOSE_ROLES,
@@ -297,6 +301,11 @@ test("task intent sets permissions independently of the selected role", () => {
   assert.match(assistantModePrompt("deslop", text), /You may edit code for behavior-preserving cleanup/);
   assert.match(assistantModePrompt("deslop", text), /Do not implement features/);
   assert.ok(assistantModePrompt("deslop", text).endsWith(text));
+  assert.match(assistantModePrompt("ui_pass", text), /Perform the UI pass directly using the project's UI pass guidance/);
+  assert.match(assistantModePrompt("ui_pass", text), /Do not implement features/);
+  assert.match(assistantModePrompt("senior", text, { intent: "ui_pass" }), /^\[Vibe64 role: Senior\.[^\n]*\]\nPerform the UI pass directly/u);
+  assert.doesNotMatch(assistantModePrompt("senior", text, { intent: "ui_pass" }), /Ready to try/);
+  assert.ok(assistantModePrompt("ui_pass", text).endsWith(text));
 });
 
 test("routing receipts and reviewer identity survive transcript storage and reload", async (t) => {
@@ -502,7 +511,7 @@ test("main chat always uses the owner setup; everyone else's helpers use their o
 
 test("team members never reach main chat models; their messages need the owner's approval", () => {
   const f = routingFixture();
-  for (const purpose of ["senior", "junior", "auto", "review", "deslop", "request_routing"]) {
+  for (const purpose of ["senior", "junior", "auto", "review", "deslop", "ui_pass", "request_routing"]) {
     const member = f.resolve(purpose, { reviewEnabled: purpose === "auto" });
     assert.deepEqual([member.available, member.reasonCode, member.approvalRequired], [false, "vibe64_main_chat_approval_required", true], purpose);
     assert.equal(member.message, "Main chat runs on the owner's AI. Your messages wait for their approval.");
@@ -639,8 +648,52 @@ test("Deslop and automatic save default on and keep an explicit off", () => {
   assert.deepEqual(assistantRoutingPreferences({ mode: "auto" }), { mode: "auto", review: true, autoSave: true });
   assert.deepEqual(assistantRoutingPreferences({ mode: "auto", review: false, autoSave: false }), { mode: "auto", review: false, autoSave: false });
   // Custom carries no choice, so Auto after it starts with both on.
-  assert.deepEqual(assistantRoutingAutomation({ mode: "custom", review: false, autoSave: false }), { review: true, autoSave: true });
-  assert.deepEqual(assistantRoutingAutomation(null), { review: true, autoSave: true });
+  assert.deepEqual(assistantRoutingAutomation({ mode: "custom", review: false, autoSave: false }), { review: true, autoSave: true, uiPass: false });
+  assert.deepEqual(assistantRoutingAutomation(null), { review: true, autoSave: true, uiPass: false });
+});
+
+test("the automatic UI pass is off unless turned on, and is saved only while on", () => {
+  // Preferences saved before the UI pass existed read unchanged, with it off.
+  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", review: true, autoSave: true }), { mode: "auto", review: true, autoSave: true });
+  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", uiPass: true }), { mode: "auto", review: true, autoSave: true, uiPass: true });
+  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", uiPass: false }), { mode: "auto", review: true, autoSave: true });
+  assert.deepEqual(assistantRoutingPreferences({ mode: "senior", uiPass: true }), { mode: "senior", review: true, autoSave: true, uiPass: true });
+  for (const mode of ["custom", "fix"]) {
+    const override = mode === "custom" ? { override: { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
+      modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: revision } } : {};
+    assert.equal(assistantRoutingPreferences({ mode, uiPass: true, ...override }).uiPass, undefined, mode);
+  }
+  assert.equal(assistantRoutingAutomation({ mode: "auto", uiPass: true }).uiPass, true);
+  assert.equal(assistantRoutingAutomation({ mode: "custom", uiPass: true }).uiPass, false);
+});
+
+test("a UI pass message names its scope as the request Genesis's ui-pass task receives", () => {
+  const changes = "Run the UI pass on the changes the current task made.";
+  const app = "Run the UI pass on the whole app.";
+  for (const message of ["UI pass", "  ui pass! ", "UI-pass.", "UI pass: this task's changes", "UI pass: this task\u2019s changes", "UI pass on the changes"]) {
+    assert.equal(uiPassRequest(message), changes, message);
+    assert.equal(assistantExplicitTask({ message }), "ui-pass", message);
+  }
+  for (const message of ["UI pass: the whole app", "ui pass on the entire application.", "UI pass - whole app", "UI pass \u2014 the whole app"]) {
+    assert.equal(uiPassRequest(message), app, message);
+  }
+  assert.equal(uiPassRequest("UI pass: the bookings pages."), "Run the UI pass on this section of the app: the bookings pages.");
+  assert.equal(uiPassRequest("UI pass for Settings"), "Run the UI pass on this section of the app: Settings.");
+  for (const message of ["What does UI pass do?", "UI pass: what is it?", "UI passes are slow", "Make the UI pass review faster", "Deslop"]) {
+    assert.equal(uiPassRequest(message), "", message);
+  }
+  // A sender who chose the UI pass sends its scope as the whole message.
+  assert.equal(uiPassRequest("the bookings pages", { explicit: true }), "Run the UI pass on this section of the app: the bookings pages.");
+  assert.equal(uiPassRequest("UI pass the whole app", { explicit: true }), app);
+  assert.equal(uiPassRequest("", { explicit: true }), changes);
+  assert.equal(assistantExplicitTask({ message: "the bookings pages", genesisTask: "ui-pass" }), "ui-pass");
+  assert.equal(assistantExplicitTask({ message: " Deslop. " }), "deslop");
+  assert.equal(assistantExplicitTask({ message: "Deslop commit abc123.", genesisTask: "deslop" }), "deslop");
+  assert.equal(assistantExplicitTask({ message: "Explain the UI pass", genesisTask: "work" }), "");
+  assert.deepEqual(ASSISTANT_TASK_PURPOSES, { deslop: "deslop", "ui-pass": "ui_pass" });
+  assert.equal(assistantTaskPurpose("ui-pass"), "ui_pass");
+  assert.equal(assistantTaskPurpose("toString"), "");
+  assert.equal(assistantTaskPurpose(undefined), "");
 });
 
 test("Auto names missing assignments and preserves connection and access failure reasons", () => {

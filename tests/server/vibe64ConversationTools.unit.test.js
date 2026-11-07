@@ -168,6 +168,12 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const auto = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", review: false } });
   assert.equal(auto.result.reviewEnabled, true, "Auto always reviews even with cleanup off");
   assert.equal(auto.result.deslopEnabled, false);
+  assert.equal(auto.result.uiPassEnabled, false, "the automatic UI pass stays off unless it is turned on");
+  const uiPass = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", uiPass: true } });
+  assert.equal(uiPass.ok, true, JSON.stringify(uiPass));
+  assert.equal(calls.at(-1).input.assistantRouting.uiPass, true);
+  assert.equal(uiPass.result.uiPassEnabled, true);
+  assert.equal(uiPass.result.deslopEnabled, true);
   assert.equal(changed.result.hasModelOverride, false);
   assert.equal(changed.result.modelId, "previous-model", "changing mode does not claim that the active model changed");
   const access = await execute("vibe64.sessions.assistant-access.inspect", { sessionId: "session-1" });

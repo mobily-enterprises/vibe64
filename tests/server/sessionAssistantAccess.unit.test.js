@@ -40,7 +40,7 @@ test("chat access omits repeated dispatch plans while retaining decisions, label
   const pair = { senior: { configuredSelection: selection, effectiveSelection: selection },
     junior: { configuredSelection: selection, effectiveSelection: selection } };
   const access = { available: true, canUse: true, nativeCanUse: true, canUseAny: true, currentMode: "junior",
-    purposes: Object.fromEntries(["senior", "junior", "review", "deslop", "auto"].map(role => [role, {
+    purposes: Object.fromEntries(["senior", "junior", "review", "deslop", "ui_pass", "auto"].map(role => [role, {
       available: true, role, configuredSelection: selection, effectiveSelection: selection,
       seniorJuniorPair: pair, router: selection, executionProfileRequest: { instruction: "server-only" },
       backupUsed: true, backupReason: "Personal connection is owner-only", reasonCode: "", message: ""
@@ -56,7 +56,7 @@ test("chat access omits repeated dispatch plans while retaining decisions, label
   assert.equal(result.canUse, true);
   assert.equal(result.nativeCanUse, true);
   assert.equal(result.currentMode, "junior");
-  for (const role of ["senior", "junior", "review", "deslop", "auto"]) {
+  for (const role of ["senior", "junior", "review", "deslop", "ui_pass", "auto"]) {
     assert.equal(result.purposes[role].available, true);
     assert.deepEqual(result.purposes[role].effectiveSelection, selection);
     assert.equal(result.purposes[role].backupUsed, true);

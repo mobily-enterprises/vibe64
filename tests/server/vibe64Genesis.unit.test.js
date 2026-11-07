@@ -205,6 +205,7 @@ test("the Genesis integration maps Vibe actions to explicit Genesis tasks and re
   assert.equal(genesisPromptTask({ genesisTask: "program" }), "program");
   assert.equal(genesisPromptTask({ genesisTask: "adopt" }), "adopt");
   assert.equal(genesisPromptTask({ genesisTask: "deslop", promptId: "anything" }), "deslop");
+  assert.equal(genesisPromptTask({ genesisTask: "ui-pass" }), "ui-pass");
   assert.equal(genesisPromptTask({ promptId: "obsolete-prompt-id" }), "work");
   assert.equal(genesisPromptTask({ promptId: "unknown" }), "work");
   assert.equal(assertGenesisPromptTask("review", { required: true }), "review");
@@ -875,6 +876,25 @@ test("Vibe64 uses the current bounded opening and component-scoped Stack guidanc
     });
     assert.match(ownChanges.prompt, /select your own changes for the current task across preceding turns/u);
     assert.match(ownChanges.prompt, /committed or uncommitted/u);
+
+    // The UI pass's scope is its request, as Deslop's commit range is.
+    for (const request of [
+      "Run the UI pass on the changes the current task made.",
+      "Run the UI pass on this section of the app: the bookings pages.",
+      "Run the UI pass on the whole app."
+    ]) {
+      const uiPass = await renderGenesisPrompt({
+        environment: process.env,
+        action: { genesisTask: "ui-pass" },
+        input: { request },
+        projectRoot
+      });
+      assert.equal(uiPass.context.requestedTask, "ui-pass");
+      assert.equal(uiPass.context.task, "ui-pass");
+      assert.equal(uiPass.originalPrompt, request);
+      assert.ok(uiPass.prompt.includes(request), request);
+      assert.match(uiPass.prompt, /SELECTED STACK UI PASS GUIDANCE/u);
+    }
   });
 });
 

@@ -1204,6 +1204,36 @@ test("OpenCode renders explicit Deslop through Genesis and leaves later follow-u
   assert.match(harness.promptCalls[2].input.prompt.text, /Explain one cleanup choice\.$/u);
 });
 
+test("OpenCode renders an explicit UI pass through Genesis with its scope as the request", async (t) => {
+  const harness = await controllerHarness({
+    assistantResponses: ["First turn", "UI pass turn"]
+  });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const options = {
+    runtime: harness.runtime,
+    session: harness.session,
+    vibe64User: { username: "ada" }
+  };
+
+  await harness.controller.sendMessage("session-1", {
+    message: "First",
+    messageId: "client-message-ui-pass-1"
+  }, options);
+  await harness.controller.waitForTurn("session-1", options);
+  await harness.controller.sendMessage("session-1", {
+    genesisTask: "ui-pass",
+    message: "Run the UI pass on this section of the app: the bookings pages.",
+    messageId: "client-message-ui-pass-2"
+  }, options);
+  await harness.controller.waitForTurn("session-1", options);
+
+  assert.deepEqual(harness.renderPromptCalls.map(({ task }) => task), ["start", "ui-pass"]);
+  assert.match(harness.promptCalls[1].input.prompt.text, /GENESIS ui-pass: Run the UI pass on this section of the app: the bookings pages\./u);
+});
+
 test("OpenCode verification observes a ready session without write admission or environment preparation", { timeout: 10_000 }, async (t) => {
   const entered = Promise.withResolvers();
   const release = Promise.withResolvers();

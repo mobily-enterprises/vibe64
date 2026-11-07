@@ -1767,10 +1767,10 @@ for (const pinned of [false, true]) {
   });
 }
 
-test("ordinary temporary chats start in Senior with review off and retain their parent's workflow", async () => {
+test("ordinary temporary chats start in Senior with review and the UI pass off and retain their parent's workflow", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true }));
+    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true, uiPass: true }));
     await f.service.createTemporaryConversation("one", { conversationId: "plan-chat" });
     const record = await f.store.readSessionConversation("one", "plan-chat");
     assert.deepEqual(JSON.parse(record.routingMetadata.assistant_routing), { mode: "senior", review: false, autoSave: false });
@@ -1815,7 +1815,7 @@ test("inherited temporary choices stay independent across Main changes and resta
     assert.deepEqual(restored.routingMetadata, first.routingMetadata);
     const second = await service.createTemporaryConversation("one", { conversationId: "second" });
     assert.equal(JSON.parse(second.routingMetadata.assistant_routing).mode, "senior");
-    const changed = await service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "senior", review: true } });
+    const changed = await service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "senior", review: true, uiPass: true } });
     assert.deepEqual(JSON.parse(changed.routingMetadata.assistant_routing), { mode: "senior", review: false, autoSave: false });
     await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { useWorkspaceDefault: true } }), /Choose Custom, Senior, Junior, or Auto/);
     await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "helper" } }), /Choose Custom, Senior, Junior, or Auto/);

@@ -1092,6 +1092,72 @@ test("a new message refused before admission is a definite not-sent rejection th
   });
 });
 
+for (const [message, scope] of [
+  ["UI pass", "Run the UI pass on the changes the current task made."],
+  ["UI pass: the bookings pages", "Run the UI pass on this section of the app: the bookings pages."],
+  ["UI pass: the whole app", "Run the UI pass on the whole app."]
+]) {
+  for (const mode of ["auto", "junior"]) {
+    test(`"${message}" from ${mode} runs Genesis's ui-pass task on the configured Senior model with its scope as the request`, async (t) => {
+      const f = await fixture(t, { mode, review: true, uiPass: true });
+      const preferences = f.metadata.assistant_routing;
+      await f.service.send("session-1", { ...request, message }, f.context);
+      assert.equal(f.helperCalls(), 0);
+      assert.equal(f.state().task, "ui-pass");
+      assert.equal(f.state().review, false);
+      assert.equal(f.sends[0].selection.modelId, "gpt-6-astra");
+      assert.equal(f.sends[0].input.genesisTask, "ui-pass");
+      assert.equal(f.sends[0].input.displayMessage, message);
+      assert.equal(f.sends[0].input.turnMetadata.assistantRouting.resolvedMode, "ui_pass");
+      assert.match(f.sends[0].input.message, /Perform the UI pass directly using the project's UI pass guidance/);
+      assert.ok(f.sends[0].input.message.endsWith(`\n\n${scope}`), f.sends[0].input.message);
+      assert.doesNotMatch(f.sends[0].input.message, /Only the designated working plan file may be written|VERY DETAILED|Deslop/);
+      assert.equal((await readWorkPlan(f.context)).status, "active", "a UI pass does not reopen planning");
+      assert.equal(f.metadata.assistant_routing, preferences);
+      await f.service.afterTurn("session-1", completion(), f.context);
+      assert.equal(f.sends.length, 1);
+      assert.equal(assistantRoutingStatusLabel(f.state()), "Reply finished.");
+    });
+  }
+}
+
+test("a UI pass sent as genesisTask takes the whole message as its scope and the configured planner despite a Junior override", async (t) => {
+  const f = await fixture(t, { mode: "junior", review: true });
+  const saved = await f.configuration.read();
+  await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
+  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true, override: f.assignments.junior });
+  await f.service.send("session-1", { ...request, genesisTask: "ui-pass", message: "the bookings pages" }, f.context);
+  assert.equal(f.sends[0].selection.modelId, "gpt-6-sol");
+  assert.equal(f.sends[0].input.genesisTask, "ui-pass");
+  assert.ok(f.sends[0].input.message.endsWith("Run the UI pass on this section of the app: the bookings pages."));
+  assert.equal(f.helperCalls(), 0);
+});
+
+test("a UI pass is never steered into a running coder or an unfinished goal", async (t) => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  f.agent.sessionState = async () => ({ turn: { active: true } });
+  await assert.rejects(f.service.send("session-1", { ...request, message: "UI pass", submissionKind: "steer" }, f.context), {
+    code: "vibe64_assistant_routing_ui_pass_turn_active",
+    message: "UI pass uses the Senior model in its own turn. Finish or stop the current turn, then send UI pass again."
+  });
+  assert.equal(f.sends.length, 0);
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  f.agent.readGoal = async () => ({ goal: { status: "active" } });
+  await assert.rejects(f.service.send("session-1", { ...request, message: "UI pass: the whole app" }, f.context), {
+    code: "vibe64_assistant_goal_ui_pass_blocked", delivery: "not-sent",
+    message: "UI pass can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send UI pass again."
+  });
+  assert.equal(f.sends.length, 0);
+});
+
+test("a question about the UI pass is ordinary chat, not a UI pass", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: true });
+  await f.service.send("session-1", { ...request, message: "What does the UI pass change?" }, f.context);
+  assert.equal(f.state().task, undefined);
+  assert.equal(f.sends[0].input.genesisTask, undefined);
+  assert.equal(f.sends[0].input.turnMetadata.assistantRouting.resolvedMode, "senior");
+});
+
 test("Deslop with uncertain admission retains its task and checks the receipt without resending", async (t) => {
   const f = await fixture(t);
   f.failAdmission();
@@ -1176,7 +1242,7 @@ test("a member cannot steer or send to an active main chat turn", async (t) => {
   assert.equal(f.helperCalls(), 0);
 });
 
-for (const message of ["Explain the current design.", "deslop"]) {
+for (const message of ["Explain the current design.", "deslop", "UI pass"]) {
   test(`Custom keeps the exact selection without configured roles: ${message}`, async (t) => {
     const f = await fixture(t, null);
     const selection = { ...f.assignments.senior, modelId: "gpt-6-sol", variantId: "low" };
