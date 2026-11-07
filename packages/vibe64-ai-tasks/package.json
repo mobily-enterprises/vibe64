@@ -61,8 +61,8 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.2.9",
-    "@jskit-ai/realtime": "0.2.13",
+    "@jskit-ai/kernel": "0.2.11",
+    "@jskit-ai/realtime": "0.2.17",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-database-tools": "0.1.0",
     "@local/vibe64-pages": "0.1.0",
