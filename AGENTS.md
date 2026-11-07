@@ -197,15 +197,16 @@ overlap a test run already active for this checkout.
   arguments in `--option=value` form.
 - Do not pass a glob, directory, or multiple test files to `npm test`, and do
   not bypass this guard with a direct broad `node --test` command.
-- Test suites run in parallel by default, bounded by the machine. `npm run
-  test:full`, `npm run test:client` and Playwright run as many test files (or
-  Playwright workers) at once as `tooling/test-concurrency.mjs` allows:
-  `V64_TEST_CONCURRENCY` when set (a test runner sharing a machine sets it for
-  each of its slots), otherwise half the CPUs, at least one, so a 2-CPU computer
-  runs one at a time. No script or command fixes its own concurrency. Every test
-  file owns its ports, temporary folders, databases and other state, so it can
-  run beside any other; fix a collision where it happens instead of making a
-  file run alone.
+- Test suites run in parallel by default, bounded by the machine's test budget
+  in `tooling/test-concurrency.mjs`: `V64_TEST_CONCURRENCY` when set (a test
+  runner sharing a machine sets it for each of its slots), otherwise half the
+  CPUs, at least one. `npm run test:full` and `npm run test:client` run that
+  many test files at once; Playwright runs one worker for every two of those
+  threads, at least one, as each worker also runs a browser and an app server.
+  No script or command fixes its own concurrency. Every test file owns its
+  ports, temporary folders, databases and other state, so it can run beside
+  any other; fix a collision where it happens instead of making a file run
+  alone.
 - Every test file, and each suite's files together, have a coarse time budget
   in `tooling/test-time-budgets.json`: about five times the measured time, with
   a floor for small files, and each suite's run a wall-clock bound of about

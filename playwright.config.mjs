@@ -27,7 +27,10 @@ export default defineConfig({
     baseURL,
     headless: true,
     ...(storageState ? { storageState } : {}),
-    trace: "retain-on-failure"
+    // A failed test keeps its trace with a DOM snapshot of every action. The
+    // trace's screencast is off: recording frames for every test took about a
+    // quarter of the browser suite's CPU, and only failures keep a trace.
+    trace: { mode: "retain-on-failure", screenshots: false }
   },
   ...(useRunningServer ? {} : {
     webServer: {

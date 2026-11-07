@@ -8,6 +8,7 @@ import {
 import {
   SERVER_COUNT_ENV,
   commandLineWorkers,
+  defaultWorkerCount,
   e2eServerCount,
   e2eServerPorts,
   e2eWorkerPort,
@@ -64,9 +65,16 @@ test("the main process settles one server per worker and its workers read that c
   // A worker sees no --workers of its own, only the recorded count and its index.
   assert.equal(e2eWorkerPort({ ...env, TEST_PARALLEL_INDEX: "0" }), 4183);
   assert.equal(e2eWorkerPort({ ...env, TEST_PARALLEL_INDEX: "2" }), 4185);
-  // Without --workers, the machine's test budget sets the count.
-  assert.equal(e2eServerCount({ argv: ["node", "playwright", "test"], env: { V64_TEST_CONCURRENCY: "2" } }), 2);
+  // Without --workers, a worker for every two threads of the machine's test budget sets the count.
+  assert.equal(e2eServerCount({ argv: ["node", "playwright", "test"], env: { V64_TEST_CONCURRENCY: "6" } }), 3);
   assert.ok(e2eServerCount({ argv: ["node", "playwright", "test"], env: {} }) >= 1);
+});
+
+test("each browser worker gets two threads of the test budget, and a small budget still runs one", () => {
+  assert.equal(defaultWorkerCount({ V64_TEST_CONCURRENCY: "6" }), 3);
+  assert.equal(defaultWorkerCount({ V64_TEST_CONCURRENCY: "5" }), 2);
+  assert.equal(defaultWorkerCount({ V64_TEST_CONCURRENCY: "2" }), 1);
+  assert.equal(defaultWorkerCount({ V64_TEST_CONCURRENCY: "1" }), 1);
 });
 
 test("a server the person started is one server on PLAYWRIGHT_PORT", () => {

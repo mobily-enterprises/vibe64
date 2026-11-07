@@ -37,16 +37,27 @@ function commandLineWorkers(argv) {
   return requested;
 }
 
+// A browser worker keeps about two CPU threads busy: its test process, its
+// browser and its app server (2.0-2.6 measured on 8-thread hosts). With one
+// worker per thread of the budget, tests ran up to twice as slowly without the
+// run finishing sooner, and the slowest reached their timeout.
+const THREADS_PER_BROWSER_WORKER = 2;
+
+/** One browser worker for every two threads of the machine's test budget, at least one. */
+function defaultWorkerCount(env = process.env) {
+  return Math.max(1, Math.floor(testConcurrency({ env }) / THREADS_PER_BROWSER_WORKER));
+}
+
 /**
  * How many workers, and so servers, this run uses: --workers on the command
- * line, else the machine's test budget (tooling/test-concurrency.mjs).
- * Playwright's main process decides and records it; its workers read the
- * recorded count.
+ * line, else a share of the machine's test budget (tooling/test-concurrency.mjs)
+ * that fits each worker's browser and server. Playwright's main process decides
+ * and records it; its workers read the recorded count.
  */
 function e2eServerCount({ argv = process.argv, env = process.env } = {}) {
   const recorded = workerCount(env[SERVER_COUNT_ENV]);
   if (recorded) return recorded;
-  const count = workerCount(commandLineWorkers(argv)) || testConcurrency({ env });
+  const count = workerCount(commandLineWorkers(argv)) || defaultWorkerCount(env);
   env[SERVER_COUNT_ENV] = String(count);
   return count;
 }
@@ -68,6 +79,7 @@ export {
   E2E_SERVERS_READY,
   SERVER_COUNT_ENV,
   commandLineWorkers,
+  defaultWorkerCount,
   e2eServerCount,
   e2eServerPorts,
   e2eWorkerPort,

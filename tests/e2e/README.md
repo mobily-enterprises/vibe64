@@ -5,8 +5,11 @@
 local app server per worker. The specs mock Studio API responses before loading the app.
 
 Tests run in parallel, spread across the workers one test at a time (`fullyParallel`): no test
-depends on another's order or state. The worker count is `--workers` (or `-j`) when given, else the
-machine's test budget: `V64_TEST_CONCURRENCY`, else half the CPUs. Worker N tests against its own server on
+depends on another's order or state. The worker count is `--workers` (or `-j`) when given, else one
+worker for every two threads of the machine's test budget (`V64_TEST_CONCURRENCY`, else half the CPUs),
+at least one, because each worker's test process, browser and app server keep about two threads busy.
+A trace is kept only for a failed test, with a DOM snapshot of every action and no screencast, whose
+frames cost about a quarter of the suite's CPU. Worker N tests against its own server on
 port `PLAYWRIGHT_PORT + N` (`PLAYWRIGHT_PORT` defaults to `4173`), so no two tests running at once
 share a server, and concurrent checkouts choose different `PLAYWRIGHT_PORT`s.
 
