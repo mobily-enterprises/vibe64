@@ -187,8 +187,9 @@ XDG and repository config and `GIT_CONFIG_*` overrides apply. The gateway awaits
 that read without holding the server's thread, and one read answers every
 command with the same directory and full env for 30 seconds. A change to a file
 `git config --global` writes ends that at once; a read that never finished is
-not kept. Only the synchronous Codex runtime-context builder still reads while
-its caller waits, through the same parser and with no memo.
+not kept. The synchronous Codex runtime-context builder, rebuilt for each Codex
+runtime it describes, shares that memo: it answers from a finished read and
+holds its caller only to read when none is current.
 
 The privileged command helper requires exact numeric target UID/GID values and
 uses a fixed executable path and trusted environment search path while dropping

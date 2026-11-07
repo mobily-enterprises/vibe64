@@ -146,12 +146,13 @@ function gitConfigReadOptions(cwd, env) {
 }
 
 /**
- * Exit 1 means no user.name or user.email is set. Any other failure yields null.
+ * Exit 1 means no user.name or user.email is set. Any other failure yields
+ * null values; `transient` marks a read that never finished, as below.
  */
 function readGitConfigIdentitySync(cwd, env) {
   const result = spawnSync("git", GIT_CONFIG_IDENTITY_ARGS, { ...gitConfigReadOptions(cwd, env), encoding: "utf8" });
-  if (result.error || (result.status !== 0 && result.status !== 1)) return null;
-  return gitConfigIdentityValues(result.stdout);
+  if (result.error || result.signal) return { transient: true, values: null };
+  return { transient: false, values: result.status === 0 || result.status === 1 ? gitConfigIdentityValues(result.stdout) : null };
 }
 
 /**
@@ -221,6 +222,18 @@ async function globalGitConfigRevision(env = {}) {
   return revisions.join("|");
 }
 
+function globalGitConfigRevisionSync(env = {}) {
+  return globalGitConfigPaths(env).map((file) => {
+    try {
+      const entry = statSync(file);
+      return `${entry.ino}:${entry.size}:${entry.mtimeMs}:${entry.ctimeMs}`;
+    } catch {
+      return "missing";
+    }
+  }).join("|");
+}
+
+// Shared by the asynchronous and synchronous reads, so either answers the other.
 const gitConfigIdentityReads = new Map();
 
 function gitConfigReadKey(repositoryDirectory, homeDirectory, env) {
@@ -238,6 +251,23 @@ async function readPersonGitConfigValues(repositoryDirectory, homeDirectory, env
   return { transient: Boolean(repository?.transient || home.transient), values: home.values };
 }
 
+function readPersonGitConfigValuesSync(repositoryDirectory, homeDirectory, env) {
+  const repository = repositoryDirectory ? readGitConfigIdentitySync(repositoryDirectory, env) : null;
+  if (repository?.values) return repository;
+  const home = readGitConfigIdentitySync(homeDirectory, env);
+  return { transient: Boolean(repository?.transient || home.transient), values: home.values };
+}
+
+/** The memo entry still answering this key, after dropping every expired one. */
+function currentGitConfigRead(key, revision, now) {
+  const cached = gitConfigIdentityReads.get(key);
+  if (cached && cached.revision === revision && cached.expiresAt > now) return cached;
+  for (const [entryKey, entry] of gitConfigIdentityReads) {
+    if (entry.expiresAt <= now) gitConfigIdentityReads.delete(entryKey);
+  }
+  return null;
+}
+
 /**
  * One read answers every command with the same directories and env (the full
  * env, so include and GIT_CONFIG_* overrides keep their effect) until the TTL
@@ -247,11 +277,8 @@ async function memoizedPersonGitConfigValues(repositoryDirectory, homeDirectory,
   const key = gitConfigReadKey(repositoryDirectory, homeDirectory, env);
   const revision = await globalGitConfigRevision(env);
   const now = Date.now();
-  const cached = gitConfigIdentityReads.get(key);
-  if (cached && cached.revision === revision && cached.expiresAt > now) return (await cached.read).values;
-  for (const [entryKey, entry] of gitConfigIdentityReads) {
-    if (entry.expiresAt <= now) gitConfigIdentityReads.delete(entryKey);
-  }
+  const cached = currentGitConfigRead(key, revision, now);
+  if (cached) return (await cached.read).values;
   const entry = {
     expiresAt: now + GIT_CONFIG_IDENTITY_TTL_MS,
     read: readPersonGitConfigValues(repositoryDirectory, homeDirectory, env),
@@ -259,7 +286,33 @@ async function memoizedPersonGitConfigValues(repositoryDirectory, homeDirectory,
   };
   gitConfigIdentityReads.set(key, entry);
   const outcome = await entry.read;
-  if (outcome.transient && gitConfigIdentityReads.get(key) === entry) gitConfigIdentityReads.delete(key);
+  if (outcome.transient) {
+    if (gitConfigIdentityReads.get(key) === entry) gitConfigIdentityReads.delete(key);
+  } else {
+    entry.values = outcome.values;
+  }
+  return outcome.values;
+}
+
+/**
+ * The same memo for a builder that must stay synchronous: it answers from a
+ * finished read, else reads while the caller waits and keeps that read.
+ */
+function memoizedPersonGitConfigValuesSync(repositoryDirectory, homeDirectory, env) {
+  const key = gitConfigReadKey(repositoryDirectory, homeDirectory, env);
+  const revision = globalGitConfigRevisionSync(env);
+  const now = Date.now();
+  const cached = currentGitConfigRead(key, revision, now);
+  if (cached && Object.hasOwn(cached, "values")) return cached.values;
+  const outcome = readPersonGitConfigValuesSync(repositoryDirectory, homeDirectory, env);
+  if (!outcome.transient) {
+    gitConfigIdentityReads.set(key, {
+      expiresAt: now + GIT_CONFIG_IDENTITY_TTL_MS,
+      read: Promise.resolve(outcome),
+      revision,
+      values: outcome.values
+    });
+  }
   return outcome.values;
 }
 
@@ -274,15 +327,17 @@ async function personGitConfigIdentity({ cwd = "", env = null } = {}) {
 }
 
 /**
- * The same identity read while the caller waits. Only a builder that must stay
- * synchronous uses it (the Codex runtime context); commands use the read above.
+ * The same identity for a builder that must stay synchronous (the Codex runtime
+ * context, rebuilt for each Codex runtime it describes): the shared memo answers it,
+ * and only a missing or ended read holds the caller. Commands use the read above.
  */
 function personGitConfigIdentitySync({ cwd = "", env = null } = {}) {
   if (!env || typeof env !== "object") return null;
-  const readEnv = gitConfigReadEnv(env);
-  const repositoryDirectory = existingDirectorySync(cwd);
-  return gitConfigIdentity((repositoryDirectory && readGitConfigIdentitySync(repositoryDirectory, readEnv)) ||
-    readGitConfigIdentitySync(existingDirectorySync(env.HOME), readEnv));
+  return gitConfigIdentity(memoizedPersonGitConfigValuesSync(
+    existingDirectorySync(cwd),
+    existingDirectorySync(env.HOME),
+    gitConfigReadEnv(env)
+  ));
 }
 
 /**

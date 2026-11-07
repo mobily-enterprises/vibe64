@@ -261,6 +261,25 @@ test("a command never reads Git's identity with a blocking spawnSync", async (t)
   assert.ok(ticks >= 5, `the server's thread was held while git read the identity (${ticks} ticks)`);
 });
 
+test("synchronous command envs share the identity memo, however many are built", async (t) => {
+  const git = await countedGit(t);
+  for (const builds of [10, 200]) {
+    const { env, gitConfig } = await freshHome(t);
+    await gitConfig(["--global", "user.name", "Ana Diaz"]);
+    await gitConfig(["--global", "user.email", "ana@example.test"]);
+    const before = await git.reads();
+    for (let build = 0; build < builds; build += 1) {
+      assert.equal(readPersonIdentitySync({ env }).authorEmail, "ana@example.test");
+    }
+    assert.equal((await readPersonIdentity({ env })).authorEmail, "ana@example.test");
+    assert.equal(await git.reads() - before, 1, `${builds} synchronous builds read Git's identity once`);
+    await gitConfig(["--global", "user.email", "diaz@example.test"]);
+    assert.equal(readPersonIdentitySync({ env }).authorEmail, "diaz@example.test");
+    assert.equal((await readPersonIdentity({ env })).authorEmail, "diaz@example.test");
+    assert.equal(await git.reads() - before, 2, "a saved identity reaches the next synchronous build");
+  }
+});
+
 test("env overrides of Git config keep their effect and their own memo entry", async (t) => {
   const { env, gitConfig } = await freshHome(t);
   await gitConfig(["--global", "user.name", "Ana Diaz"]);
