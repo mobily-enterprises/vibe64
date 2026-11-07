@@ -2610,6 +2610,7 @@ test("@preview-lifecycle token bootstrap redirects once without reloading the cl
 });
 
 test("@preview-lifecycle stays mounted without reloading while covered by dashboard", async ({ page }) => {
+  await page.clock.install();
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page);
   let onboardingReads = 0;
@@ -2646,7 +2647,9 @@ test("@preview-lifecycle stays mounted without reloading while covered by dashbo
 
   await page.getByRole("tab", { name: "Dashboard" }).click();
   await expect(page).toHaveURL(new RegExp(`${escapeRegExp(DASHBOARD_PATH)}/env/?$`, "u"));
-  await expectSteady(() => onboardingReads, 1, 5500);
+  // The page clock runs 5.5 s of the covered page's own timers; nothing reads or reloads again.
+  await page.clock.runFor(5_500);
+  await expectSteady(() => onboardingReads, 1, 500);
 
   await expect(previewFrame).toHaveCount(1);
   expect(await previewFrame.getAttribute("src")).toBe(initialSrc);
