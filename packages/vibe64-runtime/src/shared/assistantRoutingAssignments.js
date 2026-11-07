@@ -328,7 +328,7 @@ function resolveAssistantPurpose({
       const selection = routingAssignmentSelection(engine, destination.selection, { purpose: instructionPurpose });
       const model = engine.modelProviders.find(({ id }) =>
         id === selection.modelProviderId).models.find(({ id }) => id === selection.modelId);
-      if (["junior", "review", "deslop", "fix"].includes(instructionPurpose) && model.capabilities?.toolcall === false) {
+      if (["junior", "review", "deslop", "ui_pass", "fix"].includes(instructionPurpose) && model.capabilities?.toolcall === false) {
         throw routingError("The selected model cannot perform coding or review tools.", "vibe64_assistant_capability_unavailable");
       }
       if (!Array.isArray(requiredCapabilities) || requiredCapabilities.some((name) => model.capabilities?.[name] !== true)) {

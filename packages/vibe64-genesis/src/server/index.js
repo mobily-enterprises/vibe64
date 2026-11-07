@@ -152,6 +152,7 @@ const GENESIS_PROMPT_TASKS = new Set([
   "program",
   "review",
   "start",
+  "ui-pass",
   "work"
 ]);
 

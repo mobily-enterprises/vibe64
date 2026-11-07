@@ -94,7 +94,7 @@ function normalizeConversationTurnMetadata(value = null) {
     ...(VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) ? { engineId: value.engineId } : {}),
     ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
     ...(isPlainObject(value.assistantRouting) &&
-      ["senior", "junior", "fix", "helper", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
+      ["senior", "junior", "fix", "helper", "review", "deslop", "ui_pass"].includes(value.assistantRouting.resolvedMode) ? {
           assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
             .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
         } : {}),
