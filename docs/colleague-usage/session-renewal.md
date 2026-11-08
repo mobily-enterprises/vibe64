@@ -15,11 +15,13 @@ conversation, including after another renewal. Your chat and project-view choice
 in the link stay unchanged. This works on desktop and mobile.
 
 The renewal dialog offers the same main AI as **Start an AI session**: the
-owner's Senior, or its recommendation when Senior has no saved choice. Like that
-dialog, it shows a saved choice without waiting for each AI tool's model list,
-and opening a session reads none either; only opening **Models** does. Keeping
-that AI leaves the fresh chat on the main AI; picking a different model makes
-it Custom.
+owner's Senior, or its recommendation when Senior has no saved choice. A Custom
+chat's dialog offers that chat's own model instead. Like **Start an AI session**,
+it shows a saved choice without waiting for each AI tool's model list, and
+opening a session reads none either; only opening **Models** does. Keeping the
+offered AI keeps the chat mode (a Custom chat stays Custom on its model);
+picking a different model makes the fresh chat Custom. Either way the fresh
+chat keeps the four [Chat settings](chat-settings.md) switches as they were.
 
 If you choose another session or navigate away while the link is opening,
 Vibe64 keeps your newer choice. Ordinary session-tab selection keeps its existing

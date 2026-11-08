@@ -212,7 +212,7 @@
           <Vibe64RenewalAssistantSelector
             :active="renewal.open && renewal.phase === 'review' && !routing.resource.isInitialLoading.value"
             :disabled="dialogBusy"
-            :initial-selection="mainSelection"
+            :initial-selection="startSelection"
             @update:ready="assistantSelectionReady = $event"
             @update:selection="successorSelection = $event"
           />
@@ -427,9 +427,10 @@ const { smAndDown } = useDisplay();
 const renewalTitleId = `vibe64-session-renewal-title-${useId()}`;
 const assistantSelectionReady = ref(false);
 const successorSelection = ref(null);
-// The fresh session starts on main chat's Senior unless another model is chosen.
+// The fresh session starts on main chat's Senior, or a Custom chat's own model,
+// unless another model is chosen.
 const routing = useModelRouting({ enabled: computed(() => Boolean(props.renewal.open)), view: "main" });
-const mainSelection = routing.mainChatSelection;
+const startSelection = computed(() => props.renewal.customSelection || routing.mainChatSelection.value);
 const sameSelection = (left, right) => ["engineId", "agentId", "modelProviderId", "modelId", "variantId"]
   .every((key) => (left?.[key] || "") === (right?.[key] || ""));
 const dialogBusy = computed(() => Boolean(
@@ -470,7 +471,7 @@ function closeFromModel(value) {
 
 function confirmRenewal() {
   if (canConfirmRenewal.value) {
-    props.renewal.confirm(sameSelection(successorSelection.value, mainSelection.value) ? null : successorSelection.value);
+    props.renewal.confirm(sameSelection(successorSelection.value, startSelection.value) ? null : successorSelection.value);
   }
 }
 </script>

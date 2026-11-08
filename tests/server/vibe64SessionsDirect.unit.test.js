@@ -48,6 +48,7 @@ import {
 } from "../../packages/vibe64-runtime/src/shared/index.js";
 import { createSessionsService as createService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
+import { createSessionAssistant } from "../../packages/vibe64-sessions/src/server/sessionAssistant.js";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
@@ -4994,6 +4995,43 @@ test("source-bearing Learning creation retains the original source context, poli
   });
 });
 
+
+test("a renewal keeps the chat's mode and finishing steps, and a Custom chat its model at today's catalogue", async () => {
+  const custom = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "deepseek",
+    modelId: "deepseek-flash", variantId: "low", catalogRevision: `sha256:${"a".repeat(64)}` };
+  const today = `sha256:${"b".repeat(64)}`;
+  const steps = { review: false, deslop: true, uiPass: true, autoSave: false };
+  const resolved = [];
+  const assistant = createSessionAssistant({
+    initializeModelRouting: async () => ({ ok: true }), project: {}, publishSessionChanged: async () => {},
+    terminals: {
+      async resolveAssistantSelection(input) { resolved.push(input); return { ...input, catalogRevision: today }; },
+      async resolveAssistantPurpose({ purpose, override }) {
+        return { available: true, effectiveSelection: override?.selection || { ...custom, modelId: `${purpose}-model` }, connectionIdentity: "owner" };
+      },
+      async requireAssistantSelectionAccess() {}
+    }
+  });
+  const owner = { role: "owner", username: "owner" };
+  const renew = (preferences, input = {}) => assistant.resolveSessionStart(input, {
+    session: { metadata: { assistant_routing: JSON.stringify(preferences) } }, vibe64User: owner
+  });
+  const junior = await renew({ mode: "junior", ...steps });
+  assert.deepEqual(junior.assistantRouting, { mode: "junior", ...steps });
+  assert.equal(junior.assistantSelection.modelId, "junior-model");
+  // The kept Custom model is read again at today's revision, so a changed catalogue does not refuse it.
+  const kept = await renew({ mode: "custom", ...steps, override: custom });
+  assert.deepEqual(resolved, [{ schema: custom.schema, engineId: "codex", agentId: "codex", modelProviderId: "deepseek",
+    modelId: "deepseek-flash", variantId: "low" }]);
+  assert.deepEqual(kept.assistantRouting, { mode: "custom", ...steps, override: { ...custom, catalogRevision: today } });
+  // A model chosen in the renewal dialog replaces it and keeps the switches.
+  const chosen = await renew({ mode: "custom", ...steps, override: custom }, { assistantSelection: { ...custom, modelId: "deepseek-pro" } });
+  assert.equal(chosen.assistantRouting.override.modelId, "deepseek-pro");
+  assert.deepEqual({ ...chosen.assistantRouting, override: null }, { mode: "custom", ...steps, override: null });
+  // A new session starts on the defaults.
+  const fresh = await assistant.resolveSessionStart({}, { vibe64User: owner });
+  assert.deepEqual(fresh.assistantRouting, { mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true });
+});
 
 test("a Custom chat's switch saves only the switch, after a catalogue change and between handoff and its finishing turn", async () => {
   const lock = agentWriteLockHarness();

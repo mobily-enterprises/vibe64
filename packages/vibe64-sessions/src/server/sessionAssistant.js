@@ -79,8 +79,8 @@ function createSessionAssistant({
 
   /**
    * Main chat starts on the owner's setup (a team member's lesson: the team
-   * setup). A renewal keeps the chat mode; a chosen model that isn't main
-   * chat's own makes the chat Custom.
+   * setup). A renewal keeps the chat mode and its finishing steps, and a Custom
+   * chat its model; a chosen model that isn't main chat's own makes the chat Custom.
    */
   async function resolveSessionStart(input = {}, options = {}) {
     const { session = null, vibe64User = null, mode = "senior" } = options;
@@ -90,17 +90,25 @@ function createSessionAssistant({
         code: "vibe64_main_chat_model_owner_only"
       });
     }
-    // A chosen model comes from Custom's live catalogue, so it is checked as
-    // Custom checks it in an open chat.
-    const explicitSelection = Object.keys(input.assistantSelection || {}).length
-      ? await resolveAssistantSelection(input.assistantSelection, vibe64User)
-      : null;
     const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
-    const startMode = previous && !["custom", "fix"].includes(previous.mode) ? previous.mode : mode;
-    // Deslop and automatic save start on (their shared default) and the UI pass
-    // off; the chat-mode controls can change each.
-    const preferences = assistantRoutingPreferences(explicitSelection ? { mode: "custom", override: explicitSelection }
-      : { mode: startMode });
+    const chosen = Object.keys(input.assistantSelection || {}).length ? input.assistantSelection : null;
+    // A renewal keeps a Custom chat's model unless another is chosen. A chosen or
+    // kept model is read from Custom's live catalogue, as Custom checks one in an
+    // open chat (a kept one at today's revision); a team member's session keeps
+    // the owner's Custom model as saved.
+    const kept = !chosen && previous?.mode === "custom" ? previous.override : null;
+    let explicitSelection = kept;
+    if (chosen || kept && direct) {
+      const { catalogRevision: _savedRevision, ...current } = kept || {};
+      explicitSelection = await resolveAssistantSelection(chosen || current, vibe64User);
+    }
+    const startMode = previous && previous.mode !== "fix" ? previous.mode : mode;
+    // A new chat's switches start on their defaults (Deslop and automatic save
+    // on, the UI pass off); a renewal keeps the chat's own.
+    const preferences = assistantRoutingPreferences({
+      ...assistantRoutingAutomation(previous),
+      ...(explicitSelection ? { mode: "custom", override: explicitSelection } : { mode: startMode })
+    });
     const routingSetup = await initializeModelRouting({ vibe64User });
     if (routingSetup?.ok === false) {
       throw vibe64Error(routingSetup.error, routingSetup.code);

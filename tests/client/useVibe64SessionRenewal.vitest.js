@@ -169,6 +169,19 @@ describe("useVibe64SessionRenewal", () => {
     scope.stop();
   });
 
+  it("a Custom chat renews on its own model; any other chat on main chat's", () => {
+    const custom = { schema: "vibe64.assistant-selection.v1", ...ASSISTANT_SELECTION };
+    const steps = { review: true, deslop: false, uiPass: true, autoSave: false };
+    const selectedSession = ref({ sessionId: "session-1", status: "active", metadata: {
+      assistant_routing: JSON.stringify({ mode: "custom", ...steps, override: custom })
+    } });
+    const { controller, scope } = mountRenewal({ selectedSession });
+    expect(controller.customSelection.value).toMatchObject({ engineId: "opencode", modelId: "glm-4.7-flash", modelProviderId: "zai" });
+    selectedSession.value = { ...selectedSession.value, metadata: { assistant_routing: JSON.stringify({ mode: "senior", ...steps }) } };
+    expect(controller.customSelection.value).toBeNull();
+    scope.stop();
+  });
+
   it("does not confirm an untouched manual handover template", () => {
     renewalHarness.endpoint.data.value = {
       ok: true,

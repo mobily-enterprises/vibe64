@@ -14,6 +14,7 @@ import {
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { browserTabSessionStorage, vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { pageRandomUUID } from "@/lib/browser.js";
 import {
   SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS,
@@ -82,6 +83,11 @@ function useVibe64SessionRenewal({
   const hostActive = computed(() => readRefOrGetterValue(active) !== false);
   const sessionId = computed(() => String(readRefOrGetterValue(selectedSessionId) || "").trim());
   const session = computed(() => readRefOrGetterValue(selectedSession) || null);
+  // A Custom chat renews on its own model unless another is chosen.
+  const customSelection = computed(() => {
+    const preferences = assistantRoutingFromMetadata(session.value?.metadata || {});
+    return preferences?.mode === "custom" ? preferences.override : null;
+  });
   const apiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
   const renewalPath = computed(() => (
     sessionId.value && apiPath.value
@@ -599,6 +605,7 @@ function useVibe64SessionRenewal({
     cancel,
     close,
     confirm,
+    customSelection,
     draftCharacterCount,
     draftConflict,
     draftDirty,
