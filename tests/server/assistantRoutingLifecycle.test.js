@@ -1097,9 +1097,10 @@ for (const [message, scope] of [
   ["UI pass: the bookings pages", "Run the UI pass on this section of the app: the bookings pages."],
   ["UI pass: the whole app", "Run the UI pass on the whole app."]
 ]) {
-  for (const mode of ["auto", "junior"]) {
+  for (const mode of ["auto", "senior", "junior"]) {
     test(`"${message}" from ${mode} runs Genesis's ui-pass task on the configured Senior model with its scope as the request`, async (t) => {
-      const f = await fixture(t, { mode, review: true, uiPass: true });
+      // Every Chat settings switch is on: an explicit UI pass still runs alone, with no finishing turn after it.
+      const f = await fixture(t, { mode, review: true, deslop: true, uiPass: true, autoSave: true });
       const preferences = f.metadata.assistant_routing;
       await f.service.send("session-1", { ...request, message }, f.context);
       assert.equal(f.helperCalls(), 0);
@@ -1116,10 +1117,50 @@ for (const [message, scope] of [
       assert.equal(f.metadata.assistant_routing, preferences);
       await f.service.afterTurn("session-1", completion(), f.context);
       assert.equal(f.sends.length, 1);
+      assert.equal(f.notices.size, 0, "no finishing step starts after an explicit UI pass");
       assert.equal(assistantRoutingStatusLabel(f.state()), "Reply finished.");
     });
   }
 }
+
+test("a UI pass from Custom runs Genesis's ui-pass task on the Custom model", async (t) => {
+  const f = await fixture(t, null);
+  const selection = { ...f.assignments.senior, modelId: "gpt-6-sol", variantId: "low" };
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: selection, review: true, deslop: true, uiPass: true, autoSave: true });
+  await f.service.send("session-1", { ...request, message: "UI pass: the bookings pages" }, f.context);
+  assert.equal(f.helperCalls(), 0);
+  assert.equal(f.state().task, "ui-pass");
+  assert.equal(f.sends[0].selection.modelId, "gpt-6-sol");
+  assert.equal(f.sends[0].input.genesisTask, "ui-pass");
+  assert.equal(f.sends[0].input.turnMetadata.assistantRouting.resolvedMode, "custom");
+  assert.ok(f.sends[0].input.message.endsWith("Run the UI pass on this section of the app: the bookings pages."), f.sends[0].input.message);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.notices.size, 0);
+});
+
+test("a UI pass refuses an unavailable or tool-less Senior model instead of falling back to Junior", async (t) => {
+  const f = await fixture(t, { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true });
+  f.connections.set("codex:openai", { available: false, current: null, history: [] });
+  await assert.rejects(f.service.send("session-1", { ...request, message: "UI pass" }, f.context), /unavailable/);
+  assert.equal(f.sends.length, 0);
+  f.connections.delete("codex:openai");
+  f.catalog.modelProviders[0].models[0].capabilities = { toolcall: false };
+  await assert.rejects(f.service.send("session-1", { ...request, message: "UI pass" }, f.context), /cannot perform/);
+  assert.equal(f.sends.length, 0);
+});
+
+test("a UI pass with uncertain admission retains its task and checks the receipt without resending", async (t) => {
+  const f = await fixture(t);
+  f.failAdmission();
+  const input = { ...request, message: "UI pass: the whole app" };
+  await assert.rejects(f.service.send("session-1", input, f.context), /Lost admission/);
+  f.agent.inspectMessageAdmission = async () => ({ admission: "accepted", turnId: "turn-1" });
+  await f.restart().send("session-1", input, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.state().task, "ui-pass");
+  assert.equal(f.state().status, "working");
+});
 
 test("a UI pass sent as genesisTask takes the whole message as its scope and the configured planner despite a Junior override", async (t) => {
   const f = await fixture(t, { mode: "junior", review: true });

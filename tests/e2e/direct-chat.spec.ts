@@ -20,6 +20,7 @@ import {
 } from "./support/base-shell/http";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 import { touchTarget } from "./support/touch-target";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 test.beforeEach(({ page }) => suppressAiOnboarding(page));
 
@@ -2454,6 +2455,204 @@ for (const width of [390, 820, 1280]) {
       await expect(modes.getByRole("button", { name: /^Senior/ })).toBeVisible();
       await expect(page.getByRole("button", { name: "Models", exact: true })).toHaveCount(0);
       expect(configurationReads).toBe(1);
+      expect(errors).toEqual([]);
+    } finally {
+      await page.close();
+      await server.close();
+    }
+  });
+}
+
+// The UI pass end to end in the browser: its Chat settings switch, its off
+// warning and help line, its automatic start notice, an explicit UI pass's
+// reply, and the refusals main chat shows when a turn started or a goal is open.
+// What the server decides from these messages is tested in
+// tests/server/assistantRoutingLifecycle.test.js and assistantWorkflow.test.js.
+// What the terminals' Send gives the conversation for a message routing refused
+// before admission (serviceAssistant's notSentDeliveryError): a definite rejection.
+function notSentRefusal(message: string, code: string, messageId: unknown) {
+  return new AppError(409, message, { code, details: { delivery: { status: "not-sent", messageId } } });
+}
+
+async function uiPassWorld(page: Page, { width, preferences }: { width: number; preferences: Record<string, unknown> }) {
+  const server = await assistantStatusServer();
+  await page.setViewportSize({ width, height: 900 });
+  const senior = { schema: "vibe64.assistant-selection.v1", ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex",
+    modelId: "gpt-6-astra", variantId: "xhigh", catalogRevision: ASSISTANT_CATALOG.engines[0].revision };
+  const junior = { ...senior, variantId: "low" };
+  const session = server.state.session;
+  session.agentSession.turn.active = false;
+  Object.assign(session, { assistantSelection: junior });
+  session.metadata.assistant_routing = JSON.stringify(preferences);
+  const saves: Record<string, unknown>[] = [];
+  await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}`, route => fulfillJson(route, { ok: true, ...session }));
+  await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/assistant-selection`, async route => {
+    const saved = route.request().postDataJSON().assistantRouting;
+    saves.push(saved);
+    session.metadata.assistant_routing = JSON.stringify(saved);
+    await fulfillJson(route, { ok: true, ...session });
+  });
+  const decision = (effectiveSelection: Record<string, unknown>) => ({ available: true, effectiveSelection });
+  await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/assistant-access`, route => fulfillJson(route, {
+    ok: true, available: true, canUse: true, currentMode: JSON.parse(session.metadata.assistant_routing).mode,
+    purposes: { senior: decision(senior), junior: decision(junior), review: decision(senior), deslop: decision(senior),
+      ui_pass: decision(senior), auto: { available: true }, request_routing: decision(junior) }
+  }));
+  await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route =>
+    fulfillJson(route, { ok: true, revision: 1, canConfigure: true, mainSelection: senior }));
+  return { server, session, senior, saves };
+}
+
+for (const width of [390, 1280]) {
+  test(`@ui-pass the Automatically UI pass changes switch asks before turning off and is saved for the chat at ${width}px`, async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    const { server, saves } = await uiPassWorld(page, { width,
+      preferences: { mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true } });
+    try {
+      await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+      const trigger = page.getByRole("button", { name: /^Chat mode:/ });
+      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
+      await expect(trigger).not.toHaveAttribute("aria-label", /Automatic UI pass on/);
+      await trigger.click();
+      const uiPass = page.getByRole("checkbox", { name: "Automatically UI pass changes", exact: true });
+      // Off for new chats, with its chat command beside it.
+      await expect(uiPass).not.toBeChecked();
+      await expect(uiPass).toBeEnabled();
+      await expect(page.getByText("Or tell the agent “UI pass” any time — add “: <section>” or “: the whole app”.", { exact: true })).toBeVisible();
+
+      // Turning it on saves at once, keeping the chat's other choices.
+      await uiPass.click();
+      await expect(uiPass).toBeChecked();
+      await expect.poll(() => saves.length).toBe(1);
+      expect(saves[0]).toEqual({ mode: "senior", review: true, deslop: true, uiPass: true, autoSave: true });
+      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass on/);
+
+      // Turning it off asks first, naming what is lost; Cancel keeps it on.
+      await uiPass.click();
+      const confirm = page.getByRole("dialog", { name: "Turn off Automatic UI pass?", exact: true });
+      await expect(confirm).toBeVisible();
+      await expect(confirm).toContainText("The automatic UI pass is a design review after each finished piece of work: it brings the screens the work changed in line with the project's UI guidance.");
+      await expect(confirm).toContainText("Without it, screens the work changes no longer get a design review.");
+      await expect(confirm).toContainText("You can still run one yourself by telling the agent “UI pass” in the chat.");
+      await expect(confirm).toContainText("Cancel keeps it on.");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`ui-pass-off-warning-${width}.png`), animations: "disabled" });
+      await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(confirm).toBeHidden();
+      await expect(uiPass).toBeChecked();
+      expect(saves).toHaveLength(1);
+
+      await uiPass.click();
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole("button", { name: "Turn off Automatic UI pass", exact: true }).click();
+      await expect(confirm).toBeHidden();
+      await expect(uiPass).not.toBeChecked();
+      await expect.poll(() => saves.length).toBe(2);
+      expect(saves[1]).toEqual({ mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true });
+      await expect(trigger).not.toHaveAttribute("aria-label", /Automatic UI pass on/);
+
+      expect(errors).toEqual([]);
+    } finally {
+      await page.close();
+      await server.close();
+    }
+  });
+
+  test(`@ui-pass starts a UI pass from chat, shows its reply and automatic notice, and keeps a refused one unsent at ${width}px`, async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    const { server, senior } = await uiPassWorld(page, { width,
+      preferences: { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true } });
+    try {
+      // An explicit UI pass's turn, attributed to Senior's UI pass.
+      server.state.conversationLog = [{
+        turnId: "000001", user: { role: "user", text: "UI pass: the bookings pages" },
+        assistant: { role: "assistant", text: "Aligned the bookings list spacing and checked it at 390 and 1280 px." },
+        metadata: { assistantSelection: senior, assistantRouting: { requestedMode: "junior", resolvedMode: "ui_pass" } }
+      }];
+      await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      const chat = sessionChat(page);
+      const composer = page.getByLabel("Message AI assistant");
+      await expect(composer).toBeVisible();
+      await expect(page.locator(".assistant-transcript__assistant-header")
+        .getByText("Senior UI pass · Codex (gpt-6-astra xhigh)", { exact: true })).toBeVisible();
+      await expect(chat.getByText("Aligned the bookings list spacing and checked it at 390 and 1280 px.", { exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Chat mode:/ })).toHaveAttribute("aria-label", /Automatic UI pass on/);
+
+      // The finishing turn's notice, published as routing writes it when the switch starts the step.
+      const notice = "UI pass started automatically (Chat settings: Automatically UI pass changes)";
+      server.sessionChanged("assistant-routing-changed", { conversationLogPatch: { type: "upsert-turn",
+        turn: { turnId: "000002", system: { role: "system", messageId: "assistant-finishing:uiPass:followup-1", text: notice } } } });
+      await expect(page.locator(".assistant-transcript__system").filter({ hasText: notice })).toHaveCount(1);
+
+      // Starting one is typing it: the words go to routing as typed, which picks the task and its scope.
+      await composer.fill("UI pass: the settings screens");
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+      await expect.poll(() => server.state.messages.length).toBe(1);
+      expect(server.state.messages[0]).toMatchObject({ message: "UI pass: the settings screens", displayMessage: "UI pass: the settings screens" });
+      await expect(composer).toHaveValue("");
+
+      // A turn that started meanwhile: routing refuses the UI pass before it is sent.
+      const working = "UI pass uses the Senior model in its own turn. Finish or stop the current turn, then send UI pass again.";
+      server.state.deliver = message => { throw notSentRefusal(working, "vibe64_assistant_routing_ui_pass_turn_active", message.messageId); };
+      await composer.fill("UI pass");
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+      await expect.poll(() => server.state.messages.length).toBe(2);
+      expect(server.state.messages[1]).toMatchObject({ message: "UI pass" });
+      await expect(chat.getByText(working, { exact: false })).toBeVisible();
+      await expect(chat.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+      await expect(chat.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`ui-pass-refused-${width}.png`), animations: "disabled" });
+      await chat.getByRole("button", { name: "Edit", exact: true }).click();
+      await expect(composer).toHaveValue("UI pass");
+      await expect(chat.getByText(working, { exact: false })).toHaveCount(0);
+      expect(server.state.messages).toHaveLength(2);
+      expect(errors).toEqual([]);
+    } finally {
+      await page.close();
+      await server.close();
+    }
+  });
+
+  test(`@ui-pass a goal pauses the switch and routing refuses a UI pass until it ends at ${width}px`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    const { server } = await uiPassWorld(page, { width,
+      preferences: { mode: "senior", review: true, deslop: true, uiPass: true, autoSave: true } });
+    try {
+      const goal = { id: "goal-bookings", status: "active", objective: "Finish the bookings pages", createdAt: "1970-01-01T00:00:20.000Z", timeUsedSeconds: 30 };
+      server.state.goal = { status: "available", goal, target: { segmentId: "codex:thread-ui-pass-goal", capabilities: {
+        goals: true, goalBudgets: true, goalCommands: Object.fromEntries(["set", "pause", "resume", "cancel"]
+          .map(action => [action, { delivery: "control", interruptsTurn: false }]))
+      } } };
+      await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      const chat = sessionChat(page);
+      const composer = page.getByLabel("Message AI assistant");
+      await expect(composer).toBeVisible();
+      const trigger = page.getByRole("button", { name: /^Chat mode:/ });
+      // The saved choice stays on, but no finishing step runs during the goal.
+      await expect(trigger).not.toHaveAttribute("aria-label", /Automatic UI pass on/);
+      await trigger.click();
+      const uiPass = page.getByRole("checkbox", { name: "Automatically UI pass changes", exact: true });
+      await expect(uiPass).toBeChecked();
+      await expect(uiPass).toBeDisabled();
+      await expect(page.getByText("Auto and Chat settings apply after the current goal finishes.", { exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+
+      const refusal = "UI pass can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send UI pass again.";
+      server.state.deliver = message => { throw notSentRefusal(refusal, "vibe64_assistant_goal_ui_pass_blocked", message.messageId); };
+      await composer.fill("UI pass: the whole app");
+      await page.getByRole("button", { name: "Send message", exact: true }).click();
+      await expect.poll(() => server.state.messages.length).toBe(1);
+      expect(server.state.messages[0]).toMatchObject({ message: "UI pass: the whole app" });
+      await expect(chat.getByText(refusal, { exact: false })).toBeVisible();
+      await chat.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(chat.getByText(refusal, { exact: false })).toHaveCount(0);
+      await expect(chat.getByText("UI pass: the whole app", { exact: true })).toHaveCount(0);
+      expect(server.state.messages).toHaveLength(1);
       expect(errors).toEqual([]);
     } finally {
       await page.close();
