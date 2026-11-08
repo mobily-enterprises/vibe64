@@ -24,11 +24,11 @@ name** stays disabled.
 Under **Appearance** (This browser), choose **Light**, **Dark** or **System**.
 The whole app switches immediately, including the Learning environment (**L**),
 its lesson reader and the Learn page's Lesson pane. **System** follows your device's light or dark setting
-and changes when the device does. Light is the default.
+and changes when the device does. System is the default.
 
 The choice is saved in this browser only. Another browser, another device or a
-private window starts in Light until you choose again; clearing site data also
-resets it. It does not change the appearance of the app shown inside
+private window starts in System, following that device, until you choose again;
+clearing site data also resets it. It does not change the appearance of the app shown inside
 **Preview**, which belongs to the project.
 
 Vibe64 also follows the device's **reduce motion** setting (for example

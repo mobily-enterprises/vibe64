@@ -87,23 +87,23 @@ describe("standalone personal AI profile settings", () => {
     });
   });
 
-  it("remembers the chosen appearance per browser and defaults to light", () => {
+  it("remembers the chosen appearance per browser and defaults to System", () => {
     const store = new Map();
     vi.stubGlobal("window", { localStorage: {
       getItem: key => store.get(key) ?? null,
       setItem: (key, value) => store.set(key, String(value))
     } });
-    expect(readAppearance()).toBe("light");
+    expect(readAppearance()).toBe("system");
     writeAppearance("dark");
     expect(readAppearance()).toBe("dark");
-    writeAppearance("system");
-    expect(readAppearance()).toBe("system");
+    writeAppearance("light");
+    expect(readAppearance()).toBe("light");
     writeAppearance("neon");
-    expect(readAppearance()).toBe("system");
+    expect(readAppearance()).toBe("light");
     store.set("vibe64.appearance", "\"neon\"");
-    expect(readAppearance()).toBe("light");
+    expect(readAppearance()).toBe("system");
     vi.unstubAllGlobals();
-    expect(readAppearance()).toBe("light");
+    expect(readAppearance()).toBe("system");
   });
 
   it("offers Light, Dark and System on the You tab and applies the choice through the theme", async () => {
@@ -117,7 +117,7 @@ describe("standalone personal AI profile settings", () => {
     expect(component).toMatch(/label: "Light", value: "light"[\s\S]*label: "Dark", value: "dark"[\s\S]*label: "System", value: "system"/u);
     expect(component).toContain("theme.change(value);");
     expect(component).toContain("writeAppearance(value);");
-    expect(main).toContain("defaultTheme: readAppearance(),");
+    expect(main).toContain("defaultTheme: readAppearance()");
   });
 
   it("gives way to the AI onboarding flow, returning focus to the menu, unless AI Accounts is busy", async () => {

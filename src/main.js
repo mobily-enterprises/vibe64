@@ -4,10 +4,11 @@ import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { createRouter, createWebHistory } from "vue-router/auto";
 import { routes } from "vue-router/auto-routes";
 import "vuetify/styles";
+import "@jskit-ai/material-web/client/material.css";
 import "./styles/vibe64-font.css";
 import "./styles/vibe64-m3.css";
 import { createVuetify } from "vuetify";
-import { aliases as mdiAliases, mdi } from "vuetify/iconsets/mdi-svg";
+import { createMaterialVuetifyOptions } from "@jskit-ai/material-web/client";
 import App from "./App.vue";
 import NotFoundView from "./views/NotFound.vue";
 import { bootInstalledClientModules } from "virtual:jskit-client-bootstrap";
@@ -27,7 +28,7 @@ import {
 } from "./lib/browserLifecycleBootstrap.js";
 import { resolveStudioRequestUrl } from "./lib/studioUrls.js";
 import { readAppearance } from "./lib/appearance.js";
-import { vibe64Themes } from "./lib/vibe64Theme.js";
+import { theme } from "./theme/index.js";
 import { hasWindowFunction } from "./lib/browser.js";
 
 configureHttpWebClient({
@@ -66,27 +67,24 @@ const { router, fallbackRoute } = createShellRouter({
 // close at once, as the rest of the app's transitions do (src/styles/vibe64-m3.css).
 // Vuetify still fades them from JavaScript then, which no stylesheet can end, and
 // a menu ignores taps until its fade ends: 125 ms as it opens, 85 ms as it closes.
-function menuAndDialogMotion() {
-  if (!hasWindowFunction("matchMedia") || !window.matchMedia("(prefers-reduced-motion: reduce)").matches) return {};
-  return Object.fromEntries(["VMenu", "VSelect", "VAutocomplete", "VCombobox", "VDialog"].map((name) => [name, { transition: false }]));
+// JSKIT's own defaults for those components stay; only their transition goes.
+function menuAndDialogMotion(defaults) {
+  if (!hasWindowFunction("matchMedia") || !window.matchMedia("(prefers-reduced-motion: reduce)").matches) return defaults;
+  return {
+    ...defaults,
+    ...Object.fromEntries(["VMenu", "VSelect", "VAutocomplete", "VCombobox", "VDialog"].map((name) => [name, { ...defaults?.[name], transition: false }]))
+  };
 }
 
+// Exact Material 3 from JSKIT: the md3 blueprint, both schemes from the seed, Material Symbols and JSKIT's
+// component defaults. The person's Appearance choice (System unless they picked Light or Dark) selects the scheme.
+const materialOptions = createMaterialVuetifyOptions(theme);
 const vuetify = createVuetify({
+  ...materialOptions,
+  defaults: menuAndDialogMotion(materialOptions.defaults),
   theme: {
-    defaultTheme: readAppearance(),
-    themes: vibe64Themes
-  },
-  // Material 3 shape defaults: medium-rounded cards and alerts. Explicit
-  // component props still win.
-  defaults: {
-    VCard: { rounded: "lg" },
-    VAlert: { rounded: "lg" },
-    ...menuAndDialogMotion()
-  },
-  icons: {
-    defaultSet: "mdi",
-    aliases: mdiAliases,
-    sets: { mdi }
+    ...materialOptions.theme,
+    defaultTheme: readAppearance()
   }
 });
 const pinia = createPinia();

@@ -10,7 +10,9 @@ so the same command works without a source checkout in the relocated runtime.
 
 - `index.html`
 - `src/main.js`
-- `src/lib/vibe64Theme.js`
+- `src/theme/index.js`
+- `src/theme/icons.js`
+- `src/theme/extensions.js`
 - `src/styles/vibe64-m3.css`
 - `src/styles/vibe64-font.css`
 - `tests/client/vibe64ThemeColours.vitest.js`
@@ -226,26 +228,32 @@ runtime, including installed external dependencies, without needing npm on the
 activation host. The builder accepts only an empty separate destination and
 never prunes the development node_modules directory.
 
-The application theme in `src/lib/vibe64Theme.js`, which `src/main.js` gives
-Vuetify, supplies paired `surface-variant` and
-`on-surface-variant` colours: pale blue/dark text in light mode, blue/light text
-in dark mode. Status sheets, session information, renewal messages and future
-notices using that semantic surface inherit the pair rather than choosing a
-background independently. `src/App.vue` keeps disabled actions on these surfaces
-legible through the shared semantic surface and status/alert roles. Connection recovery uses its primary tint and the same on-surface
-foreground. New notices use the theme surface/foreground pair, or a semantic
+The application theme is `src/theme/index.js`: one seed colour (Vuetify's default
+blue, `#1867C0`), the Learning colour, the app's typeface and its own icons from
+`src/theme/icons.js`, extended by `src/theme/extensions.js`, which Vibe64 leaves
+empty and an app composed from Vibe64 replaces with its own colours and icons.
+`src/main.js` builds Vuetify from it with JSKIT's `createMaterialVuetifyOptions`
+(`@jskit-ai/material-web`): the md3 blueprint, light and dark Material 3 schemes
+generated from the seed with every colour role (`surface-container-low`,
+`outline-variant`, `learning-container` ...), Material Symbols Rounded behind every
+`$` icon alias and JSKIT's component defaults; `material.css` adds the sizes props
+cannot set. The theme's typography names Roboto for both Material 3 typefaces, the
+brand one (display, headlines, large titles) and the plain one (everything else),
+so the app keeps its font instead of JSKIT's default Roboto Flex. Roboto ships
+inside the build: `src/styles/vibe64-font.css` self-hosts the variable latin subset
+from `@fontsource-variable/roboto`, so every first launch renders it even where the
+system has no Roboto. The person's Appearance choice picks the scheme, System
+unless they chose Light or Dark.
+`src/App.vue` keeps disabled actions on status and alert surfaces legible through
+the shared roles. New notices use the theme surface/foreground pair, or a semantic
 warning/error alert; components do not introduce grey background constants.
 Borders, dividers and container tints use the Material 3 roles in
 `src/styles/vibe64-m3.css` (`--v64-outline`, `--v64-outline-variant`, the
 `--v64-surface-container-*` tiers), which derive from the theme. A component
 names only `--v-theme-*` colours Vuetify declares for this theme, because the
 browser ignores a declaration that names an undefined one;
-`tests/client/vibe64ThemeColours.vitest.js` derives that set from Vuetify and
-the theme, and fails on any other name in `src/` or a package's `src/`.
-The app font, Roboto, ships inside the build: `src/styles/vibe64-font.css`
-self-hosts the variable latin subset from `@fontsource-variable/roboto` under
-the family name Vuetify and the `--v64-font-family` token already use, so every
-first launch renders it even where the system has no Roboto.
+`tests/client/vibe64ThemeColours.vitest.js` derives that set from the generated
+theme, and fails on any other name in `src/` or a package's `src/`.
 A device's reduced-motion setting reaches every screen: `src/styles/vibe64-m3.css`
 then gives every CSS transition no duration and every animation a single
 near-instant run, and turns off smooth scrolling. `src/main.js` opens Vuetify's

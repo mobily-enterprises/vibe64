@@ -925,8 +925,8 @@ test.describe("direct chat", () => {
           await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
           // A marked branch's chip is filled with the theme's warning colour and its on-colour.
           const warning = theme === "dark"
-            ? { background: "rgb(223, 196, 119)", color: "rgb(61, 47, 0)" }
-            : { background: "rgb(114, 92, 12)", color: "rgb(255, 255, 255)" };
+            ? { background: "rgb(255, 183, 131)", color: "rgb(79, 37, 0)" }
+            : { background: "rgb(148, 75, 0)", color: "rgb(255, 255, 255)" };
           for (const { sessionId, label, text, offMain } of [
             { sessionId: SESSION_ID, label: "Direct chat", text: "example-owner/example-app · main", offMain: false },
             { sessionId: branchSessionId, label: "Second session", text: "example-owner/example-app · example-feature (not main)", offMain: true }

@@ -9,7 +9,7 @@ session. Canonical inputs reject caller-supplied users and enforce required
 fields; existing account services retain credential ownership, revision checks
 and native lifecycle rules.
 The Account settings **You** tab also offers an Appearance choice (Light, Dark,
-System). It is a per-browser convenience in `src/lib/appearance.js`, read once
+System, the default). It is a per-browser convenience in `src/lib/appearance.js`, read once
 at startup as Vuetify's default theme and applied with `theme.change`; it is
 not an account operation and writes no server state.
 The five `vibe64.accounts.ai-connections.*` actions own provider list/catalogue,
