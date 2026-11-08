@@ -13,9 +13,13 @@ import { fileURLToPath } from "node:url";
 // rather than timing the run, so it holds however many files run at once; a
 // suite's wallMs bounds the run's own wall-clock time, about three times what
 // it took running files in parallel on a busy test host, so a suite that would
-// take hours fails loudly. These are coarse backstops: the real guard against
-// a suite falling back to one file at a time is the test that no script fixes
-// its own concurrency (tests/server/testCommand.unit.test.js). Every run prints
+// take hours fails loudly. The server suite's run also stops at its wallMs, and
+// its testMs is every test's hard deadline, about eight times its slowest test
+// (36 s on GitHub's runner), so a test that never returns fails by name instead
+// of holding the run (tooling/run-server-tests.mjs). These are coarse
+// backstops: the real guard against a suite falling back to one file at a time
+// is the test that no script fixes its own concurrency
+// (tests/server/testCommand.unit.test.js). Every run prints
 // its slowest files against their budgets, so waste shows at a glance.
 const APP_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BUDGETS_FILE = fileURLToPath(new URL("./test-time-budgets.json", import.meta.url));

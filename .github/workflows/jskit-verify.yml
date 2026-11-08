@@ -13,6 +13,9 @@ env:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Above the suites' own wall-clock bounds together (tooling/test-time-budgets.json),
+    # so a run that hangs anywhere ends here instead of at GitHub's six hours.
+    timeout-minutes: 75
     steps:
       - id: checkout
         name: Checkout

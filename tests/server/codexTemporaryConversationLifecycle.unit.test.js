@@ -7812,7 +7812,17 @@ test("server shutdown serializes with an owned runtime before metadata is publis
     const acquiring = controller.createConversation(session.sessionId, {
       ephemeral: true
     });
-    await preMetadata.entered;
+    // An acquisition that ends before the runtime reaches its metadata hold
+    // (the provider could not start it) fails here, instead of leaving the
+    // test waiting for a hold that is never entered.
+    const endedEarly = await Promise.race([
+      preMetadata.entered.then(() => ""),
+      acquiring.then(
+        (result) => `acquisition returned ${JSON.stringify(result)}`,
+        (error) => `acquisition threw ${error?.stack || error}`
+      )
+    ]);
+    assert.equal(endedEarly, "", `The runtime never reached its metadata hold: ${endedEarly}`);
     assert.ok(child?.pid > 1);
     assert.doesNotThrow(() => process.kill(-child.pid, 0));
 

@@ -217,6 +217,13 @@ overlap a test run already active for this checkout.
   files against their budgets; look there for waste. When a run is over
   budget, find what got slow and fix it. Change a budget only when the work
   itself grew, with the new measurement, in the same change.
+- A hang fails fast instead of holding a run. In `npm run test:full`, each test
+  has the server suite's `testMs` as a hard deadline and fails by name past
+  it; its file then ends with its other tests, even when the hung test left a
+  server or timer open. The whole run stops at its wall-clock bound, and the
+  CI job has a `timeout-minutes` above the suites' bounds. A test that waits
+  for a hold, a child or an event also stops waiting when the work it waits
+  on has already ended.
 - Every test process, `npm run test:full` included, loads
   `tooling/test-host-path-guard.mjs`.
 - A test removes every temporary folder it creates by the time it ends, so a

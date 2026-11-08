@@ -2,6 +2,7 @@
   "server": {
     "totalMs": 20340000,
     "wallMs": 2700000,
+    "testMs": 300000,
     "defaultFileMs": 60000,
     "fileMs": {
       "tests/server/agentPlaywrightCommand.unit.test.js": 240000,

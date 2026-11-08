@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { serverTestRun } from "../../tooling/run-server-tests.mjs";
+import { runServerTests, serverTestRun } from "../../tooling/run-server-tests.mjs";
 import { targetedTestArguments } from "../../tooling/run-targeted-tests.mjs";
+import { loadTimeBudgets } from "../../tooling/test-time-budgets.mjs";
 import { BUDGET_VARIABLE, testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 
 const runnerPath = fileURLToPath(new URL("../../tooling/run-targeted-tests.mjs", import.meta.url));
@@ -70,6 +73,55 @@ test("the full server suite loads the host path guard a single-file run loads", 
   assert.equal(args.at(-1), "tests/server/*.test.js");
   // A guard already in NODE_OPTIONS is not added twice.
   assert.equal(serverTestRun({ NODE_OPTIONS: guard }).env.NODE_OPTIONS, guard);
+});
+
+test("the full server suite gives every test a hard deadline and stops at its wall-clock bound", () => {
+  const budgets = loadTimeBudgets("server");
+  const { args, deadlineMs } = serverTestRun({});
+  assert.ok(budgets.testMs > 0 && budgets.testMs < budgets.wallMs);
+  assert.ok(args.includes(`--test-timeout=${budgets.testMs}`));
+  // A file whose hung test left a server or timer open still ends with its tests.
+  assert.ok(args.includes("--test-force-exit"));
+  assert.equal(deadlineMs, budgets.wallMs);
+});
+
+test("a server run past its deadline is stopped with every process it started", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "v64-server-run-deadline-"));
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  const pidFile = path.join(directory, "child.pid");
+  const messages = [];
+  t.mock.method(console, "error", (message) => messages.push(message));
+  // A runner and a child that both ignore SIGTERM, as a wedged run would.
+  const runner = [
+    "const { spawn } = require('node:child_process');",
+    "process.on('SIGTERM', () => {});",
+    "const child = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\"], { stdio: 'ignore' });",
+    "require('node:fs').writeFileSync(process.argv[1], String(child.pid));",
+    "setInterval(() => {}, 1000);"
+  ].join("\n");
+  const started = Date.now();
+  const exitCode = await runServerTests(
+    { args: ["-e", runner, pidFile], deadlineMs: 1_500, env: process.env },
+    { graceMs: 100 }
+  );
+  assert.equal(exitCode, 1);
+  assert.ok(Date.now() - started < 10_000);
+  assert.match(messages.join("\n"), /ran past its \d+ min wall-clock bound/u);
+  const childPid = Number(await readFile(pidFile, "utf8"));
+  assert.ok(childPid > 1);
+  const childGone = async () => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      try {
+        process.kill(childPid, 0);
+      } catch (error) {
+        if (error.code === "ESRCH") return true;
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return false;
+  };
+  assert.equal(await childGone(), true);
 });
 
 test("the full suites run under the machine's test budget", async () => {

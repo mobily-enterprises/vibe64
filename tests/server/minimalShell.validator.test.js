@@ -133,6 +133,8 @@ test("app-owned CI verifies the application on Node 26", async () => {
   assert.doesNotMatch(workflowSource, /id: database-migrations/);
   assert.doesNotMatch(workflowSource, /run: npm run db:migrate/);
   assert.match(workflowSource, /run: npm run verify/);
+  // A hang ends the job long before GitHub's six-hour limit.
+  assert.match(workflowSource, /^ {4}timeout-minutes: \d+$/mu);
   await assert.rejects(
     access(path.join(APP_ROOT, ".github", "workflows", "vibe64-verify.yml")),
     /ENOENT/
