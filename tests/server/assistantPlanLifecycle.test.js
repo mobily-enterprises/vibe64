@@ -191,11 +191,18 @@ test("the installed plan command uses the admitted role, emits live changes and 
   const ticked = await command("progress-write", { text: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision });
   assert.equal(ticked.checked, 0);
   assert.equal(ticked.progressText, checkedText);
-  request = { schemaVersion: 5, status: "working", delivery: "accepted", stage: "review", followup: {}, resolvedMode: "junior" };
-  assert.equal((await command("complete", { expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision })).status, "completed");
+  // A Junior chat's own finishing turn records Progress but leaves the plan active for Senior.
+  request = { schemaVersion: 5, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
+  await assert.rejects(command("complete", { expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision }), /Only Senior/);
+  const reviewed = await command("progress-write", { text: `${checkedText}Finishing turn: review found no gaps.\n`,
+    expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision });
+  assert.equal((await command("read")).status, "active");
+  // Auto's finishing turn is Senior's, so it completes the plan.
+  request = { schemaVersion: 5, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "auto", resolvedMode: "junior" };
+  assert.equal((await command("complete", { expectedRevision: reviewed.revision, expectedProgressRevision: reviewed.progressRevision })).status, "completed");
   request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "senior", reason: "conversation" };
   await assert.rejects(command("reopen", { expectedRevision: (await command("read")).revision }), /Only Senior/);
-  assert.equal(events.filter(event => event.reason === "work-plan-changed").length, 3);
+  assert.equal(events.filter(event => event.reason === "work-plan-changed").length, 4);
   assert.deepEqual((await command("history")).history, [], "read-only commands finish even with stdin open");
   request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "senior" };
   const reopened = await command("reopen", { expectedRevision: (await command("read")).revision,
