@@ -374,6 +374,36 @@ test("Colleague forwards shared text events before completion and retains one fi
   assert.equal(f.observations.realtime.find(event => event.realtime.payload.completedMessage)?.realtime.payload.conversationId, final.conversationId);
 });
 
+test("a sent message's model work runs as the request that sent it, not the thread's latest request", async t => {
+  const f = await fixture(t, [reply("First answer."), reply("Second answer.")]);
+  await f.send("First question");
+  assert.equal((await f.service.wait(f.context)).status, "ready");
+  const access = [];
+  const requireAccess = f.terminals.requireAssistantSelectionAccess;
+  f.terminals.requireAssistantSelectionAccess = async function (selection, options) {
+    access.push(options.vibe64User?.username || null);
+    return requireAccess.call(this, selection, options);
+  };
+  // Between the next message's admission and its model work, the person reads
+  // the thread through a request that does not carry them, as a socket's focus
+  // update reaches Colleague: the host's action resolved the person, but the
+  // request object has none.
+  const userless = { channel: "api", surface: "app", requestMeta: { request: {} },
+    vibe64Action: Object.freeze({ user: f.context.requestMeta.request.vibe64User, project: null }) };
+  let overwrite = null;
+  // The send publishes its reply reset right after admission.
+  f.events.register({ id: "test.thread-read-after-admission", matches: event => event.entity === "colleague",
+    handle: () => { overwrite ||= f.service.read({}, userless); } });
+  await f.send("Second question", "user-2");
+  assert.ok(overwrite, "a read of the thread came between admission and the model work");
+  await overwrite;
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["First answer.", "Second answer."]);
+  assert.ok(access.length > 0);
+  assert.deepEqual([...new Set(access)], ["member"], "every model access check was the sender's");
+});
+
 for (const operation of ["stop", "supersede", "disconnect"]) {
   test(`Colleague clears shared streaming state after ${operation}`, async t => {
     const stream = modelStream();

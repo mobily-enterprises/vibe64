@@ -207,6 +207,10 @@ function createColleagueTurns({
         assistantSelection: input.assistantSelection
       };
       state.connections.set(input.clientId, connection);
+      // This message's work runs as the request that sent it. Any read or
+      // focus update since replaces the thread's latest request, and need not
+      // carry the person: a socket's focus update does not.
+      const admitted = { ...connection, focus: structuredClone(connection.focus), requestMeta: context.requestMeta };
       if (native) {
         // App admission is independent of native admission: these are the
         // actual authored rows, not fabricated native acknowledgements.
@@ -216,7 +220,7 @@ function createColleagueTurns({
         });
         if (!turn) throw failure("The authored Colleague message could not be admitted.", "vibe64_colleague_message_unadmitted");
         state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId });
-        state.nextConnection = { ...connection, focus: structuredClone(connection.focus) };
+        state.nextConnection = admitted;
         if (!state.running) {
           void worker.startWorker(state, state.nextConnection, null, true).catch(error => logger.warn(
             { error },
@@ -225,10 +229,7 @@ function createColleagueTurns({
         }
         return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user" };
       }
-      return worker.startWorker(state, {
-        ...connection,
-        focus: structuredClone(connection.focus)
-      }, {
+      return worker.startWorker(state, admitted, {
         messageId: input.messageId,
         text: input.message
       });

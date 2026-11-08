@@ -260,11 +260,13 @@ function createColleagueThreads({
 
   function actionContext(state, connection) {
     // Do not copy the reserved authorization result from a previous action.
-    // The host rechecks this real request for every tool and model exchange.
+    // The host rechecks this real request for every tool and model exchange:
+    // a sent message's own request, which its connection carries, or else the
+    // thread's latest request, for work no message started.
     return {
       surface: "app",
       channel: "automation",
-      requestMeta: state.requestContext.requestMeta,
+      requestMeta: connection.requestMeta || state.requestContext.requestMeta,
       projectSlug: connection.focus?.projectSlug || "",
       colleague: {
         userKey: state.userKey,
