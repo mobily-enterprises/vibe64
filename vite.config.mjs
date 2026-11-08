@@ -4,7 +4,7 @@ import vue from "@vitejs/plugin-vue";
 import vuetify from "vite-plugin-vuetify";
 import VueRouter from "vue-router/vite";
 import { createJskitClientBootstrapPlugin } from "@jskit-ai/kernel/client/vite";
-import { testConcurrency } from "./tooling/test-concurrency.mjs";
+import { testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 
 function toPositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);

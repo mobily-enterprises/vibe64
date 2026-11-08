@@ -197,8 +197,9 @@ overlap a test run already active for this checkout.
   arguments in `--option=value` form.
 - Do not pass a glob, directory, or multiple test files to `npm test`, and do
   not bypass this guard with a direct broad `node --test` command.
-- Test suites run in parallel by default, bounded by the machine's test budget
-  in `tooling/test-concurrency.mjs`: `V64_TEST_CONCURRENCY` when set (a test
+- Test suites run in parallel by default, bounded by the machine's test budget,
+  JSKIT's `testConcurrency()` from `@jskit-ai/jskit-catalog/test-budget`:
+  `V64_TEST_CONCURRENCY` when set to a whole number (a test
   runner sharing a machine sets it for each of its slots), otherwise half the
   CPUs, at least one. `npm run test:full` and `npm run test:client` run that
   many test files at once; Playwright runs one worker for every two of those

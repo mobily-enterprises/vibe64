@@ -3,10 +3,10 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { withHostPathGuard } from "./run-targeted-tests.mjs";
-import { testConcurrency } from "./test-concurrency.mjs";
+import { testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 
 // npm run test:full: every server test file, as many at once as the machine's
-// test budget allows (tooling/test-concurrency.mjs), with the time budgets of
+// test budget allows (JSKIT's testConcurrency()), with the time budgets of
 // tooling/test-time-budgets.json, each file under the host path guard that a
 // single-file run loads too. Node expands the file pattern itself.
 export function serverTestRun(env = process.env) {

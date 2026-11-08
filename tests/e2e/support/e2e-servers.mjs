@@ -1,7 +1,7 @@
 import os from "node:os";
 import process from "node:process";
 
-import { testConcurrency } from "../../../tooling/test-concurrency.mjs";
+import { testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 
 // Each Playwright worker tests against its own app server, so no test shares a
 // server's state with a test running at the same time: worker N (Playwright's
@@ -50,7 +50,7 @@ function defaultWorkerCount(env = process.env) {
 
 /**
  * How many workers, and so servers, this run uses: --workers on the command
- * line, else a share of the machine's test budget (tooling/test-concurrency.mjs)
+ * line, else a share of the machine's test budget (JSKIT's testConcurrency())
  * that fits each worker's browser and server. Playwright's main process decides
  * and records it; its workers read the recorded count.
  */

@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { serverTestRun } from "../../tooling/run-server-tests.mjs";
 import { targetedTestArguments } from "../../tooling/run-targeted-tests.mjs";
-import { TEST_CONCURRENCY_ENV, testConcurrency } from "../../tooling/test-concurrency.mjs";
+import { BUDGET_VARIABLE, testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 
 const runnerPath = fileURLToPath(new URL("../../tooling/run-targeted-tests.mjs", import.meta.url));
 
@@ -51,19 +51,20 @@ test("the targeted test command passes Node test options through to its one file
 });
 
 test("test files run as many at once as the machine's test budget allows", () => {
-  assert.equal(testConcurrency({ env: {}, cpus: 2 }), 1);
-  assert.equal(testConcurrency({ env: {}, cpus: 1 }), 1);
-  assert.equal(testConcurrency({ env: {}, cpus: 8 }), 4);
-  assert.equal(testConcurrency({ env: { [TEST_CONCURRENCY_ENV]: "3" }, cpus: 2 }), 3);
-  assert.equal(testConcurrency({ env: { [TEST_CONCURRENCY_ENV]: " " }, cpus: 8 }), 4);
-  for (const value of ["0", "-1", "1.5", "two"]) {
-    assert.throws(() => testConcurrency({ env: { [TEST_CONCURRENCY_ENV]: value }, cpus: 8 }), /V64_TEST_CONCURRENCY must be a whole number/u);
+  // JSKIT's budget: V64_TEST_CONCURRENCY when it is a whole number of at least 1, otherwise half the machine.
+  assert.equal(BUDGET_VARIABLE, "V64_TEST_CONCURRENCY");
+  assert.equal(testConcurrency({ env: {}, parallelism: 2 }), 1);
+  assert.equal(testConcurrency({ env: {}, parallelism: 1 }), 1);
+  assert.equal(testConcurrency({ env: {}, parallelism: 8 }), 4);
+  assert.equal(testConcurrency({ env: { [BUDGET_VARIABLE]: "3" }, parallelism: 2 }), 3);
+  for (const value of [" ", "0", "-1", "1.5", "two"]) {
+    assert.equal(testConcurrency({ env: { [BUDGET_VARIABLE]: value }, parallelism: 8 }), 4);
   }
 });
 
 test("the full server suite loads the host path guard a single-file run loads", () => {
   const guard = `--import=${new URL("../../tooling/test-host-path-guard.mjs", import.meta.url).href}`;
-  const { args, env } = serverTestRun({ [TEST_CONCURRENCY_ENV]: "3", NODE_OPTIONS: "--no-warnings" });
+  const { args, env } = serverTestRun({ [BUDGET_VARIABLE]: "3", NODE_OPTIONS: "--no-warnings" });
   assert.equal(env.NODE_OPTIONS, `--no-warnings ${guard}`);
   assert.ok(args.includes("--test-concurrency=3"));
   assert.equal(args.at(-1), "tests/server/*.test.js");
