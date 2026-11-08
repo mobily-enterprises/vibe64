@@ -385,11 +385,21 @@ function managedPlaywrightStorageState(applicationRoot = "", identity = "default
 }
 
 // A config that never reads the supplied login runs every test signed out, which looks like broken
-// sign-in; saying which variable to read points at the one-line fix.
+// sign-in; saying which variable to read points at the one-line fix. A config reads it when its code, not a
+// comment, names PLAYWRIGHT_STORAGE_STATE, or when JSKIT's browserTestConfig() builds it: that harness passes
+// the supplied login to use.storageState itself.
 function warnWhenConfigIgnoresLogin(applicationRoot = "") {
   const configName = ["playwright.config.mjs", "playwright.config.js", "playwright.config.ts", "playwright.config.cjs"]
     .find((name) => existsSync(path.join(applicationRoot, name)));
-  if (configName && !readFileSync(path.join(applicationRoot, configName), "utf8").includes("PLAYWRIGHT_STORAGE_STATE")) {
+  if (!configName) {
+    return;
+  }
+  const source = readFileSync(path.join(applicationRoot, configName), "utf8");
+  const code = configCode(source);
+  const namesLogin = /(?<![\\w$])PLAYWRIGHT_STORAGE_STATE(?![\\w$])/u.test(code);
+  const jskitHarness = source.includes("@jskit-ai/jskit-catalog/browser-tests") &&
+    /(?<![\\w$.])browserTestConfig\\s*\\(/u.test(code);
+  if (!namesLogin && !jskitHarness) {
     process.stderr.write(
       "Vibe64 supplies the signed-in browser state in PLAYWRIGHT_STORAGE_STATE, but " + configName +
       " never reads it, so these tests run signed out. Pass process.env.PLAYWRIGHT_STORAGE_STATE to use.storageState there.\\n"

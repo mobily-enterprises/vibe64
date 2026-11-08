@@ -852,10 +852,24 @@ test("managed Playwright warns when the project's config never reads the supplie
     const reading = await run();
     assert.doesNotMatch(reading.stderr, /never reads it/u);
 
+    // JSKIT's browser-test harness passes the supplied login to use.storageState itself.
+    await writeFile(configPath, [
+      "import { defineConfig } from \"@playwright/test\";",
+      "import { browserTestConfig } from \"@jskit-ai/jskit-catalog/browser-tests\";",
+      "export default defineConfig(browserTestConfig({ testDir: \"./tests/e2e\" }));"
+    ].join("\n") + "\n");
+    const harness = await run();
+    assert.doesNotMatch(harness.stderr, /never reads it/u);
+
     await writeFile(configPath, "export default { use: { storageState: process.env.APP_LOGIN_STATE } };\n");
     const ignoring = await run();
     assert.match(ignoring.stderr, /playwright\.config\.mjs never reads it, so these tests run signed out/u);
     assert.equal(JSON.parse(ignoring.stdout).storageStateExists, true, "The tests still run with the login supplied");
+
+    // A comment that names the variable reads nothing.
+    await writeFile(configPath, "// Pass PLAYWRIGHT_STORAGE_STATE on one day.\nexport default { use: {} };\n");
+    const commented = await run();
+    assert.match(commented.stderr, /playwright\.config\.mjs never reads it, so these tests run signed out/u);
   } finally {
     await fixture?.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, {
