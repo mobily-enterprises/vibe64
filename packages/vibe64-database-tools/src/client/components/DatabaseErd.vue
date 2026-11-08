@@ -151,10 +151,10 @@
     </v-dialog>
     <v-dialog v-model="groupDialog" :attach="erdRoot" max-width="520">
       <v-card title="Table groups">
-        <v-card-text>
+        <v-card-text class="d-flex flex-column ga-4">
           <v-select v-if="groups.length" :model-value="editingGroup" :items="[{ title: 'New group', value: '' }, ...groups.map(group => ({ title: group.name, value: group.id }))]" label="Group to edit" :menu-props="{ attach: erdRoot }" @update:model-value="editGroup" />
           <v-text-field v-model="groupName" label="Group name" maxlength="80" />
-          <v-autocomplete v-model="groupTables" :items="tableItems" label="Tables in group" multiple chips closable-chips :menu-props="{ attach: erdRoot }" />
+          <v-autocomplete v-model="groupTables" :items="tableItems" label="Tables in group" multiple chips closable-chips :menu-props="{ attach: erdRoot, location: 'top' }" />
         </v-card-text>
         <v-card-actions><v-btn v-if="editingGroup" @click="removeGroup">Remove group</v-btn><v-spacer /><v-btn @click="groupDialog = false">Cancel</v-btn><v-btn :disabled="!groupName.trim() || !groupTables.length" @click="saveGroup">Save group</v-btn></v-card-actions>
       </v-card>
