@@ -1,4 +1,4 @@
-import { createGitTurnCheckpointAsOneJob } from "@local/vibe64-execution/server";
+import { createGitTurnCheckpointAsOneJob, runVibe64Command } from "@local/vibe64-execution/server";
 import { codexAppServerTurnState } from "@jskit-ai/assistant-core/server/codex-turn";
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
 import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
@@ -57,11 +57,14 @@ async function checkpointTurn({
       timestamp,
       sessionId,
       project: currentProject,
+      runCommand: runVibe64Command,
       worktreePath: sessionSourcePath(session)
     });
     // Each connected copy keeps the same turn's checkpoint in its own repository.
     for (const copy of sessionConnectedCopies(session)) {
-      await createCheckpoint({ outerTurnId, outcome, timestamp, sessionId, project: currentProject, worktreePath: copy.path });
+      await createCheckpoint({
+        outerTurnId, outcome, timestamp, sessionId, project: currentProject, runCommand: runVibe64Command, worktreePath: copy.path
+      });
     }
   } catch (error) {
     failure = error.message || "A recovery checkpoint could not be created.";

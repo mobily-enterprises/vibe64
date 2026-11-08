@@ -4,9 +4,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { vibe64Host } from "./hostProfile.js";
-import {
-  runVibe64Command
-} from "./runVibe64Command.js";
+
+/**
+ * The runner every git step goes through, which the caller passes: the daemon's
+ * runVibe64Command, or, inside the one-job checkpoint's child, the capture
+ * engine alone. This module never loads the daemon's runner itself, so that
+ * child starts without it.
+ * @typedef {typeof import("./runVibe64Command.js").runVibe64Command} CheckpointCommandRunner
+ */
 
 const GIT_CHECKPOINT_TIMEOUT_MS = 30_000;
 // One bound for the whole sequence run as a single job; each git step inside
@@ -31,7 +36,7 @@ const checkpointOperations = new Map();
  * @param {string} [checkpoint.outerTurnId]
  * @param {string} [checkpoint.outcome]
  * @param {object} [checkpoint.project] the project the git commands run for
- * @param {typeof runVibe64Command} [checkpoint.runCommand]
+ * @param {CheckpointCommandRunner} checkpoint.runCommand
  * @param {string} [checkpoint.sessionId]
  * @param {number} [checkpoint.temporaryDiskBudgetBytes]
  * @param {number} [checkpoint.temporaryDiskReserveBytes]
@@ -44,7 +49,7 @@ async function createGitTurnCheckpoint({
   outcome = "completed",
   // readable-check: allow dependency-default - input validation: a checkpoint request, whose project defaults to none
   project = {},
-  runCommand = runVibe64Command,
+  runCommand,
   sessionId = "",
   temporaryDiskBudgetBytes,
   temporaryDiskReserveBytes,
@@ -78,7 +83,7 @@ async function createGitTurnCheckpoint({
  * @param {string} [checkpoint.outerTurnId]
  * @param {string} [checkpoint.outcome]
  * @param {object} [checkpoint.project] the project the git commands run for
- * @param {typeof runVibe64Command} [checkpoint.runCommand]
+ * @param {CheckpointCommandRunner} checkpoint.runCommand
  * @param {string} [checkpoint.sessionId]
  * @param {number} [checkpoint.temporaryDiskBudgetBytes]
  * @param {number} [checkpoint.temporaryDiskReserveBytes]
@@ -90,7 +95,7 @@ async function createGitTurnCheckpointAsOneJob({
   outerTurnId = "",
   outcome = "completed",
   project = {},
-  runCommand = runVibe64Command,
+  runCommand,
   sessionId = "",
   temporaryDiskBudgetBytes,
   temporaryDiskReserveBytes,
@@ -158,7 +163,7 @@ function checkpointJobValue(result = {}) {
  * @param {ReturnType<typeof checkpointIdentity>} [checkpoint.identity]
  * @param {object} [checkpoint.project] the project the git commands run for
  * @param {ReturnType<typeof checkpointRefs>} [checkpoint.refs]
- * @param {typeof runVibe64Command} [checkpoint.runCommand]
+ * @param {CheckpointCommandRunner} checkpoint.runCommand
  * @param {number} [checkpoint.temporaryDiskBudgetBytes]
  * @param {number} [checkpoint.temporaryDiskReserveBytes]
  */
@@ -166,7 +171,7 @@ async function createGitTurnCheckpointUnlocked({
   identity = {},
   project = {},
   refs = {},
-  runCommand = runVibe64Command,
+  runCommand,
   temporaryDiskBudgetBytes,
   temporaryDiskReserveBytes
 } = {}) {
@@ -250,7 +255,7 @@ async function writeGitWorktreeTree({
   baseCommit = "HEAD",
   paths = [],
   project = {},
-  runCommand = runVibe64Command,
+  runCommand,
   temporaryDiskBudgetBytes,
   temporaryDiskReserveBytes,
   worktreePath = ""
@@ -271,7 +276,7 @@ async function writeGitWorktreeTreeUnlocked({
   baseCommit = "HEAD",
   paths = [],
   project = {},
-  runCommand = runVibe64Command,
+  runCommand,
   temporaryDiskBudgetBytes,
   temporaryDiskReserveBytes,
   worktreePath = ""
@@ -353,7 +358,7 @@ async function assertCheckpointDiskBudget({
   gitDirectory = "",
   paths = [],
   project = {},
-  runCommand = runVibe64Command,
+  runCommand,
   temporaryDiskBudgetBytes,
   temporaryDiskReserveBytes,
   worktreePath = ""
@@ -462,7 +467,7 @@ async function validateExistingCheckpoint({
   identity = {},
   project = {},
   refs = {},
-  runCommand = runVibe64Command
+  runCommand
 } = {}) {
   const message = await requiredGitOutput(runCommand, identity.worktreePath, [
     "show",

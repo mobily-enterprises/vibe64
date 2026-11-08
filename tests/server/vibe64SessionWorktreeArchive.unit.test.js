@@ -12,7 +12,8 @@ import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
 import {
   checkpointRefs,
   createGitTurnCheckpoint,
-  installVibe64ManagedExecutionProvider
+  installVibe64ManagedExecutionProvider,
+  runVibe64Command
 } from "@local/vibe64-execution/server";
 import {
   projectRuntimeRoot,
@@ -409,6 +410,7 @@ test("archives and proves restoration of hidden turn checkpoint refs before remo
       outerTurnId: "client-message-archive",
       outcome: "completed",
       sessionId,
+      runCommand: runVibe64Command,
       timestamp: "2026-08-18T09:00:00.000Z",
       worktreePath
     });
@@ -490,6 +492,7 @@ test("checkpoint restore verification failures preserve the original source", as
           outerTurnId,
           outcome: "completed",
           sessionId,
+          runCommand: runVibe64Command,
           timestamp: "2026-08-18T09:00:00.000Z",
           worktreePath
         });

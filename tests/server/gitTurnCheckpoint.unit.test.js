@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:f
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import {
@@ -19,6 +20,7 @@ import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 import { endChildInput } from "./childInputTestHelpers.js";
 
 const execFileAsync = promisify(execFile);
+const CHECKPOINT_SERVER_ROOT = fileURLToPath(new URL("../../packages/vibe64-execution/src/server/", import.meta.url));
 
 // The daemon checkpoints a turn as one job; Save and Update run the same
 // sequence directly inside their own job. Both must give the same result.
@@ -35,7 +37,7 @@ async function checkpointAsOneJob(input = {}) {
 }
 
 const CHECKPOINT_ENTRY_POINTS = [
-  ["in this process", createGitTurnCheckpoint],
+  ["in this process", (input) => createGitTurnCheckpoint({ ...input, runCommand: runVibe64Command })],
   ["as one job", checkpointAsOneJob]
 ];
 
@@ -152,7 +154,7 @@ for (const [entry, create] of CHECKPOINT_ENTRY_POINTS) {
 test("checkpoint publication retries a competing latest ref without losing either turn or changing source", async () => {
   const root = await createRepository();
   try {
-    const input = { outerTurnId: "repair", outcome: "completed", sessionId: "session-1",
+    const input = { outerTurnId: "repair", outcome: "completed", runCommand: runVibe64Command, sessionId: "session-1",
       timestamp: "2026-08-18T09:00:00.000Z", worktreePath: root };
     const previous = await createGitTurnCheckpoint({ ...input, outerTurnId: "previous" });
     await writeFile(path.join(root, "tracked.txt"), "repaired work\n", "utf8");
@@ -214,6 +216,7 @@ test("later checkpoints drop files that became ignored without removing them fro
     const first = await createGitTurnCheckpoint({
       outerTurnId: "client-message-1",
       outcome: "completed",
+      runCommand: runVibe64Command,
       sessionId: "session-1",
       timestamp: "2026-08-18T09:00:00.000Z",
       worktreePath: root
@@ -224,6 +227,7 @@ test("later checkpoints drop files that became ignored without removing them fro
     const second = await createGitTurnCheckpoint({
       outerTurnId: "client-message-2",
       outcome: "completed",
+      runCommand: runVibe64Command,
       sessionId: "session-1",
       timestamp: "2026-08-18T09:05:00.000Z",
       worktreePath: root
@@ -235,6 +239,7 @@ test("later checkpoints drop files that became ignored without removing them fro
     assert.equal(await git(root, ["show", `${second.commit}:.gitignore`]), "/local.bin");
     assert.equal(second.tree, await writeGitWorktreeTree({
       baseCommit: "HEAD",
+      runCommand: runVibe64Command,
       worktreePath: root
     }));
   } finally {
@@ -255,6 +260,7 @@ test("a worktree tree can overlay only selected resolution paths onto a prepared
     const result = await writeGitWorktreeTree({
       baseCommit: preparedTree,
       paths: ["tracked.txt"],
+      runCommand: runVibe64Command,
       worktreePath: root
     });
 
@@ -277,7 +283,7 @@ test("selected conflict paths are literal filenames, never Git pathspecs", async
     await git(root, ["add", "file1.txt"]);
     const index = await git(root, ["write-tree"]);
     const status = await git(root, ["status", "--porcelain"]);
-    const tree = await writeGitWorktreeTree({ paths: selected, worktreePath: root });
+    const tree = await writeGitWorktreeTree({ paths: selected, runCommand: runVibe64Command, worktreePath: root });
     for (const name of selected) assert.equal(await git(root, ["show", tree + ":" + name]), "resolved");
     assert.equal(await git(root, ["show", tree + ":file1.txt"]), "original");
     assert.equal(await git(root, ["write-tree"]), index);
@@ -340,6 +346,7 @@ test("checkpoint disk budget ignores ignored files and names oversized unignored
     await writeFile(path.join(root, ".gitignore"), "/ignored.bin\n", "utf8");
     await writeFile(path.join(root, "ignored.bin"), "i".repeat(1024), "utf8");
     await writeGitWorktreeTree({
+      runCommand: runVibe64Command,
       temporaryDiskBudgetBytes: 128,
       temporaryDiskReserveBytes: 0,
       worktreePath: root
@@ -347,6 +354,7 @@ test("checkpoint disk budget ignores ignored files and names oversized unignored
 
     await writeFile(path.join(root, "unignored.bin"), "u".repeat(1024), "utf8");
     await assert.rejects(writeGitWorktreeTree({
+      runCommand: runVibe64Command,
       temporaryDiskBudgetBytes: 128,
       temporaryDiskReserveBytes: 0,
       worktreePath: root
@@ -474,6 +482,51 @@ test("a checkpoint job killed mid-run leaves no temporary index after the next c
 
 test("the checkpoint job's command ships in the release runtime", () => {
   assert.ok(RUNTIME_ENTRIES.includes("node_modules/@local/vibe64-execution/src/server/gitTurnCheckpointCommand.js"));
+});
+
+// Every turn end and Stop waits for this child, so it loads only the capture
+// engine and the git sequence: no package and not the daemon's command runner.
+test("the checkpoint job's command checkpoints without loading a package or the daemon's command runner", async (t) => {
+  const root = await createRepository();
+  const probe = await mkdtemp(path.join(os.tmpdir(), "vibe64-checkpoint-modules-"));
+  t.after(() => Promise.all([root, probe].map((directory) => rm(directory, { force: true, recursive: true }))));
+  const loadedLog = path.join(probe, "loaded.txt");
+  const hooks = path.join(probe, "hooks.mjs");
+  await writeFile(hooks, [
+    "import { appendFileSync } from \"node:fs\";",
+    "import { registerHooks } from \"node:module\";",
+    "registerHooks({ resolve(specifier, context, nextResolve) {",
+    "  const result = nextResolve(specifier, context);",
+    `  if (result.url.startsWith("file:")) appendFileSync(${JSON.stringify(loadedLog)}, result.url + "\\n");`,
+    "  return result;",
+    "} });",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(root, "tracked.txt"), "work in progress\n", "utf8");
+  const payload = { hostProfile: null, input: { outerTurnId: "module-turn", outcome: "completed", sessionId: "session-1",
+    temporaryDiskBudgetBytes: 512 * 1024 * 1024, temporaryDiskReserveBytes: 0, timestamp: "2026-08-18T09:00:00.000Z", worktreePath: root } };
+  const response = await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ["--import", pathToFileURL(hooks).href, path.join(CHECKPOINT_SERVER_ROOT, "gitTurnCheckpointCommand.js")], {
+      cwd: root,
+      stdio: ["pipe", "pipe", "inherit"]
+    });
+    let stdout = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.once("error", reject);
+    child.once("close", (status) => resolve({ status, stdout }));
+    endChildInput(child, JSON.stringify(payload));
+  });
+  assert.equal(response.status, 0, response.stdout);
+  const { value } = JSON.parse(response.stdout);
+  assert.equal(await git(root, ["show", `${value.commit}:tracked.txt`]), "work in progress");
+  const loaded = (await readFile(loadedLog, "utf8")).split("\n").filter(Boolean).map((url) => fileURLToPath(url))
+    .filter((file) => file !== hooks && !file.includes(`${path.sep}tooling${path.sep}`));
+  const outside = loaded.filter((file) => !file.startsWith(CHECKPOINT_SERVER_ROOT) || file.includes(`${path.sep}node_modules${path.sep}`));
+  assert.deepEqual(outside, [], `the checkpoint child loaded ${outside.join(", ")}`);
+  const relative = loaded.map((file) => path.relative(CHECKPOINT_SERVER_ROOT, file));
+  for (const runnerModule of ["runVibe64Command.js", "request.js"]) {
+    assert.ok(!relative.includes(runnerModule), `the checkpoint child loaded ${runnerModule}: ${relative.join(", ")}`);
+  }
 });
 
 async function createRepository() {
