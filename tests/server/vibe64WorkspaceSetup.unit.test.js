@@ -247,7 +247,7 @@ test("a requested connected preparation returns at once and records each progres
     const finished = await started.completion;
     assert.equal(finished.status, "succeeded");
     assert.equal(preparations, 1);
-    assert.deepEqual(people, [person], "the person who asked copies with their own access");
+    assert.deepEqual(people, [person], "connected preparation knows the person who asked");
     assert.ok(labels.indexOf("Checking connected repositories") > labels.indexOf("Copying connected repository jskit"),
       "the label names the access recheck after copying");
     const transcript = (await stored()).transcript;

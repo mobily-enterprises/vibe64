@@ -8,6 +8,8 @@ import { loadProjectExecutionEnvRecords, projectExecutionEnvFromRecords } from "
 import { failed, persist, persistInspectedState } from "./workspaceSetupRecords.js";
 import {
   CONNECTED_PREPARATION_LABEL,
+  CONNECTED_PREPARATION_PERSON_REQUIRED,
+  CONNECTED_PREPARATION_STEP_LABEL,
   appendWorkspaceSetupTranscript,
   diagnosticText,
   diagnosticsInclude,
@@ -49,9 +51,12 @@ function createWorkspaceSetupStart({
   /**
    * `rerunFailed` is an explicit start (Preview Start, ensure or restart): it
    * runs a failed recipe again instead of reporting the stored failure.
-   * `vibe64User` is the person whose GitHub access copies a connected
-   * repository this session does not have yet. `signal` stops the run this
-   * start begins (an AI task's Cancel).
+   * `vibe64User` is the person who started this preparation, if one did. A
+   * connected repository this session does not have yet is copied with the
+   * session owner's GitHub access, and with this person's only when the
+   * session has no owner yet; a preparation no person started then waits as
+   * `required` for one. `signal` stops the run this start begins (an AI
+   * task's Cancel).
    */
   async function start({
     renewal = false, rerunFailed = false, retry = false, runtime, session, signal = null, vibe64User = null
@@ -230,13 +235,27 @@ function createWorkspaceSetupStart({
         setup = await runnerState.inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
         await setupExecution.connectedSourceRoots(setup, runtime, session);
       } catch (error) {
+        const transcript = appendWorkspaceSetupTranscript(attemptStarted ? stateBase.transcript : "", toText(error?.message));
+        if (toText(error?.code) === CONNECTED_PREPARATION_PERSON_REQUIRED) {
+          // Nothing failed: Prepare workspace runs it again as the person who selects it.
+          const state = await persist(runtime, sessionId, {
+            currentLabel: CONNECTED_PREPARATION_STEP_LABEL,
+            diagnostic: toText(error.message),
+            finishedAt: "",
+            recipeHash: "",
+            startedAt: "",
+            status: "required",
+            transcript
+          }, renewal);
+          return { completion: null, state };
+        }
         const state = await failed(runtime, sessionId, {
-          currentLabel: "Prepare connected repositories",
+          currentLabel: CONNECTED_PREPARATION_STEP_LABEL,
           diagnostic: toText(error?.message),
           renewal,
           // The output keeps the reason, so Expand and the next attempt's
           // history show why, not only that this step stopped.
-          transcript: appendWorkspaceSetupTranscript(attemptStarted ? stateBase.transcript : "", toText(error?.message))
+          transcript
         });
         return { completion: null, state };
       }

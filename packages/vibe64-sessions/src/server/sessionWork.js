@@ -398,7 +398,8 @@ function createSessionWork({
         // Keep the update active while automatic preparation is starting so
         // invalidation is presented as pending, not a manual setup failure.
         await workspaceSetup.prepareUpdatedWorkspace(runtime, sessionId, {
-          originId: input.originId
+          originId: input.originId,
+          vibe64User: input.vibe64User || null
         });
         const copyFailure = connectedUpdateFailure(result.connected);
         if (copyFailure) throw copyFailure;

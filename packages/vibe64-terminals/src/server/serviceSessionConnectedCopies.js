@@ -4,7 +4,12 @@ import {
   sessionConnectedCopies
 } from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { runVibe64Command } from "@local/vibe64-execution/server";
+import {
+  GITHUB_ACCOUNT_MODE_LOCAL,
+  VIBE64_GITHUB_ACCOUNT_MODE_ENV,
+  normalizeGithubAccountMode,
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 import { GENESIS_DERIVED_ARTIFACT_PATHS } from "@local/vibe64-genesis/server";
 import {
   connectedCopyActorSession,
@@ -17,35 +22,82 @@ import { githubSourceCommandOptions } from "./sessionSource.js";
 import { saveError } from "./sessionWorkCommands.js";
 import { inspectSessionWork } from "./sessionWorkSave.js";
 import { checkSessionUpdates } from "./sessionWorkUpdate.js";
+import { CONNECTED_PREPARATION_PERSON_REQUIRED } from "./workspaceSetupRules.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 
 /**
+ * The GitHub access a preparation copies missing repositories with. On this computer's own account
+ * that is Vibe64's, as for the session's own source. Otherwise it is the session's owner's: the Git
+ * actor that Save, Update and the update check of every copy run as, whoever started the
+ * preparation, so nobody's access copies a repository into a session that is not theirs. A session
+ * with no owner yet takes the person who started this preparation, who becomes it, as Save and
+ * Update do. When no person started it, it waits for one (`CONNECTED_PREPARATION_PERSON_REQUIRED`).
+ * @param {object} input
+ * @param {CodexGitCommandService} input.codexGitCommand
+ * @param {RuntimeEnv} input.env
+ * @param {string} input.repository a missing copy's owner/name
+ * @param {typeof runVibe64Command} input.runCommand
+ * @param {object} input.runtime
+ * @param {object} input.session
+ * @param {object | null} input.vibe64User
+ */
+async function connectedCopyCloneOptions({ codexGitCommand, env, repository, runCommand, runtime, session, vibe64User }) {
+  if (normalizeGithubAccountMode(env[VIBE64_GITHUB_ACCOUNT_MODE_ENV], GITHUB_ACCOUNT_MODE_LOCAL) === GITHUB_ACCOUNT_MODE_LOCAL) {
+    return { ...await githubSourceCommandOptions(null, env), runCommand };
+  }
+  try {
+    const execution = await connectedCopyExecution({
+      codexGitCommand,
+      copy: { repository },
+      env,
+      reason: "workspace-preparation",
+      runtime,
+      session,
+      vibe64User
+    });
+    return { ...execution.commandOptions, runCommand: execution.runCommand };
+  } catch (error) {
+    if (vibe64User || error?.code !== "vibe64_session_git_command_actor_missing") throw error;
+    throw saveError(
+      "Select Prepare workspace to copy this session's connected repositories with your GitHub account.",
+      CONNECTED_PREPARATION_PERSON_REQUIRED
+    );
+  }
+}
+
+/**
  * Workspace preparation's connected step. `prepare` makes the copies this session is missing and
  * writes the Sources file that points at its copies, returning one line per repository; `inspect`
  * reads that file back for a run.
  * @param {object} input
+ * @param {CodexGitCommandService} input.codexGitCommand
  * @param {RuntimeEnv} input.env
  * @param {"inspect" | "prepare"} input.mode
  * @param {ProjectService} input.project
+ * @param {typeof runVibe64Command} [input.runCommand] the copies' commands that need no GitHub access
  * @param {object} input.runtime
  * @param {object} input.session
- * @param {object | null} [input.vibe64User]
+ * @param {object | null} [input.vibe64User] the person who started this preparation, if one did
  */
-async function prepareConnectedRepositories({ env, mode, project, runtime, session, vibe64User = null }) {
+async function prepareConnectedRepositories({
+  codexGitCommand, env, mode, project, runCommand = runVibe64Command, runtime, session, vibe64User = null
+}) {
   if (mode === "inspect") return project.inspectConnectedDevelopmentInputs({ session });
   const connections = await project.readSessionConnectedRepositories(session);
   const recorded = sessionConnectedCopies(session);
   let lines = [];
   if (connections.length || recorded.length) {
-    const missing = connections.some(connection => !recorded.some(copy => copy.repository === connection.fullName));
+    const missing = connections.find(connection => !recorded.some(copy => copy.repository === connection.fullName));
     const current = await project.readCurrentProject();
     const listed = missing ? (await project.listProjects())?.projects || [] : [];
     const prepared = await prepareConnectedCopies({
       commandOptions: missing
-        ? { ...await githubSourceCommandOptions(vibe64User, env), runCommand: runVibe64Command }
+        ? await connectedCopyCloneOptions({
+          codexGitCommand, env, repository: missing.fullName, runCommand, runtime, session, vibe64User
+        })
         : {},
       connections,
       async mirrorFor(fullName) {
@@ -54,6 +106,7 @@ async function prepareConnectedRepositories({ env, mode, project, runtime, sessi
         return match ? { mirrorPath: match.githubMirrorPath, remoteUrl: match.githubRepository.cloneUrl } : null;
       },
       ownRepository: String(current.githubRepository?.fullName || current.repository?.github?.fullName || "").toLowerCase(),
+      runCommand,
       session,
       writeCopies: (copies) => runtime.store.writeMetadataValue(
         session.sessionId,

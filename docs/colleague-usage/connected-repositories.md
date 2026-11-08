@@ -25,10 +25,20 @@ brings in its main.
 ## Prepare workspace makes the missing copies
 
 **Prepare workspace** (and **Retry**) copies every listed repository the session
-has no copy of yet, from that repository's default branch on GitHub, with your
-connected GitHub account. When this installation already has a project for the
-same GitHub repository, its local copy speeds the clone up; the session's copy
-does not depend on it afterwards. The output has one line per repository:
+has no copy of yet, from that repository's default branch on GitHub, with the
+session's GitHub account: the one its Save and Update of the copies run as,
+shown in the session header. A session without one yet takes the account of the
+person who prepares it, which becomes the session's. Preparation that starts on
+its own, after **Update this session (rebase)**, after an AI turn or when
+Preview starts, copies with that same account. When the session has no GitHub
+account yet and nobody started the preparation, it does not fail: it stops at
+**Prepare connected repositories** with **Workspace preparation required** and
+`Select Prepare workspace to copy this session's connected repositories with
+your GitHub account.`, and Preview waits with the same message. Select
+**Prepare workspace** and it continues with your account. When this
+installation already has a project for the same GitHub repository, its local
+copy speeds the clone up; the session's copy does not depend on it afterwards.
+The output has one line per repository:
 
 - `[Connected] library copied at 4f2a9c1e7b30.` for a new copy;
 - `[Connected] library ready at 4f2a9c1e7b30.` for a copy the session already

@@ -469,6 +469,13 @@ test("a stop recorded before any recipe holds Preview back even when inspection 
   assert.equal(workspaceSetupLaunchDisabledReason({
     workspaceSetup: { diagnostic: "Connected project vibe64: not ready", recipeHash: "", status: "failed" }
   }, ready), "Connected project vibe64: not ready");
+  const waiting = "Select Prepare workspace to copy this session's connected repositories with your GitHub account.";
+  assert.equal(workspaceSetupLaunchDisabledReason({
+    workspaceSetup: { currentLabel: "Prepare connected repositories", diagnostic: waiting, recipeHash: "", status: "required" }
+  }, ready), waiting, "connected preparation waiting for a person holds Preview back");
+  assert.equal(workspaceSetupLaunchDisabledReason({
+    workspaceSetup: { currentLabel: "", diagnostic: "Run this session's declared setup steps after updating its source.", recipeHash: "", status: "required" }
+  }, ready), "", "preparation required after a source change stays the launch's to run");
 });
 
 test("a pending workspace recipe remains runnable so the request can prepare it", async (t) => {

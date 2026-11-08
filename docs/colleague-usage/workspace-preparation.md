@@ -31,6 +31,12 @@ A new session with connected repositories starts preparation automatically. Its
 first step, **Preparing connected repositories**, makes this session's missing
 copies of them, one output line per repository, then **Checking connected
 repositories** checks them. It never fetches or replaces a copy it already has.
+It copies with the session's GitHub account, also when it starts on its own
+after Update, an AI turn or a Preview start. A session with no GitHub account
+yet, whose preparation nobody started, shows **Workspace preparation required**
+with `Select Prepare workspace to copy this session's connected repositories
+with your GitHub account.` instead of a failure; **Prepare workspace** then
+copies them with yours.
 If one fails, the notice reads **Prepare connected repositories** with the
 reason, and the output keeps it; copies already made are kept and **Retry** does
 not copy them again. Each retry starts its own lines in the output, so an earlier

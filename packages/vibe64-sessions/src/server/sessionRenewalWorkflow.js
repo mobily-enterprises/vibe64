@@ -525,7 +525,8 @@ function createRenewalWorkflow({
             const started = await setupRunner.startRenewal({
               retry: true,
               runtime,
-              session: successor
+              session: successor,
+              vibe64User: input.vibe64User || null
             });
             currentSetup = started?.completion
               ? await started.completion

@@ -7,6 +7,7 @@ import { currentProjectSlug } from "./terminalShared.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { inspectVibe64WorkspaceSetupForContext, listVibe64OutputTargets } from "./vibe64OutputTargets.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
+import { CONNECTED_PREPARATION_STEP_LABEL } from "./workspaceSetupRules.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // What a launch reads before it starts: the session's launch context, its
@@ -122,9 +123,12 @@ function workspaceSetupLaunchDisabledReason(session = {}, inspection = null) {
   const stored = session.workspaceSetup || {};
   const storedStatus = String(stored.status || "").trim();
   const inspectionStatus = String(inspection?.status || "").trim();
+  // Connected preparation waiting for a person to run it holds Preview back as its failure does.
+  const stopped = ["ambiguous", "failed"].includes(storedStatus) ||
+    (storedStatus === "required" && String(stored.currentLabel || "").trim() === CONNECTED_PREPARATION_STEP_LABEL);
 
   if (!inspectionStatus) {
-    return ["ambiguous", "failed"].includes(storedStatus)
+    return stopped
       ? String(stored.diagnostic || "Workspace preparation must be fixed before managed preview can start.").trim()
       : "";
   }
@@ -152,7 +156,7 @@ function workspaceSetupLaunchDisabledReason(session = {}, inspection = null) {
   }
   // A stop recorded before any recipe (connected preparation stops there)
   // cannot go stale with a recipe, so it holds until preparation runs again.
-  if ((currentRecipe || !storedRecipeHash) && ["ambiguous", "failed"].includes(storedStatus)) {
+  if ((currentRecipe || !storedRecipeHash) && stopped) {
     return String(
       stored.diagnostic || "Workspace preparation must be fixed before managed preview can start."
     ).trim();

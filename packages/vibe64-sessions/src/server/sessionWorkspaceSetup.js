@@ -30,9 +30,9 @@ function createTerminalsSetupRunner({ terminals }) {
     { retry, runtime, session, signal, vibe64User, waitMs }
   );
 
-  const startRenewal = ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
+  const startRenewal = ({ retry = false, runtime, session, vibe64User = null }) => terminals.prepareRenewalWorkspaceSetup(
     session.sessionId,
-    { retry, runtime, session }
+    { retry, runtime, session, vibe64User }
   );
 
   const wait = (sessionId) => terminals.waitForWorkspaceSetup(sessionId);
@@ -91,11 +91,12 @@ function createSessionWorkspaceSetup({
    * @param {Vibe64SessionRuntime} runtime
    * @param {string} sessionId
    * @param {object} [options]
+   * @param {object | null} [options.vibe64User] the person whose Update this follows, if one asked for it
    */
   async function prepareUpdatedWorkspace(runtime, sessionId, options = {}) {
     try {
       const session = await runtime.getSessionWithoutSource(sessionId);
-      const setup = await setupRunner.start({ runtime, session });
+      const setup = await setupRunner.start({ runtime, session, vibe64User: options.vibe64User || null });
       observeWorkspaceSetup(sessionId, setup.completion, options);
       // A consumer reads this checkout next, so it waits for the rebuild.
       if (options.wait) await setup.completion;

@@ -12,6 +12,11 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";
 const CONNECTED_PREPARATION_LABEL = "Preparing connected repositories";
+// The step a preparation names when it stops at the connected repositories.
+const CONNECTED_PREPARATION_STEP_LABEL = "Prepare connected repositories";
+// A connected copy is missing, the session has no owner whose GitHub access
+// can make it, and no person started this preparation: it waits for one.
+const CONNECTED_PREPARATION_PERSON_REQUIRED = "vibe64_connected_copy_person_required";
 const WORKSPACE_SETUP_DIAGNOSTIC_LENGTH = 1600;
 const DIAGNOSTIC_OMISSION_MARKER = "\n[…]\n";
 
@@ -163,6 +168,8 @@ function workspaceSetupRunKey(sessionId = "") {
 
 export {
   CONNECTED_PREPARATION_LABEL,
+  CONNECTED_PREPARATION_PERSON_REQUIRED,
+  CONNECTED_PREPARATION_STEP_LABEL,
   WORKSPACE_SETUP_COMMAND_TIMEOUT_MS,
   appendWorkspaceSetupTranscript,
   capturedCommandOutput,
