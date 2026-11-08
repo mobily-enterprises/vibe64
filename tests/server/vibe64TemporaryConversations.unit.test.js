@@ -3,6 +3,7 @@ import test from "node:test";
 import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { isDeepStrictEqual } from "node:util";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { assistantModePrompt } from "@local/vibe64-runtime/shared/assistantRouting";
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
@@ -1530,6 +1531,31 @@ test("temporary replies retain their routed identity across multiple native mess
 test("completed temporary output is saved while the run stays active, skipping a busy lease until the next message", { timeout: 15_000 }, async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root);
+    // The test follows each save as it happens instead of sleeping past the
+    // save delay, which a loaded machine can outlast: every zero-wait session
+    // write here is a temporary-output save (no browser read or list runs).
+    const saves = [];
+    let saved = Promise.withResolvers();
+    f.restart({ temporarySaveDelayMs: 50, runAgentWrite: async (sessionId, options, operation, lockOptions) => {
+      const exclusive = await runVibe64AgentWriteExclusive(f.runtime, sessionId, async () =>
+        operation({ ...options, runtime: f.runtime, session: await f.runtime.getSession(sessionId) }), lockOptions);
+      if (lockOptions.waitMs === 0) {
+        saves.push(exclusive.acquired);
+        saved.resolve();
+        saved = Promise.withResolvers();
+      }
+      return exclusive.value;
+    } });
+    // Resolves once matches() holds, checking again after each save, or after 10 s.
+    const untilSave = async (matches) => {
+      const deadline = AbortSignal.timeout(10_000);
+      const expired = new Promise(resolve => deadline.addEventListener("abort", resolve, { once: true }));
+      for (;;) {
+        const next = saved.promise;
+        if (await matches() || deadline.aborted) return;
+        await Promise.race([next, expired]);
+      }
+    };
     const start = f.sessionAgent.startConversationTurn;
     let onEvent;
     f.sessionAgent.startConversationTurn = async (id, input, ctx) => {
@@ -1542,7 +1568,7 @@ test("completed temporary output is saved while the run stays active, skipping a
     const row = f.native.get(record.providerConversationId);
     const savedIds = async () => (await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" }))
       .flatMap(turn => turn.messages.map(message => message.messageId));
-    const settle = () => new Promise(resolve => setTimeout(resolve, 1_300));
+    const untilSaved = (expected) => untilSave(async () => isDeepStrictEqual(await savedIds(), expected));
     const emit = async (message) => {
       row.messages.push(message);
       await onEvent({ type: "message", message, threadId: row.id, turnId: row.runId });
@@ -1552,7 +1578,7 @@ test("completed temporary output is saved while the run stays active, skipping a
     await emit({ role: "commentary", id: "interim", text: "The query is still running.", complete: true });
     await onEvent({ type: "message", message: { role: "assistant", id: "partial", text: "Draft", complete: false },
       threadId: row.id, turnId: row.runId });
-    await settle();
+    await untilSaved(["report-request", "plan", "interim"]);
     assert.equal(row.status, "inProgress");
     assert.deepEqual(await savedIds(), ["report-request", "plan", "interim"], "completed output is saved once; partial text is not");
     // Another operation holds the session lease while the next message completes.
@@ -1563,13 +1589,15 @@ test("completed temporary output is saved while the run stays active, skipping a
       await new Promise(resolve => { release = resolve; });
     }, { operation: "test-hold" });
     await holding;
+    const savesBeforeHold = saves.length;
     await emit({ role: "commentary", id: "progress", text: "Grouping the results.", complete: true });
-    await settle();
+    await untilSave(() => saves.slice(savesBeforeHold).includes(false));
+    assert.ok(saves.slice(savesBeforeHold).includes(false), "the save ran and found the lease busy");
     release();
     assert.equal((await held).acquired, true);
     assert.deepEqual(await savedIds(), ["report-request", "plan", "interim"], "a busy lease skips the save without waiting");
     await emit({ role: "assistant", id: "report", text: "| Group | Share |\n| --- | --- |\n| A | 60% |", complete: true });
-    await settle();
+    await untilSaved(["report-request", "plan", "interim", "progress", "report"]);
     assert.deepEqual(await savedIds(), ["report-request", "plan", "interim", "progress", "report"]);
     assert.equal((await f.record()).status, "inProgress", "saving output does not finish the active run");
     await f.service.close();
