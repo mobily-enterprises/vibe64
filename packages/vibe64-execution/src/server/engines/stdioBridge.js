@@ -1,7 +1,7 @@
 // Runs inside Vibe64's managed execution scope. Only bytes cross this private
 // socket: the native process keeps its protocol, authentication and history.
 import { spawn } from "node:child_process";
-import { chmod } from "node:fs/promises";
+import { chmodSync } from "node:fs";
 import net from "node:net";
 
 // An empty umask argument keeps the one this process inherited.
@@ -45,9 +45,12 @@ const server = net.createServer({ allowHalfOpen: true }, (socket) => {
 server.on("error", (error) => {
   throw error;
 });
-server.listen(socketPath, async () => {
-  await chmod(socketPath, 0o600);
-});
+// Set the socket's mode synchronously: the listening callback runs before any
+// connection is handled, and the first connection closes the server, which
+// removes the socket. A chmod queued behind other thread-pool work could run
+// after that, fail and end the bridge with the client's first bytes unread
+// (the client then reads ECONNRESET).
+server.listen(socketPath, () => chmodSync(socketPath, 0o600));
 setTimeout(() => {
   if (!connected) process.exit(1);
 }, 30_000).unref();

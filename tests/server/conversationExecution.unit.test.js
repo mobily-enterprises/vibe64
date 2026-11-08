@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { createVibe64ConversationExecution } from "../../packages/vibe64-execution/src/server/conversationExecution.js";
 import { inspectVibe64Service, installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 
@@ -83,6 +86,45 @@ test("conversation execution preserves output and exit status after input EOF", 
   assert.deepEqual(await native.exited, { code: 0, signal: null });
   assert.equal(native.running, false);
   assert.equal((await f.host.stop(native.id)).scopeEmpty, true);
+});
+
+// Incident 2026-11-08: the bridge's first connection closes its server, which
+// removes the socket, and a chmod still queued behind other thread-pool work then
+// failed and ended the bridge mid-stream, so Claude startup on a loaded machine
+// read ECONNRESET. One thread pool thread, busy while the client connects, gives
+// that order every time.
+test("the stream bridge keeps its client while its thread pool is busy", { timeout: 15_000 }, async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-stdio-bridge-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const socketPath = path.join(root, "stream.sock");
+  const bridgePath = fileURLToPath(new URL("../../packages/vibe64-execution/src/server/engines/stdioBridge.js", import.meta.url));
+  const busyThreadPool = "data:text/javascript,import { pbkdf2 } from 'node:crypto'; pbkdf2('a', 'b', 1e6, 64, 'sha512', () => {});";
+  const bridge = spawn(process.execPath, ["--import", busyThreadPool, bridgePath, socketPath, "",
+    process.execPath, "-e", "process.stdin.pipe(process.stdout)"], {
+    detached: true, env: { ...process.env, UV_THREADPOOL_SIZE: "1" }, stdio: ["ignore", "ignore", "pipe"]
+  });
+  t.after(() => { try { process.kill(-bridge.pid, "SIGKILL"); } catch { /* The bridge's group has ended. */ } });
+  let stderr = "";
+  bridge.stderr.on("data", chunk => { stderr += chunk; });
+  const exited = new Promise(resolve => bridge.once("exit", (code, signal) => resolve({ code, signal })));
+  // Connect as the product does: as soon as the socket exists.
+  let socket = null;
+  while (!socket) {
+    socket = await new Promise((resolve, reject) => {
+      const connection = net.createConnection({ path: socketPath, allowHalfOpen: true });
+      connection.once("connect", () => resolve(connection));
+      connection.once("error", reject);
+    }).catch(async error => {
+      if (!["ENOENT", "ECONNREFUSED"].includes(error.code)) throw error;
+      await new Promise(resolve => setTimeout(resolve, 25));
+      return null;
+    });
+  }
+  socket.end("ping\n");
+  const chunks = [];
+  for await (const chunk of socket) chunks.push(chunk);
+  assert.equal(Buffer.concat(chunks).toString(), "ping\n", stderr);
+  assert.deepEqual(await exited, { code: 0, signal: null }, stderr);
 });
 
 test("conversation execution observes a server failure without calling it a successful start receipt", { timeout: 10_000 }, async t => {
