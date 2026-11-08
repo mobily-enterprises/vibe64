@@ -1607,17 +1607,26 @@ test("completed temporary output is saved while the run stays active, skipping a
 test("a session's temporary chats save completed output with one write per burst and never refuse each other", { timeout: 15_000 }, async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
+    // The test follows each save as it happens instead of sleeping past the
+    // save delay, which a loaded machine can outlast: every zero-wait session
+    // write here is a temporary-output save.
     const attempts = [];
+    let saved = Promise.withResolvers();
     let holdNext = false;
     const held = Promise.withResolvers();
     const release = Promise.withResolvers();
-    const service = f.restart({ temporarySaveDelayMs: 50, runAgentWrite: async (sessionId, options, operation, lockOptions) => {
+    const saveDelayMs = 50;
+    const service = f.restart({ temporarySaveDelayMs: saveDelayMs, runAgentWrite: async (sessionId, options, operation, lockOptions) => {
       const save = lockOptions.waitMs === 0;
       const exclusive = await runVibe64AgentWriteExclusive(f.runtime, sessionId, async () => {
         if (save && holdNext) { holdNext = false; held.resolve(); await release.promise; }
         return operation({ ...options, runtime: f.runtime, session: await f.runtime.getSession(sessionId) });
       }, lockOptions);
-      if (save) attempts.push({ acquired: exclusive.acquired, expectedRefusal: lockOptions.expectedRefusal });
+      if (save) {
+        attempts.push({ acquired: exclusive.acquired, expectedRefusal: lockOptions.expectedRefusal });
+        saved.resolve();
+        saved = Promise.withResolvers();
+      }
       return exclusive.value;
     } });
     const start = f.sessionAgent.startConversationTurn;
@@ -1638,13 +1647,23 @@ test("a session's temporary chats save completed output with one write per burst
     };
     const savedIds = async (conversationId) => (await f.store.readConversationLog({ sessionId: "one", conversationId }))
       .flatMap(turn => turn.messages.map(message => message.messageId));
-    const settle = () => new Promise(resolve => setTimeout(resolve, 400));
+    // Resolves once `count` saves ran and both chats hold their ids, checking again after each save, or after 10 s.
+    const untilSaved = async (count, chatId, chat2Id) => {
+      const deadline = AbortSignal.timeout(10_000);
+      const expired = new Promise(resolve => deadline.addEventListener("abort", resolve, { once: true }));
+      for (;;) {
+        const next = saved.promise;
+        if (deadline.aborted || (attempts.length >= count &&
+          (await savedIds("chat")).includes(chatId) && (await savedIds("chat-2")).includes(chat2Id))) return;
+        await Promise.race([next, expired]);
+      }
+    };
     attempts.length = 0;
     // A burst across both chats is saved by one write.
     await emit(0, "one-a");
     await emit(1, "two-a");
     await emit(0, "one-b");
-    await settle();
+    await untilSaved(1, "one-b", "two-a");
     assert.deepEqual(attempts, [{ acquired: true, expectedRefusal: true }]);
     assert.ok((await savedIds("chat")).includes("one-b"));
     assert.ok((await savedIds("chat-2")).includes("two-a"));
@@ -1654,10 +1673,13 @@ test("a session's temporary chats save completed output with one write per burst
     await held.promise;
     await emit(1, "two-b");
     await emit(0, "one-d");
-    await settle();
+    // A save that must not happen cannot be awaited: holding the write for
+    // several save delays gives a competing save time to start. A loaded
+    // machine can only make this check less sensitive, never fail it.
+    await new Promise(resolve => setTimeout(resolve, saveDelayMs * 4));
     assert.equal(attempts.length, 1, "no save competes with the one in progress");
     release.resolve();
-    await settle();
+    await untilSaved(3, "one-d", "two-b");
     assert.deepEqual(attempts, Array.from({ length: 3 }, () => ({ acquired: true, expectedRefusal: true })));
     assert.ok((await savedIds("chat")).includes("one-d"));
     assert.ok((await savedIds("chat-2")).includes("two-b"));
