@@ -62,6 +62,13 @@ const BASE_ENV_POLICY_NAMES = new Set([
   "XDG_RUNTIME_DIR"
 ]);
 
+// A framework mode belongs to the project: its Development Env, launch
+// settings, Production Env or the command's own `env NODE_ENV=...`. The
+// editor's own mode, such as a host that serves the editor with
+// NODE_ENV=production, never reaches what it runs, or npm would leave out
+// devDependencies and dev servers, tests and agents would act as production.
+const EDITOR_ONLY_ENV_NAMES = new Set(["NODE_ENV"]);
+
 function commandBaseEnv(baseEnv = {}) {
   return Object.fromEntries(Object.entries(baseEnv && typeof baseEnv === "object" && !Array.isArray(baseEnv)
     ? baseEnv
@@ -69,6 +76,7 @@ function commandBaseEnv(baseEnv = {}) {
     .map(([key, value]) => [String(key || "").trim(), String(value ?? "")])
     .filter(([key]) => key &&
       !BASE_ENV_POLICY_NAMES.has(key) &&
+      !EDITOR_ONLY_ENV_NAMES.has(key) &&
       !key.startsWith("GIT_") &&
       !key.startsWith("GH_") &&
       !key.startsWith("XDG_")));

@@ -108,6 +108,35 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
   assert.equal(context.providerOptions.toolHomeSource, "/home/owner");
 });
 
+test("Codex and its threads never get the server's own NODE_ENV, and the project's own NODE_ENV still applies", (t) => {
+  usePackHost(t, "/srv/runtime-packs");
+  const saved = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  t.after(() => {
+    if (saved === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = saved;
+  });
+  const context = (terminalEnv) => codexRuntimeContext({
+    env: { NODE_ENV: "production", PATH: "/usr/bin" },
+    home: "/home/owner",
+    gid: 1000,
+    providerOptions: { env: { NODE_ENV: "production" } },
+    terminalEnv,
+    uid: 1000,
+    username: "owner"
+  });
+
+  const unset = context({});
+  assert.equal(unset.ok, true);
+  assert.equal(Object.hasOwn(unset.env, "NODE_ENV"), false, "the Codex app-server");
+  assert.equal(Object.hasOwn(unset.providerOptions.env, "NODE_ENV"), false);
+  assert.equal(Object.hasOwn(unset.terminalProcessEnv, "NODE_ENV"), false, "its threads' commands");
+  // The project's Env reaches the threads' commands, never the app-server.
+  const project = context({ NODE_ENV: "development" });
+  assert.equal(Object.hasOwn(project.env, "NODE_ENV"), false);
+  assert.equal(project.terminalProcessEnv.NODE_ENV, "development");
+});
+
 test("Codex runtime context derives Playwright browsers path from the runtime-pack root", (t) => {
   usePackHost(t, "/srv/vibe64-runtimes", "/srv/vibe64-cache");
   const context = codexRuntimeContext({

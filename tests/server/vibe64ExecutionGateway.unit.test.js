@@ -689,6 +689,41 @@ test("PTY terminals get exactly the gateway env, never the server's own variable
   }
 });
 
+test("commands never get the server's own NODE_ENV, and the project's own NODE_ENV still applies", async (t) => {
+  // A host that serves the editor in production mode.
+  const saved = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  t.after(() => {
+    if (saved === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = saved;
+  });
+  const print = "process.stdout.write('NODE_ENV:' + (process.env.NODE_ENV ?? 'unset'))";
+  async function nodeEnv(request) {
+    const result = await runVibe64Command({ command: process.execPath, args: ["-e", print], ...request });
+    assert.equal(result.ok, true, result.output);
+    return result.stdout;
+  }
+  // Inherited from the server, or handed over as a caller's base env.
+  assert.equal(await nodeEnv({}), "NODE_ENV:unset");
+  assert.equal(await nodeEnv({ purpose: "deployment" }), "NODE_ENV:unset");
+  assert.equal(await nodeEnv({ inheritProcessEnv: false, baseEnv: { NODE_ENV: "production" } }), "NODE_ENV:unset");
+  // What the project sets: its Env (Stack defaults and Development Env), a
+  // launch's or terminal's own env, and its Production Env.
+  assert.equal(await nodeEnv({ envPolicy: "project", project: { runtimeConfigEnv: { NODE_ENV: "development" } } }), "NODE_ENV:development");
+  assert.equal(await nodeEnv({ env: { NODE_ENV: "test" } }), "NODE_ENV:test");
+  assert.equal(await nodeEnv({ envPolicy: "deployment", purpose: "deployment", project: { deploymentEnv: { NODE_ENV: "staging" } } }), "NODE_ENV:staging");
+  // A terminal or Preview (PTY) starts from the same env.
+  const namespace = `gateway-pty-node-env-${Date.now()}`;
+  const terminal = await runVibe64Command({ command: process.execPath, args: ["-e", print], mode: "pty", runtimes: [], terminal: { namespace } });
+  try {
+    assert.equal(terminal.ok, true, terminal.output || terminal.error);
+    const snapshot = await waitForTerminalOutput(terminal.id, namespace, "NODE_ENV:");
+    assert.match(String(snapshot.output || ""), /NODE_ENV:unset/u);
+  } finally {
+    if (terminal.id) await closeTerminalSession(terminal.id, { namespace });
+  }
+});
+
 test("PTY env factories see the execution id like every other gateway command", async () => {
   const namespace = `gateway-pty-execution-id-${Date.now()}`;
   const terminal = await runVibe64Command({

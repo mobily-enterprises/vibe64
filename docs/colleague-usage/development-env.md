@@ -83,6 +83,14 @@ failure blocks that command and should be reported for investigation. Provisioni
 a newly declared resource and running application migrations remain preparation
 steps; configured names alone do not prove either has completed.
 
+A framework mode such as `NODE_ENV` comes only from the project: a Development
+Env value (or its Stack default), a launch's own settings, or the command itself
+(`NODE_ENV=test npm test`). Vibe64 never passes on the mode it runs in itself, so
+Workspace setup installs development dependencies, and Preview, terminals,
+tests and agent commands run without `NODE_ENV` unless the project sets it. To
+run them in another mode, add `NODE_ENV` in Development Env; a deployment's mode
+belongs on its Deployment Serve step. Colleague can explain this and open Env.
+
 For a long-running shell task, the coding agent can request its native tool's
 background mode and timeout. Binding the command to the Vibe64 session preserves
 those settings; the coding tool still applies its own supported limits. This is

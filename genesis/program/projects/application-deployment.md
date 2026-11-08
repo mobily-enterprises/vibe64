@@ -25,6 +25,7 @@ listen address in the `HOST` and `PORT` environment variables and probes the
 Ready when path there. A host may also give Serve, and only Serve, its
 runtime's conventional production setting such as `NODE_ENV=production`; a
 value the project sets on the Serve step or in its production environment wins.
+No step inherits the editor's own `NODE_ENV`.
 
 `- Generated secrets:` names production secrets the application needs as a
 stable random value. The host stores one strong random value per name once,

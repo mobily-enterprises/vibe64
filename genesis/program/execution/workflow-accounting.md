@@ -178,6 +178,10 @@ UID/GID matches the current process. Runtime sockets therefore retain their host
 location across same-identity execution, independently of private credential HOME.
 Cross-identity execution does not receive that directory; request and project
 configuration still cannot override this policy-owned setting.
+The resolver never takes `NODE_ENV` from the editor's environment or a caller's
+base env: a command's framework mode comes only from the project's Env, the
+launch's or caller's own env, its Production Env or its own command line, so a
+host may serve the editor itself in production mode.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
 account home. Relative directories are rejected before starting a process.
