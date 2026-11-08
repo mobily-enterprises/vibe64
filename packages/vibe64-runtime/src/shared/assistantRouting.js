@@ -322,6 +322,16 @@ function assistantRoutingRequestCanBeReplaced(request, selection) {
   return request?.delivery === "pending" && (request.status === "waiting" || Boolean(request.error)) && !request.attemptedMessageId;
 }
 
+/**
+ * A request that still holds its chat: being routed, sent or checked, or
+ * waiting in a way the next message cannot replace. A replaceable one, such as
+ * a direct chat's reply that waits for the person, holds nothing: the next
+ * message replaces it, and resuming it after the chat or plan changed is refused.
+ */
+function assistantRoutingRequestIsUnresolved(request, selection) {
+  return assistantRoutingStatusIsPending(request) && !assistantRoutingRequestCanBeReplaced(request, selection);
+}
+
 function parseRoutingDecision(text) {
   let result;
   try {
@@ -703,6 +713,7 @@ export {
   assistantGoalManagementMessage,
   assistantRoutingStatusIsPending,
   assistantRoutingRequestCanBeReplaced,
+  assistantRoutingRequestIsUnresolved,
   assistantRoutingStatusLabel,
   assistantRoutingOutcomeNotice,
   assistantWorkflowUpgradeChanges,

@@ -36,6 +36,7 @@ import {
   assistantWorkflowMessageIds,
   assistantRoutingStatusLabel,
   assistantRoutingRequestCanBeReplaced,
+  assistantRoutingRequestIsUnresolved,
   assistantWorkflowUpgradeChanges
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
@@ -885,6 +886,24 @@ test("workflow state, role, sent messages and selection identity each have one o
   assert.equal(sameVibe64AssistantSelection(selection, { ...selection, modelId: " gpt " }), true);
   assert.equal(sameVibe64AssistantSelection(selection, { ...selection, variantId: "low" }), false);
   assert.equal(assistantRoutingRequestCanBeReplaced({ stopped: true, deliverySelection: selection }, { ...selection, variantId: "low" }), true);
+});
+
+test("a request the next message would replace holds nothing; one being routed, sent or checked holds its chat", () => {
+  const followup = { messageId: "followup-1", message: "Continue implementation." };
+  // A Senior chat's reply that waits for the person, and its turn that failed: each prepares a follow-up.
+  for (const waiting of [
+    { mode: "senior", stage: "review", status: "waiting", delivery: "pending", followup, error: "Which colour should the button be?" },
+    { mode: "junior", stage: "implementation", status: "waiting", delivery: "pending", followup, error: "The implementation turn failed. Resume when ready." }
+  ]) {
+    assert.equal(assistantRoutingRequestIsUnresolved(waiting), false, waiting.mode);
+    // Once Resume has tried to send it, its delivery is unconfirmed and holds the chat.
+    assert.equal(assistantRoutingRequestIsUnresolved({ ...waiting, attemptedMessageId: followup.messageId }), true, waiting.mode);
+  }
+  for (const delivery of ["routing", "pending", "sending", "uncertain"]) {
+    assert.equal(assistantRoutingRequestIsUnresolved({ status: "working", delivery }), true, delivery);
+  }
+  assert.equal(assistantRoutingRequestIsUnresolved({ status: "complete", delivery: "pending" }), false);
+  assert.equal(assistantRoutingRequestIsUnresolved(null), false);
 });
 
 test("a restored automatic follow-up turn is recognised as the routed request's own", () => {

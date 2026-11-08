@@ -1,4 +1,4 @@
-import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingRequestForDisplay, assistantRoutingRequestIsUnresolved } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, ref, unref, watch } from "vue";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
@@ -207,8 +207,7 @@ function useVibe64AutopilotView(props, emit, {
     activeAgentTurn.value.state === "starting" && !agentObservationLost.value);
   const composerSubmissionKind = ref("");
   const routingRequest = computed(() => assistantRoutingRequestForDisplay(props.session?.metadata));
-  const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value) &&
-    !assistantRoutingRequestCanBeReplaced(routingRequest.value, props.session?.assistantSelection));
+  const routingBusy = computed(() => assistantRoutingRequestIsUnresolved(routingRequest.value, props.session?.assistantSelection));
   const composerRoutingQueueing = computed(() => composerQueueing.value && composerSending.value &&
     Boolean(routingRequest.value?.messageId) &&
     messageDelivery.value?.find(routingRequest.value.messageId)?.status === "pending");

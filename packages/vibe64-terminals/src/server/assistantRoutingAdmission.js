@@ -1,8 +1,8 @@
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
-  assistantRoutingStatusIsPending,
   assistantRoutingRequestCanBeReplaced,
+  assistantRoutingRequestIsUnresolved,
   assistantRoutingFromMetadata,
   assistantRoutingAutomation,
   assistantGoalIsActive,
@@ -225,8 +225,8 @@ function createAssistantRoutingAdmission({
         delete state.error;
         await records.save(context, state);
       }
-      if (assistantRoutingStatusIsPending(state) && state.messageId !== input.messageId &&
-          !assistantRoutingRequestCanBeReplaced(state, vibe64AssistantSelectionFromMetadata(context.session.metadata))) {
+      if (state?.messageId !== input.messageId &&
+          assistantRoutingRequestIsUnresolved(state, vibe64AssistantSelectionFromMetadata(context.session.metadata))) {
         throw failure("Resolve or cancel the pending request before sending another.", "vibe64_assistant_routing_request_unresolved");
       }
       if (state?.helper && state.messageId !== input.messageId) {

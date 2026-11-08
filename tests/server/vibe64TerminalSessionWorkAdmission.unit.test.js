@@ -2069,6 +2069,13 @@ test("source read retains original active turn and native goal guards without st
   await assert.rejects(access(path.join(f.runtime.stateRoot, "locks/source-mutation.lock")), { code: "ENOENT" });
 });
 
+test("source read and renewal admit a direct chat's waiting reply, which the next message would replace", async t => {
+  const f = await exclusiveSourceReadFixture(t);
+  f.session.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 5, mode: "senior", stage: "review", status: "waiting",
+    delivery: "pending", followup: { messageId: "followup-1" }, error: "Which colour should the button be?" });
+  assert.equal(await f.service.runSessionSourceReadExclusive(f.session.sessionId, () => "admitted"), "admitted");
+});
+
 test("source read preserves pending routing, helper and replacement guards before source acquisition", async t => {
   const f = await exclusiveSourceReadFixture(t);
   const read = () => f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("Unfinished coordination must retain source."));

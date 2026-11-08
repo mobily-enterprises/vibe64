@@ -4,8 +4,9 @@ import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
 import {
   assistantRoutingGoalFromMetadata,
   assistantRoutingRequestFromMetadata,
-  assistantRoutingStatusIsPending
+  assistantRoutingRequestIsUnresolved
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { replaceNativeConversation, requireCompletedConversationRewind } from "./assistantChangeover.js";
 import path from "node:path";
 import { vibe64Result } from "./terminalShared.js";
@@ -25,6 +26,11 @@ import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
 /** @typedef {import("./types.js").PublishAgentSessionChanged} PublishAgentSessionChanged */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
+
+// A routed request that holds its chat; one the next message would replace does not.
+function unresolvedRouting(request, metadata) {
+  return assistantRoutingRequestIsUnresolved(request, vibe64AssistantSelectionFromMetadata(metadata, { required: false }));
+}
 
 function ephemeralInput(input = {}) {
   return { ...input, ephemeral: input.persistent !== true };
@@ -58,7 +64,7 @@ function createServiceAgentConversations({
     const restoring = operation === "restore";
     return vibe64Result(() => sessionAccess.runMainAgentWrite(sessionId, {}, async (context) => {
       const request = assistantRoutingRequestFromMetadata(context.session.metadata);
-      if (sessionHasActiveAgentRun(context.session) || assistantRoutingStatusIsPending(request) ||
+      if (sessionHasActiveAgentRun(context.session) || unresolvedRouting(request, context.session.metadata) ||
           request?.status === "working" && request.workflow) {
         return {
           ok: false,
@@ -195,7 +201,7 @@ function createServiceAgentConversations({
       const conversations = await context.runtime.store.listSessionConversations(sessionId);
       for (const metadata of [context.session.metadata, ...conversations.map((record) => record.routingMetadata || {})]) {
         const routing = assistantRoutingRequestFromMetadata(metadata);
-        if (assistantRoutingStatusIsPending(routing) || routing?.helper) fail("Finish pending routing and helper cleanup first.");
+        if (unresolvedRouting(routing, metadata) || routing?.helper) fail("Finish pending routing and helper cleanup first.");
       }
       const saved = JSON.parse(context.session.metadata.assistant_changeover || "null");
       if (saved?.replacement?.status !== "preparing") {
@@ -337,9 +343,11 @@ function createServiceAgentConversations({
   async function assertSessionRenewalIdle(sessionId, options = {}) {
     const { runtime, session } = await sessionAccess.sessionContext(sessionId, options);
     const records = await runtime.store.listSessionConversations(sessionId);
-    const requests = [session.metadata, ...records.map((record) => record.routingMetadata || {})]
-      .map(assistantRoutingRequestFromMetadata);
-    if (requests.some((request) => assistantRoutingStatusIsPending(request) || request?.helper)) {
+    const holds = [session.metadata, ...records.map((record) => record.routingMetadata || {})].some((metadata) => {
+      const request = assistantRoutingRequestFromMetadata(metadata);
+      return unresolvedRouting(request, metadata) || request?.helper;
+    });
+    if (holds) {
       throw Object.assign(new AppError(409, "Finish or cancel pending chat routing and reviews before renewing this session.", {
         code: "vibe64_assistant_routing_pending",
         messageCode: "vibe64_session_renewal_routing_pending"

@@ -68,7 +68,9 @@ then **Save** last.
 Nothing runs when:
 
 - the agent asks you a question or reports a blocker (**Wait**): the steps run
-  once you answer and the work is finished;
+  once you answer and the work is finished. A waiting chat holds nothing up:
+  you can still start a goal, renew the session or change the plan, and your
+  next message replaces the waiting request;
 - you press **Stop**: nothing is reviewed, and those changes are covered by the
   next review;
 - the message only asked a question or changed no files;

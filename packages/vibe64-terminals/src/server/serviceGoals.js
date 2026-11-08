@@ -7,7 +7,7 @@ import {
   assistantRoutingFromMetadata,
   assistantRoutingGoalFromMetadata,
   assistantRoutingRequestFromMetadata,
-  assistantRoutingStatusIsPending,
+  assistantRoutingRequestIsUnresolved,
   goalStatusIsComplete
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
@@ -403,7 +403,8 @@ function createServiceGoals({
           };
         }
         const pendingRoute = assistantRoutingRequestFromMetadata(context.session.metadata);
-        if (assistantRoutingStatusIsPending(pendingRoute) || pendingRoute?.helper) {
+        if (assistantRoutingRequestIsUnresolved(pendingRoute, vibe64AssistantSelectionFromMetadata(context.session.metadata)) ||
+            pendingRoute?.helper) {
           return { ok: false, error: "Finish or cancel the pending request before starting a goal." };
         }
         const changeover = JSON.parse(context.session.metadata?.assistant_changeover || "null");
