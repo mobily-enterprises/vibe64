@@ -16,6 +16,9 @@ const SYSTEM_ROOTS = Object.freeze(["/var/lib", "/var/cache", "/opt", "/etc", "/
 // The person's own runtime folder is theirs to use.
 // readable-check: allow optional-call - platform object: process.getuid() and process.getgid() exist only on POSIX
 const OWN_RUNTIME_ROOT = `/run/user/${process.getuid?.() ?? os.userInfo().uid}`;
+// The Node running the tests, and the npm and npx beside it, are the tests'
+// own runtime wherever it is installed: CI keeps it under /opt.
+const OWN_NODE_FOLDER = path.dirname(process.execPath);
 // Functions that change a path, with the argument indexes of the paths they change.
 const WRITES = Object.freeze({
   appendFile: [0], chmod: [0], chown: [0], copyFile: [1], cp: [1], createWriteStream: [0], lchmod: [0],
@@ -83,7 +86,7 @@ function checkChildProcess(args, operation) {
   const program = operation === "exec" || operation === "execSync"
     ? String(command || "").trim().split(/\s+/u)[0]
     : pathText(command);
-  const systemPath = program.startsWith("/") && systemPathOf(program);
+  const systemPath = program.startsWith("/") && path.dirname(program) !== OWN_NODE_FOLDER && systemPathOf(program);
   if (systemPath) refuse(systemPath, operation);
   const cwd = options && typeof options === "object" ? systemPathOf(options.cwd) : "";
   if (cwd) refuse(cwd, `${operation} cwd`);

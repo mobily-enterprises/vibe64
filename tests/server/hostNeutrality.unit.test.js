@@ -14,6 +14,8 @@ const SYSTEM_LOCATION = /(?<![\w.~$/-])\/(?:var\/lib|var\/cache|opt|etc|usr\/lib
 // Locations other software owns, which local code and its tests may name.
 const OTHER_SOFTWARE_LOCATIONS = new Set([
   "/etc/passwd", "/etc/nsswitch.conf", "/etc/codex", "/opt/homebrew", "/run/user", "/run/app",
+  // GitHub's runner tool cache, where CI's Node lives.
+  "/opt/hostedtoolcache",
   // Database and Ruby packages' own install and data folders.
   "/usr/lib/postgresql", "/var/lib/postgres", "/var/lib/pgsql", "/var/lib/mysql", "/opt/mariadb", "/var/lib/gems"
 ]);
