@@ -109,7 +109,9 @@
    property of every element that changes (transition-property defaults to all)
    and keep visibility at its old value for a frame, so a control shown and
    focused at once would not take focus. Animations stay just above zero, so
-   their end events still fire. */
+   their end events still fire. Vuetify's indeterminate progress keeps its
+   motion: it is what says work is still under way, and a single near-instant
+   run would leave an empty track or a still arc that reads as stopped. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --v64-duration-short: 0ms;
@@ -117,7 +119,7 @@
     --v64-duration-long: 0ms;
   }
 
-  *,
+  *:not(.v-progress-linear__indeterminate, .v-progress-circular--indeterminate > svg, .v-progress-circular--indeterminate .v-progress-circular__overlay),
   *::before,
   *::after {
     animation-duration: 0.01ms !important;

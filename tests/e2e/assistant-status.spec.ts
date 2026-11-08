@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { DASHBOARD_PATH, viewports } from "./support/base-shell-data";
 import { assistantStatusServer, json } from "./support/assistant-status-server";
@@ -804,6 +805,39 @@ test("expired archived attachments keep their description and offer no broken do
     await expect(page.getByText("Keep the explanation for", { exact: false })).toBeVisible();
   }
   expect(methods).toEqual(["HEAD", "HEAD"]);
+});
+
+test("reduced motion keeps Vuetify's indeterminate progress moving and still ends other animation", async ({ page }) => {
+  // The browser tests ask for reduced motion. Vibe64's own stylesheet over Vuetify's progress styles, as the app loads them.
+  const css = (file: string) => readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
+  await page.setContent(`<style>${[
+    "node_modules/vuetify/lib/components/VProgressLinear/VProgressLinear.css",
+    "node_modules/vuetify/lib/components/VProgressCircular/VProgressCircular.css",
+    "src/styles/vibe64-m3.css"
+  ].map(css).join("\n")}
+  @keyframes other-spin { to { rotate: 1turn; } }
+  .other { animation: other-spin 1s linear infinite; }</style>
+  <div class="v-progress-linear v-progress-linear--active"><div class="v-progress-linear__indeterminate"><div class="v-progress-linear__indeterminate long"></div></div></div>
+  <div class="v-progress-circular v-progress-circular--indeterminate v-progress-circular--visible"><svg viewBox="0 0 24 24"><circle class="v-progress-circular__overlay" cx="12" cy="12" r="10" /></svg></div>
+  <div class="other"></div>`);
+  const motion = await page.evaluate(() => Object.fromEntries([
+    [".v-progress-linear__indeterminate", "linear"],
+    [".v-progress-circular svg", "spinner"],
+    [".v-progress-circular__overlay", "arc"],
+    [".other", "other"]
+  ].map(([selector, name]) => {
+    const style = getComputedStyle(document.querySelector(selector)!);
+    return [name, {
+      seconds: style.animationDuration.split(",").map((duration) => Number.parseFloat(duration)),
+      runs: style.animationIterationCount
+    }];
+  })));
+  for (const name of ["linear", "spinner", "arc"]) {
+    expect(motion[name].runs, name).toMatch(/^infinite(?:, infinite)*$/u);
+    expect(Math.min(...motion[name].seconds), name).toBeGreaterThan(0.1);
+  }
+  expect(motion.other.runs).toBe("1");
+  expect(motion.other.seconds[0]).toBeLessThan(0.001);
 });
 
 test("reasoning dots animate only for the confirmed phase", async ({ page }, info) => {

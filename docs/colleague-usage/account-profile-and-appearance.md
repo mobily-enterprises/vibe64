@@ -35,8 +35,9 @@ Vibe64 also follows the device's **reduce motion** setting (for example
 **Reduce motion** on macOS and iOS, **Animation effects** off on Windows, or
 **Remove animations** on Android). With it on, screens, panels, menus and dialogs
 change at once instead of sliding, fading or expanding, and pages scroll without
-smooth scrolling. Vibe64 has no setting of its own for this; change it on the
-device.
+smooth scrolling. Loading bars and spinners for work whose length is unknown
+keep moving, because that motion is what shows the work is still going. Vibe64
+has no setting of its own for this; change it on the device.
 
 Colleague can explain these steps but cannot change your name or appearance for
 you: they are your own choices in the dialog.

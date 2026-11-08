@@ -273,7 +273,8 @@ browser ignores a declaration that names an undefined one;
 theme, and fails on any other name in `src/` or a package's `src/`.
 A device's reduced-motion setting reaches every screen: `src/styles/vibe64-m3.css`
 then gives every CSS transition no duration and every animation a single
-near-instant run, and turns off smooth scrolling. `src/main.js` opens Vuetify's
+near-instant run, except Vuetify's indeterminate progress, which keeps moving to
+show work under way, and turns off smooth scrolling. `src/main.js` opens Vuetify's
 menus, selects and dialogs without their JavaScript fade, which no stylesheet
 can end. Browser tests ask for reduced motion, so no step waits out an
 animation.
