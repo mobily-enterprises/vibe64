@@ -2592,9 +2592,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(JSON.stringify(browserTimings).includes(actor.username), false);
     assert.equal(emptyGoalRead.target.segmentId, `claude:${state.thread.id}`,
       "the empty-goal read returns its selected identity without a second target lookup");
+    // The fake Claude appends whole lines while this reads them, and a reader can
+    // see part of a long one: only lines that end in a newline are complete.
     const trace = async () => {
-      try { return (await readFile(tracePath, "utf8")).trim().split("\n").filter(Boolean).map(JSON.parse); }
-      catch (error) { if (error.code === "ENOENT") return []; throw error; }
+      try {
+        const text = await readFile(tracePath, "utf8");
+        return text.slice(0, text.lastIndexOf("\n") + 1).split("\n").filter(Boolean).map(JSON.parse);
+      } catch (error) { if (error.code === "ENOENT") return []; throw error; }
     };
     assert.equal((await trace()).some(row => row.args?.includes("--print")), false, "inspection does not start native inference");
     await assert.rejects(goalFacade.updateGoal({ action: "set", objective: "clear", messageId: "invalid-goal-condition",
