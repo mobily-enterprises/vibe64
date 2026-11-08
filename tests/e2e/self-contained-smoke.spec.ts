@@ -15,8 +15,11 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await page.goto(DEVELOPMENT_PATH);
 
   await expect(page).toHaveURL(developmentUrlPattern());
-  await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
+  // The shell's bar is drawn before checking what it leaves out; the names are
+  // exact because "Account menu" contains "Menu".
+  await expect(page.getByRole("button", { name: "Account menu", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Menu", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tools", exact: true })).toHaveCount(0);
   await page.goto(`${DASHBOARD_PATH}/history`);
   await expect(page.getByRole("heading", { level: 2, name: "Session history", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
