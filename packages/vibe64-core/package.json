@@ -132,8 +132,8 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/assistant-core": "0.2.27",
-    "@jskit-ai/kernel": "0.2.13",
+    "@jskit-ai/assistant-core": "0.2.28",
+    "@jskit-ai/kernel": "0.2.14",
     "@local/vibe64-execution": "0.1.0",
     "pino": "^10.3.1"
   }
