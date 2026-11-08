@@ -625,18 +625,23 @@ and unfinished goals must finish before switching.
 A switch into Codex prepares its conversation for model routing before it opens,
 even when the session already has an OpenCode or Claude conversation.
 While the assistant starts or reconnects, the chat-mode menu shows connection
-progress; mode and model choices stay available, while the Deslop, automatic UI
-pass and automatic-save switches wait for the connection.
+progress; mode and model choices stay available, while the four Chat settings
+switches wait for the connection.
 Switching tools uses the existing conversation handoff. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
 mode and comes first. Its menu shows
 effective model and thinking assignments and the selected role, including Router
 in Auto. It uses the conversation's saved assignments and current account access
 without loading provider model catalogues. Configuration and Send still validate
-the selected models against their catalogues. Auto alone offers
-automatic Senior review, Deslop and the UI pass. Direct Senior and Junior conversations
-answer questions or implement requested changes without a temporary plan,
-automatic handoff or review. These names describe the model roles, not limits
-on the kinds of work they can do.
+the selected models against their catalogues. The chat mode only chooses who
+works. Below the modes, four Chat settings switches choose what runs once a
+piece of work is finished, in every main-chat mode: Automatically review changes,
+Automatically deslop changes, Automatically UI pass changes and Automatically
+save changes. Review, Deslop and save start on and the UI pass off, from one
+shared default. Turning any of them off asks first through one confirmation that
+names what is lost; Cancel keeps it on. Direct Senior, Junior and Custom
+conversations answer questions or implement requested changes without a
+temporary plan; their own agent does the finishing steps. These names describe
+the model roles, not limits on the kinds of work they can do.
 Unavailable modes explain why and are identified as disabled to screen readers.
 Recommendations rank connected, permitted models for every job in the order
 Claude, Codex/OpenAI, DeepSeek, GLM, then a custom endpoint. Within native providers, Senior favours
@@ -653,11 +658,10 @@ recommendations and opens them for review. Native Codex and Claude sign-in open
 this review from their confirmed login result, including immediate completion.
 The connection review shows optional current-to-suggested model changes and their
 access scope. Keeping current routing leaves the new connection available;
-The chat-mode switch is labelled Automatic deslop by Senior.
 A routing setup failure
 keeps the AI connected and appears in the review so the owner can finish setup.
 Repeating setup preserves saved choices, including roles the owner deliberately
-left empty. New main chats start with Senior, with Auto review off.
+left empty. New main chats start with Senior and the default Chat settings.
 User-created temporary chats inherit Main chat's role and custom model
 choice when created. Main's Auto mode starts them as Senior, and a team member's
 starts on Fix it with AI. Each temporary chat then keeps its own selection and can
@@ -668,7 +672,7 @@ stopping a repair, the user can choose another orchestrator, model and thinking
 level for it while keeping its repair instructions and history. Automatic
 implementation tasks retain explicit Junior assignments. Bounded background tasks
 use Quick helper.
-Temporary chats and AI tasks never run Auto, working plans or automatic review.
+Temporary chats and AI tasks never run Auto, working plans or any finishing step.
 Models is one screen with two setups: the owner's (Senior, Junior and Router
 for main chat, then the helpers Colleague, Fix it with AI, Explain & check and
 Quick helper) and the team members' (helpers only, Workspace-use models only).
@@ -700,7 +704,7 @@ or review and respects an explicit Senior or Junior choice. Senior handles plann
 and review; Junior implements unless the person explicitly chooses Senior.
 Routing progress appears with the message, without a duplicate banner above the
 composer.
-When final Senior review and any enabled Deslop succeed, an explicitly completed
+When a Senior finishing turn (in Auto or a Senior chat) succeeds, an explicitly completed
 plan and its Progress automatically move together to History after the final
 explanation. Chat links to that session's plan history. Unfinished, interrupted,
 replaced and unrelated plans stay current; a new planning discussion does not
@@ -717,7 +721,8 @@ Continue, Handoff, Wait or Complete. Continue keeps its stage and role. Handoff
 moves implementation to Senior review; substantial necessary review rework returns
 to Junior after Senior saves the technical plan and evidence within the agreed
 outcome. Junior finishes it, then Senior reviews and performs any enabled Deslop
-again. Unfinished review checks stay with Senior. A changed product requirement
+and UI pass again. Senior, Junior and Custom chats report the same outcomes, and
+their own agent does the finishing turn. Unfinished review checks stay with Senior. A changed product requirement
 needs the person's decision. Planning alone does not authorise implementation.
 Only Senior completes verified review and explicitly completes an involved plan.
 A native turn ending or a fully checked checklist does not complete the workflow.
@@ -1574,15 +1579,16 @@ checks current safety and never creates a duplicate test.
 
 Deslop is a deliberate cleanup that preserves behavior. People can request it
 in chat for the current task's changes, including unsaved work, or explicitly
-select commits. Auto can include it in the automatic Senior review when the
-optional Deslop setting is enabled. Saving work does not show a cleanup offer.
+select commits. Every main-chat mode runs it after finished work, after any
+review, while Automatically deslop changes is on. Saving work does not show a
+cleanup offer.
 
 The UI pass is Deslop's counterpart for screens: it brings them in line with the
 project's UI guidance while preserving their behavior. People request it in
 chat for the current task's changes, a named section of the app or the whole
-app, and Genesis's ui-pass task receives that scope as its request. Auto adds it
-to the automatic Senior review, after any Deslop, only when the chat's Automatic
-UI pass setting is on; it is off unless the owner turns it on.
+app, and Genesis's ui-pass task receives that scope as its request. Every
+main-chat mode runs it after finished work, after any Deslop, only while
+Automatically UI pass changes is on; it is off unless the owner turns it on.
 
 People can choose how cautiously the AI engineers a project. The choice follows
 the project's source, always keeps ordinary work simple and targeted, and makes
@@ -1918,21 +1924,32 @@ in open viewers without resetting their scroll position.
 
 Only Senior explicitly marks a plan completed after reviewing its requirements
 and evidence. Successful turns and checked boxes never complete it automatically.
-Auto reviews implementation by either role, even when both use the same model.
-Senior can fix scoped defects or save substantial necessary rework for Junior,
-then review again. Deslop is on by default within review; turning it off asks
+The finishing steps run once per piece of work, never per file or turn: with a
+plan, once the whole plan is executed; without one, once the working agent
+explicitly reports the work finished through the workflow outcome, which every
+main-chat mode now reports. Waiting for the person, Stop, a request that changed
+no files, or a direct turn that ends without reporting starts nothing; each
+finishing turn covers every change since the last one, so stopped or waiting
+work folds into the next. The order is review, Deslop, the UI pass in one turn,
+then Save last, and each automatically started step leaves a chat notice naming
+its Chat setting. The review renders Genesis's review prompt task. In Auto,
+Senior does the finishing turn by a fixed rule, without another Router call,
+for implementation by either role and even when both use the same model; in
+Senior, Junior and Custom the chat's own agent does it, so Junior reviews its own
+work. Senior can fix scoped defects or save substantial necessary rework for
+implementation, then review again. Deslop is on by default; turning it off asks
 for confirmation (code quality suffers unless Deslop is run by hand, so it suits
-only quick throwaway projects), and disabling cleanup cannot disable review. The automatic UI pass
-is off by default; turning it off also asks first, since the screens a plan changes then lose their
-design review. The person's pause or cancellation takes precedence. Ordinary
-discussion and Stop never reopen, archive or complete a plan. Direct Senior and
-Junior still work from the person's request; Junior can update Progress and existing checklist ticks but cannot
-complete the plan.
+only quick throwaway projects). The automatic UI pass is off by default. With
+review, Deslop and the UI pass all off, finished work goes straight to Save. The
+person's pause or cancellation takes precedence. Ordinary discussion and Stop
+never reopen, archive or complete a plan. Junior can update Progress and
+existing checklist ticks but cannot complete the plan; a Junior or Custom
+finishing turn leaves it active for Senior.
 
 Deslop defaults to the configured Senior model for behavior-preserving cleanup.
 Auto honors an explicit request for Junior cleanup. The command and saved-commit
-action go straight to Senior. System-generated review and optional Deslop always
-use Senior. Direct cleanup does not schedule review or change the selected chat
+action go straight to Senior. In Auto, system-generated review and optional
+Deslop always use Senior. Direct cleanup does not schedule review or change the selected chat
 mode. A requested UI pass is direct in the same way, on the configured Senior
 model, in its own turn. Ordinary answers and planning do not start implementation themselves.
 

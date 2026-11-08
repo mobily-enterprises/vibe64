@@ -2397,26 +2397,37 @@ for (const width of [390, 820, 1280]) {
       await expect(modes.getByRole("button", { name: /^Auto/ })).toContainText("Router: Codex (gpt-6-luna medium)");
       expect(mainReads).toBeGreaterThan(0);
       expect(configurationReads).toBe(0);
-      const deslop = page.getByRole("checkbox", { name: "Deslop during Senior review", exact: true });
-      const uiPass = page.getByRole("checkbox", { name: "Automatic UI pass", exact: true });
-      await expect(deslop).toHaveCount(0);
-      await expect(uiPass).toHaveCount(0);
+      // The four Chat settings switches show in every main-chat mode.
+      const review = page.getByRole("checkbox", { name: "Automatically review changes", exact: true });
+      const deslop = page.getByRole("checkbox", { name: "Automatically deslop changes", exact: true });
+      const uiPass = page.getByRole("checkbox", { name: "Automatically UI pass changes", exact: true });
+      const autoSave = page.getByRole("checkbox", { name: "Automatically save changes", exact: true });
+      await expect(review).toBeChecked();
+      await expect(deslop).toBeChecked();
+      await expect(uiPass).not.toBeChecked();
+      await expect(autoSave).toBeChecked();
+      await expect(page.getByText("Or tell the agent “Deslop” any time.", { exact: true })).toBeVisible();
+      await expect(page.getByText("Or tell the agent “UI pass” any time — add “: <section>” or “: the whole app”.", { exact: true })).toBeVisible();
       await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
       await modes.getByRole("button", { name: /^Auto/ }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Auto\./);
       await expect(deslop).toBeChecked();
       await expect(uiPass).not.toBeChecked();
-      await expect(page.getByText("Or tell the agent “Deslop” any time.", { exact: true })).toBeVisible();
-      await expect(page.getByText("Or tell the agent “UI pass” any time — add “: <section>” or “: the whole app”.", { exact: true })).toBeVisible();
       await uiPass.click();
       await expect(uiPass).toBeChecked();
-      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass by Senior on/);
-      await expect.poll(() => JSON.parse(session.metadata.assistant_routing)).toMatchObject({ mode: "auto", review: true, uiPass: true });
+      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass on/);
+      await expect.poll(() => JSON.parse(session.metadata.assistant_routing)).toMatchObject({ mode: "auto", review: true, deslop: true, uiPass: true });
       await page.screenshot({ path: info.outputPath(`ui-pass-${width}.png`), animations: "disabled" });
+      // Turning a switch off asks first; Cancel keeps it on.
+      await review.click();
+      const confirm = page.getByRole("dialog").filter({ hasText: "Turn off automatic review?" });
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(review).toBeChecked();
       await modes.getByRole("button", { name: /^Senior/ }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
-      await expect(deslop).toHaveCount(0);
-      await expect(uiPass).toHaveCount(0);
+      await expect(review).toBeChecked();
+      await expect(uiPass).toBeChecked();
       expect(JSON.parse(session.metadata.assistant_routing).mode).toBe("senior");
 
       routerChosen = false;

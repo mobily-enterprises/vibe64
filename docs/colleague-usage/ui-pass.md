@@ -9,7 +9,7 @@ checks the screens it changed in the managed browser and reports what changed
 and what it verified. It never commits, pushes or deploys.
 
 The UI pass sits beside Deslop. Deslop cleans up code; the UI pass cleans up
-screens. Each runs either automatically during Auto's Senior review, when its
+screens. Each runs either automatically after each piece of work, when its
 switch is on, or when you ask for it in the chat.
 
 ## Ask for a UI pass in the chat
@@ -43,26 +43,29 @@ so you can send it again once the chat is free. If your Senior model is
 unavailable, or cannot use coding tools, the UI pass is refused with that
 reason instead of running on Junior; choose a Senior model in **Models**.
 
-## Run it automatically after each task
+## Run it automatically after each piece of work
 
-Open **Chat mode**, the icon inside the message box, and choose **Auto**. Below **Deslop during Senior review**, turn on **Automatic UI pass**.
-From then on, whenever Auto's Senior review checks finished work, Senior also
-runs the UI pass on the screens that work changed, after any Deslop, in the
-same review turn and before a plan is completed or saved automatically. Nothing
-runs on its own while the switch is off.
+Open **Chat mode**, the icon inside the message box, and under **Chat
+settings** turn on **Automatically UI pass changes**. It works in every chat
+mode. From then on, once a piece of work is finished, the agent that finishes it
+(Senior in **Auto**, otherwise the chat's own agent) runs the UI pass on the
+screens that work changed, after any review and Deslop, in the same turn and
+before **Save**. The chat notes **UI pass started automatically (Chat settings:
+Automatically UI pass changes)** as it starts. Nothing runs on its own while the
+switch is off.
 
-The switch is off for new chats and for chats saved before it existed. It
-appears only in Auto, is saved for this chat, and its change applies to the
-next review. Turning it on saves at once. Turning it off asks first, as Deslop's
-switch does: **Turn off Automatic UI pass?** says that the screens a plan
-changes will no longer get a design review, and that typing “UI pass” in the
-chat still runs one. **Cancel** keeps it on; **Turn off Automatic UI pass**
-saves it off. The line under the switch is a reminder of the chat command:
-**Or tell the agent “UI pass” any time — add “: <section>” or “: the whole
-app”.** The chat-mode button's label adds **Automatic UI pass by Senior
-on** while it is on. Like Deslop, it is the owner's main chat choice: a team
-member sees it disabled, and it is disabled while a goal is active. Temporary
-chats and AI tasks have no automatic UI pass; ask for one in main chat instead.
+The switch is off for new chats. It is saved for this chat, and its change
+applies to the next piece of work. Turning it on saves at once. Turning it off
+asks first, as the other switches do: **Turn off Automatic UI pass?** says that
+the screens the work changes will no longer get a design review, and that
+typing “UI pass” in the chat still runs one. **Cancel** keeps it on; **Turn off
+Automatic UI pass** saves it off. The line under the switch is a reminder of the
+chat command: **Or tell the agent “UI pass” any time — add “: <section>” or “:
+the whole app”.** The chat-mode button's label adds **Automatic UI pass on**
+while it is on. It is the owner's main chat choice: a team member sees it
+disabled, and it is disabled while a goal is active. Temporary chats and AI
+tasks have no automatic UI pass; ask for one in main chat instead. See [Choose
+what runs after each piece of work](chat-settings.md) for all four switches.
 
 **Chat mode** and the switch are the same on desktop and mobile.
 
@@ -74,11 +77,12 @@ Colleague can explain the UI pass and its scopes. It can also:
   session”; Colleague sends the matching `UI pass` message to main chat, which
   you then see there. A team member's message waits for the owner's approval as
   any other main chat message does.
-- turn **Automatic UI pass** on or off for the owner through the chat mode
-  action, and tell you whether it is on.
+- turn **Automatically UI pass changes** on or off for the owner through the
+  chat mode action, and tell you whether it is on.
 
 A question or an offer starts nothing; Colleague acts only on your direct
 request or an offer you accept.
 
-See [Choose Auto roles and follow the workflow](auto-workflow.md) for Auto's
-review, and [Goals and model changes](coding-agent-goals.md) for goals.
+See [Choose what runs after each piece of work](chat-settings.md) for the
+switches, [Choose Auto roles and follow the workflow](auto-workflow.md) for
+Auto, and [Goals and model changes](coding-agent-goals.md) for goals.

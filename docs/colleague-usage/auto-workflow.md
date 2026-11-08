@@ -24,7 +24,8 @@ only for a new Auto request. It does not decide what happens after each turn.
 The working agent reports one of four outcomes:
 
 - **Continue** keeps its stage and role while authorised work or checks remain.
-- **Handoff** moves finished implementation to Senior review. If Senior discovers
+- **Handoff** moves finished implementation to Senior's finishing turn: review and
+  the other steps its [Chat settings](chat-settings.md) turn on. If Senior discovers
   substantial necessary rework, Senior updates the technical plan and Progress
   within the agreed outcome and hands that work back to Junior. Junior finishes
   it, then Senior reviews again and performs any enabled Deslop and UI pass.
@@ -93,47 +94,21 @@ explain the retained stage and blocker and offer to stop work or send your reque
 continuation through its existing actions. An explanation or offer alone does not
 authorise another turn. Colleague's watches treat Waiting as needing attention.
 
-Auto always uses a separate Senior review after implementation, even when Senior
-implemented it or both roles use the same model. The **Deslop during Senior
-review** switch in the chat-mode menu adds behavior-preserving cleanup to Senior
-review. It is on for new chats. Turning it off opens **Turn off Deslop?**: without
-Deslop, code quality suffers and the project can become hard to change and may
-crash and burn over time, unless you ask the AI to “Deslop” in the chat yourself.
-Skip it only for quick throwaway projects. **Cancel** keeps Deslop on; **Turn off
-Deslop** saves it off for this chat. Turning it off does not disable review.
-A chat with no saved choice, or one coming back to Auto from **Custom**, has
-Deslop on; a chat that turned it off keeps it off. The line under the switch
-reads **Or tell the agent “Deslop” any time.**: a message that is just “Deslop”
-runs it whatever the switch says.
-
-The **Automatic UI pass** switch below it is off by default, including for chats
-saved before it existed. Turned on, Senior's review also runs the
-[UI pass](ui-pass.md) on the screens the work changed, after any Deslop, in the
-same review turn. Turning it on saves at once. Turning it off opens **Turn off
-Automatic UI pass?**: without it, the screens a plan changes no longer get a
-design review, though typing “UI pass” in the chat still runs one. **Cancel**
-keeps it on; **Turn off Automatic UI pass** saves it off for this chat. The line
-under the switch reads **Or tell the agent “UI pass” any time — add “:
-<section>” or “: the whole app”.**
-
-The **Automatic save after completing a plan** switch below them is on by
-default. When Auto's final Senior review (with any enabled Deslop and UI pass)
-completes a
-plan and that turn ends, Vibe64 archives the plan and then runs the session's
-ordinary **Save** once, exactly as the **Save** button would, without its review
-dialog. Its usual Save progress and result appear in the Save activity panel, and
-the chat notes **Saved automatically after completing the plan.** It never runs
-while the agent is working, never runs **Update** for you, and does nothing for
-chats without a completed plan. When it cannot save, nothing is changed and the
-chat shows a short note: **Automatic save: nothing new to save.**, or
-**Automatic save didn't run:** followed by Save's own reason (for example an
-Update is needed, a conflict, a required pull request or an unavailable
-repository). In a session with connected repositories it saves their copies too,
-as **Save** does. Turn the switch off to review and
-Save by hand. Like Deslop and the UI pass, it is the owner's Main chat choice,
-changes take effect for the next completed plan, and the switch is disabled
-while a goal is active. Colleague can explain all three switches and, for the
-owner, change any of them through the chat mode action.
+In Auto, Senior always does the finishing steps after implementation, even when
+Senior implemented it or both roles use the same model: the review, Deslop and
+[UI pass](ui-pass.md) the chat's **Chat settings** switches turn on, in one
+Senior turn, then **Save**. **Automatically review changes**, **Automatically
+deslop changes** and **Automatically save changes** are on for new chats, and
+**Automatically UI pass changes** is off. Each step a switch starts adds a notice
+such as **Review started automatically (Chat settings: Automatically review
+changes)**. Turning a switch off asks first and says what is lost; **Cancel**
+keeps it on. When review, Deslop and the UI pass are all off, a handoff after
+implementation finishes the work without a Senior turn and goes straight to
+**Save**. These switches work the same way in Senior, Junior and Custom, where
+the chat's own agent does them; see [Choose what runs after each piece of
+work](chat-settings.md) for the switches, their confirmations and Save's notes.
+Colleague can explain all four switches and, for the owner, change any of them
+through the chat mode action.
 
 Unfinished checks continue in Senior review; substantial necessary rework
 returns to Junior and comes back for another review. A changed product requirement
@@ -176,8 +151,9 @@ open **View plan**, inspect the current document, and send your intended request
 in chat. No plan is silently reopened. These controls behave the same on desktop
 and mobile. Colleague can explain them or offer to send your explicit request
 through its existing chat action; an explanation alone starts no work.
-Direct Senior, Junior and Custom keep their direct behavior without automatic
-continuation or review. Junior cannot mark a plan completed.
+Senior, Junior and Custom report the same outcomes; their own agent does the
+finishing steps once the work is finished, with no Router. Junior cannot mark a
+plan completed.
 
 Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.

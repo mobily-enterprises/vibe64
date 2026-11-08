@@ -1,6 +1,12 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
 import { defineVibe64AssistantSelection, sameVibe64AssistantSelection } from "./assistantSelection.js";
 import { vibe64AssistantSelectionLabel } from "./assistantLabels.js";
+import {
+  ASSISTANT_FINISHING_DEFAULTS,
+  ASSISTANT_FINISHING_STEPS,
+  ASSISTANT_NO_FINISHING,
+  assistantFinishingParts
+} from "./assistantFinishing.js";
 
 const ASSISTANT_MODES = Object.freeze([
   { id: "custom", label: "Custom", description: "Choose a model and thinking level for this chat." },
@@ -9,7 +15,7 @@ const ASSISTANT_MODES = Object.freeze([
   {
     id: "auto",
     label: "Auto",
-    description: "Name either role, or let Senior handle plans and reviews and Junior handle other requests. Implementation always gets Senior review."
+    description: "Name either role, or let Senior handle plans and finishing steps and Junior handle other requests."
   }
 ]);
 // Temporary repair chats only; main chat never uses it.
@@ -112,9 +118,9 @@ const upgradeRequired = () => routingError(
 );
 
 /**
- * Only Senior, Junior and Auto chats carry Deslop, UI pass and automatic save choices.
+ * Every main-chat mode carries the finishing choices; Fix it with AI runs none.
  */
-const choosesAutomation = (mode) => !["custom", "fix"].includes(mode);
+const choosesAutomation = (mode) => mode !== "fix";
 
 function assistantRoutingPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) ||
@@ -123,27 +129,24 @@ function assistantRoutingPreferences(value = {}) {
   }
   if (Object.hasOwn(value, "workflowEngineId")) throw upgradeRequired();
   if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.", "vibe64_assistant_custom_model_required");
-  // review controls optional Deslop (Auto review is mandatory); uiPass adds the
-  // UI pass to that review and is saved only while on, so preferences saved
-  // before it existed read as off; autoSave runs Save after Auto completes a plan.
-  const { uiPass, ...automation } = choosesAutomation(value.mode) ? assistantRoutingAutomation(value) : { review: false, autoSave: false };
+  // Each finishing step (review, deslop, uiPass, autoSave) is saved on or off.
+  const automation = choosesAutomation(value.mode) ? assistantRoutingAutomation(value) : ASSISTANT_NO_FINISHING;
   return {
     mode: value.mode,
     ...automation,
-    ...(uiPass ? { uiPass: true } : {}),
     ...(value.override && !["auto", "fix"].includes(value.mode) ? { override: defineVibe64AssistantSelection(value.override) } : {})
   };
 }
 
 /**
- * The Auto automation a chat's preferences choose. Deslop and automatic save
- * are on unless the owner turned them off; the UI pass is off unless the owner
- * turned it on. Custom and Fix it with AI carry no choice, so returning to Auto
- * from them starts with the defaults.
+ * The finishing steps a chat's preferences choose: each saved choice, otherwise
+ * its default. Fix it with AI carries no choice, so leaving it starts with the
+ * defaults.
  */
 function assistantRoutingAutomation(value) {
   const chosen = value && choosesAutomation(value.mode) ? value : {};
-  return { review: chosen.review !== false, autoSave: chosen.autoSave !== false, uiPass: chosen.uiPass === true };
+  return Object.fromEntries(ASSISTANT_FINISHING_STEPS.map(({ id }) =>
+    [id, typeof chosen[id] === "boolean" ? chosen[id] : ASSISTANT_FINISHING_DEFAULTS[id]]));
 }
 
 // "UI pass" alone, or with a scope after a colon, a dash, "on", "of" or "for".
@@ -233,9 +236,11 @@ const ASSISTANT_WORKFLOW_DELIVERIES = Object.freeze(["routing", "pending", "send
 const assistantWorkflowStateIsSupported = (request) =>
   ASSISTANT_WORKFLOW_STATUSES.includes(request?.status) && ASSISTANT_WORKFLOW_DELIVERIES.includes(request?.delivery);
 /**
- * Senior reviews an automatic follow-up; otherwise the routed role works.
+ * In Auto, Senior does an automatic follow-up's finishing turn; otherwise the
+ * routed role works, so a Senior, Junior or Custom chat's agent finishes its own work.
  */
-const assistantWorkflowRole = (request) => request.stage === "review" && request.followup ? "senior" : request.resolvedMode;
+const assistantWorkflowRole = (request) =>
+  request.stage === "review" && request.followup && request.mode === "auto" ? "senior" : request.resolvedMode;
 /**
  * The routed message and its automatic follow-up, the turns this request sent.
  */
@@ -490,6 +495,7 @@ function assistantGoalManagementMessage(message, turn = {}) {
 }
 
 function assistantWorkflowInstructions(state) {
+  if (state.mode !== "auto") return directWorkflowInstructions(state);
   return [
     `Auto workflow stage: ${state.stage}. The workflow remains Working until an explicit outcome is processed; a native turn ending does not finish the task.`,
     "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId, workflow.stage and BOTH Plan and Progress. This read works even without a plan. Read all pages when a plan is involved.",
@@ -497,17 +503,44 @@ function assistantWorkflowInstructions(state) {
     "continue keeps this stage and agent when authorised work remains. handoff moves implementation to Senior review, or Senior review back to Junior implementation for substantial necessary rework. If explicitly selected Junior is reviewing, handoff requests Senior verification. Senior must save the technical plan and evidence for rework before handoff, preserving the agreed outcome and completed work. A changed product requirement needs the person's decision.",
     "wait retains this stage for a real blocker, a required user decision, or an explicit pause. A clarification or status question is not a stop: incorporate it and continue. An explicit Stop remains respected. A finished planning-only request waits for authorisation to execute; it must not start implementation itself. A final reply that asks the person a numbered question always waits for their answer, whatever outcome you report.",
     "complete is Senior-only after review, all required checks and any enabled Deslop and UI pass. When a plan is involved, first explicitly complete it using the plan helper, then report complete with the returned revisions. Do not archive during review; the application archives only after your final explanation and successful turn completion.",
-    "For incomplete implementation use continue, not handoff. Browser and visual checks assigned to Senior are an expected review handoff. During review, unfinished checks use continue; necessary implementation rework uses handoff; genuine blockers use wait. Do not ask the person to request the next authorised stage."
+    "For incomplete implementation use continue, not handoff. Browser and visual checks assigned to Senior are an expected review handoff. During review, unfinished checks use continue; necessary implementation rework uses handoff; genuine blockers use wait. Do not ask the person to request the next authorised stage.",
+    ...(assistantFinishingParts(state).length ? [] : [
+      "This chat's settings turn off the automatic review, Deslop and UI pass: handoff after implementation finishes the work without a Senior turn."
+    ])
+  ].join("\n");
+}
+
+/**
+ * A Senior, Junior or Custom chat's agent reports the same outcomes as Auto's,
+ * and does its own finishing turn once the work is finished.
+ */
+function directWorkflowInstructions(state) {
+  const names = assistantFinishingParts(state)
+    .map(id => ASSISTANT_FINISHING_STEPS.find(step => step.id === id).name);
+  return [
+    `Workflow stage: ${state.stage}. Only an explicit outcome finishes the work; an implementation turn that ends without one is a plain reply, and its changes wait for the next finishing turn.`,
+    "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId, workflow.stage and BOTH Plan and Progress. This read works even without a plan. Read all pages when a plan is involved.",
+    "Before your final response, report one outcome through vibe64-helper plan outcome with JSON on stdin: {messageId, turnId, stage, decision, explanation, progress, expectedRevision, expectedProgressRevision}. Use the exact workflow identity from the read. decision is continue, handoff, wait, or complete; explanation names concrete evidence or the exact blocker; progress is true only for actual new work or verification. Supply paired revisions only for the plan involved in this task; leave unrelated plans unchanged.",
+    "continue keeps this stage when authorised work remains. During implementation, handoff reports the requested work finished and changed files; " + (names.length
+      ? `you then do this chat's automatic ${names.join(", ")} yourself in one more turn, once, over every change since the last one. During that turn, handoff returns to implementation for substantial necessary rework.`
+      : "this chat's settings turn off the automatic review, Deslop and UI pass, so handoff finishes the work."),
+    "wait retains this stage for a real blocker, a required user decision, or an explicit pause. A clarification or status question is not a stop: incorporate it and continue. An explicit Stop remains respected. A final reply that asks the person a numbered question always waits for their answer, whatever outcome you report.",
+    "During implementation, complete means you answered or finished without changing any files, so nothing needs a finishing turn; never use it after changing files or for a plan's work. In the finishing turn, complete comes only after every enabled part and its checks are finished. When a plan is involved and you are Senior, first explicitly complete it using the plan helper, then report complete with the returned revisions.",
+    "For incomplete implementation use continue, not handoff. Do not ask the person to request the next step."
   ].join("\n");
 }
 
 function assistantRoutingOutcomeNotice(request) {
   if (!request?.messageId || !request.outcome || request.stopped) return null;
+  const auto = request.mode === "auto";
+  let handoff = auto ? "Returning to Junior for rework." : "Returning to implementation for rework.";
+  if (request.status === "complete") handoff = "Work finished.";
+  else if (request.stage === "review") handoff = auto ? "Ready for Senior review." : "Ready for review.";
   const headings = {
     continue: "Continuing work.",
-    handoff: request.stage === "review" ? "Ready for Senior review." : "Returning to Junior for rework.",
+    handoff,
     wait: "Waiting to continue.",
-    complete: "Review complete."
+    complete: request.stage === "review" ? "Review complete." : "Finished."
   };
   return {
     messageId: `assistant-routing-outcome:${request.messageId}:${request.outcome.turnId}:${request.outcome.decision}`,
@@ -519,14 +552,19 @@ function assistantRoutingStatusLabel(request) {
   if (!request) return "";
   const selection = request.assignments?.[assistantWorkflowRole(request)];
   const recipient = selection ? vibe64AssistantSelectionLabel(selection) : "";
-  const stage = {
+  // A direct chat's turn may only answer, so it is named by its agent until it finishes.
+  const stage = (request.mode === "auto" || request.stage === "review") && {
     planning: "Planning",
     implementation: "Implementing",
     review: "Reviewing"
   }[request.stage] || assistantModeLabel(request.resolvedMode);
   if (request.delivery === "uncertain") return `Delivery unconfirmed · ${recipient}`;
   if (request.status === "waiting") return request.stopped ? "Paused at your request." : `${stage} waiting · ${recipient}`;
-  if (request.status === "complete") return request.workflow ? "Review complete — read the findings above." : "Reply finished.";
+  if (request.status === "complete") {
+    if (!request.workflow) return "Reply finished.";
+    if (request.stage === "review") return "Review complete — read the findings above.";
+    return request.outcome?.decision === "handoff" ? "Work finished." : "Reply finished.";
+  }
   if (request.delivery === "routing") return "Choosing the recipient with Router…";
   if (request.delivery === "failed") return "Request not sent";
   if (request.delivery === "pending") return `${stage} ready to continue · ${recipient}`;

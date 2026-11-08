@@ -15,6 +15,9 @@ import {
   assistantRoutingFromMetadata,
   isAssistantRoutingOwner
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  ASSISTANT_NO_FINISHING
+} from "@local/vibe64-runtime/shared/assistantFinishing";
 import { assistantCancelledMessageIds } from "./assistantRouting.js";
 import {
   messageFields,
@@ -237,7 +240,7 @@ function createTemporaryConversationInteraction({
         const override = selectingModel
           ? await sessionAgent.resolveSelection(requested.override, ctx) : requested.override;
         if (selectingModel) await sessionAgent.requireAssistantAccessForSelection(override, ctx);
-        const preferences = assistantRoutingPreferences({ ...requested, override, review: false, autoSave: false, uiPass: false });
+        const preferences = assistantRoutingPreferences({ ...requested, override, ...ASSISTANT_NO_FINISHING });
         fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
       }
       if (settingsChanged && !input.assistantRouting) {
@@ -260,7 +263,7 @@ function createTemporaryConversationInteraction({
         }, ctx);
         fields.routingMetadata = {
           ...record.routingMetadata,
-          assistant_routing: JSON.stringify(assistantRoutingPreferences({ ...preferences, override }))
+          assistant_routing: JSON.stringify(assistantRoutingPreferences({ ...preferences, override, ...ASSISTANT_NO_FINISHING }))
         };
       }
       if (fields.routingMetadata) {

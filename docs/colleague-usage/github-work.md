@@ -45,11 +45,12 @@ Vibe64 reuses your GitHub login for a few minutes across repository operations.
 If you reconnect GitHub and the previous login was revoked, the next operation can
 fail once with a GitHub authentication error; retry it and it uses the new login.
 
-In Auto, **Automatic save after completing a plan** (on by default in the chat
-mode menu) runs this same Save once a plan is completed and its review turn ends.
+In every main-chat mode, **Automatically save changes** (on by default under
+**Chat settings** in the chat mode menu) runs this same Save once a finished
+piece of work's review, Deslop and UI pass are done and that turn ends.
 Its progress, result and recovery are the ordinary Save's; when it cannot save,
 chat shows **Automatic save didn't run:** with the reason, and nothing changes.
-See [Auto workflow](auto-workflow.md).
+See [Choose what runs after each piece of work](chat-settings.md).
 
 Whenever Save or Update reports a problem, its activity panel offers **Fix it with
 AI**, which opens the [AI task window](ai-tasks.md) with the exact error. The AI

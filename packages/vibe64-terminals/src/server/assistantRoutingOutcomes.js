@@ -1,6 +1,14 @@
 import { workPlanScope } from "../shared/assistantWorkPlan.js";
 import { readWorkPlan, manageWorkPlan } from "./assistantWorkPlan.js";
-import { assistantRoutingOutcomeNotice, assistantWorkflowRole } from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  assistantRoutingFromMetadata,
+  assistantRoutingOutcomeNotice,
+  assistantWorkflowRole
+} from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  assistantFinishingNotice,
+  assistantFinishingParts
+} from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   assistantReplyAsksPerson,
   latestAssistantMessageAwaitingUserReply
@@ -48,7 +56,7 @@ function createAssistantRoutingOutcomes({
   async function recordOutcome(sessionId, input, options) {
     return exclusive(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);
-      if (!state || state.mode !== "auto" || (!state.workflow && state.stage !== "planning") || state.stopped ||
+      if (!state || (!state.workflow && state.stage !== "planning") || state.stopped ||
           state.status !== "working" || state.delivery !== "accepted" || input.messageId !== state.messageId ||
           input.turnId !== state.turnId || input.stage !== state.stage) {
         throw failure("The workflow outcome does not match the active request and turn.", "vibe64_assistant_workflow_outcome_mismatch");
@@ -65,16 +73,22 @@ function createAssistantRoutingOutcomes({
       if (state.stage === "planning" && !["continue", "wait"].includes(input.decision)) {
         throw failure("Planning alone does not authorise implementation or plan completion.", "vibe64_assistant_workflow_planning_outcome_refused");
       }
-      if (input.decision === "complete" && (state.stage !== "review" || assistantWorkflowRole(state) !== "senior")) {
-        throw failure("Only Senior can complete a verified review.", "vibe64_assistant_workflow_completion_senior_only");
+      const involvesPlan = input.expectedRevision !== undefined || state.planInvolved;
+      // In Auto only Senior completes, after review. A direct chat's agent
+      // completes its own finishing turn, or work that changed no files.
+      const direct = state.mode !== "auto";
+      if (input.decision === "complete" && !(state.stage === "review" && (direct || assistantWorkflowRole(state) === "senior"))) {
+        if (!direct) throw failure("Only Senior can complete a verified review.", "vibe64_assistant_workflow_completion_senior_only");
+        if (involvesPlan) throw failure("A plan's work finishes with handoff, then its finishing turn.", "vibe64_assistant_workflow_plan_handoff_required");
       }
       const plan = await readWorkPlan(context);
-      const involvesPlan = input.expectedRevision !== undefined || state.planInvolved;
+      // Only Senior completes an involved plan; Junior and Custom leave it active.
+      const completesPlan = state.stage === "review" && assistantWorkflowRole(state) === "senior";
       if (involvesPlan && (!plan || input.expectedRevision !== plan.revision ||
           (input.expectedProgressRevision || null) !== plan.progressRevision)) {
         throw failure("Read the complete current Plan and Progress before reporting this outcome.", "vibe64_assistant_workflow_plan_unread");
       }
-      if (involvesPlan && input.decision === "complete" && (plan.status !== "completed" || state.workPlan &&
+      if (involvesPlan && input.decision === "complete" && completesPlan && (plan.status !== "completed" || state.workPlan &&
           workPlanScope(plan.text) !== workPlanScope(state.workPlan.text))) {
         throw failure("Senior must explicitly complete the exact reviewed plan before completing the workflow.", "vibe64_assistant_workflow_plan_incomplete");
       }
@@ -95,6 +109,18 @@ function createAssistantRoutingOutcomes({
       await records.save(context, state);
       return { ok: true, outcome: state.outcome };
     });
+  }
+
+  /**
+   * Finished work is saved when the chat's Automatically save changes is on
+   * now; Save itself runs after the lock.
+   */
+  function saveAfter(context, state) {
+    let preferences = null;
+    try {
+      preferences = assistantRoutingFromMetadata(context.session.metadata);
+    } catch { /* Unreadable preferences save nothing. */ }
+    return preferences?.autoSave ? { context, state } : null;
   }
 
   async function afterTurn(sessionId, payload, routingOptions, options = {}) {
@@ -144,6 +170,15 @@ function createAssistantRoutingOutcomes({
         return;
       }
       const outcome = state.outcome;
+      // A direct chat's implementation turn that ends without reporting is an
+      // ordinary reply: nothing finishes, and its changes fold into the next
+      // finishing turn.
+      if (state.mode !== "auto" && state.stage === "implementation" && !state.stopped && run.state === "completed" &&
+          outcome?.turnId !== state.turnId) {
+        state.status = "complete";
+        await records.save(context, state);
+        return;
+      }
       const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
       if (state.stopped || run.state !== "completed" || !outcome || outcome.turnId !== state.turnId ||
           (plan?.revision || null) !== outcome.planRevision || (plan?.progressRevision || null) !== outcome.progressRevision) {
@@ -164,7 +199,8 @@ function createAssistantRoutingOutcomes({
           await records.save(context, state);
           return;
         }
-        if (plan) {
+        // Junior and Custom leave an involved plan active for Senior.
+        if (plan?.status === "completed") {
           let archived;
           try {
             archived = await manageWorkPlan(context, {
@@ -186,10 +222,12 @@ function createAssistantRoutingOutcomes({
             reason: "work-plan-changed",
             payload: { planNotice: archived.notice, assistantRoutingRequest: state }
           });
-          completed = { context, state };
         }
         state.status = "complete";
         await records.save(context, state);
+        // Work that reached its finishing turn is saved last; an answer or
+        // work that changed no files is not.
+        if (state.stage === "review") completed = await saveAfter(context, state);
         return;
       }
       if (outcome.decision === "wait") {
@@ -212,11 +250,23 @@ function createAssistantRoutingOutcomes({
       }
       let nextStage = state.stage;
       if (outcome.decision === "handoff") {
-        const returningToJunior = state.stage === "review" && assistantWorkflowRole(state) === "senior";
-        nextStage = returningToJunior ? "implementation" : "review";
-        if (returningToJunior) state.resolvedMode = "junior";
+        // Rework returns to implementation: Junior's in Auto, the same agent's otherwise.
+        const auto = state.mode === "auto";
+        const returning = state.stage === "review" && (!auto || assistantWorkflowRole(state) === "senior");
+        nextStage = returning ? "implementation" : "review";
+        if (returning && auto) state.resolvedMode = "junior";
+      }
+      const finishingParts = assistantFinishingParts(state);
+      // With review, Deslop and the UI pass all off, finished work goes straight to Save.
+      if (nextStage === "review" && state.stage === "implementation" && !finishingParts.length) {
+        state.status = "complete";
+        await records.save(context, state);
+        await records.writeNotice(context, state, assistantRoutingOutcomeNotice(state));
+        completed = await saveAfter(context, state);
+        return;
       }
       state.steps = (state.steps || 0) + 1;
+      const finishingStarts = nextStage === "review" && outcome.decision === "handoff";
       await records.prepareFollowup(context, state, nextStage);
       state.status = "working";
       await records.save(context, state);
@@ -227,6 +277,12 @@ function createAssistantRoutingOutcomes({
         await records.save(context, state);
         return;
       }
+      // Each step the chat's settings start says so, in order, as its turn starts.
+      if (finishingStarts) {
+        for (const step of finishingParts) {
+          await records.writeNotice(context, state, assistantFinishingNotice(step, state.followup.messageId));
+        }
+      }
       try {
         await delivery.deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
       } catch (error) {
@@ -236,10 +292,11 @@ function createAssistantRoutingOutcomes({
         await records.save(context, state);
       }
     });
-    // After the lock: a completed plan's follow-up (automatic save) runs once
-    // the turn has ended, and its short result note joins the chat.
+    // After the lock: finished work's automatic save runs last, once the turn
+    // has ended; its start notice and short result note join the chat.
     if (!completed) return;
     const { context, state } = completed;
+    await records.writeNotice(context, state, assistantFinishingNotice("autoSave", state.turnId));
     let note;
     try {
       note = await onPlanCompleted(sessionId, { submittedBy: state.submittedBy });

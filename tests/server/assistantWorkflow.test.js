@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { fixture, publishPlanFixture, planDocument, reportOutcome } from "../fixtures/assistantRouting.js";
 import { manageWorkPlan, readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
-import { assistantWorkflowUpgradeChanges, parseRoutingDecision, assistantWorkflowInstructions } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantWorkflowUpgradeChanges, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 /** The plan History, read through the plan command's history operation. */
@@ -21,12 +21,21 @@ async function finish(f, decision, options) {
   await f.service.afterTurn("session-1", end(state), f.context);
 }
 async function review(f) { await f.service.send("session-1", request, f.context); await finish(f, "handoff"); }
+/** The chat's system notices, oldest first. */
+const noticeTexts = f => [...f.notices.values()].map(turn => turn.system.text);
+const started = f => noticeTexts(f).filter(text => text.includes("started automatically"));
+const STARTED = {
+  review: "Review started automatically (Chat settings: Automatically review changes)",
+  deslop: "Deslop started automatically (Chat settings: Automatically deslop changes)",
+  uiPass: "UI pass started automatically (Chat settings: Automatically UI pass changes)",
+  autoSave: "Save started automatically (Chat settings: Automatically save changes)"
+};
 
 for (const deslop of [true, false]) test(`implementation, review and explicit completion archive and auto-save exactly once with Deslop ${deslop}`, async t => {
   const saves = [];
-  const f = await fixture(t, { mode: "auto", review: deslop }, { onPlanCompleted: async (sessionId, input) => {
+  const f = await fixture(t, { mode: "auto", review: true, deslop }, { onPlanCompleted: async (sessionId, input) => {
     saves.push({ sessionId, input, archived: (await planHistory(f.context)).length, status: f.state().status });
-    return "Saved automatically after completing the plan.";
+    return "Saved automatically.";
   } });
   await publishPlanFixture(f.context, planDocument() + "\n- [x] Required-name validation verified\n");
   await review(f);
@@ -41,32 +50,39 @@ for (const deslop of [true, false]) test(`implementation, review and explicit co
   assert.equal((await planHistory(f.context)).length, 1);
   await f.service.afterTurn("session-1", end(terminal), f.context);
   assert.equal((await planHistory(f.context)).length, 1); assert.equal(f.sends.length, 2);
-  // Save follows the archived plan once, after the completing turn ended.
+  // Save follows the archived plan once, after the completing turn ended, and says it started.
   assert.equal(saves.length, 1);
   assert.equal(saves[0].sessionId, "session-1"); assert.equal(saves[0].archived, 1); assert.equal(saves[0].status, "complete");
-  assert.match([...f.notices.values()].map(turn => JSON.stringify(turn)).join("\n"), /Saved automatically after completing the plan/);
+  const notices = noticeTexts(f);
+  assert.ok(notices.indexOf("Save started automatically (Chat settings: Automatically save changes)") < notices.indexOf("Saved automatically."), notices.join("\n"));
 });
 
-for (const [preferences, heading] of [
-  [{ mode: "auto", review: true }, "Automatic review and Deslop:"],
-  [{ mode: "auto", review: true, uiPass: true }, "Automatic review, Deslop and UI pass:"],
-  [{ mode: "auto", review: false, uiPass: true }, "Automatic review and UI pass:"],
-  [{ mode: "auto", review: false }, "Automatic review:"]
-]) test(`Senior's automatic review runs the UI pass in the same turn only when it is on: ${JSON.stringify(preferences)}`, async t => {
+for (const [preferences, heading, genesisTask] of [
+  [{ mode: "auto", review: true, deslop: true }, "Automatic review and Deslop:", "review"],
+  [{ mode: "auto", review: true, deslop: true, uiPass: true }, "Automatic review, Deslop and UI pass:", "review"],
+  [{ mode: "auto", review: true, deslop: false, uiPass: true }, "Automatic review and UI pass:", "review"],
+  [{ mode: "auto", review: true, deslop: false }, "Automatic review:", "review"],
+  [{ mode: "auto", review: false, deslop: true }, "Automatic Deslop:", "deslop"],
+  [{ mode: "auto", review: false, deslop: false, uiPass: true }, "Automatic UI pass:", "ui-pass"]
+]) test(`Senior's finishing turn runs only the switched-on parts, in order, with no extra Router call: ${JSON.stringify(preferences)}`, async t => {
   const f = await fixture(t, preferences);
   await publishPlanFixture(f.context, planDocument() + "\n- [x] Required-name validation verified\n");
   await review(f);
   assert.equal(f.state().stage, "review");
-  assert.equal(f.sends.length, 2, "the UI pass starts no turn of its own");
+  assert.equal(f.sends.length, 2, "Deslop and the UI pass start no turn of their own");
   assert.equal(f.sends[1].selection.modelId, f.assignments.senior.modelId);
-  assert.equal(f.sends[1].input.genesisTask, undefined);
+  assert.equal(f.helperCalls(), 1, "Router classifies only the new request");
+  assert.equal(f.sends[1].input.genesisTask, genesisTask, "the review renders Genesis's review task");
   const message = f.sends[1].input.message;
   assert.ok(message.includes(heading), message);
-  assert.equal(message.includes("Then run the UI pass on the screens those changes touched"), preferences.uiPass === true);
-  assert.equal(message.includes("Then perform Deslop"), preferences.review);
-  if (preferences.review && preferences.uiPass) {
+  assert.equal(message.includes("Check the preceding implementation"), preferences.review);
+  assert.equal(/(Then )?[Pp]erform Deslop/u.test(message), preferences.deslop);
+  assert.equal(/(Then )?[Rr]un the UI pass on the screens/u.test(message), preferences.uiPass === true);
+  if (preferences.deslop && preferences.uiPass) {
     assert.ok(message.indexOf("Then perform Deslop") < message.indexOf("Then run the UI pass"), "the UI pass follows Deslop");
   }
+  assert.deepEqual(started(f), ["review", "deslop", "uiPass"].filter(step => preferences[step]).map(step => STARTED[step]),
+    "each step the settings start says so, in order");
 });
 
 test("a refused automatic save leaves a short note and keeps the completed plan", async t => {
@@ -215,10 +231,19 @@ for (const blocked of ["goal", "question", "access"]) test(`${blocked} prevents 
   assert.equal(f.state().status, "waiting"); assert.equal(f.state().stage, "review"); assert.equal(f.sends.length, 1);
 });
 
-for (const mode of ["senior", "junior", "custom"]) test(`direct ${mode} remains direct and cannot declare workflow outcomes`, async t => {
-  const f = await fixture(t, mode === "custom" ? { mode: "custom", override: { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` } } : { mode, review: true });
-  await f.service.send("session-1", request, f.context); await assert.rejects(report(f, "handoff"));
-  await f.service.afterTurn("session-1", end(f.state()), f.context); assert.equal(f.sends.length, 1); assert.equal(f.helperCalls(), 0);
+const customOverride = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "openai",
+  modelId: "gpt-6-astra", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
+for (const mode of ["senior", "junior", "custom"]) test(`direct ${mode} work finishes in its own agent's finishing turn, without Router`, async t => {
+  const f = await fixture(t, mode === "custom" ? { mode: "custom", override: customOverride } : { mode });
+  const model = mode === "custom" ? customOverride.modelId : f.assignments[mode].modelId;
+  await f.service.send("session-1", request, f.context);
+  assert.equal(f.state().workflow, true); assert.equal(f.state().stage, "implementation"); assert.equal(f.helperCalls(), 0);
+  assert.match(f.sends[0].input.message, /Workflow stage: implementation/);
+  await finish(f, "handoff");
+  assert.equal(f.state().stage, "review"); assert.equal(f.sends.length, 2);
+  assert.deepEqual(f.sends.map(({ selection }) => selection.modelId), [model, model], "the chat's own agent finishes its work");
+  assert.equal(f.helperCalls(), 0);
+  assert.match(f.sends[1].input.message, /Automatic review and Deslop:/);
   assert.equal((await readWorkPlan(f.context)).status, "active");
 });
 
@@ -426,4 +451,160 @@ test("a final question without an outcome is never resumed from the saved reques
   assert.equal(f.sends.length, 1, "neither recovery nor Continue may resend the original request");
   await f.service.send("session-1", { messageId: "answer-1", message: "Yes, fix them", submissionKind: "send" }, f.context);
   assert.equal(f.sends.length, 2); assert.equal(f.sends[1].input.messageId, "answer-1"); assert.equal(f.state().messageId, "answer-1");
+});
+
+const checkedPlan = planDocument() + "\n- [x] Required-name validation verified\n";
+async function completePlan(f) {
+  const plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
+}
+async function savingFixture(t, preferences, options) {
+  const saves = [];
+  const f = await fixture(t, preferences, { ...options, onPlanCompleted: async () => { saves.push(saves.length); return "Saved automatically."; } });
+  return Object.assign(f, { saves });
+}
+
+test("a Senior chat executing a plan reviews, deslops, runs the UI pass and saves once, all by Senior, after the whole plan", async t => {
+  const f = await savingFixture(t, { mode: "senior", review: true, deslop: true, uiPass: true, autoSave: true });
+  await publishPlanFixture(f.context, checkedPlan);
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "continue");
+  assert.equal(f.state().stage, "implementation", "a plan step is not the end of the work");
+  assert.deepEqual(started(f), [], "nothing finishes per step or per turn");
+  await finish(f, "handoff");
+  assert.equal(f.state().stage, "review"); assert.equal(f.sends.length, 3);
+  assert.ok(f.sends.every(({ selection }) => selection.modelId === f.assignments.senior.modelId), "Senior does every part");
+  assert.equal(f.helperCalls(), 0);
+  assert.match(f.sends[2].input.message, /Automatic review, Deslop and UI pass:/);
+  assert.equal(f.sends[2].input.genesisTask, "review");
+  assert.equal(f.sends[2].input.turnMetadata.actorLabel, "Senior review");
+  assert.deepEqual(started(f), [STARTED.review, STARTED.deslop, STARTED.uiPass]);
+  await completePlan(f);
+  await finish(f, "complete");
+  assert.equal(f.state().status, "complete"); assert.equal(await readWorkPlan(f.context), null);
+  assert.equal((await planHistory(f.context)).length, 1);
+  assert.equal(f.sends.length, 3); assert.deepEqual(f.saves, [0], "Save runs once, last");
+  assert.deepEqual(started(f), [STARTED.review, STARTED.deslop, STARTED.uiPass, STARTED.autoSave]);
+});
+
+test("a Junior chat does the same steps itself and leaves the plan for Senior to complete", async t => {
+  const f = await savingFixture(t, { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true });
+  await publishPlanFixture(f.context, checkedPlan);
+  await f.service.send("session-1", request, f.context);
+  await assert.rejects(report(f, "complete"), /handoff/, "a plan's work finishes through its finishing turn");
+  await finish(f, "handoff");
+  assert.equal(f.state().stage, "review"); assert.equal(f.sends.length, 2);
+  assert.ok(f.sends.every(({ selection }) => selection.modelId === f.assignments.junior.modelId), "Junior reviews itself");
+  assert.match(f.sends[1].input.message, /leave that plan active for Senior to complete/);
+  assert.equal(f.sends[1].input.turnMetadata.actorLabel, "Junior review");
+  assert.deepEqual(started(f), [STARTED.review, STARTED.deslop, STARTED.uiPass]);
+  await finish(f, "complete");
+  assert.equal(f.state().status, "complete");
+  assert.equal((await readWorkPlan(f.context)).status, "active", "only Senior completes a plan");
+  assert.deepEqual(f.saves, [0]);
+});
+
+test("a request without a plan that its agent reports finished gets one review, then Save", async t => {
+  const f = await savingFixture(t, { mode: "senior" }, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "handoff", { involved: false });
+  assert.equal(f.state().stage, "review"); assert.equal(f.sends.length, 2);
+  await finish(f, "complete", { involved: false });
+  assert.equal(f.state().status, "complete"); assert.equal(f.sends.length, 2); assert.deepEqual(f.saves, [0]);
+  assert.deepEqual(started(f), [STARTED.review, STARTED.deslop, STARTED.autoSave]);
+});
+
+test("a quick follow-up's review covers only the change since the last review", async t => {
+  const f = await fixture(t, { mode: "senior" }, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "handoff", { involved: false }); await finish(f, "complete", { involved: false });
+  await f.service.send("session-1", { messageId: "follow-up", message: "Make the error red", submissionKind: "send" }, f.context);
+  assert.deepEqual(f.state().unreviewed, []);
+  await finish(f, "handoff", { involved: false });
+  assert.doesNotMatch(f.sends.at(-1).input.message, /Earlier requests whose changes/);
+  assert.match(f.sends.at(-1).input.message, /Original request: Make the error red/);
+});
+
+test("Stop means no review; the stopped request's changes fold into the next one", async t => {
+  const f = await fixture(t, { mode: "senior" }, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await f.service.cancel("session-1", f.context);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.state().status, "waiting"); assert.equal(f.state().stopped, true);
+  assert.equal(f.sends.length, 1); assert.deepEqual(started(f), []);
+  await f.service.send("session-1", { messageId: "next", message: "Also validate the email", submissionKind: "send" }, f.context);
+  assert.deepEqual(f.state().unreviewed, [{ messageId: request.messageId, message: request.message }]);
+  await finish(f, "handoff", { involved: false });
+  assert.match(f.sends.at(-1).input.message, /Earlier requests whose changes no automatic review has covered yet/);
+  assert.match(f.sends.at(-1).input.message, /Execute the plan/);
+});
+
+test("a question that changes nothing triggers no finishing step", async t => {
+  const f = await savingFixture(t, { mode: "junior" }, { readyPlan: false });
+  await f.service.send("session-1", { ...request, message: "What does the form validate?" }, f.context);
+  await finish(f, "complete", { involved: false, explanation: "Answered; no files changed." });
+  assert.equal(f.state().status, "complete"); assert.equal(f.sends.length, 1);
+  assert.deepEqual(started(f), []); assert.deepEqual(f.saves, []);
+  assert.equal(assistantRoutingStatusLabel(f.state()), "Reply finished.");
+});
+
+test("a direct turn that ends without reporting is a plain reply whose changes wait for the next review", async t => {
+  const f = await savingFixture(t, { mode: "senior" }, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.state().status, "complete"); assert.equal(f.state().error, undefined);
+  assert.equal(f.sends.length, 1); assert.deepEqual(started(f), []); assert.deepEqual(f.saves, []);
+  await f.service.send("session-1", { messageId: "next", message: "Finish it", submissionKind: "send" }, f.context);
+  assert.deepEqual(f.state().unreviewed.map(({ messageId }) => messageId), [request.messageId]);
+});
+
+test("wait means no review until the work is reported finished", async t => {
+  const f = await fixture(t, { mode: "senior" }, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "wait", { involved: false, explanation: "Which error colour should I use?" });
+  assert.equal(f.state().status, "waiting"); assert.equal(f.state().stage, "implementation");
+  assert.equal(f.sends.length, 1); assert.deepEqual(started(f), []);
+  await f.service.send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context);
+  await finish(f, "handoff", { involved: false });
+  assert.equal(f.state().stage, "review"); assert.deepEqual(started(f), [STARTED.review, STARTED.deslop]);
+});
+
+for (const step of ["review", "deslop", "uiPass"]) test(`with ${step} off its part is skipped from the finishing turn`, async t => {
+  const preferences = { mode: "senior", review: true, deslop: true, uiPass: true, [step]: false };
+  const f = await fixture(t, preferences, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "handoff", { involved: false });
+  assert.deepEqual(started(f), ["review", "deslop", "uiPass"].filter(id => preferences[id]).map(id => STARTED[id]));
+  const message = f.sends[1].input.message;
+  assert.equal(message.includes("Check the preceding implementation"), preferences.review);
+  assert.equal(/[Pp]erform Deslop on the/u.test(message), preferences.deslop);
+  assert.equal(/[Rr]un the UI pass on the screens/u.test(message), preferences.uiPass);
+  assert.equal(f.sends[1].input.genesisTask, preferences.review ? "review" : "deslop");
+});
+
+test("with review, Deslop and the UI pass all off, finished work goes straight to Save", async t => {
+  const f = await savingFixture(t, { mode: "auto", review: false, deslop: false, uiPass: false, autoSave: true }, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "handoff", { involved: false });
+  assert.equal(f.state().status, "complete"); assert.equal(f.sends.length, 1, "no Senior turn");
+  assert.deepEqual(f.saves, [0]); assert.deepEqual(started(f), [STARTED.autoSave]);
+  assert.ok(noticeTexts(f).some(text => text.startsWith("Work finished.")));
+  assert.equal(assistantRoutingStatusLabel(f.state()), "Work finished.");
+});
+
+test("with automatic save off, finished work is reviewed but not saved", async t => {
+  const f = await savingFixture(t, { mode: "senior", autoSave: false }, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "handoff", { involved: false }); await finish(f, "complete", { involved: false });
+  assert.equal(f.state().status, "complete"); assert.deepEqual(f.saves, []);
+  assert.deepEqual(started(f), [STARTED.review, STARTED.deslop]);
+});
+
+test("an explicit Deslop and generated Junior work run no finishing step", async t => {
+  const f = await fixture(t, { mode: "senior" }, { readyPlan: false });
+  await f.service.send("session-1", { ...request, messageId: "deslop", message: "Deslop" }, f.context);
+  assert.equal(f.state().workflow, false); assert.equal(f.state().finishing, null);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  await f.service.send("session-1", { ...request, messageId: "generated" }, { ...f.context, purpose: "junior" });
+  assert.equal(f.state().workflow, false); assert.equal(f.state().finishing, null);
 });

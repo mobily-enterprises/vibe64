@@ -4,9 +4,13 @@ import path from "node:path";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import {
+  assistantModeLabel,
   assistantRoutingGoalFromMetadata,
   assistantWorkflowMessageIds
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  assistantFinishingMessage
+} from "@local/vibe64-runtime/shared/assistantFinishing";
 import { STATE_KEY, failure, usesWorkPlan, recentVisibleMessages } from "./assistantRoutingRequests.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -114,17 +118,23 @@ function createAssistantRoutingRecords({
   async function prepareFollowup(context, state, stage) {
     state.stage = stage;
     const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
+    const reviewer = state.mode === "auto" ? "Senior" : assistantModeLabel(state.resolvedMode);
     state.followup = {
       messageId: randomUUID(),
       planRevision: plan?.revision || null,
       messages: await recentVisibleMessages(context.runtime.store, context.session.sessionId, 5),
       displayMessage: stage === "review"
-        ? "Continue Senior review."
+        ? `Continue ${reviewer} review.`
         : stage === "planning" ? "Continue planning." : "Continue implementation.",
       message: [stage === "review"
-        ? state.reviewMessage
+        ? state.reviewMessage || assistantFinishingMessage({ review: true })
         : "Continue the authorised work from its current state; preserve completed work and do not reduce scope.",
       `Original request: ${state.input.message}`, `Accepted steering: ${JSON.stringify(state.steering || [])}`,
+      // Each finishing turn covers every change since the last one, so a
+      // stopped or unfinished earlier request's changes fold in here.
+      ...(stage === "review" && state.unreviewed?.length ? [
+        `Earlier requests whose changes no automatic review has covered yet; cover their changes too: ${JSON.stringify(state.unreviewed)}`
+      ] : []),
       `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`].join("\n\n")
     };
     state.delivery = "pending";

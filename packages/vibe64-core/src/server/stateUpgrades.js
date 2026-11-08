@@ -64,6 +64,7 @@ import codexUnusedCaches from "./stateUpgrades/20261029-codex-unused-caches.js";
 import clonedDefaultBranch from "./stateUpgrades/20261030-cloned-default-branch.js";
 import temporaryRepairChatsRemoved from "./stateUpgrades/20261104-temporary-repair-chats-removed.js";
 import connectedRepositoryCopies from "./stateUpgrades/20261106-connected-repository-copies.js";
+import chatFinishingSteps from "./stateUpgrades/20261107-chat-finishing-steps.js";
 
 const upgrades = [
   codexLoginId,
@@ -115,7 +116,8 @@ const upgrades = [
   codexUnusedCaches,
   clonedDefaultBranch,
   temporaryRepairChatsRemoved,
-  connectedRepositoryCopies
+  connectedRepositoryCopies,
+  chatFinishingSteps
 ];
 
 async function readLedger(ledgerPath) {

@@ -38,6 +38,9 @@ import { configureStudioProjectContext } from "@local/vibe64-core/server/studioP
 // The server configures the Studio project context before any feature reads it.
 configureStudioProjectContext({ env: process.env });
 
+// Temporary chats and Fix it with AI run no finishing step.
+const noFinishing = { review: false, deslop: false, uiPass: false, autoSave: false };
+
 function actionById(actions, id) {
   const action = actions.find((entry) => entry.id === id);
   assert.ok(action, `Missing action ${id}`);
@@ -1359,7 +1362,7 @@ test("temporary availability uses its own actor and override without inferring o
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" });
     const initial = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
-    assert.deepEqual(JSON.parse(initial.routingMetadata.assistant_routing), { mode: "fix", review: false, autoSave: false });
+    assert.deepEqual(JSON.parse(initial.routingMetadata.assistant_routing), { mode: "fix", ...noFinishing });
     assert.equal(initial.purposes.fix.effectiveSelection.engineId, "opencode");
     assert.equal(initial.purposes.auto.available, false);
     await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
@@ -1390,12 +1393,12 @@ test("team members' temporary chats and every repair chat use Fix it with AI", a
     for (const [input, options] of [[{ conversationId: "generated" }, f.options],
       [{ conversationId: "repair" }, { ...f.options, aiTask: () => ({ turn: { routing: "fix", structured: true } }) }]]) {
       const created = await f.service.createTemporaryConversation("one", input, options);
-      assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), { mode: "fix", review: false, autoSave: false });
+      assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), { mode: "fix", ...noFinishing });
       assert.equal(created.purposes.fix.effectiveSelection.engineId, "opencode");
     }
     const ownerRepair = await f.service.createTemporaryConversation("one", { conversationId: "owner-repair" },
       { vibe64User: { username: "owner", role: "owner" }, aiTask: () => ({ turn: { routing: "fix", structured: true } }) });
-    assert.deepEqual(JSON.parse(ownerRepair.routingMetadata.assistant_routing), { mode: "fix", review: false, autoSave: false });
+    assert.deepEqual(JSON.parse(ownerRepair.routingMetadata.assistant_routing), { mode: "fix", ...noFinishing });
     assert.equal(ownerRepair.purposes.fix.effectiveSelection.modelId, "deepseek-flash");
     assert.equal(f.calls.starts.length, 0);
   });
@@ -1773,7 +1776,7 @@ test("ordinary temporary chats start in Senior with review and the UI pass off a
     await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true, uiPass: true }));
     await f.service.createTemporaryConversation("one", { conversationId: "plan-chat" });
     const record = await f.store.readSessionConversation("one", "plan-chat");
-    assert.deepEqual(JSON.parse(record.routingMetadata.assistant_routing), { mode: "senior", review: false, autoSave: false });
+    assert.deepEqual(JSON.parse(record.routingMetadata.assistant_routing), { mode: "senior", ...noFinishing });
     await f.service.startTemporaryConversationTurn("one", { conversationId: "plan-chat", messageId: "discuss", message: "Discuss the design" });
     assert.match(f.native.lastInput.message, /Vibe64 role: Senior/);
     assert.equal(JSON.parse((await f.store.readSessionConversation("one", "plan-chat")).routingMetadata.assistant_routing_request).review, false);
@@ -1790,7 +1793,7 @@ test("temporary chats inherit Main's role and custom model; Auto becomes Senior"
       const parent = await f.store.readSession("one");
       const created = await f.service.createTemporaryConversation("one", { conversationId: mode });
       assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), {
-        ...preferences, mode: mode === "auto" ? "senior" : mode, review: false, autoSave: false
+        ...preferences, mode: mode === "auto" ? "senior" : mode, ...noFinishing
       });
       assert.deepEqual((await f.store.readSession("one")).metadata, parent.metadata);
       assert.equal(created.providerConversationId, "");
@@ -1816,7 +1819,7 @@ test("inherited temporary choices stay independent across Main changes and resta
     const second = await service.createTemporaryConversation("one", { conversationId: "second" });
     assert.equal(JSON.parse(second.routingMetadata.assistant_routing).mode, "senior");
     const changed = await service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "senior", review: true, uiPass: true } });
-    assert.deepEqual(JSON.parse(changed.routingMetadata.assistant_routing), { mode: "senior", review: false, autoSave: false });
+    assert.deepEqual(JSON.parse(changed.routingMetadata.assistant_routing), { mode: "senior", ...noFinishing });
     await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { useWorkspaceDefault: true } }), /Choose Custom, Senior, Junior, or Auto/);
     await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "helper" } }), /Choose Custom, Senior, Junior, or Auto/);
     const explicit = await service.createTemporaryConversation("one", { conversationId: "generated", assistantRouting: { mode: "junior" } });

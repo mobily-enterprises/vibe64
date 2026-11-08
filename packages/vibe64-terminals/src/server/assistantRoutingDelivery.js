@@ -7,6 +7,7 @@ import {
   vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
 import {
+  assistantModeLabel,
   assistantModePrompt,
   assistantWorkflowInstructions,
   assistantGoalIsActive,
@@ -14,6 +15,10 @@ import {
   assistantTaskPurpose,
   uiPassRequest
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  ASSISTANT_FINISHING_STEPS,
+  assistantFinishingParts
+} from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   failure,
   activeMessage,
@@ -61,7 +66,7 @@ function createAssistantRoutingDelivery({
     const role = state.stage === "review" && modelRole === "senior" ? "review" : modelRole;
     const implementing = state.stage === "implementation";
     const followupLabel = state.stage === "review"
-      ? "Senior review"
+      ? `${assistantModeLabel(modelRole)} review`
       : state.stage === "planning" ? "Continue planning" : "Continue implementation";
     const selection = state.assignments[modelRole];
     const input = activeMessage(state);
@@ -114,8 +119,8 @@ function createAssistantRoutingDelivery({
     // Explicit inspection may use only the original uncertain-receipt branch.
     // It cannot continue into selection, preparation or native dispatch.
     if (inspectionOnly) return null;
-    if (followup && state.mode !== "auto") {
-      throw failure("Automatic follow-ups require Auto. Cancel this follow-up and send a new request in your chosen role.", "vibe64_assistant_routing_followup_requires_auto");
+    if (followup && !routingState.allowAuto) {
+      throw failure("Automatic follow-ups run in Main chat only. Cancel this follow-up and send a new request.", "vibe64_assistant_routing_followup_main_chat_only");
     }
     if (state.stopped) throw failure("This request was stopped. Send a new request to continue.", "vibe64_assistant_routing_delivery_stopped");
     await decisions.validateDecision(context, state, followup);
@@ -163,11 +168,23 @@ function createAssistantRoutingDelivery({
     // A UI pass's scope is the request its Genesis task receives, as a commit
     // range in the message is Deslop's.
     const request = state.task === "ui-pass" ? uiPassRequest(input.message, { explicit: true }) : input.message;
+    const finishingParts = assistantFinishingParts(state);
+    // A finishing turn without review follows its first part's own instructions.
+    const firstPart = ASSISTANT_FINISHING_STEPS.find(({ id }) => id === finishingParts[0]);
+    const finishingIntent = followup && !finishingParts.includes("review") && assistantTaskPurpose(firstPart?.genesisTask);
     let message = assistantModePrompt(role, request, {
-      intent: taskPurpose || (state.mode === "auto" ? state.stage === "review" ? "review" : state.reason : ""),
-      browserReview: state.workflow && implementing,
+      intent: taskPurpose || (state.stage === "review" ? finishingIntent || "review" : state.mode === "auto" ? state.reason : ""),
+      // Auto's implementer leaves browser checks to Senior's review.
+      browserReview: state.mode === "auto" && state.workflow && implementing && finishingParts.includes("review"),
       planInstructions: includePlanInstructions ? workPlanInstructions(role) : ""
     });
+    // A review renders Genesis's review task; a finishing turn without review
+    // renders its first part's task, as an explicit Deslop renders deslop.
+    let genesisTask = taskPurpose ? state.task : "";
+    if (!genesisTask && state.stage === "review") {
+      const first = followup && finishingParts[0];
+      genesisTask = ASSISTANT_FINISHING_STEPS.find(({ id }) => id === first)?.genesisTask || "review";
+    }
     if (state.workflow || state.mode === "auto" && state.stage === "planning") message += "\n\n" + assistantWorkflowInstructions(state);
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
@@ -189,7 +206,7 @@ function createAssistantRoutingDelivery({
       messageId,
       message,
       displayMessage,
-      ...(taskPurpose ? { genesisTask: state.task } : {}),
+      ...(genesisTask ? { genesisTask } : {}),
       turnMetadata: {
         ...(!followup ? state.input.turnMetadata : {}),
         assistantRouting: attribution(state, followup),
@@ -236,7 +253,7 @@ function createAssistantRoutingDelivery({
     const modelRole = assistantWorkflowRole(state);
     const destination = decisions.destinations(state.decision || {})[modelRole];
     let resolvedMode = state.resolvedMode;
-    if (state.stage === "review") resolvedMode = "review";
+    if (state.stage === "review" && (state.mode === "auto" || modelRole === "senior")) resolvedMode = "review";
     else if (assistantTaskPurpose(state.task) && resolvedMode === "senior") resolvedMode = assistantTaskPurpose(state.task);
     return {
       requestedMode: state.mode,

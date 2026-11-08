@@ -190,6 +190,10 @@ current turn. The next turn uses the new settings; see [Goals and model
 changes](coding-agent-goals.md) for automatic continuations and goals. If saving
 fails, the control reports the error; retry after resolving it. Colleague can
 explain or perform a supported selection change when you explicitly ask.
+The chat mode only chooses who works. Below the modes, **Chat settings** chooses
+what runs once a piece of work is finished, in every mode: review, Deslop, the
+UI pass and Save; see [Choose what runs after each piece of
+work](chat-settings.md).
 
 A message sent while a turn is still running joins that turn, with that turn's
 mode and model. This includes a Claude turn whose reply is ready while a

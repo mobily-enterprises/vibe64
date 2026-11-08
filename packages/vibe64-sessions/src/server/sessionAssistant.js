@@ -188,10 +188,11 @@ function createSessionAssistant({
             };
             return nativeState;
           };
+          // An omitted review, Deslop, UI pass or automatic save choice keeps the chat's own.
+          const automation = assistantRoutingAutomation(assistantRoutingFromMetadata(session.metadata));
           if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
-            // An omitted Deslop, UI pass or automatic save choice keeps the chat's own.
             preferences = assistantRoutingPreferences({
-              ...assistantRoutingAutomation(assistantRoutingFromMetadata(session.metadata)),
+              ...automation,
               ...input.assistantRouting
             });
             // Main chat's tool follows the owner's setup; a changed tool
@@ -226,9 +227,10 @@ function createSessionAssistant({
           });
           const { turnActive, goalActive } = await readNativeState();
           const next = resolved;
+          // Custom keeps the chat's finishing steps, as every main-chat mode does.
           const nextPreferences = preferences || {
             mode: "custom",
-            review: false,
+            ...assistantRoutingAutomation({ ...automation, ...input.assistantRouting, mode: "custom" }),
             override: next
           };
           if (deferred || turnActive || goalActive) {

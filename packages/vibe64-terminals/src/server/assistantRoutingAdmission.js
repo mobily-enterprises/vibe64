@@ -4,9 +4,14 @@ import {
   assistantRoutingStatusIsPending,
   assistantRoutingRequestCanBeReplaced,
   assistantRoutingFromMetadata,
+  assistantRoutingAutomation,
   assistantGoalIsActive,
   assistantExplicitTask
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  assistantFinishingMessage,
+  assistantUnreviewedRequests
+} from "@local/vibe64-runtime/shared/assistantFinishing";
 import { failure, readCancelled, read, usesWorkPlan } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
@@ -227,8 +232,11 @@ function createAssistantRoutingAdmission({
       if (state?.helper && state.messageId !== input.messageId) {
         throw failure("Retry cleanup of the previous routing helper before sending another request.", "vibe64_assistant_routing_helper_cleanup_required");
       }
-      if (state?.messageId !== input.messageId && state?.status === "working" && state.delivery === "accepted" && state.workflow === true) {
-        throw failure("The coding turn is preparing its Senior review. Wait for it to finish before sending another request.", "vibe64_assistant_routing_review_preparing");
+      // A direct chat waits only once its agent has reported, while its next step is prepared.
+      if (state?.messageId !== input.messageId && state?.status === "working" && state.delivery === "accepted" && state.workflow === true &&
+          (state.mode === "auto" || state.outcome)) {
+        const next = state.mode === "auto" ? "Senior review" : "next step";
+        throw failure(`The coding turn is preparing its ${next}. Wait for it to finish before sending another request.`, "vibe64_assistant_routing_review_preparing");
       }
       if (state?.messageId === input.messageId) {
         if (!routingState.allowAuto && state.mode === "auto") {
@@ -273,7 +281,15 @@ function createAssistantRoutingAdmission({
         let resolvedMode = mode;
         if (explicitTask) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
-        const review = mode === "auto" && !explicitTask && !options.purpose && !assistantGoalIsActive(goal);
+        // Main chat's own requests run the finishing steps; an explicit task,
+        // generated work, a goal and temporary chats never do.
+        const finishes = routingState.allowAuto && mode !== "fix" && !explicitTask && !options.purpose && !assistantGoalIsActive(goal);
+        const review = mode === "auto" && finishes;
+        // A Senior, Junior or Custom chat's request is its agent's work from the
+        // start; Auto's becomes a workflow when Router classifies it.
+        const direct = finishes && mode !== "auto";
+        const { autoSave: _autoSave, ...finishing } = finishes ? assistantRoutingAutomation(preferences) : {};
+        const previous = state;
         state = {
           messageId: input.messageId,
           input: {
@@ -292,6 +308,8 @@ function createAssistantRoutingAdmission({
           resolvedMode,
           ...(explicitTask ? { task: explicitTask } : {}),
           reason: explicitTask ? "review" : "",
+          finishing: finishes ? finishing : null,
+          unreviewed: assistantUnreviewedRequests(previous),
           workPlan: plan,
           schemaVersion: 5,
           observedSelection: selection,
@@ -306,32 +324,18 @@ function createAssistantRoutingAdmission({
           delivery: resolvedMode ? "sending" : "routing",
           createdAt: new Date().toISOString(),
           review,
-          workflow: false,
-          stage: null,
+          workflow: direct,
+          stage: direct ? "implementation" : null,
           steps: 0,
           stalledTurns: 0,
           steering: [],
-          deslop: preferences.review === true,
           planInvolved: hasPlanRevision,
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
             .map((name) => [name, context.vibe64User[name]])) : null,
-          reviewMessage: [
-            preferences.review && preferences.uiPass ? "Automatic review, Deslop and UI pass:"
-              : preferences.review ? "Automatic review and Deslop:"
-                : preferences.uiPass ? "Automatic review and UI pass:" : "Automatic review:",
-            "Check the preceding implementation against my request, accepted steering and any plan explicitly involved in that work. Inspect the implementation and evidence, fix in-scope issues, and run relevant checks. Read every page of BOTH Plan and Progress before reviewing, including the complete technical implementation plan; checklist marks do not establish completion. Leave unrelated plans unchanged. Do not ask for permission merely to review or complete verified work.",
-            ...(preferences.review ? [
-              "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance. Keep that cleanup behavior-preserving and preserve unrelated work and staging."
-            ] : []),
-            ...(preferences.uiPass ? [
-              "Then run the UI pass on the screens those changes touched, following the project's UI pass guidance. Keep each screen's behavior and preserve unrelated work and staging."
-            ] : []),
-            ...(preferences.review || preferences.uiPass ? [
-              "Perform every part yourself in this turn; do not delegate cleanup or start a separate Deslop or UI pass turn. Run relevant checks after cleanup."
-            ] : []),
-            "Only after review, any enabled Deslop and UI pass and their checks are finished: Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Report findings, fixes, actual checks and anything unverified."
-          ].join(" ")
+          // In Auto Senior finishes; otherwise the chat's own agent, and only
+          // Senior completes a plan.
+          reviewMessage: finishes ? assistantFinishingMessage(finishing, { completesPlan: ["auto", "senior"].includes(mode) }) : ""
         };
         state.decision = await decisions.resolve(context, state);
         // The tool at admission; main chat's is the owner's Senior and Junior tool.

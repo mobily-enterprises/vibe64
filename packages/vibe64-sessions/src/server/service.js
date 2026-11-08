@@ -147,8 +147,8 @@ function createService({
   const browserConversations = createMainBrowserConversations({ actions, terminals });
 
   /**
-   * Automatic save: once Auto's completing turn ends, Main chat's autoSave
-   * preference runs the ordinary Save. Returns the short chat note.
+   * Automatic save: once finished work's last turn ends, Main chat's autoSave
+   * preference runs the ordinary Save, in any chat mode. Returns the short chat note.
    * @param {string} sessionId
    * @param {{ submittedBy?: object | null }} details
    */
@@ -156,7 +156,7 @@ function createService({
     const runtime = await project.createRuntimeWithoutSource();
     const session = await runtime.getSessionWithoutSource(sessionId);
     const preferences = assistantRoutingFromMetadata(session.metadata);
-    if (preferences?.mode !== "auto" || !preferences.autoSave) return "";
+    if (!preferences?.autoSave) return "";
     const skipped = reason => `Automatic save didn't run: ${reason}`;
     const inspection = await work.inspectSessionWork(sessionId);
     if (inspection?.ok === false) return skipped(normalizeText(inspection.error) || "this session's work could not be inspected.");
@@ -164,7 +164,7 @@ function createService({
     const saved = await work.saveSessionWork(sessionId, { destinationReview: inspection.destination, vibe64User: details.submittedBy });
     return saved?.ok === false
       ? skipped(normalizeText(saved.error) || "Save was refused.")
-      : "Saved automatically after completing the plan.";
+      : "Saved automatically.";
   }
 
   const service = Object.freeze({

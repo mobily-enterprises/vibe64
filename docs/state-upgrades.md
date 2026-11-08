@@ -510,8 +510,9 @@ The optional `assistant_routing.uiPass` preference adds the UI pass to that
 review. It is written only as `true`, while the owner has it on; an absent
 field reads as off, so existing preferences load unchanged with it off. An
 explicit UI pass is a new request with `task: "ui-pass"`, and its turns carry
-the `ui_pass` resolved mode; neither changes an existing record. No upgrade is
-needed.
+the `ui_pass` resolved mode; neither changes an existing record. No upgrade was
+needed then. `20261107-chat-finishing-steps` later gave every chat its own
+review, Deslop, UI pass and save choices; see that section.
 
 ## Auto implementation continuation
 
@@ -1788,3 +1789,35 @@ finds nothing left to remove and keeps the first backup. Run it as the OS user
 that owns the session state, with Vibe64 and every session process stopped.
 Focused evidence: `connectedRepositoryCopiesUpgrade.unit.test.js` and
 `stateUpgrades.unit.test.js`.
+
+## Each chat's own finishing steps (`20261107-chat-finishing-steps`)
+
+The chat mode now chooses only who works. Review, Deslop, the UI pass and Save
+are the four finishing steps of a piece of work, chosen per chat in every
+main-chat mode, so `assistant_routing` saves `review`, `deslop`, `uiPass` and
+`autoSave` as separate booleans. Before, `review` meant Auto's optional Deslop
+(Auto's review was mandatory), `uiPass` was written only while on, and only Auto
+ran any of them. The owner is Terminals' `chatFinishingStepsUpgrade.js`,
+supplied by the candidate CLI; the script refuses to run without it.
+
+Through the stopped session store, the same inventory and verified backup
+publisher as `20261023-owner-team-ai-setups`, it converts every active, closing
+and archived session's main chat preferences, each temporary chat's, and a
+pending renewal's successor:
+
+- Auto, Senior and Junior: `review: true`, `deslop` the old `review` (absent
+  read as on), `uiPass` the old `uiPass` (absent read as off), `autoSave` the
+  old `autoSave` (absent read as on), so Auto does exactly what it did. Senior
+  and Junior chats saved those same choices for a return to Auto, so the
+  person's choices carry over.
+- Custom, which saved no choice: the defaults when this upgrade was published
+  (`review`, `deslop` and `autoSave` on, `uiPass` off), frozen in the script.
+- Temporary chats and Fix it with AI: all four off; they run no finishing step.
+
+A value that already saves `deslop` is current and left alone, so a retry
+changes nothing. An unreadable or unknown chat mode stops the upgrade before
+anything is written. Saved routing requests and goals are untouched: a request
+admitted before the change has no `finishing` record and is read as Auto's, with
+its mandatory review and its captured Deslop, and nothing is replayed. New writes
+always save all four booleans. Focused evidence:
+`chatFinishingStepsUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.

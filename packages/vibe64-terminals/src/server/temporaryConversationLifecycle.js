@@ -6,6 +6,9 @@ import {
   assistantRoutingFromMetadata,
   isAssistantRoutingOwner
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  ASSISTANT_NO_FINISHING
+} from "@local/vibe64-runtime/shared/assistantFinishing";
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
@@ -82,7 +85,7 @@ function createTemporaryConversationLifecycle({
       const requestedPreferences = fixRequired ? { mode: "fix" } : input.assistantRouting || inheritedPreferences;
       if (requestedPreferences.mode === "auto") throw temporaryAutoModeRefusal();
       if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw teamTemporaryModesRefusal();
-      const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false, autoSave: false, uiPass: false });
+      const preferences = assistantRoutingPreferences({ ...requestedPreferences, ...ASSISTANT_NO_FINISHING });
       const initialPresentation = presentation(input.presentation);
       const recentContext = input.includeRecentChatContext === true
         ? await ctx.runtime.store.mutateSession(sessionId, () => recentChatContext(ctx.runtime.store, sessionId)) : null;

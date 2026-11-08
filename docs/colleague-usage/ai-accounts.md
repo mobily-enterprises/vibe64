@@ -19,9 +19,9 @@ unverified; an invitation to try the app does not replace verification.
 
 Auto shows Working, Waiting or Complete with a separate Planning, Implementation
 or Review stage. Senior continues unfinished review or saves necessary in-scope
-rework for Junior, then reviews again. Deslop controls cleanup and
-**Automatic UI pass** controls the [UI pass](ui-pass.md), not whether review
-runs. Waiting retains the stage: use its stage-specific **Continue** action when the blocker is
+rework for Junior, then reviews again. The [Chat settings](chat-settings.md)
+switches choose whether review, Deslop and the [UI pass](ui-pass.md) run and
+whether finished work is saved, in every chat mode. Waiting retains the stage: use its stage-specific **Continue** action when the blocker is
 resolved, or **Retry** for an uncertain message. Stop remains respected.
 See [plans and workflow recovery](plans.md) for the full steps.
 

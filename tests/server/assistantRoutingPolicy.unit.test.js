@@ -39,6 +39,15 @@ import {
   assistantWorkflowUpgradeChanges
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
+  ASSISTANT_FINISHING_DEFAULTS,
+  ASSISTANT_FINISHING_STEPS,
+  ASSISTANT_NO_FINISHING,
+  assistantFinishingParts,
+  assistantFinishingNotice,
+  assistantFinishingMessage,
+  assistantUnreviewedRequests
+} from "@local/vibe64-runtime/shared/assistantFinishing";
+import {
   __testables as routingAssignmentsTestables,
   recommendedRoutingAssignments,
   routingAssignmentSelection,
@@ -279,11 +288,17 @@ test("explicit closure by scope reduction keeps implementation review while draf
 });
 
 test("workflow instructions delegate outcomes to the admitted agent and retain review rework", () => {
-  const prompt = assistantWorkflowInstructions({ stage: "review" });
+  const prompt = assistantWorkflowInstructions({ mode: "auto", stage: "review" });
   assert.match(prompt, /continue, handoff, wait, or complete/);
   assert.match(prompt, /Senior review back to Junior/);
   assert.match(prompt, /explicit Stop/iu);
   assert.match(prompt, /application archives only after your final explanation/);
+  // A direct chat's agent finishes its own work, naming the parts its Chat settings turn on.
+  const direct = assistantWorkflowInstructions({ mode: "junior", stage: "implementation", finishing: { review: true, deslop: true, uiPass: true } });
+  assert.match(direct, /continue, handoff, wait, or complete/);
+  assert.match(direct, /automatic Review, Deslop, UI pass yourself in one more turn/);
+  assert.doesNotMatch(direct, /Senior review back to Junior/);
+  assert.match(assistantWorkflowInstructions({ mode: "senior", stage: "implementation", finishing: {} }), /so handoff finishes the work/);
 });
 
 test("task intent sets permissions independently of the selected role", () => {
@@ -641,30 +656,55 @@ test("old routing snapshots and chat preferences require the state upgrade", () 
   }
   assert.throws(() => assistantRoutingPreferences({ mode: "senior", workflowEngineId: "codex" }),
     (error) => error.code === "vibe64_assistant_routing_upgrade_required");
-  assert.deepEqual(assistantRoutingPreferences({ mode: "fix", review: true }), { mode: "fix", review: false, autoSave: false });
+  assert.deepEqual(assistantRoutingPreferences({ mode: "fix", review: true }),
+    { mode: "fix", review: false, deslop: false, uiPass: false, autoSave: false });
 });
 
-test("Deslop and automatic save default on and keep an explicit off", () => {
-  assert.deepEqual(assistantRoutingPreferences({ mode: "auto" }), { mode: "auto", review: true, autoSave: true });
-  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", review: false, autoSave: false }), { mode: "auto", review: false, autoSave: false });
-  // Custom carries no choice, so Auto after it starts with both on.
-  assert.deepEqual(assistantRoutingAutomation({ mode: "custom", review: false, autoSave: false }), { review: true, autoSave: true, uiPass: false });
-  assert.deepEqual(assistantRoutingAutomation(null), { review: true, autoSave: true, uiPass: false });
-});
+const defaultSteps = { review: true, deslop: true, uiPass: false, autoSave: true };
+const customOverride = () => ({ override: { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
+  modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: revision } });
 
-test("the automatic UI pass is off unless turned on, and is saved only while on", () => {
-  // Preferences saved before the UI pass existed read unchanged, with it off.
-  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", review: true, autoSave: true }), { mode: "auto", review: true, autoSave: true });
-  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", uiPass: true }), { mode: "auto", review: true, autoSave: true, uiPass: true });
-  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", uiPass: false }), { mode: "auto", review: true, autoSave: true });
-  assert.deepEqual(assistantRoutingPreferences({ mode: "senior", uiPass: true }), { mode: "senior", review: true, autoSave: true, uiPass: true });
-  for (const mode of ["custom", "fix"]) {
-    const override = mode === "custom" ? { override: { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
-      modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: revision } } : {};
-    assert.equal(assistantRoutingPreferences({ mode, uiPass: true, ...override }).uiPass, undefined, mode);
+test("review, Deslop and automatic save default on, the UI pass off, and each is saved on or off in every main-chat mode", () => {
+  assert.deepEqual(ASSISTANT_FINISHING_DEFAULTS, defaultSteps, "one constant holds the defaults");
+  for (const mode of ["auto", "senior", "junior"]) {
+    assert.deepEqual(assistantRoutingPreferences({ mode }), { mode, ...defaultSteps }, mode);
+    assert.deepEqual(assistantRoutingPreferences({ mode, review: false, deslop: false, uiPass: true, autoSave: false }),
+      { mode, review: false, deslop: false, uiPass: true, autoSave: false }, mode);
   }
-  assert.equal(assistantRoutingAutomation({ mode: "auto", uiPass: true }).uiPass, true);
-  assert.equal(assistantRoutingAutomation({ mode: "custom", uiPass: true }).uiPass, false);
+  const custom = assistantRoutingPreferences({ mode: "custom", uiPass: true, autoSave: false, ...customOverride() });
+  assert.deepEqual({ ...custom, override: undefined }, { mode: "custom", review: true, deslop: true, uiPass: true, autoSave: false, override: undefined },
+    "Custom carries the finishing steps too");
+  assert.deepEqual(assistantRoutingAutomation(null), defaultSteps);
+  assert.deepEqual(assistantRoutingAutomation({ mode: "fix", review: false }), defaultSteps, "leaving Fix it with AI starts with the defaults");
+  assert.deepEqual(ASSISTANT_NO_FINISHING, { review: false, deslop: false, uiPass: false, autoSave: false });
+});
+
+test("the finishing turn runs the switched-on parts in order, and only Senior's completes a plan", () => {
+  assert.deepEqual(assistantFinishingParts({ finishing: { review: true, deslop: true, uiPass: true } }), ["review", "deslop", "uiPass"]);
+  assert.deepEqual(assistantFinishingParts({ finishing: { review: false, deslop: false, uiPass: true } }), ["uiPass"]);
+  assert.deepEqual(assistantFinishingParts({ finishing: null }), []);
+  assert.deepEqual(assistantFinishingParts({ deslop: true }), ["review", "deslop"], "a request from before keeps Auto's mandatory review");
+  assert.equal(assistantFinishingMessage({ review: false, deslop: false, uiPass: false }), "");
+  assert.match(assistantFinishingMessage({ review: false, deslop: true, uiPass: false }), /^Automatic Deslop: Perform Deslop/u);
+  assert.match(assistantFinishingMessage({ review: true, deslop: true }, { completesPlan: false }), /leave that plan active for Senior to complete/);
+  assert.deepEqual(assistantFinishingNotice("deslop", "followup-1"), { messageId: "assistant-finishing:deslop:followup-1",
+    text: "Deslop started automatically (Chat settings: Automatically deslop changes)" });
+  assert.deepEqual(ASSISTANT_FINISHING_STEPS.map(({ setting }) => setting),
+    ["Automatically review changes", "Automatically deslop changes", "Automatically UI pass changes", "Automatically save changes"]);
+});
+
+test("each finishing turn covers every change since the last one", () => {
+  const request = (patch) => ({ messageId: "m1", input: { message: "Add it" }, workflow: true, turnId: "t1", ...patch });
+  assert.deepEqual(assistantUnreviewedRequests(null), []);
+  assert.deepEqual(assistantUnreviewedRequests(request({ status: "complete", stage: "review", unreviewed: [{ messageId: "m0" }] })), [],
+    "a finished review covered everything");
+  assert.deepEqual(assistantUnreviewedRequests(request({ status: "complete", stage: "implementation", outcome: { turnId: "t1", decision: "handoff" } })), []);
+  assert.deepEqual(assistantUnreviewedRequests(request({ status: "waiting", stopped: true, stage: "implementation" })),
+    [{ messageId: "m1", message: "Add it" }], "a stopped request folds into the next review");
+  assert.deepEqual(assistantUnreviewedRequests(request({ status: "complete", stage: "implementation", unreviewed: [{ messageId: "m0" }],
+    outcome: { turnId: "t1", decision: "complete" } })), [{ messageId: "m0" }], "an answer that changed nothing passes earlier work on");
+  assert.deepEqual(assistantUnreviewedRequests({ messageId: "q", workflow: false, status: "complete", unreviewed: [{ messageId: "m0" }] }),
+    [{ messageId: "m0" }], "an Auto conversation passes earlier work on");
 });
 
 test("a UI pass message names its scope as the request Genesis's ui-pass task receives", () => {
@@ -831,9 +871,13 @@ test("workflow state, role, sent messages and selection identity each have one o
     /unsupported state/u);
   const assignments = { senior: { engineId: "codex", modelId: "senior-model" }, junior: { engineId: "codex", modelId: "junior-model" } };
   const followup = { messageId: "followup-1" };
-  assert.equal(assistantWorkflowRole({ stage: "review", followup, resolvedMode: "junior" }), "senior");
-  assert.equal(assistantWorkflowRole({ stage: "review", resolvedMode: "junior" }), "junior");
-  assert.match(assistantRoutingStatusLabel({ stage: "review", followup, resolvedMode: "junior", status: "working", delivery: "accepted", assignments }), /senior-model/u);
+  assert.equal(assistantWorkflowRole({ mode: "auto", stage: "review", followup, resolvedMode: "junior" }), "senior");
+  assert.equal(assistantWorkflowRole({ mode: "auto", stage: "review", resolvedMode: "junior" }), "junior");
+  // A Junior chat's agent does its own finishing turn.
+  assert.equal(assistantWorkflowRole({ mode: "junior", stage: "review", followup, resolvedMode: "junior" }), "junior");
+  assert.match(assistantRoutingStatusLabel({ mode: "auto", stage: "review", followup, resolvedMode: "junior", status: "working", delivery: "accepted", assignments }), /senior-model/u);
+  assert.match(assistantRoutingStatusLabel({ mode: "junior", stage: "implementation", resolvedMode: "junior", status: "working", delivery: "accepted", assignments }),
+    /^Junior · .*junior-model/u, "a direct chat's turn is named by its agent");
   assert.deepEqual(assistantWorkflowMessageIds({ messageId: "message-1", followup }), ["message-1", "followup-1"]);
   assert.deepEqual(assistantWorkflowMessageIds({ messageId: "message-1" }), ["message-1"]);
   const selection = { engineId: "codex", modelProviderId: "openai", modelId: "gpt", agentId: "", variantId: "high" };

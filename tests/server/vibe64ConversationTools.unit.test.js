@@ -163,12 +163,21 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(changed.ok, true, JSON.stringify(changed));
   assert.equal(changed.result.chatMode, "junior");
   assert.equal(changed.result.routingMode, "senior", "saved preferences must remain separate from the previous request's mode");
-  assert.equal(changed.result.reviewEnabled, false, "direct Junior does not schedule Senior review");
-  assert.equal(changed.result.deslopEnabled, false);
+  // Every main-chat mode reports its own finishing steps.
+  assert.equal(changed.result.reviewEnabled, true, "a Junior chat reviews its own work");
+  assert.equal(changed.result.deslopEnabled, true);
+  assert.equal(changed.result.uiPassEnabled, false);
+  assert.equal(changed.result.autoSaveEnabled, true);
   const auto = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", review: false } });
-  assert.equal(auto.result.reviewEnabled, true, "Auto always reviews even with cleanup off");
-  assert.equal(auto.result.deslopEnabled, false);
+  assert.equal(auto.result.reviewEnabled, false, "review is its own switch");
+  assert.equal(auto.result.deslopEnabled, true);
   assert.equal(auto.result.uiPassEnabled, false, "the automatic UI pass stays off unless it is turned on");
+  const deslop = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1",
+    assistantRouting: { mode: "senior", deslop: false, autoSave: false } });
+  assert.equal(deslop.ok, true, JSON.stringify(deslop));
+  assert.equal(calls.at(-1).input.assistantRouting.deslop, false);
+  assert.deepEqual([deslop.result.reviewEnabled, deslop.result.deslopEnabled, deslop.result.uiPassEnabled, deslop.result.autoSaveEnabled],
+    [true, false, false, false]);
   const uiPass = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", uiPass: true } });
   assert.equal(uiPass.ok, true, JSON.stringify(uiPass));
   assert.equal(calls.at(-1).input.assistantRouting.uiPass, true);

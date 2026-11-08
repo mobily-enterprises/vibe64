@@ -183,7 +183,8 @@ function createAssistantRoutingDecisions({
   async function resolve(context, state, followup = false) {
     let purpose = state.mode;
     if (followup) {
-      purpose = state.stage === "review" ? "review" : assistantWorkflowRole(state);
+      // A direct chat's agent finishes its own work on its own purpose.
+      purpose = state.stage === "review" && state.mode === "auto" ? "review" : assistantWorkflowRole(state);
     } else if (state.mode !== "custom" && assistantTaskPurpose(state.task)) {
       purpose = state.resolvedMode === "senior" ? assistantTaskPurpose(state.task) : state.resolvedMode;
     }

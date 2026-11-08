@@ -29,6 +29,7 @@ const conversationFields = {
   reviewEnabled: { type: "boolean", required: false },
   deslopEnabled: { type: "boolean", required: false },
   uiPassEnabled: { type: "boolean", required: false },
+  autoSaveEnabled: { type: "boolean", required: false },
   hasModelOverride: { type: "boolean", required: false },
   messagesTruncated: { type: "boolean", required: true },
   messages: { type: "array", items: messageSchema, required: true }
@@ -56,9 +57,10 @@ function summary(result = {}, options = {}) {
   return {
     ...(preferences ? {
       chatMode: preferences.mode,
-      reviewEnabled: preferences.mode === "auto",
-      deslopEnabled: preferences.mode === "auto" && preferences.review,
-      uiPassEnabled: preferences.mode === "auto" && preferences.uiPass === true,
+      reviewEnabled: preferences.review,
+      deslopEnabled: preferences.deslop,
+      uiPassEnabled: preferences.uiPass,
+      autoSaveEnabled: preferences.autoSave,
       hasModelOverride: Boolean(preferences.override)
     } : {}),
     ...Object.fromEntries(["conversationId", "title", "status", "runId", "error"].flatMap((key) => (

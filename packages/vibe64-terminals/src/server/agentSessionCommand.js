@@ -66,7 +66,7 @@ import {
   waitForCommandResult
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
-import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantTaskPurpose, assistantWorkflowRole } from "@local/vibe64-runtime/shared/assistantRouting";
 import { commandLineFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -364,7 +364,9 @@ function createAgentSessionCommandService({
           !assistantTaskPurpose(request?.task) &&
           request?.status === "working" &&
           request.delivery === "accepted") {
-        role = request.stage === "review" && request.followup ? "review" : request.resolvedMode;
+        // Senior's finishing turn reviews; a Junior or Custom chat's agent keeps its own role.
+        role = request.stage === "review" && request.followup && assistantWorkflowRole(request) === "senior"
+          ? "review" : request.resolvedMode;
       }
       const result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, input, role);
       if (!["read", "history"].includes(input.operation)) {
@@ -374,7 +376,7 @@ function createAgentSessionCommandService({
         ok: true,
         ...result,
         ...(input.operation === "read" ? {
-          workflow: request?.mode === "auto" && (request.workflow || request.stage === "planning") ? {
+          workflow: request?.workflow || request?.mode === "auto" && request.stage === "planning" ? {
             messageId: request.messageId,
             turnId: request.turnId || "",
             stage: request.stage,

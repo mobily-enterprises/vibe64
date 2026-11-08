@@ -24,6 +24,7 @@ import { removeUnusedCodexCaches } from "@local/vibe64-core/server/codexCacheUpg
 import { removeSessionClonedDefaultBranches } from "@local/vibe64-terminals/server/clonedDefaultBranchUpgrade";
 import { removeTemporaryRepairChats } from "@local/vibe64-terminals/server/temporaryRepairChatsUpgrade";
 import { removeConnectedSessionLinks } from "@local/vibe64-runtime/server/connectedRepositoryCopiesUpgrade";
+import { upgradeChatFinishingSteps } from "@local/vibe64-terminals/server/chatFinishingStepsUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -87,6 +88,7 @@ try {
     removeSessionClonedDefaultBranches,
     removeTemporaryRepairChats,
     removeConnectedSessionLinks,
+    upgradeChatFinishingSteps,
     report
   });
 } catch (error) {

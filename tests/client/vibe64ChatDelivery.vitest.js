@@ -118,7 +118,7 @@ describe("routed chat delivery presentation", () => {
 
 it("shows restored review explanations as one system chat message without rewriting or duplicating history", () => {
   const receipt = { turnId: "accepted", user: { messageId: request.messageId, text: "Hello" } };
-  const routed = { ...request, status: "working", delivery: "accepted", stage: "review", followup: {}, outcome: { turnId: "implementation-1", decision: "handoff", explanation: "The work is ready for review." } };
+  const routed = { ...request, mode: "auto", status: "working", delivery: "accepted", stage: "review", followup: {}, outcome: { turnId: "implementation-1", decision: "handoff", explanation: "The work is ready for review." } };
   const original = structuredClone(receipt);
   const turns = chatTurnsWithRouting([receipt], routed);
   expect(turns).toHaveLength(2);

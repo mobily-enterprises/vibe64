@@ -100,10 +100,11 @@ implementer invites the person to try the feature while verification continues.
 Auto implementation runs focused code and basic startup, route and API smoke
 checks, optionally checking that the changed page renders with its main control.
 It hands full browser end-to-end journeys and visual verification to its separate
-Senior review. Without that automatic
-review, the selected agent owns those checks itself. The existing routing
-coordinator supplies this distinction only for requests that will receive
-review; interrupted or unavailable checks remain explicitly unverified.
+Senior review. Without that automatic review (Auto with review off, or a direct
+chat, whose own agent reviews later), the selected agent owns those checks
+itself. The existing routing coordinator supplies this distinction only for
+Auto requests that will receive Senior review; interrupted or unavailable checks
+remain explicitly unverified.
 
 The original session assistant-selection event refreshes the retained browser
 observer through JSKIT’s existing same-ID subscribe operation. Canonical reads
@@ -1302,6 +1303,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `tests/client/vibe64WorkPlan.vitest.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
+- `packages/vibe64-runtime/src/shared/assistantFinishing.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingAssignments.js`
 - `packages/vibe64-runtime/src/server/codexAppServerProcess.js`
 - `tests/server/codexHistoryAdapter.unit.test.js`
@@ -1699,27 +1701,21 @@ messages and receipts remain terminal and intact as role/Helper conversion
 advances the format. Ordinary native requests without configuration remain
 invalid; no current record is silently marked legacy.
 
-Main chat can save Custom, Senior, Junior or Auto plus Auto's Deslop (`review`)
-and automatic save (`autoSave`) preferences in the existing conversation
-metadata. `assistantRoutingAutomation` is their one default: each is on unless
-the chat turned it off, and Custom or Fix it with AI carry no choice, so Auto
-after them starts with both on. A mode change that omits a choice keeps the
-chat's own. When Auto's
-completing Senior turn archives a plan, routing calls the Sessions-owned
-plan-completed handler after its lock; with `autoSave` on it inspects work and
-runs the ordinary Save once, connected copies included, and routing writes
-its short result note to chat. Turning the switch off first opens a confirmation explaining that
-code quality will suffer unless the person runs Deslop themselves; Cancel keeps
-it on. Existing saved preferences are not rewritten: an off value cannot be told
-apart from a deliberate choice. The automatic UI pass (`uiPass`) is the
-opposite default: off unless the chat turned it on, saved only as `true`, so
-preferences written before it read as off. With it on, Senior's automatic
-review message adds the UI pass on the changed screens after any Deslop, in the
-same turn. Turning it off is confirmed through the same dialog as Deslop's,
-which says that the screens a plan changes lose their design review and that a
-typed “UI pass” still runs one; Cancel keeps it on. A line under each switch
-names its chat command (“Deslop”, “UI pass” with an optional “: <section>” or
-“: the whole app”). A role resolves to a live, available
+Main chat saves Custom, Senior, Junior or Auto plus four finishing steps,
+`review`, `deslop`, `uiPass` and `autoSave`, as separate booleans in the
+existing conversation metadata, in every main-chat mode. The chat mode only
+chooses who works. `assistantFinishing.js`'s `ASSISTANT_FINISHING_DEFAULTS` holds their one default
+(review, Deslop and save on, the UI pass off) and `ASSISTANT_FINISHING_STEPS`
+their Chat settings wording; `assistantRoutingAutomation` reads each saved
+choice or its default. Fix it with AI and temporary chats save all four off
+(`ASSISTANT_NO_FINISHING`) and run none. A mode change that omits a choice keeps
+the chat's own, and choosing a Custom model keeps them too. The numbered
+`20261107-chat-finishing-steps` upgrade converted the earlier shape, where
+`review` meant Auto's optional Deslop. The chat-mode menu shows the four
+switches under Chat settings in every main-chat mode; turning any of them off
+opens one shared confirmation naming what is lost, and Cancel keeps it on. A
+line under Deslop's and the UI pass's switch names its chat command (“Deslop”,
+“UI pass” with an optional “: <section>” or “: the whole app”). A role resolves to a live, available
 selection through the owner's setup, independently of the last native engine;
 main chat runs in the Senior's tool.
 The mode menu consumes the session's access decisions, including their loading,
@@ -1746,7 +1742,7 @@ next ordinary Send supplies the existing conversation catch-up. Custom retains
 its exact-model picker, and temporary chats retain their independent controls.
 Main passes its existing initializing/reconciling state into the mode menu.
 The menu shows Connecting assistant while keeping mode and model choices editable;
-the Deslop and automatic-save switches wait for the connection. Its existing
+the four Chat settings switches wait for the connection. Its existing
 settings lock serializes preference saves separately from turn admission. Saving
 a preference does not interrupt native startup or the current turn; native
 changeover retains the original admission and cleanup checks.
@@ -1823,8 +1819,8 @@ fields directly, without repeating their values or explaining native handoff.
 The manager shares paginated catalogue assembly with Models and rejects mixed revisions. Apply saves the choice;
 Cancel changes nothing. Save failures remain visible with the draft for retry.
 
-One icon opens the mode choices, assigned models and optional Deslop
-switch in Auto; these controls occupy no separate row above the composer. Its icon and
+One icon opens the mode choices, assigned models and the four Chat settings
+switches in every main-chat mode; these controls occupy no separate row above the composer. Its icon and
 accessible label reflect the selected mode. Owners open the shared Models form
 directly in an overlay through the **Models** cog in the menu header; Auto's
 missing roles bring the first one into view. The header's close control is an X.
@@ -1948,8 +1944,8 @@ archives that other plan first. Reopening the current plan creates no duplicate.
 Completion is an
 explicit admitted Senior/review operation at exact Plan and Progress revisions. A nonempty scope is required; checkmarks are not a completion gate or proof. Senior must review actual evidence against every acceptance requirement. Ending a coding or
 review turn only ends execution and cannot promote a plan's status.
-After the exact admitted automatic final review (including any enabled Deslop)
-finishes successfully, Routing archives an explicitly completed, unchanged scope
+After the exact admitted Senior finishing turn (in Auto or a Senior chat,
+including any enabled Deslop and UI pass) finishes successfully, Routing archives an explicitly completed, unchanged scope
 through this SAME revision-fenced plan owner. It compares the reviewed scope
 bytes with the current completed document before invoking archive; unrelated,
 replaced, active, stopped and failed scopes remain current. Progress is captured
@@ -2034,7 +2030,7 @@ and tool capability through the normal role resolver. Preferences stay unchanged
 A direct Deslop command cannot steer an active turn or change an unfinished goal.
 Other steering retains its current-turn semantics and is not reclassified.
 Combined implementation and cleanup remains an implementation request, receives
-Senior review and uses the optional automatic Deslop setting; it is not rejected
+the chat's finishing turn and uses its Chat settings; it is not rejected
 as a special mixed routing state. Classifier output is a validated role/reason
 pair, never a model, executable command or generated rejection message.
 
@@ -2097,20 +2093,44 @@ an unresolved pending request. Active-turn steering bypasses classification.
 The original routing coordinator retains schema-five workflow state independently
 of delivery: working/waiting/complete plus planning/implementation/review. Router
 classifies only a new Auto request into conversation, planning, implementation or
-review with a Senior/Junior role. Direct roles and Custom do not orchestrate.
+review with a Senior/Junior role. A Senior, Junior or Custom request from main
+chat is an implementation-stage workflow from admission, without Router; an
+explicit Deslop or UI pass, generated Junior work, an unfinished goal and
+temporary chats never are.
+
+Each workflow request captures its chat's `finishing` choices (review, Deslop,
+UI pass) and builds one finishing message from them (`assistantFinishingMessage`).
+A handoff after implementation starts one finishing turn with the enabled parts
+in order; `assistantWorkflowRole` gives it to Senior in Auto and to the chat's
+own agent otherwise. That turn renders Genesis's `review` prompt task, or its
+first part's own task when review is off, and each part writes a system notice
+naming its Chat setting (`assistantFinishingNotice`) as the turn starts. With
+every part off the handoff completes the request. When a request completes
+after its finishing turn, or that handoff, routing writes the save notice and
+calls the Sessions-owned completion handler after its lock, which runs the
+ordinary Save once, connected copies included, while `autoSave` is on, in any
+mode; routing writes its short result note to chat. A direct implementation
+turn that reports complete changed nothing; one that ends without reporting is
+an ordinary reply. Neither finishes anything. Each new request records the
+earlier requests no finishing turn covered (`assistantUnreviewedRequests`),
+so stopped, waiting and unreported work folds into the next finishing turn.
+Only Senior completes an involved plan; a Junior or Custom finishing turn
+completes the request and leaves the plan active.
 
 The admitted agent uses the existing authenticated session-helper socket's
 `plan read` and `plan outcome` operations. The read supplies exact request/turn/stage
 identity, including when there is no plan. Outcome accepts continue/handoff/wait/
 complete, a bounded concrete explanation and progress boolean. The owner checks
 captured actor/access, active native turn and both involved plan revisions. Planning
-can continue or wait; only Senior review can complete. An involved plan must first
-be explicitly completed through its existing lifecycle operation.
+can continue or wait; in Auto only Senior review can complete. A direct chat's
+agent completes its own finishing turn, or implementation that changed nothing
+and involves no plan. When Senior completes, an involved plan must first be
+explicitly completed through its existing lifecycle operation.
 
 After the exact native turn succeeds, continue retains role/stage; handoff moves
 implementation to Senior review or Senior's saved substantial in-scope rework to
-Junior. Junior then hands back to Senior. Required review and optional Deslop are
-separate choices. Real blockers wait; accepted steering invalidates an older outcome
+Junior; in a direct chat the same agent reworks and finishes again. Review,
+Deslop, the UI pass and save are separate choices. Real blockers wait; accepted steering invalidates an older outcome
 and retains the running role. Stop prevents late work. Failed/interrupted turns,
 missing outcomes, changed plans and missing final-explanation proof remain waiting.
 Two no-progress turns or eight automatic steps wait for inspection. An explicit stage-specific Continue action resets that allowance. Planning never admits implementation itself.
