@@ -3,4 +3,4 @@ export {
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
   vibe64SessionDebugSummary
-} from "@local/vibe64-runtime/server/sessionDebugLogCore";
+} from "@local/vibe64-runtime/shared/sessionDebugLog";

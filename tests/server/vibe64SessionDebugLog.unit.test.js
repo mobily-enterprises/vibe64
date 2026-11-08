@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   vibe64SessionDebugError
-} from "../../packages/vibe64-runtime/src/server/sessionDebugLogCore.js";
+} from "../../packages/vibe64-runtime/src/shared/sessionDebugLog.js";
 
 test("Vibe64 session debug errors preserve stack and cause details", () => {
   const cause = new Error("Inner failure");

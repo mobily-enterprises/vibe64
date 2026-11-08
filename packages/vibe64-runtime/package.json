@@ -10,7 +10,8 @@
     "./shared": "./src/shared/index.js",
     "./shared/assistantRouting": "./src/shared/assistantRouting.js",
     "./shared/assistantRoutingAssignments": "./src/shared/assistantRoutingAssignments.js",
-    "./shared/conversationQuestions": "./src/shared/conversationQuestions.js"
+    "./shared/conversationQuestions": "./src/shared/conversationQuestions.js",
+    "./shared/sessionDebugLog": "./src/shared/sessionDebugLog.js"
   },
   "jskit": {
     "kind": "runtime",

@@ -16,7 +16,7 @@ import {
 import {
   configureVibe64SessionDebugLog,
   vibe64SessionDebugLog
-} from "../../packages/vibe64-runtime/src/server/sessionDebugLogCore.js";
+} from "../../packages/vibe64-runtime/src/shared/sessionDebugLog.js";
 
 const { operationalLogFields } = __testables;
 const { isVibe64LogLevelEnabled } = sharedLoggingTestables;

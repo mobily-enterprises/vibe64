@@ -1,5 +1,6 @@
 import { computed } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import {
   VIBE64_SURFACE_ID
@@ -59,10 +60,6 @@ function useVibe64ProjectsResource({
     resource,
     targetRoot
   };
-}
-
-function normalizeText(value = "") {
-  return String(value || "").trim();
 }
 
 export {
