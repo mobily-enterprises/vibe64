@@ -1,0 +1,41 @@
+{
+  "infrastructure": [
+    {
+      "file": "packages/vibe64-database-tools/src/server/databaseDialect.js",
+      "rule": "no-direct-knex"
+    },
+    {
+      "file": "packages/vibe64-database-tools/src/server/lookup.js",
+      "rule": "no-direct-knex"
+    },
+    {
+      "file": "packages/vibe64-database-tools/src/server/queryExecutor.js",
+      "rule": "no-direct-knex"
+    },
+    {
+      "file": "packages/vibe64-database-tools/src/server/schemaInspector.js",
+      "rule": "no-direct-knex"
+    },
+    {
+      "file": "packages/vibe64-database-tools/src/server/service.js",
+      "rule": "no-direct-knex"
+    },
+    {
+      "file": "packages/vibe64-database-tools/src/server/sessionDatabase.js",
+      "rule": "no-direct-knex"
+    },
+    {
+      "file": "packages/vibe64-database-tools/src/server/sessionQueries.js",
+      "rule": "no-direct-knex"
+    },
+    {
+      "file": "packages/vibe64-database-tools/src/server/tableQuery.js",
+      "rule": "no-direct-knex"
+    },
+    {
+      "file": "packages/vibe64-database-tools/src/server/queryExecutor.js",
+      "rule": "sql-literal"
+    }
+  ],
+  "systemScopes": []
+}

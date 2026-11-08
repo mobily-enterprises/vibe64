@@ -1,3 +1,4 @@
+// readable-check: allow no-direct-knex - infrastructure: the database tool's per-engine dialects for a project's own database
 import { vibe64Error } from "@local/vibe64-core/server/core";
 
 import {
@@ -50,6 +51,7 @@ function mysqlOrigin(field = {}, maps = {}) {
 }
 
 const POSTGRESQL_DIALECT = Object.freeze({
+  beginReadOnly: (knex, connection) => knex.raw("BEGIN READ ONLY").connection(connection),
   client: "pg",
   commandResult(raw) {
     return {
@@ -69,7 +71,6 @@ const POSTGRESQL_DIALECT = Object.freeze({
     builder[method]("CAST(?? AS TEXT) ILIKE ?", [column, pattern]);
   },
   queryOptions: Object.freeze({ rowMode: "array" }),
-  readOnlyBeginSql: "BEGIN READ ONLY",
   resultSet(raw) {
     if (!Array.isArray(raw?.fields) || raw.fields.length < 1) {
       return null;
@@ -88,6 +89,7 @@ const POSTGRESQL_DIALECT = Object.freeze({
 });
 
 const MYSQL_DIALECT = Object.freeze({
+  beginReadOnly: (knex, connection) => knex.raw("START TRANSACTION READ ONLY").connection(connection),
   client: "mysql2",
   commandResult(raw = {}, jsonSafeValue = (value) => value) {
     const response = Array.isArray(raw) ? raw[0] || {} : {};
@@ -118,7 +120,6 @@ const MYSQL_DIALECT = Object.freeze({
     builder[method]("CAST(?? AS CHAR) LIKE ?", [column, pattern]);
   },
   queryOptions: Object.freeze({ rowsAsArray: true }),
-  readOnlyBeginSql: "START TRANSACTION READ ONLY",
   resultSet(raw = {}) {
     const rows = Array.isArray(raw) ? raw[0] : null;
     const fields = Array.isArray(raw) ? raw[1] : null;
@@ -142,6 +143,7 @@ const MYSQL_DIALECT = Object.freeze({
 
 const DATABASE_DIALECTS = Object.freeze({
   sqlite: Object.freeze({
+    beginReadOnly: (knex, connection) => knex.raw("BEGIN").connection(connection),
     client: "sqlite3",
     commandResult: (raw = {}, jsonSafeValue = (value) => value) => ({
       affectedRows: Number(raw.changes || 0),
@@ -164,7 +166,6 @@ const DATABASE_DIALECTS = Object.freeze({
       builder[method]("CAST(?? AS TEXT) LIKE ?", [column, pattern]);
     },
     queryOptions: Object.freeze({ sqliteResultSet: true }),
-    readOnlyBeginSql: "BEGIN",
     // The worker stops reading a result past its bounds, so a limited result
     // knows only that it has more rows than the ones it kept before the last.
     resultSet: (raw = {}) => raw.fields?.length ? {

@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { createRuntimePackage, RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
-import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, SERVER_BUNDLE_EXTERNALS } from "../../tooling/release/server-build.mjs";
+import { buildNodeBundle, SERVER_BUNDLE_EXTERNALS } from "../../tooling/release/server-build.mjs";
 import { verifyRuntime } from "../../tooling/release/verify-runtime.mjs";
 
 const execute = promisify(execFile);
@@ -134,7 +134,7 @@ test("bundles relocate module URLs without rewriting generated worker source", a
   }
 });
 
-test("bundled assistant file runtime preserves lazy optional SQL imports after relocation", async (t) => {
+test("bundled file-backed assistant runtime relocates without resolving or loading SQL", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-assistant-sql-bundle-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const appRoot = path.join(root, "source");
@@ -188,7 +188,7 @@ test("bundled assistant file runtime preserves lazy optional SQL imports after r
     }
   `);
   const outfile = path.join(root, "relocated/entry.mjs");
-  const result = await buildNodeBundle({ appRoot, entryPoint, outfile, plugins: [{
+  await buildNodeBundle({ appRoot, entryPoint, outfile, plugins: [{
     name: "reject-assistant-database-resolution",
     setup(build) {
       build.onResolve({ filter: /^(?:@jskit-ai\/database-runtime|knex)(?:\/|$)/ }, args => ({
@@ -196,12 +196,6 @@ test("bundled assistant file runtime preserves lazy optional SQL imports after r
       }));
     }
   }] });
-  const imports = Object.values(result.metafile.outputs).flatMap(output => output.imports);
-  const sqlImports = imports.filter(entry => entry.path.includes("/repositories/"));
-  assert.deepEqual(sqlImports.map(entry => entry.path).sort(), ASSISTANT_SQL_RUNTIME_ENTRIES.map(entry => `./${entry}`).sort());
-  assert.ok(sqlImports.every(entry => entry.external && entry.kind === "dynamic-import"));
-  assert.ok(!Object.keys(result.metafile.inputs).some(entry =>
-    /\/repositories\/(?:assistantConfigRepository|conversationsRepository|messagesRepository|repositoryPersistenceUtils)\.js$/u.test(entry)));
   const child = await execute(process.execPath, ["--input-type=module", "--eval", `
     import { registerHooks } from "node:module";
     registerHooks({ resolve(specifier, context, nextResolve) {
@@ -301,10 +295,6 @@ test("runtime release relocates, runs native and browser services, and packs wit
     assert.match(codexProcess.stdout, /packaged Codex child, model catalogue and history adapter ready/u);
     await assert.rejects(readFile(descriptor), { code: "ENOENT" });
     const manifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
-    for (const entry of ASSISTANT_SQL_RUNTIME_ENTRIES) {
-      assert.ok(RUNTIME_ENTRIES.includes(entry));
-      assert.ok((await readFile(path.join(installed, entry), "utf8")).length > 0);
-    }
     if (installedAssistantDatabase === null) {
       assert.equal(manifest.dependencies["@jskit-ai/database-runtime"], undefined);
       assert.ok(!manifest.bundleDependencies.includes("@jskit-ai/database-runtime"));

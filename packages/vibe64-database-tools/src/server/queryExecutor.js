@@ -1,3 +1,5 @@
+// readable-check: allow no-direct-knex - infrastructure: the database tool's runner for the SQL a person writes against a project's own database
+// readable-check: allow sql-literal - infrastructure: the database tool runs the SQL a person writes, as written, on a project's own database
 import {
   isDeepStrictEqual
 } from "node:util";
@@ -341,7 +343,7 @@ function normalizeRawResponse(raw, schema = {}, connection = {}, sql = "") {
 }
 
 async function beginReadOnly(knex, connection, engine = "postgresql") {
-  await knex.raw(databaseDialect(engine).readOnlyBeginSql).connection(connection);
+  await databaseDialect(engine).beginReadOnly(knex, connection);
 }
 
 async function rollbackReadOnly(knex, connection) {

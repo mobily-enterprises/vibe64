@@ -1,3 +1,4 @@
+// readable-check: allow no-direct-knex - infrastructure: the database tool's connection to a session's project database
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { thisComputerToolFamily } from "@local/vibe64-execution/server";
 import { DATABASE_TOOL_ENVIRONMENT_CONTRACT } from "@local/vibe64-project/server/resourceEnvironment";

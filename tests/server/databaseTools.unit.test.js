@@ -219,24 +219,31 @@ test("MySQL URL connections cannot enable driver multi-statements", () => {
 });
 
 test("database dialect registry is the single PostgreSQL and MySQL capability seam", () => {
+  const beginSql = (engine) => {
+    let sql = "";
+    databaseDialect(engine).beginReadOnly({ raw: (text) => ({ connection: () => { sql = text; } }) }, {});
+    return sql;
+  };
   assert.deepEqual(Object.keys(DATABASE_DIALECTS).sort(), ["mysql", "postgresql", "sqlite"]);
   assert.equal(databaseDialect("postgresql").client, "pg");
-  assert.equal(databaseDialect("postgresql").readOnlyBeginSql, "BEGIN READ ONLY");
+  assert.equal(beginSql("postgresql"), "BEGIN READ ONLY");
   assert.deepEqual(databaseDialect("postgresql").urlProtocols, ["postgres", "postgresql"]);
   assert.equal(databaseDialect("mysql").client, "mysql2");
-  assert.equal(databaseDialect("mysql").readOnlyBeginSql, "START TRANSACTION READ ONLY");
+  assert.equal(beginSql("mysql"), "START TRANSACTION READ ONLY");
+  assert.equal(beginSql("sqlite"), "BEGIN");
   assert.deepEqual(databaseDialect("mysql").urlProtocols, ["maria", "mariadb", "mysql"]);
   assert.throws(
     () => databaseDialect("unsupported"),
     { code: "vibe64_session_database_client_unsupported" }
   );
   for (const dialect of Object.values(DATABASE_DIALECTS)) {
-    for (const name of ["client", "engine", "label", "readOnlyBeginSql"]) {
+    for (const name of ["client", "engine", "label"]) {
       assert.ok(dialect[name], `${dialect.engine} ${name}`);
     }
     assert.ok(dialect.urlProtocols.length > 0, dialect.engine);
     assert.equal(typeof dialect.queryOptions, "object", dialect.engine);
     for (const name of [
+      "beginReadOnly",
       "commandResult",
       "connectionOptions",
       "databaseType",

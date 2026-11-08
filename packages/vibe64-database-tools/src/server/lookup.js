@@ -1,3 +1,4 @@
+// readable-check: allow no-direct-knex - infrastructure: the database tool's row lookups in a project's own database
 import { vibe64Error } from "@local/vibe64-core/server/core";
 
 import {

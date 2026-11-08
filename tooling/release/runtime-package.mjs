@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
 import { chmod, cp, lstat, mkdir, readFile, readdir, realpath, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, buildServerBundle, SERVER_BUNDLE_EXTERNALS } from "./server-build.mjs";
+import { buildNodeBundle, buildServerBundle, SERVER_BUNDLE_EXTERNALS } from "./server-build.mjs";
 
 const GENESIS_BOUNDARY = "@local/vibe64-genesis/server";
 // The boundary keeps every Genesis server export out of the server bundle, so
@@ -35,8 +35,7 @@ const RUNTIME_ENTRIES = [
   // Recorded processes load the Node preload, and people run the PHP build
   // command; the Python and PHP recorder sources ship as package data.
   "node_modules/@local/vibe64-usage-recording/runtime/node/preload.mjs",
-  "node_modules/@local/vibe64-usage-recording/runtime/php/build.mjs",
-  ...ASSISTANT_SQL_RUNTIME_ENTRIES
+  "node_modules/@local/vibe64-usage-recording/runtime/php/build.mjs"
 ];
 const builtins = new Set(builtinModules.flatMap(name => [name, `node:${name}`]));
 const json = async filename => JSON.parse(await readFile(filename, "utf8"));
@@ -77,9 +76,7 @@ async function buildRuntimeBundles({ appRoot, releaseAppRoot, extraEntries = [],
     }
     results.push(await buildNodeBundle({
       appRoot, entryPoint: path.join(appRoot, entry), outfile,
-      external: [...SERVER_BUNDLE_EXTERNALS, GENESIS_BOUNDARY, ...extraExternals,
-        ...(ASSISTANT_SQL_RUNTIME_ENTRIES.includes(entry)
-          ? ["@jskit-ai/database-runtime", "@jskit-ai/database-runtime/*"] : [])],
+      external: [...SERVER_BUNDLE_EXTERNALS, GENESIS_BOUNDARY, ...extraExternals],
       plugins: [{
         name: "vibe64-published-server",
         setup(build) {

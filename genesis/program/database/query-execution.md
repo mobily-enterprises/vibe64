@@ -190,6 +190,10 @@ large result is never held whole in the editor's memory; the statement itself
 still runs to completion, so a write is never cut short, and `fullRowCount`
 counts every row it returned. Other Knex queries (schema inspection, lookups,
 edits) use the drivers' normal buffered reads.
+The database tool works on a project's own database, not on tables an
+application feature owns, so its Knex modules take JSKIT's data-access
+infrastructure exception, each listed in `jskit-data-access.json`. Its own SQL
+is written as literals with bindings; the SQL a person writes runs as written.
 Copilot resolves the submitting user's Explain & check role (`database_assistant`)
 before inference: the owner's setup for the owner, the team setup for everyone
 else. It may use another orchestrator, and a team member's question uses the team

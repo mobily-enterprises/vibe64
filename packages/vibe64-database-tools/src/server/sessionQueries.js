@@ -1,3 +1,4 @@
+// readable-check: allow no-direct-knex - infrastructure: the database tool's record of the SQL each project session runs
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { cancelDatabaseQuery, executeDatabaseQuery } from "./queryExecutor.js";

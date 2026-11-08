@@ -1,6 +1,7 @@
+// readable-check: allow no-direct-knex - infrastructure: the database tool's schema reader for a project's own database
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
-const POSTGRES_TABLES_SQL = `
+const postgresTablesQuery = (knex) => knex.raw(`
   SELECT
     n.nspname AS schema_name,
     c.relname AS table_name,
@@ -22,9 +23,9 @@ const POSTGRES_TABLES_SQL = `
     AND pg_catalog.has_schema_privilege(n.oid, 'USAGE')
     AND pg_catalog.has_table_privilege(c.oid, 'SELECT')
   ORDER BY n.nspname, c.relname
-`;
+`);
 
-const POSTGRES_COLUMNS_SQL = `
+const postgresColumnsQuery = (knex) => knex.raw(`
   SELECT
     c.oid::text AS table_id,
     n.nspname AS schema_name,
@@ -53,9 +54,9 @@ const POSTGRES_COLUMNS_SQL = `
     AND pg_catalog.has_schema_privilege(n.oid, 'USAGE')
     AND pg_catalog.has_table_privilege(c.oid, 'SELECT')
   ORDER BY n.nspname, c.relname, a.attnum
-`;
+`);
 
-const POSTGRES_CONSTRAINTS_SQL = `
+const postgresConstraintsQuery = (knex) => knex.raw(`
   SELECT
     con.oid::text AS constraint_id,
     con.conname AS constraint_name,
@@ -85,9 +86,9 @@ const POSTGRES_CONSTRAINTS_SQL = `
     AND pg_catalog.has_schema_privilege(source_ns.oid, 'USAGE')
     AND pg_catalog.has_table_privilege(source.oid, 'SELECT')
   ORDER BY source_ns.nspname, source.relname, con.conname
-`;
+`);
 
-const POSTGRES_INDEXES_SQL = `
+const postgresIndexesQuery = (knex) => knex.raw(`
   SELECT
     idx.oid::text AS index_id,
     ns.nspname AS schema_name,
@@ -120,9 +121,9 @@ const POSTGRES_INDEXES_SQL = `
     i.indisprimary, i.indisunique, i.indisvalid, i.indisready,
     am.amname, i.indpred, i.indrelid, i.indexrelid
   ORDER BY ns.nspname, tbl.relname, idx.relname
-`;
+`);
 
-const MYSQL_TABLES_SQL = `
+const mysqlTablesQuery = (knex) => knex.raw(`
   SELECT
     t.TABLE_SCHEMA AS schema_name,
     t.TABLE_NAME AS table_name,
@@ -138,9 +139,9 @@ const MYSQL_TABLES_SQL = `
     ON v.TABLE_SCHEMA = t.TABLE_SCHEMA AND v.TABLE_NAME = t.TABLE_NAME
   WHERE t.TABLE_SCHEMA = DATABASE()
   ORDER BY t.TABLE_NAME
-`;
+`);
 
-const MYSQL_COLUMNS_SQL = `
+const mysqlColumnsQuery = (knex) => knex.raw(`
   SELECT
     c.TABLE_SCHEMA AS schema_name,
     c.TABLE_NAME AS table_name,
@@ -158,9 +159,9 @@ const MYSQL_COLUMNS_SQL = `
   FROM information_schema.COLUMNS c
   WHERE c.TABLE_SCHEMA = DATABASE()
   ORDER BY c.TABLE_NAME, c.ORDINAL_POSITION
-`;
+`);
 
-const MYSQL_CONSTRAINT_COLUMNS_SQL = `
+const mysqlConstraintColumnsQuery = (knex) => knex.raw(`
   SELECT
     tc.TABLE_SCHEMA AS schema_name,
     tc.TABLE_NAME AS table_name,
@@ -179,9 +180,9 @@ const MYSQL_CONSTRAINT_COLUMNS_SQL = `
     AND kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
   WHERE tc.TABLE_SCHEMA = DATABASE()
   ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME, kcu.ORDINAL_POSITION
-`;
+`);
 
-const MYSQL_REFERENTIAL_RULES_SQL = `
+const mysqlReferentialRulesQuery = (knex) => knex.raw(`
   SELECT
     rc.CONSTRAINT_SCHEMA AS schema_name,
     rc.TABLE_NAME AS table_name,
@@ -194,9 +195,9 @@ const MYSQL_REFERENTIAL_RULES_SQL = `
   FROM information_schema.REFERENTIAL_CONSTRAINTS rc
   WHERE rc.CONSTRAINT_SCHEMA = DATABASE()
   ORDER BY rc.TABLE_NAME, rc.CONSTRAINT_NAME
-`;
+`);
 
-const MYSQL_CHECKS_SQL = `
+const mysqlChecksQuery = (knex) => knex.raw(`
   SELECT
     tc.TABLE_SCHEMA AS schema_name,
     tc.TABLE_NAME AS table_name,
@@ -209,9 +210,9 @@ const MYSQL_CHECKS_SQL = `
   WHERE tc.TABLE_SCHEMA = DATABASE()
     AND tc.CONSTRAINT_TYPE = 'CHECK'
   ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME
-`;
+`);
 
-const MYSQL_INDEXES_SQL = `
+const mysqlIndexesQuery = (knex) => knex.raw(`
   SELECT
     s.TABLE_SCHEMA AS schema_name,
     s.TABLE_NAME AS table_name,
@@ -227,10 +228,10 @@ const MYSQL_INDEXES_SQL = `
   FROM information_schema.STATISTICS s
   WHERE s.TABLE_SCHEMA = DATABASE()
   ORDER BY s.TABLE_NAME, s.INDEX_NAME, s.SEQ_IN_INDEX
-`;
+`);
 
-async function rawRows(knex, sql) {
-  const result = await knex.raw(sql);
+async function rawRows(query) {
+  const result = await query;
   if (Array.isArray(result)) {
     return Array.isArray(result[0]) ? result[0] : [];
   }
@@ -372,11 +373,11 @@ function finalSchema(connection = {}, version = "", tables = []) {
 
 async function inspectPostgresSchema(knex, connection = {}) {
   const [versionRows, tableRows, columnRows, constraintRows, indexRows] = await Promise.all([
-    rawRows(knex, "SELECT current_database() AS database_name, current_schema() AS default_schema, version() AS version"),
-    rawRows(knex, POSTGRES_TABLES_SQL),
-    rawRows(knex, POSTGRES_COLUMNS_SQL),
-    rawRows(knex, POSTGRES_CONSTRAINTS_SQL),
-    rawRows(knex, POSTGRES_INDEXES_SQL)
+    rawRows(knex.raw("SELECT current_database() AS database_name, current_schema() AS default_schema, version() AS version")),
+    rawRows(postgresTablesQuery(knex)),
+    rawRows(postgresColumnsQuery(knex)),
+    rawRows(postgresConstraintsQuery(knex)),
+    rawRows(postgresIndexesQuery(knex))
   ]);
   const tables = tableRows.map((record) => normalizedTable(record, postgresTableKind(record.relkind)));
   const byKey = new Map(tables.map((table) => [tableKey(table.schema, table.name), table]));
@@ -485,9 +486,9 @@ function groupedRows(rows, keyFn) {
   return groups;
 }
 
-async function optionalRawRows(knex, sql) {
+async function optionalRawRows(query) {
   try {
-    return await rawRows(knex, sql);
+    return await rawRows(query);
   } catch (error) {
     if (["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"].includes(error?.code)) {
       return [];
@@ -498,13 +499,13 @@ async function optionalRawRows(knex, sql) {
 
 async function inspectMysqlSchema(knex, connection = {}) {
   const [versionRows, tableRows, columnRows, constraintColumnRows, ruleRows, checkRows, indexRows] = await Promise.all([
-    rawRows(knex, "SELECT DATABASE() AS database_name, VERSION() AS version"),
-    rawRows(knex, MYSQL_TABLES_SQL),
-    rawRows(knex, MYSQL_COLUMNS_SQL),
-    rawRows(knex, MYSQL_CONSTRAINT_COLUMNS_SQL),
-    rawRows(knex, MYSQL_REFERENTIAL_RULES_SQL),
-    optionalRawRows(knex, MYSQL_CHECKS_SQL),
-    rawRows(knex, MYSQL_INDEXES_SQL)
+    rawRows(knex.raw("SELECT DATABASE() AS database_name, VERSION() AS version")),
+    rawRows(mysqlTablesQuery(knex)),
+    rawRows(mysqlColumnsQuery(knex)),
+    rawRows(mysqlConstraintColumnsQuery(knex)),
+    rawRows(mysqlReferentialRulesQuery(knex)),
+    optionalRawRows(mysqlChecksQuery(knex)),
+    rawRows(mysqlIndexesQuery(knex))
   ]);
   const tables = tableRows.map((record) => normalizedTable(
     record,
@@ -614,12 +615,12 @@ async function inspectMysqlSchema(knex, connection = {}) {
 }
 
 async function inspectSqliteSchema(knex, connection = {}) {
-  const rows = async (sql, bindings = []) => (await knex.raw(sql, bindings)).rows;
-  const version = (await rows("SELECT sqlite_version() AS version"))[0].version;
+  const rows = async (query) => (await query).rows;
+  const version = (await rows(knex.raw("SELECT sqlite_version() AS version")))[0].version;
   const records = await rows(
-    "SELECT name, type, sql FROM main.sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    knex.raw("SELECT name, type, sql FROM main.sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name")
   );
-  const tableList = await rows("PRAGMA main.table_list");
+  const tableList = await rows(knex.raw("PRAGMA main.table_list"));
   const tables = [];
   for (const record of records) {
     const properties = tableList.find((entry) => entry.schema === "main" && entry.name === record.name);
@@ -630,8 +631,8 @@ async function inspectSqliteSchema(knex, connection = {}) {
       storage_engine: "SQLite",
       is_updatable: record.type === "table"
     }, record.type);
-    const columns = await rows("SELECT * FROM pragma_table_xinfo(?) ORDER BY cid", [record.name]);
-    const indexes = await rows("SELECT * FROM pragma_index_list(?) ORDER BY seq", [record.name]);
+    const columns = await rows(knex.raw("SELECT * FROM pragma_table_xinfo(?) ORDER BY cid", [record.name]));
+    const indexes = await rows(knex.raw("SELECT * FROM pragma_index_list(?) ORDER BY seq", [record.name]));
     const primary = columns.filter((column) => Number(column.pk) > 0).sort((a, b) => Number(a.pk) - Number(b.pk));
     const rowidAlias = primary.length === 1 && String(primary[0].type).toUpperCase() === "INTEGER" &&
       !Number(properties?.wr) && !indexes.some((index) => index.origin === "pk");
@@ -664,8 +665,8 @@ async function inspectSqliteSchema(knex, connection = {}) {
       });
     }
     for (const index of indexes) {
-      const entries = await rows("SELECT * FROM pragma_index_xinfo(?) WHERE key = 1 ORDER BY seqno", [index.name]);
-      const definition = (await rows("SELECT sql FROM main.sqlite_schema WHERE type = 'index' AND name = ?", [index.name]))[0]?.sql || "";
+      const entries = await rows(knex.raw("SELECT * FROM pragma_index_xinfo(?) WHERE key = 1 ORDER BY seqno", [index.name]));
+      const definition = (await rows(knex.raw("SELECT sql FROM main.sqlite_schema WHERE type = 'index' AND name = ?", [index.name])))[0]?.sql || "";
       table.indexes.push({
         id: index.name,
         name: index.name,
@@ -680,7 +681,7 @@ async function inspectSqliteSchema(knex, connection = {}) {
         comment: ""
       });
     }
-    const foreignKeys = await rows("SELECT * FROM pragma_foreign_key_list(?) ORDER BY id, seq", [record.name]);
+    const foreignKeys = await rows(knex.raw("SELECT * FROM pragma_foreign_key_list(?) ORDER BY id, seq", [record.name]));
     for (const [id, parts] of groupedRows(foreignKeys, (entry) => String(entry.id))) {
       table.constraints.push({
         name: `${record.name}_foreign_${id}`,

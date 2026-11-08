@@ -1,3 +1,4 @@
+// readable-check: allow no-direct-knex - infrastructure: the database tool's service over a project's own database
 import { databaseAssistantAvailability } from "./assistant.js";
 import { createDatabaseAssistantTasks } from "./assistantTasks.js";
 import { databaseError } from "./databaseError.js";
