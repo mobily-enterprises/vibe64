@@ -3226,11 +3226,19 @@ test("Main OpenCode browser facade keeps original action authority and live nati
 
     const eventCount = events.length;
     access.allowed = false;
+    // assistant-core lets a streamed delta reuse its subscriber's authorization
+    // while that is under a second old, so a revoked subscriber stops hearing
+    // a reply within a second. Advance the clock by the second that contract
+    // allows: the next delta is then authorized again by the original action
+    // owner.
+    t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+    t.mock.timers.tick(1000);
     response.text = "Private progress";
     // Observe the original native publication and the original action owner's
     // denial before issuing another operation; a rejected read cannot satisfy
     // this per-event authorization proof.
     await Promise.all([privatePublication.promise, deniedPublication.promise]);
+    t.mock.timers.reset();
     assert.equal(events.length, eventCount, "revoked project access stops retained browser publications");
     await assert.rejects(facade.read(), { statusCode: 403 });
     await assert.rejects(facade.send({ messageId: "revoked", text: "Do not send" }), { statusCode: 403 });
