@@ -49,6 +49,8 @@ function useDatabaseErd({ props, emit, feedback }) {
   let draggingSnapshot = null;
   let pendingRemoteLayout = null;
   let appliedLayoutRevision = props.layout.revision || 0;
+  // The diagram this viewer last saved, or last took from the shared layout.
+  let lastSharedLayout = null;
   let appliedFocusRequest = null;
   let disposed = false;
   let viewportSaveTimer = null;
@@ -68,7 +70,11 @@ function useDatabaseErd({ props, emit, feedback }) {
     redoStack.value = [];
   }
   function clearViewportSave() { clearTimeout(viewportSaveTimer); viewportSaveTimer = null; }
-  function persistPositions() { clearViewportSave(); emit("save-layout", { ...snapshot(), views: views.value }); }
+  function persistPositions() {
+    clearViewportSave();
+    lastSharedLayout = snapshot();
+    emit("save-layout", { ...lastSharedLayout, views: views.value });
+  }
   function buildNodes(saved = storedNodes) {
     return erdFlowNodes({
       tables: tables.value, relationships: relationships.value, saved,
@@ -375,14 +381,17 @@ function useDatabaseErd({ props, emit, feedback }) {
   function receiveLayout(layout) {
     if (!layout.revision || layout.revision <= appliedLayoutRevision) return;
     appliedLayoutRevision = layout.revision;
-    const current = snapshot();
     // Acknowledging our own save (or changing only named views) does not change
     // the graph. Rebuilding it would disable controls and repeat dense routing.
-    if (sameErdGraph(layout, current)) {
+    // The acknowledgement can arrive while a newer change of ours is still being
+    // drawn, such as a chosen saved view; that change saves once drawn, and taking
+    // the acknowledged diagram would undo it. So it matches our last save as well.
+    if (sameErdGraph(layout, snapshot()) || (lastSharedLayout && sameErdGraph(layout, lastSharedLayout))) {
       views.value = JSON.parse(JSON.stringify(layout.views || []));
       pendingRemoteLayout = null;
       return;
     }
+    lastSharedLayout = layout;
     if (draggingSnapshot) {
       pendingRemoteLayout = layout;
     } else if (layoutWorker) {

@@ -1640,6 +1640,67 @@ test("@erd-controls saved views, groups, filters and fullscreen remain usable fr
   } finally { await context.close().catch(() => {}); await server.close(); }
 });
 
+test("@erd-controls a saved view chosen while the previous change is saving stays shown", async ({ browser, baseURL }) => {
+  const server = await sharedDiagramServer(baseURL!);
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  let releaseSave = () => {};
+  const gate = new Promise<void>(resolve => { releaseSave = resolve; });
+  try {
+    const page = await context.newPage();
+    await openDiagram(page, server.url);
+    const visibleTables = page.locator('.database-erd .vue-flow__node:visible');
+    const options = page.locator(".database-erd__options");
+    const openOptions = async () => {
+      if (!await options.isVisible()) await page.getByRole("button", { name: "Diagram options", exact: true }).click();
+    };
+    await diagramAction(page, "Edit table groups");
+    const groupDialog = page.getByRole("dialog");
+    await groupDialog.getByRole("textbox", { name: "Group name", exact: true }).fill("Customers only");
+    await groupDialog.getByRole("combobox", { name: "Tables in group", exact: true }).fill("customers");
+    await openMenu(page).getByRole("option", { name: "customers", exact: true }).click();
+    await groupDialog.getByRole("button", { name: "Save group", exact: true }).click();
+    await expect(groupDialog).toBeHidden();
+    await openOptions();
+    await options.locator(".v-select").click({ timeout: 5000 });
+    await openMenu(page).getByRole("option", { name: "Customers only", exact: true }).click();
+    await expect(visibleTables).toHaveCount(1);
+    await options.getByRole("button", { name: "Saved views", exact: true }).click();
+    await page.getByText("Save view…", { exact: true }).click();
+    await page.getByRole("textbox", { name: "View name", exact: true }).fill("Customer view");
+    await page.getByRole("button", { name: "Save view", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    type SavedLayout = { activeGroup: string; views: { activeGroup: string }[] };
+    const lastSave = () => server.saves.at(-1)?.layout as SavedLayout | undefined;
+    await expect.poll(() => lastSave()?.views.length).toBe(1);
+    const viewGroup = lastSave()!.views[0].activeGroup;
+    expect(viewGroup).not.toBe("");
+
+    // Showing all tables saves, and that save goes out only as the saved view is clicked, so its acknowledgement
+    // arrives while the view is still being drawn: it must not put all tables back.
+    let heldSaves = 0;
+    await page.route("**/database/sessions/*/layout", async route => {
+      heldSaves += 1;
+      await gate;
+      await route.continue();
+    });
+    await page.exposeFunction("releaseLayoutSave", () => releaseSave());
+    await openOptions();
+    await options.locator(".v-select").click({ timeout: 5000 });
+    await openMenu(page).getByRole("option", { name: "All tables", exact: true }).click();
+    await expect(visibleTables).toHaveCount(2);
+    await expect.poll(() => heldSaves).toBe(1);
+    await openOptions();
+    await options.getByRole("button", { name: "Saved views", exact: true }).click();
+    const customerView = page.getByText("Customer view", { exact: true });
+    await customerView.evaluate(element => element.addEventListener("click", () => {
+      void (window as typeof window & { releaseLayoutSave: () => Promise<void> }).releaseLayoutSave();
+    }, { capture: true, once: true }));
+    await customerView.click();
+    await expect.poll(() => lastSave()?.activeGroup).toBe(viewGroup);
+    await expect(visibleTables).toHaveCount(1);
+  } finally { releaseSave(); await context.close().catch(() => {}); await server.close(); }
+});
+
 test("@erd-camera zoom saves after settling and closing the page cancels a pending camera save", async ({ browser, baseURL }) => {
   const server = await sharedDiagramServer(baseURL!);
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });

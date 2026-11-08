@@ -167,7 +167,8 @@ hidden workspaces catch up on activation. A remote move leaves the viewer's
 current camera and selection alone. Reload restores the shared saved zoom and
 exact positions, even if cards overlap; automatic placement only moves new
 tables unless Reset positions was requested. Writes are serialized and assigned
-increasing revisions; older refreshes cannot replace newer acknowledged layouts.
+increasing revisions; older refreshes cannot replace newer acknowledged layouts,
+and acknowledging a viewer's own save never undoes a change that viewer made since.
 Reading the layout only reads and normalises that shared artifact; it never writes.
 SQL history and snippets remain user-specific. Fullscreen keeps
 controls, menus, and dialogs inside the fullscreen element.
