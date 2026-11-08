@@ -118,12 +118,17 @@ function createAiTaskRunner({
    * @param {string} sessionId
    * @param {string} taskId
    * @param {Omit<AiTaskEvent, "at">} event
-   * @returns {Promise<object | null>} the conversation as saved; null once closed
+   * @param {{ found?: boolean }} [options] found: the event is what this runner's own work found, which a closed
+   *   runner no longer saves; a person's action still is
+   * @returns {Promise<object | null>} the conversation as saved; null when the task is gone, or for a finding once closed
    */
-  async function apply(sessionId, taskId, event) {
+  async function apply(sessionId, taskId, event, { found = false } = {}) {
     const { store } = await project.createRuntimeWithoutSource();
     let changed = false;
     const record = await store.mutateSession(sessionId, async () => {
+      // Checked in the write: work under way at close may have read what the restart did, such as a turn its
+      // shutdown interrupted, which this server would save as its own finding.
+      if (found && closed) return null;
       const current = await store.readSessionConversation(sessionId, taskId);
       if (!current?.task) return null;
       const { task } = advanceAiTask(current.task, { at: new Date().toISOString(), ...event });
@@ -134,6 +139,11 @@ function createAiTaskRunner({
     if (record?.task?.phase === AI_TASK_PHASES.CANCELLING) runningChecks.get(taskId)?.abort();
     if (changed) await publishSessionChanged(sessionId, { reason: "ai-task-changed", payload: { aiTask: present(record) } });
     return record;
+  }
+
+  /** Saves what this runner's own work found: a send's admission, a turn's end, a check's answer. */
+  function applyFound(sessionId, taskId, event) {
+    return apply(sessionId, taskId, event, { found: true });
   }
 
   function warn(sessionId, event, error, message) {
@@ -173,7 +183,7 @@ function createAiTaskRunner({
     } catch (error) {
       event = failedTurn(error?.message);
     }
-    await apply(sessionId, conversationId, event);
+    await applyFound(sessionId, conversationId, event);
     drive.again = true;
   }
 
@@ -182,7 +192,7 @@ function createAiTaskRunner({
     await terminals.stopTemporaryConversation(sessionId, { conversationId }).catch((error) => {
       warn(sessionId, "interrupt_failed", error, "An AI task's turn could not be stopped; the task ends anyway.");
     });
-    await apply(sessionId, conversationId, { type: "turn_stopped" });
+    await applyFound(sessionId, conversationId, { type: "turn_stopped" });
     drive.again = true;
   }
 
@@ -207,7 +217,7 @@ function createAiTaskRunner({
     }
     const current = await runtime.store.readSessionConversation(sessionId, conversationId);
     if (!current?.task) return;
-    await apply(sessionId, conversationId, checkEvent(kind, id, result, current));
+    await applyFound(sessionId, conversationId, checkEvent(kind, id, result, current));
     if (result.waiting) wakeLater(sessionId, waitingRecheckMs);
     else drive.again = true;
   }
@@ -215,17 +225,18 @@ function createAiTaskRunner({
   /** Reads how the task's turn ended, when it has. */
   async function settleTurn(sessionId, record, drive) {
     const { conversationId, task } = record;
-    const restarted = !seenTasks.has(conversationId);
-    seenTasks.add(conversationId);
     const turn = await terminals.readConversationTurn(sessionId, conversationId);
     if (turn?.code === WRITE_BUSY_CODE) {
       wakeLater(sessionId, writeBusyRetryMs);
       return;
     }
     if (!turn) return;
+    // Seen once a read has answered: a restart is not forgotten because its first read was busy.
+    const restarted = !seenTasks.has(conversationId);
+    seenTasks.add(conversationId);
     const event = turnEvent(task, turn, restarted);
     if (!event) return;
-    await apply(sessionId, conversationId, event);
+    await applyFound(sessionId, conversationId, event);
     drive.again = true;
   }
 
@@ -235,7 +246,7 @@ function createAiTaskRunner({
     if (pending?.effect === "interrupt") return interrupt(sessionId, record, drive);
     if (phase === AI_TASK_PHASES.CANCELLING) {
       // Effects run one at a time, so a check owed here is not running: nothing is left to wait for.
-      await apply(sessionId, record.conversationId, { type: "cancel_settled" });
+      await applyFound(sessionId, record.conversationId, { type: "cancel_settled" });
       return undefined;
     }
     if (pending?.effect === "check") return check(sessionId, record, drive);
@@ -249,6 +260,7 @@ function createAiTaskRunner({
         const { store } = await project.createRuntimeWithoutSource();
         const records = await store.listSessionConversations(sessionId);
         for (const record of records.filter(item => item.task?.active && item.state !== "closing")) {
+          if (closed) break;
           await advance(sessionId, record, drive);
         }
       }
@@ -287,7 +299,10 @@ function createAiTaskRunner({
     seenTasks.delete(taskId);
   }
 
-  /** A closed runner starts nothing more; what it owes is performed after the restart. */
+  /**
+   * A closed runner starts nothing more and saves nothing its work finds, even work it began before; what it owes is
+   * performed after the restart. A person's action is still saved, for the next server to perform.
+   */
   function close() {
     closed = true;
     for (const timer of timers.values()) clearTimeout(timer);

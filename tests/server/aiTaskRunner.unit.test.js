@@ -623,6 +623,65 @@ test("crash in working, and the turn is lost: it stops at needs_you and does not
   assert.equal(f.native.turns.length, 2);
 }));
 
+/** Holds the next read of a task's turn until `hold.release`, and resolves `hold.reached` once it is held. */
+const heldTurnRead = hold => terminals => ({ ...terminals,
+  async readConversationTurn(...args) {
+    if (hold.armed) {
+      hold.armed = false;
+      hold.reached.resolve();
+      await hold.release.promise;
+    }
+    return terminals.readConversationTurn(...args);
+  } });
+
+test("a restart during a read of the turn: the old server saves nothing, and the interrupted turn reads as interrupted", () => withFixture(async (f) => {
+  const hold = { armed: false, reached: Promise.withResolvers(), release: Promise.withResolvers() };
+  const running = f.boot({ terminalsWrap: heldTurnRead(hold) });
+  const { task } = await f.start(running.aiTasks);
+  await f.quiet(running.aiTasks);
+  assert.equal((await f.task(task.id)).phase, "working");
+  hold.armed = true;
+  const reading = f.quiet(running.aiTasks);
+  await hold.reached.promise;
+  running.aiTasks.closeRunner();
+  Object.assign(f.native, { status: "interrupted", text: "" });
+  hold.release.resolve();
+  await reading;
+  assert.equal((await f.task(task.id)).phase, "working", "the closed server saved nothing");
+  const restarted = f.boot();
+  await f.quiet(restarted.aiTasks);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "needs_you");
+  assert.equal(saved.reason, "interrupted");
+}));
+
+test("a restart whose first read of the turn finds the chat busy still reads the interrupted turn as interrupted", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks);
+  await f.quiet(running.aiTasks);
+  running.aiTasks.closeRunner();
+  Object.assign(f.native, { status: "interrupted", text: "" });
+  let busyReads = 1;
+  const restarted = f.boot({ terminalsWrap: terminals => ({ ...terminals,
+    async readConversationTurn(...args) {
+      if (busyReads > 0) {
+        busyReads -= 1;
+        return { code: "vibe64_agent_write_mode_busy" };
+      }
+      return terminals.readConversationTurn(...args);
+    } }) });
+  try {
+    await f.quiet(restarted.aiTasks);
+    assert.equal((await f.task(task.id)).phase, "working", "a busy read decides nothing");
+    await f.quiet(restarted.aiTasks);
+    const saved = await f.task(task.id);
+    assert.equal(saved.phase, "needs_you");
+    assert.equal(saved.reason, "interrupted");
+  } finally {
+    restarted.aiTasks.closeRunner();
+  }
+}));
+
 test("crash in working while the turn still runs: the task keeps waiting for it", () => withFixture(async (f) => {
   const running = f.boot();
   const { task } = await f.start(running.aiTasks);
