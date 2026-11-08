@@ -120,6 +120,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/onboarding/AiTeamSetupCard.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingMark.vue`
+- `packages/vibe64-accounts/src/theme/palettes.js`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingSetUpPill.vue`
 - `packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue`
 - `src/App.vue`

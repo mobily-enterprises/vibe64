@@ -30,7 +30,7 @@ const learning = useVibe64Learning();
   background: var(--v64-learning-container, rgb(var(--v-theme-surface)));
   border: 1px solid var(--v64-learning-strong);
   border-radius: var(--v64-shape-md, 12px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 6px 24px rgba(var(--v-theme-shadow), 0.22);
   display: flex;
   flex-direction: column;
   inset: 0;

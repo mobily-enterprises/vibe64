@@ -16,7 +16,7 @@ import { aiOnboardingNeeded, requestVibe64AiOnboarding } from "./aiOnboardingEve
   background: var(--v64-learning);
   border: 0;
   border-radius: var(--v64-shape-full);
-  box-shadow: 0 4px 12px -6px rgb(160 110 0 / 70%);
+  box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--v64-learning-strong) 70%, transparent);
   color: var(--v64-on-learning);
   cursor: pointer;
   display: inline-flex;

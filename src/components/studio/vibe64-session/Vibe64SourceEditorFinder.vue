@@ -122,7 +122,7 @@ const fastOpenPanelVisible = computed(() => Boolean(props.editor.fileQuery.value
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgba(var(--v-border-color), 0.35);
   border-radius: 8px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 12px 28px rgba(var(--v-theme-shadow), 0.16);
   display: grid;
   gap: 0.08rem;
   inset-inline: 0;

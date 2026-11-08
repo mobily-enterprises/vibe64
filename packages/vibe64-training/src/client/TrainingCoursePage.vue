@@ -160,7 +160,7 @@ const path = computed(() => {
   --tcp-done: rgb(var(--v-theme-success));
   --tcp-done-container: rgb(var(--v-theme-success-container));
   --tcp-progress: var(--v64-learning);
-  --tcp-progress-container: var(--v64-learning-container, rgba(245, 197, 24, 0.22));
+  --tcp-progress-container: var(--v64-learning-container);
   display: flex;
   flex-direction: column;
   gap: var(--v64-space-4, 16px);
@@ -179,7 +179,7 @@ const path = computed(() => {
   border-radius: var(--v64-shape-xl, 28px);
   background: rgb(var(--v-theme-surface-container-low));
   border: 1px solid rgb(var(--v-theme-outline-variant));
-  box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12));
+  box-shadow: var(--v64-elevation-1);
   color: rgb(var(--v-theme-on-surface));
   overflow: hidden;
   animation: tcp-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out) both;
@@ -327,9 +327,9 @@ const path = computed(() => {
   background: rgb(var(--v-theme-surface-container-low));
   transition: box-shadow var(--v64-duration-short, 150ms) var(--v64-ease-standard, ease);
 }
-.training-course-page__lesson:hover .training-course-page__card { box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12)); }
+.training-course-page__lesson:hover .training-course-page__card { box-shadow: var(--v64-elevation-1); }
 .training-course-page__lesson:hover > .training-course-page__node { transform: scale(1.06); }
-.is-next > .training-course-page__card { border-color: rgba(var(--v-theme-primary), 0.5); background: rgb(var(--v-theme-surface-container)); box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12)); }
+.is-next > .training-course-page__card { border-color: rgba(var(--v-theme-primary), 0.5); background: rgb(var(--v-theme-surface-container)); box-shadow: var(--v64-elevation-1); }
 .is-completed > .training-course-page__card { background: color-mix(in srgb, var(--tcp-done) 5%, rgb(var(--v-theme-surface))); }
 .training-course-page__card-main { flex: 1 1 14rem; min-width: 0; }
 .training-course-page__lesson-title { display: block; font: var(--v64-type-title-md, 600 1rem/1.5rem system-ui, sans-serif); }

@@ -344,7 +344,7 @@ async function handleCreateProject() {
 
 .project-selection-gate__learning-note {
   align-items: center;
-  background: var(--v64-learning-container, rgba(245, 197, 24, 0.24));
+  background: var(--v64-learning-container);
   border-radius: 0.5rem;
   color: var(--v64-on-learning-container, inherit);
   display: flex;

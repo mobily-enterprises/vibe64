@@ -216,7 +216,7 @@ function setResourceRetryBusy(value) {
   background: rgba(var(--v-theme-surface), 0.96);
   border: 1px solid rgba(var(--v-theme-error), 0.22);
   border-radius: 12px;
-  box-shadow: 0 1.2rem 3rem rgba(15, 23, 42, 0.18);
+  box-shadow: 0 1.2rem 3rem rgba(var(--v-theme-shadow), 0.18);
   justify-self: center;
   max-width: min(34rem, calc(100% - 2rem));
   padding: 1.25rem;

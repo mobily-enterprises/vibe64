@@ -18,7 +18,7 @@ defineProps({
 <style scoped>
 .vibe64-agent-terminal-drop-overlay {
   align-items: center;
-  background: rgb(0 0 0 / 0.68);
+  background: rgba(var(--v-theme-scrim), 0.68);
   display: flex;
   inset: 0;
   justify-content: center;

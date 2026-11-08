@@ -264,7 +264,7 @@ function keydown(event) {
   padding: 0 var(--v64-space-4, 16px);
   white-space: nowrap;
 }
-.vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container, rgba(245, 197, 24, 0.24)); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
+.vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
 .vibe64-learning__tab:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-learning__exit { flex: 0 0 auto; font-weight: 700; text-transform: none; }
 .vibe64-learning:focus { outline: none; }

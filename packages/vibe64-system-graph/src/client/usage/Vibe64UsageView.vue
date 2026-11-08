@@ -455,7 +455,7 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view__note { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
 .usage-view__panel { min-height: 0; overflow: auto; border-left: 1px solid rgb(var(--v-theme-outline-variant)); background: rgb(var(--v-theme-surface)); }
 .usage-view__panel--floating { position: absolute; top: 0; right: 0; bottom: 0; z-index: 2; width: min(360px, 100%); border-left: 0; border-radius: var(--v64-shape-lg) 0 0 var(--v64-shape-lg); background: rgb(var(--v-theme-surface-container-high)); box-shadow: var(--v64-elevation-3); }
-.usage-view__scrim { position: absolute; inset: 0; z-index: 1; background: rgb(0 0 0 / .32); }
+.usage-view__scrim { position: absolute; inset: 0; z-index: 1; background: rgba(var(--v-theme-scrim), 0.32); }
 .usage-view__sheet { max-height: 80vh; overflow: auto; border-radius: 28px 28px 0 0; }
 .usage-view--compact .usage-view__header { padding: 8px 12px; }
 .usage-view--compact .usage-view__content { padding: 8px 12px 24px; }

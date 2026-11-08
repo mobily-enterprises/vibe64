@@ -394,7 +394,7 @@ const previewNavVisible = computed(() => Boolean(props.embeddedPreview && previe
   background: rgba(var(--v-theme-surface), 0.94);
   border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 999px;
-  box-shadow: 0 0.4rem 1.2rem rgba(15, 23, 42, 0.14);
+  box-shadow: 0 0.4rem 1.2rem rgba(var(--v-theme-shadow), 0.14);
   left: 50%;
   justify-content: flex-end;
   max-width: min(43rem, calc(100% - 1.5rem));
@@ -618,7 +618,7 @@ const previewNavVisible = computed(() => Boolean(props.embeddedPreview && previe
 
   .vibe64-launch-controls__toolbar--teleported.vibe64-launch-controls__toolbar--mobile-expanded {
     align-items: stretch;
-    box-shadow: 0 0.55rem 1.4rem rgba(15, 23, 42, 0.16);
+    box-shadow: 0 0.55rem 1.4rem rgba(var(--v-theme-shadow), 0.16);
     max-width: calc(100vw - 1rem);
     position: fixed;
     right: 0.5rem;

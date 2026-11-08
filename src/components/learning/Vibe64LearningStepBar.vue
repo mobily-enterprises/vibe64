@@ -262,7 +262,7 @@ const openPractice = () => router.push(projectAppPath(practiceSlug.value));
 .vibe64-learning-step-bar-host { flex: 0 0 auto; min-width: 0; position: relative; }
 .vibe64-learning-step-bar {
   align-items: center;
-  background: var(--v64-learning-container, rgba(245, 197, 24, 0.16));
+  background: var(--v64-learning-container);
   border: 1px solid var(--v64-learning-strong);
   border-radius: var(--v64-shape-md, 12px);
   color: var(--v64-on-learning-container, inherit);

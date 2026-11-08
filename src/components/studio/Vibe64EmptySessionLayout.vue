@@ -114,7 +114,7 @@ defineProps({
   background: rgb(var(--v-theme-surface));
   border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 14px;
-  box-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.06);
+  box-shadow: 0 0.75rem 2rem rgba(var(--v-theme-shadow), 0.06);
   min-height: 0;
   min-width: 0;
   overflow: hidden;

@@ -286,7 +286,7 @@ const {
 
 const embeddedTerminalStyle = computed(() => ({
   alignSelf: terminalExpanded.value ? "start" : "end",
-  boxShadow: terminalExpanded.value ? "none" : "0 0.45rem 1.3rem rgba(15, 23, 42, 0.18)",
+  boxShadow: terminalExpanded.value ? "none" : "0 0.45rem 1.3rem rgba(var(--v-theme-shadow), 0.18)",
   ...(terminalExpanded.value
     ? {
         height: "clamp(24rem, 72vh, 56rem)",

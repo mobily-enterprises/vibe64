@@ -85,7 +85,7 @@ const path = computed(() => {
         <path :d="path.d" fill="none" stroke="currentColor" stroke-opacity="0.55" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round" />
         <g v-for="(node, index) in path.nodes" :key="index">
           <circle
-            :cx="node.x" :cy="node.y" r="7.5" :fill="node.status === 'completed' ? 'currentColor' : 'rgba(0,0,0,0.18)'"
+            :cx="node.x" :cy="node.y" r="7.5" :fill="node.status === 'completed' ? 'currentColor' : courseCover.pendingNode"
             stroke="currentColor" :stroke-opacity="node.status === 'not-started' ? 0.6 : 1" stroke-width="2"
           />
           <path
@@ -107,8 +107,8 @@ const path = computed(() => {
   position: absolute; left: var(--v64-space-4, 16px); bottom: var(--v64-space-3, 12px);
   display: grid; place-items: center; width: 48px; height: 48px;
   border-radius: var(--v64-shape-md, 12px);
-  background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.45);
+  background: v-bind("courseCover.monogramFill"); border: 1px solid v-bind("courseCover.monogramEdge");
   backdrop-filter: blur(6px); font: 700 1.125rem/1 system-ui, sans-serif; letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  text-shadow: 0 1px 2px v-bind("courseCover.monogramShadow");
 }
 </style>

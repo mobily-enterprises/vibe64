@@ -260,9 +260,12 @@ roles. `src/theme/terminal.js` gives the terminal the dark scheme's surface and
 on-surface in either appearance, because it is always a dark console. Content
 colours, drawn the same in light and dark, are plain values in a `palettes.js`
 beside the theme (`src/theme/palettes.js`, or a package's own `src/theme/`): the
-Learn welcome's learner, Merc's avatars, the file tree's language tints and the
-white marks over course covers; components read them through `v-bind()` in their
-styles or bound attributes. A light tile that must stay light in either
+Learn welcome's learner, Merc's avatars, the file tree's language tints, the
+white marks and frosted monogram over course covers and the shading of Claude's
+gold, crowned provider mark; components read them through `v-bind()` in their
+styles or bound attributes. Shadows and scrims read the theme's `shadow` and
+`scrim` roles with an alpha (`rgba(var(--v-theme-shadow), 0.12)`), as the
+elevation tokens do, so no colour is written as channels outside `src/theme/`. A light tile that must stay light in either
 appearance, such as the install QR code or a vendor logo, is a `v-sheet` with
 `theme="light"`. A component names only `--v-theme-*` colours Vuetify declares for this theme, because the
 browser ignores a declaration that names an undefined one;

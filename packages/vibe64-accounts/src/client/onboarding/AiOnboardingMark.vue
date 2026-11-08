@@ -1,4 +1,6 @@
 <script setup>
+import { crownedMark } from "../../theme/palettes.js";
+
 // A provider's monogram tile, one shape per provider; Claude's is gold, wearing
 // a wide, low crown that scales with the tile and glints once.
 defineProps({
@@ -53,8 +55,8 @@ const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="ht
 .aio-mark--primary .aio-mark__tile {
   --aio-tone-bg: radial-gradient(120% 120% at 25% 15%, color-mix(in srgb, var(--v64-learning), rgb(var(--v-theme-surface-container-lowest)) 45%), var(--v64-learning) 55%, color-mix(in srgb, var(--v64-learning), var(--v64-learning-strong) 35%));
   --aio-tone-fg: var(--v64-on-learning);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 55%), inset 0 -2px 0 rgb(120 80 0 / 18%),
-    0 calc(var(--aio-s) * 0.12) calc(var(--aio-s) * 0.3) calc(var(--aio-s) * -0.14) rgb(160 110 0 / 70%);
+  box-shadow: inset 0 1px 0 v-bind("crownedMark.tileHighlight"), inset 0 -2px 0 v-bind("crownedMark.tileInnerShade"),
+    0 calc(var(--aio-s) * 0.12) calc(var(--aio-s) * 0.3) calc(var(--aio-s) * -0.14) v-bind("crownedMark.tileShadow");
 }
 .aio-mark--secondary { --aio-tone-bg: rgb(var(--v-theme-secondary-container)); --aio-tone-fg: rgb(var(--v-theme-on-secondary-container)); }
 .aio-mark--tertiary { --aio-tone-bg: rgb(var(--v-theme-tertiary-container)); --aio-tone-fg: rgb(var(--v-theme-on-tertiary-container)); }
@@ -62,7 +64,7 @@ const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="ht
 
 /* The crown sits on the tile's top edge: much wider than the tile, under half as tall. */
 .aio-mark__crown {
-  filter: drop-shadow(0 1px 1px rgb(120 80 0 / 45%));
+  filter: drop-shadow(0 1px 1px v-bind("crownedMark.crownShadow"));
   height: calc(var(--aio-s) * 0.51);
   left: calc(var(--aio-s) * -0.375);
   position: absolute;
@@ -71,7 +73,7 @@ const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="ht
 }
 .aio-mark__crown i {
   background:
-    linear-gradient(105deg, transparent 38%, rgb(255 248 210 / 90%) 48%, transparent 58%) 100% 0 / 320% 100%,
+    linear-gradient(105deg, transparent 38%, v-bind("crownedMark.crownGlint") 48%, transparent 58%) 100% 0 / 320% 100%,
     linear-gradient(180deg, color-mix(in srgb, var(--v64-learning), rgb(var(--v-theme-surface-container-lowest)) 45%), var(--v64-learning) 50%, color-mix(in srgb, var(--v64-learning), var(--v64-learning-strong) 35%));
   display: block;
   height: 100%;

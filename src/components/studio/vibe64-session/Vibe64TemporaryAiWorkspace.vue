@@ -434,7 +434,7 @@ defineExpose({
   border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: 12px;
   bottom: 0.3rem;
-  box-shadow: 0 14px 38px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 14px 38px rgba(var(--v-theme-shadow), 0.22);
   display: grid;
   grid-row: 3 / -1;
   grid-template-columns: minmax(0, 1fr);

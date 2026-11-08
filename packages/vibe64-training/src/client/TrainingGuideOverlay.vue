@@ -135,18 +135,18 @@ const captionStyle = computed(() => placement.value && {
 .training-guide-overlay__spotlight {
   animation: training-guide-scrim var(--training-guide-enter) var(--training-guide-ease) both;
   border-radius: var(--training-guide-radius);
-  box-shadow: 0 0 0 200vmax rgba(12, 16, 28, 0.24);
+  box-shadow: 0 0 0 200vmax rgba(var(--v-theme-scrim), 0.24);
   position: fixed;
 }
 
-/* The ring lands on the control, haloed in white so it reads on any surface. */
+/* The ring lands on the control, haloed in the lowest surface tone so it reads on any surface. */
 .training-guide-overlay__ring {
   animation: training-guide-land var(--training-guide-enter) var(--training-guide-ease) both;
   border: 3px solid var(--training-guide-accent);
   border-radius: var(--training-guide-radius);
   box-shadow:
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.9),
-    0 0 0 1.5px rgba(255, 255, 255, 0.9),
+    inset 0 0 0 1.5px rgba(var(--v-theme-surface-container-lowest), 0.9),
+    0 0 0 1.5px rgba(var(--v-theme-surface-container-lowest), 0.9),
     0 0 22px 3px rgba(var(--training-guide-accent-rgb), 0.5);
   position: fixed;
 }
@@ -171,7 +171,7 @@ const captionStyle = computed(() => placement.value && {
   animation: training-guide-caption-below var(--training-guide-enter) var(--training-guide-ease) 90ms both;
   background: rgba(var(--training-guide-accent-rgb), 0.88);
   border-radius: var(--training-guide-radius);
-  box-shadow: var(--v64-elevation-3, 0 4px 8px 3px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.12)),
+  box-shadow: var(--v64-elevation-3),
     0 10px 28px rgba(var(--training-guide-accent-rgb), 0.28);
   box-sizing: border-box;
   color: var(--training-guide-on-accent);
@@ -229,7 +229,7 @@ const captionStyle = computed(() => placement.value && {
   display: none;
 }
 .training-guide-overlay__caption-icon {
-  background: rgba(255, 255, 255, 0.22);
+  background: color-mix(in srgb, var(--training-guide-on-accent) 22%, transparent);
   border-radius: 999px;
   box-sizing: content-box;
   flex: 0 0 auto;
@@ -265,7 +265,7 @@ const captionStyle = computed(() => placement.value && {
 }
 
 @keyframes training-guide-scrim {
-  from { box-shadow: 0 0 0 200vmax rgba(12, 16, 28, 0); }
+  from { box-shadow: 0 0 0 200vmax rgba(var(--v-theme-scrim), 0); }
 }
 @keyframes training-guide-land {
   from { opacity: 0; transform: scale(1.4); }

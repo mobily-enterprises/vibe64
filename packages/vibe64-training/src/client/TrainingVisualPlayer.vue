@@ -88,7 +88,7 @@ defineExpose({
   border: 1px solid rgb(var(--v-theme-outline-variant));
   border-radius: var(--v64-shape-lg, 16px);
   background: rgb(var(--v-theme-surface-container-lowest));
-  box-shadow: var(--v64-elevation-1, 0 1px 3px rgba(0, 0, 0, 0.12));
+  box-shadow: var(--v64-elevation-1);
   overflow: hidden;
   animation: vibe64-training-visual-rise var(--v64-duration-long, 500ms) var(--v64-ease-emphasized-decelerate, ease-out);
 }

@@ -165,7 +165,7 @@ function showUsageForDetail(owner) {
 <style scoped>
 .ui-storyboard { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; overflow: hidden; color: rgb(var(--v-theme-on-surface)); }
 .ui-storyboard *, .ui-storyboard *::before, .ui-storyboard *::after { box-sizing: border-box; }
-.ui-storyboard__toolbar { display: flex; align-items: center; gap: 12px; padding: 4px 12px; flex-wrap: wrap; border-bottom: 1px solid rgba(110, 130, 150, .18); }
+.ui-storyboard__toolbar { display: flex; align-items: center; gap: 12px; padding: 4px 12px; flex-wrap: wrap; border-bottom: 1px solid rgba(var(--v-theme-outline), 0.18); }
 .ui-storyboard__heading { display: flex; align-items: baseline; flex: 1; min-width: 0; gap: 4px 12px; flex-wrap: wrap; }
 .ui-storyboard__heading h2 { margin: 0; font-size: 18px; font-weight: 650; line-height: 26px; }
 .ui-storyboard__heading p { margin: 0; font-size: 11px; line-height: 16px; opacity: .65; }
