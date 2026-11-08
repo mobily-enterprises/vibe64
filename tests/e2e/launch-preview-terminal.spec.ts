@@ -1040,7 +1040,7 @@ for (const width of [390, 1440]) {
       .getByText("missing", { exact: true })
       .click();
 
-    await expect(page.getByText("User not found.", { exact: true })).toBeVisible();
+    // Choosing closes the menu; the identity button then names the error, and the reopened menu shows it.
     const failedIdentityButton = page.getByRole("button", {
       name: "Preview identity failed: User not found."
     });
@@ -1051,7 +1051,9 @@ for (const width of [390, 1440]) {
     // the address the page had before the fix started is what must not change.
     const developmentUrl = page.url();
     expect(new URL(developmentUrl).pathname).toBe(DEVELOPMENT_PATH);
-    await page.locator(".vibe64-launch-controls__identity-menu")
+    const identityMenu = page.locator(".vibe64-launch-controls__identity-menu");
+    await expect(identityMenu.getByText("User not found.", { exact: true })).toBeVisible();
+    await identityMenu
       .getByRole("button", {
         name: "Fix it with AI",
         exact: true
@@ -1086,7 +1088,14 @@ for (const width of [390, 1440]) {
   });
 }
 
+// These upload checks read the animated progress bar. Under reduced motion, which the browser tests ask for, an upload
+// of unknown size shows a stationary bar instead; "reduced motion keeps unknown upload progress stationary" checks it.
+function showUploadMotion(page: Page) {
+  return page.emulateMedia({ reducedMotion: "no-preference" });
+}
+
 test("@preview-lifecycle attaches multiple visible preview frames and stops each shared tab stream", async ({ page }) => {
+  await showUploadMotion(page);
   await page.addInitScript(() => {
     (window as typeof window & { __vibe64PreviewCaptureCalls?: number }).__vibe64PreviewCaptureCalls = 0;
     (window as typeof window & { __vibe64PreviewCaptureTracks?: MediaStreamTrack[] }).__vibe64PreviewCaptureTracks = [];
@@ -1191,6 +1200,7 @@ test("@preview-lifecycle attaches multiple visible preview frames and stops each
 });
 
 test("@preview-lifecycle attaches isolated proxied-app console and network diagnostics", async ({ page }) => {
+  await showUploadMotion(page);
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
     attachmentUploadResponseDelayMs: 800
@@ -1304,6 +1314,7 @@ test("@preview-lifecycle attaches isolated proxied-app console and network diagn
 
 for (const viewportWidth of [390, 960, 1600]) {
   test(`@preview-lifecycle attachment queue exposes progress and retries one failed multipart upload at ${viewportWidth}px`, async ({ page }) => {
+    await showUploadMotion(page);
     await page.setViewportSize({
       height: viewportWidth === 390 ? 844 : 900,
       width: viewportWidth
@@ -1676,6 +1687,7 @@ for (const status of ["required", "failed"]) {
 }
 
 test("@preview-lifecycle Codex interactive terminal keeps one attachment queue and retries handoff", async ({ page }) => {
+  await showUploadMotion(page);
   await page.setViewportSize({ height: 900, width: 960 });
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {

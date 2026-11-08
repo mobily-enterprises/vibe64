@@ -1670,7 +1670,8 @@ test("@erd-camera zoom saves after settling and closing the page cancels a pendi
 
 test("@overview-transition details fade in at their final positions while the overview stays still", async ({ browser, baseURL }, info) => {
   const server = await sharedDiagramServer(baseURL!, { schemaOverride: dataOverviewSchema(), overviewDefinition: bookingOverview() });
-  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  // The fade is the subject, and reduced motion, which the browser tests ask for, ends it at once.
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, reducedMotion: "no-preference" });
   try {
     const page = await context.newPage();
     const worker = await controlRoutingWorker(page);
