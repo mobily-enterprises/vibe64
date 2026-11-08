@@ -636,8 +636,8 @@ the selected models against their catalogues. The chat mode only chooses who
 works. Below the modes, four Chat settings switches choose what runs once a
 piece of work is finished, in every main-chat mode: Automatically review changes,
 Automatically deslop changes, Automatically UI pass changes and Automatically
-save changes. Review, Deslop and save start on and the UI pass off, from one
-shared default. Turning any of them off asks first through one confirmation that
+save changes. All four start on, from one shared default, and each chat keeps
+its own choices. Turning any of them off asks first through one confirmation that
 names what is lost; Cancel keeps it on. Direct Senior, Junior and Custom
 conversations answer questions or implement requested changes without a
 temporary plan; their own agent does the finishing steps. These names describe
@@ -661,7 +661,7 @@ access scope. Keeping current routing leaves the new connection available;
 A routing setup failure
 keeps the AI connected and appears in the review so the owner can finish setup.
 Repeating setup preserves saved choices, including roles the owner deliberately
-left empty. New main chats start with Senior and the default Chat settings.
+left empty. New main chats start in Auto with the default Chat settings.
 User-created temporary chats inherit Main chat's role and custom model
 choice when created. Main's Auto mode starts them as Senior, and a team member's
 starts on Fix it with AI. Each temporary chat then keeps its own selection and can
@@ -1588,7 +1588,7 @@ project's UI guidance while preserving their behavior. People request it in
 chat for the current task's changes, a named section of the app or the whole
 app, and Genesis's ui-pass task receives that scope as its request. Every
 main-chat mode runs it after finished work, after any Deslop, only while
-Automatically UI pass changes is on; it is off unless the owner turns it on.
+Automatically UI pass changes is on, as it is for new chats.
 
 People can choose how cautiously the AI engineers a project. The choice follows
 the project's source, always keeps ordinary work simple and targeted, and makes
@@ -1939,7 +1939,7 @@ Senior, Junior and Custom the chat's own agent does it, so Junior reviews its ow
 work. Senior can fix scoped defects or save substantial necessary rework for
 implementation, then review again. Deslop is on by default; turning it off asks
 for confirmation (code quality suffers unless Deslop is run by hand, so it suits
-only quick throwaway projects). The automatic UI pass is off by default. With
+only quick throwaway projects). The automatic UI pass is on by default too. With
 review, Deslop and the UI pass all off, finished work goes straight to Save. The
 person's pause or cancellation takes precedence. Ordinary discussion and Stop
 never reopen, archive or complete a plan. Junior can update Progress and

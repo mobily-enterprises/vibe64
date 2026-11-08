@@ -1831,6 +1831,12 @@ upgrade: reading it refuses with `vibe64_assistant_routing_upgrade_required`
 instead of reading it as the defaults. Focused evidence:
 `chatFinishingStepsUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
 
+Later, new chats started in Auto with all four steps on, the UI pass included.
+That changed only `ASSISTANT_FINISHING_DEFAULTS` and the mode a new session
+starts in, and needed no upgrade: since this one every saved chat holds its own
+four choices and its mode, so existing chats keep theirs, and this script keeps
+the defaults it was published with.
+
 ## Archived closing chats (`20261110-archived-closing-chats`)
 
 No Close reaches a chat in an archive. Before Archive session and renewal

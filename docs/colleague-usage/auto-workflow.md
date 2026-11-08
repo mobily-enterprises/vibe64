@@ -98,8 +98,8 @@ In Auto, Senior always does the finishing steps after implementation, even when
 Senior implemented it or both roles use the same model: the review, Deslop and
 [UI pass](ui-pass.md) the chat's **Chat settings** switches turn on, in one
 Senior turn, then **Save**. **Automatically review changes**, **Automatically
-deslop changes** and **Automatically save changes** are on for new chats, and
-**Automatically UI pass changes** is off. Each step a switch starts adds a notice
+deslop changes**, **Automatically UI pass changes** and **Automatically save
+changes** are all on for new chats. Each step a switch starts adds a notice
 such as **Review started automatically (Chat settings: Automatically review
 changes)**. Turning a switch off asks first and says what is lost; **Cancel**
 keeps it on. When review, Deslop and the UI pass are all off, a handoff after

@@ -669,19 +669,19 @@ test("old routing snapshots and chat preferences require the state upgrade", () 
   assert.deepEqual(assistantRoutingFromMetadata({ assistant_routing: JSON.stringify(current) }), current);
 });
 
-const defaultSteps = { review: true, deslop: true, uiPass: false, autoSave: true };
+const defaultSteps = { review: true, deslop: true, uiPass: true, autoSave: true };
 const customOverride = () => ({ override: { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
   modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: revision } });
 
-test("review, Deslop and automatic save default on, the UI pass off, and each is saved on or off in every main-chat mode", () => {
+test("review, Deslop, the UI pass and automatic save default on, and each is saved on or off in every main-chat mode", () => {
   assert.deepEqual(ASSISTANT_FINISHING_DEFAULTS, defaultSteps, "one constant holds the defaults");
   for (const mode of ["auto", "senior", "junior"]) {
     assert.deepEqual(assistantRoutingPreferences({ mode }), { mode, ...defaultSteps }, mode);
-    assert.deepEqual(assistantRoutingPreferences({ mode, review: false, deslop: false, uiPass: true, autoSave: false }),
-      { mode, review: false, deslop: false, uiPass: true, autoSave: false }, mode);
+    assert.deepEqual(assistantRoutingPreferences({ mode, review: false, deslop: false, uiPass: false, autoSave: false }),
+      { mode, review: false, deslop: false, uiPass: false, autoSave: false }, mode);
   }
-  const custom = assistantRoutingPreferences({ mode: "custom", uiPass: true, autoSave: false, ...customOverride() });
-  assert.deepEqual({ ...custom, override: undefined }, { mode: "custom", review: true, deslop: true, uiPass: true, autoSave: false, override: undefined },
+  const custom = assistantRoutingPreferences({ mode: "custom", uiPass: false, autoSave: false, ...customOverride() });
+  assert.deepEqual({ ...custom, override: undefined }, { mode: "custom", review: true, deslop: true, uiPass: false, autoSave: false, override: undefined },
     "Custom carries the finishing steps too");
   assert.deepEqual(assistantRoutingAutomation(null), defaultSteps);
   assert.deepEqual(assistantRoutingAutomation({ mode: "fix", review: false }), defaultSteps, "leaving Fix it with AI starts with the defaults");

@@ -8,8 +8,12 @@ finished is chosen by four **Chat settings** switches, the same in **Auto**,
 | --- | --- | --- |
 | **Automatically review changes** | Checks the finished work against your request, fixes what it finds, and checks the work's tests. | On |
 | **Automatically deslop changes** | Cleans up the code without changing what it does: duplicated helpers, dead code and muddled structure. | On |
-| **Automatically UI pass changes** | Brings the screens the work changed in line with the project's UI guidance; see [Run a UI pass](ui-pass.md). | Off |
+| **Automatically UI pass changes** | Brings the screens the work changed in line with the project's UI guidance; see [Run a UI pass](ui-pass.md). | On |
 | **Automatically save changes** | Runs the session's ordinary **Save** once the steps above are done. | On |
+
+A new session's chat starts in **Auto** with all four switches on. Each chat
+then keeps its own choices, so changing one chat's switches never changes
+another's.
 
 ## Find the switches
 
@@ -36,8 +40,8 @@ lost:
 **Cancel** keeps the switch on; the red button saves it off for this chat.
 Either way **Chat mode** stays open, so you can see the result. The
 chat-mode button's label names each step that is on, for example **Automatic
-review on. Automatic deslop on. Automatic save on**. A change applies to the
-next piece of work. The switches are the owner's main chat choice: a team
+review on. Automatic deslop on. Automatic UI pass on. Automatic save on**. A
+change applies to the next piece of work. The switches are the owner's main chat choice: a team
 member sees them disabled, and they are disabled while a goal is active.
 Temporary chats, AI tasks and Fix it with AI have no Chat settings and run none
 of these steps. Neither do lessons: Deslop never rewrites a learner's code, and

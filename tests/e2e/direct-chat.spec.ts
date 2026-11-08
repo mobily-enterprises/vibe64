@@ -2337,7 +2337,8 @@ for (const width of [390, 820, 1280]) {
       const session = server.state.session;
       session.agentSession.turn.active = false;
       Object.assign(session, { assistantSelection: junior });
-      session.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: true });
+      // An existing chat that saved the UI pass off.
+      session.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true, deslop: true, uiPass: false, autoSave: true });
       await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}`, route => fulfillJson(route, { ok: true, ...session }));
       await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/assistant-selection`, async route => {
         session.metadata.assistant_routing = JSON.stringify(route.request().postDataJSON().assistantRouting);
@@ -2507,27 +2508,21 @@ for (const width of [390, 1280]) {
   test(`@ui-pass the Automatically UI pass changes switch asks before turning off and is saved for the chat at ${width}px`, async ({ page }, info) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
+    // A new chat's choices: Auto, with every finishing step on.
     const { server, saves } = await uiPassWorld(page, { width,
-      preferences: { mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true } });
+      preferences: { mode: "auto", review: true, deslop: true, uiPass: true, autoSave: true } });
     try {
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
       await expect(page.getByLabel("Message AI assistant")).toBeVisible();
       const trigger = page.getByRole("button", { name: /^Chat mode:/ });
-      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
-      await expect(trigger).not.toHaveAttribute("aria-label", /Automatic UI pass on/);
+      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Auto\./);
+      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass on/);
       await trigger.click();
       const uiPass = page.getByRole("checkbox", { name: "Automatically UI pass changes", exact: true });
-      // Off for new chats, with its chat command beside it.
-      await expect(uiPass).not.toBeChecked();
+      // On for new chats, with its chat command beside it.
+      await expect(uiPass).toBeChecked();
       await expect(uiPass).toBeEnabled();
       await expect(page.getByText("Or tell the agent “UI pass” any time — add “: <section>” or “: the whole app”.", { exact: true })).toBeVisible();
-
-      // Turning it on saves at once, keeping the chat's other choices.
-      await uiPass.click();
-      await expect(uiPass).toBeChecked();
-      await expect.poll(() => saves.length).toBe(1);
-      expect(saves[0]).toEqual({ mode: "senior", review: true, deslop: true, uiPass: true, autoSave: true });
-      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass on/);
 
       // Turning it off asks first, naming what is lost; Cancel keeps it on.
       await uiPass.click();
@@ -2542,16 +2537,23 @@ for (const width of [390, 1280]) {
       await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect(confirm).toBeHidden();
       await expect(uiPass).toBeChecked();
-      expect(saves).toHaveLength(1);
+      expect(saves).toHaveLength(0);
 
       await uiPass.click();
       await expect(confirm).toBeVisible();
       await confirm.getByRole("button", { name: "Turn off Automatic UI pass", exact: true }).click();
       await expect(confirm).toBeHidden();
       await expect(uiPass).not.toBeChecked();
-      await expect.poll(() => saves.length).toBe(2);
-      expect(saves[1]).toEqual({ mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true });
+      await expect.poll(() => saves.length).toBe(1);
+      expect(saves[0]).toEqual({ mode: "auto", review: true, deslop: true, uiPass: false, autoSave: true });
       await expect(trigger).not.toHaveAttribute("aria-label", /Automatic UI pass on/);
+
+      // Turning it on again saves at once, keeping the chat's other choices.
+      await uiPass.click();
+      await expect(uiPass).toBeChecked();
+      await expect.poll(() => saves.length).toBe(2);
+      expect(saves[1]).toEqual({ mode: "auto", review: true, deslop: true, uiPass: true, autoSave: true });
+      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass on/);
 
       expect(errors).toEqual([]);
     } finally {

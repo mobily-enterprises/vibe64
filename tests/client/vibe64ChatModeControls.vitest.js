@@ -13,8 +13,8 @@ import { ASSISTANT_FINISHING_STEPS } from "@local/vibe64-runtime/shared/assistan
 
 const override = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
   modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "low", catalogRevision: `sha256:${"a".repeat(64)}` };
-// The defaults: review, Deslop and save on, the UI pass off.
-const defaults = { review: true, deslop: true, uiPass: false, autoSave: true };
+// The defaults: review, Deslop, the UI pass and save all on.
+const defaults = { review: true, deslop: true, uiPass: true, autoSave: true };
 let app;
 function mount(savePreferences, temporary = false, props = {}) {
   app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
@@ -81,10 +81,12 @@ for (const step of ["review", "deslop", "autoSave"]) it(`turning ${step} off ask
 });
 
 it("turning the automatic UI pass on saves at once; turning it off asks first and Cancel keeps it on", async () => {
-  const state = mount(undefined, false, routing({ mode: "auto" }));
+  // A chat that saved it off keeps it off until the owner turns it on.
+  const state = mount(undefined, false, routing({ mode: "auto", uiPass: false }));
+  expect(state.uiPass).toBe(false);
   await state.changeSwitch("uiPass", true);
   expect(state.offConfirmOpen).toBe(false);
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", ...defaults, uiPass: true });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", ...defaults });
   mocks.save.mockClear();
   state.changeSwitch("uiPass", false);
   expect(state.offConfirmOpen).toBe(true);
@@ -97,7 +99,7 @@ it("turning the automatic UI pass on saves at once; turning it off asks first an
   expect(state.uiPass).toBe(false);
   // Turning one switch off leaves the others as they were.
   expect(state.deslop).toBe(true);
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", ...defaults });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", ...defaults, uiPass: false });
 });
 
 it("the four switches are worded as the Chat settings, with Deslop's and the UI pass's help lines", () => {
@@ -110,9 +112,9 @@ it("the four switches are worded as the Chat settings, with Deslop's and the UI 
   expect(state.finishingAgent).toBe("Junior does them itself");
 });
 
-it("starts with review, Deslop and save on and the UI pass off when the chat has no saved preferences", () => {
+it("starts with review, Deslop, the UI pass and save all on when the chat has no saved preferences", () => {
   const state = mount(undefined, false, { session: { sessionId: "session-1", metadata: {} } });
-  expect([state.review, state.deslop, state.uiPass, state.autoSave]).toEqual([true, true, false, true]);
+  expect([state.review, state.deslop, state.uiPass, state.autoSave]).toEqual([true, true, true, true]);
 });
 
 it("a Custom model keeps its own switches; turning save off keeps Deslop", async () => {
@@ -120,14 +122,14 @@ it("a Custom model keeps its own switches; turning save off keeps Deslop", async
   expect(state.switchesAvailable).toBe(true);
   expect(state.finishingAgent).toBe("Your custom model does them itself");
   await state.save("auto");
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", ...defaults, review: false });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", ...defaults, review: false, uiPass: false });
   await state.save("auto", { autoSave: false });
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", ...defaults, review: false, autoSave: false });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", ...defaults, review: false, uiPass: false, autoSave: false });
   expect(state.triggerLabel).toMatch(/Automatic deslop on$/);
 });
 
 it("the trigger names each step that is on, and a failed save puts a switch back", async () => {
-  const state = mount(undefined, false, routing({ mode: "auto" }));
+  const state = mount(undefined, false, routing({ mode: "auto", uiPass: false }));
   expect(state.triggerLabel).not.toMatch(/UI pass/);
   await state.save("auto", { uiPass: true });
   expect(state.triggerLabel).toMatch(/Automatic review on\. Automatic deslop on\. Automatic UI pass on\. Automatic save on$/);
@@ -155,7 +157,7 @@ it("a lesson shows no Chat settings, even with switches saved on", () => {
 it("ends each sentence of the mode label with one period", () => {
   const state = mount(undefined, false, { canConfigure: true, ...routing({ mode: "auto", review: true, autoSave: true }) });
   expect(state.triggerLabel).toBe("Chat mode: Auto. Senior for plans and finishing steps; Junior otherwise · Router: " +
-    "Choose a model in Models. Automatic review on. Automatic deslop on. Automatic save on");
+    "Choose a model in Models. Automatic review on. Automatic deslop on. Automatic UI pass on. Automatic save on");
 });
 
 it("does not save Helper as a chat mode", async () => {

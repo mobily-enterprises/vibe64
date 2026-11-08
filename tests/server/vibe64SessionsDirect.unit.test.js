@@ -123,12 +123,13 @@ const initialPlanSelection = {
 };
 
 // A Custom model keeps the chat's finishing steps; a chat with none saved has the defaults.
-const customSteps = { review: true, deslop: true, uiPass: false, autoSave: true };
+const customSteps = { review: true, deslop: true, uiPass: true, autoSave: true };
 
-function assertInitialPlanMetadata(metadata = {}, createdBy = "", mode = "senior") {
+// A new chat starts in Auto with every finishing step on.
+function assertInitialPlanMetadata(metadata = {}, createdBy = "", mode = "auto") {
   assert.equal(metadata.created_by, createdBy);
   assert.deepEqual(vibe64AssistantSelectionFromMetadata(metadata), initialPlanSelection);
-  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode, review: true, deslop: true, uiPass: false, autoSave: true });
+  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode, review: true, deslop: true, uiPass: true, autoSave: true });
 }
 
 async function requireAgentWrite(runtime, sessionId, operation) {
@@ -3539,7 +3540,7 @@ for (const chooseBranch of [false, true]) {
         ["resolve", { purpose: "senior" }, { vibe64User: { role: "owner" } }]
       ]);
       assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing),
-        { mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true });
+        { mode: "auto", review: true, deslop: true, uiPass: true, autoSave: true });
       assert.deepEqual(vibe64AssistantSelectionFromMetadata(harness.creationInputs[0].metadata), initialPlanSelection);
       assert.equal(harness.creationInputs[0].metadata.repository_branch, chooseBranch ? repositoryBranch.name : undefined);
       assert.deepEqual(harness.creationInputs[0].sourceContext, {
@@ -4650,11 +4651,11 @@ test("chat mode changes save for the next message without changing the main AI",
   const changed = await service.updateAssistantSelection(session.sessionId, {
     assistantRouting: { mode: "senior", review: true }, vibe64User: { role: "owner", username: "owner" } });
   assert.notEqual(changed.ok, false, JSON.stringify(changed));
-  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, deslop: true, uiPass: true, autoSave: true });
   assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
   // A mode change that omits a choice keeps the chat's own.
   await service.updateAssistantSelection(session.sessionId, {
-    assistantRouting: { mode: "auto", autoSave: false, deslop: false }, vibe64User: { role: "owner", username: "owner" } });
+    assistantRouting: { mode: "auto", autoSave: false, deslop: false, uiPass: false }, vibe64User: { role: "owner", username: "owner" } });
   await service.updateAssistantSelection(session.sessionId, {
     assistantRouting: { mode: "senior" }, vibe64User: { role: "owner", username: "owner" } });
   assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, deslop: false, uiPass: false, autoSave: false });
@@ -4683,7 +4684,7 @@ test("a team member can't change main chat's mode, review or model outside their
   const practice = await runWithPracticeProjectContext("test", { vibe64User: member },
     () => service.updateAssistantSelection(session.sessionId, { assistantRouting: { mode: "senior", review: true }, vibe64User: member }));
   assert.notEqual(practice.ok, false, JSON.stringify(practice));
-  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, deslop: true, uiPass: true, autoSave: true });
 });
 
 test("Auto preferences can be saved without changing an unfinished goal when observation is unavailable", async () => {
@@ -4767,7 +4768,7 @@ test("named chat modes rebind only an unfinished goal, through authorized access
       }
       assert.notEqual(result.ok, false, `${mode}/${failure}: ${JSON.stringify(result)}`);
       assert.equal(session.metadata.assistant_selection, original.assistant_selection);
-      assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode, review: mode === "auto", deslop: true, uiPass: false, autoSave: true });
+      assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode, review: mode === "auto", deslop: true, uiPass: true, autoSave: true });
       assert.deepEqual(operations, failure === "no-goal" ? ["write"] : ["resolve", "access", "future", "write"]);
     }
   }
@@ -5028,9 +5029,9 @@ test("a renewal keeps the chat's mode and finishing steps, and a Custom chat its
   const chosen = await renew({ mode: "custom", ...steps, override: custom }, { assistantSelection: { ...custom, modelId: "deepseek-pro" } });
   assert.equal(chosen.assistantRouting.override.modelId, "deepseek-pro");
   assert.deepEqual({ ...chosen.assistantRouting, override: null }, { mode: "custom", ...steps, override: null });
-  // A new session starts on the defaults.
+  // A new session starts in Auto on the defaults, every finishing step on.
   const fresh = await assistant.resolveSessionStart({}, { vibe64User: owner });
-  assert.deepEqual(fresh.assistantRouting, { mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true });
+  assert.deepEqual(fresh.assistantRouting, { mode: "auto", review: true, deslop: true, uiPass: true, autoSave: true });
 });
 
 test("a Custom chat's switch saves only the switch, after a catalogue change and between handoff and its finishing turn", async () => {

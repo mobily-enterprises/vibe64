@@ -4,7 +4,8 @@ Use **New session** (+), or **Create session** when there are no open sessions,
 to open **Start an AI session**. It shows **Runs on your main AI:** and the main
 AI's model. A saved setup appears straight away: the dialog does not wait for
 each AI tool's model list or start any AI tool. Without a change the new session
-runs on the main AI and starts with Senior.
+runs on the main AI and its chat starts in **Auto**, as the dialog's **Starts in
+Auto** line says, with every [Chat settings](chat-settings.md) switch on.
 
 To run only this new session on another AI, for example DeepSeek, select
 **Change** beside the main AI. It opens **Custom AI**, the same choice as a

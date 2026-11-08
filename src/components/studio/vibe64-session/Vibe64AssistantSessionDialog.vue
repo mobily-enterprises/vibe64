@@ -11,7 +11,7 @@
         <span class="vibe64-assistant-dialog__title-copy">
           <strong class="text-title-large">Start an AI session</strong>
           <small class="text-body-small">
-            {{ sessionAi ? "Starts in Custom. Choose Senior, Junior or Auto from chat." : "Start with Senior. Choose Junior or Auto from chat." }}
+            {{ sessionAi ? "Starts in Custom. Choose Senior, Junior or Auto from chat." : "Starts in Auto. Choose Senior or Junior from chat." }}
           </small>
         </span>
         <v-btn

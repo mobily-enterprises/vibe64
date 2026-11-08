@@ -45,20 +45,20 @@ reason instead of running on Junior; choose a Senior model in **Models**.
 
 ## Run it automatically after each piece of work
 
-Open **Chat mode**, the icon inside the message box, and under **Chat
-settings** turn on **Automatically UI pass changes**. It works in every chat
-mode. From then on, once a piece of work is finished, the agent that finishes it
+**Automatically UI pass changes**, under **Chat settings** in **Chat mode**
+(the icon inside the message box), is on for new chats and works in every chat
+mode. While it is on, once a piece of work is finished, the agent that finishes it
 (Senior in **Auto**, otherwise the chat's own agent) runs the UI pass on the
 screens that work changed, after any review and Deslop, in the same turn and
 before **Save**. The chat notes **UI pass started automatically (Chat settings:
 Automatically UI pass changes)** as it starts. Nothing runs on its own while the
 switch is off.
 
-The switch is off for new chats. It is saved for this chat, and its change
-applies to the next piece of work. Turning it on saves at once. Turning it off
-asks first, as the other switches do: **Turn off Automatic UI pass?** says that
-the screens the work changes will no longer get a design review, and that
-typing “UI pass” in the chat still runs one. **Cancel** keeps it on; **Turn off
+It is saved for each chat, so a chat that has it off keeps it off until you
+turn it on, and its change applies to the next piece of work. Turning it on
+saves at once. Turning it off asks first, as the other switches do: **Turn off
+Automatic UI pass?** says that the screens the work changes will no longer get
+a design review, and that typing “UI pass” in the chat still runs one. **Cancel** keeps it on; **Turn off
 Automatic UI pass** saves it off. The line under the switch is a reminder of the
 chat command: **Or tell the agent “UI pass” any time — add “: <section>” or “:
 the whole app”.** The chat-mode button's label adds **Automatic UI pass on**

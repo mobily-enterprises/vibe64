@@ -1,9 +1,9 @@
 /**
  * The finishing steps' defaults, the Chat settings switches that choose them,
- * and what each step's automatic start says. Turning the UI pass on by default
- * changes only its value here.
+ * and what each step's automatic start says. A new chat starts with all four
+ * on; a saved chat keeps its own choices.
  */
-const ASSISTANT_FINISHING_DEFAULTS = Object.freeze({ review: true, deslop: true, uiPass: false, autoSave: true });
+const ASSISTANT_FINISHING_DEFAULTS = Object.freeze({ review: true, deslop: true, uiPass: true, autoSave: true });
 const ASSISTANT_FINISHING_STEPS = Object.freeze([
   { id: "review", name: "Review", setting: "Automatically review changes", genesisTask: "review" },
   { id: "deslop", name: "Deslop", setting: "Automatically deslop changes", genesisTask: "deslop" },

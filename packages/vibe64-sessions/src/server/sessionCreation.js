@@ -103,9 +103,10 @@ function createSessionCreation({
       if (pullRequest && input.repositoryBranch) {
         throw vibe64Error("Choose a branch or a pull request for this session.", "vibe64_session_source_choice_conflict");
       }
+      // A new chat starts in Auto, a lesson in Junior.
       const { assistantSelection, assistantRouting: startRouting } = await assistant.resolveSessionStart(input, {
         vibe64User,
-        mode: learningRuntime ? "junior" : "senior"
+        ...(learningRuntime ? { mode: "junior" } : {})
       });
       // A lesson runs no finishing steps: Deslop must never rewrite a
       // learner's code, and a lesson teaches Save.

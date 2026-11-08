@@ -4,7 +4,7 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { ModelRoutingForm } from "@local/vibe64-accounts/client";
 import { ASSISTANT_FIX_MODE, ASSISTANT_MODES, assistantModeLabel, assistantRoutingAutomation, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import { ASSISTANT_FINISHING_STEPS } from "@local/vibe64-runtime/shared/assistantFinishing";
+import { ASSISTANT_FINISHING_DEFAULTS, ASSISTANT_FINISHING_STEPS } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
@@ -31,10 +31,10 @@ const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
 // The four finishing steps follow the shared defaults unless this chat changed them.
-const review = ref(true);
-const deslop = ref(true);
-const uiPass = ref(false);
-const autoSave = ref(true);
+const review = ref(ASSISTANT_FINISHING_DEFAULTS.review);
+const deslop = ref(ASSISTANT_FINISHING_DEFAULTS.deslop);
+const uiPass = ref(ASSISTANT_FINISHING_DEFAULTS.uiPass);
+const autoSave = ref(ASSISTANT_FINISHING_DEFAULTS.autoSave);
 const switches = { review, deslop, uiPass, autoSave };
 // What each switch's help line, mode label and off confirmation say.
 const switchText = {

@@ -167,22 +167,22 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   // Every main-chat mode reports its own finishing steps.
   assert.equal(changed.result.reviewEnabled, true, "a Junior chat reviews its own work");
   assert.equal(changed.result.deslopEnabled, true);
-  assert.equal(changed.result.uiPassEnabled, false);
+  assert.equal(changed.result.uiPassEnabled, true);
   assert.equal(changed.result.autoSaveEnabled, true);
   const auto = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", review: false } });
   assert.equal(auto.result.reviewEnabled, false, "review is its own switch");
   assert.equal(auto.result.deslopEnabled, true);
-  assert.equal(auto.result.uiPassEnabled, false, "the automatic UI pass stays off unless it is turned on");
+  assert.equal(auto.result.uiPassEnabled, true, "the automatic UI pass is on unless it is turned off");
   const deslop = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1",
     assistantRouting: { mode: "senior", deslop: false, autoSave: false } });
   assert.equal(deslop.ok, true, JSON.stringify(deslop));
   assert.equal(calls.at(-1).input.assistantRouting.deslop, false);
   assert.deepEqual([deslop.result.reviewEnabled, deslop.result.deslopEnabled, deslop.result.uiPassEnabled, deslop.result.autoSaveEnabled],
-    [true, false, false, false]);
-  const uiPass = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", uiPass: true } });
+    [true, false, true, false]);
+  const uiPass = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", uiPass: false } });
   assert.equal(uiPass.ok, true, JSON.stringify(uiPass));
-  assert.equal(calls.at(-1).input.assistantRouting.uiPass, true);
-  assert.equal(uiPass.result.uiPassEnabled, true);
+  assert.equal(calls.at(-1).input.assistantRouting.uiPass, false);
+  assert.equal(uiPass.result.uiPassEnabled, false);
   assert.equal(uiPass.result.deslopEnabled, true);
   assert.equal(changed.result.hasModelOverride, false);
   assert.equal(changed.result.modelId, "previous-model", "changing mode does not claim that the active model changed");

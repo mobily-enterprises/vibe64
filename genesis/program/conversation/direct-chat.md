@@ -1705,7 +1705,7 @@ Main chat saves Custom, Senior, Junior or Auto plus four finishing steps,
 `review`, `deslop`, `uiPass` and `autoSave`, as separate booleans in the
 existing conversation metadata, in every main-chat mode. The chat mode only
 chooses who works. `assistantFinishing.js`'s `ASSISTANT_FINISHING_DEFAULTS` holds their one default
-(review, Deslop and save on, the UI pass off) and `ASSISTANT_FINISHING_STEPS`
+(all four on) and `ASSISTANT_FINISHING_STEPS`
 their Chat settings wording; `assistantRoutingAutomation` reads each saved
 choice or its default. Fix it with AI, temporary chats and lessons save all
 four off (`ASSISTANT_NO_FINISHING`) and run none; admission also never finishes

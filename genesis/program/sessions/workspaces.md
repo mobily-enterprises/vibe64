@@ -363,7 +363,9 @@ lease before archival can detach the session tree.
 
 
 People can create, select, inspect, and archive sessions. A new session receives
-its own Git source and stable identity. Creation starts in Senior with review off.
+its own Git source and stable identity. Creation starts main chat in Auto with
+every Chat settings switch on (`resolveSessionStart`'s default mode and
+`ASSISTANT_FINISHING_DEFAULTS`); a lesson starts in Junior with none.
 Colleague can also rename, archive and retry preparation through those same
 session actions and their current access checks. Its result projection contains
 bounded session identity, lifecycle and preparation status rather than private

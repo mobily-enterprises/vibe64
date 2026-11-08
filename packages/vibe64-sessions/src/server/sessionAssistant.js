@@ -79,11 +79,12 @@ function createSessionAssistant({
 
   /**
    * Main chat starts on the owner's setup (a team member's lesson: the team
-   * setup). A renewal keeps the chat mode and its finishing steps, and a Custom
-   * chat its model; a chosen model that isn't main chat's own makes the chat Custom.
+   * setup), in Auto unless `mode` says otherwise. A renewal keeps the chat mode
+   * and its finishing steps, and a Custom chat its model; a chosen model that
+   * isn't main chat's own makes the chat Custom.
    */
   async function resolveSessionStart(input = {}, options = {}) {
-    const { session = null, vibe64User = null, mode = "senior" } = options;
+    const { session = null, vibe64User = null, mode = "auto" } = options;
     const direct = isAssistantRoutingOwner(vibe64User) || currentRequestIsPracticeProject();
     if (!direct && Object.keys(input.assistantSelection || {}).length) {
       throw new AppError(403, "Main chat runs on the workspace owner's AI. Team members can't choose its model.", {
@@ -103,8 +104,8 @@ function createSessionAssistant({
       explicitSelection = await resolveAssistantSelection(chosen || current, vibe64User);
     }
     const startMode = previous && previous.mode !== "fix" ? previous.mode : mode;
-    // A new chat's switches start on their defaults (Deslop and automatic save
-    // on, the UI pass off); a renewal keeps the chat's own.
+    // A new chat's switches start on their defaults (review, Deslop, the UI
+    // pass and automatic save all on); a renewal keeps the chat's own.
     const preferences = assistantRoutingPreferences({
       ...assistantRoutingAutomation(previous),
       ...(explicitSelection ? { mode: "custom", override: explicitSelection } : { mode: startMode })
