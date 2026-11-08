@@ -115,21 +115,63 @@ function createServiceAssistantPreparation({
   }
 
   /**
-   * Tells the person, once per conversation and problem, that their message went although a project
-   * file cannot be read. The AI reads the same Genesis diagnostic in its session context.
+   * Shows the person a chat notice once per conversation and problem.
+   * @returns {Promise<boolean>} whether this is the first notice of the problem
    */
-  async function noticeUnreadableProjectFile(sessionId, context, error) {
-    const diagnostic = genesisProjectFileDiagnostic(error);
+  async function noticeOnce(sessionId, context, { reason, diagnostic, text }) {
     const conversationId = context.routingConversationId;
     const turn = await context.runtime.store.writeConversationSystemMessage(conversationId ? { sessionId, conversationId } : sessionId, {
-      messageId: `project-file-unreadable:${createHash("sha256").update(diagnostic).digest("hex").slice(0, 32)}`,
-      text: `A project file cannot be read: ${diagnostic} Your message was still sent, and the AI is told about it so it can fix the file.`
+      messageId: `${reason}:${createHash("sha256").update(diagnostic).digest("hex").slice(0, 32)}`,
+      text
     });
-    if (!turn) return;
-    await sessionAccess.publishTerminalSessionChanged("agentTerminal", sessionId, "project-file-unreadable", {
+    if (!turn) return false;
+    await sessionAccess.publishTerminalSessionChanged("agentTerminal", sessionId, reason, {
       conversationLogPatch: { type: "upsert-turn", turn },
       ...(conversationId ? { conversationId } : {})
     });
+    return true;
+  }
+
+  /**
+   * Tells the person that their message went although a project file cannot be read. The AI reads
+   * the same Genesis diagnostic in its session context.
+   */
+  function noticeUnreadableProjectFile(sessionId, context, error) {
+    const diagnostic = genesisProjectFileDiagnostic(error);
+    return noticeOnce(sessionId, context, {
+      diagnostic,
+      reason: "project-file-unreadable",
+      text: `A project file cannot be read: ${diagnostic} Your message was still sent, and the AI is told about it so it can fix the file.`
+    });
+  }
+
+  /**
+   * The session's installed packages lack an Agent Skill its Genesis selects, so nothing in the
+   * project needs fixing. Preparing the workspace reinstalls the packages the session pins; a session
+   * behind its project keeps older pins until Update this session. The person is told once and the
+   * workspace setup is marked required once: repeating either on each message would not help.
+   */
+  async function handleAgentSkillUnavailable(sessionId, context, error) {
+    const diagnostic = String(error.message || "").trim();
+    const noticed = await noticeOnce(sessionId, context, {
+      diagnostic,
+      reason: "agent-skill-unavailable",
+      text: `This session's installed packages lack an Agent Skill its Genesis needs: ${diagnostic} ` +
+        "Your message was still sent, with the skills the project already has. Prepare workspace reinstalls " +
+        "the packages; if this session is behind its project, Update this session first to take the project's newer ones."
+    });
+    if (noticed) {
+      await workspacePreparation.invalidateWorkspaceSetup(
+        context,
+        `${diagnostic} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`
+      );
+    }
+    logOperationalEvent(logger, "warn", {
+      code: error.code,
+      component: "vibe64.agent_skills",
+      event: "vibe64.agent_skills.preparation_required",
+      sessionId
+    }, "Project skill refresh requires workspace preparation.");
   }
 
   async function prepareAgentSkillsInsideAgentWrite(sessionId, context) {
@@ -158,16 +200,7 @@ function createServiceAssistantPreparation({
         return;
       }
       if (error?.code === "AGENT_SKILL_UNAVAILABLE") {
-        await workspacePreparation.invalidateWorkspaceSetup(
-          context,
-          `${error.message} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`
-        );
-        logOperationalEvent(logger, "warn", {
-          code: error.code,
-          component: "vibe64.agent_skills",
-          event: "vibe64.agent_skills.preparation_required",
-          sessionId
-        }, "Project skill refresh requires workspace preparation.");
+        await handleAgentSkillUnavailable(sessionId, context, error);
         return;
       }
       if (genesisProjectFileUnreadable(error)) {

@@ -5,6 +5,12 @@ steps run against the updated source. It is a neutral notice, not a failed run.
 For a Node project this can include installing dependencies, but the actual
 steps come from the project's setup contract.
 
+It also appears, once, when the session's installed packages lack an Agent
+Skill its Genesis needs; the chat explains which. If preparing the workspace
+installs the same older packages again, select **Update this session** to take
+the project's newer ones; Vibe64 does not ask for preparation again for the same
+missing skill.
+
 Select **Prepare workspace**. The notice shows progress while those steps run.
 Use **Expand** to inspect output, or **Dismiss** to hide an inactive notice.
 Preparation does not save or push the project.

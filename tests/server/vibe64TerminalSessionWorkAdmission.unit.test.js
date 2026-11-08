@@ -643,6 +643,43 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
   await assert.rejects(access(path.join(projectRoot, "node_modules/genesis-compiler")), { code: "ENOENT" });
 });
 
+test("a skill the session's installed Genesis lacks is noticed once and never asks for preparation again", async (t) => {
+  const warnings = [];
+  const events = [];
+  const { service, session, runtime, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    inspectAgentSkills: async ({ projectRoot }) => {
+      throw Object.assign(new Error(`Selected Agent Skill is unavailable: ${projectRoot}/node_modules/genesis-compiler/skills/genesis-ui-pass`),
+        { code: "AGENT_SKILL_UNAVAILABLE", name: "GenesisError" });
+    },
+    logger: { ...silentLogger, warn(event) { warnings.push(event); } },
+    publishSessionChanged: { agentTerminal: async (_sessionId, event) => events.push(event) }
+  });
+  const projectRoot = session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  project.runProjectSourceExclusive = async () => assert.fail("An unavailable skill must not change source.");
+  for (const messageId of ["first", "second"]) {
+    // A preparation that reinstalls the same older packages, as in a session behind its project.
+    session.workspaceSetup = { status: "succeeded", recipeHash: "same-older-packages" };
+    // Delivery reaches assistant admission; this fixture has no durable selection.
+    await assert.rejects(service.sendAgentMessage(session.sessionId,
+      { message: "Why does the project not start?", messageId }, { engineId: "opencode" }),
+    { code: "vibe64_assistant_selection_invalid" });
+    if (messageId === "first") assert.equal(session.workspaceSetup.status, "required");
+  }
+  assert.equal(session.workspaceSetup.status, "succeeded", "the second message leaves the prepared workspace alone");
+  assert.equal(events.filter((event) => event.reason === "workspace-setup-updated").length, 1);
+  const notices = (await runtime.store.readConversationLog(session.sessionId)).filter((turn) => turn.system);
+  assert.equal(notices.length, 1);
+  assert.match(notices[0].system.text, /^This session's installed packages lack an Agent Skill its Genesis needs: Selected Agent Skill is unavailable: /u);
+  assert.match(notices[0].system.text, /Your message was still sent/u);
+  assert.match(notices[0].system.text, /Prepare workspace reinstalls the packages; if this session is behind its project, Update this session first/u);
+  assert.doesNotMatch(notices[0].system.text, /cannot be read|fix the file/u);
+  assert.deepEqual(events.filter((event) => event.reason === "agent-skill-unavailable").map((event) => event.conversationLogPatch.turn.system.text),
+    [notices[0].system.text]);
+  assert.equal(warnings.filter((event) => event.event === "vibe64.agent_skills.preparation_required").length, 2);
+});
+
 test("a pending Stack section proposal neither defers skill refresh nor changes source", async (t) => {
   const warnings = [];
   const { service, session, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {

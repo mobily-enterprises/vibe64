@@ -110,6 +110,15 @@ explanation so it can repair the file. Skill and agent-guidance refresh waits
 until the file reads again. Desktop and mobile behave the same; Colleague can
 explain the notice and offer to ask the coding assistant to fix the file.
 
+When the session's installed packages lack an Agent Skill its Genesis needs,
+usually because the session still has older packages than its project, the
+message is still sent with the skills the project already has. The chat says so
+once, naming the missing skill, and marks **Workspace preparation required**
+once: **Prepare workspace** reinstalls the packages, and a session behind its
+project takes the newer ones with **Update this session** first. Nothing in the
+project needs fixing, and later messages do not repeat the notice or ask for
+preparation again.
+
 Nothing else Genesis does stops a message either. If Genesis fails, returns
 something unusable, or does not answer within 15 seconds while Vibe64 refreshes
 the project's skills, composes the opening prompt or gathers the assistant's
