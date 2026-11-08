@@ -73,8 +73,10 @@ own server and needs neither.
 editor however the request is addressed. It stops at start with "The localhost
 check bypass is only for local development on this computer" when Vite or the
 server would listen beyond loopback (for example `--host 0.0.0.0`), when the
-server is not a local editor, or on a host that shares or provisions its
-machine. Remove the flag and variable, or listen on `127.0.0.1`, to start.
+server is not a local editor, on a host that shares or provisions its
+machine, or when `NODE_ENV` is `production`, since the bypass is for
+development only. Remove the flag and variable, or listen on `127.0.0.1`, to
+start.
 
 To run two local examples at once, give each a different `--state-dir` and
 `--port`. Each state directory supplies its own runtime namespace, so starting

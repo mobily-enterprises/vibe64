@@ -1,3 +1,4 @@
+import { isProductionEnv } from "@jskit-ai/kernel/server/runtime/runtimeMode";
 import { vibe64Host } from "@local/vibe64-execution/server/hostProfile";
 import { isLoopbackAddress } from "./localStudioRequest.js";
 
@@ -62,7 +63,8 @@ function assertLocalhostCheckBypassAllowed({ host = "", local = true } = {}) {
 /**
  * Whether this process was started with the localhost check bypassed. A host
  * that shares or provisions its machine (several Unix accounts, a command
- * helper or its own tool packs) refuses it.
+ * helper or its own tool packs) refuses it, and so does a production start
+ * (NODE_ENV=production): the bypass is a development-only setting.
  * @param {object} options
  * @param {string[]} [options.argv]
  * @param {RuntimeEnv} options.env
@@ -75,6 +77,9 @@ function isLocalhostCheckBypassEnabled({
   const host = vibe64Host();
   if (enabled && (host.sharedGroupAccess || host.execHelperPath || host.runtimePackRoot || host.sharedCacheRoot)) {
     throw bypassRefusal("this host shares or provisions its machine.");
+  }
+  if (enabled && isProductionEnv(env)) {
+    throw bypassRefusal("NODE_ENV is production.");
   }
   return enabled;
 }

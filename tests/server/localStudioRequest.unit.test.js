@@ -92,6 +92,17 @@ test("localhost check bypass refuses a host that shares or provisions its machin
   assert.equal(isLocalhostCheckBypassEnabled({ argv: [], env }), true, "a developer's own computer keeps it");
 });
 
+test("localhost check bypass is a development-only setting that a production start refuses", () => {
+  for (const enabled of [{ argv: [LOCALHOST_CHECK_BYPASS_FLAG], env: {} }, { argv: [], env: { [LOCALHOST_CHECK_BYPASS_ENV]: "1" } }]) {
+    assert.throws(() => isLocalhostCheckBypassEnabled({ ...enabled, env: { ...enabled.env, NODE_ENV: "Production" } }), {
+      code: LOCALHOST_CHECK_BYPASS_REFUSED,
+      message: `The localhost check bypass is only for local development on this computer, and NODE_ENV is production. Remove ${LOCALHOST_CHECK_BYPASS_FLAG} and ${LOCALHOST_CHECK_BYPASS_ENV} to start.`
+    });
+    assert.equal(isLocalhostCheckBypassEnabled({ ...enabled, env: { ...enabled.env, NODE_ENV: "development" } }), true);
+  }
+  assert.equal(isLocalhostCheckBypassEnabled({ argv: [], env: { NODE_ENV: "production" } }), false, "a production start without the bypass starts");
+});
+
 test("localhost check bypass refuses a listener beyond loopback or a server that is not a local editor", () => {
   for (const host of ["", "127.0.0.1", "localhost", "::1", "[::1]"]) {
     assert.doesNotThrow(() => assertLocalhostCheckBypassAllowed({ host }), host);
