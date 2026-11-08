@@ -202,9 +202,10 @@ overlap a test run already active for this checkout.
   `V64_TEST_CONCURRENCY` when set to a whole number (a test
   runner sharing a machine sets it for each of its slots), otherwise half the
   CPUs, at least one. `npm run test:full` and `npm run test:client` run that
-  many test files at once; Playwright runs one worker for every two of those
-  threads, at least one, as each worker also runs a browser and an app server.
-  No script or command fixes its own concurrency. Every test file owns its
+  many test files at once; Playwright runs on JSKIT's browser-test harness,
+  `browserTestConfig()` from `@jskit-ai/jskit-catalog/browser-tests`, with one
+  worker and app server for every two of those threads, at least one, as each
+  worker also runs a browser. No script or command fixes its own concurrency. Every test file owns its
   ports, temporary folders, databases and other state, so it can run beside
   any other; fix a collision where it happens instead of making a file run
   alone.

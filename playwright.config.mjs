@@ -1,63 +1,41 @@
 import { defineConfig } from "@playwright/test";
+import { browserTestConfig } from "@jskit-ai/jskit-catalog/browser-tests";
 
-import { E2E_SERVERS_READY, e2eServerCount, e2eWorkerPort } from "./tests/e2e/support/e2e-servers.mjs";
+import { loadTimeBudgets } from "./tooling/test-time-budgets.mjs";
 
-const managedBaseUrl = String(process.env.PLAYWRIGHT_BASE_URL || "")
-  .trim()
-  .replace(/\/+$/u, "");
-const storageState = String(process.env.PLAYWRIGHT_STORAGE_STATE || "").trim();
-const useRunningServer = Boolean(managedBaseUrl) || process.env.VIBE64_LIVE_E2E === "1";
-// Without a running server, each worker tests against its own server, so tests
-// run in parallel without sharing a server's state (tests/e2e/support/e2e-servers.mjs).
-// A running server is one shared server, so its tests run one at a time.
-const baseURL = managedBaseUrl || `http://127.0.0.1:${e2eWorkerPort()}`;
+// JSKIT's browser-test harness: it builds the app once (reused while its
+// sources are unchanged) and starts one app server per worker on
+// PLAYWRIGHT_PORT + N (4173 by default), each through the single-server harness
+// with its own throwaway state, so tests running at once never share a server.
+// With PLAYWRIGHT_BASE_URL, the tests use that running target instead, one
+// worker at a time, with the login state its host supplies in
+// PLAYWRIGHT_STORAGE_STATE. VIBE64_LIVE_E2E=1 makes a Vibe64 server the person
+// started on PLAYWRIGHT_PORT that target.
+if (process.env.VIBE64_LIVE_E2E === "1" && !String(process.env.PLAYWRIGHT_BASE_URL || "").trim()) {
+  process.env.PLAYWRIGHT_BASE_URL = `http://127.0.0.1:${String(process.env.PLAYWRIGHT_PORT || "").trim() || 4173}`;
+}
+
+const harness = browserTestConfig({
+  server: "node ./tests/e2e/support/start-web-server.mjs",
+  // The whole suite needs longer than the harness's 20 minutes: its measured
+  // wall-clock bound is in tooling/test-time-budgets.json.
+  globalTimeout: loadTimeBudgets("browser").wallMs
+});
 
 export default defineConfig({
-  testDir: "./tests/e2e",
-  timeout: 60_000,
-  expect: {
-    timeout: 10_000
-  },
-  // The time budget reporter fails a run that went over tooling/test-time-budgets.json.
-  reporter: [[process.env.CI ? "github" : "list"], ["./tests/e2e/support/time-budget-reporter.mjs"]],
-  // Every test sets up its own page, mocks and folders; none depends on another.
+  ...harness,
+  // Every test sets up its own page, mocks and folders; none depends on
+  // another, so a file's tests spread across the workers too.
   fullyParallel: true,
-  workers: useRunningServer ? 1 : e2eServerCount(),
+  // The time budget reporter fails a run that went over tooling/test-time-budgets.json.
+  reporter: [...harness.reporter, ["./tests/e2e/support/time-budget-reporter.mjs"]],
   use: {
-    baseURL,
-    headless: true,
+    ...harness.use,
     // The app's reduced-motion setting (src/styles/vibe64-m3.css, and src/main.js
     // for Vuetify's menus and dialogs) ends transitions at once, so no step waits
     // out a menu, dialog, expand or route animation, measures an element still
     // moving into place, or taps a menu still fading in. Playwright reads this
     // only from contextOptions, not from use itself.
-    contextOptions: { reducedMotion: "reduce" },
-    ...(storageState ? { storageState } : {}),
-    // A failed test keeps its trace with a DOM snapshot of every action. The
-    // trace's screencast is off: recording frames for every test took about a
-    // quarter of the browser suite's CPU, and only failures keep a trace.
-    trace: { mode: "retain-on-failure", screenshots: false }
-  },
-  ...(useRunningServer ? {} : {
-    webServer: {
-      // One build, then one server per worker, each started by the
-      // single-server harness tests/e2e/support/start-web-server.mjs.
-      command: "npm run build && node ./tests/e2e/support/start-web-servers.mjs",
-      // Playwright's default stop is SIGKILL, which skips the servers' shutdown
-      // and leaves their temporary folders behind. SIGTERM runs that shutdown;
-      // each server forces its own exit after 8 s, inside this timeout.
-      gracefulShutdown: {
-        signal: "SIGTERM",
-        timeout: 10_000
-      },
-      // The launcher prints this once every server answers /api/health. Every
-      // run tests the build it just made: the launcher refuses a port that
-      // already answers, because that server may serve a build from before the
-      // last JSKIT install.
-      wait: {
-        stdout: new RegExp(E2E_SERVERS_READY, "u")
-      },
-      timeout: 180_000
-    }
-  })
+    contextOptions: { reducedMotion: "reduce" }
+  }
 });

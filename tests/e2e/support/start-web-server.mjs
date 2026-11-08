@@ -45,17 +45,13 @@ function isolatedServerRoots() {
   };
 }
 
-// Every stop ends in that exit. Playwright stops this server with SIGTERM (the
-// config's gracefulShutdown): the server's own shutdown handles it once
-// started, and this harness until then. If Playwright dies without stopping it
-// (a timeout's SIGTERM, which Playwright does not handle), the stdin pipe
-// start-web-servers.mjs holds closes, and that stops the server the same way.
+// Every stop ends in that exit. JSKIT's browser-test launcher starts one of
+// these per worker (playwright.config.mjs), with PORT and HOST and no stdin,
+// and stops it with SIGTERM: the server's own shutdown handles it once
+// started, and this harness until then.
 async function main() {
   const exitOnStopSignal = (signal) => process.exit(128 + os.constants.signals[signal]);
   for (const signal of STOP_SIGNALS) process.once(signal, exitOnStopSignal);
-  process.stdin.once("end", () => process.kill(process.pid, "SIGTERM"));
-  process.stdin.resume();
-  process.stdin.unref?.();
   try {
     await startServer({
       ...playwrightServerStartOptions(),
@@ -66,8 +62,8 @@ async function main() {
     });
     // The server's shutdown handles the first stop signal and forces its own
     // exit when it overruns. A later one (Playwright signals the whole process
-    // group while start-web-servers.mjs closes this stdin) must not end the
-    // process before that shutdown has removed the temporary folder.
+    // group, and the launcher passes the stop on) must not end the process
+    // before that shutdown has removed the temporary folder.
     for (const signal of STOP_SIGNALS) process.on(signal, ignoreRepeatedStop);
   } finally {
     for (const signal of STOP_SIGNALS) process.off(signal, exitOnStopSignal);
