@@ -393,8 +393,17 @@ function assistantRoutingPrompt({ message, messages = [], attachments = [], plan
   return render();
 }
 
+/**
+ * @param {string} mode the role that works
+ * @param {string} message
+ * @param {{ planInstructions?: string, intent?: string, browserReview?: boolean, rework?: "junior" | "self" | "report" }} [options]
+ *   rework: where a review sends substantial rework. Auto's review hands it back to Junior,
+ *   a direct chat's finishing turn returns to its own implementation, and a review outside
+ *   a workflow reports it.
+ */
 function assistantModePrompt(mode, message, options = {}) {
   let { planInstructions = "", intent = "", browserReview = false } = options;
+  const { rework = "junior" } = options;
   const direct = "Work directly from the user's request and conversation, answering questions or implementing changes as requested. You may edit application files when requested. Make ordinary local choices using established project patterns, ask about unresolved scope or design decisions, preserve unrelated work, and verify changes with relevant checks.";
   const instructions = {
     custom: direct,
@@ -430,7 +439,11 @@ function assistantModePrompt(mode, message, options = {}) {
       "If implementation is missing or coding stopped for a decision, report that and preserve the decision for the user; do not start the original implementation from scratch.",
       "Run relevant checks, then report findings, fixes, actual checks and anything unverified.",
       "You own browser verification for this review. Exercise the requested user flow and inspect meaningful visual checkpoints yourself using the supplied managed browser tools; the implementer's code tests do not replace these checks. Reuse reliable passing evidence and avoid repeating unaffected checks. Report browser or visual checks that could not be performed, and do not claim verified completion while required checks remain unfinished.",
-      "Do not Save, push or invent new product requirements. For substantial necessary rework within the agreed outcome, update the technical plan and hand back to Junior through the workflow outcome command. Junior implementation will receive another Senior review and any enabled Deslop and UI pass."
+      "Do not Save, push or invent new product requirements. For substantial necessary rework within the agreed outcome, " + {
+        junior: "update the technical plan and hand back to Junior through the workflow outcome command. Junior implementation will receive another Senior review and any enabled Deslop and UI pass.",
+        self: "return to your own implementation through the workflow outcome command; this finishing turn then runs again over that rework.",
+        report: "report what it needs instead of starting it in this review."
+      }[rework]
     ].join(" ")
   };
   if (!instructions[mode]) throw routingError("Unknown assistant mode.", "vibe64_assistant_mode_unknown");

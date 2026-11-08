@@ -38,10 +38,12 @@ function assistantFinishingNotice(step, key) {
  * The finishing turn's instructions: the enabled parts in order, done by one
  * agent in one turn. Only Senior completes an involved plan.
  * @param {{ review?: boolean, deslop?: boolean, uiPass?: boolean }} finishing
- * @param {{ completesPlan?: boolean }} [options]
+ * @param {{ plan?: "complete" | "progress" | "report" }} [options] what the agent does
+ *   with an involved plan: Senior (and Auto's Senior) completes it, Junior records its
+ *   Progress, and Custom, which cannot write the plan, reports in its reply.
  */
 function assistantFinishingMessage(finishing, options = {}) {
-  const { completesPlan = true } = options;
+  const { plan = "complete" } = options;
   const parts = assistantFinishingParts({ finishing });
   if (!parts.length) return "";
   const { review, deslop, uiPass } = finishing;
@@ -63,9 +65,11 @@ function assistantFinishingMessage(finishing, options = {}) {
     ...(deslop || uiPass ? [
       "Perform every part yourself in this turn; do not delegate cleanup or start a separate Deslop or UI pass turn. Run relevant checks after cleanup."
     ] : []),
-    completesPlan
-      ? `Only after ${review ? "review, any enabled Deslop and UI pass" : "every part"} and their checks are finished: Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Report findings, fixes, actual checks and anything unverified.`
-      : "Only after every part and its checks are finished: record specific gaps and verification evidence in an involved plan's paired Progress document and leave that plan active for Senior to complete. Report findings, fixes, actual checks and anything unverified."
+    {
+      complete: `Only after ${review ? "review, any enabled Deslop and UI pass" : "every part"} and their checks are finished: Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Report findings, fixes, actual checks and anything unverified.`,
+      progress: "Only after every part and its checks are finished: record specific gaps and verification evidence in an involved plan's paired Progress document and leave that plan active for Senior to complete. Report findings, fixes, actual checks and anything unverified.",
+      report: "Only after every part and its checks are finished: leave an involved plan and its Progress unchanged and active for Senior to complete, and name its remaining gaps and verification evidence in your reply. Report findings, fixes, actual checks and anything unverified."
+    }[plan]
   ].join(" ");
 }
 

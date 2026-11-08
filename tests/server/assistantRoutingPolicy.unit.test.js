@@ -695,7 +695,20 @@ test("the finishing turn runs the switched-on parts in order, and only Senior's 
   assert.deepEqual(assistantFinishingParts({ deslop: true }), ["review", "deslop"], "a request from before keeps Auto's mandatory review");
   assert.equal(assistantFinishingMessage({ review: false, deslop: false, uiPass: false }), "");
   assert.match(assistantFinishingMessage({ review: false, deslop: true, uiPass: false }), /^Automatic Deslop: Perform Deslop/u);
-  assert.match(assistantFinishingMessage({ review: true, deslop: true }, { completesPlan: false }), /leave that plan active for Senior to complete/);
+  assert.match(assistantFinishingMessage({ review: true, deslop: true }, { plan: "progress" }), /record specific gaps .* Progress document and leave that plan active for Senior to complete/);
+  // Custom cannot write the plan, so it reports in its reply instead of asking for Progress.
+  const custom = assistantFinishingMessage({ review: true, deslop: true }, { plan: "report" });
+  assert.match(custom, /leave an involved plan and its Progress unchanged .* name its remaining gaps and verification evidence in your reply/);
+  assert.doesNotMatch(custom, /record specific gaps|Explicitly complete/);
+  // A direct chat's review returns rework to its own implementation; only Auto's hands it back to Junior.
+  assert.match(assistantModePrompt("senior", "Change the form", { intent: "review" }), /hand back to Junior/);
+  const direct = assistantModePrompt("custom", "Change the form", { intent: "review", rework: "self" });
+  assert.match(direct, /return to your own implementation through the workflow outcome command/);
+  assert.doesNotMatch(direct, /hand back to Junior|another Senior review/);
+  // A review outside a workflow has no outcome command to return through.
+  const asked = assistantModePrompt("senior", "Change the form", { intent: "review", rework: "report" });
+  assert.match(asked, /report what it needs instead of starting it in this review/);
+  assert.doesNotMatch(asked, /workflow outcome command/);
   assert.deepEqual(assistantFinishingNotice("deslop", "followup-1"), { messageId: "assistant-finishing:deslop:followup-1",
     text: "Deslop started automatically (Chat settings: Automatically deslop changes)" });
   assert.deepEqual(ASSISTANT_FINISHING_STEPS.map(({ setting }) => setting),

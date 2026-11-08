@@ -176,6 +176,8 @@ function createAssistantRoutingDelivery({
       intent: taskPurpose || (state.stage === "review" ? finishingIntent || "review" : state.mode === "auto" ? state.reason : ""),
       // Auto's implementer leaves browser checks to Senior's review.
       browserReview: state.mode === "auto" && state.workflow && implementing && finishingParts.includes("review"),
+      // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
+      rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
       planInstructions: includePlanInstructions ? workPlanInstructions(role) : ""
     });
     // A review renders Genesis's review task; a finishing turn without review
@@ -206,7 +208,9 @@ function createAssistantRoutingDelivery({
       messageId,
       message,
       displayMessage,
-      ...(genesisTask ? { genesisTask } : {}),
+      // A finishing turn's task is Vibe64's choice, not the person's: without a
+      // Blueprint it goes as written instead of becoming the Blueprint's task.
+      ...(genesisTask ? { genesisTask, ...(!taskPurpose ? { automaticGenesisTask: true } : {}) } : {}),
       turnMetadata: {
         ...(!followup ? state.input.turnMetadata : {}),
         assistantRouting: attribution(state, followup),

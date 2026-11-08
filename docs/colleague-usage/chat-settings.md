@@ -48,8 +48,11 @@ mobile.
 
 - **Senior**, **Junior** or **Custom**: that one agent implements, reviews,
   deslops and runs the UI pass. In a Junior chat Junior reviews its own work.
-  Only Senior completes a plan, so a Junior or Custom chat records its findings
-  in the plan's Progress and leaves the plan active for Senior to complete.
+  Only Senior completes a plan, so a Junior chat records its findings in the
+  plan's Progress, a Custom chat (which cannot change the plan) reports them in
+  its reply, and both leave the plan active for Senior to complete. When the
+  review finds substantial rework, the same agent goes back to implementing it
+  and the finishing turn runs again afterwards.
 - **Auto**: Router still chooses who handles each new message; see [Choose Auto
   roles and follow the workflow](auto-workflow.md). Senior always does the
   review, Deslop and UI pass, and Junior implements, with no extra Router call.

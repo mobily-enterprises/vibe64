@@ -580,6 +580,10 @@ for (const step of ["review", "deslop", "uiPass"]) test(`with ${step} off its pa
   assert.equal(/[Pp]erform Deslop on the/u.test(message), preferences.deslop);
   assert.equal(/[Rr]un the UI pass on the screens/u.test(message), preferences.uiPass);
   assert.equal(f.sends[1].input.genesisTask, preferences.review ? "review" : "deslop");
+  // Vibe64 chose that task, so a project without a Blueprint gets the message as written.
+  assert.equal(f.sends[1].input.automaticGenesisTask, true);
+  assert.doesNotMatch(message, /hand back to Junior/);
+  if (preferences.review) assert.match(message, /return to your own implementation through the workflow outcome command/);
 });
 
 test("with review, Deslop and the UI pass all off, finished work goes straight to Save", async t => {

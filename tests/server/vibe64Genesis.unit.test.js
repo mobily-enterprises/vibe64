@@ -928,6 +928,25 @@ test("Genesis owns the opening conversation for an existing uninitialized projec
   });
 });
 
+test("a task Vibe64 chose itself goes as written in a project without a Blueprint", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await initializeGit(projectRoot);
+    await writeFile(path.join(projectRoot, "app.js"), "export const answer = 42;\n", "utf8");
+    const finishing = "Automatic review: Check the preceding implementation against my request.";
+    // An automatic finishing turn's review is not turned into the opening that prepares the project.
+    const rendered = await renderGenesisPrompt({
+      environment: process.env,
+      action: { genesisTask: "review" },
+      input: { request: finishing, automaticGenesisTask: true },
+      projectRoot
+    });
+    assert.deepEqual(rendered, { prompt: finishing });
+    // The same task asked for by the person still opens with preparing the project.
+    const asked = await renderGenesisPrompt({ environment: process.env, action: { genesisTask: "review" }, input: { request: finishing }, projectRoot });
+    assert.equal(asked.context.task, "start");
+  });
+});
+
 test("Codex execution shims receive the installed Genesis executable exactly once", () => {
   const bin = genesisCommandShimDirectory();
   const first = withGenesisCommandShim(["/managed/git", genesisPackageBinDirectory(), bin]);

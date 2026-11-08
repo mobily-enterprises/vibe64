@@ -335,9 +335,11 @@ function createAssistantRoutingAdmission({
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
             .map((name) => [name, context.vibe64User[name]])) : null,
-          // In Auto Senior finishes; otherwise the chat's own agent, and only
-          // Senior completes a plan.
-          reviewMessage: finishes ? assistantFinishingMessage(finishing, { completesPlan: ["auto", "senior"].includes(mode) }) : ""
+          // In Auto Senior finishes; otherwise the chat's own agent. Only Senior
+          // completes a plan; Junior records its Progress, and Custom cannot write it.
+          reviewMessage: finishes ? assistantFinishingMessage(finishing, {
+            plan: ["auto", "senior"].includes(mode) ? "complete" : mode === "junior" ? "progress" : "report"
+          }) : ""
         };
         state.decision = await decisions.resolve(context, state);
         // The tool at admission; main chat's is the owner's Senior and Junior tool.

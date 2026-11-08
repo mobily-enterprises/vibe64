@@ -493,7 +493,8 @@ async function inspectVibe64ResourceEstimates(options = {}) {
  * @param {object} request
  * @param {object} [request.action] the prompt task: its genesisTask, id and label
  * @param {RuntimeEnv} request.environment the environment Genesis runs in
- * @param {object} [request.input] the request text and its options
+ * @param {object} [request.input] the request text and its options; automaticGenesisTask
+ *   marks a task Vibe64 chose itself, which never falls back to the Blueprint's task
  * @param {string} request.projectRoot
  */
 async function renderGenesisPrompt({
@@ -521,6 +522,9 @@ async function renderGenesisPrompt({
       ? GENESIS_PROMPT_FALLBACK_TASKS[error.code]
       : "";
     if (!fallbackTask || fallbackTask === requestedTask) throw error;
+    // A task Vibe64 chose itself, such as an automatic finishing turn's review,
+    // never becomes the Blueprint's: its request goes as written.
+    if (input.automaticGenesisTask === true) return { prompt: request };
     task = fallbackTask;
     result = await generate(task);
   }

@@ -1017,6 +1017,7 @@ for (const mode of ["auto", "senior", "junior"]) {
     assert.equal(f.state().review, false);
     assert.equal(f.sends[0].selection.modelId, "gpt-6-astra");
     assert.equal(f.sends[0].input.genesisTask, "deslop");
+    assert.equal(f.sends[0].input.automaticGenesisTask, undefined, "the person asked for Deslop");
     assert.equal(f.sends[0].input.turnMetadata.assistantRouting.resolvedMode, "deslop");
     assert.match(f.sends[0].input.message, /You may edit code for behavior-preserving cleanup/);
     assert.doesNotMatch(f.sends[0].input.message, /Only the designated working plan file may be written|VERY DETAILED/);
