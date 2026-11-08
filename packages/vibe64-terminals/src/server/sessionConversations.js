@@ -19,7 +19,8 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
  * A session's temporary chats. Session storage owns discovery and the
  * transcript, existing provider adapters own native turns, and only Close
  * removes a user-facing temporary chat; an interrupted Close finishes after
- * its engine's next turn in the session. The parts are built
+ * its engine's next turn in the session, or before the session is archived or
+ * renewed. The parts are built
  * once, in dependency order, and the result names each of their functions.
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
@@ -120,6 +121,7 @@ function createSessionConversations({
     deleteTemporaryConversation: chatLifecycle.deleteTemporaryConversation,
     retireTemporaryConversations: chatLifecycle.retireTemporaryConversations,
     finishInterruptedCloses: chatLifecycle.finishInterruptedCloses,
+    finishInterruptedClosesBeforeArchive: chatLifecycle.finishInterruptedClosesBeforeArchive,
     afterTemporaryTurn: chatLifecycle.afterTemporaryTurn
   });
 }

@@ -210,6 +210,15 @@ saved. Either way that work stays only in the source-recovery artifacts, which
 the archived-session view cannot restore to the project, and a new session
 starts from saved canonical source.
 
+No interrupted Close enters an archive. Before Archive session stops a session's
+work (`sessionArchive.js`), and before renewal confirmation or a pre-acknowledgement
+Retry freezes the predecessor (`sessionRenewalPredecessor.js`), the terminals'
+`finishInterruptedClosesBeforeArchive` finishes each closing chat or AI task with
+its native conversations; one that cannot finish stops the archive or renewal,
+retryably, with the session open. The archive's lock and the renewal's
+predecessor idleness check refuse a closing record that appeared meanwhile
+([temporary assistance](../conversation/temporary-assistance.md)).
+
 The Store retains its existing filesystem creation lock through Runtime source
 initialization, outside the publication mutation queue so ordinary metadata
 writes can finish. Session lists omit records whose creation lock still has a

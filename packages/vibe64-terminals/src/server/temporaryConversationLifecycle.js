@@ -32,8 +32,8 @@ import {
 
 /**
  * A temporary chat from creation to Close: creating, listing and reading chats, stopping a turn,
- * closing and retiring chats, finishing an interrupted Close after its engine's next turn, and saving
- * an idle turn before its review.
+ * closing and retiring chats, finishing an interrupted Close after its engine's next turn or before
+ * the session is archived or renewed, and saving an idle turn before its review.
  * @param {object} dependencies
  * @param {TemporaryConversationRecords} dependencies.chatRecords
  * @param {TemporaryConversationTurns} dependencies.chatTurns
@@ -306,6 +306,36 @@ function createTemporaryConversationLifecycle({
   }
 
   /**
+   * Before a session is archived or renewed, Close finishes there each interrupted Close, whatever its
+   * engines, starting an engine for it as the person's own Close does. No Close reaches a chat in an
+   * archive, so a closing record packed into one would leave its Codex and OpenCode conversations in
+   * the engine's storage for good. A Close that still cannot finish keeps its record and stops the
+   * archive or renewal with a retryable error that says why.
+   * @param {string} sessionId
+   * @param {object} [options]
+   */
+  async function finishInterruptedClosesBeforeArchive(sessionId, options = {}) {
+    const { runtime } = await readSessionContext(sessionId, options);
+    let finished = 0;
+    for (const record of await runtime.store.listSessionConversations(sessionId)) {
+      if (record.state !== "closing") continue;
+      try {
+        throwIfAgentWriteBusy(await deleteTemporaryConversation(sessionId, { conversationId: record.conversationId }, options));
+      } catch (error) {
+        const reason = String(error?.message || "Close did not finish").trim().replace(/\.$/u, "");
+        const message = `A chat in this session could not finish closing: ${reason}. Resolve that, then try again.`;
+        throw Object.assign(new AppError(409, message, {
+          cause: error,
+          code: "vibe64_conversation_close_unfinished",
+          details: { conversationId: record.conversationId }
+        }), { retryable: true });
+      }
+      finished += 1;
+    }
+    return { ok: true, finished };
+  }
+
+  /**
    * Archive: once its source is gone a session's temporary chats cannot
    * reopen, so their open runtime entries leave memory with it.
    */
@@ -358,6 +388,7 @@ function createTemporaryConversationLifecycle({
     deleteTemporaryConversation,
     retireTemporaryConversations,
     finishInterruptedCloses,
+    finishInterruptedClosesBeforeArchive,
     afterTemporaryTurn
   });
 }

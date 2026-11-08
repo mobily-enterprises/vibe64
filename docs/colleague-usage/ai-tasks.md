@@ -306,7 +306,8 @@ removes it at once, and **Edit** returns its text to the message box.
 used more than one AI in the task, Close cleans up each one's conversation. A failed Close
 can be retried; the retry continues the unfinished cleanup without repeating what was
 already removed. Vibe64 also retries it by itself after that AI's next turn in the same
-session.
+session, and before the session is archived or renewed; if it still fails then, archiving
+or renewal stops with the reason and the session stays open.
 
 During an Update repair, **Checking Update…** means the repository operation is not yet
 confirmed. After a disconnect or reload an uncertain result shows as unconfirmed, not as

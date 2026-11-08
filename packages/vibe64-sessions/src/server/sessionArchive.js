@@ -117,6 +117,7 @@ function createSessionArchive({
       }
       const runtime = await project.createRuntimeWithoutSource();
       let routingCancelled = false;
+      let closesFinished = false;
       const cancelledRouting = new Map();
       while (true) {
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
@@ -166,6 +167,17 @@ function createSessionArchive({
             startedAt: previous.status === "running" && previous.startedAt || new Date().toISOString(),
             status: "running"
           };
+          // A chat whose Close was interrupted finishes closing before the session stops: no Close
+          // reaches a chat in the archive, and its Codex and OpenCode conversations would stay in
+          // their engine's storage. Its engine can still start while the session has its source.
+          if (operation.phase === "stopping" && conversations.some(record => record.state === "closing")) {
+            if (!closesFinished) return { closesToFinish: true };
+            throw Object.assign(vibe64Error(
+              "A chat in this session is still closing. Retry Archive session to finish closing it.",
+              "vibe64_conversation_close_unfinished",
+              { messageCode: "vibe64_session_archive_close_unfinished" }
+            ), { retryable: true });
+          }
           const persist = () => runtime.store.writeMetadataValue(sessionId, "session_archive_operation", JSON.stringify(operation));
           async function advanceArchivePhase(phase) {
             operation.phase = phase;
@@ -235,6 +247,12 @@ function createSessionArchive({
             cancelledRouting.set(conversationId || "", request.messageId);
           }
           routingCancelled = true;
+          continue;
+        }
+        if (exclusive.value?.closesToFinish) {
+          // Close owns its own agent-write admission; it runs outside the archive lock too.
+          await terminals.finishInterruptedClosesBeforeArchive(sessionId, { runtime });
+          closesFinished = true;
           continue;
         }
         const session = exclusive.value;

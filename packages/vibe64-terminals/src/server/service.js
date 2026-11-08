@@ -486,6 +486,7 @@ function createService({
     readConversationTurn: sessionConversations.readConversationTurn,
     deleteTemporaryConversation: sessionConversations.deleteTemporaryConversation,
     retireTemporaryConversations: sessionConversations.retireTemporaryConversations,
+    finishInterruptedClosesBeforeArchive: sessionConversations.finishInterruptedClosesBeforeArchive,
     afterTemporaryTurn: sessionConversations.afterTemporaryTurn,
     startTemporaryConversationTurn: assistant.startTemporaryConversationTurn,
     readClaudeAccountStatus,

@@ -13,7 +13,9 @@ that the repair flows opened as temporary chats before AI tasks, as Close delete
 one, and keeps every person's and Colleague's temporary chat (`docs/state-upgrades.md`).
 A live repair chat with a Codex or OpenCode conversation is handed to Close as a
 closing record, which Close finishes after that engine's next turn in the session
-([temporary assistance](temporary-assistance.md)).
+or before the session is archived or renewed
+([temporary assistance](temporary-assistance.md)). An AI task whose Close was
+interrupted finishes closing the same way.
 
 ## Sources
 

@@ -1077,6 +1077,43 @@ test("an old repair chat the state upgrade hands to Close goes with its Codex th
   });
 });
 
+test("before archive or renewal, an interrupted Close finishes with its Codex thread whatever its engine, and one that cannot finish stops it", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const service = f.restart();
+    // The person's Close of a Codex chat stopped its turn but could not delete the thread.
+    await service.createTemporaryConversation("one", { conversationId: "closing" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "closing", messageId: "input", message: "Use this" });
+    f.native.deleteError = "Delete unavailable";
+    await assert.rejects(service.deleteTemporaryConversation("one", { conversationId: "closing" }), /Delete unavailable/);
+    assert.equal((await f.store.readSessionConversation("one", "closing")).state, "closing");
+    // Another chat the person kept open stays with the session.
+    await service.createTemporaryConversation("one", { conversationId: "kept" });
+
+    // An engine that still cannot delete it stops the archive or renewal, keeping the record for a retry.
+    await assert.rejects(f.restart().finishInterruptedClosesBeforeArchive("one"), (error) => {
+      assert.equal(error.code, "vibe64_conversation_close_unfinished");
+      assert.equal(error.retryable, true);
+      assert.equal(error.statusCode, 409);
+      assert.deepEqual(error.details, { conversationId: "closing" });
+      assert.match(error.message, /^A chat in this session could not finish closing: .*Delete unavailable.*\. Resolve that, then try again\.$/u);
+      return true;
+    });
+    assert.equal(f.native.deletes, 0);
+    assert.equal((await f.store.readSessionConversation("one", "closing")).state, "closing");
+
+    // With no turn of Codex in between, the Close finishes when the archive or renewal asks.
+    f.native.deleteError = "";
+    assert.deepEqual(await f.restart().finishInterruptedClosesBeforeArchive("one"), { ok: true, finished: 1 });
+    assert.equal(f.native.deletes, 1);
+    assert.equal(await f.store.readSessionConversation("one", "closing"), null);
+    assert.ok(f.events.some(([, event]) => event.reason === "temporary-conversation-closed" && event.payload.conversationId === "closing"));
+    assert.deepEqual((await f.restart().listTemporaryConversations("one")).conversations.map(chat => chat.conversationId), ["kept"]);
+    assert.deepEqual(await f.restart().finishInterruptedClosesBeforeArchive("one"), { ok: true, finished: 0 });
+    assert.equal(f.native.deletes, 1);
+  });
+});
+
 test("saved temporary draft attachments survive restart and cannot take ownership of main attachments", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, restart, attachments } = await conversationFixture(root);

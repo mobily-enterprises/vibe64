@@ -12,7 +12,8 @@ to the AI task window; a record without one is a temporary chat. The list behind
 the tabs and Colleague's list tool (`listTemporaryConversations`) always leaves out
 records that carry a task, so a tab never shows a task, even after a reload. An
 interrupted Close of either kind finishes after its engine's next turn in the session
-(`finishInterruptedCloses`, below). The AI task window binds its own conversation by
+(`finishInterruptedCloses`, below), and before the session is archived or renewed
+(`finishInterruptedClosesBeforeArchive`). The AI task window binds its own conversation by
 reading it by id (`GET /sessions/:sessionId/temporary-conversations/:taskId`); it
 never reads the list. The conversation machinery below (records, turns, routing,
 delivery, attachments, native engines and Close) serves both; a task's own
@@ -536,6 +537,20 @@ person's Close; the failure is logged as `close_unfinished`. The
 chats with Codex or OpenCode conversations to this path as closing records whose
 error says so (`docs/state-upgrades.md`); a chat holding both waits for the
 person's Close.
+No Close reaches a chat in an archive, so a closing record must never enter one:
+its Codex threads and OpenCode sessions would stay in their engines' storage for
+good. Before Archive session stops the session's work, and before renewal
+confirmation (or a Retry of a failed renewal whose session is in use again)
+freezes the session, `finishInterruptedClosesBeforeArchive` runs the person's
+Close for each closing record of any engine, outside the archive's or renewal's
+agent-write lock, starting an engine for it as the person's Close does. A Close
+that still fails keeps its record and stops the archive or renewal with the
+retryable `vibe64_conversation_close_unfinished` (409), whose message names the
+reason; the session stays open and unmarked. Inside its lock, Archive and
+renewal refuse again a closing record that appeared meanwhile, and a session
+quiesced for renewal refuses the store write that would start a Close, so none
+reaches the renewal's prepared archive. Open chats keep their native
+conversations with the archived session's saved history.
 After the cleared stream is published, Close retires that chat's open entry in
 the shared conversation runtime (`retireOpenConversation`), so its old handles
 close. Archive retires every temporary chat entry of the session the same way,

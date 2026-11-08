@@ -12,8 +12,9 @@ import { assertWorkspaceIdle, manualDraftTemplate, renewalError, sourceEnvelopes
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 /**
- * The session being renewed: its terminal admission, its terminals and
- * process-exit proof, its idleness, and the handover reviewed from it.
+ * The session being renewed: its terminal admission, its terminals, its
+ * interrupted Closes and process-exit proof, its idleness, and the handover
+ * reviewed from it.
  * @param {object} dependencies
  * @param {RenewalSessionAccess} dependencies.renewalAccess
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
@@ -44,6 +45,17 @@ function createRenewalPredecessorSession({
     });
   }
 
+  /**
+   * Before the session quiesces, each of its chats whose Close was interrupted finishes closing, with
+   * its Codex and OpenCode conversations: no Close reaches a chat in the renewal's archive. Close runs
+   * outside the renewal's agent-write lock, as the person's own Close does.
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   */
+  async function finishPredecessorCloses(runtime, sessionId) {
+    return terminals.finishInterruptedClosesBeforeArchive(sessionId, { runtime });
+  }
+
   async function releasePredecessorProcessExitProof(runtime, state, session = null) {
     const predecessor = session || await renewalAccess.readInternalSession(runtime, state.sessionId);
     return terminals.releaseRenewalPredecessorProcessExitProof(predecessor, {
@@ -64,6 +76,14 @@ function createRenewalPredecessorSession({
       runtime,
       session: predecessor
     });
+    // A Close interrupted after finishPredecessorCloses ran must not reach the renewal's archive.
+    if ((await runtime.store.listSessionConversations(sessionId)).some(record => record.state === "closing")) {
+      throw renewalError(
+        "A chat in this session is still closing. Try again to finish closing it.",
+        "vibe64_conversation_close_unfinished",
+        { retryable: true }
+      );
+    }
     return predecessor;
   }
 
@@ -134,6 +154,7 @@ function createRenewalPredecessorSession({
     freezePredecessorTerminalAdmission,
     thawPredecessorTerminalAdmission,
     closePredecessorTerminals,
+    finishPredecessorCloses,
     releasePredecessorProcessExitProof,
     assertPredecessorIdle,
     returnToRenewalReview,

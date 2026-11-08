@@ -1707,9 +1707,11 @@ chat's attachments, transcript and record, exactly as it does for a Close the
 person retries. It runs by itself after a turn of that engine settles in the
 same session (a Main chat turn, a temporary chat's or an AI task's), so no engine
 starts only for it; locally and hosted alike. Until then the chat shows as
-closing with that notice, and the person's own Close finishes it at once. A
-chat holding both Codex and OpenCode conversations is reported as a warning and
-waits for the person's Close, since no single engine's turn covers it. In a
+closing with that notice, and the person's own Close finishes it at once, as
+does archiving or renewing its session, which finishes every closing record
+first. A chat holding both Codex and OpenCode conversations is reported as a
+warning and waits for the person's Close or the session's archive or renewal,
+since no single engine's turn covers it. In a
 prepared renewal archive no Close reaches the chat, so its Codex and OpenCode
 conversations stay in the engine's own storage and the report counts them. The
 engine upload copies of the attachments are not visited: offline their folder

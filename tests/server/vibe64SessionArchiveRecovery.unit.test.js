@@ -228,3 +228,56 @@ test("the archive's stopping phase removes the session's command helpers with it
   assert.equal((await f.service().archiveSession("session-a", {})).ok, true);
   assert.deepEqual(f.calls, ["stop", "helpers", "resources", "source"]);
 });
+
+// A chat whose Close was interrupted (the person's, or an old repair chat a state upgrade handed to
+// Close), beside an open chat that the archive keeps with the session.
+function withClosingChat(f) {
+  const chats = { records: [{ conversationId: "closing-chat", state: "closing" }, { conversationId: "open-chat" }] };
+  f.runtime.store.listSessionConversations = async () => structuredClone(chats.records);
+  return chats;
+}
+
+test("archive finishes an interrupted Close through its engine before the session's work stops", async () => {
+  const f = fixture();
+  const chats = withClosingChat(f);
+  f.terminals.finishInterruptedClosesBeforeArchive = async (sessionId, { runtime }) => {
+    assert.equal(sessionId, "session-a");
+    assert.equal(runtime, f.runtime);
+    // The session is not closing yet, so Close can still start the chat's engine.
+    assert.equal(f.session.metadata.session_closing_reason, undefined);
+    f.calls.push("finish-closes");
+    chats.records = chats.records.filter(record => record.state !== "closing");
+    return { finished: 1, ok: true };
+  };
+  assert.equal((await f.service().archiveSession("session-a", {})).ok, true);
+  assert.deepEqual(f.calls, ["finish-closes", "stop", "resources", "source"]);
+  assert.equal(f.session.status, "archived");
+});
+
+test("a Close that cannot finish keeps the session open and unmarked for Archive's retry", async () => {
+  const f = fixture();
+  withClosingChat(f);
+  f.terminals.finishInterruptedClosesBeforeArchive = async () => {
+    f.calls.push("finish-closes");
+    throw Object.assign(new Error("A chat in this session could not finish closing: Codex is not signed in. Resolve that, then try again."),
+      { code: "vibe64_conversation_close_unfinished", retryable: true });
+  };
+  const failed = await f.service().archiveSession("session-a", {});
+  assert.equal(failed.ok, false);
+  assert.equal(failed.code, "vibe64_conversation_close_unfinished");
+  assert.match(failed.error, /Codex is not signed in/u);
+  assert.deepEqual(f.calls, ["finish-closes"]);
+  assert.equal(f.session.status, "active");
+  assert.equal(f.session.metadata.session_archive_operation, undefined);
+  assert.equal(f.session.metadata.session_closing_reason, undefined);
+  assert.deepEqual(f.events, []);
+
+  // A chat that is closing again after its Close finished is never packed into the archive either.
+  f.terminals.finishInterruptedClosesBeforeArchive = async () => { f.calls.push("finish-closes"); return { finished: 1, ok: true }; };
+  const raced = await f.service().archiveSession("session-a", {});
+  assert.equal(raced.ok, false);
+  assert.equal(raced.code, "vibe64_conversation_close_unfinished");
+  assert.match(raced.error, /Retry Archive session/u);
+  assert.equal(f.session.status, "active");
+  assert.equal(f.session.metadata.session_archive_operation, undefined);
+});

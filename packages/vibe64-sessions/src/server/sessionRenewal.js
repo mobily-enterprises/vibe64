@@ -210,6 +210,7 @@ function createSessionRenewalController({
         }
         return publicRenewalResult(observed, {}, input.vibe64User);
       }
+      if (observed.status === SESSION_RENEWAL_STATUS.REVIEW) await predecessorSession.finishPredecessorCloses(runtime, sessionId);
       const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
         const current = await readSessionRenewalState(runtime, sessionId);
         assertSessionRenewalOperation(current, input.operationKey);
@@ -403,6 +404,11 @@ function createSessionRenewalController({
     ].includes(observed.status)) {
       await scheduler.schedule(observed, input);
       return publicRenewalResult(observed, {}, input.vibe64User);
+    }
+    // A failed renewal whose session is in use again quiesces it on Retry.
+    if (observed.status === SESSION_RENEWAL_STATUS.FAILED && SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES.has(observed.stage) &&
+      toText(await runtime.store.readStatusForRenewal(sessionId)) === VIBE64_SESSION_STATUS.ACTIVE) {
+      await predecessorSession.finishPredecessorCloses(runtime, sessionId);
     }
     const exclusive = await runVibe64RenewalAgentWriteExclusive(runtime, sessionId, async () => {
       let current = await readSessionRenewalState(runtime, sessionId);

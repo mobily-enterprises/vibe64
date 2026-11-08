@@ -188,17 +188,22 @@ A retry continues the unfinished cleanup without repeating histories already
 removed. You do not have to retry it yourself when the cleanup left belongs to
 one AI: the next time that AI finishes a turn in the same session (in Main chat,
 another temporary chat or an AI task), Vibe64 tries the Close again and removes
-the chat once cleanup succeeds.
+the chat once cleanup succeeds. Archiving or renewing the session also finishes
+it first. If its cleanup still cannot finish then, Archive session or the
+renewal's confirmation stops with **A chat in this session could not finish
+closing: <reason>. Resolve that, then try again.** and the session stays open.
+Resolve the reason, often an AI account to reconnect, then try again.
 Removing the view alone preserves the chat.
 
 After the update that replaced repair chats with [AI tasks](ai-tasks.md), an old
 repair chat that used Codex or OpenCode may show as closing, with the notice
 **Vibe64 deletes this old repair chat and its Codex conversation after Codex next
 works in this session. Close deletes them now.** (or OpenCode). Nothing is
-needed: it disappears after that AI's next turn in the session. Select **Close**
-to remove it now. An old repair chat that used both Codex and OpenCode says
-**This old repair chat holds Codex and OpenCode conversations. Close deletes it
-with them.** and stays until you select **Close**.
+needed: it disappears after that AI's next turn in the session, or when you
+archive or renew the session. Select **Close** to remove it now. An old repair
+chat that used both Codex and OpenCode says **This old repair chat holds Codex
+and OpenCode conversations. Close deletes it with them.** and stays until you
+select **Close** or archive or renew the session.
 
 ## Typing and message order
 

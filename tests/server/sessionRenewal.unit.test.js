@@ -225,6 +225,7 @@ function fixture({
   archiveFailure = "",
   closeBarrier = null,
   closeErrors = [],
+  closeFinishOutcomes = [],
   cleanupFailure = false,
   commitTransitionPostWriteErrors = [],
   commitTransitionPreWriteErrors = [],
@@ -283,6 +284,7 @@ function fixture({
     discardTransitionWrites: 0,
     eligibility: 0,
     expectedCommit: "",
+    finishCloses: 0,
     freeze: 0,
     generate: 0,
     maintenanceWrites: [],
@@ -328,6 +330,9 @@ function fixture({
   );
   let remainingQuiesceFailures = quiesceFailures;
   const currentRestoreWritableErrors = [...restoreWritableErrors];
+  const currentCloseFinishOutcomes = [...closeFinishOutcomes];
+  // The predecessor's temporary chats and AI tasks, as the session store lists them.
+  let conversations = [];
   const currentCloseErrors = [...closeErrors];
   const currentCreationErrors = [...creationErrors];
   const currentCommitTransitionPostWriteErrors = [...commitTransitionPostWriteErrors];
@@ -374,6 +379,9 @@ function fixture({
   const stateMutationChains = new Map();
 
   const store = {
+    async listSessionConversations(sessionId) {
+      return sessionId === OLD_SESSION_ID ? structuredClone(conversations) : [];
+    },
     async listSessionRenewalStateSessionIds() {
       return [...artifacts.keys()].sort();
     },
@@ -1061,6 +1069,19 @@ function fixture({
     createSessionRenewalManualHandoverTemplate(input) {
       return sessionRenewalManualHandoverTemplate(input);
     },
+    // The predecessor's interrupted Closes, which finish before it is frozen. An outcome is an error
+    // to throw, or "raced" for another Close interrupted right after these finished.
+    async finishInterruptedClosesBeforeArchive(sessionId, { runtime: closeRuntime }) {
+      assert.equal(sessionId, OLD_SESSION_ID);
+      assert.equal(closeRuntime, runtime);
+      calls.finishCloses += 1;
+      calls.ordering.push("finish-closes");
+      const outcome = currentCloseFinishOutcomes.shift();
+      if (outcome instanceof Error) throw outcome;
+      const finished = conversations.filter(record => record.state === "closing").length;
+      if (outcome !== "raced") conversations = conversations.filter(record => record.state !== "closing");
+      return { finished, ok: true };
+    },
     async freezeSessionTerminalAdmissionForRenewal(sessionId, { renewalId }) {
       const current = terminalAdmissions.get(sessionId);
       assert.ok(!current || current === renewalId);
@@ -1244,6 +1265,9 @@ function fixture({
     terminalAdmissions,
     setConversation(value) {
       conversation = value;
+    },
+    setConversations(value) {
+      conversations = structuredClone(value);
     },
     setArchiveFailure(value) {
       currentArchiveFailure = value;
@@ -2333,6 +2357,50 @@ test("unverified predecessor process exit leaves the source active and thaws adm
   ]);
 });
 
+test("confirmation finishes the session's interrupted Closes before freezing it, and one that cannot finish keeps the review", async () => {
+  const closeError = Object.assign(new Error("A chat in this session could not finish closing: Delete unavailable. " +
+    "Resolve that, then try again."), { code: "vibe64_conversation_close_unfinished", retryable: true });
+  const context = fixture({ closeFinishOutcomes: [closeError, "raced"] });
+  const reviewed = await reviewedRenewal(context);
+  assert.equal(context.calls.finishCloses, 0, "preparing the handover leaves the session's chats alone");
+  context.setConversations([{ conversationId: "closing-chat", state: "closing" }, { conversationId: "open-chat" }]);
+  const confirmation = {
+    expectedHash: reviewed.draft.hash,
+    expectedRevision: reviewed.draft.revision,
+    operationKey: reviewed.operationKey
+  };
+  const assertReviewKept = async () => {
+    const kept = await readSessionRenewalState(context.runtime, OLD_SESSION_ID);
+    assert.equal(kept.status, SESSION_RENEWAL_STATUS.REVIEW);
+    assert.equal(kept.stage, SESSION_RENEWAL_STAGE.DRAFT_READY);
+    assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+    assert.equal(context.calls.freeze, 0);
+    assert.equal(context.calls.quiesce, 0);
+  };
+
+  await assert.rejects(context.controller.confirmSessionRenewal(OLD_SESSION_ID, confirmation), { code: closeError.code });
+  await assertReviewKept();
+  // A Close interrupted between the finish and the renewal's lock is refused there too.
+  await assert.rejects(context.controller.confirmSessionRenewal(OLD_SESSION_ID, confirmation), (error) => {
+    assert.equal(error.code, "vibe64_conversation_close_unfinished");
+    assert.equal(error.retryable, true);
+    assert.match(error.message, /still closing/u);
+    return true;
+  });
+  await assertReviewKept();
+
+  await context.controller.confirmSessionRenewal(OLD_SESSION_ID, confirmation);
+  await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
+  );
+  assert.equal(context.calls.finishCloses, 3);
+  assert.equal(context.calls.quiesce, 1);
+  const { ordering } = context.calls;
+  assert.ok(ordering.lastIndexOf("finish-closes") < ordering.indexOf("freeze"), ordering.join(", "));
+  assert.ok(ordering.indexOf("freeze") < ordering.indexOf("quiesce"), ordering.join(", "));
+});
+
 test("failed quiescence returns to review and a changed source cannot be frozen on retry", async () => {
   const context = fixture({ quiesceFailures: 1 });
   const reviewed = await reviewedRenewal(context);
@@ -2506,7 +2574,8 @@ test("confirmed renewal creates a hidden successor and selects it only after ack
   assert.equal(context.sessions.get(completed.successor.sessionId).status, "active");
   assert.equal(context.currentSessionId, completed.successor.sessionId);
   assert.equal(completed.successor.threadId, "thread-new");
-  assert.deepEqual(context.calls.ordering.slice(0, 5), [
+  assert.deepEqual(context.calls.ordering.slice(0, 6), [
+    "finish-closes",
     "freeze",
     "close-start",
     "close-exited",
@@ -3832,6 +3901,8 @@ test("one explicit retry restores a paused predecessor and continues the claimed
   assert.deepEqual(completed.continuedBy, { id: "actor-b", name: "Actor B" });
   assert.equal(context.sessions.get(completed.successor.sessionId).status, "active");
   assert.equal(context.calls.restoreWritable, 1);
+  // Only confirmation finished the session's Closes: Retry found it still quiesced.
+  assert.equal(context.calls.finishCloses, 1);
 });
 
 test("actor recovery failure discards private archive preparation and restores the predecessor", async () => {
@@ -3985,10 +4056,18 @@ test("retry discards a hidden successor and retains the handover when the predec
     newestTurnId: "turn-after-failure",
     totalTurnCount: 22
   });
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+  assert.equal(context.calls.finishCloses, 1);
+  const freezesBeforeRetry = context.calls.freeze;
 
   await context.controller.retrySessionRenewal(OLD_SESSION_ID, {
     operationKey: reviewed.operationKey
   });
+  // Retry quiesces the session in use again, so its interrupted Closes finish before it freezes.
+  assert.equal(context.calls.finishCloses, 2);
+  assert.equal(context.calls.freeze, freezesBeforeRetry + 1);
+  assert.equal(context.calls.ordering.filter(step => step === "finish-closes" || step === "freeze").slice(-2).join(","),
+    "finish-closes,freeze");
   const retained = await eventually(
     () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
     (state) => state?.status === SESSION_RENEWAL_STATUS.REVIEW

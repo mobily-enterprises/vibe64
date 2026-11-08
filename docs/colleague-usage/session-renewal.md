@@ -6,6 +6,14 @@ handover, confirm, and Vibe64 creates and briefs a fresh session before it
 archives the old one. Renewal keeps the old session until the fresh one has
 taken over.
 
+When you confirm, a chat or AI task whose **Close** did not finish (it shows as
+closing) finishes closing first, with its AI conversations, so none is left in
+the old session's archive. If that still fails, confirmation stops with **A chat
+in this session could not finish closing: <reason>. Resolve that, then try
+again.**, the handover stays for review and the old session stays in use. Resolve
+the reason, often an AI account to reconnect, then confirm again. **Retry** of a
+failed renewal does the same.
+
 ## Keep the fresh session's link after renewal
 
 When a completed renewal selects its confirmed fresh session, the address bar
