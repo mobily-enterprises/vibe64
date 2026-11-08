@@ -291,7 +291,7 @@ function meterLabel([aspect, rating]) {
   top: -14px;
 }
 .aio-card__ribbon { background: var(--aio-crown); color: var(--aio-crown-ink); right: var(--v64-space-6); }
-.aio-card__connected { background: rgb(var(--v-theme-success-container)); color: var(--v64-on-success-container); left: var(--v64-space-5); }
+.aio-card__connected { background: rgb(var(--v-theme-success-container)); color: rgb(var(--v-theme-on-success-container)); left: var(--v64-space-5); }
 .aio-card__connected--warn { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 22%, rgb(var(--v-theme-surface))); color: var(--aio-warn-ink); }
 .aio-card__head {
   align-items: center;
