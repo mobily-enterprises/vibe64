@@ -522,6 +522,31 @@ for (const control of ["indicator", "banner"]) {
   });
 }
 
+test("a manual reconnect that fails says so while recovery continues", async ({ page }) => {
+  await openChat(page);
+  await composer(page).fill("Keep me through a failed reconnect.");
+  await expect(steer(page)).toBeEnabled();
+  server.state.rejectConnections = true;
+  server.forceDisconnect();
+  const banner = page.locator("[data-vibe64-connection-recovery]");
+  await expect(banner).toContainText("Connection lost. Reconnecting automatically.");
+  const reconnect = banner.getByRole("button", { name: "Reconnect", exact: true });
+  await page.clock.pauseAt(new Date());
+  const attempts = server.state.connectionAttempts;
+  await reconnect.click();
+  await expect.poll(() => server.state.connectionAttempts).toBeGreaterThan(attempts);
+  // The refused handshake is reported, not silently replaced by the old notice.
+  await expect(banner).toContainText(/Reconnect failed \(.+\)\. Vibe64 keeps trying automatically\. Your draft is kept\./u);
+  await expect(reconnect).toBeEnabled();
+  server.state.rejectConnections = false;
+  await page.clock.resume();
+  await expect(steer(page)).toBeEnabled();
+  await expect(banner).toHaveCount(0);
+  await expect(composer(page)).toHaveValue("Keep me through a failed reconnect.");
+  expect(server.state.messages).toHaveLength(0);
+  expect(server.state.interrupts).toBe(0);
+});
+
 test("failed display refresh does not invalidate a successful provider check", async ({ page }) => {
   server.state.detailHandler = (response) => {
     if (server.state.detailCount > 1) json(response, { ok: false, error: "Display refresh unavailable" }, 503);

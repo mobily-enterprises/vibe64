@@ -57,7 +57,7 @@ function agentConnectionThinkingLabel({
   if (status === "initializing") {
     return "Loading assistant…";
   }
-  if (status === "disconnected") {
+  if (["disconnected", "reconnecting"].includes(status)) {
     return "Connection lost — assistant status unknown.";
   }
   return status === "reconciling"
@@ -333,7 +333,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const connectionRecoveryVisible = computed(() => (
     !sessionInteractionDisabled.value &&
-    ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(composerConnectionStatus.value)
+    ["disconnected", "reconnecting", "unknown", "reconciling", "unavailable", "failed"].includes(composerConnectionStatus.value)
   ));
   const thinkingVisible = computed(() => Boolean(
     !assistantAccountUnavailable.value && (

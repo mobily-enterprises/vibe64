@@ -25,10 +25,11 @@
           v-if="!assistantAccountUnavailable || props.sessionSelectionArchived"
           variant="tonal"
           size="small"
-          :disabled="props.agentConnectionStatus === 'reconciling'"
+          :disabled="['reconnecting', 'reconciling'].includes(props.agentConnectionStatus)"
+          :loading="props.agentConnectionStatus === 'reconnecting'"
           @click="props.retryAgentConnection()"
         >
-          {{ props.agentConnectionStatus === 'disconnected' ? 'Reconnect' : 'Retry connection' }}
+          {{ ['disconnected', 'reconnecting'].includes(props.agentConnectionStatus) ? 'Reconnect' : 'Retry connection' }}
         </v-btn>
         <v-btn
           v-if="props.agentConnectionStatus === 'failed' && props.sessionRenewal?.visible"
@@ -43,9 +44,10 @@
         {{ assistantAccountMessage }} Your draft is kept.
       </span>
       <span v-else class="text-body-small">
-        {{ props.agentConnectionStatus === 'disconnected'
-          ? 'Connection lost. Reconnecting automatically.'
-          : props.agentConnectionError || 'Checking the assistant connection.' }}
+        {{ props.agentConnectionStatus === 'reconnecting' ? 'Reconnecting…'
+          : props.agentConnectionStatus === 'disconnected'
+            ? props.agentConnectionError || 'Connection lost. Reconnecting automatically.'
+            : props.agentConnectionError || 'Checking the assistant connection.' }}
         Your draft is kept.
       </span>
     </v-sheet>

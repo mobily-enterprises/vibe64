@@ -1174,7 +1174,14 @@ it("opens native plan history from its system-message link without treating it a
   } finally { f.app.unmount(); }
 });
 
-for (const state of ["failed", "reconciling", "disconnected", "account-unavailable"]) {
+const connectionRowMessages = {
+  disconnected: "Connection lost. Reconnecting automatically.",
+  failed: "Connection interrupted.",
+  reconciling: "Checking the assistant connection.",
+  "reconnect-failed": "Reconnect failed (timeout). Vibe64 keeps trying automatically.",
+  reconnecting: "Reconnecting…"
+};
+for (const state of ["failed", "reconciling", "disconnected", "reconnecting", "reconnect-failed", "account-unavailable"]) {
   it(`renders the compact ${state} connection row with recovery before the explanation`, async () => {
     const source = readAutopilotViewSource();
     const template = source.match(/<v-sheet\s+v-if="connectionRecoveryVisible"[\s\S]*?<\/v-sheet>/u)?.[0];
@@ -1188,17 +1195,22 @@ for (const state of ["failed", "reconciling", "disconnected", "account-unavailab
     const app = vue.createSSRApp({ setup: () => ({ connectionRecoveryVisible: true,
       assistantAccountUnavailable: state === "account-unavailable", assistantAccountMessage: "Connect your AI account.",
       requestVibe64AccountConnectionsDialog() {}, requestSessionRenewal() {},
-      props: { agentConnectionStatus: state, agentConnectionError: state === "failed" ? "Connection interrupted." : "", retryAgentConnection() {} }
+      props: { agentConnectionStatus: state === "reconnect-failed" ? "disconnected" : state,
+        agentConnectionError: ["failed", "reconnect-failed"].includes(state) ? connectionRowMessages[state] : "",
+        retryAgentConnection() {} }
     }), render: module.exports.render });
     for (const name of ["v-sheet", "v-btn"]) app.component(name, { setup: (_, { attrs, slots }) =>
       () => vue.h(name === "v-btn" ? "button" : "section", attrs, slots.default?.()) });
     const html = await renderToString(app);
-    const label = state === "account-unavailable" ? "Go to AI Accounts" : state === "disconnected" ? "Reconnect" : "Retry connection";
+    const label = state === "account-unavailable" ? "Go to AI Accounts"
+      : ["disconnected", "reconnecting", "reconnect-failed"].includes(state) ? "Reconnect" : "Retry connection";
     expect(html).toContain(label);
     expect(html).not.toContain("Open AI");
     expect(html.indexOf(label)).toBeLessThan(html.indexOf("Your draft is kept."));
+    if (connectionRowMessages[state]) expect(html).toContain(`${connectionRowMessages[state]} Your draft is kept.`);
     expect(html).toContain('role="status"');
-    expect(html.includes("disabled")).toBe(state === "reconciling");
+    // An attempt in progress cannot be started again; a failed one can.
+    expect(html.includes("disabled")).toBe(["reconciling", "reconnecting"].includes(state));
     // The recovery actions are small JSKIT buttons, with no height of their own.
     expect(html).toContain('size="small"');
     expect(html).not.toMatch(/\smin-height="/u);

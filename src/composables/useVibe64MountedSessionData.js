@@ -4,6 +4,7 @@ import {
   useRealtimeEvent,
   useRealtimeSocket
 } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { reconnectSocketIoClient } from "@jskit-ai/realtime/client/runtime";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "@local/vibe64-runtime/shared";
@@ -269,7 +270,8 @@ function useVibe64MountedSessionData({
     // Rechecking a healthy connection does not restart the assistant. Keep
     // confirmed activity visible until the check actually reports a problem.
     if (agentConnectionStatus.value !== "connected") {
-      agentConnectionStatus.value = ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(agentConnectionStatus.value)
+      agentConnectionStatus.value = ["disconnected", "reconnecting", "unknown", "reconciling", "unavailable", "failed"]
+        .includes(agentConnectionStatus.value)
         ? "reconciling"
         : "initializing";
     }
@@ -405,6 +407,23 @@ function useVibe64MountedSessionData({
     reconciliationController?.abort();
     agentConnectionStatus.value = "disconnected";
   };
+  const markRealtimeConnectionLost = () => {
+    markRealtimeDisconnected();
+    // An earlier check's message described the connection that just ended.
+    agentConnectionError.value = "";
+  };
+  const markRealtimeConnectFailed = (error) => {
+    const reconnectRequested = agentConnectionStatus.value === "reconnecting";
+    markRealtimeDisconnected();
+    if (reconnectRequested) {
+      // Socket.IO keeps retrying on its own; the person learns that their
+      // attempt failed instead of seeing the button come back unexplained.
+      // Later automatic failures keep this message until a connection or
+      // another attempt replaces it.
+      const detail = String(error?.message || "").trim();
+      agentConnectionError.value = `Reconnect failed${detail ? ` (${detail})` : ""}. Vibe64 keeps trying automatically.`;
+    }
+  };
   const reconcileAfterVisible = () => {
     if (!globalThis.document?.hidden && agentConnectionStatus.value === "unknown") {
       void reconcileMountedAgentSession("visible");
@@ -415,12 +434,17 @@ function useVibe64MountedSessionData({
     if (realtimeSocket.connected) {
       return reconcileMountedAgentSession("manual-retry");
     }
-    realtimeSocket.connect();
+    // JSKIT's reconnect opens a fresh attempt at once, even while Socket.IO
+    // waits out a backoff delay that would ignore a plain connect(). The
+    // attempt ends in "connect", which checks the assistant, or "connect_error".
+    reconnectSocketIoClient(realtimeSocket);
+    agentConnectionStatus.value = "reconnecting";
+    agentConnectionError.value = "";
   }
   globalThis.document?.addEventListener("visibilitychange", reconcileAfterVisible);
   realtimeSocket.on("connect", reconcileAfterRealtimeConnect);
-  realtimeSocket.on("connect_error", markRealtimeDisconnected);
-  realtimeSocket.on("disconnect", markRealtimeDisconnected);
+  realtimeSocket.on("connect_error", markRealtimeConnectFailed);
+  realtimeSocket.on("disconnect", markRealtimeConnectionLost);
   if (realtimeSocket.connected) {
     queueMicrotask(() => {
       void reconcileMountedAgentSession("initial-realtime-connect");
@@ -437,8 +461,8 @@ function useVibe64MountedSessionData({
     reconciliationController?.abort();
     globalThis.document?.removeEventListener("visibilitychange", reconcileAfterVisible);
     realtimeSocket.off("connect", reconcileAfterRealtimeConnect);
-    realtimeSocket.off("connect_error", markRealtimeDisconnected);
-    realtimeSocket.off("disconnect", markRealtimeDisconnected);
+    realtimeSocket.off("connect_error", markRealtimeConnectFailed);
+    realtimeSocket.off("disconnect", markRealtimeConnectionLost);
   });
 
   watch(detailResource.data, (candidate) => {

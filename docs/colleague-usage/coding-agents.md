@@ -34,7 +34,12 @@ light theme, and a blue tinted background with light text in the dark theme.
 This applies to connection and test-approval notices, session renewal messages,
 and session information. Disabled notice controls remain readable.
 A **Retry connection** or **Reconnect** notice uses these same colours. **Retry connection** remains visible but
-unavailable while Vibe64 is checking the connection; your draft is kept. In the
+unavailable while Vibe64 is checking the connection; your draft is kept.
+**Reconnect** starts a new connection attempt at once, even while Vibe64 is
+waiting before its next automatic attempt. The button shows its progress and
+the notice says **Reconnecting…** until the attempt ends. When it connects, the
+chat checks the assistant and the notice closes; when it fails, the notice says
+**Reconnect failed** with the reason, and Vibe64 keeps trying automatically. In the
 dark theme the notice uses the theme's contrasting text. Desktop and phone show
 the same status and recovery controls; Colleague can explain them, but reconnecting
 the browser requires your interaction.

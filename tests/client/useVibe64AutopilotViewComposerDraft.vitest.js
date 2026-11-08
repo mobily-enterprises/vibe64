@@ -1066,7 +1066,7 @@ describe("useVibe64AutopilotView direct chat", () => {
   it("keeps an idle draft editable without sending it before connection verification", async () => {
     const { props, view } = await createViewWithProps();
     view.composerDraft.value = "Do not send this automatically.";
-    for (const status of ["disconnected", "reconciling", "unknown"]) {
+    for (const status of ["disconnected", "reconnecting", "reconciling", "unknown"]) {
       props.agentConnectionStatus = status;
       await nextTick();
       expect(view.connectionRecoveryVisible.value).toBe(true);

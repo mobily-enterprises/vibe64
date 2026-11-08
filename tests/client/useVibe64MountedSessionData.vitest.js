@@ -14,8 +14,10 @@ const realtimeMocks = vi.hoisted(() => ({
   events: [],
   handlers: new Map(),
   socket: {
+    active: false,
     connect: vi.fn(),
     connected: false,
+    disconnect: vi.fn(),
     off: vi.fn(),
     on: vi.fn()
   }
@@ -54,8 +56,10 @@ describe("useVibe64MountedSessionData", () => {
   beforeEach(() => {
     realtimeMocks.events.length = 0;
     realtimeMocks.handlers.clear();
+    realtimeMocks.socket.active = false;
     realtimeMocks.socket.connected = false;
     realtimeMocks.socket.connect.mockReset();
+    realtimeMocks.socket.disconnect.mockReset();
     realtimeMocks.socket.off.mockReset();
     realtimeMocks.socket.on.mockReset();
     realtimeMocks.socket.on.mockImplementation((event, handler) => {
@@ -639,14 +643,70 @@ describe("useVibe64MountedSessionData", () => {
       realtimeMocks.handlers.get("disconnect")();
       await controller.retryAgentConnection();
       expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(1);
-      expect(controller.agentConnectionStatus.value).toBe("disconnected");
+      expect(realtimeMocks.socket.disconnect).not.toHaveBeenCalled();
+      expect(controller.agentConnectionStatus.value).toBe("reconnecting");
+      // The attempt's own connection runs the check.
       realtimeMocks.socket.connected = true;
-      await controller.retryAgentConnection();
+      realtimeMocks.handlers.get("connect")();
+      await vi.advanceTimersByTimeAsync(0);
       expect(controller.agentConnectionStatus.value).toBe("connected");
       expect(httpMocks.request).toHaveBeenCalledTimes(2);
+      await controller.retryAgentConnection();
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(1);
+      expect(httpMocks.request).toHaveBeenCalledTimes(3);
       scope.stop();
       await controller.retryAgentConnection();
-      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+      expect(httpMocks.request).toHaveBeenCalledTimes(3);
+    });
+
+    it("manual reconnect replaces an attempt Socket.IO holds in its backoff delay", async () => {
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      realtimeMocks.socket.connected = false;
+      realtimeMocks.handlers.get("disconnect")();
+      // Socket.IO ignores connect() while its own reconnection is pending.
+      realtimeMocks.socket.active = true;
+      controller.retryAgentConnection();
+      expect(realtimeMocks.socket.disconnect).toHaveBeenCalledTimes(1);
+      expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(1);
+      expect(realtimeMocks.socket.disconnect.mock.invocationCallOrder[0])
+        .toBeLessThan(realtimeMocks.socket.connect.mock.invocationCallOrder[0]);
+      expect(controller.agentConnectionStatus.value).toBe("reconnecting");
+    });
+
+    it("reports a failed manual reconnect and clears it when the connection returns", async () => {
+      httpMocks.request.mockResolvedValueOnce({ ok: false, error: "Status check failed" });
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionError.value).toBe("Status check failed");
+      realtimeMocks.socket.connected = false;
+      realtimeMocks.handlers.get("disconnect")();
+      // The previous connection's check failure no longer describes anything.
+      expect(controller.agentConnectionStatus.value).toBe("disconnected");
+      expect(controller.agentConnectionError.value).toBe("");
+      // Socket.IO's own failed retries are not the person's attempt.
+      realtimeMocks.handlers.get("connect_error")(new Error("websocket error"));
+      expect(controller.agentConnectionError.value).toBe("");
+      controller.retryAgentConnection();
+      expect(controller.agentConnectionStatus.value).toBe("reconnecting");
+      realtimeMocks.handlers.get("connect_error")(new Error("websocket error"));
+      expect(controller.agentConnectionStatus.value).toBe("disconnected");
+      const failure = "Reconnect failed (websocket error). Vibe64 keeps trying automatically.";
+      expect(controller.agentConnectionError.value).toBe(failure);
+      // Automatic retries that fail afterwards keep the report.
+      realtimeMocks.handlers.get("connect_error")(new Error("timeout"));
+      expect(controller.agentConnectionError.value).toBe(failure);
+      controller.retryAgentConnection();
+      expect(controller.agentConnectionError.value).toBe("");
+      realtimeMocks.handlers.get("connect_error")({});
+      expect(controller.agentConnectionError.value).toBe("Reconnect failed. Vibe64 keeps trying automatically.");
+      realtimeMocks.socket.connected = true;
+      realtimeMocks.handlers.get("connect")();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(controller.agentConnectionError.value).toBe("");
+      expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(2);
     });
 
     it("recovers from a busy response without reconnecting or losing the active turn", async () => {
