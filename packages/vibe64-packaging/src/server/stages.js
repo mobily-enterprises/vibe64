@@ -100,8 +100,17 @@ function spawnCommand({ command, args, cwd, env, stdin = null, signal }) {
     child.stderr.on("data", (chunk) => {
       stderr = tail(stderr + chunk);
     });
+    // A command can exit without reading its input (Git refusing a directory that
+    // is not a repository); writing it then fails with EPIPE, and the exit status
+    // and stderr say what happened. Any other write failure fails the run.
+    let inputError = null;
+    child.stdin?.on("error", (error) => {
+      if (error.code !== "EPIPE") inputError = error;
+    });
     child.on("error", (error) => resolve({ ok: false, exitCode: null, stdout, stderr, error: error.message }));
-    child.on("close", (exitCode) => resolve({ ok: exitCode === 0, exitCode, stdout, stderr }));
+    child.on("close", (exitCode) => resolve(inputError
+      ? { ok: false, exitCode, stdout, stderr, error: inputError.message }
+      : { ok: exitCode === 0, exitCode, stdout, stderr }));
     if (stdin) child.stdin.end(stdin);
   });
 }

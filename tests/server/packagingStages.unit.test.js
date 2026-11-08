@@ -157,6 +157,24 @@ test("Stage 2 credentials are private temp files or stdin, removed on success an
   );
 });
 
+// Git refuses a missing repository before it reads its input. With more input
+// than a pipe holds, the write is still pending when Git exits and fails with
+// EPIPE, which once ended the server instead of failing the command.
+test("a tool that exits before reading its input fails with its own exit status and stderr", async (t) => {
+  const paths = await workspace(t);
+  const result = await spawnCommand({
+    command: "git",
+    args: ["update-ref", "--stdin"],
+    cwd: paths.root,
+    env: { PATH: process.env.PATH, GIT_DIR: path.join(paths.root, "missing.git") },
+    stdin: Buffer.alloc(4 * 1024 * 1024, "verify refs/heads/main 0000000000000000000000000000000000000000\n")
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.exitCode, 128);
+  assert.match(result.stderr, /not a git repository/u);
+  assert.equal(result.error, undefined);
+});
+
 function fakeDestination({ published = null } = {}) {
   const state = { published, uploads: 0 };
   return {

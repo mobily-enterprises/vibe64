@@ -311,6 +311,12 @@ async function runManagedExecutionPayload(payloadPath = "") {
       let exitObservedAt = "";
       child.once("exit", () => { exitObservedAt = new Date().toISOString(); });
       child.once("error", reject);
+      // A command can exit without reading its input; writing it then fails with
+      // EPIPE and the command's own status is the result. Any other write failure
+      // fails the run, as a spawn failure does.
+      child.stdin?.on("error", (error) => {
+        if (error.code !== "EPIPE") reject(error);
+      });
       child.once("close", (status, signal) => resolve({ signal, status, exitObservedAt }));
     });
     const status = typeof outcome.status === "number" ? outcome.status : 1;

@@ -671,6 +671,37 @@ test("a finite managed runner whose command is killed by a signal exits with a f
   }
 });
 
+// Git refuses a missing repository before it reads its input. With more input
+// than a pipe holds, the runner's write is still pending when Git exits and
+// fails with EPIPE; the run still ends with Git's own status and receipt.
+test("a managed runner whose command exits before reading its input reports the command's status", { skip: process.platform === "win32" }, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-managed-unread-input-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const payloadPath = path.join(root, "command.json");
+  await writeFile(payloadPath, JSON.stringify({
+    args: ["update-ref", "--stdin"],
+    command: "git",
+    cwd: root,
+    env: { PATH: process.env.PATH, GIT_DIR: path.join(root, "missing.git") },
+    executionId: randomUUID(),
+    inputBase64: Buffer.alloc(4 * 1024 * 1024, "verify refs/heads/main 0000000000000000000000000000000000000000\n").toString("base64"),
+    inputPresent: true,
+    schema: "vibe64.managed-execution.command",
+    schemaVersion: 1
+  }));
+  await assert.rejects(execFileAsync(process.execPath, [EXEC_HELPER, "run-managed", payloadPath], {
+    cwd: root, env: {}, timeout: 10000
+  }), (error) => {
+    assert.equal(error.code, 128);
+    assert.match(error.stderr, /not a git repository/u);
+    assert.doesNotMatch(error.stderr, /EPIPE/u);
+    return true;
+  });
+  const receipt = JSON.parse(await readFile(path.join(root, "result.json"), "utf8"));
+  assert.equal(receipt.result, "exit-code");
+  assert.equal(receipt.execMainStatus, "128");
+});
+
 test("a managed service's controller lease is its daemon's runtime socket, never a name any account can take", () => {
   const owner = { username: `${DAEMON_USERNAME_PREFIX}test` };
   const lease = path.join(managedExecutionRuntimeBase(owner), "resource-controller.sock");
