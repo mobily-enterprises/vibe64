@@ -421,6 +421,9 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     if (hosting.diagnostics().lifecycleState === "started") await hosting.shutdown();
   });
   app.addHook("onRequest", async request => {
+    // The owner is signed in, as resolveUser says. A host's sign-in puts the
+    // person on each of their requests, where Colleague's work reads them.
+    Object.assign(request, { vibe64User: owner });
     if (request.url.startsWith("/api/assistant/") || colleague && request.url.startsWith("/api/vibe64/colleague")) {
       state.requests.push(`${request.method} ${request.url}`);
     } else if (temporary && request.url.includes("/temporary-conversations")) {
