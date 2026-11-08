@@ -1351,6 +1351,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-execution/src/server/runVibe64Command.js`
 - `packages/vibe64-execution/src/server/engines/helperClient.js`
 - `packages/vibe64-execution/src/server/engines/capture.js`
+- `packages/vibe64-execution/src/server/engines/captureProcess.js`
 - `packages/vibe64-execution/src/server/result.js`
 - `packages/vibe64-terminals/src/server/codexGitCommand.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandOperations.js`

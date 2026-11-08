@@ -1,9 +1,8 @@
-import { execa } from "execa";
-
 import {
   commandErrorResult,
   commandResult
 } from "../result.js";
+import { startCaptureProcess } from "./captureProcess.js";
 import {
   drainProcessGroup,
   processGroupMembers
@@ -53,18 +52,13 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
     return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", { execution });
   }
   try {
-    const subprocess = execa(command, args, {
-      all: true,
+    const subprocess = startCaptureProcess(command, args, {
       cwd,
-      detached: process.platform !== "win32",
-      encoding: outputEncoding,
       env,
-      extendEnv: false,
       input,
       maxBuffer,
-      reject: false,
-      stdin: input === undefined || input === null ? "ignore" : "pipe",
-      stripFinalNewline: false,
+      onOutput,
+      outputEncoding,
       timeout
     });
     processGroupId = Number(subprocess.pid);
@@ -76,7 +70,7 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
           drain = drainProcessGroup(processGroupId).catch(() => false);
         } else {
           subprocess.kill("SIGKILL");
-          drain = subprocess.then(() => true, () => true);
+          drain = subprocess.completion.then(() => true);
         }
         stopping = drain.then((scopeEmpty) => {
           if (!scopeEmpty) stopping = null;
@@ -88,18 +82,9 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
     if (execution?.id) capturedExecutions.set(execution.id, stop);
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) abort();
-    if (typeof onOutput === "function" && subprocess.all) {
-      subprocess.all.on("data", (chunk) => {
-        try {
-          onOutput(String(chunk || ""));
-        } catch {
-          // Output observers must not change command execution semantics.
-        }
-      });
-    }
     const result = await Promise.race([
-      subprocess,
-      cancellationFinished.promise.then((scopeEmpty) => scopeEmpty ? subprocess : { exitCode: 1 })
+      subprocess.completion,
+      cancellationFinished.promise.then((scopeEmpty) => scopeEmpty ? subprocess.completion : { exitCode: 1 })
     ]);
     const exitCode = typeof result.exitCode === "number" ? result.exitCode : 1;
     outcome = commandResult({
@@ -117,15 +102,10 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
       execution
     });
   } catch (error) {
+    // spawn refused its arguments before any process started.
     outcome = commandErrorResult(error.message, "vibe64_command_capture_failed", {
       execution,
-      exitCode: typeof error.exitCode === "number" ? error.exitCode : 1,
-      output: error.all,
-      outputEncoding,
-      signal: error.signal,
-      stderr: error.stderr,
-      stdout: error.stdout,
-      timedOut: error.timedOut === true
+      outputEncoding
     });
   } finally {
     signal?.removeEventListener("abort", abort);

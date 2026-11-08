@@ -11,6 +11,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/stdioBridge.js`
 - `packages/vibe64-execution/src/server/request.js`
 - `packages/vibe64-execution/src/server/engines/capture.js`
+- `packages/vibe64-execution/src/server/engines/captureProcess.js`
 - `packages/vibe64-execution/src/server/engines/detached.js`
 - `packages/vibe64-execution/src/server/engines/detachedReaper.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
