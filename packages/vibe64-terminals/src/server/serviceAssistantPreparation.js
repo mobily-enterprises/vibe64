@@ -136,10 +136,11 @@ function createServiceAssistantPreparation({
     if (!projectRoot || !existsSync(path.join(projectRoot, GENESIS_BLUEPRINT_PATH))) return;
     const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
     if (temporary.active) return;
-    const format = await inspectGenesisProjectFormat({ projectRoot });
-    if (format.status !== "current") return;
-    if (isPracticeProjectRuntime(context.runtime)) await excludeAgentGuidanceFromPracticeHistory(projectRoot);
+    // Preparing the AI's guidance never stops the message it is prepared for.
     try {
+      const format = await inspectGenesisProjectFormat({ projectRoot });
+      if (format.status !== "current") return;
+      if (isPracticeProjectRuntime(context.runtime)) await excludeAgentGuidanceFromPracticeHistory(projectRoot);
       await refreshAgentGuidance(sessionId, projectRoot);
     } catch (error) {
       if (genesisProjectContractNeedsAttention(error)) {
@@ -164,15 +165,23 @@ function createServiceAssistantPreparation({
         }, "Project skill refresh requires workspace preparation.");
         return;
       }
-      // Wrong contents in a project file never stop the AI that can repair it.
-      if (!genesisProjectFileUnreadable(error)) throw error;
+      if (genesisProjectFileUnreadable(error)) {
+        logOperationalEvent(logger, "warn", {
+          code: error.code || error.name,
+          component: "vibe64.agent_skills",
+          event: "vibe64.agent_skills.project_file_unreadable",
+          sessionId
+        }, "A project file cannot be read; skill refresh deferred and the message sent.");
+        await noticeUnreadableProjectFile(sessionId, context, error);
+        return;
+      }
       logOperationalEvent(logger, "warn", {
-        code: error.code || error.name,
+        code: error?.code || error?.name,
         component: "vibe64.agent_skills",
-        event: "vibe64.agent_skills.project_file_unreadable",
+        error: String(error?.message || error),
+        event: "vibe64.agent_skills.preparation_failed",
         sessionId
-      }, "A project file cannot be read; skill refresh deferred and the message sent.");
-      await noticeUnreadableProjectFile(sessionId, context, error);
+      }, "Preparing the project's agent guidance failed; the message is sent without the refresh.");
     }
   }
 

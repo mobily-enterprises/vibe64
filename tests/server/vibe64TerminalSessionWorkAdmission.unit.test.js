@@ -692,6 +692,24 @@ test("an undecided competing Stack section defers skill refresh without blocking
     event.code === "STACK_SECTION_AMBIGUOUS"), true);
 });
 
+test("any failure preparing the AI's guidance is logged and never stops the message", async (t) => {
+  const warnings = [];
+  const { service, session, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    inspectAgentSkills: async () => { throw new Error("The skills directory cannot be listed."); },
+    logger: { ...silentLogger, warn(event) { warnings.push(event); } }
+  });
+  const projectRoot = session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  project.runProjectSourceExclusive = async () => assert.fail("A failed preparation must not change source.");
+  // Delivery reaches assistant admission; this fixture has no durable selection.
+  await assert.rejects(service.sendAgentMessage(session.sessionId,
+    { message: "Why does the project not start?" }, { engineId: "opencode" }),
+  { code: "vibe64_assistant_selection_invalid" });
+  assert.deepEqual(warnings.filter((event) => event.event === "vibe64.agent_skills.preparation_failed").map((event) => event.error),
+    ["The skills directory cannot be listed."]);
+});
+
 const UNREADABLE_NOTICE_END = " Your message was still sent, and the AI is told about it so it can fix the file.";
 
 async function unreadableFileNotices(runtime, sessionId) {

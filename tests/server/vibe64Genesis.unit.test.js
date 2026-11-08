@@ -1,7 +1,7 @@
 import { createVibe64HostContextRegistry } from "../../packages/vibe64-genesis/src/server/hostContextRegistry.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -962,6 +962,34 @@ test("a project file Genesis cannot read sends the request as written", async ()
     const review = "Review the latest change.";
     assert.deepEqual(await renderGenesisPrompt({ environment: process.env, action: { genesisTask: "review" },
       input: { request: review }, projectRoot }), { prompt: review });
+  });
+});
+
+test("Genesis failing for a reason of its own sends the request as written", async () => {
+  await withTemporaryRoot(async (root) => {
+    // Genesis cannot read a project that is not there; the message still goes.
+    const request = "Why does the project not start?";
+    assert.deepEqual(await renderGenesisPrompt({ environment: process.env, input: { conversationRequest: request },
+      projectRoot: path.join(root, "missing") }), { prompt: request });
+  });
+});
+
+test("a core Agent Skill the project's installed Genesis cannot supply never stops the message", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await initializeGit(projectRoot);
+    await initializeGenesisProject({ projectRoot });
+    // The project lists genesis-compiler, so Genesis reads core skills from the project's installed copy,
+    // which here has no UI pass skill.
+    const installed = path.join(path.dirname(genesisPackageBinDirectory()), "genesis-compiler");
+    const copy = path.join(projectRoot, "node_modules/genesis-compiler");
+    await mkdir(copy, { recursive: true });
+    await writeFile(path.join(copy, "package.json"), JSON.stringify({ name: "genesis-compiler", version: "0.0.0" }));
+    await cp(path.join(installed, "skills"), path.join(copy, "skills"), { recursive: true });
+    await rm(path.join(copy, "skills/genesis-ui-pass"), { recursive: true, force: true });
+    await writeFile(path.join(projectRoot, "package.json"), JSON.stringify({ devDependencies: { "genesis-compiler": "0.0.0" } }));
+    const request = "Hello";
+    const { prompt } = await renderGenesisPrompt({ environment: process.env, input: { conversationRequest: request }, projectRoot });
+    assert.ok(prompt.includes(request), "the message goes, composed or as written");
   });
 });
 

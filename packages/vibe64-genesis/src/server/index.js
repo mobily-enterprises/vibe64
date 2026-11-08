@@ -513,12 +513,10 @@ async function renderGenesisPrompt({
     sessionContextInstalled: true,
     task: promptTask
   }, { prompt: true });
-  // A project file Genesis cannot read never stops the message: the request
-  // goes as written, and the AI reads Genesis's diagnostic in its session context.
-  const asWritten = (error) => {
-    if (!genesisProjectFileUnreadable(error)) throw error;
-    return { prompt: request };
-  };
+  // Nothing Genesis does while composing the prompt stops the message: the
+  // request goes as written. For a project file Genesis cannot read, the AI
+  // reads Genesis's diagnostic in its session context.
+  const asWritten = () => ({ prompt: request });
   let task = requestedTask;
   let result;
   try {
@@ -530,12 +528,12 @@ async function renderGenesisPrompt({
       : "";
     // A task Vibe64 chose itself, such as an automatic finishing turn's review,
     // never becomes the Blueprint's: its request goes as written.
-    if (!fallbackTask || fallbackTask === requestedTask || input.automaticGenesisTask === true) return asWritten(error);
+    if (!fallbackTask || fallbackTask === requestedTask || input.automaticGenesisTask === true) return asWritten();
     task = fallbackTask;
     try {
       result = await generate(task);
-    } catch (fallbackError) {
-      return asWritten(fallbackError);
+    } catch {
+      return asWritten();
     }
   }
   const effectiveTask = assertGenesisPromptTask(result.task) || task;

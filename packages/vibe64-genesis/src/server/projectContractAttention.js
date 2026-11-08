@@ -19,8 +19,8 @@ function genesisProjectContractNeedsAttention(error) {
 // Skills, or an agent integration file. Its message and details (path, line,
 // observed text) say what to fix, and a project JSON file that does not parse
 // arrives as a SyntaxError. Either way the project needs a repair, not the
-// host, so an AI message still goes. Genesis's own Git, process and
-// host-context failures are not project files.
+// host, so the person and the AI are told what to fix. Genesis's own Git,
+// process and host-context failures are not project files.
 const GENESIS_STACK_PATH = "genesis/stack.md";
 const GENESIS_HOST_FAILURE_PREFIXES = Object.freeze(["GIT_", "PROCESS_", "HOST_CONTEXT_"]);
 
