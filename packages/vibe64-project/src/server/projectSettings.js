@@ -5,6 +5,7 @@ import {
   saveConnectedProjects
 } from "./connectedProjects.js";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { assertProjectDirectoryUsable } from "@local/vibe64-core/server/studioProjectContext";
 import { saveProjectPromptHints } from "@local/vibe64-core/server/projectPromptHints";
 import {
@@ -14,6 +15,7 @@ import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 /** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Project settings kept in the project's source: connected repositories, collaboration
@@ -23,6 +25,7 @@ import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisCollaboration} dependencies.inspectCollaboration
  * @param {(fullName: string, input: object) => Promise<object>} dependencies.inspectConnectedRepository
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisEngineering} dependencies.inspectEngineering
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectSelection} dependencies.selection
  * @param {ProjectSessionWork} dependencies.sessionWork
  * @param {typeof import("@local/vibe64-genesis/server").setGenesisCollaboration} dependencies.setCollaboration
@@ -32,6 +35,7 @@ function createProjectSettings({
   inspectCollaboration,
   inspectConnectedRepository,
   inspectEngineering,
+  logger,
   selection,
   sessionWork,
   setCollaboration,
@@ -113,27 +117,41 @@ function createProjectSettings({
       rootKind: source.rootKind,
       sessionId: source.sessionId
     };
+    const unavailable = (unavailableReason) => ({
+      available: false,
+      canEdit: false,
+      choices: {},
+      experience: "",
+      explanationStyle: "",
+      requirements: "",
+      responseLength: "",
+      source: publicSource,
+      status: "unavailable",
+      tone: "",
+      unavailableReason
+    });
     if (!source.sourceRoot) {
-      return {
-        available: false,
-        canEdit: false,
-        choices: {},
-        experience: "",
-        explanationStyle: "",
-        requirements: "",
-        responseLength: "",
-        source: publicSource,
-        status: "unavailable",
-        tone: "",
-        unavailableReason: source.sessionId
-          ? "This session does not have an available project source yet."
-          : "Create or select an AI session to set collaboration guidance."
-      };
+      return unavailable(source.sessionId
+        ? "This session does not have an available project source yet."
+        : "Create or select an AI session to set collaboration guidance.");
     }
     await assertProjectDirectoryUsable(source.sourceRoot);
-    const collaboration = await inspectCollaboration({
-      projectRoot: source.sourceRoot
-    });
+    let collaboration;
+    try {
+      collaboration = await inspectCollaboration({
+        projectRoot: source.sourceRoot
+      });
+    } catch (error) {
+      // The settings, which the session page reads too, still load without Genesis.
+      logOperationalEvent(logger, "warn", {
+        code: error?.code || error?.name,
+        component: "vibe64.project_settings",
+        error: String(error?.message || error),
+        event: "vibe64.project_settings.collaboration_unavailable",
+        sessionId: source.sessionId
+      }, "Genesis could not read the collaboration approach; settings load without it.");
+      return unavailable(`Genesis could not read this project's collaboration approach: ${String(error?.message || error)}`);
+    }
     return {
       available: true,
       canEdit: canEditProjectSettings(input),

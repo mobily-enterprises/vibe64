@@ -3,6 +3,7 @@ import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   managedSessionSourcePath,
   sessionHasSource,
@@ -48,6 +49,7 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("./sessionRuntimeRenewal.js").RenewalSessionRequest} RenewalSessionRequest */
 
 
@@ -71,6 +73,7 @@ class Vibe64SessionRuntime {
    * @param {boolean} [options.inspectSourceByDefault] whether getSession and sessionView inspect the source checkout;
    *   stated once per runtime (a without-source runtime), the *WithoutSource methods never inspect
    * @param {object | null} [options.learningScope] the admitted learning session scope
+   * @param {RuntimeLogger | null} [options.logger] where a prompt Genesis could not compose is reported
    * @param {string} [options.projectContextRoot]
    * @param {string} [options.projectRuntimeRoot]
    * @param {string} [options.projectSessionSourceRoot]
@@ -86,6 +89,7 @@ class Vibe64SessionRuntime {
     createSessionSource = null,
     inspectSourceByDefault = true,
     learningScope = null,
+    logger = null,
     projectContextRoot = process.cwd(),
     projectRuntimeRoot = "",
     projectSessionSourceRoot = "",
@@ -103,6 +107,7 @@ class Vibe64SessionRuntime {
       throw vibe64Error("The supplied session store must retain the exact admitted learning scope.", "vibe64_learning_scope_store_mismatch");
     }
     this.inspectSourceByDefault = inspectSourceByDefault;
+    this.logger = logger;
     this.createSessionSource = createSessionSource;
     this.projectSessionSourceRoot = toText(projectSessionSourceRoot);
     this.promptEnvironment = promptEnvironment;
@@ -369,6 +374,16 @@ class Vibe64SessionRuntime {
       input: {
         ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
         ...(toText(request) ? { request: toText(request) } : {})
+      },
+      onGenesisUnavailable: (error) => {
+        if (!this.logger) return;
+        logOperationalEvent(this.logger, "warn", {
+          code: error?.code || error?.name,
+          component: "vibe64.agent_message",
+          error: String(error?.message || error),
+          event: "vibe64.agent_message.genesis_prompt_unavailable",
+          sessionId
+        }, "Genesis could not compose the prompt; the request goes as written.");
       },
       projectRoot: sourceRoot
     });

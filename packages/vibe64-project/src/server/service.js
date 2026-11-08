@@ -101,7 +101,7 @@ function createService({
     savedEnvValues,
     selection
   });
-  const sessionWork = createProjectSessionWork({ environment, selection });
+  const sessionWork = createProjectSessionWork({ environment, logger, selection });
   const developmentDatabase = createProjectDevelopmentDatabase({
     projectContext,
     resourceEnvironmentProvider,
@@ -112,6 +112,7 @@ function createService({
     inspectCollaboration,
     inspectConnectedRepository,
     inspectEngineering,
+    logger,
     selection,
     sessionWork,
     setCollaboration,

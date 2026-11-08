@@ -2367,30 +2367,36 @@ test("Save regenerates Genesis-derived artifacts from captured authored work", a
   }
 });
 
-test("Save leaves canonical and session source untouched when derived-artifact regeneration fails", async () => {
+test("Genesis failing to regenerate the derived artifacts never stops a Save", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-"));
   try {
     const fixture = await createRemoteFixture(root);
     const session = await sessionForRemote(root, fixture);
+    await mkdir(path.join(session.sourcePath, ".genesis"), { recursive: true });
     await writeFile(path.join(session.sourcePath, "authored.txt"), "important\n", "utf8");
-    const beforeCanonical = await git(fixture.remote, ["rev-parse", "refs/heads/main"]);
-    const beforeHead = await git(session.sourcePath, ["rev-parse", "HEAD"]);
-    const beforeStatus = await git(session.sourcePath, ["status", "--porcelain=v1", "-z"]);
+    await writeFile(path.join(session.sourcePath, ".genesis", "machine-city.json"), "{\"session\":true}\n", "utf8");
 
-    await assert.rejects(saveSessionWork({
+    const result = await saveSessionWork({
       derivedArtifactPaths: [".genesis/machine-city.json", ".genesis/program-city.json"],
       operationId: "save-derived-refresh-failure",
       project: githubProject(root, fixture.remote),
       refreshDerivedArtifacts: async () => {
-        throw new Error("derived refresh failed");
+        throw Object.assign(new TypeError("Cannot read properties of undefined (reading 'nodes')"), { code: "GENESIS_BROKEN" });
       },
       runCommand: commandRunner,
       session
-    }), /derived refresh failed/u);
+    });
 
-    assert.equal(await git(fixture.remote, ["rev-parse", "refs/heads/main"]), beforeCanonical);
-    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), beforeHead);
-    assert.equal(await git(session.sourcePath, ["status", "--porcelain=v1", "-z"]), beforeStatus);
+    assert.equal(result.status, "saved");
+    assert.deepEqual(result.changedPaths, ["authored.txt"]);
+    assert.deepEqual(result.derivedArtifactsKept, {
+      code: "GENESIS_BROKEN",
+      message: "Cannot read properties of undefined (reading 'nodes')"
+    });
+    assert.equal(await git(fixture.remote, ["rev-parse", "refs/heads/main"]), result.saveCommit);
+    assert.equal(await git(fixture.remote, ["show", "main:authored.txt"]), "important");
+    // The Save keeps the project's derived artifacts as they were, never the session's unregenerated copy.
+    await assert.rejects(git(fixture.remote, ["show", "main:.genesis/machine-city.json"]));
     assert.equal(await readFile(path.join(session.sourcePath, "authored.txt"), "utf8"), "important\n");
   } finally {
     await rm(root, { force: true, recursive: true });

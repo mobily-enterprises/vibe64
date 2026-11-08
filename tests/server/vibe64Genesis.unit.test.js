@@ -179,25 +179,33 @@ test("the Genesis hook shim trusts only the registered provider session worktree
     const run = (target = projectRoot, options = {}) => execFileAsync(process.execPath, [
       shim, "hook", "turn", "--project-root", target
     ], { cwd: projectRoot, env, ...options });
-    await run();
+    const trusted = async (result) => assert.doesNotMatch((await result).stderr, /GIT_REPOSITORY_UNTRUSTED|The Genesis hook failed/u);
+    await trusted(run());
     const nativeEnv = { ...env };
     delete nativeEnv.GENESIS_HOST_CONTEXT_INPUT;
     const native = run(projectRoot, { env: nativeEnv });
     native.child.stdin.end(JSON.stringify({ session_id: "provider-session" }));
-    await native;
+    await trusted(native);
     const childEnv = { ...env, GENESIS_HOST_CONTEXT_INPUT: JSON.stringify({
       sessionId: "child-session", parentSessionIds: ["nested-child", "provider-session"]
     }) };
-    await run(projectRoot, { env: childEnv });
-    await assert.rejects(run(otherRoot, { env: childEnv }), /GIT_REPOSITORY_UNTRUSTED/u);
-    await assert.rejects(run(otherRoot), /GIT_REPOSITORY_UNTRUSTED/u);
-    await assert.rejects(run(projectRoot, {
+    await trusted(run(projectRoot, { env: childEnv }));
+    // An untrusted worktree fails the hook, which never fails its conversation: Genesis's
+    // diagnostic stays on stderr and the hook exits 0 with no guidance.
+    const untrusted = async (...args) => {
+      const { stdout, stderr } = await run(...args);
+      assert.equal(stdout, "");
+      assert.match(stderr, /GIT_REPOSITORY_UNTRUSTED[\s\S]*The Genesis hook failed \(exit 1\); the conversation continues without its guidance\./u);
+    };
+    await untrusted(otherRoot, { env: childEnv });
+    await untrusted(otherRoot);
+    await untrusted(projectRoot, {
       env: { ...env, GENESIS_HOST_CONTEXT_INPUT: '{"sessionId":"unknown"}' }
-    }), /GIT_REPOSITORY_UNTRUSTED/u);
-    await assert.rejects(run(projectRoot, { cwd: otherRoot }), /GIT_REPOSITORY_UNTRUSTED/u);
-    await assert.rejects(run(projectRoot, {
+    });
+    await untrusted(projectRoot, { cwd: otherRoot });
+    await untrusted(projectRoot, {
       env: { ...env, GENESIS_HOST_CONTEXT_RESOLVER_DATA: "" }
-    }), /GIT_REPOSITORY_UNTRUSTED/u);
+    });
   });
 });
 

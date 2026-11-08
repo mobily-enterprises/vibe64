@@ -1,4 +1,7 @@
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * The engine-neutral Vibe64 guidance input of a session conversation. Codex,
@@ -25,4 +28,21 @@ function sessionGuidanceInput({ conversationKind, env, commands }) {
   };
 }
 
-export { sessionGuidanceInput };
+/**
+ * Reports a conversation whose instructions lack Genesis's project guidance because Genesis failed
+ * or did not answer in time; the conversation goes on with Vibe64's own guidance.
+ * @param {RuntimeLogger} logger
+ * @param {{ engineId: string, sessionId: string }} fields
+ * @returns {(error: Error) => void}
+ */
+function reportGenesisGuidanceUnavailable(logger, fields) {
+  return (error) => logOperationalEvent(logger, "warn", {
+    ...fields,
+    code: error?.code || error?.name,
+    component: "vibe64.agent_guidance",
+    error: String(error?.message || error),
+    event: "vibe64.agent_guidance.genesis_unavailable"
+  }, "Genesis project guidance is unavailable; the conversation goes on with Vibe64's guidance alone.");
+}
+
+export { reportGenesisGuidanceUnavailable, sessionGuidanceInput };

@@ -15,7 +15,7 @@ missing, and how many optional extras aren't set up. Only **Needed** checks coun
 | Git | Git is missing or didn't start. |
 | An AI tool | None of Claude Code, Codex or opencode runs on this computer. One is enough. **Set up your AI** opens AI setup. |
 | AI connection | No AI is connected yet. **Set up your AI** opens AI setup (shown on the first AI row that needs it). |
-| Vibe64, Genesis | Vibe64's own parts can't be read. This is not something a project setting fixes. |
+| Vibe64, Genesis | Vibe64's own parts can't be read. This is not something a project setting fixes. When Vibe64 cannot find its Genesis, only the Genesis row fails, saying what is missing; the other rows still show. |
 
 **Optional** (nice to have; nothing depends on them): GitHub CLI, ripgrep, the AI
 tools you don't use, **Your name in Git**, the Playwright browser for automated

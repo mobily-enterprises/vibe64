@@ -136,6 +136,7 @@ function createClaudeConversationHost({
   const { prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess } =
     createClaudeConversationEnvironment({
       env,
+      logger,
       project,
       command,
       credentialHome,

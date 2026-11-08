@@ -11,7 +11,7 @@ import {
 } from "@local/vibe64-genesis/server";
 import { claudeFlagSettings } from "./claudeCodeProcess.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
-import { sessionGuidanceInput } from "./sessionGuidanceInput.js";
+import { reportGenesisGuidanceUnavailable, sessionGuidanceInput } from "./sessionGuidanceInput.js";
 import { claudeConversationError, claudeTerminalNamespace } from "./terminalShared.js";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { learningSessionExecutionRoot } from "./mainConversationContext.js";
@@ -21,6 +21,7 @@ import {
 } from "@local/vibe64-execution/server/terminalSessions";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
@@ -67,6 +68,7 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
  * Vibe64's selected settings, managed command environment and Genesis host facts.
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {() => string} dependencies.command
  * @param {object} dependencies.credentialHome
@@ -83,6 +85,7 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
  */
 function createClaudeConversationEnvironment({
   env,
+  logger,
   project,
   command,
   credentialHome,
@@ -97,6 +100,12 @@ function createClaudeConversationEnvironment({
   agentPreviewCommand,
   agentSessionCommand
 }) {
+  function guidanceInstructions(entry, workdir) {
+    return vibe64ConversationInstructions({ workdir, promptContext: sessionGuidance(entry) }, {
+      onGenesisUnavailable: reportGenesisGuidanceUnavailable(logger, { engineId: ENGINE, sessionId: entry.context.sessionId })
+    });
+  }
+
   function sessionGuidance(entry) {
     return sessionGuidanceInput({
       conversationKind: entry.main ? "main" : "temporary",
@@ -168,7 +177,7 @@ function createClaudeConversationEnvironment({
     let systemPrompt = entry.context.assistantScope?.stableContext || (profile
       ? "Complete only the supplied task."
       : learningRoot ? ""
-        : await vibe64ConversationInstructions({ workdir: entry.context.workdir, promptContext: sessionGuidance(entry) }));
+        : await guidanceInstructions(entry, entry.context.workdir));
     if (applicationTools && entry.main && !entry.context.runtime.learningScope && !profile && !entry.context.assistantScope) {
       systemPrompt += "\n\nYou cannot create a goal through Claude's application tools. When the human asks you to create or set a goal, explain that they need to use the chat UI: choose Set goal, enter the objective, then choose Start goal. Offer a concise objective they can paste. If an unfinished goal already exists, explain Resume goal for continuing it or Cancel goal before setting a different one. Do not claim that stating an objective creates a goal.";
       systemPrompt += "\n\nWhen the human explicitly asks to pause the goal, finish any requested checkpoint and drain delegated work, then use the application action vibe64.terminals.main-goal.pause through the application tools. Saying paused does not pause the goal. Do not invoke Pause merely because work is unfinished, delegated work is running, or prerequisites are missing. When a concrete external prerequisite prevents all useful work, use vibe64.terminals.main-goal.block with a short reason explaining what must change before Resume. Do not mark a goal blocked while delegated/background agents or checks are still working; wait for their results. Do not repeatedly answer that you are waiting for missing human input.";
@@ -241,7 +250,7 @@ function createClaudeConversationEnvironment({
     const configuration = claudeModelConfiguration({ providerId: ctx.selection.modelProviderId, model: ctx.selection.modelId }, external);
     return {
       get systemPrompt() {
-        return vibe64ConversationInstructions({ workdir: ctx.workdir, promptContext: sessionGuidance(entry) });
+        return guidanceInstructions(entry, ctx.workdir);
       },
       get model() {
         return configuration.model;

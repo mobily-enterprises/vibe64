@@ -603,6 +603,26 @@ async function removeStoppedDerivedWorktrees(runCommand, context, options) {
   await git(runCommand, context, ["worktree", "prune"], { ...options, required: false });
 }
 
+/**
+ * The progress note of a Save or Update whose derived artifacts Genesis could not regenerate.
+ * @param {{ code: string, message: string }} kept
+ * @param {string} operation
+ */
+function derivedArtifactsKeptProgress(kept, operation) {
+  return {
+    code: kept.code,
+    kind: operation === "Save" ? "publish" : "update",
+    message: `Genesis could not regenerate the project diagrams, so this ${operation} kept the ones it had. ${kept.message}`,
+    stage: "derived-artifacts-kept"
+  };
+}
+
+/**
+ * The tree with Genesis's derived artifacts regenerated from it. Genesis failing to regenerate them
+ * never stops the work they derive from: the tree keeps the artifacts it came with, and
+ * derivedArtifactsKept says why.
+ * @returns {Promise<{ tree: string, derivedArtifactsKept?: { code: string, message: string } }>}
+ */
 async function regenerateDerivedArtifactTree(runCommand, context, {
   baseCommit,
   commandOptions,
@@ -613,7 +633,7 @@ async function regenerateDerivedArtifactTree(runCommand, context, {
 }) {
   const paths = normalizedDerivedArtifactPaths(derivedArtifactPaths);
   if (!paths.length) {
-    return tree;
+    return { tree };
   }
   await removeStoppedDerivedWorktrees(runCommand, context, { commandOptions, project });
   const sourceCommit = await createVirtualCommit(runCommand, context, {
@@ -640,13 +660,25 @@ async function regenerateDerivedArtifactTree(runCommand, context, {
       sourceCommit
     ], options);
     registered = true;
-    await refreshDerivedArtifacts({ projectRoot: temporaryWorktree });
-    return await writeGitWorktreeTree({
-      baseCommit: "HEAD",
-      project: commandProject(context, project),
-      runCommand,
-      worktreePath: temporaryWorktree
-    });
+    try {
+      await refreshDerivedArtifacts({ projectRoot: temporaryWorktree });
+    } catch (error) {
+      return {
+        derivedArtifactsKept: {
+          code: String(error?.code || error?.name || "vibe64_derived_artifacts_unavailable"),
+          message: String(error?.message || error)
+        },
+        tree
+      };
+    }
+    return {
+      tree: await writeGitWorktreeTree({
+        baseCommit: "HEAD",
+        project: commandProject(context, project),
+        runCommand,
+        worktreePath: temporaryWorktree
+      })
+    };
   } finally {
     if (registered) {
       await git(runCommand, context, [
@@ -680,6 +712,7 @@ export {
   countCommitsBetween,
   createVirtualCommit,
   deleteOperationRef,
+  derivedArtifactsKeptProgress,
   git,
   gitOutput,
   isGitObjectId,

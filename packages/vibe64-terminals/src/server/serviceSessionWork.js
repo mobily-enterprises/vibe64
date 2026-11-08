@@ -50,6 +50,27 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 
 /**
+ * Logs a Save or Update whose derived artifacts Genesis could not regenerate.
+ * @param {RuntimeLogger} logger
+ * @param {{ derivedArtifactsKept?: { code: string, message: string } } | null} result
+ * @param {"save" | "update"} operation
+ * @param {string} operationId
+ * @param {string} sessionId
+ */
+function logDerivedArtifactsKept(logger, result, operation, operationId, sessionId) {
+  if (!result?.derivedArtifactsKept) return;
+  logOperationalEvent(logger, "warn", {
+    code: result.derivedArtifactsKept.code,
+    component: "vibe64.session_work",
+    error: result.derivedArtifactsKept.message,
+    event: "vibe64.session_work.derived_artifacts_kept",
+    operation,
+    operationId,
+    sessionId
+  }, "Genesis could not regenerate the project's derived artifacts; the work went ahead with the ones it had.");
+}
+
+/**
  * A session's work in its repository and its connected copies: the work execution, saving and its
  * recovery, updates, pull requests, the session source and its exclusive reads, and the Git command
  * actor.
@@ -242,11 +263,8 @@ function createServiceSessionWork({
       }, options),
       session
     });
-    return {
-      ...saved,
-      commitTitleExecutionProfile: commitTitle.executionProfile,
-      ...(connected.length ? { connected } : {})
-    };
+    logDerivedArtifactsKept(logger, saved, "save", input.operationId, normalizedSessionId);
+    return { ...saved, commitTitleExecutionProfile: commitTitle.executionProfile, ...(connected.length ? { connected } : {}) };
   }
 
   async function runSessionRepositoryWrite(
@@ -563,6 +581,7 @@ function createServiceSessionWork({
         session,
         signal
       });
+      logDerivedArtifactsKept(logger, updated, "update", input.operationId, sessionId);
       return connected.length ? { ...updated, connected } : updated;
     });
   }

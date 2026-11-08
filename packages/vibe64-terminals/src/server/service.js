@@ -1,4 +1,4 @@
-import { inspectGenesisSkills } from "@local/vibe64-genesis/server";
+import { GENESIS_USER_PATH_TIMEOUT_MS, inspectGenesisSkills } from "@local/vibe64-genesis/server";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
@@ -74,6 +74,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
  * @param {ActionCatalogue} dependencies.actions
  * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
  * @param {RuntimeEnv} dependencies.env
+ * @param {number} [dependencies.genesisTimeoutMs] how long Genesis may hold a message's preparation
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
@@ -92,6 +93,7 @@ function createService({
   // readable-check: allow dependency-default - data: a host's Codex terminal settings, none by default
   codexTerminalController = {},
   env,
+  genesisTimeoutMs = GENESIS_USER_PATH_TIMEOUT_MS,
   inspectAgentSkills = inspectGenesisSkills,
   logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
@@ -237,6 +239,7 @@ function createService({
   const assistantPreparation = createServiceAssistantPreparation({
     sessionAccess,
     workspacePreparation,
+    genesisTimeoutMs,
     inspectAgentSkills,
     logger,
     project,

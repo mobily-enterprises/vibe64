@@ -7,15 +7,17 @@ import {
 
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 /** @typedef {import("./types.js").ProjectEnvironment} ProjectEnvironment */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * The selected project's session runtime, and source work that holds a session's
  * agent write lock while it runs.
  * @param {object} dependencies
  * @param {ProjectEnvironment} dependencies.environment
+ * @param {RuntimeLogger} [dependencies.logger]
  * @param {ProjectSelection} dependencies.selection
  */
-function createProjectSessionWork({ environment, selection }) {
+function createProjectSessionWork({ environment, logger, selection }) {
   async function runSessionSourceWorkExclusive(input, operation, operationName = "project-source-write", options = {}) {
     const {
       waitMs = 0
@@ -43,6 +45,7 @@ function createProjectSessionWork({ environment, selection }) {
     const target = selection.requireSelectedTargetRoot();
     return {
       createSessionSource: options.createSessionSource,
+      logger,
       projectContextRoot: target,
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
       projectSessionSourceRoot: selection.selectedSessionSourceRoot(),

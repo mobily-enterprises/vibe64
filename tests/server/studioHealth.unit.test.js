@@ -119,6 +119,40 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
   assert.equal(commandCalls.every((call) => call.purpose === "health"), true);
 });
 
+test("a Genesis Vibe64 cannot locate fails only its own Health row", async (t) => {
+  const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-genesis-"));
+  t.after(() => rm(studioRoot, { recursive: true, force: true }));
+  await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
+  withRuntimePacks(t, studioRoot);
+  const service = createService({
+    env: process.env,
+    connections: {
+      checkCustomEndpoints: async () => [],
+      async getStatus() {
+        return { ok: true, connections: [{ connected: true, id: "ai", label: "AI connection", status: "connected" },
+          { connected: true, id: "github", status: "connected" }] };
+      }
+    },
+    genesisBinDirectory() {
+      throw new Error("Cannot find package 'genesis-compiler'.");
+    },
+    project: { async listProjects() { return { ok: true, projects: [{ slug: "example" }] }; } },
+    async runCommand({ args, command }) {
+      return successfulCommandResult(command, args);
+    },
+    studioRoot
+  });
+
+  const result = await service.inspect({ vibe64User: { role: "owner" } });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.healthy, false);
+  assert.equal(result.summary.failed, 1);
+  const genesis = result.checks.find((check) => check.id === "genesis");
+  assert.equal(genesis.status, "fail");
+  assert.match(genesis.observed, /Cannot find package 'genesis-compiler'/u);
+});
+
 test("Studio Health shows a stopped custom model endpoint as a warning that never blocks", async (t) => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-custom-"));
   t.after(() => rm(studioRoot, { recursive: true, force: true }));

@@ -22,6 +22,7 @@ import { codexThreadIdForWorkdir } from "./codexConversationStorage.js";
 import { codexAgentSettingsFromSession, codexThreadModelProvider } from "./codexRuntimeHost.js";
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { subscribeUnixCommandControlChanges } from "./unixJsonCommand.js";
+import { reportGenesisGuidanceUnavailable } from "./sessionGuidanceInput.js";
 import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -150,7 +151,9 @@ function createCodexSessionProviderHost(host) {
             const binding = params.hostContext
               ? { promptContext: params.hostContext, workdir: params.cwd }
               : registry.get(threadId);
-            return binding ? await vibe64ConversationInstructions(binding) : undefined;
+            return binding ? await vibe64ConversationInstructions(binding, {
+              onGenesisUnavailable: reportGenesisGuidanceUnavailable(logger, { engineId: "codex", sessionId })
+            }) : undefined;
           },
           bindThreadContext: async (threadId, hostContext, params) => {
             if (await learningSessionExecutionRoot(learningRuntime, sessionId)) return;

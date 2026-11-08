@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { configureVibe64Host, runCaptureCommand } from "@local/vibe64-execution/server";
 import {
@@ -33,15 +31,7 @@ const OPERATION_IMPLEMENTATIONS = {
     });
   },
   "save-maintenance": refreshSessionWorkSaveCacheDirect,
-  "save-message": async (input) => {
-    // Map regeneration validates the project's Stack before publication. Catch
-    // missing contracts before optional model naming, without rewriting source.
-    if (input.derivedArtifactPaths?.length && existsSync(path.join(input.session.sourcePath, "genesis/blueprint.md"))) {
-      const { inspectGenesisStackComponents } = await import("@local/vibe64-genesis/server");
-      await inspectGenesisStackComponents({ projectRoot: input.session.sourcePath });
-    }
-    return prepareSessionWorkSaveMessageDirect(input);
-  },
+  "save-message": prepareSessionWorkSaveMessageDirect,
   "work": inspectSessionWorkDirect,
   "update-failure": inspectSessionUpdateFailureDirect,
   "update-checkpoint": captureSessionWorkUpdateCheckpointDirect,

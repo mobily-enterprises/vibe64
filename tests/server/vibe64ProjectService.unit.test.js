@@ -872,6 +872,50 @@ test("collaboration validation errors come from Genesis rather than a Vibe64 par
   });
 });
 
+test("project settings still load when Genesis cannot read the session's collaboration approach", async () => {
+  await withTemporaryRoot(async (temporaryRoot) => {
+    const projectContext = createStudioProjectContext({
+      env: process.env,
+      explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
+      explicitProjectsRoot: path.join(temporaryRoot, "projects"),
+      explicitSystemRoot: path.join(temporaryRoot, "system"),
+      home: temporaryRoot
+    });
+    const warnings = [];
+    const service = createService({ ...projectServiceCollaborators(), env: {}, projectContext,
+      ...collaborationHarness(),
+      async inspectCollaboration() {
+        throw new TypeError("Cannot read properties of undefined (reading 'tone')");
+      },
+      logger: { ...console, warn: (event) => warnings.push(event) }
+    });
+    await service.createProject({ name: "Genesis cannot read collaboration" });
+    const source = path.join(temporaryRoot, "managed-source", "sessions", "active", "broken-genesis", "source");
+    await mkdir(source, { recursive: true });
+    await (await service.createSessionStore()).createSession({
+      metadata: {
+        source_kind: "session_clone",
+        source_path: source,
+        source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+      },
+      runtimeKind: "genesis",
+      sessionId: "broken-genesis"
+    });
+
+    const settings = await service.readSettings({ sessionId: "broken-genesis", vibe64User: { role: "owner" } });
+
+    assert.equal(settings.ok, true, JSON.stringify(settings.errors || settings.error || []));
+    assert.equal(settings.collaboration.available, false);
+    assert.equal(settings.collaboration.canEdit, false);
+    assert.equal(settings.collaboration.status, "unavailable");
+    assert.match(settings.collaboration.unavailableReason,
+      /^Genesis could not read this project's collaboration approach: Cannot read properties of undefined \(reading 'tone'\)/u);
+    assert.equal(settings.promptHints.enabled, true);
+    assert.deepEqual(warnings.filter((event) => event.event === "vibe64.project_settings.collaboration_unavailable")
+      .map((event) => event.sessionId), ["broken-genesis"]);
+  });
+});
+
 test("catalogue collaboration follows the selected session source while prompt hints remain project-wide", async () => {
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectsRoot = path.join(temporaryRoot, "projects");

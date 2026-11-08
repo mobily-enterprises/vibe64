@@ -133,6 +133,7 @@ async function terminalServiceFixture(t, lock, {
   assistantSelection = null,
   codexAppServerProviderFactory,
   env = {},
+  genesisTimeoutMs,
   inspectAgentSkills,
   logger = silentLogger,
   opencodeTerminalController = {},
@@ -238,6 +239,7 @@ async function terminalServiceFixture(t, lock, {
   };
   const service = createTerminalService(terminalsServiceCollaborators({
     ...(inspectAgentSkills ? { inspectAgentSkills } : {}),
+    ...(genesisTimeoutMs ? { genesisTimeoutMs } : {}),
     logger,
     codexTerminalController: {
       codexAppServerProviderFactory,
@@ -708,6 +710,27 @@ test("any failure preparing the AI's guidance is logged and never stops the mess
   { code: "vibe64_assistant_selection_invalid" });
   assert.deepEqual(warnings.filter((event) => event.event === "vibe64.agent_skills.preparation_failed").map((event) => event.error),
     ["The skills directory cannot be listed."]);
+});
+
+test("a Genesis that never answers while the AI's guidance is prepared does not hold the message", {
+  timeout: 20_000
+}, async (t) => {
+  const warnings = [];
+  const { service, session, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    genesisTimeoutMs: 100,
+    inspectAgentSkills: () => new Promise(() => {}),
+    logger: { ...silentLogger, warn(event) { warnings.push(event); } }
+  });
+  const projectRoot = session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  project.runProjectSourceExclusive = async () => assert.fail("An abandoned preparation must not change source.");
+  // Delivery reaches assistant admission; this fixture has no durable selection.
+  await assert.rejects(service.sendAgentMessage(session.sessionId,
+    { message: "Why does the project not start?" }, { engineId: "opencode" }),
+  { code: "vibe64_assistant_selection_invalid" });
+  assert.deepEqual(warnings.filter((event) => event.event === "vibe64.agent_skills.preparation_failed").map((event) => event.code),
+    ["vibe64_genesis_timeout"]);
 });
 
 const UNREADABLE_NOTICE_END = " Your message was still sent, and the AI is told about it so it can fix the file.";

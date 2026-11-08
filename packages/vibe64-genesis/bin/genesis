@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { readFile, realpath } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // A host-disabled turn lane needs no compiler or Git setup.
 if (process.argv[2] === "hook" && process.argv[3] === "turn" &&
@@ -8,9 +10,7 @@ if (process.argv[2] === "hook" && process.argv[3] === "turn" &&
   process.exit(0);
 }
 
-const { withTrustedGitRepository } = await import("genesis-compiler");
-const { runCli } = await import("genesis-compiler/cli");
-
+const VIBE64_HOST_CONTEXT_RESOLVER = fileURLToPath(new URL("./vibe64-genesis-host-context", import.meta.url));
 const VIBE64_STACK_PACKAGES = Object.freeze(["genesis-stack"]);
 
 function withVibe64StackPackages(argv = []) {
@@ -56,7 +56,30 @@ if (argv[0] === "hook" && registryPath) {
       trustedWorktree = worktree;
     }
   }
+  // Vibe64 delivers a registered conversation's session guidance natively, and
+  // its resolver answers this hook with nothing. Answer so here, without Genesis,
+  // so a slow or failing Genesis cannot fail the hook.
+  if (trustedWorktree && session.promptContext && process.argv[3] === "session" &&
+      path.resolve(process.env.GENESIS_HOST_CONTEXT_RESOLVER || "") === VIBE64_HOST_CONTEXT_RESOLVER) {
+    process.exit(0);
+  }
 }
-process.exitCode = trustedWorktree
-  ? await withTrustedGitRepository(trustedWorktree, () => runCli(argv))
-  : await runCli(argv);
+
+async function run() {
+  const { withTrustedGitRepository } = await import("genesis-compiler");
+  const { runCli } = await import("genesis-compiler/cli");
+  return trustedWorktree ? withTrustedGitRepository(trustedWorktree, () => runCli(argv)) : runCli(argv);
+}
+if (argv[0] === "hook") {
+  // An agent hook never fails its conversation over Genesis (OpenCode stops a
+  // message whose hook exits non-zero): Genesis's diagnostic stays on stderr and
+  // the conversation goes on without the hook's guidance.
+  const exitCode = await run().catch((error) => {
+    process.stderr.write(`${error?.stack || error}\n`);
+    return 1;
+  });
+  if (exitCode !== 0) process.stderr.write(`The Genesis hook failed (exit ${exitCode}); the conversation continues without its guidance.\n`);
+  process.exitCode = 0;
+} else {
+  process.exitCode = await run();
+}

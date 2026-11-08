@@ -15,7 +15,8 @@ import {
   inspectGenesisProjectFormat,
   inspectGenesisAgentIntegrations,
   syncGenesisAgentIntegrations,
-  syncGenesisSkills
+  syncGenesisSkills,
+  withinGenesisDeadline
 } from "@local/vibe64-genesis/server";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64AssistantConversationKey, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
@@ -35,6 +36,7 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
  * @param {object} dependencies
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceWorkspacePreparation} dependencies.workspacePreparation
+ * @param {number} [dependencies.genesisTimeoutMs] how long the guidance refresh may hold a message
  * @param {InspectAgentSkills} dependencies.inspectAgentSkills
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
@@ -43,6 +45,7 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 function createServiceAssistantPreparation({
   sessionAccess,
   workspacePreparation,
+  genesisTimeoutMs,
   inspectAgentSkills,
   logger,
   project,
@@ -136,12 +139,14 @@ function createServiceAssistantPreparation({
     if (!projectRoot || !existsSync(path.join(projectRoot, GENESIS_BLUEPRINT_PATH))) return;
     const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
     if (temporary.active) return;
-    // Preparing the AI's guidance never stops the message it is prepared for.
+    // Preparing the AI's guidance never stops or holds the message it is prepared for.
     try {
-      const format = await inspectGenesisProjectFormat({ projectRoot });
-      if (format.status !== "current") return;
-      if (isPracticeProjectRuntime(context.runtime)) await excludeAgentGuidanceFromPracticeHistory(projectRoot);
-      await refreshAgentGuidance(sessionId, projectRoot);
+      await withinGenesisDeadline(async () => {
+        const format = await inspectGenesisProjectFormat({ projectRoot });
+        if (format.status !== "current") return;
+        if (isPracticeProjectRuntime(context.runtime)) await excludeAgentGuidanceFromPracticeHistory(projectRoot);
+        await refreshAgentGuidance(sessionId, projectRoot);
+      }, genesisTimeoutMs);
     } catch (error) {
       if (genesisProjectContractNeedsAttention(error)) {
         logOperationalEvent(logger, "warn", {

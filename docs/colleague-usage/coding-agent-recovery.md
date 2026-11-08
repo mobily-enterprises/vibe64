@@ -110,7 +110,9 @@ If recovery has to stop the shared service, inspect both chats before retrying.
 A failed OpenCode **Stop** leaves the current turn available for another **Stop**
 attempt. After Stop succeeds, **Send** starts the next turn in the same conversation.
 The same Stop and retry rules apply to temporary chats and in an AI task's Chat.
-If OpenCode reports **Project guidance could not load**, its project instructions
+Genesis failing or not answering does not stop OpenCode: the project's Genesis
+hook adds nothing, and the conversation goes on with Vibe64's own guidance.
+If OpenCode still reports **Project guidance could not load**, its project instructions
 were unavailable; this is not confirmation that your API key failed. Ask the
 installation owner to check the installed Genesis runtime and project hook. Once
 that prerequisite is repaired and the conversation is ready, enter a new message

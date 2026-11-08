@@ -156,6 +156,29 @@ const GENESIS_PROMPT_TASKS = new Set([
   "ui-pass",
   "work"
 ]);
+// Genesis on a person's path, such as an AI message, answers within this
+// deadline or the path goes on without it.
+const GENESIS_USER_PATH_TIMEOUT_MS = 15_000;
+
+/**
+ * Runs a Genesis operation on a person's path within a deadline; past it the
+ * returned promise rejects with code vibe64_genesis_timeout. Genesis offers no
+ * way to cancel the operation, so it runs on and its late result is dropped.
+ * @template T
+ * @param {() => Promise<T>} operation
+ * @param {number} [timeoutMs]
+ * @returns {Promise<T>}
+ */
+function withinGenesisDeadline(operation, timeoutMs = GENESIS_USER_PATH_TIMEOUT_MS) {
+  let timer;
+  const deadline = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(Object.assign(
+      new Error(`Genesis did not answer within ${timeoutMs} ms.`),
+      { code: "vibe64_genesis_timeout" }
+    )), timeoutMs);
+  });
+  return Promise.race([Promise.resolve().then(operation), deadline]).finally(() => clearTimeout(timer));
+}
 
 function assertGenesisPromptTask(value, options = {}) {
   const {
@@ -240,7 +263,7 @@ function initializeGenesisProject(options = {}) {
 }
 
 function inspectGenesisSkills(options = {}) {
-  return runGenesisOperation(inspectSkills, options);
+  return inspectGenesis(inspectSkills, options);
 }
 
 function syncGenesisSkills(options = {}) {
@@ -252,11 +275,11 @@ function syncGenesisAgentIntegrations(options = {}) {
 }
 
 function inspectGenesisAgentIntegrations(options = {}) {
-  return runGenesisOperation(inspectAgentIntegrations, options);
+  return inspectGenesis(inspectAgentIntegrations, options);
 }
 
 function inspectGenesisSubsystems(options = {}) {
-  return runGenesisOperation(inspectSubsystems, options);
+  return inspectGenesis(inspectSubsystems, options);
 }
 
 async function inspectVibe64ArchitectureInspection(options = {}) {
@@ -311,26 +334,75 @@ async function runGenesisOperation(operation, options = {}, catalogOptions = {})
   return withTrustedGitRepository(projectRoot, () => operation(withVibe64StackCatalog(options, catalogOptions)));
 }
 
-/**
- * Applications own the prompt; the conversation runtime owns its native delivery.
- */
-async function vibe64ConversationInstructions({ workdir, promptContext }) {
-  const contribution = vibe64Driver(promptContext);
-  if (promptContext.scope === "ephemeral") return contribution;
-  const result = await runGenesisOperation(genesisCompiler.projectSessionContext, {
-    projectRoot: workdir,
-    hostDriver: vibe64Driver,
-    hostDriverInput: promptContext
-  });
-  return result.output;
+// A caller that does not log why Genesis is unavailable.
+function ignoreGenesisUnavailable() {
+  return undefined;
 }
 
-async function exactGenesisInspection(inspector, contract, options = {}) {
-  const result = await runGenesisOperation(inspector, options);
+function genesisGuidanceUnavailableNote(error) {
+  const reason = normalizeText(error?.message || error).replace(/\s+/gu, " ").slice(0, 300);
+  return `Genesis project guidance is unavailable for this conversation (${reason || "no reason given"}). ` +
+    "Work from the repository itself, where the genesis/ files still describe the project when present, " +
+    "and tell the user that Genesis guidance did not load if it matters to the request.";
+}
+
+/**
+ * Applications own the prompt; the conversation runtime owns its native delivery.
+ * Nothing Genesis does stops the conversation: when Genesis fails, does not
+ * answer within the deadline or answers without guidance, the conversation gets
+ * Vibe64's own contribution and a note that Genesis's guidance is missing.
+ * @param {object} request
+ * @param {object} request.promptContext
+ * @param {string} request.workdir
+ * @param {object} [options]
+ * @param {(error: Error) => void} [options.onGenesisUnavailable] reports why Genesis's guidance is missing
+ * @param {number} [options.timeoutMs]
+ */
+async function vibe64ConversationInstructions({ workdir, promptContext }, {
+  onGenesisUnavailable = ignoreGenesisUnavailable,
+  timeoutMs = GENESIS_USER_PATH_TIMEOUT_MS
+} = {}) {
+  const contribution = vibe64Driver(promptContext);
+  if (promptContext.scope === "ephemeral") return contribution;
+  let failure;
+  try {
+    const result = await withinGenesisDeadline(() => runGenesisOperation(genesisCompiler.projectSessionContext, {
+      projectRoot: workdir,
+      hostDriver: vibe64Driver,
+      hostDriverInput: promptContext
+    }), timeoutMs);
+    if (typeof result?.output === "string" && result.output.trim()) return result.output;
+    failure = new Error("Genesis returned no session guidance.");
+  } catch (error) {
+    failure = error;
+  }
+  onGenesisUnavailable(failure);
+  return `${genesisGuidanceUnavailableNote(failure)}\n\n${contribution}`;
+}
+
+/**
+ * A read-only Genesis inspection answers within the deadline, so a page, Preview, workspace setup or
+ * message never waits on a Genesis that hangs: past it the inspection fails with vibe64_genesis_timeout,
+ * as any other Genesis failure. Changes Genesis makes are not bounded; abandoning one part way would
+ * release the locks it runs under while it still writes.
+ */
+function inspectGenesis(inspector, options = {}) {
+  return withinGenesisDeadline(() => runGenesisOperation(inspector, options));
+}
+
+function exactGenesisContract(result, contract) {
   if (result?.contract !== contract) {
     throw new Error(`Genesis returned ${result?.contract || "no contract identity"}; expected ${contract}.`);
   }
   return result;
+}
+
+async function exactGenesisInspection(inspector, contract, options = {}) {
+  return exactGenesisContract(await inspectGenesis(inspector, options), contract);
+}
+
+async function exactGenesisChange(operation, contract, options = {}) {
+  return exactGenesisContract(await runGenesisOperation(operation, options), contract);
 }
 
 function inspectGenesisStackSection(name, options = {}) {
@@ -342,7 +414,7 @@ function inspectGenesisStackSection(name, options = {}) {
 }
 
 async function inspectGenesisStackSections(names, options = {}) {
-  const sections = await runGenesisOperation(
+  const sections = await inspectGenesis(
     (inspectionOptions) => inspectStackSections({ ...inspectionOptions, names }),
     options
   );
@@ -403,7 +475,7 @@ function listGenesisTemplates(options = {}) {
 }
 
 function applyGenesisTemplate(options = {}) {
-  return exactGenesisInspection(applyTemplate, GENESIS_CONTRACTS.templateApplication, options);
+  return exactGenesisChange(applyTemplate, GENESIS_CONTRACTS.templateApplication, options);
 }
 
 function inspectGenesisEngineering(options = {}) {
@@ -415,7 +487,7 @@ function inspectGenesisCollaboration(options = {}) {
 }
 
 async function inspectGenesisProjectFormat(options = {}) {
-  const result = await runGenesisOperation(inspectProjectFormat, options);
+  const result = await inspectGenesis(inspectProjectFormat, options);
   if (!normalizeText(result?.status)) {
     throw new Error("Genesis did not return a project-format status.");
   }
@@ -423,11 +495,11 @@ async function inspectGenesisProjectFormat(options = {}) {
 }
 
 function setGenesisEngineeringProfile(options = {}) {
-  return exactGenesisInspection(setEngineeringProfile, GENESIS_CONTRACTS.engineering, options);
+  return exactGenesisChange(setEngineeringProfile, GENESIS_CONTRACTS.engineering, options);
 }
 
 function setGenesisCollaboration(options = {}) {
-  return exactGenesisInspection(setCollaboration, GENESIS_CONTRACTS.collaboration, options);
+  return exactGenesisChange(setCollaboration, GENESIS_CONTRACTS.collaboration, options);
 }
 
 /**
@@ -496,13 +568,17 @@ async function inspectVibe64ResourceEstimates(options = {}) {
  * @param {RuntimeEnv} request.environment the environment Genesis runs in
  * @param {object} [request.input] the request text and its options; automaticGenesisTask
  *   marks a task Vibe64 chose itself, which never falls back to the Blueprint's task
+ * @param {(error: Error) => void} [request.onGenesisUnavailable] reports why the request goes as written
  * @param {string} request.projectRoot
+ * @param {number} [request.timeoutMs]
  */
 async function renderGenesisPrompt({
   action = {},
   environment,
   input = {},
-  projectRoot
+  onGenesisUnavailable = ignoreGenesisUnavailable,
+  projectRoot,
+  timeoutMs = GENESIS_USER_PATH_TIMEOUT_MS
 }) {
   const requestedTask = genesisPromptTask(action);
   const request = genesisPromptRequest(input, action);
@@ -513,30 +589,36 @@ async function renderGenesisPrompt({
     sessionContextInstalled: true,
     task: promptTask
   }, { prompt: true });
-  // Nothing Genesis does while composing the prompt stops the message: the
+  const compose = async () => {
+    try {
+      return { result: await generate(requestedTask), task: requestedTask };
+    } catch (error) {
+      // A missing or invalid Blueprint is answered by the task that writes one.
+      const fallbackTask = Object.hasOwn(GENESIS_PROMPT_FALLBACK_TASKS, String(error?.code))
+        ? GENESIS_PROMPT_FALLBACK_TASKS[error.code]
+        : "";
+      // A task Vibe64 chose itself, such as an automatic finishing turn's review,
+      // never becomes the Blueprint's: its request goes as written.
+      if (!fallbackTask || fallbackTask === requestedTask || input.automaticGenesisTask === true) throw error;
+      return { result: await generate(fallbackTask), task: fallbackTask };
+    }
+  };
+  // Nothing Genesis does while composing the prompt stops the message: when it
+  // fails, does not answer within the deadline or answers without a prompt, the
   // request goes as written. For a project file Genesis cannot read, the AI
   // reads Genesis's diagnostic in its session context.
-  const asWritten = () => ({ prompt: request });
-  let task = requestedTask;
-  let result;
+  let composed;
   try {
-    result = await generate(task);
-  } catch (error) {
-    // A missing or invalid Blueprint is answered by the task that writes one.
-    const fallbackTask = Object.hasOwn(GENESIS_PROMPT_FALLBACK_TASKS, String(error?.code))
-      ? GENESIS_PROMPT_FALLBACK_TASKS[error.code]
-      : "";
-    // A task Vibe64 chose itself, such as an automatic finishing turn's review,
-    // never becomes the Blueprint's: its request goes as written.
-    if (!fallbackTask || fallbackTask === requestedTask || input.automaticGenesisTask === true) return asWritten();
-    task = fallbackTask;
-    try {
-      result = await generate(task);
-    } catch {
-      return asWritten();
+    composed = await withinGenesisDeadline(compose, timeoutMs);
+    if (typeof composed.result?.prompt !== "string" || !composed.result.prompt.trim()) {
+      throw new Error("Genesis returned no prompt.");
     }
+  } catch (error) {
+    onGenesisUnavailable(error);
+    return { prompt: request };
   }
-  const effectiveTask = assertGenesisPromptTask(result.task) || task;
+  const { result, task } = composed;
+  const effectiveTask = GENESIS_PROMPT_TASKS.has(normalizeText(result.task)) ? normalizeText(result.task) : task;
   return {
     context: {
       genesis: true,
@@ -569,6 +651,7 @@ export {
   GENESIS_DERIVED_ARTIFACT_PATHS,
   GENESIS_MACHINE_CITY_PATH,
   GENESIS_PROGRAM_CITY_PATH,
+  GENESIS_USER_PATH_TIMEOUT_MS,
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
   VIBE64_PACKAGING_CONTRACT,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
@@ -628,5 +711,6 @@ export {
   vibe64HostContextResolverPath,
   vibe64HostContextEnvironment,
   vibe64HostContextRegistry,
-  withGenesisCommandShim
+  withGenesisCommandShim,
+  withinGenesisDeadline
 };

@@ -70,15 +70,16 @@ pushed from elsewhere while this session still holds the old history remains a
 diverged-history error; start a new session on that branch and carry the work
 across. These steps apply on desktop and mobile.
 
-For Genesis projects, Save checks the selected Stack contracts before asking the
-assistant to name the version. If it reports a missing **Connected development**
-section, the project needs its Stack reconciled; retrying Save alone does not
-repair it. Ask the coding agent to reconcile the existing selected component as
-the error directs, preserving the project's authored setup and output sections.
-This does not require installing dependencies or preparing the database. Review
-the repair, then use **Save** again. The failed preflight leaves your source and
-saved version unchanged. Colleague can explain this recovery; the coding
-agent performs the source repair. These steps apply on desktop and mobile.
+For Genesis projects, Save and Update regenerate the project diagrams from the
+saved source. Genesis never stops either one: when it cannot regenerate them,
+for example because `genesis/stack.md` is missing a section Genesis needs, or
+Genesis fails or does not answer, your work is still saved or updated with the
+diagrams it had. The activity shows **Genesis could not regenerate the project
+diagrams, so this Save kept the ones it had.** (or **this update**) followed by
+Genesis's reason. Ask the coding agent to fix what the reason names; the next
+Save or Update after the fix regenerates the diagrams. Colleague can explain the
+note; the coding agent performs the source repair. These steps apply on desktop
+and mobile.
 
 If assistant naming is unavailable, Save uses a checkpoint-based version name
 and continues. A successful Save clears that nonfatal diagnostic from its current

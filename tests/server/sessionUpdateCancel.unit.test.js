@@ -156,7 +156,7 @@ test("a regeneration stopped part way leaves its temporary checkout, and the nex
   await git(f.sourcePath, "worktree", "add", "--detach", stopped, "HEAD");
   const head = await git(f.sourcePath, "rev-parse", "HEAD");
   const seen = [];
-  const tree = await regenerateDerivedArtifactTree(f.runCommand, repositoryContext(f.session, f.project), {
+  const { tree } = await regenerateDerivedArtifactTree(f.runCommand, repositoryContext(f.session, f.project), {
     baseCommit: head,
     commandOptions: {},
     derivedArtifactPaths: ["diagram.txt"],
@@ -171,4 +171,27 @@ test("a regeneration stopped part way leaves its temporary checkout, and the nex
   assert.equal(await git(f.sourcePath, "show", `${tree}:diagram.txt`), "regenerated");
   assert.deepEqual((await readdir(parent)).filter(name => name.startsWith(STOPPED_PREFIX)), []);
   assert.doesNotMatch(await git(f.sourcePath, "worktree", "list", "--porcelain"), new RegExp(STOPPED_PREFIX), "Git forgot its worktree");
+});
+
+test("Genesis failing to regenerate the derived artifacts keeps the tree they derive from", async (t) => {
+  const f = await fixture(t);
+  const parent = path.dirname(f.sourcePath);
+  const head = await git(f.sourcePath, "rev-parse", "HEAD");
+  const original = await git(f.sourcePath, "rev-parse", "HEAD^{tree}");
+  const regenerated = await regenerateDerivedArtifactTree(f.runCommand, repositoryContext(f.session, f.project), {
+    baseCommit: head,
+    commandOptions: {},
+    derivedArtifactPaths: ["diagram.txt"],
+    project: f.project,
+    async refreshDerivedArtifacts({ projectRoot }) {
+      await writeFile(path.join(projectRoot, "diagram.txt"), "half written\n");
+      throw Object.assign(new Error("Genesis could not read the program."), { code: "GENESIS_BROKEN" });
+    },
+    tree: original
+  });
+  assert.deepEqual(regenerated, {
+    derivedArtifactsKept: { code: "GENESIS_BROKEN", message: "Genesis could not read the program." },
+    tree: original
+  });
+  assert.deepEqual((await readdir(parent)).filter(name => name.startsWith(STOPPED_PREFIX)), [], "the temporary checkout is removed");
 });

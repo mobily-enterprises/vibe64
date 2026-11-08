@@ -9,6 +9,7 @@ import {
   commitIsAncestor,
   commitTree,
   deleteOperationRef,
+  derivedArtifactsKeptProgress,
   git,
   gitOutput,
   normalizedDerivedArtifactPaths,
@@ -249,7 +250,7 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
     sourceCommit: canonicalCommit,
     tree: checkpointTree
   });
-  const mergedTree = await regenerateDerivedArtifactTree(runCommand, context, {
+  const { derivedArtifactsKept, tree: mergedTree } = await regenerateDerivedArtifactTree(runCommand, context, {
     baseCommit: canonicalCommit,
     commandOptions,
     derivedArtifactPaths,
@@ -281,6 +282,7 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
     canonicalCommit,
     changeBaseCommit: comparison.changeBaseCommit,
     changedPaths,
+    ...(derivedArtifactsKept ? { derivedArtifactsKept } : {}),
     mergedTree,
     preparedRef,
     saveCommit,
@@ -314,6 +316,7 @@ function completedSessionWorkSave(context, checkpoint, prepared, verifiedCommit,
     changeBaseCommit: prepared.changeBaseCommit,
     changedPaths: prepared.changedPaths,
     checkpointCommit: checkpoint.checkpointCommit,
+    ...(prepared.derivedArtifactsKept ? { derivedArtifactsKept: prepared.derivedArtifactsKept } : {}),
     checkpointTree: checkpoint.checkpointTree,
     mergedTree: prepared.mergedTree,
     mode: context.mode,
@@ -631,6 +634,7 @@ async function saveSessionWork({
   }, {
     operation: `save-session:${context.sessionId}`
   });
+  if (saved.derivedArtifactsKept) await onProgress(derivedArtifactsKeptProgress(saved.derivedArtifactsKept, "Save"));
   if (context.mode === PROJECT_REPOSITORY_MODE_GITHUB) {
     queueMicrotask(() => {
       void runSessionWorkOperation({

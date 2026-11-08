@@ -10,6 +10,9 @@ prompt-suggestion or other project settings. Use the section's Save control and
 wait for its saved result. Changes to collaboration style apply to future work;
 they do not rewrite past messages. Engineering choices do not migrate existing
 code automatically. Prompt suggestions can be changed separately from those choices.
+If Genesis cannot read the project's collaboration approach, the collaboration
+section says so, with Genesis's reason, and the rest of the page still loads;
+ask the coding agent to fix the file the reason names.
 
 **Connected repositories** maintains the source-owned `vibe64.connections.json` list.
 Add a name, GitHub URL and Dependency/Composition relationship.

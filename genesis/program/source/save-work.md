@@ -31,12 +31,14 @@ same reading feeds the session assistant's `vibe64-helper session status`
 to guess. The failure does not disable Save: Save stays unavailable only when
 there is nothing to save.
 
-For Genesis projects with declared generated artifacts, the managed `save-message`
-operation inspects the current selected Stack through the existing Genesis owner
-before capturing/naming work. Missing operation contracts fail read-only, before
-optional inference or publication. Source is never silently migrated. This is an
-early check; final map regeneration on the proposed tree and publication checks
-still apply, including when source changes after preflight.
+For Genesis projects with declared generated artifacts, Save and Update
+regenerate them on the proposed tree (`regenerateDerivedArtifactTree`). Genesis
+never stops either operation: when regeneration fails, for example over a Stack
+missing an operation contract, the tree keeps the artifacts it came with, the
+result carries `derivedArtifactsKept` with Genesis's code and message, the
+activity records a `derived-artifacts-kept` progress note and the server logs
+`vibe64.session_work.derived_artifacts_kept`. Source is never silently migrated;
+the next Save or Update after a repair regenerates the artifacts.
 
 Successful Save completion clears the current task's diagnostic code, including
 an earlier optional naming failure. Progress history retains the fallback notice;

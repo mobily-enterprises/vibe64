@@ -19,6 +19,7 @@ import {
   conflictWorktreeTree,
   countCommitsBetween,
   createVirtualCommit,
+  derivedArtifactsKeptProgress,
   git,
   gitOutput,
   mergeTrees,
@@ -588,7 +589,7 @@ async function regenerateSessionWorkUpdateDirect({
   session = {}
 } = {}) {
   const context = repositoryContext(session, project);
-  const mergedTree = await regenerateDerivedArtifactTree(runCommand, context, {
+  const { derivedArtifactsKept, tree: mergedTree } = await regenerateDerivedArtifactTree(runCommand, context, {
     baseCommit: prepared.canonicalCommit,
     commandOptions,
     derivedArtifactPaths,
@@ -605,7 +606,7 @@ async function regenerateSessionWorkUpdateDirect({
       project,
       tree: mergedTree
     });
-  return { ...prepared, mergedCommit, mergedTree };
+  return { ...prepared, ...(derivedArtifactsKept ? { derivedArtifactsKept } : {}), mergedCommit, mergedTree };
 }
 
 async function applySessionWorkUpdateDirect({
@@ -676,6 +677,7 @@ async function runSessionUpdateStages({
       stage: "regenerating"
     });
     prepared = await stage("update-derived", { prepared });
+    if (prepared.derivedArtifactsKept) await onProgress(derivedArtifactsKeptProgress(prepared.derivedArtifactsKept, "update"));
     await onProgress({ ...prepared, kind: "update", message: "A conflict-free session update is ready.", stage: "prepared" });
     throwIfUpdateCancelled(signal);
     await onProgress({ kind: "update", message: "Applying and verifying the session update.", stage: "mutating" });

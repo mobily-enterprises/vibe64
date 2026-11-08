@@ -103,6 +103,22 @@ async function commandCheck({
 }
 
 /**
+ * The Genesis row. A Genesis that Vibe64 cannot locate fails this row, never the whole screen.
+ * @param {(definition: object) => Promise<object>} check
+ * @param {() => string} genesisBinDirectory
+ * @param {object} definition the row's command check, without its command
+ */
+function genesisCommandCheck(check, genesisBinDirectory, definition) {
+  let bin;
+  try {
+    bin = genesisBinDirectory();
+  } catch (error) {
+    return failedCheck({ ...definition, observed: error.message });
+  }
+  return check({ ...definition, command: path.join(bin, "genesis") });
+}
+
+/**
  * The Node.js major version Vibe64 declares in its package.json engines field.
  */
 async function requiredNodeMajor(studioRoot) {
@@ -404,6 +420,7 @@ function packCommandChecks(check, { runCommand, studioRoot }) {
  * @param {object} dependencies
  * @param {ConnectionsService} dependencies.connections
  * @param {RuntimeEnv} dependencies.env the environment the person's tools are checked with
+ * @param {typeof genesisPackageBinDirectory} [dependencies.genesisBinDirectory]
  * @param {ProjectService} dependencies.project
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {string} dependencies.studioRoot
@@ -411,6 +428,7 @@ function packCommandChecks(check, { runCommand, studioRoot }) {
 function createService({
   connections,
   env,
+  genesisBinDirectory = genesisPackageBinDirectory,
   project,
   runCommand = runVibe64Command,
   studioRoot
@@ -424,11 +442,10 @@ function createService({
     const commandChecks = [
       ...(packs ? [] : [gitIdentityCheck({ runCommand, studioRoot })]),
       ...(packs ? packCommandChecks(check, { runCommand, studioRoot }) : []),
-      check({
+      genesisCommandCheck(check, genesisBinDirectory, {
         id: "genesis",
         label: "Genesis",
         group: "Runtime",
-        command: path.join(genesisPackageBinDirectory(), "genesis"),
         args: ["--help"],
         runtimes: ["node26"],
         runCommand,

@@ -378,6 +378,25 @@ test("Claude main and temporary chats' composed system guidance tells them about
   }
 });
 
+test("a Claude chat whose project Genesis cannot read is sent with Vibe64's guidance and a note", async (t) => {
+  const f = await fixture(t);
+  // Genesis lists the project with Git, which cannot read a corrupt index.
+  const index = path.join(f.root, "sessions", "active", "test", "source", ".git", "index");
+  await writeFile(index, "not a Git index");
+  try {
+    await f.provider.sendMessage(f.context, { message: "First", messageId: "broken-genesis" });
+  } finally {
+    await rm(index, { force: true });
+  }
+  assert.equal(f.processes.length, 1);
+  assert.equal(f.processes[0].lastInput.message, "Context: First");
+  const instructions = f.processes[0].options.instructionArguments[1];
+  assert.match(instructions, /^Genesis project guidance is unavailable for this conversation \(/u);
+  assert.match(instructions, /VIBE64 CONVERSATION CONTEXT/u);
+  assert.ok(f.diagnostics.some((event) => event.event === "vibe64.agent_guidance.genesis_unavailable" &&
+    event.engineId === "claude" && event.sessionId === "test"));
+});
+
 test("Claude main and temporary chats install composed system guidance and yield their Genesis hooks", async (t) => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "First", messageId: "main-guidance" });

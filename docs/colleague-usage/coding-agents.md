@@ -110,6 +110,15 @@ explanation so it can repair the file. Skill and agent-guidance refresh waits
 until the file reads again. Desktop and mobile behave the same; Colleague can
 explain the notice and offer to ask the coding assistant to fix the file.
 
+Nothing else Genesis does stops a message either. If Genesis fails, returns
+something unusable, or does not answer within 15 seconds while Vibe64 refreshes
+the project's skills, composes the opening prompt or gathers the assistant's
+project guidance, the message is sent with your request as written. The
+assistant is told that Genesis guidance did not load, so it can say so when it
+matters, and Vibe64 records the problem in its server log. A later message gets
+Genesis's guidance again once Genesis answers; a running Claude conversation
+keeps the guidance it started with until it restarts.
+
 When an assistant cannot start, stops by itself or reports a failure, see [When a coding agent fails or stops](coding-agent-failures.md).
 
 1. Select the intended project and session, then Main, the intended temporary
