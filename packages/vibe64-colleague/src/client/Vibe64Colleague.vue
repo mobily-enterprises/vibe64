@@ -161,6 +161,11 @@ const { conversation, working, voiceSession, staleVoice, voicePreview, bodyVisib
   onMessageSubmit: messageId => emit("message-submit", messageId), onVoiceVisual: visual => emit("voice-visual", visual),
   isMounted, reportFailure
 });
+// While a switch away from Colleague's voice waits for its answer, the voice
+// host's one window shows this conversation with that choice, so Colleague's own
+// drawer and dialog stay closed until Stay here or the switch answers it.
+const frameOpen = computed(() => bodyVisible.value
+  && !(voice.controller.state.nextTarget && isColleagueBinding(voice.controller.state.binding)));
 // A shown Colleague stays shown and its voice controls follow to the new thread.
 watch(() => conversation.runtime.value?.identity.conversationId, (id, previous) => {
   if (!id || !previous || !staleVoice.value || !voice.controller.state.visible) return;
@@ -261,7 +266,7 @@ onBeforeUnmount(() => {
     />
   </Teleport>
   <VNavigationDrawer
-    :model-value="bodyVisible && !xs" location="right" :width="380" :order="1" :mobile="false" :scrim="false"
+    :model-value="frameOpen && !xs" location="right" :width="380" :order="1" :mobile="false" :scrim="false"
     disable-resize-watcher disable-route-watcher touchless tag="section" :aria-label="`${name} conversation`"
     @keydown.esc.stop="closeText"
   >
@@ -280,7 +285,7 @@ onBeforeUnmount(() => {
     </div>
   </VNavigationDrawer>
   <ConversationDialog
-    :model-value="bodyVisible && xs" :title="name" :close-label="`Close ${name}`" minimizable
+    :model-value="frameOpen && xs" :title="name" :close-label="`Close ${name}`" minimizable
     :activator="launcher?.$el" :open-on-click="false" eager
     @update:model-value="value => !value && closeText()" @minimize="toggleConversation($event).catch(reportFailure)"
   >

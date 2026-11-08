@@ -149,7 +149,9 @@ inline presentation: the application owns a mounted right-hand 380px Vuetify
 navigation drawer, whose native layout registration reserves workspace space
 below the app bar without a scrim. On phones the existing fullscreen
 ConversationDialog is the frame. The original single aside Teleport selects the
-desktop or phone panel, while a root target-switch panel retains priority.
+desktop or phone panel, while a root target-switch panel retains priority:
+while a switch away from Colleague's binding is pending, the drawer and phone
+dialog stay closed, so the root's window is the only one showing the body.
 Minimize, reopen and responsive changes keep that body and its runtime mounted;
 Close keeps the original explicit voice-end/discard operation. No host layout
 state or second voice controller is added: both frames share the host's v-app.

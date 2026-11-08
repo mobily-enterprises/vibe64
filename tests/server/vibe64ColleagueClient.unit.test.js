@@ -591,6 +591,32 @@ test("the Colleague launcher opens its target while Main is inline and preserves
   assert.equal(nonFocusPosts(view.requests).length, 0, "opening sends no agent request");
 });
 
+test("a pending switch away from Colleague's voice shows its conversation only in the voice host's window", async t => {
+  const view = mount(t, async () => ({ ok: true, conversationId: "switch-person", messages: [], status: "ready" }));
+  await flush();
+  view.state.desktopPanelTarget.value = vue.markRaw({ id: "desktop-panel" });
+  view.state.panelTarget.value = vue.markRaw({ id: "phone-panel" });
+  await view.state.openVoice();
+  const state = view.state.voice.controller.state;
+  const { binding } = state;
+  assert.equal(view.state.frameOpen.value, true, "Colleague's voice opens in its own drawer or phone dialog");
+  // Main's Talk while Colleague holds unsent words: the controller keeps
+  // Colleague and asks, and the host's window takes the conversation.
+  state.nextTarget = { id: "main", presentation: "inline", label: "Project agent" };
+  binding.setConversationTarget(vue.markRaw({ id: "switch-window" }));
+  for (const xs of [false, true]) {
+    view.state.xs.value = xs;
+    await flush();
+    assert.equal(view.state.bodyVisible.value, true, "the conversation stays visible beside the choice");
+    assert.equal(view.state.frameOpen.value, false, "Colleague's own drawer and dialog stay closed meanwhile");
+  }
+  state.nextTarget = null;
+  binding.setConversationTarget(null);
+  await flush();
+  assert.equal(view.state.frameOpen.value, true, "Stay here returns the conversation to Colleague's own frame");
+  assert.equal(state.binding, binding);
+});
+
 async function mountVoiceHost(t, preferences) {
   const filename = new URL("../../packages/vibe64-voice/src/client/Vibe64VoiceHost.vue", import.meta.url);
   const { descriptor } = parse(await readFile(filename, "utf8"), { filename: String(filename) });

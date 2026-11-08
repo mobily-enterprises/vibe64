@@ -161,7 +161,9 @@ outside click away from the header avatar closes the view and stops voice; use
 minus or the avatar to keep listening.
 Open voice for a different conversation to switch. Unfinished words require
 completion or **Discard and switch**; **Stay here** keeps the original target.
-There is only one voice window and one active capture/playback owner.
+There is only one voice window and one active capture/playback owner. When
+Colleague holds the unfinished words, that window shows its conversation with
+the choice and Colleague's own panel stays closed until you answer.
 
 Lessons have no voice of their own: use Colleague's voice to learn with a
 lesson.
