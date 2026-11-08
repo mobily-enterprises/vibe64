@@ -709,6 +709,24 @@ describe("useVibe64MountedSessionData", () => {
       expect(realtimeMocks.socket.connect).toHaveBeenCalledTimes(2);
     });
 
+    it("clears a failed manual reconnect as soon as an automatic retry connects, before its status check ends", async () => {
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      realtimeMocks.socket.connected = false;
+      realtimeMocks.handlers.get("disconnect")();
+      controller.retryAgentConnection();
+      realtimeMocks.handlers.get("connect_error")(new Error("websocket error"));
+      expect(controller.agentConnectionError.value).toBe("Reconnect failed (websocket error). Vibe64 keeps trying automatically.");
+      // Socket.IO's own retry connects; the assistant check it starts has not answered yet.
+      realtimeMocks.socket.connected = true;
+      realtimeMocks.handlers.get("connect")();
+      expect(controller.agentConnectionStatus.value).toBe("reconciling");
+      expect(controller.agentConnectionError.value).toBe("");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(controller.agentConnectionError.value).toBe("");
+    });
+
     it("recovers from a busy response without reconnecting or losing the active turn", async () => {
       httpMocks.request.mockResolvedValueOnce({
         code: "vibe64_agent_write_mode_busy",

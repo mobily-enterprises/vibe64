@@ -382,7 +382,12 @@ function useVibe64MountedSessionData({
     reconciliationController?.abort();
     void reconcileMountedAgentSession(reason);
   };
-  const reconcileAfterRealtimeConnect = () => reconcileAfterConnectionChange("realtime-connect");
+  const reconcileAfterRealtimeConnect = () => {
+    // A failed attempt no longer describes the connection that just opened; the
+    // status check that follows (up to 45 seconds) reports any new problem.
+    agentConnectionError.value = "";
+    reconcileAfterConnectionChange("realtime-connect");
+  };
   useRealtimeEvent({
     enabled: computed(() => Boolean(activeSessionId.value)),
     event: VIBE64_CONNECTIONS_CHANGED_EVENT,

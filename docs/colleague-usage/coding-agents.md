@@ -39,7 +39,9 @@ unavailable while Vibe64 is checking the connection; your draft is kept.
 waiting before its next automatic attempt. The button shows its progress and
 the notice says **Reconnecting…** until the attempt ends. When it connects, the
 chat checks the assistant and the notice closes; when it fails, the notice says
-**Reconnect failed** with the reason, and Vibe64 keeps trying automatically. In the
+**Reconnect failed** with the reason, and Vibe64 keeps trying automatically.
+That message goes as soon as one of those automatic attempts connects, while the
+chat checks the assistant again. In the
 dark theme the notice uses the theme's contrasting text. Desktop and phone show
 the same status and recovery controls; Colleague can explain them, but reconnecting
 the browser requires your interaction.
