@@ -82,8 +82,11 @@ const hasGoal = computed(() => Boolean(props.goal && !["completed", "complete"].
 // Main chat's mode, settings and model are the owner's; the server refuses a
 // team member's change outside their own lesson.
 const ownerOnly = computed(() => !props.temporary && decisions.value.senior?.approvalRequired === true);
-// Main chat's finishing switches apply in every mode; temporary chats have none.
-const switchesAvailable = computed(() => !props.temporary && !ownerOnly.value && !hasGoal.value && Boolean(mode.value) && mode.value !== "fix");
+// Main chat's finishing switches apply in every mode; temporary chats and
+// lessons have none (Deslop must never rewrite a learner's code, and a lesson teaches Save).
+const finishingShown = computed(() => !props.temporary && props.session?.purpose !== "learning" &&
+  Boolean(mode.value) && mode.value !== "fix");
+const switchesAvailable = computed(() => finishingShown.value && !ownerOnly.value && !hasGoal.value);
 const switchValues = () => Object.fromEntries(Object.entries(switches).map(([id, value]) => [id, value.value]));
 const updatedPreferences = computed(() => ({ mode: mode.value,
   ...(props.temporary ? { review: false } : switchValues()),
@@ -245,7 +248,7 @@ function configure() {
           </v-list>
           <div class="px-4 pb-3">
             <p v-if="requiredMode" class="text-body-small">Repair chats use Fix it with AI, or a model you choose. Model changes apply to the next turn.</p>
-            <template v-if="!temporary && mode && mode !== 'fix'">
+            <template v-if="finishingShown">
               <p class="text-body-small font-weight-bold">Chat settings</p>
               <p class="text-body-small">When the agent finishes a piece of work (a whole plan, or a request it reports finished), these run once, in this order. {{ finishingAgent }}. Keep Deslop on unless this is a quick throwaway project.</p>
               <template v-for="step in ASSISTANT_FINISHING_STEPS" :key="step.id">

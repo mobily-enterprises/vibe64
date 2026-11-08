@@ -143,6 +143,14 @@ it("a temporary chat never carries a finishing step", async () => {
   expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false });
 });
 
+it("a lesson shows no Chat settings, even with switches saved on", () => {
+  const lesson = routing({ mode: "junior", ...defaults });
+  const state = mount(undefined, false, { session: { ...lesson.session, purpose: "learning" } });
+  expect(state.finishingShown).toBe(false);
+  expect(state.switchesAvailable).toBe(false);
+  expect(state.triggerLabel).not.toMatch(/Automatic/u);
+});
+
 it("ends each sentence of the mode label with one period", () => {
   const state = mount(undefined, false, { canConfigure: true, ...routing({ mode: "auto", review: true, autoSave: true }) });
   expect(state.triggerLabel).toBe("Chat mode: Auto. Senior for plans and finishing steps; Junior otherwise · Router: " +

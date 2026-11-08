@@ -282,8 +282,10 @@ function createAssistantRoutingAdmission({
         if (explicitTask) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
         // Main chat's own requests run the finishing steps; an explicit task,
-        // generated work, a goal and temporary chats never do.
-        const finishes = routingState.allowAuto && mode !== "fix" && !explicitTask && !options.purpose && !assistantGoalIsActive(goal);
+        // generated work, a goal, temporary chats and lessons never do. Deslop
+        // must never rewrite a learner's code, and a lesson teaches Save.
+        const finishes = routingState.allowAuto && !context.runtime?.learningScope && mode !== "fix" && !explicitTask &&
+          !options.purpose && !assistantGoalIsActive(goal);
         const review = mode === "auto" && finishes;
         // A Senior, Junior or Custom chat's request is its agent's work from the
         // start; Auto's becomes a workflow when Router classifies it.

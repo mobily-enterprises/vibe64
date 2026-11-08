@@ -1812,7 +1812,10 @@ pending renewal's successor:
   person's choices carry over.
 - Custom, which saved no choice: the defaults when this upgrade was published
   (`review`, `deslop` and `autoSave` on, `uiPass` off), frozen in the script.
-- Temporary chats and Fix it with AI: all four off; they run no finishing step.
+- Temporary chats, Fix it with AI and lessons (a session with
+  `learning_session` metadata, main chat and a pending successor alike): all
+  four off; they run no finishing step. Deslop must never rewrite a learner's
+  code, and a lesson teaches Save.
 
 A value that already saves `deslop` is current and left alone, so a retry
 changes nothing. An unreadable or unknown chat mode stops the upgrade before

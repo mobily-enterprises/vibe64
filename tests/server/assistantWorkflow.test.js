@@ -592,6 +592,17 @@ test("with review, Deslop and the UI pass all off, finished work goes straight t
   assert.equal(assistantRoutingStatusLabel(f.state()), "Work finished.");
 });
 
+test("a lesson's work runs no finishing step and is never saved automatically, whatever its switches say", async t => {
+  const f = await savingFixture(t, { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true }, { readyPlan: false });
+  // A lesson's runtime is bound to its learner's attempt.
+  f.context.runtime.learningScope = { learnerId: "learner-1", attemptId: "attempt-1", noExercise: false };
+  await f.service.send("session-1", request, f.context);
+  assert.equal(f.state().workflow, false);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.state().status, "complete"); assert.equal(f.sends.length, 1);
+  assert.deepEqual(started(f), []); assert.deepEqual(f.saves, []);
+});
+
 test("with automatic save off, finished work is reviewed but not saved", async t => {
   const f = await savingFixture(t, { mode: "senior", autoSave: false }, { readyPlan: false });
   await f.service.send("session-1", request, f.context);

@@ -40,7 +40,8 @@ review on. Automatic deslop on. Automatic save on**. A change applies to the
 next piece of work. The switches are the owner's main chat choice: a team
 member sees them disabled, and they are disabled while a goal is active.
 Temporary chats, AI tasks and Fix it with AI have no Chat settings and run none
-of these steps. **Chat mode** and the switches are the same on desktop and
+of these steps. Neither do lessons: Deslop never rewrites a learner's code, and
+saving is part of what a lesson teaches, so you choose **Save** yourself. **Chat mode** and the switches are the same on desktop and
 mobile.
 
 ## Who does each step

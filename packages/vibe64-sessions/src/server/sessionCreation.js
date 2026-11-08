@@ -7,6 +7,7 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
 import { serializeVibe64AssistantSelection, VIBE64_ASSISTANT_SELECTION_METADATA } from "@local/vibe64-runtime/shared";
 import { ASSISTANT_ROUTING_METADATA } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_NO_FINISHING } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { sessionsOccupyingPolicySlots } from "./sessionPolicySlots.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
@@ -102,10 +103,13 @@ function createSessionCreation({
       if (pullRequest && input.repositoryBranch) {
         throw vibe64Error("Choose a branch or a pull request for this session.", "vibe64_session_source_choice_conflict");
       }
-      const { assistantSelection, assistantRouting } = await assistant.resolveSessionStart(input, {
+      const { assistantSelection, assistantRouting: startRouting } = await assistant.resolveSessionStart(input, {
         vibe64User,
         mode: learningRuntime ? "junior" : "senior"
       });
+      // A lesson runs no finishing steps: Deslop must never rewrite a
+      // learner's code, and a lesson teaches Save.
+      const assistantRouting = learningRuntime ? { ...startRouting, ...ASSISTANT_NO_FINISHING } : startRouting;
       const runtime = learningRuntime || await project.createRuntime(sessionRuntimeOptions(terminals));
       if (runtime.learningScope && !learningRuntime) {
         throw new TypeError("Learning creation requires the trusted Project learning context.");

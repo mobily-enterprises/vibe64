@@ -64,6 +64,15 @@ test("temporary chats run no finishing step, and a renewal's successor converts 
   assert.deepEqual(changes.renewal.successor.assistantRouting, { mode: "auto", review: true, deslop: false, uiPass: false, autoSave: true });
 });
 
+test("a lesson's main chat and its pending successor run no finishing step", () => {
+  const changes = chatFinishingStepsChanges({
+    metadata: { learning_session: JSON.stringify({ schemaVersion: 1 }), assistant_routing: JSON.stringify({ mode: "junior", review: true }) },
+    renewal: { status: "running", successor: { assistantSelection: opus, assistantRouting: { mode: "junior" } } }
+  });
+  assert.deepEqual(JSON.parse(changes.metadata.assistant_routing), { mode: "junior", ...none });
+  assert.deepEqual(changes.renewal.successor.assistantRouting, { mode: "junior", ...none });
+});
+
 test("current values are left alone, so a retry changes nothing, and unreadable or unknown modes stop the upgrade", () => {
   const current = JSON.stringify({ mode: "senior", review: false, deslop: true, uiPass: true, autoSave: false });
   assert.equal(chatFinishingStepsChanges({ metadata: { assistant_routing: current } }).metadata.assistant_routing, current);

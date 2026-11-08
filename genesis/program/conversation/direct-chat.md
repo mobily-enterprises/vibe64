@@ -1707,8 +1707,11 @@ existing conversation metadata, in every main-chat mode. The chat mode only
 chooses who works. `assistantFinishing.js`'s `ASSISTANT_FINISHING_DEFAULTS` holds their one default
 (review, Deslop and save on, the UI pass off) and `ASSISTANT_FINISHING_STEPS`
 their Chat settings wording; `assistantRoutingAutomation` reads each saved
-choice or its default. Fix it with AI and temporary chats save all four off
-(`ASSISTANT_NO_FINISHING`) and run none. A mode change that omits a choice keeps
+choice or its default. Fix it with AI, temporary chats and lessons save all
+four off (`ASSISTANT_NO_FINISHING`) and run none; admission also never finishes
+a lesson's request (`runtime.learningScope`), because Deslop must never rewrite
+a learner's code and a lesson teaches Save. The menu shows a lesson no Chat
+settings. A mode change that omits a choice keeps
 the chat's own, and choosing a Custom model keeps them too. The numbered
 `20261107-chat-finishing-steps` upgrade converted the earlier shape, where
 `review` meant Auto's optional Deslop. The chat-mode menu shows the four

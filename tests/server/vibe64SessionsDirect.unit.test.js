@@ -4970,8 +4970,9 @@ test("source-bearing Learning creation retains the original source context, poli
     assert.equal(f.creationInputs.length, 1);
     assert.deepEqual(f.creationInputs[0].sourceContext, { expectedCommit: "d".repeat(40), vibe64User: actor });
     assert.equal(f.creationInputs[0].metadata.created_by, actor.username);
+    // A lesson runs no finishing steps.
     assert.deepEqual(JSON.parse(f.creationInputs[0].metadata.assistant_routing),
-      { mode: "junior", review: true, deslop: true, uiPass: false, autoSave: true });
+      { mode: "junior", review: false, deslop: false, uiPass: false, autoSave: false });
     assert.deepEqual(vibe64AssistantSelectionFromMetadata(f.creationInputs[0].metadata), teacher);
     assert.equal(setup.length, 1);
     assert.equal(setup[0].runtime, f.runtime);
