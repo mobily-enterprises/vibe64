@@ -112,11 +112,19 @@ automatic skill refresh without invalidating successful setup or changing source
 so the conversation can repair or decide them; Vibe64 never picks a proposal.
 Setup and launch retain their contract validation: workspace preparation records
 an undecided section as `ambiguous` with Genesis's message, and the agent status
-command reports it as a blocked inspection. A Stack Genesis cannot parse at all,
-such as prose under an operation section (`genesisStackUnreadable()`), refuses the
-message with `vibe64_genesis_stack_unreadable` (409), naming the file, Genesis's
-section line, the offending text and Genesis's message, so the person fixes the
-file and sends again. Other inspection errors still propagate.
+command reports it as a blocked inspection. Wrong contents in a project file
+never stop a message. When Genesis cannot read a file it reads for the AI (any
+Stack section, such as prose under Verification, the Blueprint, subsystems,
+Program, collaboration, engineering, Agent Skills and the `package.json` that
+locates them, or an agent integration file; `genesisProjectFileUnreadable()`),
+skill refresh waits and the message is sent. The conversation the message went
+to gets one system notice per problem naming the file, Genesis's section line,
+the text found there and Genesis's message
+(`genesisProjectFileDiagnostic()`); the AI reads the same diagnostic in its
+Genesis session context and can repair the file. A task prompt Genesis cannot
+compose for the same reason, such as an automatic review, goes as the request
+was written. Genesis's own Git, process and host-context failures, and other
+inspection errors, still propagate.
 An active main or temporary turn skips this preparation. Routine connection
 verification and read-only helper conversations remain read-only. Project
 format migration remains a separate operation, and skill maintenance does not

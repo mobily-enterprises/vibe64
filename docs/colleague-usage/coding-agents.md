@@ -100,6 +100,16 @@ Codex, Claude and OpenCode share the project-format check before refreshing
 skills and agent guidance. This check reads the format marker without scanning
 application files; it does not replace the separate guidance checks.
 
+Wrong contents in a project file never stop a message. When Genesis cannot read
+a file it gives the assistant, such as a `genesis/stack.md` line with prose after
+a Verification command or an invalid `.claude/settings.json`, the message is
+still sent, in Main, a temporary chat or an AI task alike. The chat shows a
+notice once per problem, naming the file, the line where Genesis knows it, the
+text found there and Genesis's explanation, and the assistant receives the same
+explanation so it can repair the file. Skill and agent-guidance refresh waits
+until the file reads again. Desktop and mobile behave the same; Colleague can
+explain the notice and offer to ask the coding assistant to fix the file.
+
 When an assistant cannot start, stops by itself or reports a failure, see [When a coding agent fails or stops](coding-agent-failures.md).
 
 1. Select the intended project and session, then Main, the intended temporary

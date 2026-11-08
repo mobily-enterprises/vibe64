@@ -947,6 +947,24 @@ test("a task Vibe64 chose itself goes as written in a project without a Blueprin
   });
 });
 
+test("a project file Genesis cannot read sends the request as written", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await initializeGit(projectRoot);
+    await initializeGenesisProject({ projectRoot });
+    const stackPath = path.join(projectRoot, "genesis/stack.md");
+    const stack = await readFile(stackPath, "utf8");
+    await writeFile(stackPath, `${stack.trimEnd()}\n\n## Verification\n\n- Verify \`changed\`: \`npm\` \`run\` \`test:changed\` (while working)\n`);
+    const request = "Why does the project not start?";
+    assert.deepEqual(await renderGenesisPrompt({ environment: process.env, input: { conversationRequest: request }, projectRoot }),
+      { prompt: request });
+    await writeFile(stackPath, stack);
+    await writeFile(path.join(projectRoot, "genesis/engineering.md"), "Notes without an engineering profile.\n");
+    const review = "Review the latest change.";
+    assert.deepEqual(await renderGenesisPrompt({ environment: process.env, action: { genesisTask: "review" },
+      input: { request: review }, projectRoot }), { prompt: review });
+  });
+});
+
 test("Codex execution shims receive the installed Genesis executable exactly once", () => {
   const bin = genesisCommandShimDirectory();
   const first = withGenesisCommandShim(["/managed/git", genesisPackageBinDirectory(), bin]);

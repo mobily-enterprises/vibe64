@@ -4,14 +4,14 @@ import {
   rememberAssistantBeforeChangeover,
   requireCompletedConversationRewind
 } from "./assistantChangeover.js";
-import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import {
   GENESIS_BLUEPRINT_PATH,
-  GENESIS_STACK_PATH,
   genesisProjectContractNeedsAttention,
-  genesisStackUnreadable,
+  genesisProjectFileDiagnostic,
+  genesisProjectFileUnreadable,
   inspectGenesisProjectFormat,
   inspectGenesisAgentIntegrations,
   syncGenesisAgentIntegrations,
@@ -28,23 +28,6 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").InspectAgentSkills} InspectAgentSkills */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
-/** @typedef {Error & { code: string, details?: { path?: string, line?: number, observed?: string } }} GenesisStackError */
-
-/**
- * The message is refused with Genesis's own explanation, so the person can fix the Stack file
- * and send again. Genesis numbers lines within the failing section.
- * @param {GenesisStackError} error
- */
-function unreadableStackRefusal(error) {
-  const { path: file = GENESIS_STACK_PATH, line, observed } = error.details || {};
-  const where = line ? `${file} (line ${line} of its section)` : file;
-  const found = observed ? ` Found: "${observed}".` : "";
-  return new AppError(409, `${where} cannot be read: ${error.message}${found} Fix it, then send the message again.`, {
-    code: "vibe64_genesis_stack_unreadable",
-    params: { file, line, message: error.message, observed },
-    details: { genesisCode: error.code }
-  });
-}
 
 /**
  * What a session's assistant needs before work reaches it: the previous assistant stopped on a
@@ -105,43 +88,11 @@ function createServiceAssistantPreparation({
     if (preparation) await preparation;
   }
 
-  async function prepareAgentSkillsInsideAgentWrite(sessionId, context) {
-    await sessionAgent.requireAssistantAccess(sessionId, context);
-    if (sessionHasActiveAgentRun(context.session)) return;
-    const projectRoot = sessionSourcePath(context.session);
-    if (!projectRoot || !existsSync(path.join(projectRoot, GENESIS_BLUEPRINT_PATH))) return;
-    const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
-    if (temporary.active) return;
-    const format = await inspectGenesisProjectFormat({ projectRoot });
-    if (format.status !== "current") return;
-    if (isPracticeProjectRuntime(context.runtime)) await excludeAgentGuidanceFromPracticeHistory(projectRoot);
-    let inspection;
-    try {
-      inspection = await inspectAgentSkills({ projectRoot });
-    } catch (error) {
-      if (genesisProjectContractNeedsAttention(error)) {
-        logOperationalEvent(logger, "warn", {
-          code: error.code,
-          component: "vibe64.agent_skills",
-          event: "vibe64.agent_skills.refresh_deferred",
-          sessionId
-        }, "Project contracts need repair or a project decision; skill refresh deferred so chat remains available.");
-        return;
-      }
-      if (genesisStackUnreadable(error)) throw unreadableStackRefusal(error);
-      if (error?.code !== "AGENT_SKILL_UNAVAILABLE") throw error;
-      await workspacePreparation.invalidateWorkspaceSetup(
-        context,
-        `${error.message} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`
-      );
-      logOperationalEvent(logger, "warn", {
-        code: error.code,
-        component: "vibe64.agent_skills",
-        event: "vibe64.agent_skills.preparation_required",
-        sessionId
-      }, "Project skill refresh requires workspace preparation.");
-      return;
-    }
+  /**
+   * Refreshes the project's agent skills and integrations when Genesis reports them missing or outdated.
+   */
+  async function refreshAgentGuidance(sessionId, projectRoot) {
+    const inspection = await inspectAgentSkills({ projectRoot });
     const guidance = await inspectGenesisAgentIntegrations({ projectRoot });
     const refreshSkills = ["missing", "outdated"].includes(inspection.status);
     if (!refreshSkills && guidance.status === "current") return;
@@ -157,6 +108,71 @@ function createServiceAssistantPreparation({
       await sessionAccess.publishTerminalSessionChanged("agentTerminal", sessionId, "agent-skills-updated", {
         changedFiles: result.changedFiles
       });
+    }
+  }
+
+  /**
+   * Tells the person, once per conversation and problem, that their message went although a project
+   * file cannot be read. The AI reads the same Genesis diagnostic in its session context.
+   */
+  async function noticeUnreadableProjectFile(sessionId, context, error) {
+    const diagnostic = genesisProjectFileDiagnostic(error);
+    const conversationId = context.routingConversationId;
+    const turn = await context.runtime.store.writeConversationSystemMessage(conversationId ? { sessionId, conversationId } : sessionId, {
+      messageId: `project-file-unreadable:${createHash("sha256").update(diagnostic).digest("hex").slice(0, 32)}`,
+      text: `A project file cannot be read: ${diagnostic} Your message was still sent, and the AI is told about it so it can fix the file.`
+    });
+    if (!turn) return;
+    await sessionAccess.publishTerminalSessionChanged("agentTerminal", sessionId, "project-file-unreadable", {
+      conversationLogPatch: { type: "upsert-turn", turn },
+      ...(conversationId ? { conversationId } : {})
+    });
+  }
+
+  async function prepareAgentSkillsInsideAgentWrite(sessionId, context) {
+    await sessionAgent.requireAssistantAccess(sessionId, context);
+    if (sessionHasActiveAgentRun(context.session)) return;
+    const projectRoot = sessionSourcePath(context.session);
+    if (!projectRoot || !existsSync(path.join(projectRoot, GENESIS_BLUEPRINT_PATH))) return;
+    const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
+    if (temporary.active) return;
+    const format = await inspectGenesisProjectFormat({ projectRoot });
+    if (format.status !== "current") return;
+    if (isPracticeProjectRuntime(context.runtime)) await excludeAgentGuidanceFromPracticeHistory(projectRoot);
+    try {
+      await refreshAgentGuidance(sessionId, projectRoot);
+    } catch (error) {
+      if (genesisProjectContractNeedsAttention(error)) {
+        logOperationalEvent(logger, "warn", {
+          code: error.code,
+          component: "vibe64.agent_skills",
+          event: "vibe64.agent_skills.refresh_deferred",
+          sessionId
+        }, "Project contracts need repair or a project decision; skill refresh deferred so chat remains available.");
+        return;
+      }
+      if (error?.code === "AGENT_SKILL_UNAVAILABLE") {
+        await workspacePreparation.invalidateWorkspaceSetup(
+          context,
+          `${error.message} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`
+        );
+        logOperationalEvent(logger, "warn", {
+          code: error.code,
+          component: "vibe64.agent_skills",
+          event: "vibe64.agent_skills.preparation_required",
+          sessionId
+        }, "Project skill refresh requires workspace preparation.");
+        return;
+      }
+      // Wrong contents in a project file never stop the AI that can repair it.
+      if (!genesisProjectFileUnreadable(error)) throw error;
+      logOperationalEvent(logger, "warn", {
+        code: error.code || error.name,
+        component: "vibe64.agent_skills",
+        event: "vibe64.agent_skills.project_file_unreadable",
+        sessionId
+      }, "A project file cannot be read; skill refresh deferred and the message sent.");
+      await noticeUnreadableProjectFile(sessionId, context, error);
     }
   }
 

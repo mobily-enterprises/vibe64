@@ -46,7 +46,8 @@ import {
   genesisPackageBinDirectory,
   initializeGenesisProject,
   inspectVibe64WorkspaceSetup,
-  inspectGenesisSkills
+  inspectGenesisSkills,
+  vibe64ConversationInstructions
 } from "../../packages/vibe64-genesis/src/server/index.js";
 import process from "node:process";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
@@ -691,31 +692,84 @@ test("an undecided competing Stack section defers skill refresh without blocking
     event.code === "STACK_SECTION_AMBIGUOUS"), true);
 });
 
-test("an unreadable Stack refuses the message with Genesis's file, line and explanation", async (t) => {
-  const { service, session, project } = await terminalServiceFixture(t, agentWriteLockHarness());
+const UNREADABLE_NOTICE_END = " Your message was still sent, and the AI is told about it so it can fix the file.";
+
+async function unreadableFileNotices(runtime, sessionId) {
+  return (await runtime.store.readConversationLog(sessionId))
+    .filter((turn) => turn.system?.text.startsWith("A project file cannot be read: "));
+}
+
+test("a malformed Verification line neither stops the message nor the AI that can fix it", async (t) => {
+  const provider = await controllerHarness();
+  t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
+  const warnings = [];
+  const { service, session, runtime, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    assistantSelection: provider.selection,
+    logger: { ...silentLogger, warn(event) { warnings.push(event); } },
+    opencodeTerminalController: provider.controllerOptions
+  });
   const projectRoot = session.metadata.source_path;
   await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
   await initializeGenesisProject({ projectRoot });
   const stackPath = path.join(projectRoot, "genesis/stack.md");
-  const stack = await readFile(stackPath, "utf8");
-  await writeFile(stackPath, `${stack.trimEnd()}\n\n## Verification\n\n- Verify \`application\`: \`npm\` \`test\`\n\nRun the checks before every release.\n`);
+  // Prose after the backticked arguments: Genesis cannot read the Verification section.
+  const entry = "- Verify `changed`: `npm` `run` `test:changed` (while working: only the changed files)";
+  const stack = `${(await readFile(stackPath, "utf8")).trimEnd()}\n\n## Verification\n\n${entry}\n`;
+  await writeFile(stackPath, stack);
   project.runProjectSourceExclusive = async () => assert.fail("An unreadable Stack must not change source.");
-  await assert.rejects(service.sendAgentMessage(session.sessionId,
-    { message: "Why does the project not start?" }, { engineId: "opencode" }),
-  (error) => {
-    assert.equal(error.status, 409);
-    assert.equal(error.code, "vibe64_genesis_stack_unreadable");
-    assert.equal(error.message, "genesis/stack.md (line 3 of its section) cannot be read: " +
-      "Every Verification entry must use `- Verify `label`: `command` `argument`...`. " +
-      "Found: \"Run the checks before every release.\". Fix it, then send the message again.");
-    assert.deepEqual(error.params, {
-      file: "genesis/stack.md",
-      line: 3,
-      message: "Every Verification entry must use `- Verify `label`: `command` `argument`...`.",
-      observed: "Run the checks before every release."
-    });
-    return true;
+  runtime.renderPrompt = async (_id, input) => ({ prompt: input.request });
+  service.configureAssistantRuntime({ listConnections: provider.controllerOptions.listConnections,
+    resolveConnection: provider.controllerOptions.resolveConnection });
+
+  const result = await service.sendAgentMessage(session.sessionId,
+    { message: "Fix the project's Stack file.", messageId: "repair-the-stack" });
+
+  assert.equal(result.delivered, true, JSON.stringify(result));
+  assert.equal(provider.promptCalls.length, 1);
+  const notices = await unreadableFileNotices(runtime, session.sessionId);
+  assert.deepEqual(notices.map((turn) => turn.system.text), ["A project file cannot be read: genesis/stack.md (line 1 of its section): " +
+    `Every verification command and argument must be one separate non-empty backticked value. Found: "${entry}".${UNREADABLE_NOTICE_END}`]);
+  assert.deepEqual(warnings.filter((event) => event.event === "vibe64.agent_skills.project_file_unreadable").map((event) => event.code),
+    ["STACK_VERIFICATION_INVALID"]);
+  assert.equal(await readFile(stackPath, "utf8"), stack);
+  // The AI's own instructions carry Genesis's diagnostic, so it can repair the file.
+  const instructions = await vibe64ConversationInstructions({ workdir: projectRoot, promptContext: {
+    scope: "session", conversationKind: "main",
+    session: { managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true } } });
+  assert.match(instructions, /Project opening state: attention\./u);
+  assert.ok(instructions.includes("Every verification command and argument must be one separate non-empty backticked value."));
+});
+
+test("an agent integration file Genesis cannot read is noticed once per conversation and never stops the message", async (t) => {
+  const warnings = [];
+  const events = [];
+  const { service, session, runtime, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    logger: { ...silentLogger, warn(event) { warnings.push(event); } },
+    publishSessionChanged: { agentTerminal: async (_sessionId, event) => events.push(event) }
   });
+  const projectRoot = session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  await mkdir(path.join(projectRoot, ".claude"), { recursive: true });
+  await writeFile(path.join(projectRoot, ".claude/settings.json"), "{ \"hooks\": ");
+  project.runProjectSourceExclusive = async () => assert.fail("An unreadable integration file must not change source.");
+  for (const messageId of ["first", "second"]) {
+    // Delivery reaches assistant admission; this fixture has no durable selection.
+    await assert.rejects(service.sendAgentMessage(session.sessionId,
+      { message: "Why does the project not start?", messageId }, { engineId: "opencode" }),
+    { code: "vibe64_assistant_selection_invalid" });
+  }
+  const notices = await unreadableFileNotices(runtime, session.sessionId);
+  assert.equal(notices.length, 1);
+  assert.match(notices[0].system.text, /^A project file cannot be read: \.claude\/settings\.json is not valid JSON: /u);
+  assert.ok(notices[0].system.text.endsWith(UNREADABLE_NOTICE_END));
+  const published = events.filter((event) => event.reason === "project-file-unreadable");
+  assert.equal(published.length, 1);
+  assert.equal(published[0].conversationLogPatch.type, "upsert-turn");
+  assert.equal(published[0].conversationLogPatch.turn.system.text, notices[0].system.text);
+  assert.deepEqual(warnings.filter((event) => event.event === "vibe64.agent_skills.project_file_unreadable").map((event) => event.code),
+    ["CLAUDE_SETTINGS_INVALID", "CLAUDE_SETTINGS_INVALID"]);
+  assert.equal(await readFile(path.join(projectRoot, ".claude/settings.json"), "utf8"), "{ \"hooks\": ");
 });
 
 test("assistant inspection and active-turn steering leave outdated skills untouched", async (t) => {

@@ -14,7 +14,8 @@ import {
   GENESIS_STACK_PATH,
   GENESIS_STACK_SECTION_AMBIGUOUS,
   genesisProjectContractNeedsAttention,
-  genesisStackUnreadable
+  genesisProjectFileDiagnostic,
+  genesisProjectFileUnreadable
 } from "./projectContractAttention.js";
 import * as genesisCompiler from "genesis-compiler";
 import { createVibe64HostContextRegistry } from "./hostContextRegistry.js";
@@ -512,6 +513,12 @@ async function renderGenesisPrompt({
     sessionContextInstalled: true,
     task: promptTask
   }, { prompt: true });
+  // A project file Genesis cannot read never stops the message: the request
+  // goes as written, and the AI reads Genesis's diagnostic in its session context.
+  const asWritten = (error) => {
+    if (!genesisProjectFileUnreadable(error)) throw error;
+    return { prompt: request };
+  };
   let task = requestedTask;
   let result;
   try {
@@ -521,12 +528,15 @@ async function renderGenesisPrompt({
     const fallbackTask = Object.hasOwn(GENESIS_PROMPT_FALLBACK_TASKS, String(error?.code))
       ? GENESIS_PROMPT_FALLBACK_TASKS[error.code]
       : "";
-    if (!fallbackTask || fallbackTask === requestedTask) throw error;
     // A task Vibe64 chose itself, such as an automatic finishing turn's review,
     // never becomes the Blueprint's: its request goes as written.
-    if (input.automaticGenesisTask === true) return { prompt: request };
+    if (!fallbackTask || fallbackTask === requestedTask || input.automaticGenesisTask === true) return asWritten(error);
     task = fallbackTask;
-    result = await generate(task);
+    try {
+      result = await generate(task);
+    } catch (fallbackError) {
+      return asWritten(fallbackError);
+    }
   }
   const effectiveTask = assertGenesisPromptTask(result.task) || task;
   return {
@@ -547,7 +557,8 @@ export {
   GENESIS_STACK_PATH,
   GENESIS_STACK_SECTION_AMBIGUOUS,
   genesisProjectContractNeedsAttention,
-  genesisStackUnreadable,
+  genesisProjectFileDiagnostic,
+  genesisProjectFileUnreadable,
   inspectVibe64ConnectedDevelopment,
   inspectVibe64ProjectServices,
   parseVibe64ProjectServicesLines,
