@@ -17,6 +17,7 @@ import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/s
 import { NO_SAVED_ENV_VALUE_LINKS } from "../../packages/vibe64-terminals/src/server/savedEnvValueLinks.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const {
   AGENT_ENV_COMMAND_NAME,
@@ -165,7 +166,7 @@ function runWithInput(command, args, {
       stderr,
       stdout
     }));
-    child.stdin.end(input);
+    endChildInput(child, input);
   });
 }
 

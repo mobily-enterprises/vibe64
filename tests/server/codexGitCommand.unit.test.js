@@ -35,6 +35,7 @@ import {
   withTemporaryRoot,
   projectServiceCollaborators
 } from "./vibe64TestHelpers.js";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
@@ -74,14 +75,7 @@ function runProcessWithInput(command, args = [], {
       const stderrBytes = Buffer.concat(stderrChunks);
       resolve({ exitCode, signal, stderr: stderrBytes.toString("utf8"), stdout: stdoutBytes.toString("utf8"), stderrBytes, stdoutBytes });
     });
-    // A command that never reads its input (git config) can exit before the
-    // input is written; on a busy machine the write then fails with EPIPE.
-    // The exit status and output still say what happened, so only other
-    // write failures fail the run.
-    child.stdin.on("error", (error) => {
-      if (error.code !== "EPIPE") reject(error);
-    });
-    child.stdin.end(input);
+    endChildInput(child, input);
   });
 }
 

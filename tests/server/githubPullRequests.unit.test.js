@@ -22,6 +22,7 @@ import getPlacements from "../../src/placement.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const user = { username: "alice", home: "/home/alice", uid: 1001, gid: 1001 };
 const project = { repositoryMode: "github", repository: { defaultBranch: "main", mode: "github" },
@@ -427,7 +428,7 @@ async function command(request) {
     child.stdout.on("data", (chunk) => { stdout += chunk; }); child.stderr.on("data", (chunk) => { stderr += chunk; });
     child.once("error", (error) => resolve({ ok: false, stdout, stderr: error.message }));
     child.on("close", (code) => resolve({ ok: code === 0, stdout, stderr }));
-    child.stdin.end(request.input);
+    endChildInput(child, request.input);
   });
 }
 async function git(cwd, args) {

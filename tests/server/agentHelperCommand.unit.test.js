@@ -9,6 +9,7 @@ import test from "node:test";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import { createAgentDatabaseCommandService, prepareAgentDatabaseCommand } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const HELPER_GROUPS = ["preview", "playwright", "env", "database", "github", "session"];
 
@@ -33,12 +34,7 @@ function run(command, args, { env = process.env, cwd, input = Buffer.alloc(0) } 
       stdout: Buffer.concat(stdout),
       stderr: Buffer.concat(stderr).toString()
     }));
-    child.stdin.on("error", (error) => {
-      if (error.code !== "EPIPE") {
-        reject(error);
-      }
-    });
-    child.stdin.end(input);
+    endChildInput(child, input);
   });
 }
 

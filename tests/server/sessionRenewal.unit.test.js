@@ -24,6 +24,7 @@ import {
   inspectSessionWork as inspectGitSessionWork
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const OLD_SESSION_ID = "session-old";
 const COMMIT = "a".repeat(40);
@@ -131,11 +132,7 @@ function runLocalCommand(request = {}) {
       stderr,
       stdout
     }));
-    if (request.input !== undefined && request.input !== null) {
-      child.stdin.end(request.input);
-    } else {
-      child.stdin.end();
-    }
+    endChildInput(child, request.input ?? undefined);
   });
 }
 

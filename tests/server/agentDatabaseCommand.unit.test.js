@@ -14,6 +14,7 @@ import {
 import { agentSessionCommandEnvironmentIsHealthy } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
 import { requestUnixJsonCommand } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const {
   AGENT_DATABASE_COMMAND_NAME,
@@ -60,7 +61,7 @@ function run(command, args, env, input = "") {
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.once("error", reject);
     child.once("close", (code) => resolve({ code, stderr, stdout }));
-    child.stdin.end(input);
+    endChildInput(child, input);
   });
 }
 

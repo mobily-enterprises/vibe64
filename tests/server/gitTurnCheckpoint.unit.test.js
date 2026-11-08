@@ -16,6 +16,7 @@ import {
   runVibe64Command
 } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -444,7 +445,7 @@ test("a checkpoint job killed mid-run leaves no temporary index after the next c
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
       stdio: ["pipe", "pipe", "ignore"]
     });
-    child.stdin.end(request.input);
+    endChildInput(child, request.input);
     const poll = setInterval(async () => {
       const pid = Number((await readFile(staging, "utf8").catch(() => "")).trim());
       if (!pid) return;

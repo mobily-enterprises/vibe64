@@ -14,6 +14,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/repositoryHistory.js";
 import { commandResult } from "../../packages/vibe64-execution/src/server/result.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const { repositoryReadContext } = __testables;
 
@@ -48,7 +49,7 @@ async function commandRunner(request = {}) {
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.once("error", (error) => resolve({ error: error.message, ok: false, stderr, stdout }));
     child.once("close", (code) => resolve({ ok: code === 0, exitCode: code, stderr, stdout }));
-    child.stdin.end(request.input ?? undefined);
+    endChildInput(child, request.input ?? undefined);
   });
 }
 

@@ -35,6 +35,7 @@ import {
 } from "../../packages/vibe64-execution/src/server/repositoryStorage.js";
 import { vibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const { canonicalRepositoryBackupPath } = repositoryStorageTestables;
 
@@ -90,11 +91,7 @@ async function commandRunner(request = {}) {
       stderr,
       stdout
     }));
-    if (request.input !== undefined && request.input !== null) {
-      child.stdin.end(request.input);
-    } else {
-      child.stdin.end();
-    }
+    endChildInput(child, request.input ?? undefined);
   });
 }
 

@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import { createRuntimePackage, RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 import { buildNodeBundle, SERVER_BUNDLE_EXTERNALS } from "../../tooling/release/server-build.mjs";
 import { verifyRuntime } from "../../tooling/release/verify-runtime.mjs";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const execute = promisify(execFile);
 const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -49,7 +50,7 @@ test("bundled Genesis ownership hook defers the compiler until instructions are 
       process.argv[2] = ${JSON.stringify(instructions ? "--instructions" : "")};
       await import(${JSON.stringify(pathToFileURL(outfile).href)});
     `], { cwd: root, timeout: 10000 }, (error, stdout) => error ? reject(error) : resolve(stdout));
-    child.stdin.end(JSON.stringify(request));
+    endChildInput(child, JSON.stringify(request));
   });
   const request = { scope: "session", providerSessionId: "main", data: { registryPath } };
   for (const providerSessionId of ["main", "temporary"]) {
@@ -110,7 +111,7 @@ test("bundled source search helper builds and searches a persistent index", asyn
       if (error) reject(error);
       else resolve(JSON.parse(stdout));
     });
-    child.stdin.end(JSON.stringify({ operation, sourceRoot: path.join(root, "source"), directory: path.join(root, "index"), query: "needle", limit: 10 }));
+    endChildInput(child, JSON.stringify({ operation, sourceRoot: path.join(root, "source"), directory: path.join(root, "index"), query: "needle", limit: 10 }));
   });
   assert.equal((await run("refresh")).state, "ready");
   assert.deepEqual((await run("search")).results, [{ path: "test.txt", line: 1, column: 9, preview: "bundled needle" }]);

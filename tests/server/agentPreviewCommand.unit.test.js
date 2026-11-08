@@ -32,6 +32,7 @@ import {
   prepareAgentPreviewCommand
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 const {
   AGENT_PREVIEW_COMMAND_NAME,
@@ -170,7 +171,7 @@ function execWithInput(command, args, {
       }
       reject(new Error(`Command failed (${signal || code}): ${stderr || stdout}`));
     });
-    child.stdin.end(input);
+    endChildInput(child, input);
   });
 }
 

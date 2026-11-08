@@ -24,6 +24,7 @@ import {
 import { connectedCopyExecution } from "../../packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js";
 import { createServiceSessionWork } from "../../packages/vibe64-terminals/src/server/serviceSessionWork.js";
 import { createServiceSessionWorkInspection } from "../../packages/vibe64-terminals/src/server/serviceSessionWorkInspection.js";
+import { endChildInput } from "./childInputTestHelpers.js";
 
 // Every copy's GitHub URL reaches a local bare repository through Git's own
 // URL rewriting, so the engine runs exactly as it does against GitHub.
@@ -55,7 +56,7 @@ function commandRunner(request = {}) {
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.once("error", (error) => resolve({ code: "git_failed", error: error.message, ok: false, output: stderr, stderr, stdout }));
     child.once("close", (code) => resolve({ ...(code === 0 ? {} : { code: "git_failed" }), ok: code === 0, output: stdout, stderr, stdout }));
-    child.stdin.end(request.input ?? undefined);
+    endChildInput(child, request.input ?? undefined);
   });
 }
 
