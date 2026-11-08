@@ -44,7 +44,7 @@ stays visible and is not resent. Its same words stay blocked until the outcome i
 known. Returning focus to the window makes no refresh request; the live connection
 still refreshes on relevant events and reconnects.
 
-Alternatively, **Start fresh** opens a
+Alternatively, **Start fresh** on the unconfirmed message opens a
 confirmation. It retains the old conversation and unconfirmed words, starts a new
 chat without its old context, and resends nothing. Your model choice, watches and
 assignments stay in place; their coding agents keep running. Finish the current

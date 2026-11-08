@@ -329,6 +329,10 @@ onBeforeUnmount(() => {
             <AssistantConversationStatus :message="message" @check-delivery="adapter.actions.checkDelivery($event)" />
             <v-btn v-if="message.delivery" variant="tonal" :disabled="freshBusy" @click="showFreshConfirmation">Start fresh</v-btn>
           </template>
+          <!-- An uncertain delivery of your own message shows on that message, so Start fresh sits there too. -->
+          <template #user-message-actions="{ turn }">
+            <v-btn v-if="turn.user && turn.system?.delivery?.messageId === turn.user.messageId" variant="tonal" min-height="48" :disabled="freshBusy" @click="showFreshConfirmation">Start fresh</v-btn>
+          </template>
           <template #composer="{ adapter: { composer } }">
             <div class="vibe64-colleague__composer-region">
               <!-- Keep the dialog from handling Tab again after the input focuses Send. -->

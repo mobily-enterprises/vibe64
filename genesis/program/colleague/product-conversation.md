@@ -1094,8 +1094,12 @@ every tool definition on each model request.
 
 ## Fresh/history client presentation
 
-The original Colleague element keeps its shared uncertainty status and Check
-delivery action, and adds explicit Start fresh confirmation (`ColleagueFreshDialog.vue`, operated by
+The original Colleague element keeps the shared transcript's uncertainty status and
+Retry delivery check action, and adds an explicit Start fresh button beside them:
+on the user message an uncertain delivery belongs to (the transcript's
+`user-message-actions` slot, since the shared transcript shows that delivery on
+its message), or on a delivery-only system message. Start fresh opens its
+confirmation (`ColleagueFreshDialog.vue`, operated by
 `useColleagueFreshStart.js`). The confirmation
 explains that the old voice conversation ends, nothing is resent, history remains
 readable and watches/assignments continue. Active admission, Stop, voice setup,

@@ -1876,6 +1876,26 @@ test("previous-conversation list offers explicit fresh recovery after a terminal
   assert.equal(view.state.voiceSession.value.voice.listening.value, false, "restoring controls does not start recording");
 });
 
+test("an uncertain delivery of your own message offers Start fresh on that message", async t => {
+  const view = mount(t, async url => url.startsWith("/api/assistant/")
+    ? conversationSnapshot({ conversationId: "original" }) : { ok: true, conversationId: "original", messages: [], status: "ready" });
+  await flush();
+  // The shared transcript shows a delivery that belongs to a user message on that
+  // message, not as a system message, so Colleague's Start fresh follows it there.
+  const slot = descriptor.template.content.split('<template #user-message-actions="{ turn }">')[1].split("</template>")[0];
+  const [, condition] = slot.match(/<v-btn v-if="([^"]+)"[^>]*@click="showFreshConfirmation">Start fresh<\/v-btn>/u);
+  const offersFresh = new Function("turn", `return Boolean(${condition});`);
+  const runtime = view.state.conversation.runtime.value;
+  await runtime.delivery.send({ message: "Unknown A", request: { text: "Unknown A", data: { clientId: "client-a" } } },
+    { messageId: "unknown-a", deliver: async () => ({ ok: false, status: "uncertain" }) });
+  await flush();
+  const uncertain = view.display.value.turns.find(turn => turn.user?.messageId === "unknown-a");
+  assert.equal(uncertain.system.delivery.messageId, "unknown-a");
+  assert.equal(offersFresh(uncertain), true);
+  assert.equal(offersFresh({ ...uncertain, system: undefined }), false, "a confirmed message offers no Start fresh");
+  assert.equal(offersFresh({ ...uncertain, system: { delivery: { messageId: "another" } } }), false, "another message's delivery stays its own");
+});
+
 test("fresh recovery binds a new paused original voice session without transport, capture, playback or submission", async t => {
   const { createVoiceConversationController } = await import(new URL("./voiceController.js", import.meta.resolve("@jskit-ai/assistant-voice/client")));
   const { useVoiceConversation } = await import(new URL("./voiceConversation.js", import.meta.resolve("@jskit-ai/assistant-voice/client")));
