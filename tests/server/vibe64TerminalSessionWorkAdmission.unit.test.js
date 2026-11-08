@@ -765,7 +765,7 @@ test("a member's integration continuation waits for the owner's main AI without 
   });
   const shared = { ...JSON.parse(provider.session.metadata.assistant_selection), selectionSource: "explicit" };
   session.metadata.assistant_selection = JSON.stringify(shared);
-  const preferences = JSON.stringify({ mode: "senior", review: true });
+  const preferences = JSON.stringify({ mode: "senior", deslop: true, review: true });
   await runtime.store.writeMetadataValue(session.sessionId, "assistant_routing", preferences);
   await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ owner: { senior: shared, junior: shared },
     nonOwner: { colleague: shared } }, 0);
@@ -1726,7 +1726,7 @@ test("shutdown requested by a dependent feature closes main and temporary routin
   t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
   const { service, session } = await terminalServiceFixture(t, { store: {} }, { opencodeTerminalController: provider.controllerOptions });
   session.metadata.assistant_selection = provider.session.metadata.assistant_selection;
-  session.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: false });
+  session.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: false });
   await service.createTemporaryConversation(session.sessionId, { conversationId: "shutdown-chat" });
   const shutdown = await service.invalidateAgentRuntimes({ reason: "server-shutdown" });
   assert.notEqual(shutdown.ok, false, JSON.stringify(shutdown));
@@ -1761,7 +1761,7 @@ test("purpose access sends a member's main chat to the owner and keeps their hel
   const shared = { ...JSON.parse(provider.session.metadata.assistant_selection), selectionSource: "explicit" };
   const personal = { ...shared, modelProviderId: "personal", modelId: "personal-model" };
   session.metadata.assistant_selection = JSON.stringify(personal);
-  session.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true });
+  session.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: true });
   await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({
     owner: { senior: personal, junior: shared, router: shared, quickHelper: shared }, nonOwner: { quickHelper: shared }
   }, 0);

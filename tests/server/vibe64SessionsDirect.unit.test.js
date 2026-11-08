@@ -4642,7 +4642,7 @@ test("chat mode changes save for the next message without changing the main AI",
   const current = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode",
     modelId: "big-pickle", modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: "" };
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
-    assistant_selection: JSON.stringify(current), assistant_routing: JSON.stringify({ mode: "junior", review: false }) } };
+    assistant_selection: JSON.stringify(current), assistant_routing: JSON.stringify({ mode: "junior", deslop: true, review: false }) } };
   const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
   const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {} });
@@ -4662,7 +4662,7 @@ test("chat mode changes save for the next message without changing the main AI",
 test("a team member can't change main chat's mode, review or model outside their lesson", async () => {
   const lock = agentWriteLockHarness();
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
-    assistant_routing: JSON.stringify({ mode: "junior", review: true }),
+    assistant_routing: JSON.stringify({ mode: "junior", deslop: true, review: true }),
     assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
       modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` }) } };
   let runtimes = 0;
@@ -4678,7 +4678,7 @@ test("a team member can't change main chat's mode, review or model outside their
     assert.equal(refused.code, "vibe64_main_chat_settings_owner_only");
   }
   assert.equal(runtimes, 0);
-  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "junior", review: true });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "junior", deslop: true, review: true });
   const practice = await runWithPracticeProjectContext("test", { vibe64User: member },
     () => service.updateAssistantSelection(session.sessionId, { assistantRouting: { mode: "senior", review: true }, vibe64User: member }));
   assert.notEqual(practice.ok, false, JSON.stringify(practice));
@@ -4687,7 +4687,7 @@ test("a team member can't change main chat's mode, review or model outside their
 
 test("Auto preferences can be saved without changing an unfinished goal when observation is unavailable", async () => {
   const lock = agentWriteLockHarness();
-  const initialRouting = JSON.stringify({ mode: "junior", review: false });
+  const initialRouting = JSON.stringify({ mode: "junior", deslop: true, review: false });
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
     assistant_routing: initialRouting,
     assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
@@ -4729,7 +4729,7 @@ test("named chat modes rebind only an unfinished goal, through authorized access
       const next = { ...current, engineId: "claude", agentId: "claude", modelProviderId: "deepseek", modelId: "deepseek-flash" };
       const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
         assistant_selection: JSON.stringify(current),
-        assistant_routing: JSON.stringify({ mode: "custom", review: false, override: current }),
+        assistant_routing: JSON.stringify({ mode: "custom", deslop: true, review: false, override: current }),
         ...(failure === "no-goal" ? {} : { assistant_routing_goal: JSON.stringify({ status: "active" }) })
       } };
       const original = { ...session.metadata };
@@ -4781,7 +4781,7 @@ test("a chat mode change sees the live session's unfinished goal once, like a mo
   const next = { ...current, modelId: "gpt-6-nova" };
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
     assistant_selection: JSON.stringify(current),
-    assistant_routing: JSON.stringify({ mode: "custom", review: false, override: current })
+    assistant_routing: JSON.stringify({ mode: "custom", deslop: true, review: false, override: current })
   } };
   const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; } } };
@@ -5004,7 +5004,7 @@ test("a Custom chat's switch saves only the switch, after a catalogue change and
     outcome: { decision: "handoff", turnId: "turn-1" }, turnId: "turn-1" };
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
     assistant_selection: JSON.stringify(custom), assistant_routing_request: JSON.stringify(handoff),
-    assistant_routing: JSON.stringify({ mode: "custom", ...customSteps, override: custom })
+    assistant_routing: JSON.stringify({ mode: "custom", deslop: true, ...customSteps, override: custom })
   } };
   const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { session.metadata[name] = value; }
@@ -5041,7 +5041,7 @@ test("paused goals save next-turn settings without clearing, resuming or replaci
       const pinned = { ...nativeGoal, mode: "custom", selection: current };
       const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
         assistant_selection: JSON.stringify(current), assistant_routing_goal: JSON.stringify(pinned),
-        assistant_routing: JSON.stringify({ mode: "custom", review: false, override: current })
+        assistant_routing: JSON.stringify({ mode: "custom", deslop: true, review: false, override: current })
       } };
       if (failure === "missing-pin") delete session.metadata.assistant_routing_goal;
       if (failure === "stale-pin") session.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, status: "active", objective: "Old objective" });
@@ -5157,7 +5157,7 @@ test("session actions hide people's approvals and undescribed actions from Colle
 });
 
 test("automatic save after a completed plan runs ordinary Save once and reports why it did not", async () => {
-  let preferences = { mode: "auto", review: true };
+  let preferences = { mode: "auto", review: true, deslop: true };
   let unsaved = true;
   let refusal = null;
   const saves = [];
@@ -5205,12 +5205,12 @@ test("automatic save after a completed plan runs ordinary Save once and reports 
   assert.equal(await planCompleted("session-1", { submittedBy: owner }), "Automatic save didn't run: Update this session before saving.");
   refusal = null;
   for (const off of [{ mode: "auto", autoSave: false }, { mode: "senior", autoSave: false }, { mode: "fix" }]) {
-    preferences = off;
+    preferences = { ...off, deslop: true };
     assert.equal(await planCompleted("session-1", { submittedBy: owner }), "");
   }
   assert.equal(saves.length, 1);
   // Automatically save changes applies in every main-chat mode.
-  preferences = { mode: "junior", autoSave: true };
+  preferences = { mode: "junior", autoSave: true, deslop: true };
   assert.equal(await planCompleted("session-1", { submittedBy: owner }), "Saved automatically.");
   assert.equal(saves.length, 2);
 });

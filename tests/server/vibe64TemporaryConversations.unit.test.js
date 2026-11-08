@@ -490,7 +490,7 @@ test("temporary chats reject Auto at creation, preference updates and request ad
     }), /Main chat only/);
     assert.deepEqual((await f.store.readSessionConversation("one", "chat")).routingMetadata, record.routingMetadata);
     await f.store.writeSessionConversation("one", "chat", { routingMetadata: {
-      ...record.routingMetadata, assistant_routing: JSON.stringify({ mode: "auto", review: true })
+      ...record.routingMetadata, assistant_routing: JSON.stringify({ mode: "auto", deslop: true, review: true })
     } });
     await assert.rejects(f.service.startTemporaryConversationTurn("one", {
       conversationId: "chat", messageId: "blocked", message: "Implement it"
@@ -1214,7 +1214,7 @@ async function temporaryChangeoverFixture(root, actor = { role: "owner", usernam
   const helper = select(sharedCatalog, {});
   await createAssistantRoutingStore({ systemRoot: root }).write({ owner: { senior, junior, quickHelper: helper, router: junior, fix: { follows: "junior" } },
     nonOwner: { colleague: helper, fix: { follows: "colleague" }, quickHelper: helper } }, 1);
-  await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "junior", review }));
+  await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "junior", deslop: true, review }));
   await f.store.writeMetadataValue("one", "assistant_changeover", '{"mainChatSentinel":true}');
   const native = new Map();
   const calls = { starts: [], stops: [], deletes: [], settings: [] };
@@ -1386,7 +1386,7 @@ test("temporary availability uses its own actor and override without inferring o
 test("team members' temporary chats and every repair chat use Fix it with AI", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" });
-    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true }));
+    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", deslop: true, review: true }));
     await assert.rejects(f.service.createTemporaryConversation("one", { conversationId: "generated",
       assistantRouting: { mode: "junior", review: false } }, f.options),
     { message: /Senior and Junior are for the workspace owner/, statusCode: 403, code: "vibe64_assistant_owner_required" });
@@ -1773,7 +1773,7 @@ for (const pinned of [false, true]) {
 test("ordinary temporary chats start in Senior with review and the UI pass off and retain their parent's workflow", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true, uiPass: true }));
+    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", deslop: true, review: true, uiPass: true }));
     await f.service.createTemporaryConversation("one", { conversationId: "plan-chat" });
     const record = await f.store.readSessionConversation("one", "plan-chat");
     assert.deepEqual(JSON.parse(record.routingMetadata.assistant_routing), { mode: "senior", ...noFinishing });
@@ -1788,7 +1788,7 @@ test("temporary chats inherit Main's role and custom model; Auto becomes Senior"
     const f = await conversationFixture(root);
     const override = resolveVibe64AssistantSelection(f.capabilities, { ...f.selection, catalogRevision: f.capabilities.revision, modelId: "chosen", variantId: "ultra" });
     for (const mode of ["senior", "junior", "auto"]) {
-      const preferences = { mode, review: true, ...(mode === "auto" ? {} : { override }) };
+      const preferences = { mode, review: true, deslop: true, ...(mode === "auto" ? {} : { override }) };
       await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify(preferences));
       const parent = await f.store.readSession("one");
       const created = await f.service.createTemporaryConversation("one", { conversationId: mode });
@@ -1810,9 +1810,9 @@ test("temporary chats inherit Main's role and custom model; Auto becomes Senior"
 test("inherited temporary choices stay independent across Main changes and restart", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "junior", review: false }));
+    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "junior", deslop: true, review: false }));
     const first = await f.service.createTemporaryConversation("one", { conversationId: "first" });
-    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "senior", review: false }));
+    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "senior", deslop: true, review: false }));
     const service = f.restart();
     const restored = await service.readTemporaryConversation("one", { conversationId: "first" });
     assert.deepEqual(restored.routingMetadata, first.routingMetadata);

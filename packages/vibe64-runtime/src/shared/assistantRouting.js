@@ -189,9 +189,16 @@ function assistantExplicitTask(input = {}) {
   return uiPassRequest(input.message) ? "ui-pass" : "";
 }
 
+/**
+ * A chat's saved preferences. Since the 20261107-chat-finishing-steps upgrade
+ * every saved record holds its four finishing choices, so one without deslop
+ * missed that upgrade: it is refused rather than read as the defaults.
+ */
 function assistantRoutingFromMetadata(metadata = {}) {
-  return metadata[ASSISTANT_ROUTING_METADATA]
-    ? assistantRoutingPreferences(JSON.parse(metadata[ASSISTANT_ROUTING_METADATA])) : null;
+  if (!metadata[ASSISTANT_ROUTING_METADATA]) return null;
+  const saved = JSON.parse(metadata[ASSISTANT_ROUTING_METADATA]);
+  if (saved && typeof saved === "object" && typeof saved.deslop !== "boolean") throw upgradeRequired();
+  return assistantRoutingPreferences(saved);
 }
 
 /**

@@ -68,7 +68,8 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
   const configuration = createAssistantRoutingStore({ systemRoot: root });
   await configuration.write({ owner: assignments, nonOwner: {} }, 0);
   const metadata = { assistant_selection: JSON.stringify(assignments.senior),
-    ...(preferences ? { assistant_routing: JSON.stringify(preferences) } : {}) };
+    // A saved chat mode carries its finishing choices; Deslop's default is on.
+    ...(preferences ? { assistant_routing: JSON.stringify({ deslop: true, ...preferences }) } : {}) };
   const receipts = new Map();
   const notices = new Map();
   const session = { sessionId: "session-1", metadata };

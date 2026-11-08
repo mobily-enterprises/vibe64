@@ -17,7 +17,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   };
   const terminals = {
     async updateTemporaryConversation(sessionId, input) { calls.push({ sessionId, input }); return { ok: true,
-      routingMetadata: { assistant_routing: JSON.stringify({ ...input.assistantRouting, review: false }),
+      routingMetadata: { assistant_routing: JSON.stringify({ ...input.assistantRouting, review: false, deslop: false }),
         private: "private-native-binding" } }; },
     async readSessionWorkPlan() { return { ok: true, available: true, text: "  Full page 🙂\n", status: "ready", revision: "a".repeat(64),
       offset: 0, nextOffset: 14, totalCharacters: 16020, hasMore: true, path: "/private/plan.md", token: "secret" }; },
@@ -32,7 +32,8 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   };
   const sessions = {
     async updateAssistantSelection(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, sessionId, assistantSelection: { engineId: "codex", modelId: "previous-model" }, metadata: {
-      assistant_routing: JSON.stringify(input.assistantRouting),
+      // The service saves complete preferences; a request without Deslop keeps its default.
+      assistant_routing: JSON.stringify({ deslop: true, ...input.assistantRouting }),
       assistant_routing_request: JSON.stringify({ status: "completed", resolvedMode: "senior" })
     } }; },
     async inspectAssistantAccess() { return { ok: true, currentMode: "junior", canUse: true, purposes: {

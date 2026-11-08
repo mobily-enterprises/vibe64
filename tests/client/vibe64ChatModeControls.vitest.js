@@ -20,14 +20,15 @@ function mount(savePreferences, temporary = false, props = {}) {
   app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
     .createApp({ ...Vibe64ChatModeControls, render: () => null }, {
       session: { sessionId: "session-1", metadata: { assistant_routing: JSON.stringify({
-        mode: "junior", review: false, override
+        mode: "junior", review: false, deslop: true, override
       }) } }, savePreferences, temporary, ...props
     });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
   return app._instance.setupState;
 }
-const routing = (preferences) => ({ session: { sessionId: "session-1", metadata: { assistant_routing: JSON.stringify(preferences) } } });
+// A saved chat mode carries its finishing choices; Deslop's default is on.
+const routing = (preferences) => ({ session: { sessionId: "session-1", metadata: { assistant_routing: JSON.stringify({ deslop: true, ...preferences }) } } });
 beforeEach(() => { mocks.save.mockReset(); mocks.save.mockResolvedValue({ ok: true }); });
 afterEach(() => { app?.unmount(); });
 
@@ -167,7 +168,7 @@ it("does not save Helper as a chat mode", async () => {
 it("keeps a merge repair on Fix it with AI while exposing the custom model picker", async () => {
   const openPicker = vi.fn();
   const state = mount(mocks.save, true, { requiredMode: "fix", onCustom: openPicker, session: {
-    sessionId: "repair", metadata: { assistant_routing: JSON.stringify({ mode: "fix", review: false }) }
+    sessionId: "repair", metadata: { assistant_routing: JSON.stringify({ mode: "fix", deslop: true, review: false }) }
   } });
   expect(state.modeLabel).toBe("Fix it with AI");
   expect(state.modes.map(({ id }) => id)).toEqual(["custom", "fix"]);
@@ -247,7 +248,7 @@ for (const status of ["paused", "active"]) {
 it("uses the shared native goal rather than stale session and routing snapshots", async () => {
   const state = mount(undefined, false, { goal: { status: "paused", objective: "Native goal" },
     session: { sessionId: "session-1", agentSession: { goal: { status: "active" }, turn: { goalStatus: "active" } },
-      metadata: { assistant_routing: JSON.stringify({ mode: "senior" }),
+      metadata: { assistant_routing: JSON.stringify({ mode: "senior", deslop: true }),
         assistant_routing_goal: JSON.stringify({ status: "active" }) } } });
   expect(state.hasGoal).toBe(true);
   await state.save("junior");

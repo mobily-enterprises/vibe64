@@ -2288,7 +2288,7 @@ for (const width of [390, 1280]) {
     }];
     await mockDirectChat(page);
     const session = { ...directSession(), metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", review: true }),
+      assistant_routing: JSON.stringify({ mode: "auto", deslop: true, review: true }),
       assistant_routing_request: JSON.stringify({ schemaVersion: 5, messageId, input: { message },
         mode: "auto", resolvedMode: "senior", status: "waiting", delivery: "accepted", stage: "review",
         workflow: true, followup: { messageId: "review-followup", message: "Continue review." } })
@@ -2337,7 +2337,7 @@ for (const width of [390, 820, 1280]) {
       const session = server.state.session;
       session.agentSession.turn.active = false;
       Object.assign(session, { assistantSelection: junior });
-      session.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true });
+      session.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: true });
       await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}`, route => fulfillJson(route, { ok: true, ...session }));
       await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/assistant-selection`, async route => {
         session.metadata.assistant_routing = JSON.stringify(route.request().postDataJSON().assistantRouting);
@@ -2680,7 +2680,7 @@ for (const width of [390, 820, 1280]) {
         error: "This Codex conversation is stored in a separate provider home. Renew the session to use the models chosen in Models." };
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
         ok: true, ...directSession(), metadata: {
-          assistant_routing: JSON.stringify({ mode: "senior" }),
+          assistant_routing: JSON.stringify({ mode: "senior", deslop: true }),
           assistant_routing_request: JSON.stringify(routingRequest)
         }
       }));
@@ -2970,7 +2970,7 @@ test("@helper-hydration delayed history opens at the failed request and reports 
       error: "The routing connection needs attention." };
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
       ok: true, ...directSession(), metadata: {
-        assistant_routing: JSON.stringify({ mode: "auto" }),
+        assistant_routing: JSON.stringify({ mode: "auto", deslop: true }),
         assistant_routing_request: JSON.stringify(request)
       }
     }));
@@ -3013,7 +3013,7 @@ for (const width of [390, 820, 1280]) {
     });
     const saved = { ...catalog.engines[0].defaults, engineId: "codex", catalogRevision: catalog.engines[0].revision };
     const session = { ...directSession(), assistantSelection: saved, metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", review: false })
+      assistant_routing: JSON.stringify({ mode: "auto", deslop: true, review: false })
     } };
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     let patches = 0;
@@ -3032,7 +3032,7 @@ for (const width of [390, 820, 1280]) {
       patches++;
       if (patches === 1) return fulfillJson(route, { ok: false, error: "Connection changed. Please retry." });
       session.assistantSelection = route.request().postDataJSON().assistantSelection;
-      session.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: session.assistantSelection });
+      session.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, review: false, override: session.assistantSelection });
       return fulfillJson(route, { ok: true, ...session });
     });
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);

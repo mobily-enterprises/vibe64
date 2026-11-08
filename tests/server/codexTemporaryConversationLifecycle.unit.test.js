@@ -12265,7 +12265,7 @@ test("Main browser facade uses the original native owner and action authority wi
       assert.equal(captures.turns.length, 0);
       await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
       await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({
-        mode: "custom", review: false,
+        mode: "custom", deslop: true, review: false,
         override: JSON.parse(before.assistant_selection)
       }));
       const rejectedMessageId = "main-browser-oversized";
@@ -12547,7 +12547,7 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
     await createAssistantRoutingStore({ systemRoot: controllerOptions.env.VIBE64_SYSTEM_ROOT }).write({
       owner: { senior: selection, junior: selection }, nonOwner: {}
     }, 0);
-    await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior" }));
+    await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior", deslop: true }));
     registerVibe64ActionContext(actions, {
       projectContext: { currentPracticeProjectScope: () => null, projectsRoot: path.dirname(runtime.projectContextRoot), async readWorkspaceProject() {
         return { project: { projectRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot } };

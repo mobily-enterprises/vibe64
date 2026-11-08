@@ -19,6 +19,7 @@ import {
   parseRoutingDecision,
   assistantRoutingPreferences,
   assistantRoutingAutomation,
+  assistantRoutingFromMetadata,
   uiPassRequest,
   ASSISTANT_TASK_PURPOSES,
   assistantTaskPurpose,
@@ -659,6 +660,13 @@ test("old routing snapshots and chat preferences require the state upgrade", () 
     (error) => error.code === "vibe64_assistant_routing_upgrade_required");
   assert.deepEqual(assistantRoutingPreferences({ mode: "fix", review: true }),
     { mode: "fix", review: false, deslop: false, uiPass: false, autoSave: false });
+  // A saved chat mode without its finishing choices missed 20261107-chat-finishing-steps; it is not read as the defaults.
+  for (const saved of [{ mode: "senior", review: true }, { mode: "auto" }, { mode: "fix", review: false }]) {
+    assert.throws(() => assistantRoutingFromMetadata({ assistant_routing: JSON.stringify(saved) }),
+      (error) => error.code === "vibe64_assistant_routing_upgrade_required", saved.mode);
+  }
+  const current = { mode: "senior", review: false, deslop: true, uiPass: true, autoSave: false };
+  assert.deepEqual(assistantRoutingFromMetadata({ assistant_routing: JSON.stringify(current) }), current);
 });
 
 const defaultSteps = { review: true, deslop: true, uiPass: false, autoSave: true };

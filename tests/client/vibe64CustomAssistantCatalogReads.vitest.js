@@ -42,7 +42,7 @@ it("reads each connected tool's model list once while Custom AI opens, reopens a
   const saved = { engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt", variantId: "high",
     catalogRevision: catalogues.codex.revision };
   const app = renderer.createApp({ ...Menu, render: () => null }, { modelValue: false, sessionsApiPath: "/api/sessions",
-    session: { sessionId: "one", assistantSelection: saved, metadata: { assistant_routing: JSON.stringify({ mode: "auto" }) } } });
+    session: { sessionId: "one", assistantSelection: saved, metadata: { assistant_routing: JSON.stringify({ mode: "auto", deslop: true }) } } });
   app.use(VueQueryPlugin, { queryClient });
   app.provide(ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, reactive({ fullPath: "/app/project/project-a/dashboard", params: { slug: "project-a" }, query: {} }));

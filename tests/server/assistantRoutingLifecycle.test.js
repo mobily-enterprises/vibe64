@@ -463,15 +463,15 @@ test("a Chat mode change never refuses steering: the message joins the running t
   // next message fail with "The running turn still uses Senior". Steering must
   // keep the running turn's model instead of refusing.
   const f = await fixture(t, { mode: "auto", review: false });
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: f.assignments.senior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, review: false, override: f.assignments.senior });
   await f.service.send("session-1", { ...request, messageId: "custom-turn" }, f.context);
   assert.equal(f.state().mode, "custom");
   f.agent.sessionState = async () => ({ turn: { active: true, id: "turn-1" } });
   const { submissionKind: _kind, ...plain } = request;
-  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", review: false });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", deslop: true, review: false });
   const steered = await f.service.send("session-1", { ...plain, messageId: "plan", message: "Create a plan" }, f.context);
   assert.equal(steered.delivered, true);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: f.assignments.junior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, review: false, override: f.assignments.junior });
   await f.service.send("session-1", { ...plain, messageId: "other-model" }, f.context);
   assert.equal(f.sends.length, 3);
   assert.equal(f.sends[2].input.message, plain.message, "steering is delivered verbatim");
@@ -479,7 +479,7 @@ test("a Chat mode change never refuses steering: the message joins the running t
   assert.equal(f.state().mode, "custom", "the running request keeps its mode");
   // Once the turn ends, the next message is routed by the new Chat mode.
   f.agent.sessionState = async () => ({ turn: { active: false } });
-  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", review: false });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", deslop: true, review: false });
   await f.service.send("session-1", { ...plain, messageId: "next", message: "Create a plan" }, f.context);
   assert.equal(f.sends.length, 4);
   assert.equal(f.state().mode, "auto");
@@ -771,7 +771,7 @@ for (const review of [false, true]) {
     await f.service.afterTurn("session-1", completion(), f.context);
     assert.equal(f.state().review, false, "direct Junior ignores Auto review preferences");
     assert.equal(f.sends.length, 1);
-    f.metadata.assistant_routing = JSON.stringify({ mode: "senior", review: false });
+    f.metadata.assistant_routing = JSON.stringify({ mode: "senior", deslop: true, review: false });
     await f.restart().send("session-1", { ...request, messageId: "next-plan" }, f.context);
     assert.deepEqual([f.sends.at(-1).selection.engineId, f.sends.at(-1).selection.modelId], ["opencode", "gpt-6-astra"]);
     assert.equal(f.state().workflowEngineId, "opencode", "the main AI's tool runs the workflow");
@@ -782,7 +782,7 @@ for (const review of [false, true]) {
   test(`a saved Code override survives restart with review ${review}`, async (t) => {
     const f = await fixture(t, { mode: "junior", review });
     const override = { ...f.assignments.junior, variantId: "low", selectionSource: "explicit" };
-    const preferences = JSON.stringify({ mode: "junior", review, override });
+    const preferences = JSON.stringify({ mode: "junior", deslop: true, review, override });
     f.metadata.assistant_routing = preferences;
     await f.service.send("session-1", request, f.context);
     assert.deepEqual([f.sends[0].selection.engineId, f.sends[0].selection.modelId, f.sends[0].selection.variantId], ["codex", "deepseek-flash", "low"]);
@@ -800,7 +800,7 @@ test("a main AI without tool calls refuses Senior and Junior before delivery", a
   const originalSelection = f.metadata.assistant_selection;
   for (const mode of ["senior", "junior"]) {
     for (const review of [false, true]) {
-      f.metadata.assistant_routing = JSON.stringify({ mode, review });
+      f.metadata.assistant_routing = JSON.stringify({ mode, deslop: true, review });
       await assert.rejects(f.service.send("session-1", request, f.context), {
         code: "vibe64_assistant_capability_unavailable"
       });
@@ -1034,7 +1034,7 @@ test("the Deslop button uses the configured planner despite a conversation's Jun
   const f = await fixture(t, { mode: "junior", review: true });
   const saved = await f.configuration.read();
   await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true, override: f.assignments.junior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: true, override: f.assignments.junior });
   await f.service.send("session-1", { ...request, genesisTask: "deslop", message: "Deslop commit abc123." }, f.context);
   assert.equal(f.sends[0].selection.modelId, "gpt-6-sol", "Deslop follows the saved Plan assignment, not a hard-coded model");
   assert.equal(f.helperCalls(), 0);
@@ -1166,7 +1166,7 @@ test("a UI pass sent as genesisTask takes the whole message as its scope and the
   const f = await fixture(t, { mode: "junior", review: true });
   const saved = await f.configuration.read();
   await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true, override: f.assignments.junior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: true, override: f.assignments.junior });
   await f.service.send("session-1", { ...request, genesisTask: "ui-pass", message: "the bookings pages" }, f.context);
   assert.equal(f.sends[0].selection.modelId, "gpt-6-sol");
   assert.equal(f.sends[0].input.genesisTask, "ui-pass");
@@ -1287,7 +1287,7 @@ for (const message of ["Explain the current design.", "deslop", "UI pass"]) {
   test(`Custom keeps the exact selection without configured roles: ${message}`, async (t) => {
     const f = await fixture(t, null);
     const selection = { ...f.assignments.senior, modelId: "gpt-6-sol", variantId: "low" };
-    f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: selection });
+    f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, override: selection });
     await f.configuration.write({ owner: { senior: null, junior: null, router: null, quickHelper: null }, nonOwner: {} }, 1);
     const result = await f.service.send("session-1", { ...request, message }, f.context);
     assert.equal(result.delivered, true, JSON.stringify(result));
@@ -1303,7 +1303,7 @@ for (const message of ["Explain the current design.", "deslop", "UI pass"]) {
 
 test("a team member's main chat Custom model waits for the owner's approval", async (t) => {
   const f = await fixture(t, null);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: f.assignments.senior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, override: f.assignments.senior });
   await assert.rejects(f.service.send("session-1", request, { ...f.context, vibe64User: { role: "member", username: "member" } }),
     { code: "vibe64_main_chat_approval_required" });
   assert.equal(f.sends.length, 0);
@@ -1376,7 +1376,7 @@ test("a cancelled uncertain request permits new work on a changed assistant with
   const next = { ...f.assignments.junior, modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high" };
   assert.notEqual(f.state().deliverySelection.modelProviderId, next.modelProviderId);
   f.metadata.assistant_selection = JSON.stringify(next);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: next });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, review: false, override: next });
   f.failAdmission(false);
   const result = await f.service.send("session-1", nextRequest, f.context);
   assert.equal(result.delivered, true);
@@ -1532,7 +1532,7 @@ test("delivery inspection exposes the original failed-before-admission receipt w
 
 test("routing retains the original definite native validation rejection without dispatch", async t => {
   const f = await fixture(t, { mode: "custom", review: false, override: null });
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: f.assignments.senior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, override: f.assignments.senior });
   f.rejectAdmission({ ok: false, delivered: false, code: "conversation_invalid_message",
     error: "Bounded text or attachment IDs and a stable messageId are required." });
   await assert.rejects(f.service.send("session-1", { ...request, message: "x".repeat(32_001) }, f.context), {
@@ -1634,7 +1634,7 @@ for (const status of ["active", "paused"]) {
       return { ok: true };
     };
     assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-      { mode: "senior", review: false }, f.context), "next-turn");
+      { mode: "senior", review: false, deslop: true }, f.context), "next-turn");
     assert.deepEqual(updates, [{ sessionId: "session-1", input: { threadId: "native-thread",
       model: f.assignments.senior.modelId, effort: f.assignments.senior.variantId }, selection: f.assignments.senior }]);
     const saved = JSON.parse(f.metadata.assistant_routing_goal);
@@ -1659,17 +1659,17 @@ test("goal settings keep other tools and Auto deferred, and expose native failur
   f.agent.readGoal = async () => ({ status: "available", threadId: "native-thread", goal: pinned });
   f.agent.updateSessionSettings = async () => assert.fail("A deferred selection must not reach the current native goal");
   assert.equal(await f.service.applyGoalSelection("session-1", { ...f.assignments.senior, engineId: "claude" },
-    { mode: "senior" }, f.context), "after-goal");
+    { mode: "senior", deslop: true }, f.context), "after-goal");
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "auto" }, f.context), "after-goal");
+    { mode: "auto", deslop: true }, f.context), "after-goal");
   assert.equal(f.metadata.assistant_routing_goal, original);
   f.agent.updateSessionSettings = async () => ({ ok: false, error: "Native settings failed", code: "settings_failed" });
   await assert.rejects(f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior" }, f.context), { code: "settings_failed" });
+    { mode: "senior", deslop: true }, f.context), { code: "settings_failed" });
   assert.equal(f.metadata.assistant_routing_goal, original);
   f.agent.readGoal = async () => ({ status: "unavailable", goal: null });
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior" }, f.context), "unobserved");
+    { mode: "senior", deslop: true }, f.context), "unobserved");
   assert.equal(f.metadata.assistant_routing_goal, original);
 });
 
@@ -1684,7 +1684,7 @@ test("a concurrent goal pause survives a next-turn model update", async t => {
     return { ok: true };
   };
   await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior" }, f.context);
+    { mode: "senior", deslop: true }, f.context);
   const saved = JSON.parse(f.metadata.assistant_routing_goal);
   assert.equal(saved.status, "paused");
   assert.equal(saved.selection.modelId, f.assignments.senior.modelId);
@@ -1703,7 +1703,7 @@ test("a goal model update does not overwrite a concurrently replaced objective",
     return { ok: true };
   };
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior" }, f.context), "after-goal");
+    { mode: "senior", deslop: true }, f.context), "after-goal");
   assert.deepEqual(JSON.parse(f.metadata.assistant_routing_goal), replacement);
 });
 

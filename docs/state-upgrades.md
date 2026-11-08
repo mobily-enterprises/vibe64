@@ -1822,5 +1822,7 @@ changes nothing. An unreadable or unknown chat mode stops the upgrade before
 anything is written. Saved routing requests and goals are untouched: a request
 admitted before the change has no `finishing` record and is read as Auto's, with
 its mandatory review and its captured Deslop, and nothing is replayed. New writes
-always save all four booleans. Focused evidence:
+always save all four booleans, so a saved chat mode without `deslop` missed this
+upgrade: reading it refuses with `vibe64_assistant_routing_upgrade_required`
+instead of reading it as the defaults. Focused evidence:
 `chatFinishingStepsUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
