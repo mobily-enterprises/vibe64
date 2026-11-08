@@ -23,6 +23,7 @@ import { upgradeTeamSetupSessions } from "@local/vibe64-terminals/server/teamSet
 import { removeUnusedCodexCaches } from "@local/vibe64-core/server/codexCacheUpgrade";
 import { removeSessionClonedDefaultBranches } from "@local/vibe64-terminals/server/clonedDefaultBranchUpgrade";
 import { removeTemporaryRepairChats } from "@local/vibe64-terminals/server/temporaryRepairChatsUpgrade";
+import { retireArchivedClosingChats } from "@local/vibe64-terminals/server/archivedClosingChatsUpgrade";
 import { removeConnectedSessionLinks } from "@local/vibe64-runtime/server/connectedRepositoryCopiesUpgrade";
 import { upgradeChatFinishingSteps } from "@local/vibe64-terminals/server/chatFinishingStepsUpgrade";
 
@@ -89,6 +90,7 @@ try {
     removeTemporaryRepairChats,
     removeConnectedSessionLinks,
     upgradeChatFinishingSteps,
+    retireArchivedClosingChats,
     report
   });
 } catch (error) {

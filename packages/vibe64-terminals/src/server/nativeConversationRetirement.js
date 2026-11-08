@@ -6,9 +6,41 @@ function isNativeConversationBindingKey(name) {
   return NATIVE_CONVERSATION_BINDING_KEY.test(name);
 }
 
+const RECORD_ENGINES = new Set(["claude", "codex", "opencode"]);
+
 /**
- * Only saved main bindings and acknowledged replacements are eligible here.
- * Temporary conversations retain their existing explicit-close lifecycle.
+ * The native conversations a temporary chat or AI task record names, as its Close releases them: its
+ * retained bindings and its current one. They ran in the session's own directory and Codex home, as
+ * its main chat does; Claude saved its directory with each conversation.
+ * @param {Record<string, string>} metadata the session's metadata
+ * @param {object} record a temporary chat or AI task record
+ * @param {object[]} mainBindings the main chat's bindings, for its directory
+ */
+function conversationRecordBindings(metadata, record, mainBindings) {
+  const named = [
+    ...Object.values(record.nativeBindings && typeof record.nativeBindings === "object" ? record.nativeBindings : {}),
+    { conversationId: record.providerConversationId, assistantSelection: record.assistantSelection }
+  ];
+  const bindings = [];
+  for (const { conversationId, assistantSelection } of named.filter(Boolean)) {
+    const engineId = assistantSelection?.engineId;
+    if (typeof conversationId !== "string" || !conversationId || !RECORD_ENGINES.has(engineId) ||
+        bindings.some((entry) => entry.engineId === engineId && entry.conversationId === conversationId)) continue;
+    const claude = engineId === "claude" ? JSON.parse(metadata[`claude_conversation_${conversationId}`] || "null") : null;
+    const workdir = claude?.nativeWorkdir ||
+      mainBindings.find((entry) => entry.engineId === engineId && !entry.retired)?.workdir || metadata.source_path || "";
+    const modelProviderId = engineId === "codex" ? metadata.codex_routing_home_provider || "openai" : "";
+    bindings.push({ engineId, conversationId, retired: false, workdir, modelProviderId, assistantSelection });
+  }
+  return bindings;
+}
+
+/**
+ * Saved main bindings and acknowledged replacements. An archived session from
+ * `withArchivedSession` also carries its temporary chat and AI task records, and
+ * their native conversations join it: none continues after the archive (a renewal
+ * carries none to its fresh session), and their saved history stays in it. An
+ * open session's temporary conversations keep their explicit-close lifecycle.
  */
 function nativeConversationBindings(session, options = {}) {
   const { retiredOnly = false } = options;
@@ -36,6 +68,14 @@ function nativeConversationBindings(session, options = {}) {
       ? codexHomeProvider || metadata.codex_routing_home_provider || "openai" : "";
     bindings.push({ engineId, conversationId, retired: false, workdir, modelProviderId });
   }
+  if (session.archived !== true) return bindings;
+  for (const record of session.conversations || []) {
+    for (const binding of conversationRecordBindings(metadata, record, bindings)) {
+      if (!bindings.some((entry) => entry.engineId === binding.engineId && entry.conversationId === binding.conversationId)) {
+        bindings.push(binding);
+      }
+    }
+  }
   return bindings;
 }
 
@@ -56,6 +96,7 @@ async function prepareCodexModelRouting(sessionId, _selection, { runtime, sessio
 }
 
 export {
+  conversationRecordBindings,
   isNativeConversationBindingKey,
   nativeConversationBindings,
   prepareCodexModelRouting

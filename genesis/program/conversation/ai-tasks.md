@@ -15,7 +15,8 @@ A live repair chat with a Codex or OpenCode conversation is handed to Close as a
 closing record, which Close finishes after that engine's next turn in the session
 or before the session is archived or renewed
 ([temporary assistance](temporary-assistance.md)). An AI task whose Close was
-interrupted finishes closing the same way.
+interrupted finishes closing the same way. The `20261110-archived-closing-chats`
+upgrade cleans up the closing records older archives still hold.
 
 ## Sources
 
@@ -63,6 +64,7 @@ interrupted finishes closing the same way.
 - `packages/vibe64-terminals/src/server/temporaryConversationInteraction.js`
 - `packages/vibe64-terminals/src/server/temporaryRepairChatsUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261104-temporary-repair-chats-removed.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261110-archived-closing-chats.js`
 - `tests/server/temporaryRepairChatsUpgrade.unit.test.js`
 
 ## Public contract
@@ -265,7 +267,10 @@ chat ([optional recent Main context](temporary-assistance.md#optional-recent-mai
 Close is the shared conversation Close, run when an ended task is closed by a person,
 by Colleague or by starting the session's next task. Archiving a session ends its
 open task as Not done; the conversation's open runtime entry is retired like a
-temporary chat's.
+temporary chat's. The archive keeps every task's record and saved history, and
+its native conversations join the archive's native bindings for the host's
+archived native-history retirement, as a temporary chat's do
+([temporary assistance](temporary-assistance.md)).
 
 ## The task chat in the browser
 

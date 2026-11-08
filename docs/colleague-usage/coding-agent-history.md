@@ -18,7 +18,9 @@ use the selected agent's image input; other files remain available to its file
 tools. Changing a native binding does not grant access to another conversation's
 files. Keep the same request when checking uncertain delivery.
 
-Archived native history is preserved before cleanup. Cleanup uses the saved
+Archived native history is preserved before cleanup. Cleanup covers the
+archived session's main chat and its temporary chats and AI tasks, which do not
+continue anywhere; their saved history stays in the archive. Cleanup uses the saved
 conversation's agent and storage location; switching the current chat's agent does
 not change that target. Busy conversations, a changed native storage directory,
 incomplete exports or interrupted preservation prevent

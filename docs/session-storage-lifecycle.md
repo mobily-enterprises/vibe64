@@ -73,6 +73,7 @@ Neither archive path retroactively invokes preparation for historical archives.
 await runtime.store.withArchivedSession(sessionId, async (session, { publishArtifacts, pruneArtifacts, pruneAttachments }) => {
   // session.metadata contains the full archived metadata, not its list index.
   // session.sessionRoot and session.artifactsRoot exist only during this call.
+  // session.conversations holds its temporary chat and AI task records, oldest first.
   // Optional: await publishArtifacts([{ relativePath: "native/chat.jsonl", sourcePath }]);
   // Optional, after any publication: await pruneArtifacts(relativePaths, { beforePrune });
   // Optional, last: await pruneAttachments({ beforePrune });
@@ -131,7 +132,10 @@ before any destructive cleanup. This API performs no provider cleanup itself.
 The existing `vibe64.terminals` service supplies these server-only operations:
 
 - `listAgentConversationStorage(sessionId, { runtime })`: saved native bindings
-  in a finalized archive, or accepted predecessors in an open session.
+  in a finalized archive, or accepted predecessors in an open session. An
+  archive's bindings are its main chat's (current and retired) and those of its
+  temporary chats and AI tasks: none continues after the archive, a renewal
+  carries none to its fresh session, and their saved history stays in it.
 - `scanAgentConversationStorage(sessionId, { runtime, session? })`: query each
   evidenced native home/directory and return `{ scopes, conversations }`.
   `tracked: false` identifies additional candidates such as native `/new` and
@@ -151,7 +155,9 @@ an archive is extracted only for the work itself.
 
 The pure `nativeConversationBindings(session, { retiredOnly? })` helper is
 available from `@local/vibe64-terminals/server/nativeConversationBindings` for
-host reference checks without provider I/O.
+host reference checks without provider I/O. Given an archived session from
+`withArchivedSession`, it includes its temporary chats' and AI tasks' bindings,
+from `session.conversations`; an open session's are left to their Close.
 
 Discovery does not prove exclusive ownership. Arbitrary external CLI homes and
 changed directories outside the evidenced scopes are not implicitly covered.

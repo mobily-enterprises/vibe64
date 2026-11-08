@@ -260,7 +260,11 @@ prepares the workspace again itself. Connecting,
 disconnecting or switching an AI account never stops or waits on a running fix.
 
 Archiving a session with a fix running warns you first, and ends the fix as **Not
-done**.
+done**. Its ended tasks stay in the archive with their saved history, and their AI
+conversations are cleaned up with the main chat's, as for temporary chats
+([archived AI history](coding-agent-history.md#attachments-and-saved-history)).
+Renewing does the same for the old session's tasks: the fresh session starts
+without them.
 
 Colleague can explain this window and what its state means. It doesn't start, answer
 or end a fix from a notice; choose those controls yourself.

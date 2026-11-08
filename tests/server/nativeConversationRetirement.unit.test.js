@@ -123,6 +123,32 @@ test("saved inventory separates main bindings from acknowledged predecessors and
     [["retired", "openai"], ["routed", "openai"], ["older", "zai-coding-plan"]]);
 });
 
+test("an archived session's temporary chats and AI tasks join its bindings in the main chat's directory and Codex home", () => {
+  const codex = { engineId: "codex", modelId: "gpt" };
+  const claudeId = "0b5b8c55-0000-4000-8000-000000000001";
+  const metadata = { source_path: "/source", codex_routing_home_provider: "openai", opencode_conversation_id: "ses_main",
+    opencode_conversation_workdir: "/opencode-source", [`claude_conversation_${claudeId}`]: JSON.stringify({ nativeWorkdir: "/claude" }) };
+  const conversations = [
+    { conversationId: "chat", providerConversationId: "ses_chat", assistantSelection: { engineId: "opencode" },
+      nativeBindings: { codex: { conversationId: "thread-retained", assistantSelection: codex } } },
+    { conversationId: "task", task: { kind: "update" }, providerConversationId: claudeId, assistantSelection: { engineId: "claude" } },
+    // The main chat's own conversation, an unknown engine and an empty binding name nothing new.
+    { conversationId: "repeat", providerConversationId: "ses_main", assistantSelection: { engineId: "opencode" },
+      nativeBindings: { other: { conversationId: "x", assistantSelection: { engineId: "other" } }, codex: { conversationId: "" } } }
+  ];
+  const archived = nativeConversationBindings({ archived: true, metadata, conversations });
+  assert.deepEqual(archived.map(({ engineId, conversationId, workdir, modelProviderId }) => [engineId, conversationId, workdir, modelProviderId]), [
+    ["opencode", "ses_main", "/opencode-source", ""],
+    ["codex", "thread-retained", "/source", "openai"],
+    ["opencode", "ses_chat", "/opencode-source", ""],
+    ["claude", claudeId, "/claude", ""]
+  ]);
+  assert.deepEqual(archived.find(binding => binding.conversationId === "thread-retained").assistantSelection, codex);
+  // An open session's chats keep their own Close, and retired-only reads never include them.
+  assert.deepEqual(nativeConversationBindings({ metadata, conversations }).map(binding => binding.conversationId), ["ses_main"]);
+  assert.deepEqual(nativeConversationBindings({ archived: true, metadata, conversations }, { retiredOnly: true }), []);
+});
+
 test("Codex descendant discovery includes archived, CLI and spawned conversations with bounded pagination", async () => {
   const provider = createCodexAppServerAgentProvider();
   const calls = [];

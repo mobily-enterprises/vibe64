@@ -53,7 +53,10 @@ Retry before asking again.`, and a source explanation or copilot that could not
 close is kept so the retry closes it. Resolve the named reason, often an AI
 account to reconnect, then retry **Archive session**. Archiving also closes the
 session's open temporary chats in the browser; their saved history stays with
-the archived session. A chat or AI task whose **Close** did not finish (it shows
+the archived session, as does that of its AI tasks. None of them continues
+anywhere, so their AI conversations are cleaned up with the main chat's
+([archived AI history](coding-agent-history.md#attachments-and-saved-history)).
+A chat or AI task whose **Close** did not finish (it shows
 as closing) finishes closing first, with its AI conversations. If that still
 fails, archiving stops before anything else with **A chat in this session could
 not finish closing: <reason>. Resolve that, then try again.** and the session

@@ -4,11 +4,19 @@ import { lstat, rm } from "node:fs/promises";
 import path from "node:path";
 import { isMissingPathError, isPlainObject } from "@local/vibe64-core/server/core";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
-import { isValidVibe64SessionId } from "./sessionRecordRules.js";
-import { metadataFilePath, readDirectoryEntries, sortedDirectoryNames } from "./sessionStoreLayout.js";
+import { assertValidVibe64SessionId, isValidVibe64SessionId } from "./sessionRecordRules.js";
+import {
+  metadataFilePath,
+  readDirectoryEntries,
+  readTextIfExists,
+  renewalArchiveStagingRoot,
+  sortedDirectoryNames
+} from "./sessionStoreLayout.js";
 
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
 /** @typedef {import("./types.js").SessionRecordFiles} SessionRecordFiles */
+/** @typedef {import("./types.js").SessionArchiveRecords} SessionArchiveRecords */
+/** @typedef {import("./types.js").SessionArchiveAccess} SessionArchiveAccess */
 /** @typedef {ReturnType<typeof import("./sessionStateUpgrades.js").createSessionStateUpgrades>["prepareSessionStateUpgrade"]} PrepareSessionStateUpgrade */
 
 /**
@@ -56,6 +64,13 @@ async function filesBelow(root, inventory) {
   return files;
 }
 
+/** The temporary conversation record a folder holds, refused unless its identity is the folder's. */
+function conversationRecord(source, filePath, folderName) {
+  const conversation = parsedRecord(source, filePath, "temporary conversation");
+  if (conversation.conversationId !== folderName) throw new Error(`Temporary conversation identity does not match ${filePath}.`);
+  return conversation;
+}
+
 function parsedRecord(source, filePath, label) {
   let record;
   try {
@@ -71,28 +86,34 @@ function parsedRecord(source, filePath, label) {
  * @param {object} dependencies
  * @param {SessionStorePaths} dependencies.storePaths
  * @param {SessionRecordFiles} dependencies.recordFiles
+ * @param {SessionArchiveRecords} dependencies.archiveRecords
+ * @param {SessionArchiveAccess} dependencies.archiveAccess
  * @param {PrepareSessionStateUpgrade} dependencies.prepareSessionStateUpgrade the session inventory the other upgrades use
  */
-function createSessionTemporaryConversationRemoval({ storePaths, recordFiles, prepareSessionStateUpgrade }) {
+function createSessionTemporaryConversationRemoval({ storePaths, recordFiles, archiveRecords, archiveAccess, prepareSessionStateUpgrade }) {
   /**
    * Stopped-writer removal of whole temporary conversations, as Close removes one: the record's
    * folder, the session attachments it owns and the session metadata its owner names. Live (active
-   * and closing) sessions and prepared renewal archives are visited; other archived sessions never are.
-   * `select({ sessionId, metadata, archived, conversations })` sees every record with the attachment
-   * ids it owns and returns `{ conversationId, metadataNames }` for each one to remove. Its record
-   * file is removed last, after everything it owns. A choice that also carries `record` leaves its
-   * conversation to Close instead: only the record file is rewritten, as that record, and the
-   * transcript and attachments stay for Close to remove; the metadata it names still goes.
+   * and closing) sessions and prepared renewal archives are visited, and with `allArchives` every
+   * published archive too. `select({ sessionId, metadata, archived, prepared, conversations })` sees
+   * every record with the attachment ids it owns (`prepared` marks a renewal's prepared archive) and
+   * returns `{ conversationId, metadataNames }` for each one to remove, or `{ remove, metadata }`
+   * whose `metadata` also sets session metadata values. A removed record file goes last, after
+   * everything it owns. A choice that also carries `record` leaves its conversation to Close instead:
+   * only the record file is rewritten, as that record, and the transcript and attachments stay for
+   * Close to remove; the metadata it names still goes.
    * @param {object} options
    * @param {string} options.temporaryRoot
    * @param {Function} options.select
+   * @param {boolean} [options.allArchives]
    */
-  async function prepareTemporaryConversationRemoval({ temporaryRoot, select }) {
+  async function prepareTemporaryConversationRemoval({ temporaryRoot, select, allArchives = false }) {
     if (typeof select !== "function") throw new Error("Temporary conversation removal requires a selection.");
     const removedFolders = new Map();
+    const preparedRoot = renewalArchiveStagingRoot(storePaths.paths());
     return prepareSessionStateUpgrade({
       temporaryRoot,
-      preparedRenewalsOnly: true,
+      preparedRenewalsOnly: !allArchives,
       async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText, archiveRecord }) {
         await checkedPath(sessionPaths.sessionRoot, true);
         await checkedPath(sessionPaths.manifestPath);
@@ -117,21 +138,30 @@ function createSessionTemporaryConversationRemoval({ storePaths, recordFiles, pr
           const filePath = path.join(paths.conversationRoot, "conversation.json");
           const original = await readRegularText(filePath);
           if (!original) continue;
-          const conversation = parsedRecord(original, filePath, "temporary conversation");
-          if (conversation.conversationId !== entry.name) throw new Error(`Temporary conversation identity does not match ${filePath}.`);
+          const conversation = conversationRecord(original, filePath, entry.name);
           conversations.push({ paths, filePath, original, conversation, attachmentIds: owned.get(entry.name) || [] });
         }
-        const chosen = await select({
+        const selected = await select({
           sessionId: sessionPaths.sessionId,
           metadata: { ...metadata },
           archived: Boolean(archiveRecord),
+          prepared: Boolean(archiveRecord) && !path.relative(preparedRoot, archiveRecord.archivePath).startsWith(".."),
           conversations: conversations.map(({ conversation, attachmentIds }) => ({
             conversation: structuredClone(conversation),
             attachmentIds: [...attachmentIds]
           }))
         });
-        if (!Array.isArray(chosen)) throw new Error("Temporary conversation removal must return the conversations to remove.");
+        const { remove: chosen, metadata: values = {} } = Array.isArray(selected) ? { remove: selected } : selected || {};
+        if (!Array.isArray(chosen) || !isPlainObject(values)) {
+          throw new Error("Temporary conversation removal must return the conversations to remove.");
+        }
         const changes = [];
+        for (const [name, value] of Object.entries(values)) {
+          if (typeof value !== "string") throw new Error("Temporary conversation removal sets only text metadata values.");
+          if (value === metadata[name]) continue;
+          const filePath = metadataFilePath(sessionPaths, name);
+          changes.push({ filePath, original: await checkedPath(filePath) ? await readRegularText(filePath) : null, contents: `${value}\n` });
+        }
         const folders = [];
         const removed = new Set();
         for (const choice of chosen) {
@@ -174,6 +204,36 @@ function createSessionTemporaryConversationRemoval({ storePaths, recordFiles, pr
   }
 
   /**
+   * The session id, metadata and temporary conversation records of a copy of a session archive, such
+   * as an earlier upgrade's before copy, read from a validated extraction below `temporaryRoot`.
+   * @param {object} options
+   * @param {string} options.archivePath the copy, named `<sessionId>.tar.gz`
+   * @param {string} options.temporaryRoot
+   */
+  async function readArchivedConversations({ archivePath, temporaryRoot }) {
+    if (!path.isAbsolute(archivePath || "") || !archivePath.endsWith(".tar.gz") || !path.isAbsolute(temporaryRoot || "")) {
+      throw new Error("Reading an archive copy requires its absolute path and a scratch directory.");
+    }
+    const sessionId = assertValidVibe64SessionId(path.basename(archivePath, ".tar.gz"));
+    await archiveRecords.validateSessionArchive(archivePath);
+    return archiveAccess.withExtractedSessionArchive({ sessionId, archivePath }, async (sessionPaths) => {
+      const conversations = [];
+      for (const entry of await readDirectoryEntries(sessionPaths.conversationsRoot)) {
+        if (!entry.isDirectory()) continue;
+        const filePath = path.join(recordFiles.conversationPaths(sessionPaths, entry.name).conversationRoot, "conversation.json");
+        const info = await lstat(filePath).catch((error) => {
+          if (isMissingPathError(error)) return null;
+          throw error;
+        });
+        if (!info) continue;
+        if (!info.isFile()) throw new Error(`Session upgrade requires a regular file: ${filePath}`);
+        conversations.push(conversationRecord(await readTextIfExists(filePath), filePath, entry.name));
+      }
+      return { sessionId, metadata: await recordFiles.readMetadataFromPaths(sessionPaths), conversations };
+    }, { temporaryRoot });
+  }
+
+  /**
    * After a stopped-writer removal is published, the conversation and attachment folders it emptied
    * leave live sessions. Only folders that hold no file at any depth are removed.
    * @returns {Promise<number>} how many folders were removed
@@ -196,6 +256,7 @@ function createSessionTemporaryConversationRemoval({ storePaths, recordFiles, pr
 
   return Object.freeze({
     prepareTemporaryConversationRemoval,
+    readArchivedConversations,
     removeEmptyConversationFolders
   });
 }

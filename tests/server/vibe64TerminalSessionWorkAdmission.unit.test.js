@@ -395,6 +395,61 @@ test("native storage discovers and retires an archived native-only chat through 
   assert.deepEqual([...ids], ["ses_original"]);
 });
 
+test("an archive's retirement covers its temporary chats and AI tasks through their saved bindings and keeps their records", async (t) => {
+  const lock = agentWriteLockHarness();
+  const selection = { engineId: "opencode", agentId: "build", modelProviderId: "deepseek", modelId: "deepseek-chat",
+    variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
+  const ids = new Set(["ses_original", "ses_chat", "ses_task"]);
+  let workdir;
+  const f = await terminalServiceFixture(t, lock, { assistantSelection: selection, opencodeTerminalController: {
+    createServerProcess: async () => ({
+      client: { health: async () => ({ healthy: true }), forDirectory() { return this; }, sessionStatus: async () => ({ type: "idle" }),
+        deleteSession: async (id) => { ids.delete(id); },
+        readConversationStorage: async (id) => {
+          if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
+          return { id, directory: workdir, time: { updated: 1 } };
+        },
+        listConversationsForDirectory: async () => [...ids].map((id) => ({ id, directory: workdir })),
+        listConversationChildren: async () => [],
+        readConversationStoragePage: async (id) => ({ nextCursor: null, data: [{
+          info: { id: "msg_nativeuser", sessionID: id, role: "user" }, parts: [{ type: "text", text: "A temporary question" }]
+        }] }) },
+      stop: async () => ({ exited: true })
+    })
+  } });
+  workdir = f.session.metadata.source_path;
+  await f.runtime.store.writeMetadataValue("session-1", "opencode_conversation_id", "ses_original");
+  await f.runtime.store.writeSessionConversation("session-1", "chat", { title: "Temporary 1", providerConversationId: "ses_chat",
+    assistantSelection: selection });
+  await f.runtime.store.writeSessionConversation("session-1", "task", { providerConversationId: "ses_task", assistantSelection: selection,
+    task: { kind: "update", phase: "done" } });
+  await f.runtime.store.writeStatus("session-1", "archived");
+  await f.runtime.store.publishSessionArchive("session-1");
+  await rm(workdir, { recursive: true });
+  const listed = await f.service.listAgentConversationStorage("session-1", { runtime: f.runtime });
+  assert.deepEqual(listed.map(({ conversationId }) => conversationId).sort(), ["ses_chat", "ses_original", "ses_task"]);
+  assert.ok(listed.every((binding) => binding.workdir === workdir && binding.retired === false));
+  // The host's scan in the open archive tracks them as saved bindings, not native-only discoveries.
+  const inventory = await f.runtime.store.withArchivedSession("session-1", (session) =>
+    f.service.scanAgentConversationStorage("session-1", { runtime: f.runtime, session }));
+  assert.equal(inventory.scopes.length, 1);
+  assert.deepEqual(inventory.conversations.map((row) => [row.conversationId, row.tracked]).sort(),
+    [["ses_chat", true], ["ses_original", true], ["ses_task", true]]);
+  const preserve = async ({ archived, conversations, exportConversation }) => {
+    assert.equal(archived, true);
+    for (const { conversationId } of conversations) await exportConversation(conversationId, async () => {});
+    return { preserved: true, exclusive: true };
+  };
+  for (const conversationId of ["ses_chat", "ses_task"]) {
+    assert.equal((await f.service.retireAgentConversationHistory("session-1", { engineId: "opencode", conversationId },
+      { runtime: f.runtime, beforeDelete: preserve })).ok, true);
+  }
+  assert.deepEqual([...ids], ["ses_original"]);
+  // Their saved history stays with the archive.
+  assert.deepEqual(await f.runtime.store.withArchivedSession("session-1", (session) =>
+    session.conversations.map((record) => record.conversationId).sort()), ["chat", "task"]);
+});
+
 test("native retirement reads no archive to learn its status, and works inside the archive its host opened", async (t) => {
   const lock = agentWriteLockHarness();
   const selection = { engineId: "opencode", agentId: "build", modelProviderId: "deepseek", modelId: "deepseek-chat",

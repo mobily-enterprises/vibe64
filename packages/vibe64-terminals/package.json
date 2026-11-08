@@ -35,6 +35,7 @@
     "./server/clonedDefaultBranchUpgrade": "./src/server/clonedDefaultBranchUpgrade.js",
     "./server/temporaryRepairChatsUpgrade": "./src/server/temporaryRepairChatsUpgrade.js",
     "./server/chatFinishingStepsUpgrade": "./src/server/chatFinishingStepsUpgrade.js",
+    "./server/archivedClosingChatsUpgrade": "./src/server/archivedClosingChatsUpgrade.js",
     "./server/sessionWorkTasks": "./src/server/sessionWorkTasks.js",
     "./server/sessionRenewalHandover": "./src/server/sessionRenewalHandover.js",
     "./server/types": "./src/server/types.js"

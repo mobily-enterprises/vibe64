@@ -196,9 +196,11 @@ function createSessionArchiveAccess({
             { params: { sessionId: normalizedSessionId } }
           );
         }
+        // Its temporary chats and AI tasks come with it: none continues after the archive.
         const archived = {
           ...session,
           artifactsRoot: sessionPaths.artifactsRoot,
+          conversations: await recordFiles.readConversationsFromPaths(sessionPaths),
           sessionRoot: sessionPaths.sessionRoot
         };
         let available = true;

@@ -554,16 +554,7 @@ function createSessionConversationStore({
   }
 
   async function listSessionConversations(sessionId) {
-    return archiveAccess.withReadableSessionPaths(sessionId, async (paths) => {
-      const entries = await readDirectoryEntries(paths.conversationsRoot);
-      const records = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
-        const text = await readTextIfExists(
-          path.join(recordFiles.conversationPaths(paths, entry.name).conversationRoot, "conversation.json")
-        );
-        return text ? JSON.parse(text) : null;
-      }));
-      return records.filter(Boolean).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-    });
+    return archiveAccess.withReadableSessionPaths(sessionId, recordFiles.readConversationsFromPaths);
   }
 
   async function writeSessionConversation(sessionId, conversationId, patch) {

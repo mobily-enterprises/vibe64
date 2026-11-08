@@ -151,7 +151,10 @@ draft and settings you just changed. Use **Stop** to interrupt
 work while retaining the conversation, or **Close** (the X on the chat's tab) to
 remove that chat after cleanup succeeds. Archiving the session closes its open
 temporary chats in the browser; their saved history stays with the archived
-session.
+session, and their AI conversations are cleaned up with its main chat's, since
+the chats do not continue anywhere ([archived AI history](coding-agent-history.md#attachments-and-saved-history)).
+Renewing does the same for the old session's chats: the fresh session starts
+without them.
 
 ## Recover a lost delivery confirmation
 

@@ -573,7 +573,11 @@ publishes native artifacts and applies both expiries with one extraction; the
 standalone prune operations open their own. Native inventory and retirement in
 Terminals read the session summary to learn that it is archived, and retirement
 accepts the host's already open archive (`archivedSession`) instead of
-extracting it again.
+extracting it again. The archived session also carries its temporary chat and
+AI task records (`conversations`): none continues after the archive, so their
+native conversations are among its bindings, retired as the main chat's are,
+while their records and saved history stay. Renewal carries none of them to the
+fresh session, so the predecessor's archive covers all of theirs.
 
 The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session

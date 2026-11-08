@@ -1713,7 +1713,9 @@ first. A chat holding both Codex and OpenCode conversations is reported as a
 warning and waits for the person's Close or the session's archive or renewal,
 since no single engine's turn covers it. In a
 prepared renewal archive no Close reaches the chat, so its Codex and OpenCode
-conversations stay in the engine's own storage and the report counts them. The
+conversations stay in the engine's own storage and the report counts them;
+`20261110-archived-closing-chats` reads them from this upgrade's before copies
+and records them for the archive's native-history retirement. The
 engine upload copies of the attachments are not visited: offline their folder
 cannot be named, and the server's startup sweep expires every copy after 30
 minutes.
@@ -1828,3 +1830,78 @@ always save all four booleans, so a saved chat mode without `deslop` missed this
 upgrade: reading it refuses with `vibe64_assistant_routing_upgrade_required`
 instead of reading it as the defaults. Focused evidence:
 `chatFinishingStepsUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
+
+## Archived closing chats (`20261110-archived-closing-chats`)
+
+No Close reaches a chat in an archive. Before Archive session and renewal
+finished every interrupted Close first, a chat or AI task whose Close had not
+finished (a closing record: one whose Close failed, or an old repair chat that
+`20261104-temporary-repair-chats-removed` handed to Close) was packed into its
+session's archive, and its native conversations stayed in the engine's storage.
+So did the Codex threads and OpenCode sessions of the repair chats `20261104`
+removed from prepared renewal archives. This upgrade follows
+`20261107-chat-finishing-steps` and cleans both up. The owner is
+Terminals' `archivedClosingChatsUpgrade.js`, supplied by the candidate CLI; the
+script refuses to run without it. Runtime's session store
+(`prepareTemporaryConversationRemoval` with `allArchives`, and
+`readArchivedConversations`) inventories and stages the files, and Core's
+`publishStateUpgradeFiles` backs them up and publishes them.
+
+It visits every project's published archives and the archives a renewal
+prepared (`sessions/archived/.renewals/`); live sessions are not changed, since
+Close and archiving finish their closing records. In each archive it deletes
+every closing record as Close deletes one: its folder (`conversations/<id>/`:
+record, transcript and presentation), the session attachments whose
+`attachment.json` names it, the session metadata of its Claude bindings
+(`claude_conversation_<nativeId>`) and Claude's native history, offline through
+JSKIT's `retireClaudeConversationHistory`, found from the saved `nativeWorkdir`,
+else the session's managed source. The archive's other chats and AI tasks stay;
+the archive's own native-history retirement covers theirs.
+
+Codex threads and OpenCode sessions can be deleted only by their running engine.
+Each one a deleted closing record names, and each one `20261104` left, is
+recorded as a retired native binding of its archived session: an entry of
+`retiredConversations` in its `assistant_changeover` metadata, `{ conversationId,
+assistantSelection, workdir, modelProviderId }`, as an accepted replacement
+records its predecessor. The host's retirement of archived native history then
+deletes it through its engine, preserving any native-only text in the archive
+first, as it does the main chat's. Its folder is the main chat's for that
+engine, else the session's source path; its Codex home is the session's routing
+home (`openai` when none is saved). One with no saved folder is reported as a
+warning and left. The ids `20261104` left are read from its manifest
+(`upgrades/backups/20261104-temporary-repair-chats-removed/sessions/manifest.json`):
+each before copy of a prepared archive, verified against the manifest's digest,
+names the repair chats it removed (records without `task` with a filled repair
+field). They are recorded on that session's archive, published since or still
+prepared; a session with no archive any more is reported as a warning. The
+archive is repacked once, without the deleted folders and with the new
+`assistant_changeover`.
+
+A record that cannot be read or whose identity does not match its folder, an
+unreadable native binding or `assistant_changeover`, an unknown engine, a Claude
+id that is not a UUID, an unreadable or changed `20261104` before copy, or a
+closing record's (or a `20261104` repair chat's) conversation shared with the
+archive's main chat (current or retired), an AI task or a kept chat stops the
+upgrade before anything changes.
+
+Backups go under `upgrades/backups/20261110-archived-closing-chats/`.
+`sessions/` is the publisher's manifest, with the before and after copy of every
+repacked archive; copy `sessions/before/<path>` back to `<systemRoot>/<path>` to
+restore one. `claude/` holds every deleted Claude file at its path inside
+Claude's storage, copied privately and verified before deletion.
+
+Check is read-only: per project it reports how many closing chats and AI tasks
+it would delete (in published and prepared archives) with their attachments;
+then how many Claude conversations it deletes, how many Codex and OpenCode
+conversations it records for retirement (of these chats, and those `20261104`
+left), and how many it leaves without a saved folder; then the number of state
+files to change. Apply deletes Claude's history first, then publishes the
+repacked archives. A rerun before publication starts inventories again, finding
+deleted Claude history absent; a rerun after it starts finishes publication; a
+later run changes nothing. A Claude
+history that cannot be deleted is reported as a warning and stays. Run it as the
+OS user that owns the session state and Claude's storage (`CLAUDE_CONFIG_DIR` or
+`~/.claude`), with Vibe64 and every session process stopped. A host that records
+an archive's native-history retirement as finished must retire it again for the
+bindings this adds. Focused evidence: `archivedClosingChatsUpgrade.unit.test.js`
+and `stateUpgrades.unit.test.js`.

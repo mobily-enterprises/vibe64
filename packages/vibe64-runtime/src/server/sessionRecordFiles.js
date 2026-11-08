@@ -224,6 +224,19 @@ function createSessionRecordFiles({ state, storePaths }) {
     return { ...sessionPaths, conversationRoot: root, conversationLogRoot: path.join(root, "conversation-log") };
   }
 
+  /**
+   * A session's temporary chat and AI task records, oldest first.
+   * @param {object} sessionPaths
+   */
+  async function readConversationsFromPaths(sessionPaths) {
+    const entries = await readDirectoryEntries(sessionPaths.conversationsRoot);
+    const records = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
+      const text = await readTextIfExists(path.join(conversationPaths(sessionPaths, entry.name).conversationRoot, "conversation.json"));
+      return text ? JSON.parse(text) : null;
+    }));
+    return records.filter(Boolean).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
   async function readManifestFromPaths(sessionPaths) {
     const manifestText = await readTextIfExists(sessionPaths.manifestPath);
     try {
@@ -333,6 +346,7 @@ function createSessionRecordFiles({ state, storePaths }) {
     readAgentRunsFromPaths,
     readBackgroundTaskFromPath,
     readBackgroundTasksFromPaths,
+    readConversationsFromPaths,
     readManifestFromPaths,
     readMetadataFromPaths,
     readPinnedSessionId,

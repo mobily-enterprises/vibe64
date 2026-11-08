@@ -14,6 +14,11 @@ again.**, the handover stays for review and the old session stays in use. Resolv
 the reason, often an AI account to reconnect, then confirm again. **Retry** of a
 failed renewal does the same.
 
+The fresh session starts with the handover only: the old session's temporary
+chats and AI tasks stay in its archive with their saved history, and their AI
+conversations are cleaned up with its main chat's, as for any archived session
+([archived AI history](coding-agent-history.md#attachments-and-saved-history)).
+
 ## Keep the fresh session's link after renewal
 
 When a completed renewal selects its confirmed fresh session, the address bar

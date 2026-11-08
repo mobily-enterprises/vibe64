@@ -303,4 +303,13 @@ async function removeTemporaryRepairChats(context) {
   if (folders) report("info", `Removed ${folders} emptied conversation and attachment folder(s).`);
 }
 
-export { removeTemporaryRepairChats };
+export {
+  CLAUDE_CONVERSATION_ID,
+  ENGINE_NAMES,
+  fileDigest,
+  isRepairChat,
+  nativeConversations,
+  preserveClaudeHistory,
+  removeTemporaryRepairChats,
+  savedClaudeState
+};

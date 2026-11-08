@@ -223,6 +223,9 @@ Changing the composer selection never rewrites historical attribution.
 - `packages/vibe64-terminals/src/server/temporaryConversationLifecycle.js`
 - `packages/vibe64-terminals/src/server/serviceTurnPublication.js`
 - `packages/vibe64-terminals/src/server/temporaryRepairChatsUpgrade.js`
+- `packages/vibe64-terminals/src/server/archivedClosingChatsUpgrade.js`
+- `packages/vibe64-terminals/src/server/nativeConversationRetirement.js`
+- `packages/vibe64-runtime/src/server/sessionArchiveAccess.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationInteraction.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationRules.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
@@ -549,8 +552,18 @@ retryable `vibe64_conversation_close_unfinished` (409), whose message names the
 reason; the session stays open and unmarked. Inside its lock, Archive and
 renewal refuse again a closing record that appeared meanwhile, and a session
 quiesced for renewal refuses the store write that would start a Close, so none
-reaches the renewal's prepared archive. Open chats keep their native
-conversations with the archived session's saved history.
+reaches the renewal's prepared archive. The archive keeps every open chat and
+ended AI task, with its record and saved history, and none of them continues:
+the archived session that `withArchivedSession` supplies carries those records,
+and `nativeConversationBindings` adds the native conversations each one names to
+the archive's own bindings, in the main chat's directory and Codex home. The
+host's retirement of archived native history then deletes them as it deletes the
+main chat's (`docs/session-storage-lifecycle.md`). Renewal carries no chat or AI
+task to the fresh session, so its predecessor's archive retires all of theirs the
+same way. The `20261110-archived-closing-chats` state upgrade deletes the closing
+records older archives still hold, with Claude's history of them, and records
+their Codex and OpenCode conversations, and those `20261104` left in prepared
+archives, as retired bindings of the archive (`docs/state-upgrades.md`).
 After the cleared stream is published, Close retires that chat's open entry in
 the shared conversation runtime (`retireOpenConversation`), so its old handles
 close. Archive retires every temporary chat entry of the session the same way,
