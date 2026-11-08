@@ -4994,6 +4994,41 @@ test("source-bearing Learning creation retains the original source context, poli
 });
 
 
+test("a Custom chat's switch saves only the switch, after a catalogue change and between handoff and its finishing turn", async () => {
+  const lock = agentWriteLockHarness();
+  const custom = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
+    modelId: "gpt-6-sol", modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
+  // The handoff turn has reported; its finishing turn is being prepared.
+  const handoff = { schemaVersion: 5, mode: "custom", status: "working", delivery: "accepted", workflow: true, messageId: "message-1",
+    outcome: { decision: "handoff", turnId: "turn-1" }, turnId: "turn-1" };
+  const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
+    assistant_selection: JSON.stringify(custom), assistant_routing_request: JSON.stringify(handoff),
+    assistant_routing: JSON.stringify({ mode: "custom", ...customSteps, override: custom })
+  } };
+  const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
+    async writeMetadataValue(_id, name, value) { session.metadata[name] = value; }
+  } };
+  const refused = (name) => async () => { throw new Error(`A switch must not ${name}.`); };
+  const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {
+    resolveAssistantSelection: refused("re-read the catalogue"),
+    resolveAssistantPurpose: refused("resolve a purpose"),
+    requireAssistantSelectionAccess: refused("check access"),
+    agentSessionState: refused("read the turn"),
+    cancelAssistantRoutingForSelection: refused("cancel the request"),
+    prepareRoutingSelection: refused("replace the conversation"),
+    applyGoalSelection: refused("rebind a goal")
+  } });
+  // The menu sends the chat's mode, every switch and its saved model, which the live catalogue no longer lists.
+  const result = await service.updateAssistantSelection(session.sessionId, {
+    assistantRouting: { mode: "custom", ...customSteps, deslop: false, override: { ...custom, catalogRevision: `sha256:${"b".repeat(64)}` } },
+    vibe64User: { role: "owner", username: "owner" }
+  });
+  assert.notEqual(result.ok, false, JSON.stringify(result));
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "custom", ...customSteps, deslop: false, override: custom });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing_request), handoff);
+  assert.deepEqual(JSON.parse(session.metadata.assistant_selection), custom);
+});
+
 test("paused goals save next-turn settings without clearing, resuming or replacing the current turn", async () => {
   for (const mode of ["custom", "senior", "junior"]) {
     for (const failure of ["", "active", "other-agent", "rebind", "missing-pin", "stale-pin", "goal-unavailable"]) {

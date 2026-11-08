@@ -4,6 +4,7 @@ import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/proje
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   defineVibe64AssistantSelection,
+  sameVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
   VIBE64_ASSISTANT_SELECTION_METADATA,
   vibe64AssistantSelectionFromMetadata
@@ -188,8 +189,17 @@ function createSessionAssistant({
             };
             return nativeState;
           };
+          const saved = assistantRoutingFromMetadata(session.metadata);
+          // A Custom chat's switch, with its model unchanged, saves only the
+          // switch: there is no model to check or work to cancel.
+          if (input.assistantRouting?.mode === "custom" && saved?.mode === "custom" &&
+              sameVibe64AssistantSelection(input.assistantRouting.override, saved.override)) {
+            const switched = assistantRoutingPreferences({ ...saved, ...input.assistantRouting, override: saved.override });
+            await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(switched));
+            return { assistantSelection: current, session: await runtime.getSessionWithoutSource(sessionId) };
+          }
           // An omitted review, Deslop, UI pass or automatic save choice keeps the chat's own.
-          const automation = assistantRoutingAutomation(assistantRoutingFromMetadata(session.metadata));
+          const automation = assistantRoutingAutomation(saved);
           if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
             preferences = assistantRoutingPreferences({
               ...automation,
