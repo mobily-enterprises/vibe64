@@ -848,7 +848,7 @@ test("Codex controller renews accepted attachments in the selected session sourc
     });
     const old = new Date(Date.now() - 20 * 60 * 1000);
     await utimes(result.path, old, old);
-    const { attachments: controller } = createCodexSessionRegistration({ logger: silentLogger,
+    const { attachments: controller } = createCodexSessionRegistration({ logger: silentLogger, trackShutdownWork: work => work,
       listConnections: async () => [], codexAppServerProviderOptions: {}, publishSessionChanged: async () => null,
       connectionStatus: async () => true, publishConversation: async () => null, runtimeProfile: null,
       env: {
@@ -907,7 +907,7 @@ test("shared upload, Codex renewal, and cleanup use the configured attachment ro
   const project = { createRuntime: () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } };
   const attachments = createSessionAttachments({ env, project });
   const { attachments: controller } = createCodexSessionRegistration({ listConnections: async () => [], codexAppServerProviderOptions: {},
-    logger: silentLogger, publishSessionChanged: async () => null, connectionStatus: async () => true,
+    logger: silentLogger, publishSessionChanged: async () => null, connectionStatus: async () => true, trackShutdownWork: work => work,
     publishConversation: async () => null, env, project, runtimeProfile: null });
   try {
     await store.createSession({

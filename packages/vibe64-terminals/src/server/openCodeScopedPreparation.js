@@ -22,6 +22,7 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparationContextFor} OpenCodeMainMessagePreparationContextFor */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("./types.js").TrackShutdownWork} TrackShutdownWork */
 
 function openCodeExecutionProfile(input = {}) {
   if (!input.executionProfile) {
@@ -90,6 +91,7 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
  * @param {OpenCodeConversationEvents} dependencies.events
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {TrackShutdownWork} dependencies.trackShutdownWork
  * @param {OpenCodeLifecyclePreparation["prepareSessionCleanup"]} dependencies.prepareSessionCleanup
  */
 function createOpenCodeScopedPreparation({
@@ -98,6 +100,7 @@ function createOpenCodeScopedPreparation({
   hostPreparation,
   events,
   publishSessionChanged,
+  trackShutdownWork,
   prepareSessionCleanup,
   logger
 }) {
@@ -197,7 +200,7 @@ function createOpenCodeScopedPreparation({
         get inputMessageId() {
           return input.messageId ? upstreamMessageId(input.messageId) : "";
         },
-        stoppedByShutdown: shutdownStoppedRun({ project, publishSessionChanged }, context, input.stoppedByShutdown)
+        stoppedByShutdown: shutdownStoppedRun({ project, publishSessionChanged, trackShutdownWork }, context, input.stoppedByShutdown)
       },
       failure: throwVibe64OpenCodeError,
       onRemoved: writeSessionEnvironmentRegistry,
@@ -318,7 +321,8 @@ function createOpenCodeScopedPreparation({
                   sessionId,
                   outerTurnId,
                   outcome,
-                  publishSessionChanged
+                  publishSessionChanged,
+                  trackShutdownWork
                 });
               }
             };

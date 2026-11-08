@@ -18,7 +18,7 @@ export function createCodexTerminalController(options = {}) {
   const { nativeTestContext, ...controllerOptions } = options;
   const registration = createCodexSessionRegistration({ listConnections: async () => [], codexAppServerProviderOptions: {},
     connectionStatus: async () => true, env: process.env, publishConversation: async () => null, publishSessionChanged: async () => null,
-    runtimeProfile: null, ...controllerOptions });
+    trackShutdownWork: work => work, runtimeProfile: null, ...controllerOptions });
   const { provider } = registration;
   // Preserve only the test's original low-level view over actual named owners.
   const controller = {

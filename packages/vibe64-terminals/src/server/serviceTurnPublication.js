@@ -49,15 +49,6 @@ function createServiceTurnPublication({
   conversationTurns
 }) {
   /**
-   * Keeps a turn's follow-up work in flight until it settles, so shutdown can wait for it.
-   * @param {Promise<unknown>} completion
-   */
-  function trackCompletion(completion) {
-    state.turnCompletions.add(completion);
-    void completion.finally(() => state.turnCompletions.delete(completion));
-  }
-
-  /**
    * The follow-up work after a Main turn; each part logs its own failure.
    * @param {string} sessionId
    * @param {object} payload
@@ -107,7 +98,7 @@ function createServiceTurnPublication({
     await publishSessionChanged.agentTerminal(sessionId, payload);
     if (state.lifecycle.closing) return;
     if (payload.reason === "temporary-agent-turn-idle") {
-      trackCompletion(afterTemporaryTurn(sessionId, payload.payload).catch((error) => {
+      state.trackShutdownWork(afterTemporaryTurn(sessionId, payload.payload).catch((error) => {
         logOperationalEvent(logger, "warn", {
           component: "vibe64.assistant_routing",
           event: "vibe64.assistant_routing.temporary_review_deferred",
@@ -121,7 +112,7 @@ function createServiceTurnPublication({
     if (!engineId) {
       return;
     }
-    trackCompletion(followMainTurn(sessionId, payload).then(() => conversationTurns.settled(sessionId, "")).catch((error) => {
+    state.trackShutdownWork(followMainTurn(sessionId, payload).then(() => conversationTurns.settled(sessionId, "")).catch((error) => {
       logOperationalEvent(logger, "warn", {
         component: "vibe64.conversation",
         event: "vibe64.conversation.turn_settled_failed",

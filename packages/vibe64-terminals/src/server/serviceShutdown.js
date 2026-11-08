@@ -50,10 +50,15 @@ function createServiceShutdown({
     return shutdownBegun;
   }
 
+  /**
+   * The server's close refuses new work first: each AI engine leaves a turn's end to the next
+   * server, and follow-up work and goal admission see `closing`. It then waits for the work
+   * already writing a session (`shutdownWork`), and only then stops the AI runtimes and the rest.
+   */
   async function close() {
     beginShutdown();
     state.lifecycle.closing = true;
-    await Promise.allSettled(state.turnCompletions);
+    await Promise.allSettled(state.shutdownWork);
     const [agentClose, outputTargetClose] = await Promise.allSettled([
       Promise.resolve().then(() => invalidateAgentRuntimes({
         reason: "server-shutdown"
@@ -97,7 +102,7 @@ function createServiceShutdown({
         state.lifecycle.closing = true;
         state.shutdownSignal.abort(Object.assign(new Error("Vibe64 is stopping."), { code: "vibe64_server_stopping" }));
         const routing = await Promise.allSettled([assistantRouting.close(), sessionConversations.close(), sessionNaming.close()]);
-        await Promise.allSettled(state.turnCompletions);
+        await Promise.allSettled(state.shutdownWork);
         const [native] = await Promise.allSettled([sessionAgent.invalidateRuntimes(input, {
           providerId: normalizeAgentProviderId(input.provider)
         })]);

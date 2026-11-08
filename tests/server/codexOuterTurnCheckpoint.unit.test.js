@@ -7,16 +7,23 @@ import {
   withCodexState
 } from "../../packages/vibe64-terminals/src/server/codexConversationStorage.js";
 
+// The service's shutdown tracker; these checkpoints need no shutdown.
+const trackShutdownWork = work => work;
+
 test("checkpoint confirmation projects the original outcome after failure cleanup reports interruption", async () => {
   let task;
   const session = { sessionId: "session-1", sourcePath: "/retained/worktree", metadata: {} };
   const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: {
     async writeBackgroundTaskEvent(_id, _taskId, value) { task = value.patch; return task; }
   } };
-  const result = await checkpointSessionTurn({ runtime, session, sessionId: session.sessionId,
+  const tracked = [];
+  const checkpointing = checkpointSessionTurn({ runtime, session, sessionId: session.sessionId,
     outerTurnId: "failed-claude-turn", outcome: "interrupted", project: { async readCurrentProject() { return {}; } },
     publishSessionChanged: async () => {},
+    trackShutdownWork: work => (tracked.push(work), work),
     createCheckpoint: async () => ({ ok: true, created: false, commit: "a".repeat(40), outcome: "failed" }) });
+  assert.deepEqual(tracked, [checkpointing], "shutdown waits for a checkpoint once it has begun");
+  const result = await checkpointing;
   assert.equal(result.ok, true);
   assert.equal(task.status, "ready");
   assert.equal(task.error, "");
@@ -62,7 +69,7 @@ test("shared turn checkpoints preserve outcome and expose recovery failures", as
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: { writeBackgroundTaskEvent: async (_id, _task, { patch }) => { changes.push(patch); return patch; } }
   };
-  const input = { runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
+  const input = { trackShutdownWork, runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
     outerTurnId: "claude:conversation:turn", outcome: "interrupted", publishSessionChanged: async () => {} };
   let received;
   const created = await checkpointSessionTurn({ ...input, createCheckpoint: async (value) => {
@@ -94,7 +101,7 @@ test("a turn checkpoint also checkpoints each connected copy in its own reposito
     store: { writeBackgroundTaskEvent: async (_id, _task, { patch }) => patch }
   };
   const received = [];
-  const result = await checkpointSessionTurn({ runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
+  const result = await checkpointSessionTurn({ trackShutdownWork, runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
     outerTurnId: "claude:conversation:turn", publishSessionChanged: async () => {},
     createCheckpoint: async (value) => {
       received.push([value.worktreePath, value.outerTurnId]);
@@ -178,7 +185,7 @@ test("source-bearing Learning retains the original native source and Git checkpo
         await mkdir(nativeRoot, { recursive: true });
       }
       const project = Object.freeze({ slug: "actual-practice" });
-      const input = { runtime, sessionId: id, outerTurnId: `outer-${engine}`, outcome: "completed",
+      const input = { trackShutdownWork, runtime, sessionId: id, outerTurnId: `outer-${engine}`, outcome: "completed",
         project: { readCurrentProject: async () => project },
         createCheckpoint: async value => {
           checkpoints.push(value); return { created: true, commit: "d".repeat(40) };
@@ -225,7 +232,8 @@ test("temporary and Main Codex turns record the same checkpoint outcome for a tu
   };
   const checkpoint = createCodexSessionTurnCheckpoint({
     project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); }, async readCurrentProject() { return {}; } },
-    publishSessionChanged: async () => {}
+    publishSessionChanged: async () => {},
+    trackShutdownWork
   });
   for (const [turnOutcome, outcome] of [["user_cancelled", "cancelled"], ["response_delivery_failure", "failed"]]) {
     await checkpoint("session-1", { outerTurnId: `codex:temporary:${turnOutcome}`, status: "completed", turnOutcome });

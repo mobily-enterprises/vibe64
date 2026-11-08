@@ -130,6 +130,7 @@ function createServiceAgentProviders({
     publishConversation,
     continueGoalAfterAccountChange,
     runNativeDetachedConversation,
+    trackShutdownWork: state.trackShutdownWork,
     runtimeProfile
   });
   // OpenCode lists and resolves the owner's custom endpoint beside its own saved
@@ -177,7 +178,8 @@ function createServiceAgentProviders({
     publishConversation,
     resolveConnection: (context) => context?.modelProviderId === CUSTOM_AI_PROVIDER_ID
       ? openCodeCustomConnection() : state.assistantRuntime.resolveConnection(context),
-    runNativeDetachedConversation
+    runNativeDetachedConversation,
+    trackShutdownWork: state.trackShutdownWork
   });
   const sessionAttachments = createSessionAttachments({ project, env });
   const claudeProvider = createClaudeConversationHost({
@@ -195,7 +197,8 @@ function createServiceAgentProviders({
     agentPreviewCommand,
     agentSessionCommand,
     accountStatus: readClaudeAccountStatus,
-    connectionStatus: (context) => state.assistantRuntime.claudeConnectionStatus(context)
+    connectionStatus: (context) => state.assistantRuntime.claudeConnectionStatus(context),
+    trackShutdownWork: state.trackShutdownWork
   });
   const providerAccess = createServiceProviderAccess({
     state,

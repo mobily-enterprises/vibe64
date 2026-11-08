@@ -46,10 +46,11 @@ function fixture() {
     },
     events: { detachedObservationProjection: () => ({}) },
     publishSessionChanged,
+    trackShutdownWork: work => work,
     prepareSessionCleanup: async () => null,
     logger: { warn() {}, info() {} }
   });
-  const events = createOpenCodeConversationEvents({ project, publishSessionChanged,
+  const events = createOpenCodeConversationEvents({ project, publishSessionChanged, trackShutdownWork: work => work,
     sharedRuntime: { turns: new Map(), temporaryConversations: new Map() }, presentation: {} });
   const chatRecords = createTemporaryConversationRecords({ sessionAgent: {}, publishConversation: async () => {} });
   async function turnEnd() {

@@ -13,6 +13,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("./types.js").ClaudeConversationOwner} ClaudeConversationOwner */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").TrackShutdownWork} TrackShutdownWork */
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
@@ -26,6 +27,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
  * @param {ClaudeConversationOwner} dependencies.owner
  * @param {object} dependencies.accountQueries the account catalogue and usage queries
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {TrackShutdownWork} dependencies.trackShutdownWork
  * @param {RuntimeLogger} dependencies.logger
  */
 function createClaudeConversationEvents({
@@ -35,6 +37,7 @@ function createClaudeConversationEvents({
   owner,
   accountQueries,
   publishSessionChanged,
+  trackShutdownWork,
   logger
 }) {
   const { save } = storage;
@@ -213,7 +216,8 @@ function createClaudeConversationEvents({
         sessionId: entry.context.sessionId,
         outerTurnId: `claude:${entry.id}:${entry.turn.id}`,
         outcome: [VIBE64_AGENT_RUN_STATE.COMPLETED, VIBE64_AGENT_RUN_STATE.INTERRUPTED, VIBE64_AGENT_RUN_STATE.CANCELLED].includes(event.state) ? event.state : "failed",
-        publishSessionChanged
+        publishSessionChanged,
+        trackShutdownWork
       });
     }
   };

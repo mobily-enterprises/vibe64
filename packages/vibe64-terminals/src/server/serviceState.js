@@ -4,14 +4,28 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 /** @typedef {import("./types.js").AssistantRuntime} AssistantRuntime */
 
 /**
- * What the service's parts share: the turn completions in flight, the shutdown signal, and the assistant
+ * What the service's parts share: the work in flight that shutdown waits for, the shutdown signal, and the assistant
  * runtime a host configures. What changes after construction has one place each: shutdown progress and
  * the running goal recovery in `lifecycle`, and in `slots` the providers other owners fill and clear at their shutdown.
  * @param {object} dependencies
  * @param {ReadClaudeAccountStatus} dependencies.readClaudeAccountStatus
  */
 function createServiceState({ readClaudeAccountStatus }) {
-  const turnCompletions = new Set();
+  const shutdownWork = new Set();
+  /**
+   * Work that writes the session after the call that started it has returned: a turn's checkpoint
+   * and follow-up work, a Cancel's goal pause. Shutdown waits for it before it stops anything, so
+   * nothing writes a session after the service closed. Its owner reports its failure.
+   * @template T
+   * @param {Promise<T>} work
+   * @returns {Promise<T>}
+   */
+  function trackShutdownWork(work) {
+    shutdownWork.add(work);
+    const forget = () => shutdownWork.delete(work);
+    work.then(forget, forget);
+    return work;
+  }
   // Server shutdown happens once. Its signal stops discarded background AI
   // work (session naming).
   const shutdownSignal = new AbortController();
@@ -41,7 +55,8 @@ function createServiceState({ readClaudeAccountStatus }) {
       planCompleted: null,
       sourceEditorProvider: null
     }),
-    turnCompletions
+    shutdownWork,
+    trackShutdownWork
   });
 }
 

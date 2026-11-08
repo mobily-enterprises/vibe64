@@ -9,12 +9,22 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").TrackShutdownWork} TrackShutdownWork */
 
 // The persisted task identity keeps its Codex name; checkpoints cover every
 // session assistant, including writable temporary conversations.
 const SESSION_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
 
-async function checkpointSessionTurn({
+/**
+ * A turn's recovery checkpoint and its task record. Once begun it is shutdown work: it writes the
+ * session's source and records, so the server's close waits for it.
+ * @param {{ trackShutdownWork: TrackShutdownWork } & Parameters<typeof checkpointTurn>[0]} turn
+ */
+function checkpointSessionTurn({ trackShutdownWork, ...turn }) {
+  return trackShutdownWork(checkpointTurn(turn));
+}
+
+async function checkpointTurn({
   project,
   runtime,
   session,
@@ -109,8 +119,9 @@ function checkpointOutcomeForCodexTurn(status = "", turnOutcome = "") {
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {TrackShutdownWork} dependencies.trackShutdownWork
  */
-function createCodexSessionTurnCheckpoint({ project, publishSessionChanged }) {
+function createCodexSessionTurnCheckpoint({ project, publishSessionChanged, trackShutdownWork }) {
   async function checkpointCodexAppServerTurn(sessionId = "", options = {}) {
     const {
       status = "completed",
@@ -125,7 +136,8 @@ function createCodexSessionTurnCheckpoint({ project, publishSessionChanged }) {
         sessionId,
         outerTurnId: conversationOuterTurnId,
         outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
-        publishSessionChanged
+        publishSessionChanged,
+        trackShutdownWork
       });
       return publishSessionChanged(sessionId, {
         reason: "temporary-agent-turn-idle",
@@ -148,7 +160,8 @@ function createCodexSessionTurnCheckpoint({ project, publishSessionChanged }) {
       outerTurnId,
       outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
       timestamp: normalizeText(turn.completedAt || turn.updatedAt),
-      publishSessionChanged
+      publishSessionChanged,
+      trackShutdownWork
     });
   }
 
@@ -162,10 +175,11 @@ function createCodexSessionTurnCheckpoint({ project, publishSessionChanged }) {
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {TrackShutdownWork} dependencies.trackShutdownWork
  * @param {{ runtime?: object | null, session?: object | null, sessionId: string }} context
  * @param {{ runId: string, checkpointTurnId?: string, routingConversationId: string, outcome?: string } | undefined} stop
  */
-function shutdownStoppedRun({ project, publishSessionChanged }, context, stop) {
+function shutdownStoppedRun({ project, publishSessionChanged, trackShutdownWork }, context, stop) {
   if (!stop?.runId) return null;
   return {
     runId: stop.runId,
@@ -179,7 +193,8 @@ function shutdownStoppedRun({ project, publishSessionChanged }, context, stop) {
         sessionId: context.sessionId,
         outerTurnId: stop.checkpointTurnId,
         outcome: stop.outcome || "interrupted",
-        publishSessionChanged
+        publishSessionChanged,
+        trackShutdownWork
       });
       await runtime.store.writeSessionConversation(context.sessionId, stop.routingConversationId, {
         stoppedByShutdown: { runId: stop.runId, routingConversationId: stop.routingConversationId }

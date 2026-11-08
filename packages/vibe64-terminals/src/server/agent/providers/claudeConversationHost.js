@@ -47,6 +47,7 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("../../types.js").AgentSessionCommandService} AgentSessionCommandService */
 /** @typedef {import("../../types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("../../types.js").TrackShutdownWork} TrackShutdownWork */
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
@@ -59,6 +60,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(event: object) => unknown} dependencies.publishConversation
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
+ * @param {TrackShutdownWork} dependencies.trackShutdownWork
  * @param {() => string} [dependencies.command]
  * @param {object} [dependencies.credentialHome]
  * @param {typeof createClaudeCodeProcess} [dependencies.createProcess]
@@ -83,6 +85,7 @@ function createClaudeConversationHost({
   publishSessionChanged: publishApplicationSessionChanged,
   publishConversation,
   runNativeDetachedConversation,
+  trackShutdownWork,
   // Found again at each start, so a Claude Code installed after Vibe64 started is used.
   command = () => operatorCliCommand("claude", { env }),
   credentialHome = appCredentialContext(),
@@ -210,6 +213,7 @@ function createClaudeConversationHost({
     owner: conversations,
     accountQueries,
     publishSessionChanged,
+    trackShutdownWork,
     logger
   });
   /**

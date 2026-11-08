@@ -144,6 +144,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
 /** @typedef {import("./types.js").ContinueGoalAfterAccountChange} ContinueGoalAfterAccountChange */
+/** @typedef {import("./types.js").TrackShutdownWork} TrackShutdownWork */
 
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
 
@@ -176,6 +177,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {ContinueGoalAfterAccountChange} dependencies.continueGoalAfterAccountChange
  * @param {ConversationRuntime["runNativeDetachedConversation"]} dependencies.runNativeDetachedConversation
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {TrackShutdownWork} dependencies.trackShutdownWork
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  */
@@ -203,6 +205,7 @@ function createCodexSessionRegistration({
   continueGoalAfterAccountChange,
   runNativeDetachedConversation,
   publishSessionChanged,
+  trackShutdownWork,
   runCommand = runVibe64Command,
   runtimeProfile
 }) {
@@ -315,7 +318,7 @@ function createCodexSessionRegistration({
     const { nativeGoal: _nativeGoal, ...publicEvent } = event;
     return publishMainConversationEvent(codexTerminalNamespace, publishSessionChanged, publishConversation, sessionId, event, publicEvent);
   }
-  const checkpointCodexAppServerTurn = createCodexSessionTurnCheckpoint({ project, publishSessionChanged });
+  const checkpointCodexAppServerTurn = createCodexSessionTurnCheckpoint({ project, publishSessionChanged, trackShutdownWork });
   const codexAppServerRunOwner = createCodexAppServerRunOwner({
     namespace: codexTerminalNamespace,
     normalizeRunState: normalizeVibe64AgentRunState,
@@ -539,7 +542,7 @@ function createCodexSessionRegistration({
     env,
     publishSessionChanged: publishCodexConversationEvent,
     checkpoint: checkpointCodexAppServerTurn,
-    shutdownStoppedRun: (context, stop) => shutdownStoppedRun({ project, publishSessionChanged }, context, stop)
+    shutdownStoppedRun: (context, stop) => shutdownStoppedRun({ project, publishSessionChanged, trackShutdownWork }, context, stop)
   });
   return Object.freeze({
     provider,

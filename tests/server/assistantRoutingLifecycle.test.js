@@ -1774,6 +1774,27 @@ test("Cancel answers while another chat's slow startup holds the write lock, sto
   assert.equal(f.state().stopped, true);
 });
 
+test("routing's close waits for a Cancel's deferred settle, so it writes nothing once closed", async t => {
+  const f = await fixture(t, { mode: "senior" });
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission response/);
+  const startup = f.holdLock();
+  await startup.started;
+  let closed = false;
+  let closing;
+  try {
+    await promptly(f.service.cancelMessage("session-1", { messageId: request.messageId }, f.context));
+    closing = f.service.close().then(() => { closed = true; });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.equal(closed, false, "close waits for the settle still queued behind the lock");
+  } finally {
+    startup.release();
+  }
+  await closing;
+  assert.deepEqual(f.discards, [request.messageId], "the settle ran before close returned");
+  assert.equal(JSON.parse(f.metadata.assistant_cancelled_messages)[0].settled, true);
+});
+
 test("Cancel during classification stops the classifier without the write lock", async t => {
   const f = await fixture(t);
   const started = Promise.withResolvers();

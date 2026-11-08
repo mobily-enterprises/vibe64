@@ -190,13 +190,15 @@ function createAssistantRoutingCancellation({
       : (await store.readConversationTail(sessionId, { userLimit: 1 })).findLast(turn => turn.user)?.user?.messageId === messageId;
     let interrupted = false;
     if (owned) interrupted = await interrupt(sessionId, context).then(result => result?.ok !== false, () => false);
-    void exclusive(sessionId, options, current => settle(sessionId, current)).catch((error) => logOperationalEvent(logger, "warn", {
+    const settling = exclusive(sessionId, options, current => settle(sessionId, current)).catch((error) => logOperationalEvent(logger, "warn", {
       component: "vibe64.assistant_routing",
       event: "vibe64.assistant_routing.settle_failed",
       sessionId: sessionId,
       code: error?.code,
       error: error?.message
     }, "Settling a cancelled message failed; the next send settles it."));
+    routingState.settling.add(settling);
+    void settling.then(() => routingState.settling.delete(settling));
     return { ok: true, cancelled: true, messageId, interrupted };
   }
 

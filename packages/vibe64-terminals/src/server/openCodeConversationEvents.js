@@ -16,6 +16,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("./types.js").OpenCodeConversationPresentation} OpenCodeConversationPresentation */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").TrackShutdownWork} TrackShutdownWork */
 
 function openCodeMessageError(message = {}) {
   const failure = readOpenCodeMessageError(message);
@@ -113,12 +114,14 @@ function openCodeRunRealtimePayload(run = {}) {
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {TrackShutdownWork} dependencies.trackShutdownWork
  * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
  * @param {OpenCodeConversationPresentation} dependencies.presentation
  */
 function createOpenCodeConversationEvents({
   project,
   publishSessionChanged,
+  trackShutdownWork,
   sharedRuntime,
   presentation
 }) {
@@ -173,7 +176,8 @@ function createOpenCodeConversationEvents({
         outerTurnId: `opencode:${turn.threadId}:${turn.id}`,
         outcome: ["completed", "interrupted", "cancelled"].includes(state) ? state : "failed",
         timestamp: turn.updatedAt || new Date().toISOString(),
-        publishSessionChanged
+        publishSessionChanged,
+        trackShutdownWork
       });
     }
     let written = null;

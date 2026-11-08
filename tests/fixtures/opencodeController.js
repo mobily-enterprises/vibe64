@@ -528,7 +528,8 @@ async function controllerHarness({
     async verifyConnectionCommand(input) {
       verifyConnectionCalls.push(input);
       return { ok: true };
-    }
+    },
+    trackShutdownWork: work => work
   };
   // These original controller-only cases exercise the retained native owner.
   // Product admission/runtime integration is covered by boundMainOpenCodeFixture.

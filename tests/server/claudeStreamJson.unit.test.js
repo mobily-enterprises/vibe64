@@ -122,7 +122,7 @@ function createClaudeSessionAgentProvider(options) {
       ...context, prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
     }) }
   });
-  provider = createNativeClaudeSessionAgentProvider({ env: process.env, logger: silentLogger, ...nativeOptions, conversationRuntime: conversations,
+  provider = createNativeClaudeSessionAgentProvider({ env: process.env, logger: silentLogger, trackShutdownWork: work => work, ...nativeOptions, conversationRuntime: conversations,
     runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
     publishConversation: options.publishConversation || (event => conversations.publishNative(event)) });
   const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime: conversations, defaultProviderId: "claude",

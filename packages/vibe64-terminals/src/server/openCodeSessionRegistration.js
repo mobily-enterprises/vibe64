@@ -64,6 +64,7 @@ import {
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").ListAssistantConnections} ListAssistantConnections */
 /** @typedef {import("./types.js").ResolveAssistantConnection} ResolveAssistantConnection */
+/** @typedef {import("./types.js").TrackShutdownWork} TrackShutdownWork */
 
 /**
  * @param {object} dependencies
@@ -88,6 +89,7 @@ import {
  * @param {typeof readOpenCodeZenModelIds} [dependencies.readZenModelsCommand]
  * @param {typeof writeSessionGitCommandActor} [dependencies.recordGitActor]
  * @param {ResolveAssistantConnection} dependencies.resolveConnection
+ * @param {TrackShutdownWork} dependencies.trackShutdownWork
  * @param {typeof verifyOpenCodeApiKey} [dependencies.verifyConnectionCommand]
  */
 function createOpenCodeSessionRegistration({
@@ -112,6 +114,7 @@ function createOpenCodeSessionRegistration({
   readZenModelsCommand = readOpenCodeZenModelIds,
   recordGitActor = recordSessionGitCommandActor,
   resolveConnection,
+  trackShutdownWork,
   verifyConnectionCommand = verifyOpenCodeApiKey
 }) {
   const publishSessionChanged = publishMainConversationEvent.bind(
@@ -158,6 +161,7 @@ function createOpenCodeSessionRegistration({
   const events = createOpenCodeConversationEvents({
     project,
     publishSessionChanged,
+    trackShutdownWork,
     sharedRuntime,
     presentation
   });
@@ -188,6 +192,7 @@ function createOpenCodeSessionRegistration({
     hostPreparation,
     events,
     publishSessionChanged,
+    trackShutdownWork,
     prepareSessionCleanup,
     logger
   });

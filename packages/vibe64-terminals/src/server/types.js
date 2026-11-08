@@ -94,6 +94,7 @@
 /** @typedef {AssistantRuntime["readAssistantAccess"]} ReadAssistantAccess */
 /** @typedef {AssistantRuntime["resolveAssistantUser"]} ResolveAssistantUser */
 /** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
+/** @typedef {ServiceState["trackShutdownWork"]} TrackShutdownWork */
 /** @typedef {ReturnType<typeof import("./sessionNaming.js").createSessionNaming>} SessionNaming */
 /** @typedef {ReturnType<typeof import("./sessionPromptHints.js").createSessionPromptHintsService>} SessionPromptHintsService */
 /** @typedef {ReturnType<typeof import("./assistantRouting.js").createAssistantRouting>} AssistantRouting */

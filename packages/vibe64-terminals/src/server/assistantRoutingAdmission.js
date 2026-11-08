@@ -468,6 +468,7 @@ function createAssistantRoutingAdmission({
     const tasks = [...routingState.running.values()];
     for (const task of tasks) task.cancelled = true;
     const results = await Promise.allSettled(tasks.map((task) => task.close()));
+    await Promise.allSettled(routingState.settling);
     const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason);
     if (failures.length) throw new AggregateError(failures, "Assistant routing shutdown did not complete successfully.");
   }

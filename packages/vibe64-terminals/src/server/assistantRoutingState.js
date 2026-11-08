@@ -15,6 +15,9 @@ function createAssistantRoutingState({ systemRoot, allowAuto }) {
   // Messages cancelled in this process whose lock-held cleanup has not settled.
   // A request naming one stays stopped, whichever operation saves it meanwhile.
   const cancelling = new Set();
+  // That cleanup runs after Cancel answers; routing's close waits for it, so it
+  // writes nothing once the server has closed.
+  const settling = new Set();
 
   return Object.freeze({
     systemRoot,
@@ -22,7 +25,8 @@ function createAssistantRoutingState({ systemRoot, allowAuto }) {
     running,
     timings,
     liveFollowupRequests,
-    cancelling
+    cancelling,
+    settling
   });
 }
 

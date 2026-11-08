@@ -10,7 +10,7 @@ function fixture({ begun = { ok: true, failed: [] } } = {}) {
   const state = {
     lifecycle: { closing: false, goalRecovery: null },
     shutdownSignal: new AbortController(),
-    turnCompletions: new Set()
+    shutdownWork: new Set()
   };
   const shutdown = createServiceShutdown({
     state,
@@ -47,7 +47,7 @@ test("the server-shutdown stop, and the server's close, tell the engines before 
 
   const closing = fixture();
   const followUp = Promise.withResolvers();
-  closing.state.turnCompletions.add(followUp.promise);
+  closing.state.shutdownWork.add(followUp.promise);
   const close = closing.shutdown.close();
   assert.deepEqual(closing.calls, ["begin"], "the turns' follow-up work is still running");
   followUp.resolve();

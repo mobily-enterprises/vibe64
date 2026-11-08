@@ -44,7 +44,7 @@ function fixture() {
   const deferCheckpoint = createCodexDeferredTurnCheckpoint({ project });
   const provider = createCodexSessionAgentProvider({
     controller: {},
-    shutdownStoppedRun: (context, stop) => shutdownStoppedRun({ project, publishSessionChanged }, context, stop)
+    shutdownStoppedRun: (context, stop) => shutdownStoppedRun({ project, publishSessionChanged, trackShutdownWork: work => work }, context, stop)
   });
   const chatRecords = createTemporaryConversationRecords({ sessionAgent: {}, publishConversation: async () => {} });
   // The chat's read, as the next server makes it: Codex receives the record's mark.

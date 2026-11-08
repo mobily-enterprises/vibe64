@@ -138,8 +138,8 @@ function createServiceGoals({
   const goalAdmissions = new Map();
 
   /**
-   * Cancel answers without waiting for the goal settings lock: it stops a goal
-   * admission at once, records the stop, and saves it under that lock afterwards.
+   * Cancel answers without waiting for the goal settings lock: it stops a goal admission at once,
+   * records the stop, and saves it under that lock afterwards. Shutdown waits for that save.
    */
   async function requestGoalStop(sessionId, context) {
     const intent = readGoalIntent(await context.runtime.getSessionWithoutSource(sessionId));
@@ -150,7 +150,8 @@ function createServiceGoals({
       GOAL_STOP_REQUEST,
       JSON.stringify({ intentId: intent.id, requestedAt: new Date().toISOString() })
     );
-    void changeGoalIntent(sessionId, context, () => null).catch(error => logIntentClearFailure(logger, sessionId, error));
+    const saving = changeGoalIntent(sessionId, context, () => null).catch(error => logIntentClearFailure(logger, sessionId, error));
+    void state.trackShutdownWork(saving);
   }
 
   async function stopGoalIntent(sessionId, context, expectedId) {

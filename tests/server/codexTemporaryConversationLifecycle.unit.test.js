@@ -13729,6 +13729,7 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
     }, { operation: "hold-goal-settings", waitMs: 0 });
     let restarted;
     let cancelling;
+    let closing;
     let timer;
     try {
       await entered.promise;
@@ -13749,6 +13750,13 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
       assert.equal(recovered.ok, true, JSON.stringify(recovered));
       assert.equal(recovered.results[0].skipped, true, JSON.stringify(recovered));
       assert.deepEqual(writes, ["set"], "the recorded pause stops a restart from resuming the goal");
+      // Shutdown waits for the pause it has yet to save, so nothing writes the session after close.
+      closing = terminals.close();
+      const closedEarly = await Promise.race([
+        closing.then(() => true),
+        new Promise(resolve => { timer = setTimeout(() => resolve(false), 1_000); })
+      ]);
+      assert.equal(closedEarly, false, "close finished before the goal pause was saved");
     } finally {
       clearTimeout(timer);
       release.resolve();
@@ -13756,8 +13764,8 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
       await cancelling?.catch(() => {});
       await restarted?.close();
     }
-    await waitForSessionValue(metadata, value => value.assistant_goal_stop_request === "null",
-      "the recorded goal pause to be saved under the settings lock");
+    await closing;
+    assert.equal((await metadata()).assistant_goal_stop_request, "null", "close returned before the goal pause was saved");
     assert.equal(JSON.parse((await metadata()).assistant_goal_intent).active, false);
     assert.equal(JSON.parse((await metadata()).assistant_goal_intent).id, intent.id);
   }, { actions: CONVERSATION_CONTEXT_ACTIONS, throughTerminalService: true });
