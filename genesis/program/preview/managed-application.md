@@ -142,6 +142,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
+- `src/composables/useVibe64AppPage.js`
 - `src/composables/useVibe64OutputControls.js`
 - `src/composables/useVibe64OutputStatus.js`
 - `src/composables/useVibe64OutputTerminal.js`
@@ -479,6 +480,13 @@ palette. Setup actions retain readable labels when disabled during assistant wor
 They do not unmount a running iframe or its toolbar. Recheck setup refreshes
 only that inspection, works during assistant activity, and removes the warning
 when resolved. Reload remains the separate browser/output-status action.
+Choosing Preview (its tab, or Go to preview on a phone) also reads the inspection
+again, so the warning shows the current setup each time: the page's
+`selectProjectPane` invalidates every session's `vibe64ProjectSetupQueryKey`
+read in the project. A Preview hidden under the Dashboard reads it once as it
+shows; a Preview that never left, because the click replaced a Dashboard
+navigation still loading its code, reads it at once. Reloading the preview
+reads no setup.
 Starter selection and adoption still guide new or uninitialized projects;
 Vibe64's output and workspace-setup contracts continue to validate actual launches.
 

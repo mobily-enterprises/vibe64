@@ -24,7 +24,8 @@ import {
   scopedDevelopmentApiUrl
 } from "@/lib/studioUrls.js";
 import {
-  VIBE64_SURFACE_ID
+  VIBE64_SURFACE_ID,
+  vibe64ProjectSetupQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   VIBE64_PROJECT_CHANGED_EVENT
@@ -395,6 +396,10 @@ function useVibe64AppPage() {
       }));
       return;
     }
+    // Choosing Preview reads the project's setup again, so its warning is current. A Preview
+    // read hidden under the Dashboard reads it as it shows; one that never left Preview (this
+    // click replaced a Dashboard navigation still loading its code) reads it at once.
+    void queryClient.invalidateQueries({ queryKey: vibe64ProjectSetupQueryKey(projectSlug.value) });
     void router.push(developmentBasePath.value);
   }
 

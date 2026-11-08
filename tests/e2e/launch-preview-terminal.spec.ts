@@ -864,6 +864,61 @@ for (const width of [1280, 768, 390]) {
   });
 }
 
+test("@preview-setup-warning choosing Preview while the Dashboard is still loading reads setup again", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockLaunchTerminalSocket(page, { terminalSocketNeverSettles: true });
+  const launch = await mockLaunchSession(page);
+  let state = "attention";
+  let reads = 0;
+  await page.route("**/vibe64/onboarding?*", async (route) => {
+    reads += 1;
+    await fulfillJson(route, {
+      ok: true,
+      available: true,
+      inspection: state === "ready" ? { state, nextAction: "work", diagnostics: [] } : {
+        state,
+        nextAction: "repair",
+        diagnostics: [{ code: "PROGRAM_SOURCE_MISSING", message: "Program module cites a missing or ineligible source file: src/Missing.vue." }]
+      },
+      templates: []
+    });
+  });
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+  const warning = page.locator(".project-preview__warning");
+  await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
+  await expect(warning).toContainText("src/Missing.vue");
+  state = "ready";
+  await warning.getByRole("button", { name: "Recheck setup" }).click();
+  await expect(warning).toHaveCount(0);
+  const readsBefore = reads;
+  const initialLoads = launch.getPreviewLoadCount();
+
+  // The Dashboard's code is held, so the Preview click replaces its navigation and the route never
+  // leaves Preview, as a quick Dashboard and Preview round trip does on a busy machine.
+  const appOrigin = new URL(BASE_URL).origin;
+  const dashboardCode = Promise.withResolvers<void>();
+  await page.route((url) => url.origin === appOrigin && url.pathname.endsWith(".js"), async (route) => {
+    await dashboardCode.promise;
+    await route.continue().catch(() => undefined);
+  });
+  const dashboardTab = page.getByRole("tab", { name: "Dashboard", exact: true });
+  const previewTab = page.getByRole("tab", { name: "Preview", exact: true });
+  try {
+    state = "attention";
+    await dashboardTab.click();
+    await previewTab.click();
+    await expect(warning).toContainText("src/Missing.vue");
+    expect(reads).toBe(readsBefore + 1);
+  } finally {
+    dashboardCode.resolve();
+  }
+  await expect(previewTab).toHaveAttribute("aria-selected", "true");
+  await expect(dashboardTab).toHaveAttribute("aria-selected", "false");
+  expect(new URL(page.url()).pathname).toBe(DEVELOPMENT_PATH);
+  expect(launch.getPreviewLoadCount()).toBe(initialLoads);
+  expect(reads).toBe(readsBefore + 1);
+});
+
 test("@preview-setup-warning retains reload when launch settings have no usable target", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launch = await mockLaunchSession(page, {

@@ -11,8 +11,7 @@ import * as Vue from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { routeLocationKey } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { VIBE64_SURFACE_ID, vibe64SessionQueryKey } from "../../src/lib/vibe64SessionRequestConfig.js";
+import { vibe64ProjectSetupQueryKey } from "../../src/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
 
 const mocks = vi.hoisted(() => ({ live: false, resource: null, query: null }));
@@ -214,15 +213,13 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true }
       for (const handler of sessionListeners) handler(payload);
       await Vue.nextTick();
     },
+    // What choosing Preview does to the project's setup reads (useVibe64AppPage.js).
+    choosePreview: () => queryClient.invalidateQueries({ queryKey: vibe64ProjectSetupQueryKey("project-a") }),
     async settleRead(index, data = opening()) {
       const request = reads[index];
       const query = queryClient.getQueryCache().find({
         exact: true,
-        queryKey: [
-          ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, "project-a"),
-          request.options.query.sessionId,
-          "project-onboarding"
-        ]
+        queryKey: vibe64ProjectSetupQueryKey("project-a", request.options.query.sessionId)
       });
       const pending = query?.promise;
       request.resolve(data);
@@ -298,6 +295,30 @@ describe("Preview project onboarding", () => {
       fixture.close();
       await fixture.sessionChanged(finished);
       expect(fixture.reads).toHaveLength(3);
+    } finally { fixture.close(); }
+  });
+  it("reads setup again each time Preview is chosen: at once when Preview never left, once as it shows otherwise", async () => {
+    const fixture = mountOnboarding();
+    try {
+      await fixture.settleRead(0, opening("ready"));
+      expect(fixture.colleaguePreview.value.screen).toBe("outputs");
+      // A Preview click that replaced a Dashboard navigation still loading: Preview never left.
+      void fixture.choosePreview();
+      await vi.waitFor(() => expect(fixture.reads).toHaveLength(2));
+      await fixture.settleRead(1, opening("attention"));
+      expect(fixture.colleaguePreview.value.screen).toBe("outputs-with-setup-warning");
+
+      fixture.props.projectPane = "dashboard";
+      await Vue.nextTick();
+      await fixture.choosePreview();
+      expect(fixture.reads).toHaveLength(2);
+      fixture.props.projectPane = "preview";
+      await Vue.nextTick();
+      await vi.waitFor(() => expect(fixture.reads).toHaveLength(3));
+      await fixture.settleRead(2, opening("ready"));
+      expect(fixture.colleaguePreview.value.screen).toBe("outputs");
+      expect(fixture.reads).toHaveLength(3);
+      expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
     } finally { fixture.close(); }
   });
   it("reports the displayed setup screen and clears it when hidden or unmounted", async () => {

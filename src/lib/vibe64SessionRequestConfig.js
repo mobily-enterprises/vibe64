@@ -1,3 +1,4 @@
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { vibe64RealtimeOriginPayload } from "./vibe64BrowserTabOrigin.js";
 import {
   VIBE64_SURFACE_ID
@@ -46,6 +47,13 @@ function vibe64SessionsQueryKey(surfaceId, ownershipFilter, projectSlug) {
 
 function vibe64SessionQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "session"];
+}
+
+// The Preview view's read of a session's project setup (Vibe64ProjectOnboarding.vue);
+// without a session, the prefix of every session's read in the project.
+function vibe64ProjectSetupQueryKey(projectSlug, sessionId = "") {
+  return [...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug), "project-onboarding",
+    ...(sessionId ? [sessionId] : [])];
 }
 
 // Event identity is a transport fence, never account authorization. Server
@@ -451,6 +459,7 @@ export {
   vibe64SessionCheckUpdatesPath,
   vibe64SessionChangesPath,
   vibe64SessionPath,
+  vibe64ProjectSetupQueryKey,
   vibe64SessionQueryKey,
   vibe64SessionEventMatchesScope,
   selectedSessionStorageKey,

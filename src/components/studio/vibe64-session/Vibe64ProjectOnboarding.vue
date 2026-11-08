@@ -124,8 +124,8 @@ import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SURFACE_ID,
-  vibe64SessionEventMatchesScope,
-  vibe64SessionQueryKey
+  vibe64ProjectSetupQueryKey,
+  vibe64SessionEventMatchesScope
 } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({
@@ -152,11 +152,8 @@ const resource = useEndpointResource({
   enabled,
   path: computed(() => resolveStudioRequestUrl("/api/vibe64/onboarding")),
   readQuery: computed(() => ({ sessionId: props.sessionId })),
-  queryKey: computed(() => [
-    ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
-    props.sessionId,
-    "project-onboarding"
-  ]),
+  // Choosing Preview marks it stale (useVibe64AppPage.js), so a Preview that never left re-reads too.
+  queryKey: computed(() => vibe64ProjectSetupQueryKey(projectSlug.value, props.sessionId)),
   queryOptions: { refetchOnMount: "always", refetchOnWindowFocus: true },
   realtime: {
     events: [VIBE64_PROJECT_CHANGED_EVENT, VIBE64_SESSION_CHANGED_EVENT],

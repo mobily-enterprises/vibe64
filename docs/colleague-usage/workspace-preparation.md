@@ -101,6 +101,10 @@ keep the application's real setup, launch and database commands. Node's default
 `Connected development` declaration selects `npm` treatment only; it adds no
 connected repositories and performs no dependency installation by itself.
 
+Vibe64 also checks setup again each time you choose **Preview** (on a phone,
+**Go to preview**), so the warning always shows the current setup, even after a
+quick trip to the Dashboard and back.
+
 After a manual repair, select **Recheck setup**; a **Fix it with AI** task on the
 warning rechecks setup itself and is **Done** only once it no longer needs
 attention (see [AI tasks](ai-tasks.md)). If workspace
