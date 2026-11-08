@@ -218,7 +218,7 @@ function createColleagueWatches({
           params: { limit: 16 }
         });
       }
-      state.requestContext = context;
+      threads.rememberRequest(state, context);
       const watch = {
         watchId: input.watchId,
         ...target,
@@ -278,7 +278,7 @@ function createColleagueWatches({
       if (watch.assignmentId) {
         throw failure("Resume the assignment through assignment.update after a new user instruction.", "vibe64_colleague_watch_assignment_resume");
       }
-      state.requestContext = context;
+      threads.rememberRequest(state, context);
       watch.status = "active";
       try {
         await worker.observeWatch(state, watch);

@@ -131,7 +131,7 @@ function createColleagueHistory({
         state.replyTimer = null;
         state.streamEpoch = randomUUID();
         state.streamRevision = 0;
-        state.requestContext = context;
+        threads.rememberRequest(state, context);
         for (const connection of state.connections.values()) {
           answerPendingNavigation(connection, {
             ok: false,

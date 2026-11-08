@@ -28,7 +28,7 @@ function createColleagueFocusAndNavigation({ threads }) {
         messageCode: "vibe64_colleague_conversation_unavailable"
       });
     }
-    if (context.requestMeta?.request) state.requestContext = context;
+    if (context.requestMeta?.request) threads.rememberRequest(state, context);
     const connection = state.connections.get(context.colleague?.clientId);
     const focused = context.colleague?.focus || connection?.focus || null;
     return { ok: true, focus: focused || {} };
@@ -58,7 +58,7 @@ function createColleagueFocusAndNavigation({ threads }) {
       }
       browserBinding.onRelease(connection.browserBinding.release);
     }
-    state.requestContext = context;
+    threads.rememberRequest(state, context);
     return { ok: true, focus: connection.focus };
   }
 

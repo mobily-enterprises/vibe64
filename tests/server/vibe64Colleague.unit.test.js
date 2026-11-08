@@ -126,8 +126,9 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: user } } };
   registerVibe64ActionContext(actions, {
     projectContext: { currentPracticeProjectScope: () => null, projectsRoot: root, async readWorkspaceProject({ slug }) { return { project: { path: path.join(root, slug) } }; } },
-    // A request whose login the host has ended resolves no user.
-    resolveUser: async ({ request }) => observations.allow && !request?.loginEnded ? request?.vibe64User : null,
+    // A request whose login the host has ended resolves no user. A socket's
+    // request names its connection's actor, not vibe64User.
+    resolveUser: async ({ request }) => observations.allow && !request?.loginEnded ? request?.vibe64User || request?.user?.user || null : null,
     async authorizeProject({ slug, user, context }) {
       observations.projectChecks.push(slug);
       if (!watching) throw new Error("Colleague must not need a project.");
@@ -402,6 +403,35 @@ test("a sent message's model work runs as the request that sent it, not the thre
   assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["First answer.", "Second answer."]);
   assert.ok(access.length > 0);
   assert.deepEqual([...new Set(access)], ["member"], "every model access check was the sender's");
+});
+
+test("a watch wake and its reply run as the thread's owner after a socket focus update that does not carry them", async t => {
+  const f = await fixture(t, [reply("Alpha's agent has answered: it is ready.")], { watching: true });
+  await f.service.read({}, f.context);
+  await watchAction(f, "watch.create", watchInput);
+  const access = [];
+  const requireAccess = f.terminals.requireAssistantSelectionAccess;
+  f.terminals.requireAssistantSelectionAccess = async function (selection, options) {
+    access.push(options.vibe64User?.username || null);
+    return requireAccess.call(this, selection, options);
+  };
+  // The person's last request before the wake is a socket's focus update: the
+  // host resolves them from the connection, but the request has no vibe64User.
+  const user = f.context.requestMeta.request.vibe64User;
+  const socket = { channel: "api", surface: "app", requestMeta: { request: { headers: {}, user: { id: String(user.uid), user } } } };
+  await f.actions.execute({ actionId: "vibe64.colleague.focus.update", context: socket,
+    input: { clientId: "browser-1", focus: { projectSlug: "alpha", sessionId: "session-1" } } });
+  f.observations.target = { ...f.observations.target, status: "completed", messages: [{ id: "answer", role: "assistant", text: "It is ready." }] };
+  await changed(f);
+  await until(() => f.observations.starts.length === 1);
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.equal(final.watches[0].status, "delivered");
+  assert.ok(access.length > 0);
+  assert.deepEqual([...new Set(access)], ["member"], "the wake's model access checks were the owner's");
+  const delivered = f.observations.realtime.filter(event => event.realtime.payload.completedMessage);
+  assert.ok(delivered.length > 0, "the wake's reply was published");
+  assert.deepEqual([...new Set(f.observations.realtime.map(event => event.actorId))], ["42"], "every reply went to the thread's owner");
 });
 
 for (const operation of ["stop", "supersede", "disconnect"]) {

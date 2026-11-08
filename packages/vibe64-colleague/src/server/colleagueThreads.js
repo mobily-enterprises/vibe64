@@ -57,6 +57,27 @@ function createColleagueThreads({
     return { kind: "learn", learnerKey, ...(attemptId ? { attemptId } : {}) };
   }
 
+  /**
+   * The request a person's Colleague work rechecks, naming the person the
+   * host's action resolved. A request object need not carry them itself: a
+   * socket's focus update does not.
+   */
+  function ownerRequestMeta(context) {
+    const request = context?.requestMeta?.request;
+    return request ? {
+      ...context.requestMeta,
+      request: { ...request, headers: request.headers, vibe64User: authenticatedVibe64User(context) }
+    } : context?.requestMeta;
+  }
+
+  /**
+   * This person's latest request becomes the thread's owner request, which
+   * work no message started (a watch wake, a stop) runs as.
+   */
+  function rememberRequest(state, context) {
+    state.requestContext = { ...context, requestMeta: ownerRequestMeta(context) };
+  }
+
   async function stateFor(context) {
     const owner = userKey(context);
     // A turn's own operations stay with its thread, whatever the mode is now.
@@ -82,6 +103,8 @@ function createColleagueThreads({
       throw error;
     }
     showThread(state);
+    // Its replies reach only this person, whichever request touched it last.
+    state.ownerActorId ||= String(authenticatedVibe64User(context)?.uid || "");
     return state;
   }
 
@@ -207,6 +230,7 @@ function createColleagueThreads({
       streamRevision: 0,
       generation: 0,
       requestContext: null,
+      ownerActorId: "",
       streamingReply: null,
       operationContext: null,
       operationRunId: "",
@@ -262,7 +286,7 @@ function createColleagueThreads({
     // Do not copy the reserved authorization result from a previous action.
     // The host rechecks this real request for every tool and model exchange:
     // a sent message's own request, which its connection carries, or else the
-    // thread's latest request, for work no message started.
+    // thread's owner request, for work no message started.
     return {
       surface: "app",
       channel: "automation",
@@ -284,6 +308,8 @@ function createColleagueThreads({
     stateFor,
     assertCurrentConversation,
     actionContext,
+    ownerRequestMeta,
+    rememberRequest,
     releaseLearnThread
   });
 }

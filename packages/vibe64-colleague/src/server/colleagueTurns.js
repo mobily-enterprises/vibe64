@@ -38,7 +38,7 @@ function createColleagueTurns({
 }) {
   async function read(input, context) {
     const state = await threads.stateFor(context);
-    state.requestContext = context;
+    threads.rememberRequest(state, context);
     worker.scheduleWatches(state);
     worker.wakeForObservations(state);
     // Until a send commits a model, every read re-checks current
@@ -62,7 +62,7 @@ function createColleagueTurns({
     if (serviceState.lifecycle.closed || state.stopping || state.summaryRunning) {
       throw failure("Finish or stop the current Colleague summary first.", "vibe64_colleague_summary_busy");
     }
-    state.requestContext = context;
+    threads.rememberRequest(state, context);
     const scoped = threads.actionContext(state, {
       clientId: context.colleague?.clientId || "",
       focus: { projectSlug: input.projectSlug }
@@ -92,7 +92,7 @@ function createColleagueTurns({
       );
       const changed = !sameVibe64AssistantSelection(state.record.assistantSelection, selected);
       const pendingRequest = state.record.conversationMetadata?.runtime?.replacement?.request;
-      state.requestContext = context;
+      threads.rememberRequest(state, context);
       const scoped = { ...threads.actionContext(state, { clientId: "", focus: null }), assistantSelection: selected };
       let conversation = state.record.conversationMetadata?.runtime ? await conversations.openConversation(state, scoped) : null;
       let current = await conversation?.read();
@@ -194,7 +194,7 @@ function createColleagueTurns({
         await state.conversation?.cancel();
         await state.running;
       }
-      state.requestContext = context;
+      threads.rememberRequest(state, context);
       state.streamingReply = null;
       state.interimReply = null;
       state.record.error = "";
@@ -210,7 +210,7 @@ function createColleagueTurns({
       // This message's work runs as the request that sent it. Any read or
       // focus update since replaces the thread's latest request, and need not
       // carry the person: a socket's focus update does not.
-      const admitted = { ...connection, focus: structuredClone(connection.focus), requestMeta: context.requestMeta };
+      const admitted = { ...connection, focus: structuredClone(connection.focus), requestMeta: threads.ownerRequestMeta(context) };
       if (native) {
         // App admission is independent of native admission: these are the
         // actual authored rows, not fabricated native acknowledgements.
@@ -274,7 +274,7 @@ function createColleagueTurns({
         { pauseWatches: true }
       );
     }
-    state.requestContext = context;
+    threads.rememberRequest(state, context);
     try {
       if (!state.conversation && state.record.conversationMetadata?.runtime) {
         await conversations.openConversation(

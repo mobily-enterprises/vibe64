@@ -3,7 +3,6 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createConversationTranscript, createConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { COLLEAGUE_TOOL_LIMITS } from "./protocol.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
@@ -246,8 +245,7 @@ function createColleagueRecords({
 
   function publishReply(state, completedMessage = null) {
     state.streamRevision += 1;
-    const user = authenticatedVibe64User(state.requestContext || {});
-    const actorId = String(user?.uid || "");
+    const actorId = state.ownerActorId;
     // Realtime replies go only to their authenticated actor; without one, the
     // browser reconciles over HTTP.
     if (!actorId || !events?.publish) return;

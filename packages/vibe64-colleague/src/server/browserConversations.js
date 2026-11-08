@@ -1,4 +1,3 @@
-import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { failure } from "./colleagueFailure.js";
 import { colleagueBrowserState, releaseObserver } from "./colleaguePresentation.js";
 import {
@@ -36,14 +35,10 @@ function createColleagueBrowserConversations({
     // Action contributors own authority; never retain their cached result
     // when a subscription or subsequent model operation checks the request.
     if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.", "vibe64_colleague_shutting_down");
-    const request = context?.requestMeta?.request;
     const requestContext = {
       surface: "app",
       channel: "internal",
-      requestMeta: request ? {
-        ...context.requestMeta,
-        request: { ...request, headers: request.headers, vibe64User: authenticatedVibe64User(context) }
-      } : context?.requestMeta,
+      requestMeta: threads.ownerRequestMeta(context),
       colleague: { userKey: threads.userKey(context), clientId: "", focus: null }
     };
     await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
