@@ -938,13 +938,25 @@ test("a release service unit loads its environment as its user, then becomes its
   const startScript = path.join(root, "start.sh");
   await writeFile(environmentFile, 'RELEASE_TEST_KEY="from-file"\nPORT="4100"\n', { mode: 0o600 });
   await writeFile(startScript, '#!/bin/sh\nprintf "%s %s %s %s" "$$" "$RELEASE_TEST_KEY" "$PORT" "$KEPT"\n', { mode: 0o700 });
-  const child = spawn(process.execPath, [new URL(HELPER_SOURCE_URL).pathname, "run-release-service", environmentFile, startScript], {
-    env: { KEPT: "unit-environment", PATH: "/usr/bin:/bin", PORT: "1" }, stdio: ["ignore", "pipe", "pipe"]
-  });
-  let output = "";
-  child.stdout.on("data", (chunk) => { output += chunk; });
-  const status = await new Promise((resolve) => child.once("close", resolve));
-  assert.equal(status, 0);
-  assert.equal(output, `${child.pid} from-file 4100 unit-environment`, "the helper's process became the start script, with the file's values over the unit's");
+  // Its working directory is in the application's area, which must be mounted nosuid: /dev/shm is, and the
+  // host's root file system is not.
+  const start = async (cwd) => {
+    const child = spawn(process.execPath, [new URL(HELPER_SOURCE_URL).pathname, "run-release-service", environmentFile, startScript], {
+      cwd, env: { KEPT: "unit-environment", PATH: "/usr/bin:/bin", PORT: "1" }, stdio: ["ignore", "pipe", "pipe"]
+    });
+    let output = "";
+    let errors = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { errors += chunk; });
+    const status = await new Promise((resolve) => child.once("close", resolve));
+    return { errors, output, pid: child.pid, status };
+  };
+  const started = await start("/dev/shm");
+  assert.equal(started.status, 0, started.errors);
+  assert.equal(started.output, `${started.pid} from-file 4100 unit-environment`, "the helper's process became the start script, with the file's values over the unit's");
+  const refused = await start("/");
+  assert.notEqual(refused.status, 0);
+  assert.equal(refused.output, "", "the start script never runs");
+  assert.match(refused.errors, /this host's application area is not mounted nosuid at \//u);
 });
 

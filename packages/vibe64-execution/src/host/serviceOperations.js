@@ -10,7 +10,12 @@ import {
 import path from "node:path";
 import process from "node:process";
 
-import { applicationReleaseServiceFiles, assertReleaseServiceClaim, registeredApplicationUser } from "./applicationAccounts.js";
+import {
+  applicationReleaseServiceFiles,
+  assertApplicationAreaNosuid,
+  assertReleaseServiceClaim,
+  registeredApplicationUser
+} from "./applicationAccounts.js";
 import { helperCommandPath, readEnvironmentFile } from "./commandEnvironment.js";
 import {
   ensureGroup,
@@ -414,11 +419,14 @@ function removeDeploymentServiceUnit(unitName = "", owner = {}) {
 // A release service loads its environment as its own user at every start, so
 // neither root nor systemd on root's behalf reads a file whose path that user
 // controls. The start script then replaces this process, so nothing else stays
-// running.
+// running. Like every application's code it runs only while its area, where it
+// works, is mounted nosuid: at every start, boot included, whatever systemd
+// started first.
 function runReleaseService(environmentFile = "", startScript = "") {
   if (process.argv.length !== 5 || !path.isAbsolute(environmentFile) || !path.isAbsolute(startScript)) {
     throw new Error("Usage: vibe64-exec-helper run-release-service <environment-file> <start-script>");
   }
+  assertApplicationAreaNosuid(process.cwd());
   process.execve(startScript, [startScript], { ...process.env, ...readEnvironmentFile(environmentFile) });
 }
 

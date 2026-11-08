@@ -12,6 +12,7 @@ import {
   lstatSync,
   openSync,
   readdirSync,
+  readFileSync,
   rmSync,
   unlinkSync
 } from "node:fs";
@@ -461,12 +462,37 @@ function retireApplicationAccount(owner = {}, project = "", {
   return { retired: Boolean(user || registration || projectRoot >= 0) };
 }
 
+// A set-user-ID or set-group-ID file an application makes must do nothing,
+// for every process on the host, sandboxed or not: the mount its area, or the
+// folder in it a release service works in, lies on is nosuid. That is the
+// mount, in mountinfo, with the longest mount point that holds it, the last
+// listed of those sharing it, since a later mount covers an earlier one. Host
+// setup mounts the area so; until then no application code runs.
+function assertApplicationAreaNosuid(areaRoot = "", mountInfo = () => readFileSync("/proc/self/mountinfo", "utf8")) {
+  const area = canonicalPath(areaRoot);
+  let covering = { mountPoint: "", options: [] };
+  for (const line of String(mountInfo()).split("\n")) {
+    const [, , , , escaped = "", options = ""] = line.split(" ");
+    const mountPoint = escaped.replace(/\\([0-7]{3})/gu, (_, octal) => String.fromCharCode(Number.parseInt(octal, 8)));
+    if ((mountPoint === area || relativePathParts(mountPoint, area).length > 0) &&
+        mountPoint.length >= covering.mountPoint.length) {
+      covering = { mountPoint, options: options.split(",") };
+    }
+  }
+  if (!covering.options.includes("nosuid")) {
+    throw new Error(`Vibe64 exec helper refused to run application code: this host's application area is not ` +
+      `mounted nosuid at ${area}, so a set-user-ID or set-group-ID file there would take effect. Host setup mounts it so.`);
+  }
+}
+
 // The application account an execution or release service runs as: one root
 // registered for the calling daemon's workspace, still exactly the account the
-// helper made. Never a person, nor another workspace's application.
+// helper made, its area mounted nosuid. Never a person, nor another
+// workspace's application.
 function registeredApplicationUser(owner = {}, username = "", {
   areaRoot = applicationAreaRoot(),
   facts = hostApplicationFacts,
+  mountInfo,
   resolveUser = resolveOsUser,
   ...registry
 } = {}) {
@@ -483,6 +509,7 @@ function registeredApplicationUser(owner = {}, username = "", {
   if (problem) {
     throw new Error(`Vibe64 exec helper refused application account ${name}: ${problem}`);
   }
+  assertApplicationAreaNosuid(areaRoot, mountInfo);
   return { ...user, application: identity };
 }
 
@@ -599,6 +626,7 @@ export {
   applicationIdentity,
   applicationReleaseEnvironmentFile,
   applicationReleaseServiceFiles,
+  assertApplicationAreaNosuid,
   assertReleaseServiceClaim,
   ensureApplicationAccount,
   handleApplicationAccountOperation,

@@ -322,10 +322,26 @@ private `/tmp` as its `TMPDIR`, the whole file system read-only except its area
 and its receipt, no access to homes or to the host's settings folder (with
 its people and applications), no other users' processes, no devices beyond
 the standard ones, no System V IPC or `/dev/shm` shared with others, no kernel settings,
-set-user-ID files, namespaces or capabilities; only internet, local and netlink
+namespaces or capabilities; only internet, local and netlink
 sockets (Node's `os.networkInterfaces()` needs netlink); and only an ordinary
 service's system calls (`@system-service`), any other failing with `EPERM`.
-Builds with Node, npm, esbuild, Python, tar and SQLite run unchanged in it. Its
+A set-user-ID or set-group-ID file it makes does nothing: the host mounts the
+application area `nosuid,nodev`, so the kernel ignores those bits there for
+every process on the host, sandboxed or not, and the helper requires it. Before
+it runs an application's command or installs its release service, the mount
+covering the area (the last listed with the longest mount point holding it in
+`/proc/self/mountinfo`) must be `nosuid`, and so must the one covering a release
+service's working directory before its start script runs, at every start, boot
+included. Otherwise the helper refuses with a message naming the area, and no
+application code runs. Everything else an application may write, its private
+`/tmp` and `/var/tmp`, its `/dev/shm` and its receipt in `/run`, is `nosuid`
+too. The sandbox has
+no `RestrictSUIDSGID=`: under it systemd refuses `openat2()` with `ENOSYS`,
+since it cannot see the mode inside `struct open_how`, and GNU tar creates
+every file and folder it unpacks with `openat2()`, so tar and dpkg-deb could
+unpack nothing. A person's own computer has no application accounts, so it
+needs no such mount.
+Builds with Node, npm, esbuild, Python, tar, dpkg-deb and SQLite run unchanged in it. Its
 receipt sits in
 root's own runtime directory for the workspace's applications (`0711`), which
 the account can traverse but not list, because it is in no group that reaches

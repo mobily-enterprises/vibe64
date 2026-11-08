@@ -50,6 +50,14 @@ function releaseServicePort(value) {
 // V IPC, nor the kernel's settings. They use only internet, local and netlink sockets (Node's
 // os.networkInterfaces() needs netlink) and the system calls of an ordinary
 // service; any other call fails with EPERM rather than killing the process.
+// A set-user-ID or set-group-ID file they make does nothing: host setup mounts
+// the application area nosuid,nodev, which the helper requires before any
+// application code runs (assertApplicationAreaNosuid), so the kernel ignores
+// those bits there for every process on the host; their private /tmp and
+// /var/tmp, /dev/shm and receipt in /run are nosuid too. There is no
+// RestrictSUIDSGID=: under it systemd refuses openat2() with ENOSYS, since it
+// cannot see the mode inside struct open_how, and GNU tar makes every file and
+// folder it unpacks with openat2(), so tar and dpkg-deb could unpack nothing.
 function applicationSandboxLines(identity = {}, writablePaths = []) {
   return [
     "NoNewPrivileges=yes",
@@ -66,7 +74,6 @@ function applicationSandboxLines(identity = {}, writablePaths = []) {
     "ProtectKernelModules=yes",
     "ProtectKernelLogs=yes",
     "ProtectControlGroups=yes",
-    "RestrictSUIDSGID=yes",
     "RestrictNamespaces=yes",
     "LockPersonality=yes",
     "CapabilityBoundingSet=",

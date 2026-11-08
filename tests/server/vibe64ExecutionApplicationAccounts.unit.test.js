@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -11,6 +11,7 @@ import {
   applicationIdentity,
   applicationReleaseEnvironmentFile,
   applicationReleaseServiceFiles,
+  assertApplicationAreaNosuid,
   assertReleaseServiceClaim,
   ensureApplicationAccount,
   readApplicationRegistration,
@@ -43,11 +44,16 @@ const GID = process.getgid();
 // The test's uid stands in for the system account the helper makes.
 const LOGIN_UIDS = { max: 60000, min: UID + 1 };
 
+// One /proc/self/mountinfo line: a mount at mountPoint with those per-mount options.
+const mountLine = (id, mountPoint, options) => `${id} 1 8:1 / ${mountPoint} ${options} shared:1 - ext4 /dev/vda1 rw`;
+
 // A host as root sees it, in a temporary directory: the test's own uid stands
-// in for root, the daemon and the application alike.
+// in for root, the daemon and the application alike. Its application area
+// lies on a nosuid mount, as host setup mounts it.
 async function applicationHost(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-application-accounts-"));
   t.after(() => rm(root, { force: true, recursive: true }));
+  const mountInfo = [mountLine(1, "/", "rw,relatime"), mountLine(2, await realpath(root), "rw,nosuid,nodev,relatime")].join("\n");
   await mkdir(path.join(root, "var", "lib"), { recursive: true });
   const managedRoot = path.join(root, "var", "lib", "managed");
   const unitRoot = path.join(root, "etc", "systemd", "system");
@@ -75,6 +81,7 @@ async function applicationHost(t) {
     facts: (username) => ({ groupGid: GID, groups: [username], loginUids: LOGIN_UIDS }),
     grantDaemonSearch: (descriptor) => grants.push(descriptor),
     managedRoot,
+    mountInfo: () => mountInfo,
     registryRoot: path.join(root, "etc", "vibe64", "applications"),
     registryUid: UID,
     resolveUser: (username) => accounts.get(username) || null,
@@ -374,6 +381,40 @@ test("an application command runs only as a registered application of the daemon
   }), /group other than its own/u);
 });
 
+test("an application runs only while its area lies on a nosuid mount", async (t) => {
+  const host = await applicationHost(t);
+  const account = host.ensure("shop");
+  const area = await realpath(host.options.areaRoot);
+  const run = (...lines) => registeredApplicationUser(host.owner, account.username,
+    { ...host.options, mountInfo: () => `${lines.join("\n")}\n` });
+  const refused = /refused to run application code: this host's application area is not mounted nosuid at \//u;
+
+  assert.equal(run(mountLine(1, "/", "rw,relatime"), mountLine(2, area, "rw,nosuid,nodev,relatime")).username, account.username);
+  // The host's own file system is the area's mount until host setup mounts it.
+  assert.throws(() => run(mountLine(1, "/", "rw,relatime")), refused);
+  // A nosuid parent mount covers the area; one beside it, sharing its name's start, does not.
+  run(mountLine(1, "/", "rw,relatime"), mountLine(2, path.dirname(area), "rw,nosuid,relatime"));
+  assert.throws(() => run(mountLine(1, "/", "rw,relatime"), mountLine(2, `${area}-old`, "rw,nosuid,nodev,relatime")), refused);
+  // A mount below the area is not the area's.
+  assert.throws(() => run(mountLine(1, "/", "rw,relatime"), mountLine(2, path.join(area, "test"), "rw,nosuid,relatime")), refused);
+  // The last mount listed at the same place covers those before it.
+  assert.throws(() => run(mountLine(1, "/", "rw,relatime"), mountLine(2, area, "rw,nosuid,nodev,relatime"),
+    mountLine(3, area, "rw,nodev,relatime")), refused);
+  run(mountLine(1, "/", "rw,relatime"), mountLine(2, area, "rw,relatime"), mountLine(3, area, "rw,nosuid,nodev,relatime"));
+  // An option that only contains the word is not nosuid.
+  assert.throws(() => run(mountLine(1, "/", "rw,relatime"), mountLine(2, area, "rw,nosuidx,relatime")), refused);
+
+  // mountinfo escapes a space in a mount point as \040, and the area is found by its real path.
+  const spaced = path.join(host.root, "app area");
+  await mkdir(spaced);
+  await symlink(spaced, path.join(host.root, "linked"));
+  const realRoot = await realpath(host.root);
+  const spacedMount = (options) => () => [mountLine(1, "/", "rw"), mountLine(2, `${realRoot}/app\\040area`, options)].join("\n");
+  assertApplicationAreaNosuid(spaced, spacedMount("rw,nosuid"));
+  assertApplicationAreaNosuid(path.join(host.root, "linked"), spacedMount("rw,nosuid"));
+  assert.throws(() => assertApplicationAreaNosuid(spaced, spacedMount("rw")), refused);
+});
+
 test("an application command starts in its own area, whatever links it planted", async (t) => {
   const host = await applicationHost(t);
   const account = host.ensure("shop");
@@ -440,7 +481,7 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   assert.deepEqual(lines.slice(0, 3), [`User=${account.username}`, `Group=${account.username}`, "UMask=0077"]);
   assert.equal(lines.some((line) => /^(SupplementaryGroups=|Group=vibe64$)/u.test(line)), false);
   for (const line of ["NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ProtectHome=yes",
-    "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
+    "ProtectProc=invisible", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
     `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, `ReadWritePaths=${account.appRoot} ${account.databaseRoot} ${receiptRoot}`,
     "PrivateDevices=yes", "PrivateIPC=yes", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
     "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK",
@@ -448,6 +489,8 @@ test("an application's execution runs as itself in its sandbox, with its own tem
     assert.ok(lines.includes(line), line);
   }
   assert.equal(lines.some((line) => line.startsWith("SocketBind")), false, "a finite command may bind, as builds and tests do");
+  // Under RestrictSUIDSGID= systemd refuses openat2(), with which GNU tar unpacks; the nosuid area takes its place.
+  assert.equal(lines.some((line) => line.startsWith("RestrictSUIDSGID")), false, "tar and dpkg-deb unpack folders");
   assert.deepEqual(accountUnitLines({ username: "alice" }),
     ["User=alice", "Group=vibe64", "SupplementaryGroups=nix-users", "UMask=0007"]);
 
@@ -582,7 +625,7 @@ test("a release service unit runs as its application in its sandbox, listening o
   for (const line of [
     `User=${applicationUser("0123456789ab")}`, `Group=${applicationUser("0123456789ab")}`, "UMask=0077", "Slice=vibe64-test-work.slice",
     "NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ReadWritePaths=/area/app /area/database",
-    "ProtectHome=yes", "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
+    "ProtectHome=yes", "ProtectProc=invisible", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
     `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "SocketBindAllow=tcp:4100", "SocketBindAllow=udp", "SocketBindDeny=any",
     "Environment=PATH=/packs/bin:/usr/bin", "Environment=TMPDIR=/tmp", "PrivateDevices=yes", "PrivateIPC=yes", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
     "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK", "SystemCallArchitectures=native",
@@ -593,7 +636,7 @@ test("a release service unit runs as its application in its sandbox, listening o
   ]) {
     assert.ok(lines.includes(line), line);
   }
-  assert.equal(lines.some((line) => /^(SupplementaryGroups=|Group=vibe64$|EnvironmentFile=)/u.test(line)), false);
+  assert.equal(lines.some((line) => /^(SupplementaryGroups=|Group=vibe64$|EnvironmentFile=|RestrictSUIDSGID=)/u.test(line)), false);
   for (const port of [0, 80, 1023, 65536, "4100; rm", undefined]) {
     assert.throws(() => unit(port), /release service port/u, String(port));
   }
