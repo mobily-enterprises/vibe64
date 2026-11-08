@@ -42,6 +42,7 @@ import { sessionAgentManagerDefaults } from "../../fixtures/sessionAgentManagerD
 import { registerRoutes as registerTerminalRoutes } from "../../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { createColleagueService } from "../../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions } from "../../../packages/vibe64-colleague/src/server/colleagueActions.js";
+import { nameColleague } from "../../../packages/vibe64-colleague/src/server/colleagueName.js";
 import { createColleagueUsageKnowledge } from "../../../packages/vibe64-colleague/src/server/usageKnowledge.js";
 import { NO_HOST_PANES } from "../../../packages/vibe64-colleague/src/shared/navigationPanes.js";
 import { sourceMetadata } from "../../server/vibe64TestHelpers.js";
@@ -318,7 +319,9 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
     setup({ events }) {
       const selection = { engineId: "codex", modelProviderId: "openai", modelId: "test-model" };
+      // Uncomposed hosts get the default name, as Vibe64ColleagueFeature gives them.
       const service = createColleagueService({ actions, events, systemRoot: colleagueRoot, logger: silentLogger,
+        resolveName: nameColleague,
         accounts: { async initializeModelRouting() {} },
         terminals: {
           async requireAssistantSelectionAccess(_selection, { vibe64User }) {
