@@ -365,6 +365,32 @@ test("a schedule refreshes on time, and turns missed while Vibe64 was stopped co
   assert.equal((await world.read(page.id)).refresh.running, null);
 });
 
+test("stopping the scheduler waits for a start's pickup still under way, which picks up no more projects", async () => {
+  const entered = [];
+  const held = Promise.withResolvers();
+  const project = {
+    listProjects: async () => ({ projects: [{ slug: "first" }, { slug: "second" }] }),
+    // The first project's pickup is still running when the server stops.
+    runInProjectContext: async (slug) => {
+      entered.push(slug);
+      await held.promise;
+    }
+  };
+  const pages = createPagesService({ now: () => iso(Date.now()), clock: Date.now, project, logger: quietLogger });
+  const resuming = pages.resumeRefreshes();
+  await until(() => entered.length === 1, "the pickup reaching its first project");
+  let closed = false;
+  const closing = Promise.resolve(pages.closeRefreshes()).then(() => {
+    closed = true;
+  });
+  await delay(50);
+  assert.equal(closed, false, "stopping waits for the project being picked up");
+  held.resolve();
+  await closing;
+  await resuming;
+  assert.deepEqual(entered, ["first"]);
+});
+
 test("a prompt refresh is an AI task in the session it was set from, refreshed once the page has new data; a lost AI account or session pauses it", async (t) => {
   const world = await refreshWorld(t);
   const tasks = fakeTasks();

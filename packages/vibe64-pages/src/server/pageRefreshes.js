@@ -89,6 +89,8 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
   let timer = null;
   let pollTimer = null;
   let closed = false;
+  // The start's pickup of every project's refreshes, which close() waits for.
+  let resuming = Promise.resolve(null);
   const iso = (ms) => new Date(ms).toISOString();
 
   function warn(event, error, fields = {}) {
@@ -412,9 +414,17 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
    * passed while Vibe64 was stopped becomes one catch-up now, a prompt refresh still running is
    * followed again, and a script that was running when Vibe64 stopped has ended, its checkout with it.
    */
-  async function resume() {
+  function resume() {
+    const pickup = resumeProjects();
+    resuming = pickup.catch(() => null);
+    return pickup;
+  }
+
+  async function resumeProjects() {
     const listed = await project.listProjects();
     for (const { slug } of listed?.projects || []) {
+      // A server that stopped meanwhile picks up nothing more.
+      if (closed) return;
       await project.runInProjectContext(slug, async () => {
         const { pagesRoot } = currentProjectPages();
         // Checkouts a stopped Vibe64 left behind.
@@ -435,13 +445,18 @@ function createPageRefreshes({ project, store, records, writeData, logger, clock
     }
   }
 
-  /** A closed scheduler starts nothing more and stops the scripts it runs; AI tasks carry on, followed again on the next start. */
+  /**
+   * A closed scheduler starts nothing more and stops the scripts it runs; AI tasks carry on,
+   * followed again on the next start. Resolves once a pickup still under way has stopped, so a
+   * stopped server no longer writes to a project's state.
+   */
   function close() {
     closed = true;
     clearTimeout(timer);
     clearTimeout(pollTimer);
     due.clear();
     for (const stop of stops.values()) stop.abort();
+    return resuming;
   }
 
   function running(slug, pageId) {

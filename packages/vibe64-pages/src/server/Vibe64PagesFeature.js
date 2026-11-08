@@ -66,13 +66,15 @@ const Vibe64PagesFeature = defineFeature({
     void outputs.pages.resumeRefreshes();
   },
   /**
+   * Stops the refresh scheduler, and waits for a start's pickup still under way, so nothing
+   * writes to a project's state once the server has stopped.
    * @param {{ terminals: TerminalsService }} capabilities
    * @param {{ outputs: { pages: PagesService } }} context
    */
-  shutdown({ terminals }, { outputs }) {
+  async shutdown({ terminals }, { outputs }) {
     // readable-check: allow setter-seam - cycle: vibe64.pages requires vibe64.terminals, whose agent command publishes pages
     terminals.setPagesProvider(null);
-    outputs.pages.closeRefreshes();
+    await outputs.pages.closeRefreshes();
   }
 });
 
