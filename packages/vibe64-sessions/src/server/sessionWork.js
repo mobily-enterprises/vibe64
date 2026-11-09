@@ -14,6 +14,25 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {ReturnType<typeof import("./sessionWorkRecovery.js").createSessionWorkRecovery>} SessionWorkRecovery */
 /** @typedef {import("./types.js").SessionUpdateChecks} SessionUpdateChecks */
 
+const NOTED_PATH_LIMIT = 20;
+
+/**
+ * What the main chat's AI is told after Update changed files it may be working on: which ones, so it reads them
+ * again. Empty when Update changed no file.
+ * @param {{ updatedPaths?: string[], updatedPathCount?: number, connected?: object[] }} result
+ */
+function updateMainChatNote(result = {}) {
+  const sources = [result, ...(result.connected || [])];
+  const paths = sources.flatMap(source => source.updatedPaths || []);
+  const count = sources.reduce((total, source) => total + (source.updatedPathCount || 0), 0);
+  if (!count) return "";
+  const listed = paths.slice(0, NOTED_PATH_LIMIT);
+  const more = count - listed.length;
+  return `Vibe64 updated this session to the saved version. These files changed: ${listed.join(", ")}${more > 0 ? ` and ${more} more` : ""}. Re-read them before editing them, and re-run any checks that touch them.`;
+}
+
+const SAVE_MAIN_CHAT_NOTE = "Vibe64 saved this session's work as it is now, including unfinished changes. No files changed, so nothing needs re-reading.";
+
 /**
  * The copy whose Update failed, as the Update's own failure: a conflict first,
  * so its review and repair run as the session's own conflict does.
@@ -248,16 +267,25 @@ function createSessionWork({
             await runtime.store.writeMetadataValue(sessionId, "base_commit", result.saveCommit);
           }
         }
+        const changedDuringSave = result.unsavedPathCount || 0;
         const savedMessage = result.cacheMaintenance?.retryable === true
           ? "Session work was saved. The local clone cache could not be refreshed and will be retried later."
           : result.reconciled === true
             ? "Session work was saved."
-            : "Session work was pushed and needs local reconciliation.";
+            : changedDuringSave
+              ? "Session work was saved, but a file changed while Save ran, so this session kept every change and still shows the earlier version. Nothing was lost. Update brings it onto the saved version."
+              : "Session work was pushed and needs local reconciliation.";
+        const unsavedMessage = result.reconciled === true && changedDuringSave
+          ? `${changedDuringSave} ${changedDuringSave === 1 ? "file" : "files"} changed while Save ran; ${changedDuringSave === 1 ? "that change stays" : "those changes stay"} unsaved.`
+          : "";
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
           event: {
             kind: result.status,
-            message: [savedMessage, ...(result.connected || []).map(copy => `[Connected] ${copy.name} saved at ${copy.saveCommit.slice(0, 12)}.`)]
-              .join("\n"),
+            message: [
+              savedMessage,
+              unsavedMessage,
+              ...(result.connected || []).map(copy => `[Connected] ${copy.name} saved at ${copy.saveCommit.slice(0, 12)}.`)
+            ].filter(Boolean).join("\n"),
             status: "ready"
           },
           patch: {
@@ -281,6 +309,8 @@ function createSessionWork({
             originId: input.originId
           });
         }
+        // A running turn learns its work so far was saved; an idle one has nothing to act on.
+        await terminals.noteMainChat(sessionId, { message: SAVE_MAIN_CHAT_NOTE }, { runtime, vibe64User });
         return {
           ...result,
           operation: task,
@@ -401,6 +431,13 @@ function createSessionWork({
           originId: input.originId,
           vibe64User: input.vibe64User || null
         });
+        const note = updateMainChatNote(result);
+        if (note) {
+          await terminals.noteMainChat(sessionId, { message: note, nextTurn: true }, {
+            runtime,
+            vibe64User: input.vibe64User || null
+          });
+        }
         const copyFailure = connectedUpdateFailure(result.connected);
         if (copyFailure) throw copyFailure;
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {

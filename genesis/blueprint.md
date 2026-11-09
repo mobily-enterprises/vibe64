@@ -863,7 +863,12 @@ server lifecycle and does not depend on the person keeping its chat open.
 Routine checks of an established assistant connection leave attachment uploads
 available. Starting or restoring an assistant still respects session renewal
 and cleanup.
-Save and Update wait for active assistant preparation to finish. During either
+Save and Update wait for active assistant preparation to finish. Update and Save
+can run while the AI works; Save asks first because it includes unfinished
+changes. Nothing written while either runs is lost: a file changed meanwhile
+stays as unsaved work, or Update stops, keeps every change and says to try again.
+Afterwards the main chat's AI is told which files Update changed so it re-reads
+them, and a working turn learns its work so far was saved. During either
 operation, an existing temporary chat's or open AI task's saved history remains
 readable and its plain text draft can be saved. Assistant sends, model or attachment changes and chat
 lifecycle actions still use source coordination. A lost Update response remains

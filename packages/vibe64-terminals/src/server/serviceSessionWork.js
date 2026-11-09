@@ -267,19 +267,24 @@ function createServiceSessionWork({
     return { ...saved, commitTitleExecutionProfile: commitTitle.executionProfile, ...(connected.length ? { connected } : {}) };
   }
 
+  /**
+   * A repository change under the session's write lock. One that `whileAssistantWorks` (Save and Update) runs during
+   * the main chat's turn: each checks itself that no file changed while it ran. Every other one waits for the turn.
+   */
   async function runSessionRepositoryWrite(
     sessionId,
     options,
     {
       operation: operationName = "repository-write",
       activeCode = "vibe64_session_repository_agent_active",
-      activeMessage = "Wait for the assistant turn to finish before changing this session's repository."
+      activeMessage = "Wait for the assistant turn to finish before changing this session's repository.",
+      whileAssistantWorks = false
     },
     operation
   ) {
     const { onRepositoryWriteAcquired = doNothing } = options;
     const result = await sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
-      if (sessionHasActiveAgentRun(context.session)) {
+      if (!whileAssistantWorks && sessionHasActiveAgentRun(context.session)) {
         const activityCheck = await sessionAgent.ensureSession(sessionId, context);
         context.session = await context.runtime.getSessionWithoutSource(sessionId);
         if (sessionHasActiveAgentRun(context.session)) {
@@ -417,8 +422,7 @@ function createServiceSessionWork({
   async function saveSessionWork(sessionId, input = {}) {
     return runSessionRepositoryWrite(sessionId, input, {
       operation: "save-session-work",
-      activeCode: "vibe64_session_save_agent_active",
-      activeMessage: "Wait for the assistant turn to finish before saving this work."
+      whileAssistantWorks: true
     }, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
   }
 
@@ -536,8 +540,7 @@ function createServiceSessionWork({
       }
     }, {
       operation: "update-session-work",
-      activeCode: "vibe64_session_update_agent_active",
-      activeMessage: "Wait for the assistant turn to finish before updating this session."
+      whileAssistantWorks: true
     }, async (context) => {
       const { execution, runtime, session } = await sessionWorkExecution(sessionId, context, "session-update", { createsCommits: true });
       const projectRecord = await project.readCurrentProject();

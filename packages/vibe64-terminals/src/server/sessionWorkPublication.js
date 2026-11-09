@@ -9,6 +9,7 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { githubMirrorRefreshInvocation, writeGitWorktreeTree } from "@local/vibe64-execution/server";
 import {
+  changedPathsBetween,
   commandProject,
   commitTree,
   git,
@@ -18,6 +19,7 @@ import {
   saveCommand,
   saveError
 } from "./sessionWorkGit.js";
+import { switchSessionWorktree } from "./sessionWorktreeSwitch.js";
 import { assertLocalAuthority } from "./sessionWorkAuthority.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
@@ -282,27 +284,20 @@ async function reconcileSession(runCommand, context, {
       status: "published_needs_reconcile"
     };
   }
-  const preserveLaterWork = currentTree !== checkpointTree && currentTree !== saveTree;
+  // Files written after the checkpoint, by the person or the session's AI, are not in this Save. The switch keeps
+  // them as the session's unsaved work and refuses, changing nothing, rather than overwrite one.
+  const unsavedPathCount = currentTree === checkpointTree || currentTree === saveTree
+    ? 0
+    : (await changedPathsBetween(runCommand, context, checkpointTree, currentTree, { commandOptions, project })).length;
   const oldIndexTree = await gitOutput(runCommand, context, ["write-tree"], {
     commandOptions,
     project
   });
   try {
-    if (preserveLaterWork) {
-      await git(runCommand, context, ["read-tree", checkpointCommit], {
-        commandOptions,
-        project
-      });
-      await git(runCommand, context, ["read-tree", "-m", "-u", checkpointCommit, saveCommit], {
-        commandOptions,
-        project
-      });
-    } else {
-      await git(runCommand, context, ["read-tree", "--reset", "-u", saveCommit], {
-        commandOptions,
-        project
-      });
-    }
+    await switchSessionWorktree(runCommand, context, currentTree === saveTree ? saveTree : checkpointCommit, saveCommit, {
+      commandOptions,
+      project
+    });
     await git(runCommand, context, ["update-ref", "HEAD", saveCommit, oldHead], {
       commandOptions,
       project
@@ -310,16 +305,10 @@ async function reconcileSession(runCommand, context, {
     return {
       currentTree,
       reconciled: true,
-      status: "saved"
+      status: "saved",
+      unsavedPathCount
     };
   } catch (error) {
-    if (!preserveLaterWork) {
-      await git(runCommand, context, ["read-tree", "--reset", "-u", checkpointCommit], {
-        commandOptions,
-        project,
-        required: false
-      });
-    }
     await git(runCommand, context, ["read-tree", oldIndexTree], {
       commandOptions,
       project,
@@ -329,7 +318,8 @@ async function reconcileSession(runCommand, context, {
       currentTree,
       error: normalizeText(error?.message || error),
       reconciled: false,
-      status: "published_needs_reconcile"
+      status: "published_needs_reconcile",
+      unsavedPathCount
     };
   }
 }

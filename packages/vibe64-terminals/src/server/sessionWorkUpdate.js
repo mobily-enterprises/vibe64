@@ -12,6 +12,7 @@ import {
 import { GIT_HISTORY_RECORD_FORMAT, parseGitHistoryRecords } from "./gitRecords.js";
 import {
   assertBranch,
+  changedPathStatusesBetween,
   changedPathsBetween,
   commandProject,
   commitIsAncestor,
@@ -41,6 +42,13 @@ import {
 } from "./sessionWorkAuthority.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import {
+  sessionWorktreeTree,
+  switchSessionWorktree,
+  undoSessionUpdate,
+  UPDATE_WORKTREE_CHANGED_CODE,
+  updateWorktreeChangedError
+} from "./sessionWorktreeSwitch.js";
 
 const INCOMING_VERSION_LIMIT = 5;
 const UPDATE_CANCELLED_CODE = "vibe64_session_update_cancelled";
@@ -347,6 +355,12 @@ async function readSessionAuthorityHeads({
   return results;
 }
 
+/**
+ * Applies the prepared update. The session's AI may be working, so the switch changes only the paths Update changes
+ * and never overwrites a file written after the checkpoint; files written elsewhere stay as the session's unsaved
+ * work. When a file Update changes is written while it runs, Update stops and puts the session back, keeping every
+ * file as last written.
+ */
 async function applySessionUpdate(runCommand, context, {
   canonicalCommit,
   checkpointCommit,
@@ -358,70 +372,43 @@ async function applySessionUpdate(runCommand, context, {
   oldIndexTree,
   project
 }) {
-  const currentTree = await writeGitWorktreeTree({
-    baseCommit: "HEAD",
-    project: commandProject(context, project),
-    runCommand,
-    worktreePath: context.worktreePath
-  });
-  if (currentTree !== checkpointTree) {
-    throw saveError(
-      "This session changed while its update was being prepared. Retry when the assistant is idle.",
-      "vibe64_session_update_worktree_changed"
-    );
-  }
+  const options = { commandOptions, project };
+  const updatedPathStatuses = await changedPathStatusesBetween(runCommand, context, checkpointTree, mergedTree, options);
+  let switched = false;
   try {
-    await git(runCommand, context, ["read-tree", "--reset", "-u", mergedCommit], {
-      commandOptions,
-      project
-    });
-    await git(runCommand, context, ["update-ref", "HEAD", canonicalCommit, oldHead], {
-      commandOptions,
-      project
-    });
-    await git(runCommand, context, ["read-tree", canonicalCommit], {
-      commandOptions,
-      project
-    });
-    const updatedTree = await writeGitWorktreeTree({
-      baseCommit: "HEAD",
-      project: commandProject(context, project),
-      runCommand,
-      worktreePath: context.worktreePath
-    });
-    if (updatedTree !== mergedTree) {
-      throw saveError(
-        "The updated session did not match the prepared merged work.",
-        "vibe64_session_update_verification_failed"
-      );
-    }
-    await rememberCanonicalCommit(runCommand, context, canonicalCommit, {
-      commandOptions,
-      project
-    });
-    return { currentTree: updatedTree, reconciled: true, status: "updated" };
+    await switchSessionWorktree(runCommand, context, checkpointCommit, mergedCommit, options);
+    switched = true;
+    await git(runCommand, context, ["update-ref", "HEAD", canonicalCommit, oldHead], options);
+    await git(runCommand, context, ["read-tree", canonicalCommit], options);
+    const updatedTree = await sessionWorktreeTree(runCommand, context, project);
+    const written = (await changedPathsBetween(runCommand, context, mergedTree, updatedTree, options))
+      .filter((entry) => updatedPathStatuses.has(entry));
+    if (written.length) throw updateWorktreeChangedError(written);
+    await rememberCanonicalCommit(runCommand, context, canonicalCommit, options);
+    // The main chat's AI is told which files changed; a long list is cut, with its full count.
+    return {
+      currentTree: updatedTree,
+      reconciled: true,
+      status: "updated",
+      updatedPathCount: updatedPathStatuses.size,
+      updatedPaths: [...updatedPathStatuses.keys()].sort((left, right) => left.localeCompare(right)).slice(0, 50)
+    };
   } catch (error) {
-    const currentHead = await gitOutput(runCommand, context, ["rev-parse", "HEAD"], {
-      commandOptions,
-      project
-    }).catch(() => "");
-    await git(runCommand, context, ["read-tree", "--reset", "-u", checkpointCommit], {
-      commandOptions,
+    const { undone, written } = await undoSessionUpdate(runCommand, context, {
+      canonicalCommit,
+      checkpointCommit,
+      checkpointTree,
+      mergedTree,
+      oldHead,
+      oldIndexTree,
+      options,
       project,
-      required: false
+      switched,
+      updatedPathStatuses
     });
-    if (currentHead && currentHead !== oldHead) {
-      await git(runCommand, context, ["update-ref", "HEAD", oldHead, currentHead], {
-        commandOptions,
-        project,
-        required: false
-      });
+    if (!undone || (written.length && error?.code !== UPDATE_WORKTREE_CHANGED_CODE)) {
+      throw updateWorktreeChangedError(written, { undone });
     }
-    await git(runCommand, context, ["read-tree", oldIndexTree], {
-      commandOptions,
-      project,
-      required: false
-    });
     throw error;
   }
 }

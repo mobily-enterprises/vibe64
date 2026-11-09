@@ -26,6 +26,7 @@ import { createServiceAssistant } from "./serviceAssistant.js";
 import { createServiceMainConversationHost } from "./serviceMainConversationHost.js";
 import { createServiceAgentConversations } from "./serviceAgentConversations.js";
 import { createServiceSessionWork } from "./serviceSessionWork.js";
+import { createMainChatNote, MAIN_CHAT_NOTE_METADATA_KEY, messageWithMainChatNote, pendingMainChatNote } from "./mainChatNote.js";
 import { prepareConnectedRepositories } from "./serviceSessionConnectedCopies.js";
 import { createServiceSessionWorkInspection } from "./serviceSessionWorkInspection.js";
 import { createServiceProjectRuntime } from "./serviceProjectRuntime.js";
@@ -311,7 +312,14 @@ function createService({
       await assistantPreparation.prepareAgentSkillsInsideAgentWrite(sessionId, context);
       // A Main send needs the session's durable selection; this refuses without one.
       vibe64AssistantSelectionFromMetadata(context.session.metadata);
-      return sessionAgent.sendMessage(sessionId, input, context);
+      const note = pendingMainChatNote(context.session);
+      const noted = messageWithMainChatNote(input, note);
+      const result = await sessionAgent.sendMessage(sessionId, noted || input, context);
+      if (noted && result?.delivered === true &&
+        await context.runtime.store.readMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY) === note) {
+        await context.runtime.store.deleteMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY);
+      }
+      return result;
     }
   });
 
@@ -605,6 +613,9 @@ function createService({
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,
+    noteMainChat: createMainChatNote({
+      assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent
+    }),
     prepareAssistantChangeover: assistantPreparation.prepareAssistantChangeover,
     prepareRoutingSelection: assistantPreparation.prepareRoutingSelection,
     applyGoalSelection: goals.applyGoalSelection,

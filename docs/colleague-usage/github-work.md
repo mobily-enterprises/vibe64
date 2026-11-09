@@ -111,6 +111,29 @@ To see a dismissed failure again, choose **Show Update notice** or **Show Save
 notice** in the selected session tab's info.
 On phones, reveal chat to reach the notice and its controls.
 
+## Save or Update while the AI works
+
+Update and Save can run while the AI works; Save asks first because it includes
+unfinished changes. Choosing **Save** while the main chat's AI is working opens
+**Save changes** with **The AI is still working. Save now, including its
+unfinished changes?**; its button reads **Save now**, and **Cancel** saves
+nothing. Update runs straight away.
+
+Nothing written while either runs is lost. A file the AI writes after Save has
+captured the work stays as unsaved work, and Save's notice says how many files
+changed while it ran. If a file Save itself changes, such as a project file Save
+regenerates, was written meanwhile, the work is still saved and every change kept, and
+the notice says to use Update to bring the session onto the saved version. When a
+file Update changes is written while Update runs,
+Update stops, puts the session back as it was with every change kept, and says
+**A file changed while Update ran**, so try Update again. Afterwards Vibe64 tells
+the main chat's AI what happened: after Update, which files changed, so it
+re-reads them before editing and re-runs checks that touch them (a turn that is
+working is told at once, otherwise the note leads your next message); after
+Save, a working turn is told its work so far was saved. Colleague can explain
+these notices; Save and Update themselves still need your instruction. These
+steps apply on desktop and mobile.
+
 ## When the repository needs help
 
 A circled **!** on a session's tab reads **Repository needs help**: that
@@ -170,8 +193,8 @@ intended changes from both versions. Wait for coding work to finish, then:
    runs as that fix's check. It does not Save or push the work.
 
 On phones, reveal chat to reach the Update error; the file review and confirmation
-are the same as on desktop. The controls wait while an assistant
-or repository operation is busy. A changed conflict invalidates an open review.
+are the same as on desktop. The controls wait while a repository operation is
+busy; an AI that is working does not hold them. A changed conflict invalidates an open review.
 If Update refuses a stale review or finds remaining conflicts, inspect the new
 diagnostic, finish the repair and review again. This manual action does not send
 another AI request. Successful Update may still require workspace preparation;

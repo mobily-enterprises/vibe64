@@ -233,7 +233,8 @@ async function runSessionWorkOperation({
   );
 }
 
-async function changedPathsBetween(runCommand, context, baseCommit, tree, options = {}) {
+/** Each path that differs between two trees, with Git's status letter (A, M, D or T) from `baseCommit` to `tree`. */
+async function changedPathStatusesBetween(runCommand, context, baseCommit, tree, options = {}) {
   const result = await git(runCommand, context, [
     "diff-tree",
     "--no-commit-id",
@@ -243,7 +244,11 @@ async function changedPathsBetween(runCommand, context, baseCommit, tree, option
     baseCommit,
     tree
   ], options);
-  return [...parseGitNameStatusZ(result.stdout || result.output).keys()]
+  return parseGitNameStatusZ(result.stdout || result.output);
+}
+
+async function changedPathsBetween(runCommand, context, baseCommit, tree, options = {}) {
+  return [...(await changedPathStatusesBetween(runCommand, context, baseCommit, tree, options)).keys()]
     .sort((left, right) => left.localeCompare(right));
 }
 
@@ -704,6 +709,7 @@ export {
   assertBranch,
   boundedReviewDiff,
   canonicalRef,
+  changedPathStatusesBetween,
   changedPathsBetween,
   commandProject,
   commitIsAncestor,

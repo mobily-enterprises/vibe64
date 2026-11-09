@@ -1240,7 +1240,7 @@ test("publication rejects missing reviews and enforces the project's PR workflow
   }), { code: "vibe64_pull_request_required" });
 });
 
-test("Save rechecks active assistant work after waiting for preparation", { timeout: 15_000 }, async (t) => {
+test("Save waits for preparation, then runs although the AI started working meanwhile", { timeout: 15_000 }, async (t) => {
   const contended = deferred();
   const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {
     codexAppServerProviderFactory() {
@@ -1263,8 +1263,10 @@ test("Save rechecks active assistant work after waiting for preparation", { time
     await release.promise;
   }, { operation: "prepare-agent-session" });
   await entered.promise;
+  // Save and Update run while the AI works; the person confirmed Save first.
+  const admitted = new Error("Save reached repository work.");
   const requested = service.saveSessionWork(session.sessionId, {
-    onRepositoryWriteAcquired() { assert.fail("Active assistant must prevent repository work"); }
+    onRepositoryWriteAcquired() { throw admitted; }
   }).catch((error) => error);
   try {
     await contended.promise;
@@ -1273,7 +1275,7 @@ test("Save rechecks active assistant work after waiting for preparation", { time
     release.resolve();
     await preparing;
   }
-  assert.equal((await requested).code, "vibe64_session_save_agent_active");
+  assert.equal(await requested, admitted);
   session.agentRuns = [];
 });
 

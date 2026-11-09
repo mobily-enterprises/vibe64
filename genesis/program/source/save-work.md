@@ -77,6 +77,8 @@ Git commands.
 - `packages/vibe64-terminals/src/server/sessionWorkSaveRecovery.js`
 - `packages/vibe64-terminals/src/server/sessionGitCommandActor.js`
 - `packages/vibe64-terminals/src/server/sessionWorkGit.js`
+- `packages/vibe64-terminals/src/server/sessionWorktreeSwitch.js`
+- `packages/vibe64-terminals/src/server/mainChatNote.js`
 - `packages/vibe64-terminals/src/server/sessionWorkCommands.js`
 - `packages/vibe64-terminals/src/server/sessionWorkAuthority.js`
 - `packages/vibe64-terminals/src/server/githubRemoteHeads.js`
@@ -357,7 +359,44 @@ Repository Save and manual pull-request creation do not require AI access;
 their source-operation and GitHub permissions still apply.
 The chat-header Save control also remains usable after AI access is denied or
 startup fails. It still waits while assistant activity is unknown or being
-reconciled, and while a turn or repository operation is running.
+reconciled, while a message is being sent, and while a repository operation is
+running.
+
+Update and Save can run while the AI works; Save asks first because it includes
+unfinished changes. Neither the header controls nor the server refuse during a
+main-chat turn (`runSessionRepositoryWrite` in `serviceSessionWork.js` takes
+`whileAssistantWorks` for both; recovery and source reads still wait). While the
+main chat's turn is open the Save confirmation says "The AI is still working.
+Save now, including its unfinished changes?" and its button reads Save now; that
+confirmation is the only gate. The write lock and the project source lock still
+make each operation exclusive.
+
+Nothing written while either runs is lost, because neither replaces the
+session's files wholesale. Both move the worktree with Git's two-tree switch
+(`switchSessionWorktree` in `sessionWorktreeSwitch.js`: read the starting tree into the
+index, refresh its file stats, then `read-tree -m -u`), which changes only the
+paths that differ and refuses, changing nothing, rather than overwrite a file that
+no longer matches its starting version. Save's commit is its checkpoint; files
+written after it stay unsaved and Save's notice counts them
+(`unsavedPathCount`). When the switch onto the saved commit is refused, the
+push stands, every change is kept, and the result is `published_needs_reconcile`
+with a notice that a file changed while Save ran. Update switches only the paths
+the merge changes, so edits elsewhere stay as unsaved work; when a path Update
+changes is written before or after its switch, Update stops with
+`vibe64_session_update_worktree_changed`, switches those paths back to the
+checkpoint unless they were written since, restores HEAD (only while it still
+names the saved commit) and the index, and says a file changed while it ran.
+Fix Update waits and tries again on that code.
+
+After a successful Update the main chat's AI is told which files changed
+(the first twenty, with the full count), to re-read them before editing and
+re-run checks that touch them; after Save a working turn is told its work so far
+was saved and nothing needs re-reading. The terminals' `noteMainChat`
+(`mainChatNote.js`) steers a running turn through the ordinary routed steer
+(generated Junior work, so it never starts a turn); otherwise Update's note waits
+in the session metadata `main_chat_note` and the main-chat dispatch puts it ahead
+of the next message sent there (not a slash command), clearing it once that
+message is delivered. The chat keeps showing what the person sent.
 Naming resolves the actor's Quick helper (`commit_title`) before requesting
 its bounded tool-free profile. Its scoped conversation never changes the main
 chat's binding or history. Repository authorization and write admission still apply.
@@ -526,8 +565,8 @@ for another check. Application tests do not replace the actual Update check.
 Save and Update use the mounted assistant connection's existing readiness state.
 Reconnection is visible and disables both the header action and an already-open
 Save confirmation. The server remains authoritative: a repository request waits
-up to ten seconds for assistant-write admission, then rechecks active assistant
-work before entering repository work. If preparation still owns the lock at
+up to ten seconds for assistant-write admission before entering repository work;
+Save and Update then run whether or not a main-chat turn is open. If preparation still owns the lock at
 timeout, the failure identifies reconnection and offers a later retry. The lock
 is never bypassed and the browser does not automatically resubmit publication.
 

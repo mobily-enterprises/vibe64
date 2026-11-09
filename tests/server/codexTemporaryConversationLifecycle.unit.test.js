@@ -32,6 +32,7 @@ import { createCodexProviderConnectionStore } from "../../packages/vibe64-core/s
 
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 import { prepareCodexModelRouting } from "../../packages/vibe64-terminals/src/server/nativeConversationRetirement.js";
+import { sessionHasActiveAgentRun } from "../../packages/vibe64-terminals/src/server/serviceSessionRecords.js";
 import {
   codexTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
@@ -3647,6 +3648,30 @@ test("an idle message does not replace a thread for an unrelated invalid request
     assert.equal(captures.turns.length, 0);
     assert.equal(captures.threadStarts.length, 1);
   });
+});
+
+test("a note to an idle main chat leads its next message, and a working turn is steered with it", async () => {
+  await withAgentMessageController(async ({ captures, sessionId, store, terminals }) => {
+    const note = "Vibe64 updated this session to the saved version. These files changed: a.txt. Re-read them before editing them, and re-run any checks that touch them.";
+    assert.deepEqual(await terminals.noteMainChat(sessionId, { message: note, nextTurn: true }), { delivered: false, waiting: true });
+    assert.equal(captures.turns.length + captures.steers.length, 0, "a note never starts a turn");
+    assert.equal(await store.readMetadataValue(sessionId, "main_chat_note"), note);
+
+    const sent = await terminals.sendAgentMessage(sessionId, { message: "Carry on with the form.", messageId: "after-note" });
+    assert.equal(sent.delivered, true, JSON.stringify(sent));
+    assert.equal(captures.turns.length, 1);
+    assert.match(JSON.stringify(captures.turns[0].input), /These files changed: a\.txt\..*Carry on with the form\./u);
+    const userTexts = (await store.readConversationLog(sessionId)).map((turn) => turn.user?.text).filter(Boolean);
+    assert.deepEqual(userTexts, ["Carry on with the form."], "the chat shows what the person sent");
+    assert.ok(!await store.readMetadataValue(sessionId, "main_chat_note"), "a delivered note is not sent again");
+
+    const saved = "Vibe64 saved this session's work as it is now, including unfinished changes. No files changed, so nothing needs re-reading.";
+    assert.deepEqual(await terminals.noteMainChat(sessionId, { message: saved }), { delivered: true });
+    assert.equal(captures.turns.length, 1, "the working turn is steered, not replaced");
+    assert.equal(captures.steers.length, 1);
+    assert.match(JSON.stringify(captures.steers[0].message), /Vibe64 saved this session's work as it is now/u);
+    assert.ok(!await store.readMetadataValue(sessionId, "main_chat_note"));
+  }, { throughTerminalService: true });
 });
 
 test("Codex changeover resumes its original thread and sends one combined normal prompt", async () => {
@@ -10715,7 +10740,11 @@ test("goal Resume respects Save admission and protects the gap before a native t
     const pending = (await runtime.getSession(sessionId)).agentRuns.find((run) => run.providerGoalThreadId === goal.threadId);
     assert.equal(pending.providerGoalStatus, "active");
     assert.equal(pending.active, false, "Do not invent a running provider turn");
-    await assert.rejects(terminals.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    // Pending native goal work counts as the AI working, and Save still runs (the person confirms it first).
+    assert.equal(sessionHasActiveAgentRun(await runtime.getSession(sessionId)), true);
+    await assert.rejects(terminals.saveSessionWork(sessionId, {
+      onRepositoryWriteAcquired() { throw stopBeforeGit; }
+    }), (error) => error === stopBeforeGit);
     const earlyMessage = await terminals.sendAgentMessage(sessionId, {
       message: "Keep the migration small.", messageId: "goal-message-before-native-turn"
     });
@@ -10732,7 +10761,10 @@ test("goal Resume respects Save admission and protects the gap before a native t
     await waitForSessionValue(() => runtime.getSession(sessionId), (session) => (
       session.agentRuns.some((run) => run.active && run.providerTurnId === provider.turnId)
     ), "the resumed goal's native turn to enter normal lifecycle tracking");
-    await assert.rejects(terminals.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    assert.equal(sessionHasActiveAgentRun(await runtime.getSession(sessionId)), true);
+    await assert.rejects(terminals.saveSessionWork(sessionId, {
+      onRepositoryWriteAcquired() { throw stopBeforeGit; }
+    }), (error) => error === stopBeforeGit);
     const steering = await terminals.sendAgentMessage(sessionId, {
       message: "Keep the migration small.", messageId: "goal-message-with-native-turn"
     });
@@ -10782,13 +10814,14 @@ test("clearing the current goal releases pending Resume ownership while stale th
     for (const subscriber of captures.subscribers) {
       subscriber({ method: "thread/goal/cleared", params: { threadId: "another-thread" } });
     }
-    await assert.rejects(terminals.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    assert.equal(sessionHasActiveAgentRun(await runtime.getSession(sessionId)), true);
     for (const subscriber of captures.subscribers) {
       subscriber({ method: "thread/goal/cleared", params: { threadId: goal.threadId } });
     }
     await waitForSessionValue(() => runtime.getSession(sessionId), (session) => (
       session.agentRuns.some((run) => run.providerGoalThreadId === goal.threadId && run.providerGoalStatus === "")
     ), "the cleared goal to release pending native work");
+    assert.equal(sessionHasActiveAgentRun(await runtime.getSession(sessionId)), false);
     const stopBeforeGit = new Error("Stop this fixture before Git publication.");
     await assert.rejects(terminals.saveSessionWork(sessionId, {
       onRepositoryWriteAcquired() { throw stopBeforeGit; }
@@ -10925,7 +10958,11 @@ for (const condition of ["active turn", "active goal", "unknown goal", "unknown 
       const run = await store.readAgentRun(sessionId, "codex_app_server");
       assert.equal(run.active, true);
       assert.equal(run.events.some(event => event.kind === "codex-observation-stop-recovered"), false);
-      await assert.rejects(terminals.updateSessionWork(sessionId), { code: "vibe64_session_update_agent_active" });
+      // Update runs while the AI works, so the busy record does not hold it.
+      const stopBeforeGit = new Error("Stop this fixture before Git work.");
+      await assert.rejects(terminals.updateSessionWork(sessionId, {
+        onRepositoryWriteAcquired() { throw stopBeforeGit; }
+      }), error => error === stopBeforeGit);
       assert.equal(captures.turns.length, 0);
     }, { throughTerminalService: true });
   });

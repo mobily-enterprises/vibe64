@@ -1840,6 +1840,57 @@ test("a successful Save keeps mirror maintenance failure as a visible retryable 
   assert.equal(Object.hasOwn(result.operation, "error"), false);
 });
 
+test("a Save while the main chat's AI works tells it the work was saved and reports files written meanwhile", async () => {
+  const taskEvents = [];
+  const notes = [];
+  const runtime = {
+    async getSession() {
+      return { agentRuns: [], sessionId: "session-1", status: "active" };
+    },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    async listSessionSummaries() {
+      return [{ agentRuns: [], sessionId: "session-1", status: "active" }];
+    },
+    store: {
+      async listSessionConversations() { return []; },
+      async readBackgroundTask() { return null; },
+      async writeBackgroundTaskEvent(_sessionId, _taskId, input) {
+        taskEvents.push(input);
+        return { ...input.patch, events: taskEvents.map((entry) => entry.event), id: "save-work" };
+      },
+      async writeMetadataValue() {}
+    }
+  };
+  const service = createService({
+    project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
+      async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
+    },
+    async publishSessionChanged() {},
+    terminals: {
+      async noteMainChat(sessionId, note) {
+        notes.push({ note, sessionId });
+        return { delivered: true };
+      },
+      async requireAssistantAccess() { return { ok: true }; },
+      async saveSessionWork(_sessionId, input) {
+        await input.onRepositoryWriteAcquired();
+        return { reconciled: true, saveCommit: "saved-mid-turn", status: "saved", unsavedPathCount: 2 };
+      }
+    }
+  });
+
+  const result = await service.saveSessionWork("session-1", {});
+
+  assert.equal(result.ok, true);
+  assert.equal(taskEvents.at(-1).event.message, "Session work was saved.\n2 files changed while Save ran; those changes stay unsaved.");
+  assert.deepEqual(notes, [{
+    note: { message: "Vibe64 saved this session's work as it is now, including unfinished changes. No files changed, so nothing needs re-reading." },
+    sessionId: "session-1"
+  }]);
+});
+
 test("a reconciled Save supersedes an older failed session update", async () => {
   const tasks = new Map([
     ["update-session", {
@@ -2283,6 +2334,8 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
   let rejectPreparation = false;
   const preparations = [];
   const publications = [];
+  const notes = [];
+  const changedPaths = Array.from({ length: 25 }, (_entry, index) => `src/file-${String(index).padStart(2, "0")}.js`);
   const service = createService({
     project: {
       async createRuntime() {
@@ -2344,9 +2397,19 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
         assert.deepEqual(running.events.map((event) => event.kind), ["update-started"]);
         return {
           canonicalCommit: "canonical",
+          connected: [{
+            canonicalCommit: "library", line: "[Connected] library updated.", name: "library", status: "updated",
+            updatedPathCount: 1, updatedPaths: ["../connected/library/index.js"]
+          }],
           reconciled: true,
-          status: "updated"
+          status: "updated",
+          updatedPathCount: 30,
+          updatedPaths: changedPaths
         };
+      },
+      async noteMainChat(sessionId, note) {
+        notes.push({ sessionId, note });
+        return { delivered: false, waiting: true };
       }
     }
   });
@@ -2366,6 +2429,14 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
   assert.deepEqual(retried.operation.conflictPaths, []);
   assert.equal(retried.operation.code, "");
   assert.equal(retried.operation.error, "");
+  assert.equal(notes.length, 1, "Only a successful Update tells the main chat");
+  assert.deepEqual(notes[0], {
+    sessionId: "session-1",
+    note: {
+      message: `Vibe64 updated this session to the saved version. These files changed: ${changedPaths.slice(0, 20).join(", ")} and 11 more. Re-read them before editing them, and re-run any checks that touch them.`,
+      nextTurn: true
+    }
+  });
   assert.equal(preparations.length, 1, "The HTTP result must not wait for preparation to finish.");
   assert.equal(publications.at(-1).session.workspaceSetup.status, "running");
   assert.deepEqual(
@@ -2865,7 +2936,7 @@ test("repository history does not reuse an old behind check without incoming ver
   assert.equal(Object.hasOwn(result, "updateCheck"), false);
 });
 
-test("native Save rejects every active provider state before touching Git", async () => {
+test("native Save returns the repository owner's refusal before touching Git", async () => {
   let saveCalls = 0;
   const service = createService({
     project: {
@@ -2890,8 +2961,8 @@ test("native Save rejects every active provider state before touching Git", asyn
       },
       async saveSessionWork() {
         saveCalls += 1;
-        const error = new Error("Wait for the assistant turn to finish before saving this session's work.");
-        error.code = "vibe64_session_save_agent_active";
+        const error = new Error("Another change to this session is running. Try again when it finishes.");
+        error.code = "vibe64_agent_write_mode_busy";
         error.retryable = true;
         throw error;
       }
@@ -2900,7 +2971,7 @@ test("native Save rejects every active provider state before touching Git", asyn
 
   const result = await service.saveSessionWork("session-1", {});
   assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_session_save_agent_active");
+  assert.equal(result.code, "vibe64_agent_write_mode_busy");
   assert.equal(saveCalls, 1);
 });
 

@@ -526,7 +526,14 @@ async function updateConnectedCopies({
         ? `[Connected] ${copy.name} was already current.`
         : `[Connected] ${copy.name} updated to ${shortCommit(result.canonicalCommit)}.`;
       await onProgress({ connectedUpdate: null, kind: "connected", message: line, stage: "connected-updated" });
-      results.push({ canonicalCommit: result.canonicalCommit, line, name: copy.name, status: result.status });
+      results.push({
+        canonicalCommit: result.canonicalCommit,
+        line,
+        name: copy.name,
+        status: result.status,
+        updatedPathCount: result.updatedPathCount || 0,
+        updatedPaths: (result.updatedPaths || []).map(entry => `${prefix}${entry}`)
+      });
     } catch (error) {
       if (signal?.aborted) throw error;
       const recovery = error?.code === "vibe64_session_update_conflict" ? error.details?.conflictRecovery || null : null;
