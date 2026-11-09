@@ -13,12 +13,12 @@ import {
 } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const messageSessionLists = VueRuntime.ref({});
+const messageSessionReads = VueRuntime.ref({});
 vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({
   usePaths: () => ({ api: (suffix, { params }) => `/api/app/${params.slug}${suffix}` })
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
-  useEndpointResource: ({ path }) => ({ data: VueRuntime.computed(() => messageSessionLists.value[path.value]) })
+  useEndpointResource: ({ path }) => ({ data: VueRuntime.computed(() => messageSessionReads.value[path.value]) })
 }));
 
 vi.mock("vuetify/components/VAlert", () => ({
@@ -335,7 +335,7 @@ describe("Vibe64 conversation scroll following", () => {
   let originalWindowDescriptor;
 
   beforeEach(() => {
-    messageSessionLists.value = {};
+    messageSessionReads.value = {};
     vi.useFakeTimers();
     animationFrames = new Map();
     nextAnimationFrameId = 1;
@@ -628,9 +628,11 @@ describe("Vibe64 conversation scroll following", () => {
     expect(userPromptContent(mounted.container)).toBeNull();
     expect(findNode(mounted.container, node => node.type === "a" && node.props.href === "/app/project/vibe64?session=source&chat=main")).not.toBeNull();
     expect(nodeText(mounted.container)).toContain("· source");
-    messageSessionLists.value = {
-      "/api/app/vibe64/vibe64/sessions": { sessions: [{ sessionId: "source", sessionName: "FileTransfer" }] },
-      "/api/app/online/vibe64/sessions": { sessions: [{ sessionId: "destination", sessionName: "Learning" }] }
+    // Each card reads its one session, never the project's open-session list.
+    messageSessionReads.value = {
+      "/api/app/vibe64/vibe64/sessions": { sessions: [{ sessionId: "source", sessionName: "Listed" }] },
+      "/api/app/vibe64/vibe64/sessions/source": { ok: true, sessionId: "source", sessionName: "FileTransfer", status: "archived" },
+      "/api/app/online/vibe64/sessions/destination": { ok: true, sessionId: "destination", sessionName: "Learning" }
     };
     await nextTick();
     expect(nodeText(mounted.container)).toContain("FileTransfer (source)");
@@ -643,7 +645,7 @@ describe("Vibe64 conversation scroll following", () => {
       expect(findNode(mounted.container, node => node.props?.["aria-label"] === "Sent agent message")).not.toBeNull();
       expect(findNode(mounted.container, node => node.type === "a" && node.props.href === "/app/project/online?session=destination&chat=main")).not.toBeNull();
     }
-    messageSessionLists.value = {};
+    messageSessionReads.value = {};
     await nextTick();
     expect(nodeText(mounted.container)).toContain("· destination");
     expect(nodeText(mounted.container)).not.toContain("Learning (destination)");

@@ -63,8 +63,9 @@ Received messages appear on
 the left; sent messages appear on the right, with their timestamp and delivery
 status inside the bubble. They are not human messages.
 The **From** and **To** lines show the session's name as the page last read it,
-for example **FileTransfer (2026-10-11_14-18-36)**. Unnamed sessions, or sessions
-whose name cannot be loaded, show only their ID. A rename in the other project
+for example **FileTransfer (2026-10-11_14-18-36)**, including a session since
+archived or renewed. Unnamed sessions, or sessions whose name cannot be loaded,
+show only their ID. A rename in the other project
 appears after reloading the page. The link still opens that exact session;
 renaming it does not change message routing.
 Bubbles show the actual message, without the internal permission and reply-command

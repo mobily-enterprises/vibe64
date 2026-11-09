@@ -36,18 +36,19 @@ import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { vibe64SessionShortLabel } from "@/lib/vibe64SessionViewModel.js";
-import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SESSION_SUMMARY_CHANGED_EVENT, VIBE64_SURFACE_ID, vibe64SessionsQueryKey } from "@/lib/vibe64SessionRequestConfig.js";
+import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SESSION_SUMMARY_CHANGED_EVENT, VIBE64_SURFACE_ID, vibe64SessionPath, vibe64SessionQueryKey } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({ details: { type: Object, required: true }, at: { type: String, default: "" } });
 const sent = computed(() => props.details.direction === "sent");
 const project = computed(() => sent.value ? props.details.projectSlug : props.details.sourceProject);
 const sessionId = computed(() => sent.value ? props.details.sessionId : props.details.sourceSession);
 const paths = usePaths();
-const sessions = useEndpointResource({
+// The one session's own read names it, archived or renewed sessions too.
+const session = useEndpointResource({
   enabled: computed(() => Boolean(project.value && sessionId.value)),
-  path: computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, { surface: VIBE64_SURFACE_ID, params: { slug: project.value } })),
-  queryKey: computed(() => vibe64SessionsQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, project.value)),
-  readQuery: { limit: 20 },
+  path: computed(() => vibe64SessionPath(
+    paths.api(VIBE64_SESSIONS_API_SUFFIX, { surface: VIBE64_SURFACE_ID, params: { slug: project.value } }), sessionId.value)),
+  queryKey: computed(() => [...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, project.value), sessionId.value, "project-message"]),
   queryOptions: { refetchOnMount: false, refetchOnWindowFocus: false },
   realtime: {
     events: [VIBE64_SESSION_SUMMARY_CHANGED_EVENT, "connect"],
@@ -56,8 +57,7 @@ const sessions = useEndpointResource({
   }
 });
 const sessionLabel = computed(() => {
-  const session = sessions.data.value?.sessions?.find(item => item.sessionId === sessionId.value);
-  const name = vibe64SessionShortLabel(session);
+  const name = session.data.value?.sessionId === sessionId.value ? vibe64SessionShortLabel(session.data.value) : "";
   return name && name !== sessionId.value ? `${name} (${sessionId.value})` : sessionId.value;
 });
 const expanded = ref(false);
