@@ -131,7 +131,10 @@ is made in the session while Save runs, the work is still saved, every change is
 kept, and the notice says Update brings the session onto the saved version. When a file
 Update changes is written, deleted or renamed while Update runs, Update stops,
 puts the session back as it was with every change kept, and says **A file
-changed while Update ran**, so try Update again. When Update would replace a
+changed while Update ran**, so try Update again. If files keep changing each time
+Update tries to put the session back, the session stays updated instead, keeps
+every file as last written, and says **Files kept changing while Update ran**:
+check those files before saving. When Update would replace a
 local file Git ignores in this session, it stops before changing anything and
 names that file: move or rename it, then try Update again. When a Git commit is
 made in the session while Update runs, Update stops, leaves every file as it is

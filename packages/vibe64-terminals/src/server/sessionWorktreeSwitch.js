@@ -1,6 +1,6 @@
 // Moving a session's files while its AI may be writing them: the two-tree switch Save and Update use, and how a
 // failed Update puts the session back without losing a file written meanwhile.
-import { lstat, mkdtemp, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { writeGitWorktreeTree } from "@local/vibe64-execution/server";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
@@ -61,7 +61,10 @@ async function untrackedFilesInTheWay(context, changes) {
  */
 async function switchSessionWorktree(runCommand, context, from, to, options = {}) {
   const changes = await changedPathStatusesBetween(runCommand, context, from, to, options);
-  const temporaryRoot = await mkdtemp(path.join(path.dirname(context.worktreePath), ".vibe64-switch-index-"));
+  // Beside the turn checkpoints' temporary trees, whose sweep also removes an index a crash leaves behind.
+  const checkpoints = path.join(await gitOutput(runCommand, context, ["rev-parse", "--absolute-git-dir"], options), "vibe64-checkpoints");
+  await mkdir(checkpoints, { recursive: true });
+  const temporaryRoot = await mkdtemp(path.join(checkpoints, ".tree-switch-"));
   const indexOptions = {
     ...options,
     additionalAllowedRoots: [temporaryRoot],
@@ -121,15 +124,16 @@ async function switchSessionKeepingWrites(runCommand, context, project, { from, 
     const kept = [...writes.values()]
       .filter((write) => !(write.status === "D" && changes.get(write.path)?.status === "D"))
       .map((write) => write.path);
-    // With no paths, a worktree tree would take every file as it is now, so nothing written means `to` itself.
-    const target = kept.length
-      ? await sessionWorktreeTree(runCommand, context, project, { baseCommit: to, paths: kept })
-      : to;
     try {
+      // With no paths, a worktree tree would take every file as it is now, so nothing written means `to` itself.
+      const target = kept.length
+        ? await sessionWorktreeTree(runCommand, context, project, { baseCommit: to, paths: kept })
+        : to;
       await switchSessionWorktree(runCommand, context, currentTree, target, options);
       return { changes, moved: true, writes };
     } catch {
-      // Someone wrote a file between reading the session and switching it: read it again.
+      // Someone wrote a file between reading the session and switching it, or while its kept files were read: read
+      // it again.
     }
   }
   return { changes, moved: false, writes };

@@ -272,7 +272,8 @@ async function reconcileSession(runCommand, context, {
     required: false
   });
   if (headMoved.ok !== true) {
-    // A commit was made in the session meanwhile, so it stays on that commit, its files as they are.
+    // A commit was made in the session meanwhile, so HEAD stays on that commit. The files Save changed that nobody
+    // wrote may already show the saved version; every other file stays as it is.
     return {
       error: normalizeText(headMoved.stderr || headMoved.output || headMoved.error),
       reconciled: false,

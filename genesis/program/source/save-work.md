@@ -379,8 +379,9 @@ chat).
 Nothing written while either runs is lost, because neither replaces the
 session's files wholesale. Both move the worktree with Git's two-tree switch
 (`switchSessionWorktree` in `sessionWorktreeSwitch.js`: read the starting tree into
-an index of its own beside the session source, refresh its file stats, then
-`read-tree -m -u`), which changes only the paths that differ and refuses, changing
+an index of its own under the Git directory's `vibe64-checkpoints`, whose sweep of
+stale temporary trees also removes one a crash leaves behind, refresh its file
+stats, then `read-tree -m -u`), which changes only the paths that differ and refuses, changing
 nothing, rather than overwrite a file that no longer matches its starting version.
 Git takes a missing file for an unchanged one and replaces a file it ignores, so
 the switch first refuses itself (`vibe64_session_worktree_written`) when a path it
@@ -397,7 +398,8 @@ Every session work Git command that finds the index lock held, as the AI's own
 `switchSessionKeepingWrites` moves the files from one tree onto a commit while
 keeping every file written since: the target is the commit plus those files as
 they are now, so only paths nobody wrote change; a file written between reading
-the session and switching it makes it read again, three times at most. Save's
+the session and switching it, or while its kept files are read, makes it read
+again, three times at most. Save's
 commit is its checkpoint; Save's reconcile (`reconcileSession` in
 `sessionWorkPublication.js`) moves the session from that checkpoint onto the saved
 commit this way, so a regenerated file the AI wrote or deleted meanwhile stays as
@@ -405,7 +407,8 @@ the AI left it, as an unsaved change, and HEAD moves to the saved commit even wh
 files kept changing. Files written after the checkpoint stay unsaved and Save's
 notice counts them (`unsavedPathCount`); `refreshedPaths` lists the files Save
 changed on disk. Only a commit made in the session while Save ran leaves it on
-that commit with the result `published_needs_reconcile`. Save records the
+that commit with the result `published_needs_reconcile`; the files Save changed
+that nobody wrote may by then already show the saved version. Save records the
 session's HEAD from its checkpoint onward (the `checkpointed` and
 `message-writing` progress), so its recovery, which can run during a turn, also
 leaves the session on a commit made since that Save. Update switches only the

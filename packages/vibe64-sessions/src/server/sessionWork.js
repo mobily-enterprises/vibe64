@@ -295,7 +295,7 @@ function createSessionWork({
           ? "Session work was saved. The local clone cache could not be refreshed and will be retried later."
           : result.reconciled === true
             ? "Session work was saved."
-            : "Session work was saved, but a Git commit was made in this session while Save ran, so it still shows its own version, with every change kept. Nothing was lost. Update brings it onto the saved version.";
+            : "Session work was saved, but a Git commit was made in this session while Save ran, so the session stays on that commit, with every change kept. Nothing was lost. Update brings it onto the saved version.";
         const unsavedMessage = result.reconciled === true && changedDuringSave
           ? `${changedDuringSave} ${changedDuringSave === 1 ? "file" : "files"} changed while Save ran; ${changedDuringSave === 1 ? "that change stays" : "those changes stay"} unsaved.`
           : "";
