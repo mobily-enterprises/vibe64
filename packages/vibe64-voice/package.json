@@ -40,8 +40,8 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/assistant-voice": "0.2.35",
-    "@jskit-ai/kernel": "0.2.15",
+    "@jskit-ai/assistant-voice": "0.2.37",
+    "@jskit-ai/kernel": "0.2.17",
     "@local/vibe64-core": "0.1.0",
     "vue": "^3.5.13",
     "vuetify": "^4.0.0",
