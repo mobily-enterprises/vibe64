@@ -14,10 +14,16 @@ const requestRow = (number) => ({ id: `r_${String(number).padStart(6, "0")}`, me
 const requestRows = (count, first = 1) => Array.from({ length: count }, (_, index) => requestRow(first + index));
 
 // The server's requests read: offset cursors, newest first on request, and the total.
+// Each page read is followed by one route-match read naming its rows' templates.
 function serve(recorded) {
   const queries = [];
+  const routeReads = [];
   configureHttpWebClient({
-    async request(path, { query = {} } = {}) {
+    async request(path, { query = {}, method, body } = {}) {
+      if (method === "POST" && path.endsWith("/usage/routes")) {
+        routeReads.push(body.requests.length);
+        return { templates: body.requests.map(() => "") };
+      }
       queries.push(query);
       const rows = query.order === "newest" ? [...recorded].reverse() : recorded;
       const offset = Number(query.cursor || 0);
@@ -25,7 +31,7 @@ function serve(recorded) {
       return { requests: rows.slice(offset, end), interactions: [], nextCursor: end < rows.length ? String(end) : null, total: rows.length };
     }
   });
-  return queries;
+  return { queries, routeReads };
 }
 
 const ids = (data) => data.requests.map((row) => row.id);
@@ -33,7 +39,7 @@ const filter = (values = {}) => ({ recordingId: "rec_aaaaaaaaaaaaaaaaaaaa", q: "
 
 describe("recording requests", () => {
   it("shows the first 200 with the total, and Show more adds pages until every request is shown", async () => {
-    const queries = serve(requestRows(450));
+    const { queries, routeReads } = serve(requestRows(450));
     const { requests } = useVibe64UsageWeb({ sessionId: "s1" });
     await requests.run(filter());
     expect([requests.data.value.requests.length, requests.data.value.total, requests.data.value.nextCursor]).toEqual([200, 450, "200"]);
@@ -44,11 +50,12 @@ describe("recording requests", () => {
     expect(requests.data.value.nextCursor).toBeNull();
     expect(await requests.more()).toBeNull();
     expect(queries).toHaveLength(3);
+    expect(routeReads).toEqual([200, 200, 50]);
   });
 
   it("reads a live recording newest first and puts new requests on top of the rows shown", async () => {
     const recorded = requestRows(450);
-    const queries = serve(recorded);
+    const { queries } = serve(recorded);
     const { requests } = useVibe64UsageWeb({ sessionId: "s1" });
     const live = filter({ newestFirst: true });
     await requests.run(live);
