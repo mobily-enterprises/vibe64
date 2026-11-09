@@ -5,8 +5,8 @@ import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js"
 import { thinkingMessagesPresentation } from "@/lib/vibe64ThinkingPresentation.js";
 
 // How the main chat shows one conversation turn: who answered and through which
-// mode, project and Learning messages as system rows, goal commands with their
-// objective only, and integration requests parsed for their Configure card.
+// mode, project, Learning and Vibe64's own notes as system rows, goal commands
+// with their objective only, and integration requests parsed for their Configure card.
 
 function presentationMessage(message, turn) {
   if (!message || assistantGoalManagementMessage(message, turn)) return null;
@@ -35,6 +35,8 @@ function conversationTurnPresentation(turn) {
       user: null,
       system: { ...(turn.system || turn.user), role: "system", projectMessage: turn.metadata.projectMessage }
     } : {}),
+    // A note Vibe64 steered into a working turn, after Save or Update changed the session, is Vibe64's own.
+    ...(turn.metadata?.vibe64Note === true && turn.user ? { user: null, system: { ...turn.user, role: "system" } } : {}),
     // A Learning watch wake is application-origin: show its short status, not the teacher prompt.
     ...(learningGuidancePresentation(turn.user) ? {
       user: null,

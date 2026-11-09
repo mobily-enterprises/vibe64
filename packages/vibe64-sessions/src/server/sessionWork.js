@@ -37,7 +37,23 @@ const UPDATE_STOPPED_CODES = new Set([
   "vibe64_session_update_worktree_changed"
 ]);
 
-const SAVE_MAIN_CHAT_NOTE = "Vibe64 saved this session's work as it is now, including unfinished changes. No files changed, so nothing needs re-reading.";
+/**
+ * What the main chat's AI is told after Save moved its session onto the saved version: that its work was saved as
+ * it was when Save started, and which files Save itself changed, so it reads them again.
+ * @param {{ refreshedPaths?: string[], unsavedPathCount?: number }} result
+ */
+function saveMainChatNote(result = {}) {
+  const paths = result.refreshedPaths || [];
+  const listed = paths.slice(0, NOTED_PATH_LIMIT);
+  const more = paths.length - listed.length;
+  return [
+    "Vibe64 saved this session's work as it was when Save started, including unfinished changes.",
+    result.unsavedPathCount ? "Changes made to files after that are not saved yet." : "",
+    paths.length
+      ? `Save also regenerated these files: ${listed.join(", ")}${more > 0 ? ` and ${more} more` : ""}. Re-read them before editing them.`
+      : "Save changed no files, so nothing needs re-reading."
+  ].filter(Boolean).join(" ");
+}
 
 /**
  * The copy whose Update failed, as the Update's own failure: a conflict first,
@@ -314,8 +330,11 @@ function createSessionWork({
             originId: input.originId
           });
         }
-        // A running turn learns its work so far was saved; an idle one has nothing to act on.
-        await terminals.noteMainChat(sessionId, { message: SAVE_MAIN_CHAT_NOTE }, { runtime, vibe64User });
+        // A running turn learns its work so far was saved; an idle one has nothing to act on. A session left on
+        // its earlier version has nothing new to learn either.
+        if (result.reconciled === true) {
+          await terminals.noteMainChat(sessionId, { message: saveMainChatNote(result) }, { runtime, vibe64User });
+        }
         return {
           ...result,
           operation: task,

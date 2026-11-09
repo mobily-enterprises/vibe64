@@ -137,9 +137,11 @@ and says so; try Update again.
 Afterwards Vibe64 tells the main chat's AI what happened: after Update, which
 files changed, so it re-reads them before editing and re-runs checks that touch
 them (a turn that is working is told at once, otherwise the note leads your next
-message); after Save, a working turn is told its work so far was saved.
-Colleague can explain these notices; Save and Update themselves still need your
-instruction. These steps apply on desktop and mobile.
+message, and several waiting notes go together); after Save, a working turn is
+told its work was saved as it was when Save started and which files Save
+regenerated. A note sent to a working turn appears in the chat as Vibe64's, not
+as yours. Colleague can explain these notices; Save and Update themselves still
+need your instruction. These steps apply on desktop and mobile.
 
 ## When the repository needs help
 

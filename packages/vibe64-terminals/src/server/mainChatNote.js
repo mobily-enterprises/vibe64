@@ -5,6 +5,8 @@ import crypto from "node:crypto";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 const MAIN_CHAT_NOTE_METADATA_KEY = "main_chat_note";
+// Marks the turn of a note steered into the main chat, which the chat shows as Vibe64's.
+const MAIN_CHAT_NOTE_TURN_METADATA_KEY = "vibe64Note";
 
 /**
  * The note waiting for the next main-chat message, or "".
@@ -38,14 +40,27 @@ function createMainChatNote({ assistantContext, logger, sendAgentMessage, sessio
       const context = await assistantContext.assistantSessionOptions(sessionId, options);
       if ((await sessionAgent.sessionState(sessionId, context))?.turn?.active) {
         // Generated work declares Junior, so a turn that ends meanwhile refuses the steer instead of starting one.
+        // The chat shows the note as Vibe64's, not as the person's.
         const steered = await sendAgentMessage(sessionId, {
           message,
           messageId: crypto.randomUUID(),
-          submissionKind: "steer"
-        }, { ...options, purpose: "junior" }).catch(() => null);
-        if (steered?.delivered === true) return { delivered: true };
+          submissionKind: "steer",
+          turnMetadata: { [MAIN_CHAT_NOTE_TURN_METADATA_KEY]: true }
+        }, { ...options, purpose: "junior" }).then(
+          (result) => (result?.delivered === true ? "delivered" : "uncertain"),
+          (error) => (error?.details?.delivery?.status === "not-sent" ? "not-sent" : "uncertain")
+        );
+        if (steered === "delivered") return { delivered: true };
+        // A steer that may have reached the AI is never repeated with the next message.
+        if (steered === "uncertain") return { delivered: false, waiting: false };
       }
-      if (nextTurn) await context.runtime.store.writeMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY, message);
+      if (nextTurn) {
+        // A note still waiting from an earlier change stays, with this one after it.
+        const { store } = context.runtime;
+        const waiting = String(await store.readMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY) || "");
+        const notes = waiting && waiting !== message ? `${waiting}\n\n${message}` : message;
+        await store.writeMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY, notes);
+      }
       return { delivered: false, waiting: nextTurn };
     } catch (error) {
       logOperationalEvent(logger, "warn", {
@@ -63,6 +78,7 @@ function createMainChatNote({ assistantContext, logger, sendAgentMessage, sessio
 export {
   createMainChatNote,
   MAIN_CHAT_NOTE_METADATA_KEY,
+  MAIN_CHAT_NOTE_TURN_METADATA_KEY,
   messageWithMainChatNote,
   pendingMainChatNote
 };

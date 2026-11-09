@@ -1840,9 +1840,13 @@ test("a successful Save keeps mirror maintenance failure as a visible retryable 
   assert.equal(Object.hasOwn(result.operation, "error"), false);
 });
 
-test("a Save while the main chat's AI works tells it the work was saved and reports files written meanwhile", async () => {
+test("a Save while the main chat's AI works tells it what was saved and which files Save changed, and nothing when the session stays behind", async () => {
   const taskEvents = [];
   const notes = [];
+  const results = [
+    { reconciled: true, refreshedPaths: [".genesis/machine-city.json"], saveCommit: "saved-mid-turn", status: "saved", unsavedPathCount: 2 },
+    { reconciled: false, saveCommit: "saved-again", status: "published_needs_reconcile" }
+  ];
   const runtime = {
     async getSession() {
       return { agentRuns: [], sessionId: "session-1", status: "active" };
@@ -1876,7 +1880,7 @@ test("a Save while the main chat's AI works tells it the work was saved and repo
       async requireAssistantAccess() { return { ok: true }; },
       async saveSessionWork(_sessionId, input) {
         await input.onRepositoryWriteAcquired();
-        return { reconciled: true, saveCommit: "saved-mid-turn", status: "saved", unsavedPathCount: 2 };
+        return results.shift();
       }
     }
   });
@@ -1886,9 +1890,13 @@ test("a Save while the main chat's AI works tells it the work was saved and repo
   assert.equal(result.ok, true);
   assert.equal(taskEvents.at(-1).event.message, "Session work was saved.\n2 files changed while Save ran; those changes stay unsaved.");
   assert.deepEqual(notes, [{
-    note: { message: "Vibe64 saved this session's work as it is now, including unfinished changes. No files changed, so nothing needs re-reading." },
+    note: {
+      message: "Vibe64 saved this session's work as it was when Save started, including unfinished changes. Changes made to files after that are not saved yet. Save also regenerated these files: .genesis/machine-city.json. Re-read them before editing them."
+    },
     sessionId: "session-1"
   }]);
+  assert.equal((await service.saveSessionWork("session-1", {})).ok, true);
+  assert.equal(notes.length, 1, "a session left on its earlier version is told nothing");
 });
 
 test("a reconciled Save supersedes an older failed session update", async () => {

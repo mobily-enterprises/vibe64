@@ -2,6 +2,7 @@ import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shar
 import {
   currentActorUser
 } from "@local/vibe64-execution/server";
+import { MAIN_CHAT_NOTE_TURN_METADATA_KEY } from "./mainChatNote.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -37,7 +38,9 @@ async function conversationActorMetadata({
   };
 }
 
+/** An automatic review's message, or a note Vibe64 steered into the turn, is the app's, not the person's. */
 function conversationReviewActorMetadata(turnMetadata) {
+  if (turnMetadata?.[MAIN_CHAT_NOTE_TURN_METADATA_KEY] === true) return { actorId: "app", actorDisplayName: "Vibe64" };
   return turnMetadata?.assistantRouting?.resolvedMode === "review" ? { actorId: "app", actorDisplayName: "Automatic review" } : {};
 }
 

@@ -416,13 +416,18 @@ survives all three stops for the next repair check.
 
 After a successful Update the main chat's AI is told which files changed
 (the first twenty, with the full count), to re-read them before editing and
-re-run checks that touch them; after Save a working turn is told its work so far
-was saved and nothing needs re-reading. The terminals' `noteMainChat`
-(`mainChatNote.js`) steers a running turn through the ordinary routed steer
-(generated Junior work, so it never starts a turn); otherwise Update's note waits
-in the session metadata `main_chat_note` and the main-chat dispatch puts it ahead
-of the next message sent there (not a slash command), clearing it once that
-message is delivered. The chat keeps showing what the person sent.
+re-run checks that touch them; after a Save that moved the session onto its
+commit, a working turn is told its work was saved as it was when Save started,
+whether later changes stay unsaved, and which files Save regenerated, to re-read
+them. The terminals' `noteMainChat` (`mainChatNote.js`) steers a running turn
+through the ordinary routed steer (generated Junior work, so it never starts a
+turn), marked `vibe64Note` so its turn is the app's (`actorId` "app") and the chat
+shows it as a system row; a steer that may have reached the AI is never repeated,
+and only one refused before sending (`not-sent`) falls back. Otherwise Update's
+note waits in the session metadata `main_chat_note`, joined after any note still
+waiting, and the main-chat dispatch puts it ahead of the next message sent there
+(not a slash command), clearing it once that message is delivered. The chat keeps
+showing what the person sent.
 Naming resolves the actor's Quick helper (`commit_title`) before requesting
 its bounded tool-free profile. Its scoped conversation never changes the main
 chat's binding or history. Repository authorization and write admission still apply.

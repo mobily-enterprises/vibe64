@@ -3653,23 +3653,35 @@ test("an idle message does not replace a thread for an unrelated invalid request
 test("a note to an idle main chat leads its next message, and a working turn is steered with it", async () => {
   await withAgentMessageController(async ({ captures, sessionId, store, terminals }) => {
     const note = "Vibe64 updated this session to the saved version. These files changed: a.txt. Re-read them before editing them, and re-run any checks that touch them.";
+    const later = "Vibe64 updated this session to the saved version. These files changed: b.txt. Re-read them before editing them, and re-run any checks that touch them.";
     assert.deepEqual(await terminals.noteMainChat(sessionId, { message: note, nextTurn: true }), { delivered: false, waiting: true });
     assert.equal(captures.turns.length + captures.steers.length, 0, "a note never starts a turn");
     assert.equal(await store.readMetadataValue(sessionId, "main_chat_note"), note);
+    assert.deepEqual(await terminals.noteMainChat(sessionId, { message: later, nextTurn: true }), { delivered: false, waiting: true });
+    assert.equal(await store.readMetadataValue(sessionId, "main_chat_note"), `${note}\n\n${later}`, "a second note joins the first");
 
     const sent = await terminals.sendAgentMessage(sessionId, { message: "Carry on with the form.", messageId: "after-note" });
     assert.equal(sent.delivered, true, JSON.stringify(sent));
     assert.equal(captures.turns.length, 1);
-    assert.match(JSON.stringify(captures.turns[0].input), /These files changed: a\.txt\..*Carry on with the form\./u);
+    assert.match(JSON.stringify(captures.turns[0].input), /These files changed: a\.txt\..*These files changed: b\.txt\..*Carry on with the form\./u);
     const userTexts = (await store.readConversationLog(sessionId)).map((turn) => turn.user?.text).filter(Boolean);
     assert.deepEqual(userTexts, ["Carry on with the form."], "the chat shows what the person sent");
     assert.ok(!await store.readMetadataValue(sessionId, "main_chat_note"), "a delivered note is not sent again");
 
-    const saved = "Vibe64 saved this session's work as it is now, including unfinished changes. No files changed, so nothing needs re-reading.";
+    const saved = "Vibe64 saved this session's work as it was when Save started, including unfinished changes. Save changed no files, so nothing needs re-reading.";
     assert.deepEqual(await terminals.noteMainChat(sessionId, { message: saved }), { delivered: true });
     assert.equal(captures.turns.length, 1, "the working turn is steered, not replaced");
     assert.equal(captures.steers.length, 1);
-    assert.match(JSON.stringify(captures.steers[0].message), /Vibe64 saved this session's work as it is now/u);
+    assert.match(JSON.stringify(captures.steers[0].message), /Vibe64 saved this session's work as it was when Save started/u);
+    assert.ok(!await store.readMetadataValue(sessionId, "main_chat_note"));
+    const steered = (await store.readConversationLog(sessionId)).find((turn) => turn.user?.text === saved);
+    assert.equal(steered?.metadata?.vibe64Note, true, "the chat shows the steered note as Vibe64's");
+    assert.equal(steered?.metadata?.actorId, "app");
+
+    // A steer that may have reached the AI is not sent again with the next message.
+    captures.onSteerTurn = () => { throw new Error("The connection closed while steering."); };
+    assert.deepEqual(await terminals.noteMainChat(sessionId, { message: later, nextTurn: true }), { delivered: false, waiting: false });
+    assert.equal(captures.steers.length, 2);
     assert.ok(!await store.readMetadataValue(sessionId, "main_chat_note"));
   }, { throughTerminalService: true });
 });
