@@ -365,7 +365,8 @@ running.
 Update and Save can run while the AI works; Save asks first because it includes
 unfinished changes. Neither the header controls nor the server refuse during a
 main-chat turn (`runSessionRepositoryWrite` in `serviceSessionWork.js` takes
-`whileAssistantWorks` for both; recovery and source reads still wait). While the
+`whileAssistantWorks` for both and for Save's recovery; Update's recovery and
+source reads still wait). While the
 main chat's turn is open the Save confirmation says "The AI is still working.
 Save now, including its unfinished changes?" and its button reads Save now; that
 confirmation is the only gate. The write lock and the project source lock still

@@ -1279,6 +1279,21 @@ test("Save waits for preparation, then runs although the AI started working mean
   session.agentRuns = [];
 });
 
+test("an interrupted Save's recovery runs while the AI works, as Save itself does", async (t) => {
+  const { service, session } = await terminalServiceFixture(t, { store: {} });
+  session.agentRuns = [{ active: true, state: "active", runId: "working" }];
+  const admitted = new Error("Save recovery reached repository work.");
+  try {
+    const recovered = await service.recoverSessionWorkSave(session.sessionId, {
+      onRepositoryWriteAcquired() { throw admitted; },
+      recovery: { operationId: "save-1", status: "running" }
+    }).catch((error) => error);
+    assert.equal(recovered, admitted);
+  } finally {
+    session.agentRuns = [];
+  }
+});
+
 test("Save preparation timeout returns an actionable retry without starting repository work", async (t) => {
   const { runtime, service, session } = await terminalServiceFixture(t, { store: {} });
   runtime.store.runSessionExclusive = async (_sessionId, _lockName, _operation, options) => {

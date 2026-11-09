@@ -420,10 +420,8 @@ function createServiceSessionWork({
   }
 
   async function saveSessionWork(sessionId, input = {}) {
-    return runSessionRepositoryWrite(sessionId, input, {
-      operation: "save-session-work",
-      whileAssistantWorks: true
-    }, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
+    const admission = { operation: "save-session-work", whileAssistantWorks: true };
+    return runSessionRepositoryWrite(sessionId, input, admission, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
   }
 
   async function runSessionSourceReadExclusive(sessionId, operation) {
@@ -619,7 +617,9 @@ function createServiceSessionWork({
    * repository.
    */
   async function recoverSessionWorkSave(sessionId, input = {}) {
-    return runSessionRepositoryWrite(sessionId, input, { operation: "recover-session-save" }, async ({ runtime, session }) => {
+    // Like Save, its recovery keeps every file the AI writes meanwhile, so it runs while the AI works.
+    const admission = { operation: "recover-session-save", whileAssistantWorks: true };
+    return runSessionRepositoryWrite(sessionId, input, admission, async ({ runtime, session }) => {
       const projectRecord = await project.readCurrentProject();
       const runProjectSourceExclusive = project.runProjectSourceExclusive.bind(project);
       const connected = await recoverConnectedCopySaves({
