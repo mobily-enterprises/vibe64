@@ -26,15 +26,21 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 
 import { QueryClient } from "@tanstack/vue-query";
 import { PRACTICE_PROJECT_DELETED_CODE, isPracticeNoticeForProject, useProjectSelectionGate } from "../../src/composables/useProjectSelectionGate.js";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 const deletedError = () => Object.assign(new Error("This practice project was deleted. Its lesson is still in Learning."), {
   status: 404, code: "vibe64_practice_project_deleted" });
 
-function openPage(options) {
+// Every page of the shell has its one Learning controller (App.vue's Vibe64AssistantShellContext provides it), and the
+// gate keys its selection's cache by the controller's mode, so a page opens with one: in Develop mode unless a test
+// passes another.
+function openPage(options, learning = Vue.reactive({ learnMode: false })) {
   mocks.queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const app = Vue.createApp({});
+  app.provide(VIBE64_LEARNING_KEY, learning);
   const emitted = [];
   const scope = Vue.effectScope();
-  const gate = scope.run(() => useProjectSelectionGate((name, value) => emitted.push([name, value]), options));
+  const gate = app.runWithContext(() => scope.run(() => useProjectSelectionGate((name, value) => emitted.push([name, value]), options)));
   return { gate, emitted, scope, selection: mocks.resources[0] };
 }
 
@@ -171,20 +177,9 @@ describe("project page deleted notice", () => {
 describe("the project picker in Learn mode", () => {
   afterEach(() => { mocks.resources.length = 0; });
 
-  async function openInLearningMode(learning, options = {}) {
-    const { VIBE64_LEARNING_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
-    mocks.queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const app = Vue.createApp({});
-    app.provide(VIBE64_LEARNING_KEY, learning);
-    const emitted = [];
-    const scope = Vue.effectScope();
-    const gate = app.runWithContext(() => scope.run(() => useProjectSelectionGate((name, value) => emitted.push([name, value]), options)));
-    return { gate, emitted, scope, selection: mocks.resources[0] };
-  }
-
   it("shows the server's listing as is, says when Learn mode is on and switches to Develop on request", async () => {
     const learning = Vue.reactive({ learnMode: true, toggleMode: vi.fn(async () => ({ on: false })) });
-    const { gate, scope, selection } = await openInLearningMode(learning);
+    const { gate, scope, selection } = openPage({}, learning);
     // The server lists no project of yours in Learn mode; practice projects are never listed.
     selection.data.value = { hasSelection: false, projects: [] };
     await Vue.nextTick();
@@ -203,7 +198,7 @@ describe("the project picker in Learn mode", () => {
 
   it("shows the server's reason, not a load error, when the mode refuses a project", async () => {
     const learning = Vue.reactive({ learnMode: true, toggleMode: vi.fn() });
-    const { gate, emitted, scope, selection } = await openInLearningMode(learning, { scopeSelectionToCurrentProject: true });
+    const { gate, emitted, scope, selection } = openPage({ scopeSelectionToCurrentProject: true }, learning);
     selection.query.error.value = Object.assign(new Error("You're in Learn mode. Press L to go back to your projects."),
       { status: 403, code: "vibe64_learning_mode_project" });
     await Vue.nextTick();
