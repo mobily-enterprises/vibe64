@@ -50,6 +50,18 @@ it("reads actor-scoped resources while Learning is open, without requiring a pro
   expect(courses.learningResource.data.value.learnerId).toBe("learner-owner");
 });
 
+it("makes no request while Learning is closed, and reads the courses and saved lessons once it opens", async () => {
+  app.unmount(); queryClient.clear(); read.mockClear();
+  open.value = false;
+  mount();
+  await flush();
+  expect(read).not.toHaveBeenCalled();
+  expect(courses.learningResource.data.value).toBeNull();
+  open.value = true; await flush();
+  expect([...new Set(read.mock.calls.map(([path]) => path))]).toEqual(["/api/vibe64/training/courses", "/api/vibe64/training/learning", "/api/vibe64/training/available"]);
+  expect(courses.learnerId.value).toBe("learner-owner");
+});
+
 it("hides old progress synchronously on account change and sign-out using real query observers", async () => {
   const member = Promise.withResolvers();
   read.mockImplementation(path => path.endsWith("/learning") ? member.promise : Promise.resolve({ ok: true, courses: [] }));

@@ -60,9 +60,11 @@ export function useVibe64LearningCourses({ active }) {
     };
   }
 
-  const coursesResource = readResource("courses", VIBE64_LEARNING_ROUTES.courses);
-  const learningResource = readResource("learning", VIBE64_LEARNING_ROUTES.learning);
-  // The official catalogue is read from GitHub by the server, so only while L is open.
+  // Every read waits for L to open: the overlay is mounted on every page, and
+  // opening L reads these again anyway (below). The official catalogue is
+  // read from GitHub by the server.
+  const coursesResource = readResource("courses", VIBE64_LEARNING_ROUTES.courses, open);
+  const learningResource = readResource("learning", VIBE64_LEARNING_ROUTES.learning, open);
   const availableResource = readResource("available", VIBE64_LEARNING_ROUTES.available, open);
   // A host's own reads beside the courses (hostRead), reread with them.
   const hostReads = new Set();
