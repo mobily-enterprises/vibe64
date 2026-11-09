@@ -65,10 +65,12 @@ async function codexDeliveredConversationMetadata(store, sessionId, turnMetadata
  * @param {string} sessionId
  */
 async function codexTerminalConversationMetadata(store, sessionId) {
-  const turns = await store.readConversationLog(sessionId);
-  const previousMetadata = turns.findLast((turn) => (
-    turn?.user && turn?.metadata
-  ))?.metadata || null;
+  // The newest user turn normally carries it; only a log whose newest user
+  // turn has no metadata is read further back.
+  const withMetadata = (turns) => turns.findLast((turn) => turn?.user && turn?.metadata)?.metadata || null;
+  const tail = await store.readConversationTail(sessionId, { userLimit: 1 });
+  const previousMetadata = withMetadata(tail)
+    || (tail.some((turn) => turn?.user) ? withMetadata(await store.readConversationLog(sessionId)) : null);
   return {
     actorDisplayName: previousMetadata?.actorDisplayName,
     actorId: previousMetadata?.actorId,

@@ -191,11 +191,15 @@ test("plain runtime uses Genesis onboarding for the first user turn, then ordina
     await runtime.writeConversationUserMessage("prompt-session", {
       text: "Build a book catalogue."
     });
+    // Whether a person has written is read from the transcript's tail, never the whole log.
+    const readWholeLog = runtime.store.readConversationLog;
+    runtime.store = { ...runtime.store, readConversationLog: async () => { throw new Error("The prompt read the whole transcript."); } };
     const nextPrompt = await runtime.renderPrompt("prompt-session", {
       request: "Use JSKIT.",
       task: "work"
     });
     assert.equal(nextPrompt.context.task, "work");
+    runtime.store = { ...runtime.store, readConversationLog: readWholeLog };
   });
 });
 

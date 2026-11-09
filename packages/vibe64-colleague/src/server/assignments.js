@@ -119,12 +119,25 @@ function createAssignmentOperations({
       }
     }
   }
+  // The current instruction's user messages, in transcript order: each found
+  // by its ID through the transcript's message index, in the current
+  // conversation and then in earlier ones only for IDs not found yet, instead
+  // of reading every kept conversation in full.
   async function userMessages(state, context) {
     requireUser(context);
-    const ids = context.colleague.userMessageIds;
-    return (await Promise.all([state.record, ...state.record.previousConversations].map(chat =>
-      transcript.readConversationLog(chat.runtimeId)))).flatMap(log => log.flatMap(turn => turn.messages))
-      .filter((message) => message.role === "user" && ids.includes(message.messageId));
+    const missing = new Set(context.colleague.userMessageIds);
+    const messages = [];
+    for (const chat of [state.record, ...state.record.previousConversations]) {
+      if (!missing.size) break;
+      const turns = (await Promise.all([...missing].map((id) => transcript.findSubmittedTurn(chat.runtimeId, id))))
+        .filter((turn) => turn?.user && missing.has(turn.user.messageId))
+        .sort((left, right) => left.turnId.length - right.turnId.length || left.turnId.localeCompare(right.turnId));
+      for (const turn of turns) {
+        messages.push(turn.user);
+        missing.delete(turn.user.messageId);
+      }
+    }
+    return messages;
   }
   function cancelWatches(state, assignment) {
     for (const watch of state.record.watches) if (watch.assignmentId === assignment.assignmentId) watch.status = "cancelled";

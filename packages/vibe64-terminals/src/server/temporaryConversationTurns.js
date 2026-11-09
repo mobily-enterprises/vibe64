@@ -63,6 +63,10 @@ const turnWithoutReceipt = turn => turn.metadata?.assistantRouting ? turn : {
   messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message)
 };
 
+// The turn a person's message started, found through the transcript's message
+// index rather than by reading the whole log; null for any other message.
+const userTurn = (turn, messageId) => (turn?.user?.messageId === messageId ? turn : null);
+
 // Changing a chat's selection resumes the native conversation that selection kept, or starts afresh.
 const reboundNativeConversation = (retained, assistantSelection) => ({
   providerConversationId: retained?.conversationId || "",
@@ -219,10 +223,10 @@ function createTemporaryConversationTurns({
     updateSessionSettings: (id, input, ctx) => sessionAgent.updateSessionSettings(id, input, nativeContext(ctx)),
     async inspectMessageAdmission(id, input, ctx) {
       let record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
-      const turn = (await ctx.conversationContext.runtime.store.readConversationLog({
+      const turn = userTurn(await ctx.conversationContext.runtime.store.findSubmittedConversationTurn({
         sessionId: id,
         conversationId: record.conversationId
-      })).find(entry => entry.user?.messageId === input.messageId);
+      }, input.messageId), input.messageId);
       if (turn?.metadata?.assistantSelection) {
         const requested = { ...record, assistantSelection: turn.metadata.assistantSelection };
         const key = chatRecords.bindingKey(ctx.conversationContext, requested);
@@ -288,7 +292,7 @@ function createTemporaryConversationTurns({
         metadata[key] = value;
       })
     };
-    scopedStore.readConversationTail = async () => (await store.readConversationLog(scope)).slice(-12);
+    scopedStore.readConversationTail = (_id, options) => store.readConversationTail(scope, options);
     scopedStore.readConversationLog = async () => (await store.readConversationLog(scope)).map(turnWithoutReceipt);
     scopedStore.writeConversationUserMessage = (_id, ...args) => store.writeConversationUserMessage(scope, ...args);
     const context = {
@@ -301,8 +305,8 @@ function createTemporaryConversationTurns({
     };
     scopedStore.conversationMessageIdExists = async (_id, messageId) => {
       if (!await store.conversationMessageIdExists(scope, messageId)) return false;
-      const turn = (await scopedStore.readConversationLog()).find(entry => entry.user?.messageId === messageId);
-      if (turn?.user?.receipt !== false) return true;
+      const turn = userTurn(await store.findSubmittedConversationTurn(scope, messageId), messageId);
+      if (!turn || turnWithoutReceipt(turn).user.receipt !== false) return true;
       const receipt = await routingAgent.inspectMessageAdmission(ctx.session.sessionId, { messageId }, context).catch(() => null);
       return receipt?.admission === "accepted";
     };

@@ -358,7 +358,8 @@ class Vibe64SessionRuntime {
       required: true
     });
     if (genesisTask === "work") {
-      const conversation = await this.store.readConversationLog(sessionId);
+      // The tail up to the newest user turn: the whole log only when it has none.
+      const conversation = await this.store.readConversationTail(sessionId, { userLimit: 1 });
       const hasUserMessage = conversation.some((turn) => Boolean(turn?.user));
       if (!hasUserMessage && !sessionHasRenewalHandover(session)) {
         genesisTask = "start";
