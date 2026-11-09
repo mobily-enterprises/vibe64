@@ -120,11 +120,13 @@ function createSaveKind({ sessions, terminals }) {
         if (work?.ok === false) return saveCheckResult(work);
         if (!work.unsaved && saved?.status === "ready") return saveCheckResult({ ok: true });
         if (!task.pending?.whileAiWorks) {
-          // The chat's own working indicator reads this same turn.
+          // The chat's own working indicator reads this same turn; between the turns of a workflow such as Auto's
+          // review the AI is still at work, and the wait then names when it began.
           const session = await runtime.getSessionWithoutSource(sessionId);
           const { turn } = await terminals.agentSessionState(sessionId, { runtime, session }) || {};
-          if (turn?.active === true) {
-            return { waiting: true, message: MAIN_CHAT_WAITING_MESSAGE, mainChatSince: String(turn.startedAt || "") };
+          if (turn?.active === true || terminals.sessionAssistantWorking(session)) {
+            const since = turn?.active === true && turn.startedAt || task.mainChatSince || new Date().toISOString();
+            return { waiting: true, message: MAIN_CHAT_WAITING_MESSAGE, mainChatSince: String(since) };
           }
         }
         return saveCheckResult(await sessions.saveSessionWork(sessionId, {

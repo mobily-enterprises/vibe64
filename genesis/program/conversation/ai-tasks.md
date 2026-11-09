@@ -145,10 +145,13 @@ A check that answers `waiting` keeps its pending check and runs again when a
 turn settles or after thirty seconds. Update and Save can run while the AI works;
 Save asks first because it includes unfinished changes. So Fix Update waits only
 for its own conversation, and for another change holding the session
-(`vibe64_agent_write_mode_busy`) or a file written while Update ran. Fix Save
-also waits while the main chat's turn is open, read from
-`terminals.agentSessionState`, the same turn the chat's working indicator shows;
-its wait records `mainChatSince`, the turn's start. Its kind declares
+(`vibe64_agent_write_mode_busy`) or a file written, or a commit made, while Update
+ran. Fix Save also waits while the main chat's AI works: its turn is open, read
+from `terminals.agentSessionState`, the same turn the chat's working indicator
+shows, or `terminals.sessionAssistantWorking` (`serviceSessionRecords.js`) finds
+an active run, an unresolved routed request or a workflow between its turns, the
+rule the work plan's archive and restore also wait for. Its wait records
+`mainChatSince`, the turn's start, or else when the wait began. Its kind declares
 `check.whileAiWorks` (an action label and a note), so the window names the main
 chat and that time and offers Wait for the AI, which hides the window and
 focuses the main chat, and Save now, a `check_now` with `whileAiWorks` that runs

@@ -181,9 +181,10 @@ can be done next.
 When a repair is ready while the main chat's AI is still working, Fix Update runs
 Update straight away: Update and Save can run while the AI works. Fix Save asks
 first, because Save would include the AI's unfinished changes: the window names the
-main chat and the time its AI started working. **Wait for the AI** returns you to the
-main chat, and Vibe64 saves by itself as soon as that turn ends; **Save now** saves at
-once, unfinished changes included. When the main chat is idle, Fix Save saves straight
+main chat and the time its AI started working. It also waits between the steps of
+the main chat's work, such as an Auto review, so the time shown is then when the wait
+began. **Wait for the AI** returns you to the main chat, and Vibe64 saves by itself as
+soon as that work ends; **Save now** saves at once, unfinished changes included. When the main chat is idle, Fix Save saves straight
 away with no click. Both still wait while another Save, Update or preparation holds
 the session.
 

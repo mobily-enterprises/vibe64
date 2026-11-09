@@ -181,7 +181,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
         terminals: { ...temporary!.terminals, verifyPreviewIdentity: (_sessionId, input) => {
           aiTaskWorld.signIns.push(input);
           return aiTaskWorld.signIn(input);
-        }, agentSessionState: async () => ({ turn: aiTaskWorld.mainTurn }) },
+        }, agentSessionState: async () => ({ turn: aiTaskWorld.mainTurn }), sessionAssistantWorking: () => false },
         sessions: {
           updateSessionWork: (_sessionId, input) => {
             aiTaskWorld.updates.push(input);

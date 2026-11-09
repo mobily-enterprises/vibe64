@@ -35,6 +35,7 @@ import { createServiceHostSlots } from "./serviceHostSlots.js";
 import { createServiceTurnPublication } from "./serviceTurnPublication.js";
 import { createServiceCommandServices } from "./serviceCommandServices.js";
 import { createServiceAgentProviders } from "./serviceAgentProviders.js";
+import { sessionAssistantWorking } from "./serviceSessionRecords.js";
 
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
@@ -613,6 +614,7 @@ function createService({
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,
+    sessionAssistantWorking,
     noteMainChat: createMainChatNote({
       assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent
     }),

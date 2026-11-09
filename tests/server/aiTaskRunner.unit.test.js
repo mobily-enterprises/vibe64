@@ -171,6 +171,9 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
         // The engine is chosen from the session's own record, so the caller passes it.
         assert.equal(session?.sessionId, sessionId);
         return { turn: server.mainTurn };
+      }, sessionAssistantWorking(session) {
+        assert.equal(session?.sessionId, SESSION);
+        return server.assistantWorking === true;
       } }
     });
     return { aiTasks, conversations };
@@ -260,6 +263,26 @@ test("Fix Save waits while the main chat's AI works, names when it started, and 
   });
   assert.equal(f.saves.length, 0, "Save waits rather than include the AI's unfinished changes");
   f.server.mainTurn = { active: false };
+  await running.aiTasks.onTurnSettled({ sessionId: SESSION, conversationId: "", failure: null });
+  await f.quiet(running.aiTasks);
+  assert.equal((await f.task(task.id)).phase, "done");
+  assert.equal(f.saves.length, 1);
+  running.aiTasks.closeRunner();
+}, { updateFailure: null, saveFailed: saveFailure }));
+
+test("Fix Save waits while the main chat's AI is between a workflow's turns, offering its choices, and saves once it is done", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "save");
+  await f.quiet(running.aiTasks);
+  f.server.mainTurn = { active: false };
+  f.server.assistantWorking = true;
+  await f.finishTurn(running);
+  const waiting = await f.task(task.id);
+  assert.equal(waiting.waiting, true);
+  assert.equal(waiting.message, "Save waits for the main chat's AI to finish");
+  assert.ok(!Number.isNaN(Date.parse(waiting.mainChatSince)), "the wait names when it began, so its choices show");
+  assert.equal(f.saves.length, 0);
+  f.server.assistantWorking = false;
   await running.aiTasks.onTurnSettled({ sessionId: SESSION, conversationId: "", failure: null });
   await f.quiet(running.aiTasks);
   assert.equal((await f.task(task.id)).phase, "done");
