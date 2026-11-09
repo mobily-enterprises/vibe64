@@ -95,9 +95,10 @@ function attachmentByteCounter(maxBytes = CODEX_ATTACHMENT_MAX_BYTES) {
 
 /**
  * Prepares attachment storage at start: retires quarantined sessions and scans each session's expired files.
- * @param {{ env: RuntimeEnv, lockWaitMs?: number, now?: number }} options
+ * @param {{ env: RuntimeEnv, busyRetryMs?: number, lockWaitMs?: number, now?: number }} options
  */
 async function prepareCodexAttachmentStorage({
+  busyRetryMs,
   env,
   lockWaitMs = ATTACHMENT_RENEW_LOCK_WAIT_MS,
   now = Date.now()
@@ -132,6 +133,7 @@ async function prepareCodexAttachmentStorage({
         projectEntry.name,
         sessionEntry.name,
         {
+          busyRetryMs,
           env,
           lockWaitMs: attachmentLockWaitMs({ lockWaitMs }, ATTACHMENT_RENEW_LOCK_WAIT_MS),
           now

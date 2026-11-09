@@ -99,7 +99,7 @@ async function cleanupCodexAttachments(executionRoot, sessionId, attachmentId, o
           normalizedAttachmentId,
           options,
           error?.code === "vibe64_agent_attachment_busy"
-            ? ATTACHMENT_EXPIRY_RETRY_MS
+            ? attachmentBusyRetryMs(options, ATTACHMENT_EXPIRY_RETRY_MS)
             : ATTACHMENT_EXPIRY_ERROR_RETRY_MS
         );
       }
@@ -240,6 +240,17 @@ async function retireAttachmentDirectory(directory) {
   return true;
 }
 
+/**
+ * How long a cleanup that found its folder or session busy waits before it tries again: the default, or the
+ * caller's busyRetryMs for every such retry (tests use a short one, so they wait for the lock, not the clock).
+ * @param {{ busyRetryMs?: number }} options
+ * @param {number} fallback
+ */
+function attachmentBusyRetryMs(options, fallback) {
+  const configured = Number(options?.busyRetryMs);
+  return Number.isFinite(configured) && configured >= 0 ? configured : fallback;
+}
+
 function clearScheduledTimer(timers, timerKey) {
   const timer = timers.get(timerKey);
   if (!timer) {
@@ -303,6 +314,7 @@ async function pruneAttachmentSessionDirectory(executionRoot, sessionId, options
   );
   if (!sessionLock.release) {
     scheduleAttachmentSessionScan(projectKey, sessionKey, {
+      busyRetryMs: options.busyRetryMs,
       env: options.env,
       lockWaitMs: attachmentLockWaitMs(options, ATTACHMENT_RENEW_LOCK_WAIT_MS)
     });
@@ -429,7 +441,7 @@ function scheduleAttachmentForcedCleanup(
   sessionId,
   attachmentId,
   options,
-  delayMs = ATTACHMENT_EXPIRY_RETRY_MS
+  delayMs = attachmentBusyRetryMs(options, ATTACHMENT_EXPIRY_RETRY_MS)
 ) {
   const cleanupPath = attachmentHostDirectory(
     executionRoot,
@@ -460,7 +472,9 @@ function scheduleAttachmentForcedCleanup(
         sessionId,
         attachmentId,
         options,
-        ATTACHMENT_EXPIRY_ERROR_RETRY_MS
+        error?.code === "vibe64_agent_attachment_busy"
+          ? attachmentBusyRetryMs(options, ATTACHMENT_EXPIRY_ERROR_RETRY_MS)
+          : ATTACHMENT_EXPIRY_ERROR_RETRY_MS
       );
     });
   }, Math.max(1, delayMs));
@@ -507,7 +521,7 @@ function scheduleAttachmentSessionCleanup(
   executionRoot,
   sessionId,
   options,
-  delayMs = ATTACHMENT_SESSION_RETRY_MS
+  delayMs = attachmentBusyRetryMs(options, ATTACHMENT_SESSION_RETRY_MS)
 ) {
   const [projectKey, sessionKey] = attachmentSessionKey(executionRoot, sessionId).split(path.sep);
   const timerKey = attachmentSessionTimerKey(projectKey, sessionKey, options);
@@ -537,10 +551,11 @@ function scheduleAttachmentSessionCleanup(
 /**
  * @param {string} projectKey
  * @param {string} sessionKey
- * @param {{ env: RuntimeEnv, lockWaitMs?: number, now?: number }} options
+ * @param {{ env: RuntimeEnv, busyRetryMs?: number, lockWaitMs?: number, now?: number }} options
  */
 async function scanAttachmentSession(projectKey, sessionKey, options) {
   const {
+    busyRetryMs,
     env,
     lockWaitMs = ATTACHMENT_RENEW_LOCK_WAIT_MS,
     now = Date.now()
@@ -560,7 +575,7 @@ async function scanAttachmentSession(projectKey, sessionKey, options) {
     { waitMs: lockWaitMs }
   );
   if (!sessionLock.release) {
-    scheduleAttachmentSessionScan(projectKey, sessionKey, { env, lockWaitMs, now });
+    scheduleAttachmentSessionScan(projectKey, sessionKey, { busyRetryMs, env, lockWaitMs, now });
     return false;
   }
   try {
@@ -616,7 +631,7 @@ function scheduleAttachmentSessionScan(
   projectKey,
   sessionKey,
   options,
-  delayMs = ATTACHMENT_SESSION_RETRY_MS
+  delayMs = attachmentBusyRetryMs(options, ATTACHMENT_SESSION_RETRY_MS)
 ) {
   const timerKey = attachmentSessionTimerKey(projectKey, sessionKey, options);
   const existingTimer = attachmentSessionScanTimers.get(timerKey);

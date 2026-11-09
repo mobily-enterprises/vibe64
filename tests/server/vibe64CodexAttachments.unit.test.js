@@ -60,6 +60,10 @@ import { configureStudioProjectContext } from "@local/vibe64-core/server/studioP
 // The server configures the Studio project context before any feature reads it.
 configureStudioProjectContext({ env: process.env });
 
+// A cleanup that finds its folder or session busy retries after one to five seconds; tests that release the lock and
+// wait for that retry have it retry this often instead, so they wait for the lock, not the clock.
+const BUSY_RETRY_MS = 10;
+
 test("assistant attachment route reads one bounded multipart file into the upload action", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-route-test-"));
   const app = testApp();
@@ -1186,7 +1190,7 @@ test("busy session cleanup preserves the attachment for its eventual expiry retr
       "/source/project",
       "busy-expiry-session",
       "",
-      { env, lockWaitMs: 25 }
+      { busyRetryMs: BUSY_RETRY_MS, env, lockWaitMs: 25 }
     ), false);
     assert.equal(await readFile(result.path, "utf8"), "expired");
     await holder.release();
@@ -1275,6 +1279,7 @@ test("startup defers a busy session scan and expires stale data after lock relea
     holder = await spawnExclusiveLockHolder(sessionLockPath, path.dirname(sessionLockPath));
 
     await prepareCodexAttachmentStorage({
+      busyRetryMs: BUSY_RETRY_MS,
       env: {
         [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root
       },
@@ -1312,7 +1317,7 @@ test("session cleanup automatically retries after losing an active-upload lock r
       "/source/project",
       "cleanup-retry-session",
       "",
-      { env, lockWaitMs: 25 }
+      { busyRetryMs: BUSY_RETRY_MS, env, lockWaitMs: 25 }
     ), false);
     upload.end("-complete");
     const result = await storing;
@@ -1346,7 +1351,7 @@ test("deferred session cleanup removes only attachments from its original snapsh
       "/source/project",
       "cleanup-snapshot-session",
       "",
-      { env, lockWaitMs: 25 }
+      { busyRetryMs: BUSY_RETRY_MS, env, lockWaitMs: 25 }
     ), false);
     const second = await storeCodexAttachment({
       env,
