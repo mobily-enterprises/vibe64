@@ -15,9 +15,10 @@ const UPDATE_HANDOFF = [
 
 const UPDATE_SUCCEEDED_MESSAGE = "Session updated. Your changes were preserved. Nothing was pushed.";
 // Update runs while the main chat's AI works. It waits only for another change to the session's files, and tries
-// again when a file it changes was written while it ran.
+// again when a file it changes was written, or a commit made, while it ran.
 const WAITING_MESSAGES = Object.freeze({
   vibe64_agent_write_mode_busy: "Update waits for another change to this session to finish",
+  vibe64_session_update_head_moved: "A commit was made in this session while Update ran, so Vibe64 tries again shortly",
   vibe64_session_update_worktree_changed: "A file changed while Update ran, so Vibe64 tries again shortly"
 });
 const REPAIRABLE_CODES = Object.freeze([

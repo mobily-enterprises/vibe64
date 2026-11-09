@@ -2,6 +2,7 @@
 
 import crypto from "node:crypto";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -116,12 +117,25 @@ async function saveCommand(runCommand, context, command, args, options = {}) {
   });
 }
 
+// Git refuses at once while another git command holds the session's index, as the session's AI's own `git status`
+// or `git add` does for a moment, so a refused command waits and runs again, for ten seconds at most.
+const INDEX_LOCK_RETRIES = 100;
+const INDEX_LOCK_RETRY_MS = 100;
+
+function indexLocked(result) {
+  return result?.ok !== true && /index\.lock'?: File exists/u.test(String(result?.stderr || result?.output || ""));
+}
+
 async function git(runCommand, context, args, options = {}) {
   const {
     required = true,
     ...commandOptions
   } = options;
-  const result = await saveCommand(runCommand, context, "git", args, commandOptions);
+  let result = await saveCommand(runCommand, context, "git", args, commandOptions);
+  for (let retry = 0; retry < INDEX_LOCK_RETRIES && indexLocked(result); retry += 1) {
+    await delay(INDEX_LOCK_RETRY_MS);
+    result = await saveCommand(runCommand, context, "git", args, commandOptions);
+  }
   if (required && result?.ok !== true) {
     throw saveError(
       normalizeText(result?.stderr || result?.stdout || result?.output || result?.error) || "Git Save command failed.",

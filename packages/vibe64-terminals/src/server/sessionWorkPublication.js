@@ -7,11 +7,8 @@ import {
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT
 } from "@local/vibe64-core/server/projectRepository";
-import { githubMirrorRefreshInvocation, writeGitWorktreeTree } from "@local/vibe64-execution/server";
+import { githubMirrorRefreshInvocation } from "@local/vibe64-execution/server";
 import {
-  changedPathsBetween,
-  commandProject,
-  commitTree,
   git,
   gitOutput,
   output,
@@ -19,7 +16,7 @@ import {
   saveCommand,
   saveError
 } from "./sessionWorkGit.js";
-import { switchSessionWorktree } from "./sessionWorktreeSwitch.js";
+import { switchSessionKeepingWrites } from "./sessionWorktreeSwitch.js";
 import { assertLocalAuthority } from "./sessionWorkAuthority.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
@@ -247,81 +244,50 @@ async function refreshVerifiedGithubMirror(
 }
 
 async function reconcileSession(runCommand, context, {
-  checkpointCommit,
   checkpointTree,
   commandOptions,
   project,
   saveCommit,
   sessionHead = ""
 }) {
-  const [currentTree, oldHead, saveTree] = await Promise.all([
-    writeGitWorktreeTree({
-      baseCommit: "HEAD",
-      project: commandProject(context, project),
-      runCommand,
-      worktreePath: context.worktreePath
-    }),
-    gitOutput(runCommand, context, ["rev-parse", "HEAD"], {
-      commandOptions,
-      project
-    }),
-    commitTree(runCommand, context, saveCommit, {
-      commandOptions,
-      project
-    })
-  ]);
+  const options = { commandOptions, project };
+  const oldHead = await gitOutput(runCommand, context, ["rev-parse", "HEAD"], options);
   if (oldHead === saveCommit) {
-    return {
-      currentTree,
-      reconciled: true,
-      status: "saved"
-    };
+    return { reconciled: true, status: "saved" };
   }
   if (sessionHead && oldHead !== sessionHead) {
-    return {
-      currentTree,
-      reconciled: false,
-      status: "published_needs_reconcile"
-    };
+    return { reconciled: false, status: "published_needs_reconcile" };
   }
-  // Files written after the checkpoint, by the person or the session's AI, are not in this Save. The switch keeps
-  // them as the session's unsaved work and refuses, changing nothing, rather than overwrite one.
-  const unsavedPathCount = currentTree === checkpointTree || currentTree === saveTree
-    ? 0
-    : (await changedPathsBetween(runCommand, context, checkpointTree, currentTree, { commandOptions, project })).length;
-  const oldIndexTree = await gitOutput(runCommand, context, ["write-tree"], {
-    commandOptions,
-    project
+  // Files written after the checkpoint, by the person or the session's AI, are not in this Save: they stay as they
+  // are, the session's unsaved work, and only files Save itself changed that nobody wrote meanwhile move. When files
+  // keep changing, every file stays as it is and HEAD still moves, so Update later merges from the saved version.
+  const { changes, moved, writes } = await switchSessionKeepingWrites(runCommand, context, project, {
+    from: checkpointTree,
+    options,
+    to: saveCommit
   });
-  try {
-    await switchSessionWorktree(runCommand, context, currentTree === saveTree ? saveTree : checkpointCommit, saveCommit, {
-      commandOptions,
-      project
-    });
-    await git(runCommand, context, ["update-ref", "HEAD", saveCommit, oldHead], {
-      commandOptions,
-      project
-    });
+  const unsavedPathCount = writes.size;
+  const headMoved = await git(runCommand, context, ["update-ref", "HEAD", saveCommit, oldHead], {
+    ...options,
+    required: false
+  });
+  if (headMoved.ok !== true) {
+    // A commit was made in the session meanwhile, so it stays on that commit, its files as they are.
     return {
-      currentTree,
-      reconciled: true,
-      status: "saved",
-      unsavedPathCount
-    };
-  } catch (error) {
-    await git(runCommand, context, ["read-tree", oldIndexTree], {
-      commandOptions,
-      project,
-      required: false
-    });
-    return {
-      currentTree,
-      error: normalizeText(error?.message || error),
+      error: normalizeText(headMoved.stderr || headMoved.output || headMoved.error),
       reconciled: false,
       status: "published_needs_reconcile",
       unsavedPathCount
     };
   }
+  await git(runCommand, context, ["read-tree", saveCommit], { ...options, required: false });
+  return {
+    reconciled: true,
+    // The files Save changed in the session, which its AI reads again.
+    refreshedPaths: moved ? [...changes.keys()].filter((entry) => !writes.has(entry)).sort() : [],
+    status: "saved",
+    unsavedPathCount
+  };
 }
 
 export {

@@ -373,20 +373,46 @@ make each operation exclusive.
 
 Nothing written while either runs is lost, because neither replaces the
 session's files wholesale. Both move the worktree with Git's two-tree switch
-(`switchSessionWorktree` in `sessionWorktreeSwitch.js`: read the starting tree into the
-index, refresh its file stats, then `read-tree -m -u`), which changes only the
-paths that differ and refuses, changing nothing, rather than overwrite a file that
-no longer matches its starting version. Save's commit is its checkpoint; files
-written after it stay unsaved and Save's notice counts them
-(`unsavedPathCount`). When the switch onto the saved commit is refused, the
-push stands, every change is kept, and the result is `published_needs_reconcile`
-with a notice that a file changed while Save ran. Update switches only the paths
-the merge changes, so edits elsewhere stay as unsaved work; when a path Update
-changes is written before or after its switch, Update stops with
-`vibe64_session_update_worktree_changed`, switches those paths back to the
-checkpoint unless they were written since, restores HEAD (only while it still
-names the saved commit) and the index, and says a file changed while it ran.
-Fix Update waits and tries again on that code.
+(`switchSessionWorktree` in `sessionWorktreeSwitch.js`: read the starting tree into
+an index of its own beside the session source, refresh its file stats, then
+`read-tree -m -u`), which changes only the paths that differ and refuses, changing
+nothing, rather than overwrite a file that no longer matches its starting version.
+Git takes a missing file for an unchanged one and replaces a file it ignores, so
+the switch first refuses itself (`vibe64_session_worktree_written`) when a path it
+changes was modified or deleted on disk (`git diff-files`) or a path it adds
+already holds an untracked file, and refuses with
+`vibe64_session_update_ignored_file`, naming the files, when that file is one Git
+ignores (`git check-ignore --no-index`), since the checkpoint never captured it.
+Its own index means the session's index, which the AI's git commands use, never
+holds the checkpoint's untracked files; callers set it only once HEAD has moved.
+Every session work Git command that finds the index lock held, as the AI's own
+`git status` does for a moment, runs again for up to ten seconds (`git` in
+`sessionWorkCommands.js`).
+
+`switchSessionKeepingWrites` moves the files from one tree onto a commit while
+keeping every file written since: the target is the commit plus those files as
+they are now, so only paths nobody wrote change; a file written between reading
+the session and switching it makes it read again, three times at most. Save's
+commit is its checkpoint; Save's reconcile (`reconcileSession` in
+`sessionWorkPublication.js`) moves the session from that checkpoint onto the saved
+commit this way, so a regenerated file the AI wrote or deleted meanwhile stays as
+the AI left it, as an unsaved change, and HEAD moves to the saved commit even when
+files kept changing. Files written after the checkpoint stay unsaved and Save's
+notice counts them (`unsavedPathCount`); `refreshedPaths` lists the files Save
+changed on disk. Only a commit made in the session while Save ran leaves it on
+that commit with the result `published_needs_reconcile`. Update switches only the
+paths the merge changes, so edits elsewhere stay as unsaved work; when a path
+Update changes is written, deleted or renamed before or after its switch, Update
+stops with `vibe64_session_update_worktree_changed`, switches those paths back to
+the checkpoint unless they were written since (`undoSessionUpdate`), moves HEAD
+back and restores the index, and says a file changed while it ran. When files keep
+changing through every attempt to switch back, the session stays updated and HEAD
+moves to the saved commit its files show. HEAD is read first and checked after
+each move: a commit made in the session while Update ran leaves every file as it
+is, sets the index to that commit and stops with
+`vibe64_session_update_head_moved`. Fix Update waits and tries again on the
+worktree-changed and head-moved codes, and a reviewed conflict's recovery
+survives all three stops for the next repair check.
 
 After a successful Update the main chat's AI is told which files changed
 (the first twenty, with the full count), to re-read them before editing and

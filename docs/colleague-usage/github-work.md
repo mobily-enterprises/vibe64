@@ -119,20 +119,27 @@ unfinished changes. Choosing **Save** while the main chat's AI is working opens
 unfinished changes?**; its button reads **Save now**, and **Cancel** saves
 nothing. Update runs straight away.
 
-Nothing written while either runs is lost. A file the AI writes after Save has
-captured the work stays as unsaved work, and Save's notice says how many files
-changed while it ran. If a file Save itself changes, such as a project file Save
-regenerates, was written meanwhile, the work is still saved and every change kept, and
-the notice says to use Update to bring the session onto the saved version. When a
-file Update changes is written while Update runs,
-Update stops, puts the session back as it was with every change kept, and says
-**A file changed while Update ran**, so try Update again. Afterwards Vibe64 tells
-the main chat's AI what happened: after Update, which files changed, so it
-re-reads them before editing and re-runs checks that touch them (a turn that is
-working is told at once, otherwise the note leads your next message); after
-Save, a working turn is told its work so far was saved. Colleague can explain
-these notices; Save and Update themselves still need your instruction. These
-steps apply on desktop and mobile.
+Nothing written, deleted or renamed while either runs is lost. A file the AI
+writes after Save has captured the work stays as unsaved work, and Save's notice
+says how many files changed while it ran. That includes a file Save itself
+changes, such as a project file Save regenerates: the session still moves onto
+the saved version and the AI's copy stays as an unsaved change. When a Git commit
+is made in the session while Save runs, the work is still saved, every change is
+kept, and the notice says Update brings the session onto the saved version. When a file
+Update changes is written, deleted or renamed while Update runs, Update stops,
+puts the session back as it was with every change kept, and says **A file
+changed while Update ran**, so try Update again. When Update would replace a
+local file Git ignores in this session, it stops before changing anything and
+names that file: move or rename it, then try Update again. When a Git commit is
+made in the session while Update runs, Update stops, leaves every file as it is
+and says so; try Update again.
+
+Afterwards Vibe64 tells the main chat's AI what happened: after Update, which
+files changed, so it re-reads them before editing and re-runs checks that touch
+them (a turn that is working is told at once, otherwise the note leads your next
+message); after Save, a working turn is told its work so far was saved.
+Colleague can explain these notices; Save and Update themselves still need your
+instruction. These steps apply on desktop and mobile.
 
 ## When the repository needs help
 

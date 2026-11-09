@@ -293,6 +293,23 @@ test("Fix Update runs Update while the main chat's AI works: it waits only for i
   assert.equal(f.updates.length, 1);
 }));
 
+test("Fix Update tries Update again when a commit was made in the session while Update ran", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks);
+  await f.quiet(running.aiTasks);
+  f.server.update = async () => ({ ok: false, code: "vibe64_session_update_head_moved", error: "A Git commit was made in this session while Update ran." });
+  await f.finishTurn(running);
+  const waiting = await f.task(task.id);
+  assert.equal(waiting.waiting, true);
+  assert.equal(waiting.message, "A commit was made in this session while Update ran, so Vibe64 tries again shortly");
+  f.server.update = async () => ({ ok: true });
+  await running.aiTasks.onTurnSettled({ sessionId: SESSION, conversationId: "", failure: null });
+  await f.quiet(running.aiTasks);
+  assert.equal((await f.task(task.id)).phase, "done");
+  assert.equal(f.updates.length, 2);
+  running.aiTasks.closeRunner();
+}));
+
 test("a Save only a person can settle stops for them without asking the AI again", () => withFixture(async (f) => {
   const running = f.boot();
   const { task } = await f.start(running.aiTasks, OWNER, "save");

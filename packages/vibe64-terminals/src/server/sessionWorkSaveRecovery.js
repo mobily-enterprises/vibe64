@@ -122,7 +122,6 @@ async function recoverSessionWorkSave({
       { commandOptions, project }
     );
     const reconciliation = await reconcileSession(runCommand, context, {
-      checkpointCommit,
       checkpointTree,
       commandOptions,
       project,

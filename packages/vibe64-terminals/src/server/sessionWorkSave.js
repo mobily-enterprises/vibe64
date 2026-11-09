@@ -525,7 +525,6 @@ async function saveSessionWorkDirect({
     });
     await onProgress({ kind: "reconcile", message: "Reconciling the session onto the saved commit.", stage: "reconciling" });
     const reconciliation = await reconcileSession(runCommand, context, {
-      checkpointCommit: checkpoint.checkpointCommit,
       checkpointTree: checkpoint.checkpointTree,
       commandOptions,
       project,

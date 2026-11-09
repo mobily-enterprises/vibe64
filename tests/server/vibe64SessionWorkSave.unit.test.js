@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -23,6 +23,7 @@ import {
   updateSessionWork
 } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 import { updateSessionWorkInProcess } from "./sessionWorkUpdateTestHelpers.js";
+import { updateWorktreeChangedError } from "../../packages/vibe64-terminals/src/server/sessionWorktreeSwitch.js";
 import {
   inspectSessionUpdateFailure,
   recoverSessionWorkUpdate
@@ -1077,6 +1078,202 @@ test("a failure after Update switched the session, with nothing written meanwhil
     assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), shared);
     assert.equal(await readFile(path.join(session.sourcePath, "local.txt"), "utf8"), "local\n");
     await assert.rejects(readFile(path.join(session.sourcePath, "remote.txt"), "utf8"), { code: "ENOENT" });
+    assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("a rollback keeps files the AI deleted or renamed while Update ran", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-"));
+  try {
+    const { fixture, session } = await sessionBehindSavedWork(root);
+    await writeFile(path.join(session.sourcePath, "notes.txt"), "notes\n", "utf8");
+    let written = false;
+    await assert.rejects(updateSessionWorkInProcess({
+      operationId: "update-rollback-with-deletion",
+      project: githubProject(root, fixture.remote),
+      // Right after Update's switch the AI deletes a file and renames another, both of which Update leaves alone,
+      // and writes a file Update changed, which puts the session back.
+      async runCommand(request) {
+        if (!written && request.command === "git" && request.args[0] === "update-ref" && request.args[1] === "HEAD") {
+          written = true;
+          await rm(path.join(session.sourcePath, "local.txt"));
+          await rename(path.join(session.sourcePath, "notes.txt"), path.join(session.sourcePath, "renamed.txt"));
+          await writeFile(path.join(session.sourcePath, "shared.txt"), "written after the switch\n", "utf8");
+        }
+        return commandRunner(request);
+      },
+      session
+    }), { code: "vibe64_session_update_worktree_changed" });
+    assert.equal(written, true);
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+    assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "written after the switch\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "renamed.txt"), "utf8"), "notes\n");
+    for (const gone of ["local.txt", "notes.txt", "remote.txt"]) {
+      await assert.rejects(readFile(path.join(session.sourcePath, gone), "utf8"), { code: "ENOENT" });
+    }
+    assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+for (const change of ["deleted", "renamed"]) {
+  test(`Update keeps a file it changes that the AI ${change} before its switch`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-"));
+    try {
+      const { fixture, session } = await sessionBehindSavedWork(root);
+      const shared = path.join(session.sourcePath, "shared.txt");
+      await assert.rejects(updateSessionWork({
+        async beforeSourceChange() {
+          if (change === "deleted") await rm(shared);
+          else await rename(shared, path.join(session.sourcePath, "moved.txt"));
+        },
+        operationId: `update-file-${change}-before-switch`,
+        project: githubProject(root, fixture.remote),
+        runCommand: commandRunner,
+        session
+      }), (error) => {
+        assert.equal(error.code, "vibe64_session_update_worktree_changed");
+        assert.match(error.message, /^A file changed while Update ran \(shared\.txt\), so Update stopped/u);
+        return true;
+      });
+      assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+      await assert.rejects(readFile(shared, "utf8"), { code: "ENOENT" });
+      if (change === "renamed") assert.equal(await readFile(path.join(session.sourcePath, "moved.txt"), "utf8"), "initial\n");
+      await assert.rejects(readFile(path.join(session.sourcePath, "remote.txt"), "utf8"), { code: "ENOENT" });
+      assert.equal(await readFile(path.join(session.sourcePath, "local.txt"), "utf8"), "local\n");
+      assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+}
+
+test("Update refuses, changing nothing, to replace a local file Git ignores", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-"));
+  try {
+    const { fixture, session } = await sessionBehindSavedWork(root);
+    await writeFile(path.join(session.sourcePath, ".git", "info", "exclude"), "remote.txt\n", "utf8");
+    await writeFile(path.join(session.sourcePath, "remote.txt"), "my own copy\n", "utf8");
+    await assert.rejects(updateSessionWork({
+      operationId: "update-over-ignored-file",
+      project: githubProject(root, fixture.remote),
+      runCommand: commandRunner,
+      session
+    }), (error) => {
+      assert.equal(error.code, "vibe64_session_update_ignored_file");
+      assert.match(error.message, /remote\.txt/u);
+      return true;
+    });
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+    assert.equal(await readFile(path.join(session.sourcePath, "remote.txt"), "utf8"), "my own copy\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "initial\n");
+    assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("a Git commit made while Update runs stops it and leaves every file as it is", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-"));
+  try {
+    const { fixture, session } = await sessionBehindSavedWork(root);
+    let aiCommit = "";
+    await assert.rejects(updateSessionWorkInProcess({
+      operationId: "update-with-ai-commit",
+      project: githubProject(root, fixture.remote),
+      // Right after Update moved HEAD, the AI writes a file Update changed and commits it.
+      async runCommand(request) {
+        const result = await commandRunner(request);
+        if (!aiCommit && request.command === "git" && request.args[0] === "update-ref" && request.args[1] === "HEAD") {
+          await writeFile(path.join(session.sourcePath, "shared.txt"), "committed by the AI\n", "utf8");
+          await git(session.sourcePath, ["commit", "-q", "-m", "AI work", "--", "shared.txt"]);
+          aiCommit = await git(session.sourcePath, ["rev-parse", "HEAD"]);
+        }
+        return result;
+      },
+      session
+    }), (error) => {
+      assert.equal(error.code, "vibe64_session_update_head_moved");
+      assert.match(error.message, /commit was made in this session while Update ran/u);
+      return true;
+    });
+    assert.notEqual(aiCommit, "");
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), aiCommit);
+    assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "committed by the AI\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "remote.txt"), "utf8"), "remote\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "local.txt"), "utf8"), "local\n");
+    assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("a session that stays updated because files kept changing is on the saved version it shows", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-"));
+  try {
+    const { canonicalCommit, fixture, session } = await sessionBehindSavedWork(root);
+    let headFailed = false;
+    let switches = 0;
+    await assert.rejects(updateSessionWorkInProcess({
+      operationId: "update-stays-updated",
+      project: githubProject(root, fixture.remote),
+      // HEAD fails to move after the switch while the AI writes a file Update changed, and every switch back is
+      // refused, as Git refuses while files keep changing.
+      async runCommand(request) {
+        if (request.command === "git" && request.args[0] === "update-ref" && request.args[1] === "HEAD" && !headFailed) {
+          headFailed = true;
+          await writeFile(path.join(session.sourcePath, "shared.txt"), "written after the switch\n", "utf8");
+          return { code: "git_failed", ok: false, output: "", stderr: "HEAD could not move.", stdout: "" };
+        }
+        if (request.command === "git" && request.args[0] === "read-tree" && request.args[1] === "-m") {
+          switches += 1;
+          if (switches > 1) {
+            return { code: "git_failed", ok: false, output: "", stderr: "error: Entry 'remote.txt' not uptodate. Cannot merge.", stdout: "" };
+          }
+        }
+        return commandRunner(request);
+      },
+      session
+    }), (error) => {
+      assert.equal(error.code, "vibe64_session_update_worktree_changed");
+      assert.match(error.message, /^Files kept changing while Update ran \(shared\.txt\), so this session stays updated/u);
+      return true;
+    });
+    assert.equal(switches, 4);
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), canonicalCommit);
+    assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "written after the switch\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "remote.txt"), "utf8"), "remote\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "local.txt"), "utf8"), "local\n");
+    assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("an Update notice with no file to name lists none", () => {
+  assert.match(updateWorktreeChangedError([], { undone: false }).message, /^Files kept changing while Update ran, so this session stays updated/u);
+  assert.match(updateWorktreeChangedError([]).message, /^A file changed while Update ran, so Update stopped/u);
+});
+
+test("Update waits for a Git index lock the AI holds for a moment", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-"));
+  try {
+    const { canonicalCommit, fixture, session } = await sessionBehindSavedWork(root);
+    const lock = path.join(session.sourcePath, ".git", "index.lock");
+    await writeFile(lock, "", "utf8");
+    const released = new Promise((resolve) => setTimeout(resolve, 500)).then(() => rm(lock));
+    const result = await updateSessionWork({
+      operationId: "update-waits-for-index-lock",
+      project: githubProject(root, fixture.remote),
+      runCommand: commandRunner,
+      session
+    });
+    await released;
+    assert.equal(result.status, "updated");
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), canonicalCommit);
     assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
   } finally {
     await rm(root, { force: true, recursive: true });
@@ -2300,6 +2497,7 @@ test("Save moves the session onto its regenerated files while keeping a file the
     assert.equal(result.status, "saved");
     assert.equal(result.reconciled, true);
     assert.equal(result.unsavedPathCount, 1);
+    assert.deepEqual(result.refreshedPaths, [".genesis/machine-city.json"]);
     assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), result.saveCommit);
     assert.equal(await git(fixture.remote, ["show", "main:authored.txt"]), "authored");
     assert.equal(await readFile(path.join(session.sourcePath, "authored.txt"), "utf8"), "edited during Save\n");
@@ -2309,20 +2507,52 @@ test("Save moves the session onto its regenerated files while keeping a file the
   }
 });
 
-test("Save keeps a file the AI wrote that Save itself changes, and leaves the session to Update", async () => {
+test("Save keeps a file the AI wrote that Save itself changes as unsaved work, and a later Update has nothing to merge", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-"));
   try {
     const { fixture, session } = await sessionWithArtifact(root);
     const aiCopy = "{\"written by the AI\":true}\n";
     const result = await saveWithRegeneratedArtifact(root, fixture, session, async ({ stage }) => {
-      if (stage === "prepared") await writeFile(path.join(session.sourcePath, ".genesis", "machine-city.json"), aiCopy, "utf8");
+      if (stage !== "prepared") return;
+      await writeFile(path.join(session.sourcePath, ".genesis", "machine-city.json"), aiCopy, "utf8");
+      await writeFile(path.join(session.sourcePath, "authored.txt"), "edited during Save\n", "utf8");
     });
-    assert.equal(result.status, "published_needs_reconcile");
-    assert.equal(result.reconciled, false);
-    assert.equal(result.unsavedPathCount, 1);
+    assert.equal(result.status, "saved");
+    assert.equal(result.reconciled, true);
+    assert.equal(result.unsavedPathCount, 2);
+    assert.deepEqual(result.refreshedPaths, []);
     assert.equal(await git(fixture.remote, ["rev-parse", "refs/heads/main"]), result.saveCommit);
-    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), result.saveCommit);
     assert.equal(await readFile(path.join(session.sourcePath, ".genesis", "machine-city.json"), "utf8"), aiCopy);
+    assert.equal(await readFile(path.join(session.sourcePath, "authored.txt"), "utf8"), "edited during Save\n");
+    assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
+    assert.equal(await git(session.sourcePath, ["diff", "--name-only"]), ".genesis/machine-city.json\nauthored.txt");
+    const update = await updateSessionWork({
+      operationId: "update-after-save-with-ai-writes",
+      project: githubProject(root, fixture.remote),
+      runCommand: commandRunner,
+      session: { ...session, metadata: { ...session.metadata, base_commit: result.saveCommit, canonical_commit: result.saveCommit } }
+    });
+    assert.equal(update.status, "already_current");
+    assert.equal(await readFile(path.join(session.sourcePath, "authored.txt"), "utf8"), "edited during Save\n");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("Save keeps a file the AI deleted that Save itself regenerates deleted", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-"));
+  try {
+    const { fixture, session } = await sessionWithArtifact(root);
+    const artifact = path.join(session.sourcePath, ".genesis", "machine-city.json");
+    const result = await saveWithRegeneratedArtifact(root, fixture, session, async ({ stage }) => {
+      if (stage === "prepared") await rm(artifact);
+    });
+    assert.equal(result.status, "saved");
+    assert.equal(result.reconciled, true);
+    assert.equal(result.unsavedPathCount, 1);
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), result.saveCommit);
+    await assert.rejects(readFile(artifact, "utf8"), { code: "ENOENT" });
     assert.equal(await readFile(path.join(session.sourcePath, "authored.txt"), "utf8"), "authored\n");
     assert.equal(await git(session.sourcePath, ["diff", "--cached", "--name-only"]), "");
   } finally {

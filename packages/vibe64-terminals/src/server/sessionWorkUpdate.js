@@ -46,8 +46,9 @@ import {
   sessionWorktreeTree,
   switchSessionWorktree,
   undoSessionUpdate,
-  UPDATE_WORKTREE_CHANGED_CODE,
-  updateWorktreeChangedError
+  updateHeadMovedError,
+  updateWorktreeChangedError,
+  WORKTREE_WRITTEN_CODE
 } from "./sessionWorktreeSwitch.js";
 
 const INCOMING_VERSION_LIMIT = 5;
@@ -394,7 +395,7 @@ async function applySessionUpdate(runCommand, context, {
       updatedPaths: [...updatedPathStatuses.keys()].sort((left, right) => left.localeCompare(right)).slice(0, 50)
     };
   } catch (error) {
-    const { undone, written } = await undoSessionUpdate(runCommand, context, {
+    const { headMoved, undone, written } = await undoSessionUpdate(runCommand, context, {
       canonicalCommit,
       checkpointCommit,
       checkpointTree,
@@ -406,8 +407,9 @@ async function applySessionUpdate(runCommand, context, {
       switched,
       updatedPathStatuses
     });
-    if (!undone || (written.length && error?.code !== UPDATE_WORKTREE_CHANGED_CODE)) {
-      throw updateWorktreeChangedError(written, { undone });
+    if (headMoved) throw updateHeadMovedError();
+    if (!undone || written.length || error?.code === WORKTREE_WRITTEN_CODE) {
+      throw updateWorktreeChangedError(written.length ? written : error?.changedPaths || [], { undone });
     }
     throw error;
   }

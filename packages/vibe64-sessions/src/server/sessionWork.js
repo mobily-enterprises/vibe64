@@ -274,13 +274,12 @@ function createSessionWork({
           }
         }
         const changedDuringSave = result.unsavedPathCount || 0;
+        // Save keeps the session on its own commit when one was made in it while Save ran.
         const savedMessage = result.cacheMaintenance?.retryable === true
           ? "Session work was saved. The local clone cache could not be refreshed and will be retried later."
           : result.reconciled === true
             ? "Session work was saved."
-            : changedDuringSave
-              ? "Session work was saved, but a file changed while Save ran, so this session kept every change and still shows the earlier version. Nothing was lost. Update brings it onto the saved version."
-              : "Session work was pushed and needs local reconciliation.";
+            : "Session work was saved, but a Git commit was made in this session while Save ran, so it still shows its own version, with every change kept. Nothing was lost. Update brings it onto the saved version.";
         const unsavedMessage = result.reconciled === true && changedDuringSave
           ? `${changedDuringSave} ${changedDuringSave === 1 ? "file" : "files"} changed while Save ran; ${changedDuringSave === 1 ? "that change stays" : "those changes stay"} unsaved.`
           : "";
