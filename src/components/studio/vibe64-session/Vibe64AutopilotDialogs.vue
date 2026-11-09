@@ -59,6 +59,7 @@
         </v-sheet>
         <p v-else-if="!saveWorkReview" role="status">Refresh repository status to review the destination.</p>
         <p class="text-body-small mt-3 mb-0">Save open file edits first.</p>
+        <p v-if="agentActive" role="status" class="text-body-medium mt-3 mb-0">The AI is still working. Save now, including its unfinished changes?</p>
         <p v-if="saveWorkNeedsPullRequest" role="status" class="text-body-small mt-2">A pull request is required.</p>
         <p v-if="saveWorkDisabled" role="status" class="mt-3">{{ saveWorkTitle }}</p>
       </v-card-text>
@@ -84,7 +85,7 @@
           :variant="saveWorkNeedsPullRequest ? 'outlined' : 'flat'"
           @click="confirmSaveWork"
         >
-          <span class="text-wrap" style="overflow-wrap: anywhere">{{ saveWorkSending ? "Committing…" : publicationLabel }}</span>
+          <span class="text-wrap" style="overflow-wrap: anywhere">{{ saveWorkSending ? "Committing…" : agentActive ? "Save now" : publicationLabel }}</span>
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -106,7 +107,7 @@ const { view } = defineProps({
 });
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
-  applyResolvedUpdate, cancelSaveWork, confirmSaveWork, contextFullFailure, createPullRequestOpen,
+  agentActive, applyResolvedUpdate, cancelSaveWork, confirmSaveWork, contextFullFailure, createPullRequestOpen,
   githubProject, props, resolvedUpdateReview, retryContextFull, saveWorkConfirmOpen,
   saveWorkDisabled, saveWorkReview, saveWorkSending, saveWorkTitle,
   selectSessionTool, sessionPullRequest, sourceOperationsSuspended, updateWorkDisabled

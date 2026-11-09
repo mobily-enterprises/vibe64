@@ -35,6 +35,7 @@ import { useVibe64SessionSaveWork } from "@/composables/useVibe64SessionSaveWork
 import { useVibe64SessionToolPane } from "@/composables/useVibe64SessionToolPane.js";
 import { useVibe64ShortActionDismissals } from "@/composables/useVibe64ShortActionDismissals.js";
 import { useVibe64WorkspaceSetupActivity } from "@/composables/useVibe64WorkspaceSetupActivity.js";
+import { backgroundWorkLabel } from "@/lib/vibe64BackgroundWorkLabel.js";
 
 const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";
 const NUMBERED_QUESTION_UNSURE_CHOICE = Object.freeze({
@@ -347,7 +348,8 @@ function useVibe64AutopilotView(props, emit, {
       status: composerConnectionStatus.value
     }) ||
     (agentActive.value && activeAgentTurn.value.phase === "compacting" ? "Compacting conversation context…" : "") ||
-    (agentActive.value && activeAgentTurn.value.phase === "background" ? "Reply ready · background task still running…" : "") ||
+    (agentActive.value && activeAgentTurn.value.phase === "background"
+      ? backgroundWorkLabel(Number(activeAgentTurn.value.backgroundTasks) || 0) : "") ||
     (unref(props.conversationRuntime?.phase) === "compacting" ? "Summarising the assistant's memory before sending…" : "") ||
     (agentActive.value ? unref(assistantProgressLabel) : "") ||
     (agentActive.value ? "Assistant is working..." : "") ||
@@ -376,7 +378,6 @@ function useVibe64AutopilotView(props, emit, {
 
   const saveWork = useVibe64SessionSaveWork(props, {
     actorKey,
-    agentActive,
     composerSending,
     dismissals,
     projectSlug,

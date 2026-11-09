@@ -29,7 +29,6 @@ function repositoryFailureFromError(error) {
 /** The selected session's Save and Update: header state, attempts, failures and the Save dialog. */
 function useVibe64SessionSaveWork(props, {
   actorKey,
-  agentActive,
   composerSending,
   dismissals,
   projectSlug,
@@ -97,10 +96,10 @@ function useVibe64SessionSaveWork(props, {
   const repositoryAssistantStateSettled = computed(() => ["connected", "restricted", "unavailable", "failed"].includes(
     props.agentConnectionStatus
   ));
+  // Update and Save run while the AI works: Save asks first, since it includes the AI's unfinished changes.
   const updateWorkDisabled = computed(() => Boolean(
     sessionInteractionDisabled.value ||
     !repositoryAssistantStateSettled.value ||
-    agentActive.value ||
     composerSending.value ||
     saveWorkSending.value ||
     saveWorkRepositoryBusy.value ||
@@ -133,8 +132,8 @@ function useVibe64SessionSaveWork(props, {
     if (repositoryOperationActive.value || saveWorkRepositoryBusy.value) {
       return "Wait for the current repository operation to finish";
     }
-    if (agentActive.value || composerSending.value) {
-      return "Wait for the assistant turn to finish before saving or updating";
+    if (composerSending.value) {
+      return "Wait for your message to reach the assistant before saving or updating";
     }
     if (saveWorkRepositoryState.value?.loading) {
       return "Checking whether this session has work to save";

@@ -914,6 +914,18 @@ test("Claude command admission is distinct from user tool-result frames and wait
   await event({ type: "system", subtype: "task_started", task_id: "task", task_type: "local_agent" });
   await event({ type: "result", subtype: "success", result: "Done", uuid: "done" });
   assert.equal((await f.provider.sessionState(f.context)).turn.active, true);
+  // The reply is written, but the turn stays open; the chat says it still works and on how many commands.
+  const working = () => f.publications.filter(publication => publication.reason === "claude-stream-turn-active");
+  const background = working().at(-1).payload.agentSession.turn;
+  assert.equal(background.phase, "background");
+  assert.equal(background.active, true);
+  assert.equal(background.backgroundTasks, 1);
+  const shown = working().length;
+  await event({ type: "system", subtype: "task_updated", task_id: "task", patch: { status: "running" } });
+  assert.equal(working().length, shown, "an unchanged count publishes nothing");
+  await event({ type: "system", subtype: "task_started", task_id: "task-2", task_type: "local_bash" });
+  assert.equal(working().at(-1).payload.agentSession.turn.backgroundTasks, 2);
+  await event({ type: "system", subtype: "task_notification", task_id: "task-2", status: "completed" });
   await event({ type: "system", subtype: "task_notification", task_id: "task", status: "completed" });
   // The main model still has to consume the finished task's result.
   assert.equal((await f.provider.sessionState(f.context)).turn.active, true);

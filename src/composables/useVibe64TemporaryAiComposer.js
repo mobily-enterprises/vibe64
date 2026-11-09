@@ -1,6 +1,7 @@
 import { computed } from "vue";
 import { assistantRoutingFromMetadata, assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
+import { backgroundWorkLabel } from "@/lib/vibe64BackgroundWorkLabel.js";
 
 /**
  * The temporary chats' composers: whether a chat takes a message now and why not, the active chat's error and
@@ -47,7 +48,7 @@ function useVibe64TemporaryAiComposer({ props, temporary, closingTask, taskPromp
   });
   const activityLabel = computed(() => {
     if (activeTask.value?.delivery.state.sending) return "Sending to assistant…";
-    if (activeTask.value?.busy && activeTask.value.phase === "background") return "Reply ready · background task still running…";
+    if (activeTask.value?.busy && activeTask.value.phase === "background") return backgroundWorkLabel();
     if (activeTask.value?.busy) return "AI is working…";
     return typingPresence.typingLabel.value;
   });

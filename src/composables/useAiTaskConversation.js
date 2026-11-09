@@ -5,11 +5,11 @@ import { useAiTaskConversationMessages } from "@/composables/useAiTaskConversati
 import { useAiTaskConversationRecord } from "@/composables/useAiTaskConversationRecord.js";
 import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
 import { aiTaskRequest } from "@/lib/vibe64AiTaskConversation.js";
+import { backgroundWorkLabel } from "@/lib/vibe64BackgroundWorkLabel.js";
 import { vibe64TemporaryConversationPath } from "@/lib/vibe64SessionRequestConfig.js";
 
 const SENDING_LABEL = "Sending to assistant…";
 const WORKING_LABEL = "AI is working…";
-const BACKGROUND_LABEL = "Reply ready · background task still running…";
 const NOT_STEERABLE = "You cannot steer this turn's AI connection. You can send a new request when it finishes.";
 const MODE_UNAVAILABLE = "This mode is unavailable. Choose another chat mode.";
 const RESTORE_FAILED = "The conversation could not be loaded:";
@@ -66,7 +66,7 @@ function useAiTaskConversation({
   const activityLabel = computed(() => {
     const current = task.value;
     if (current?.delivery.state.sending) return SENDING_LABEL;
-    if (current?.busy && current.phase === "background") return BACKGROUND_LABEL;
+    if (current?.busy && current.phase === "background") return backgroundWorkLabel();
     return current?.busy ? WORKING_LABEL : typingPresence.typingLabel.value;
   });
   // A message that failed shows its own Retry, Cancel and Edit; only anything else needs a line.

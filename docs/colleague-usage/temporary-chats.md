@@ -75,9 +75,10 @@ Temporary chat uses Main's round Send arrow and square Stop control. While a
 message is being delivered, you can type and send another; it appears as
 **Pending** until the earlier delivery settles. The diagonal arrow sends guidance
 to a working assistant. **Stop** interrupts that chat without closing it.
-**Reply ready · background task still running…** means the answer is already
-shown but a background command Claude started is still running; any later
-follow-up reply appears after the answer without replacing it.
+**Still working · waiting on background commands…** means the answer is already
+shown but a background command Claude started is still running, so the chat is
+still working and **Stop** still ends it; any later follow-up reply appears after
+the answer without replacing it.
 Completed replies and progress updates are saved about a second after they
 finish, even while the request is still working and nobody has the chat open,
 so other viewers and a later reopen see them with their actual timing.

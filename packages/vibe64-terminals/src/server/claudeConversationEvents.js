@@ -79,6 +79,8 @@ function createClaudeConversationEvents({
         }
       })
     }));
+    const backgroundTasks = entry.nativeTurn?.read().backgroundTasks || 0;
+    entry.shownBackgroundTasks = backgroundTasks;
     await publishSessionChanged(sessionId, {
       session: { sessionId, revision },
       reason: active ? "claude-stream-turn-active" : "claude-stream-turn-idle",
@@ -96,7 +98,9 @@ function createClaudeConversationEvents({
           providerId: ENGINE,
           transportId: TRANSPORT,
           thread: { id: entry.id },
-          turn: { ...snapshot(entry), runState: state, state: active ? "active" : "idle" }
+          // A turn whose reply is written stays open while commands it started in the background run; the chat
+          // says how many.
+          turn: { ...snapshot(entry), backgroundTasks, runState: state, state: active ? "active" : "idle" }
         }
       }
     });
@@ -163,6 +167,10 @@ function createClaudeConversationEvents({
     }
     if (event.type === "save") return save(entry);
     if (event.type === "state") return publishRun(entry, event);
+    if (event.type === "diagnostic" && event.stage === "background_tasks" && entry.turn?.active &&
+      entry.turn.phase === "background" && event.backgroundTasks !== entry.shownBackgroundTasks) {
+      return publishRun(entry, { state: entry.turn.state, active: true, message: "" });
+    }
     if (event.type === "goal-updated") return publishSessionChanged(entry.context.sessionId, { reason: "claude-goal" });
     if (event.type === "stop-unconfirmed") {
       if (entry.turn) await publishRun(entry, { state: entry.turn.state, active: entry.turn.active, message: entry.observationError });

@@ -1183,7 +1183,7 @@ test.describe("direct chat", () => {
     }
   }
 
-  test("only allows a status check while the agent is active", async ({ page }) => {
+  test("Save while the agent is active asks first, then saves its unfinished changes", async ({ page }) => {
     const saves: Record<string, unknown>[] = [];
     await mockDirectChat(page, {
       agentActive: true,
@@ -1192,10 +1192,12 @@ test.describe("direct chat", () => {
 
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-    await expect(page.getByRole("button", { name: "Review selected session changes", exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "Check for updates", exact: true }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("button", { name: "Review selected session changes", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("The AI is still working. Save now, including its unfinished changes?", { exact: true })).toBeVisible();
     expect(saves).toHaveLength(0);
+    await dialog.getByRole("button", { name: "Save now", exact: true }).click();
+    await expect.poll(() => saves.length).toBe(1);
   });
 
   test.describe("session-chat Save on a phone", () => {

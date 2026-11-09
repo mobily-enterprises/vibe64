@@ -916,6 +916,15 @@ Interrupted coding leaves the explicit plan status intact. Auto classifies a
 request to continue against the current active plan; questions and scope changes
 remain distinct intents.
 
+A Claude turn whose reply is written stays open while commands it started in the
+background run (JSKIT's native turn phase `background`): it can continue when they
+finish, and Stop still ends it. Main chat says “Still working · waiting on N
+background commands…”, so the turn never looks finished. The count is the native
+turn's `backgroundTasks`, which `publishRun` in `claudeConversationEvents.js` adds to
+the published turn, again whenever the background tasks change during that phase; a
+turn read without it says “waiting on background commands…”. Temporary chats and AI
+tasks use the same words without the count (`src/lib/vibe64BackgroundWorkLabel.js`).
+
 Main chat shows “Compacting conversation context…” for native compaction in all
 three orchestrators: Codex's tracked compaction item, OpenCode's current unfinished
 summary message, or Claude's streamed compaction status. Completion, terminal
@@ -1270,6 +1279,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/composables/useStoredSelection.js`
 
 - `src/lib/vibe64ThinkingPresentation.js`
+- `src/lib/vibe64BackgroundWorkLabel.js`
 - `packages/vibe64-runtime/src/shared/assistantLabels.js`
 - `tests/client/vibe64ThinkingPresentation.vitest.js`
 - `tests/fixtures/claudeSummarizedThinking.js`

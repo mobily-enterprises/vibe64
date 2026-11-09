@@ -637,7 +637,11 @@ describe("useVibe64AutopilotView direct chat", () => {
     props.session.agentSession.turn.phase = "";
     expect(view.thinkingLabel.value).toBe("Assistant is working...");
     props.session.agentSession.turn.phase = "background";
-    expect(view.thinkingLabel.value).toBe("Reply ready · background task still running…");
+    expect(view.thinkingLabel.value).toBe("Still working · waiting on background commands…");
+    props.session.agentSession.turn.backgroundTasks = 1;
+    expect(view.thinkingLabel.value).toBe("Still working · waiting on 1 background command…");
+    props.session.agentSession.turn.backgroundTasks = 3;
+    expect(view.thinkingLabel.value).toBe("Still working · waiting on 3 background commands…");
     props.session.agentSession.turn.phase = "compacting";
     props.session.agentSession.turn.status = "observation_lost";
     expect(view.thinkingLabel.value).toContain("not yet confirmed");
@@ -2555,17 +2559,23 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(props.updateSessionWork).toHaveBeenCalledOnce();
   });
 
-  it("rechecks active turns when confirming Save and clears the dialog when switching sessions", async () => {
+  it("runs Save and Update while the AI works, Save only after its dialog is confirmed", async () => {
     const { props, view } = await createViewWithProps({ workState: { unsaved: true } });
+    props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    await nextTick();
+    expect(view.agentActive.value).toBe(true);
+    expect(view.saveWorkDisabled.value).toBe(false);
     expect(view.requestSaveWork()).toBe(true);
-    props.session.agentSession.turn = { active: true };
-    await nextTick();
-    await expect(view.confirmSaveWork()).resolves.toBe(false);
+    expect(view.saveWorkConfirmOpen.value).toBe(true);
     expect(props.saveSessionWork).not.toHaveBeenCalled();
-    expect(view.saveWorkTitle.value).toContain("Wait for the assistant turn");
-    props.session = { ...props.session, sessionId: "session-2" };
+    await view.confirmSaveWork();
+    expect(props.saveSessionWork).toHaveBeenCalledOnce();
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    props.workState.updateAvailable = true;
     await nextTick();
-    expect(view.saveWorkConfirmOpen.value).toBe(false);
+    expect(view.updateWorkDisabled.value).toBe(false);
+    await expect(view.requestSaveWork()).resolves.toMatchObject({ ok: true });
+    expect(props.updateSessionWork).toHaveBeenCalledOnce();
   });
 
   it("submits the destination the person reviewed even when a refresh reports a new branch", async () => {

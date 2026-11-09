@@ -894,6 +894,8 @@ describe("Vibe64 direct session view", () => {
     expect(component).not.toContain(':loading="saveWorkSending"');
     expect(component).toContain("icon=\"$dominoMask\"");
     expect(component).toContain("@click=\"confirmSaveWork\"");
+    expect(component).toContain('<p v-if="agentActive" role="status" class="text-body-medium mt-3 mb-0">The AI is still working. Save now, including its unfinished changes?</p>');
+    expect(component).toContain('agentActive ? "Save now" : publicationLabel');
     expect(component).toContain("<Vibe64TemporaryActionTerminal");
     expect(component.indexOf("<Vibe64TemporaryActionTerminal")).toBeLessThan(
       component.indexOf("<Vibe64ConversationLog")

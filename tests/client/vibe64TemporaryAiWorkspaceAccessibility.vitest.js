@@ -771,7 +771,7 @@ describe("Temporary AI workspace accessibility", () => {
       expect(nodeText(activity)).toBe("AI is working…");
       temporary.tasks.value[0].phase = "background";
       await nextTick();
-      expect(nodeText(activity)).toBe("Reply ready · background task still running…");
+      expect(nodeText(activity)).toBe("Still working · waiting on background commands…");
       temporary.tasks.value[0].phase = "";
       await nextTick();
       expect(nodeText(activity)).toBe("AI is working…");

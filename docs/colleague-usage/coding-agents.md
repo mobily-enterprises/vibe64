@@ -228,7 +228,7 @@ work](chat-settings.md).
 A message sent while a turn is still running joins that turn, with that turn's
 mode and model. This includes a Claude turn whose reply is ready while a
 background task (for example a long test run) still runs: the status reads
-**Reply ready · background task still running…**. If you changed **Chat mode**
+**Still working · waiting on 1 background command…**. If you changed **Chat mode**
 (or chose another Custom model) since that turn started, the message still joins
 the running turn on its original mode and model; your new choice applies from
 the next new request. During a goal, the goal's own mode
