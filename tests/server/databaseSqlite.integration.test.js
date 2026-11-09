@@ -106,3 +106,39 @@ test("SQLite schema, results, edits, read isolation and cancellation use real da
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("SQLite schema reading asks the same few queries however many tables and indexes there are", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-sqlite-"));
+  try {
+    async function inspect(tableCount) {
+      const filename = path.join(root, `tables-${tableCount}.sqlite`);
+      const setup = new DatabaseSync(filename);
+      setup.exec("CREATE TABLE owners (id INTEGER PRIMARY KEY, name TEXT UNIQUE)");
+      for (let index = 0; index < tableCount; index += 1) {
+        setup.exec(`CREATE TABLE items_${index} (id INTEGER PRIMARY KEY, owner_id INTEGER REFERENCES owners(id), code TEXT, size INTEGER);
+          CREATE INDEX items_${index}_code ON items_${index}(code, size);`);
+      }
+      setup.close();
+      let queries = 0;
+      let schema;
+      await withSessionKnex({ kind: "sqlite", database: filename, readOnly: true }, async ({ connection, knex }) => {
+        const counted = { raw: (...input) => { queries += 1; return knex.raw(...input); } };
+        schema = await inspectDatabaseSchema({ connection, knex: counted });
+      });
+      return { queries, schema };
+    }
+    const one = await inspect(1);
+    const many = await inspect(12);
+    assert.equal(many.queries, one.queries);
+    assert.equal(many.schema.tables.length, 13);
+    const last = many.schema.tables.find((table) => table.name === "items_11");
+    assert.deepEqual(last.columns.map((column) => column.name), ["id", "owner_id", "code", "size"]);
+    assert.deepEqual(last.indexes.map((index) => [index.name, index.columns]), [["items_11_code", ["code", "size"]]]);
+    assert.match(last.indexes[0].definition, /CREATE INDEX items_11_code/);
+    assert.equal(many.schema.relationships.filter((relation) => relation.referencedTable === "main.owners").length, 12);
+    const owners = many.schema.tables.find((table) => table.name === "owners");
+    assert.deepEqual(owners.indexes.map((index) => [index.columns, index.unique]), [[["name"], true]]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

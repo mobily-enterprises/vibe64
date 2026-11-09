@@ -14,35 +14,50 @@ function previewCourse(course) {
 
 const previewNote = "Preview — the workspace owner can try it; it becomes startable when released.";
 
-function lessonStatus(lesson, lessonProgress) {
-  const saved = lessonProgress.find(value => value.lessonCode === lesson.code && value.lessonHash === lesson.hash);
+// Values grouped by key, in their order.
+function grouped(values, key) {
+  const groups = new Map();
+  for (const value of values) {
+    const group = groups.get(key(value));
+    if (group) group.push(value);
+    else groups.set(key(value), [value]);
+  }
+  return groups;
+}
+
+const lessonKey = (code, hash) => `${code}\u0000${hash}`;
+
+// A lesson's status from its saved progress for this exact code and hash.
+function lessonStatus(saved) {
   if (saved?.completed) return "completed";
   return saved && (saved.open || saved.passed > 0) ? "in-progress" : "not-started";
 }
 
 // Display only: when a course update changed a lesson's content, its earlier
 // completed version is named by the release of a saved attempt of that version.
-function earlierCompletion(lesson, lessonProgress, attempts) {
-  const done = lessonProgress.filter(value => value.lessonCode === lesson.code && value.lessonHash !== lesson.hash && value.completed);
+function earlierCompletion(lesson, progressByCode, attemptsByLesson) {
+  const done = (progressByCode.get(lesson.code) || []).filter(value => value.lessonHash !== lesson.hash && value.completed);
   if (!done.length) return null;
-  const releases = done.flatMap(value => attempts.filter(attempt => attempt?.pin?.lesson?.code === value.lessonCode &&
-    attempt.pin.lesson.hash === value.lessonHash).map(attempt => attempt.pin.course?.release)).filter(Boolean);
+  const releases = done.flatMap(value => (attemptsByLesson.get(lessonKey(value.lessonCode, value.lessonHash)) || [])
+    .map(attempt => attempt.pin.course?.release)).filter(Boolean);
   return { release: releases.at(-1) || "" };
 }
 
 function courseProgress(course, lessonProgress = [], active = null, history = [], { canTryPreviews = false } = {}) {
-  const attempts = [...history, ...(active ? [active] : [])];
+  const attempts = [...history, ...(active ? [active] : [])].filter(attempt => attempt?.pin?.lesson);
+  const progressByCode = grouped(lessonProgress, value => value.lessonCode);
+  const attemptsByLesson = grouped(attempts, attempt => lessonKey(attempt.pin.lesson.code, attempt.pin.lesson.hash));
   const lessons = course.lessons.map(lesson => {
-    const status = lessonStatus(lesson, lessonProgress);
-    const earlier = status === "completed" ? null : earlierCompletion(lesson, lessonProgress, attempts);
+    const saved = progressByCode.get(lesson.code)?.find(value => value.lessonHash === lesson.hash);
+    const status = lessonStatus(saved);
+    const earlier = status === "completed" ? null : earlierCompletion(lesson, progressByCode, attemptsByLesson);
     // The lesson in progress (open) is resumed, not started; any other lesson starts as a new attempt.
-    const current = Boolean(lessonProgress.find(value => value.lessonCode === lesson.code && value.lessonHash === lesson.hash)?.open);
-    return { lesson, status, current, ...(earlier ? { earlier } : {}) };
+    return { lesson, status, current: Boolean(saved?.open), ...(earlier ? { earlier } : {}) };
   });
   const next = lessons.find(value => value.status !== "completed" && offered(course, value.lesson, canTryPreviews))?.lesson || null;
   const counted = lessons.some(value => value.lesson.required) ? lessons.filter(value => value.lesson.required) : lessons;
-  const topics = course.topics.map(topic => ({ ...topic,
-    lessons: lessons.filter(value => value.lesson.topicId === topic.topicId && value.lesson.topicRelease === topic.release) }));
+  const lessonsByTopic = grouped(lessons, value => lessonKey(value.lesson.topicId, value.lesson.topicRelease));
+  const topics = course.topics.map(topic => ({ ...topic, lessons: lessonsByTopic.get(lessonKey(topic.topicId, topic.release)) || [] }));
   return {
     lessons, topics,
     completed: counted.filter(value => value.status === "completed").length,

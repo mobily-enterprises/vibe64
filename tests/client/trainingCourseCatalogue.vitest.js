@@ -179,4 +179,16 @@ describe("Training course catalogue", () => {
     expect(html).not.toContain("Continue lesson<");
     expect(html).toContain("Start next lesson");
   });
+
+  it("looks up each lesson's saved progress once, however many lessons and saved lessons there are", () => {
+    const lessons = Array.from({ length: 40 }, (_, index) => ({ code: `L-${index}`, hash: "c".repeat(64), status: "published",
+      required: true, topicId: "intro", topicRelease: "0.1.0" }));
+    let reads = 0;
+    const progress = lessons.map(lesson => ({ get lessonCode() { reads += 1; return lesson.code; },
+      lessonHash: lesson.hash, required: 1, passed: 1, completed: true, open: false }));
+    const summary = courseProgress({ enabled: true, status: "released", lessons, topics: [{ topicId: "intro", release: "0.1.0" }] }, progress);
+    expect(summary.completed).toBe(40);
+    expect(summary.topics[0].lessons).toHaveLength(40);
+    expect(reads).toBeLessThanOrEqual(progress.length * 2);
+  });
 });

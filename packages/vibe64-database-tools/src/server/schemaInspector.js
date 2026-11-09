@@ -621,6 +621,29 @@ async function inspectSqliteSchema(knex, connection = {}) {
     knex.raw("SELECT name, type, sql FROM main.sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name")
   );
   const tableList = await rows(knex.raw("PRAGMA main.table_list"));
+  // Every table's columns, indexes, index columns and foreign keys come in one
+  // query each, not a few round trips per table and per index.
+  const eachTable = "FROM main.sqlite_schema AS m";
+  const userTables = "m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%'";
+  const columnRows = await rows(knex.raw(
+    `SELECT m.name AS table_name, c.* ${eachTable} JOIN pragma_table_xinfo(m.name) AS c WHERE ${userTables} ORDER BY m.name, c.cid`
+  ));
+  const indexRows = await rows(knex.raw(
+    `SELECT m.name AS table_name, i.* ${eachTable} JOIN pragma_index_list(m.name) AS i WHERE ${userTables} ORDER BY m.name, i.seq`
+  ));
+  const indexColumnRows = await rows(knex.raw(
+    `SELECT i.name AS index_name, x.* ${eachTable} JOIN pragma_index_list(m.name) AS i JOIN pragma_index_xinfo(i.name) AS x ` +
+    `WHERE ${userTables} AND x.key = 1 ORDER BY i.name, x.seqno`
+  ));
+  const indexDefinitions = await rows(knex.raw("SELECT name, sql FROM main.sqlite_schema WHERE type = 'index'"));
+  const foreignKeyRows = await rows(knex.raw(
+    `SELECT m.name AS table_name, f.* ${eachTable} JOIN pragma_foreign_key_list(m.name) AS f WHERE ${userTables} ORDER BY m.name, f.id, f.seq`
+  ));
+  const columnsOf = groupedRows(columnRows, (row) => row.table_name);
+  const indexesOf = groupedRows(indexRows, (row) => row.table_name);
+  const indexColumnsOf = groupedRows(indexColumnRows, (row) => row.index_name);
+  const indexDefinitionOf = new Map(indexDefinitions.map((row) => [row.name, row.sql || ""]));
+  const foreignKeysOf = groupedRows(foreignKeyRows, (row) => row.table_name);
   const tables = [];
   for (const record of records) {
     const properties = tableList.find((entry) => entry.schema === "main" && entry.name === record.name);
@@ -631,8 +654,8 @@ async function inspectSqliteSchema(knex, connection = {}) {
       storage_engine: "SQLite",
       is_updatable: record.type === "table"
     }, record.type);
-    const columns = await rows(knex.raw("SELECT * FROM pragma_table_xinfo(?) ORDER BY cid", [record.name]));
-    const indexes = await rows(knex.raw("SELECT * FROM pragma_index_list(?) ORDER BY seq", [record.name]));
+    const columns = columnsOf.get(record.name) || [];
+    const indexes = indexesOf.get(record.name) || [];
     const primary = columns.filter((column) => Number(column.pk) > 0).sort((a, b) => Number(a.pk) - Number(b.pk));
     const rowidAlias = primary.length === 1 && String(primary[0].type).toUpperCase() === "INTEGER" &&
       !Number(properties?.wr) && !indexes.some((index) => index.origin === "pk");
@@ -665,8 +688,8 @@ async function inspectSqliteSchema(knex, connection = {}) {
       });
     }
     for (const index of indexes) {
-      const entries = await rows(knex.raw("SELECT * FROM pragma_index_xinfo(?) WHERE key = 1 ORDER BY seqno", [index.name]));
-      const definition = (await rows(knex.raw("SELECT sql FROM main.sqlite_schema WHERE type = 'index' AND name = ?", [index.name])))[0]?.sql || "";
+      const entries = indexColumnsOf.get(index.name) || [];
+      const definition = indexDefinitionOf.get(index.name) || "";
       table.indexes.push({
         id: index.name,
         name: index.name,
@@ -681,7 +704,7 @@ async function inspectSqliteSchema(knex, connection = {}) {
         comment: ""
       });
     }
-    const foreignKeys = await rows(knex.raw("SELECT * FROM pragma_foreign_key_list(?) ORDER BY id, seq", [record.name]));
+    const foreignKeys = foreignKeysOf.get(record.name) || [];
     for (const [id, parts] of groupedRows(foreignKeys, (entry) => String(entry.id))) {
       table.constraints.push({
         name: `${record.name}_foreign_${id}`,

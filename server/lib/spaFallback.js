@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { API_BASE_PATH, matchesPathPrefix, normalizePathname, toRequestPathname } from "@jskit-ai/kernel/shared/surface/paths";
 
@@ -67,8 +68,20 @@ function canServeStaticFile(distRoot, relativePath) {
   return existsSync(resolvedPath);
 }
 
-function readSpaDocument(distRoot) {
-  return readFileSync(path.resolve(distRoot, SPA_INDEX_FILE), "utf8");
+// The index each build root last served, kept while its file is unchanged.
+const spaDocuments = new Map();
+
+async function readSpaDocument(distRoot) {
+  const file = path.resolve(distRoot, SPA_INDEX_FILE);
+  const stats = await stat(file, { bigint: true });
+  const identity = `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`;
+  const cached = spaDocuments.get(file);
+  if (cached?.identity === identity) {
+    return cached.document;
+  }
+  const document = await readFile(file, "utf8");
+  spaDocuments.set(file, { identity, document });
+  return document;
 }
 
 /**
@@ -111,7 +124,7 @@ function registerSpaNotFoundHandler(app, { distRoot, hasWebBuild }) {
     return reply
       .header("Cache-Control", "no-store")
       .type("text/html; charset=utf-8")
-      .send(readSpaDocument(distRoot));
+      .send(await readSpaDocument(distRoot));
   });
 }
 

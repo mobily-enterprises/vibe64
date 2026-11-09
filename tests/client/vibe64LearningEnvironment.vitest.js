@@ -123,6 +123,25 @@ describe("useVibe64Learning controller", () => {
     expect(learning.lesson.value.steps.find(step => step.id === "read").bodyText).toBe("# Hello");
   });
 
+  it("reads every other page of a long lesson at once, however many there are", async () => {
+    const steps = Array.from({ length: 40 }, (_, index) => ({ id: `s${index}`, title: `Step ${index}`, required: false, check: { kind: "none" } }));
+    const first = lessonResult({ page: { index: 0, count: 40 } });
+    first.lesson.steps = steps.map((step, index) => index ? step : { ...step, bodyText: "First." });
+    const pages = Promise.withResolvers();
+    const { learning, calls } = controller({ reads: url => {
+      const index = Number(url.split("?page=")[1] || 0);
+      return index ? pages.promise.then(() => lessonResult({ page: { index, count: 40 },
+        lesson: { schemaVersion: 2, code: "V64-START-01", steps: [{ id: `s${index}`, bodyText: `Text ${index}.` }] } })) : first;
+    } });
+    learning.setViewer("member");
+    const shown = learning.show({ attemptId: ATTEMPT });
+    await vi.waitFor(() => expect(calls, "every other page is asked for before any answers").toHaveLength(40));
+    pages.resolve();
+    await shown;
+    expect(learning.lesson.value.steps.find(step => step.id === "s39").bodyText).toBe("Text 39.");
+    expect(learning.lesson.value.steps.find(step => step.id === "s0").bodyText).toBe("First.");
+  });
+
   it("records whether the learner's own close or Escape hid Courses, for Colleague's phone return", async () => {
     const { learning } = controller();
     learning.setViewer("member");

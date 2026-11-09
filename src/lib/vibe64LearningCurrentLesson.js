@@ -45,12 +45,13 @@ function createLearningCurrentLesson({ state, request }) {
    */
   async function readAllPages(attemptId) {
     const first = await request(VIBE64_LEARNING_ROUTES.lessonRead(attemptId), { method: "GET" });
-    const count = Number.isSafeInteger(first?.page?.count) ? Math.min(first.page.count, 32) : 1;
+    const count = Number.isSafeInteger(first?.page?.count) ? first.page.count : 1;
     const steps = Array.isArray(first?.lesson?.steps) ? first.lesson.steps : null;
     if (count <= 1 || !steps) return first;
+    const pages = await Promise.all(Array.from({ length: count - 1 }, (_, index) =>
+      request(`${VIBE64_LEARNING_ROUTES.lessonRead(attemptId)}?page=${index + 1}`, { method: "GET" })));
     const bodies = new Map();
-    for (let index = 1; index < count; index++) {
-      const page = await request(`${VIBE64_LEARNING_ROUTES.lessonRead(attemptId)}?page=${index}`, { method: "GET" });
+    for (const page of pages) {
       for (const step of page?.lesson?.steps || []) if (typeof step?.bodyText === "string") bodies.set(step.id, step.bodyText);
     }
     return { ...first, lesson: { ...first.lesson,
