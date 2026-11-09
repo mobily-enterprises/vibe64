@@ -12,7 +12,7 @@ import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nod
 import python from "../../packages/vibe64-usage-recording/src/server/tracers/python.js";
 import { admitUsageRecording } from "../../packages/vibe64-usage-recording/src/server/admission.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
-import { routeTemplateFor } from "../../packages/vibe64-system-graph/src/client/usage/usageModel.js";
+import { matchRoutes } from "../../packages/vibe64-system-graph/src/server/usageWeb.js";
 
 const HASH = `sha256:${"b".repeat(64)}`;
 const SESSION_ID = "session-one";
@@ -167,9 +167,10 @@ test("request paths keep no query and hide long ids and tokens, and still match 
   const rows = await waitFor(async () => (await call("readRequests", { recordingId: recording.id })).requests,
     (value) => value.length === 1, "the local request");
   assert.equal(rows[0].path, "/verify/[redacted]");
-  const routes = [{ title: "GET /api/notes/:noteId" }, { title: "GET /files/s/:token/view" }];
-  assert.equal(routeTemplateFor("GET", "/api/notes/[redacted]", routes), "/api/notes/:noteId");
-  assert.equal(routeTemplateFor("GET", "/files/s/[redacted]/view", routes), "/files/s/:token/view");
+  // A replaced segment still matches its route's parameter.
+  const scan = { entries: [{ kind: "route", title: "GET /api/notes/:noteId" }, { kind: "route", title: "GET /files/s/:token/view" }] };
+  assert.deepEqual(matchRoutes(scan, { requests: [{ method: "GET", path: "/api/notes/[redacted]" }, { method: "GET", path: "/files/s/[redacted]/view" }] }).templates,
+    ["/api/notes/:noteId", "/files/s/:token/view"]);
 });
 
 test("targets list Preview and each terminal Output target with what can be recorded", async (t) => {

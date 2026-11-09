@@ -11,6 +11,7 @@ import {
   ACTION_SYSTEM_GRAPH_USAGE_ENTRIES_READ,
   ACTION_SYSTEM_GRAPH_USAGE_FUNCTION_READ,
   ACTION_SYSTEM_GRAPH_USAGE_JOIN,
+  ACTION_SYSTEM_GRAPH_USAGE_ROUTES_MATCH,
   ACTION_SYSTEM_GRAPH_USAGE_WEB_READ
 } from "./usageActions.js";
 
@@ -29,7 +30,7 @@ function usageInput(request, source, fields) {
 }
 
 function usageEntriesInput(request) {
-  return usageInput(request, requestQuery(request), ["kind", "q", "cursor", "limit"]);
+  return usageInput(request, requestQuery(request), ["kind", "q", "file", "cursor", "limit"]);
 }
 
 function usageWebInput(request) {
@@ -42,6 +43,10 @@ function usageFunctionInput(request) {
 
 function usageJoinInput(request) {
   return usageInput(request, requestBody(request), ["functions"]);
+}
+
+function usageRoutesInput(request) {
+  return usageInput(request, requestBody(request), ["requests"]);
 }
 
 /**
@@ -85,6 +90,13 @@ function registerUsageRoutes(http, { localhostCheckBypassed, projectContext }) {
     buildInput: usageJoinInput,
     bodyLimit: 1024 * 1024,
     summary: "Join recorded functions to the current call web."
+  });
+
+  routes.actionRoute("POST", "/system-graph/sessions/:sessionId/usage/routes", {
+    actionId: ACTION_SYSTEM_GRAPH_USAGE_ROUTES_MATCH,
+    buildInput: usageRoutesInput,
+    bodyLimit: 256 * 1024,
+    summary: "Name each recorded request's route template from the current scan."
   });
 }
 

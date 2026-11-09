@@ -15,10 +15,11 @@ import {
 } from "./vibe64RouteTestHelpers.js";
 
 const USAGE_ROUTES = [
-  ["GET", "/usage/entries", "readUsageEntries", "usage.entries.read", { query: { kind: "route", q: "sessions", cursor: "50", limit: "20", ignored: "x" } }, { kind: "route", q: "sessions", cursor: "50", limit: 20 }],
+  ["GET", "/usage/entries", "readUsageEntries", "usage.entries.read", { query: { kind: "route", q: "sessions", file: "src/a.vue", cursor: "50", limit: "20", ignored: "x" } }, { kind: "route", q: "sessions", file: "src/a.vue", cursor: "50", limit: 20 }],
   ["GET", "/usage/web", "readUsageWeb", "usage.web.read", { query: { entryId: "entry:page:a.vue", mode: "calls", certainty: "exact", subsystemId: "directory:src", maxNodes: "300", _: "1" } }, { entryId: "entry:page:a.vue", mode: "calls", certainty: "exact", subsystemId: "directory:src", maxNodes: 300 }],
   ["GET", "/usage/function", "readUsageFunction", "usage.function.read", { query: { functionId: "fn:src/a.js#run" } }, { functionId: "fn:src/a.js#run" }],
-  ["POST", "/usage/join", "joinUsage", "usage.join", { body: { functions: [{ path: "src/a.js", hash: "sha256:a", name: "", start: { line: 1, column: 1 } }], sessionId: "other" } }, { functions: [{ path: "src/a.js", hash: "sha256:a", name: "", start: { line: 1, column: 1 } }] }]
+  ["POST", "/usage/join", "joinUsage", "usage.join", { body: { functions: [{ path: "src/a.js", hash: "sha256:a", name: "", start: { line: 1, column: 1 } }], sessionId: "other" } }, { functions: [{ path: "src/a.js", hash: "sha256:a", name: "", start: { line: 1, column: 1 } }] }],
+  ["POST", "/usage/routes", "matchUsageRoutes", "usage.routes.match", { body: { requests: [{ method: "GET", path: "/api/sessions/1" }], sessionId: "other" } }, { requests: [{ method: "GET", path: "/api/sessions/1" }] }]
 ];
 
 test("usage queries are System Graph read actions on session routes with Architecture's authority", async () => {
@@ -50,7 +51,7 @@ test("usage queries are System Graph read actions on session routes with Archite
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64/system-graph/sessions/:sessionId${suffix}` });
       assert.ok(route, `${method} ${suffix} was not registered`);
       assert.equal(route.options.surface, "app");
-      if (method === "POST") assert.equal(route.options.bodyLimit, 1024 * 1024);
+      if (method === "POST") assert.equal(route.options.bodyLimit, suffix === "/usage/join" ? 1024 * 1024 : 256 * 1024);
       const httpRequest = {
         params: routeProjectParams({ sessionId: "session-1" }),
         ...request,

@@ -14,6 +14,7 @@ import {
 import {
   __testables as usageWebTestables,
   joinFunctions,
+  matchRoutes,
   readCallsWeb,
   readEntries,
   readFunction,
@@ -94,6 +95,44 @@ test("entries list every kind present, searched, filtered and paged in a stable 
   assert.throws(() => readEntries(index, { kind: "widget" }), { code: "vibe64_invalid_usage_entry_kind" });
   assert.throws(() => readEntries(index, { q: "x".repeat(81) }), { code: "vibe64_invalid_usage_search" });
   assert.throws(() => readEntries(index, { cursor: "-1" }), { code: "vibe64_invalid_usage_cursor" });
+});
+
+test("entries of exactly one file come back whatever else its path's text matches", () => {
+  // Click in Preview reads a picked component's entries by file. Many entries
+  // whose text contains the file's path must not crowd its own off the page.
+  const crowded = snapshot({ ...machine, architecture: { ...machine.architecture, entryPoints: [
+    ...Array.from({ length: 60 }, (_, number) => ({
+      id: `entry:page:src/components/SessionList.vue/${number}`, kind: "page", title: `src/components/SessionList.vue ${number}`,
+      file: `src/pages/${number}.vue`, functionIds: []
+    })),
+    ...machine.architecture.entryPoints
+  ] } });
+  const picked = readEntries(crowded, { file: "src/components/SessionList.vue", limit: 50 });
+  assert.deepEqual(picked.entries.map((item) => item.id), [COMPONENT]);
+  assert.equal(picked.nextCursor, null);
+  assert.deepEqual(readEntries(index, { file: "src/components" }).entries, [], "a file matches exactly, not as a prefix");
+  assert.deepEqual(readEntries(index, { file: "src/components/SessionList.vue", q: "nothing" }).entries, [], "file and search narrow together");
+});
+
+test("recorded requests are named by their route template from every route in the scan", () => {
+  // Routes sort by title; the ones that matter here come after more than a
+  // thousand others, past any page a browser would read.
+  const many = Array.from({ length: 1200 }, (_, number) => ({
+    id: `entry:route:http:demo:GET:/api/a${String(number).padStart(4, "0")}`, kind: "route",
+    title: `GET /api/a${String(number).padStart(4, "0")}/:id`, file: "server/routes.js", functionIds: []
+  }));
+  const crowded = snapshot({ ...machine, architecture: { ...machine.architecture, entryPoints: [...many, ...machine.architecture.entryPoints] } });
+  const answer = matchRoutes(crowded, { requests: [
+    { method: "get", path: "/api/sessions" },
+    { method: "POST", path: "/api/sessions" },
+    { method: "GET", path: "/api/a1199/42" },
+    { method: "DELETE", path: "/api/sessions" },
+    { method: "GET", path: "/api/sessions/1/extra" }
+  ] });
+  assert.deepEqual(answer.templates, ["/api/sessions", "/api/sessions", "/api/a1199/:id", "", ""]);
+  assert.deepEqual(matchRoutes(index, { requests: [] }).templates, []);
+  assert.throws(() => matchRoutes(index, { requests: Array.from({ length: 201 }, () => ({ method: "GET", path: "/" })) }),
+    { code: "vibe64_invalid_usage_route_size" });
 });
 
 test("a project without a call web still lists entries, without calls", () => {

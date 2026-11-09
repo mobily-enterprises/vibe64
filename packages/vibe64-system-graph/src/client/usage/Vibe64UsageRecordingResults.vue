@@ -102,7 +102,7 @@
                 <template v-else>{{ request.method || '–' }}</template>
               </v-chip>
             </template>
-            <v-list-item-title class="text-body-medium"><template v-for="(part, index) in pathParts(requestTitle(request, routes, requests))" :key="index">{{ part }}<wbr></template></v-list-item-title>
+            <v-list-item-title class="text-body-medium"><template v-for="(part, index) in pathParts(requestTitle(request, requests))" :key="index">{{ part }}<wbr></template></v-list-item-title>
             <v-list-item-subtitle>{{ subtitle(request) }}</v-list-item-subtitle>
           </v-list-item>
         </template>
@@ -137,7 +137,6 @@ const props = defineProps({
   interactionId: { type: String, default: "" },
   search: { type: String, default: "" },
   includeEmpty: { type: Boolean, default: false },
-  routes: { type: Array, default: () => [] },
   unavailable: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   requestsLoading: { type: Boolean, default: false },

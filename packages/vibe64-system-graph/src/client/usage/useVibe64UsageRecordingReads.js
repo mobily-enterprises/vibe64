@@ -26,7 +26,7 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
   const recordingActive = computed(() => props.active && mode.value === "recording");
   const selectedRecording = computed(() => recordings.value.find((recording) => recording.id === props.state.recording) || null);
   async function loadRecordings() {
-    await Promise.all([usage.recordings.run(), usage.targets.run(), usage.routes.value.length ? null : usage.loadRoutes()]);
+    await Promise.all([usage.recordings.run(), usage.targets.run()]);
   }
   let recordingsKey = "";
   watch([recordingActive, () => props.sessionId, () => props.snapshotKey], ([on, sessionId, key]) => {
@@ -116,7 +116,6 @@ function useVibe64UsageRecordingReads({ props, usage, mode, pickerOpen, update, 
     interactionId: props.state.interaction,
     search: requestSearch.value,
     includeEmpty: includeEmpty.value,
-    routes: usage.routes.value,
     unavailable: unavailable.value,
     loading: usage.recordings.loading.value,
     requestsLoading: usage.requests.loading.value,

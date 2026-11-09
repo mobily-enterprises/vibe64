@@ -35,7 +35,8 @@ function createSystemGraph({
     readUsageEntries,
     readUsageWeb,
     readUsageFunction,
-    joinUsage
+    joinUsage,
+    matchUsageRoutes
   } = createUsageService({ project });
   return Object.freeze({
     readStatus,
@@ -46,7 +47,8 @@ function createSystemGraph({
     readUsageEntries,
     readUsageWeb,
     readUsageFunction,
-    joinUsage
+    joinUsage,
+    matchUsageRoutes
   });
 }
 

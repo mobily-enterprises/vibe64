@@ -70,9 +70,7 @@ function usageReads({ entries = readEntries(index, {}), snapshot = index.snapsho
     recordings: recordings || read({ recordings: [] }),
     targets: reads.targets || read(targets),
     requests: reads.requests || read(null),
-    result: result || read(),
-    routes: shallowRef([{ title: "GET /api/sessions" }, { title: "POST /api/sessions" }]),
-    loadRoutes: vi.fn(async () => [])
+    result: result || read()
   };
 }
 

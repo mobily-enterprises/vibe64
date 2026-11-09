@@ -18,6 +18,7 @@ import {
 import {
   CALL_WEB_CACHE_SESSIONS,
   joinFunctions,
+  matchRoutes,
   readCallsWeb,
   readEntries,
   readFunction,
@@ -124,7 +125,8 @@ function createUsageService({
       throw usageError("Mode must be imports or calls.", "vibe64_invalid_usage_mode");
     }),
     readUsageFunction: query(async (index, input, calls) => readFunction(index, await calls(), input)),
-    joinUsage: query(async (index, input, calls) => joinFunctions(index, await calls(), input))
+    joinUsage: query(async (index, input, calls) => joinFunctions(index, await calls(), input)),
+    matchUsageRoutes: query((index, input) => matchRoutes(index, input))
   });
 }
 

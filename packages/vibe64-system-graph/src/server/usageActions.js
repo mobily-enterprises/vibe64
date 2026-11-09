@@ -10,6 +10,7 @@ const ACTION_SYSTEM_GRAPH_USAGE_ENTRIES_READ = "vibe64.system-graph.usage.entrie
 const ACTION_SYSTEM_GRAPH_USAGE_WEB_READ = "vibe64.system-graph.usage.web.read";
 const ACTION_SYSTEM_GRAPH_USAGE_FUNCTION_READ = "vibe64.system-graph.usage.function.read";
 const ACTION_SYSTEM_GRAPH_USAGE_JOIN = "vibe64.system-graph.usage.join";
+const ACTION_SYSTEM_GRAPH_USAGE_ROUTES_MATCH = "vibe64.system-graph.usage.routes.match";
 
 const sessionId = { type: "string", minLength: 1, maxLength: 256, required: true };
 const optionalText = (maxLength) => ({ type: "string", maxLength, required: false });
@@ -22,6 +23,10 @@ const recordedFunction = createSchema({
   hash: { type: "string", minLength: 1, maxLength: 128, required: true },
   name: { type: "string", maxLength: 512, required: true },
   start: { type: "object", schema: point, required: true }
+});
+const recordedRequest = createSchema({
+  method: { type: "string", maxLength: 16, required: true },
+  path: { type: "string", maxLength: 512, required: true }
 });
 
 /**
@@ -41,6 +46,7 @@ function createUsageActions({ systemGraph }) {
           sessionId,
           kind: { type: "string", enum: USAGE_ENTRY_KINDS, required: false },
           q: optionalText(80),
+          file: optionalText(4096),
           cursor: optionalText(32),
           limit: { type: "integer", min: 1, max: 200, required: false }
         }),
@@ -91,6 +97,19 @@ function createUsageActions({ systemGraph }) {
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.joinUsage(input)
+    }),
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: ACTION_SYSTEM_GRAPH_USAGE_ROUTES_MATCH,
+      input: {
+        schema: createSchema({
+          sessionId,
+          requests: { type: "array", items: recordedRequest, required: true }
+        }),
+        mode: "create"
+      },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => systemGraph.matchUsageRoutes(input)
     })
   ]);
 }
@@ -99,6 +118,7 @@ export {
   ACTION_SYSTEM_GRAPH_USAGE_ENTRIES_READ,
   ACTION_SYSTEM_GRAPH_USAGE_FUNCTION_READ,
   ACTION_SYSTEM_GRAPH_USAGE_JOIN,
+  ACTION_SYSTEM_GRAPH_USAGE_ROUTES_MATCH,
   ACTION_SYSTEM_GRAPH_USAGE_WEB_READ,
   createUsageActions
 };

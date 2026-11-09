@@ -25,7 +25,8 @@ const USAGE_QUERY_LIMITS = Object.freeze({
   responseBytes: 1024 * 1024,
   unresolved: 50,
   functionList: 200,
-  joinFunctions: 1500
+  joinFunctions: 1500,
+  routeRequests: 200
 });
 const CALL_WEB_CACHE_SESSIONS = 2;
 const NEAR_LINES = 3;
@@ -78,7 +79,12 @@ function readEntries(index, input = {}) {
   const cursor = toText(input.cursor);
   if (cursor && !/^[0-9]{1,9}$/u.test(cursor)) throw usageError("The entry cursor is invalid.", "vibe64_invalid_usage_cursor");
   const offset = cursor ? Number(cursor) : 0;
-  const matching = search ? index.entries.filter((entry) => entry.search.includes(search)) : index.entries;
+  // `file` names exactly one source file: Click in Preview finds a picked
+  // component's entries this way, whatever its path's substring also matches.
+  const file = toText(input.file);
+  const matching = search || file
+    ? index.entries.filter((entry) => (!file || entry.file === file) && (!search || entry.search.includes(search)))
+    : index.entries;
   const counts = new Map();
   for (const entry of matching) counts.set(entry.kind, (counts.get(entry.kind) || 0) + 1);
   const selected = kind ? matching.filter((entry) => entry.kind === kind) : matching;
@@ -544,11 +550,58 @@ function joinFunctions(index, callIndex, input) {
   };
 }
 
+// ---------------------------------------------------------------- route templates
+
+// The snapshot's route entries by method and segment count, in entry order,
+// built once per snapshot index.
+const routeTables = new WeakMap();
+
+function routeTable(index) {
+  if (!routeTables.has(index)) {
+    const table = new Map();
+    for (const entry of index.entries) {
+      if (entry.kind !== "route") continue;
+      const [method, template] = String(entry.title || "").split(" ");
+      if (!template) continue;
+      const parts = template.split("/");
+      const key = `${method.toUpperCase()} ${parts.length}`;
+      if (!table.has(key)) table.set(key, []);
+      table.get(key).push({ parts, template: entry.title.split(" ").slice(1).join(" ") });
+    }
+    routeTables.set(index, table);
+  }
+  return routeTables.get(index);
+}
+
+/**
+ * Each recorded request's route template, in the order asked: the first route
+ * entry whose template matches its method and path, where `:name` and `*`
+ * stand for one segment; "" when no route matches. Every route in the scan is
+ * considered, however many there are.
+ */
+function matchRoutes(index, input = {}) {
+  const requests = Array.isArray(input.requests) ? input.requests : [];
+  if (requests.length > USAGE_QUERY_LIMITS.routeRequests) {
+    throw usageError("Match at most 200 requests at a time.", "vibe64_invalid_usage_route_size");
+  }
+  const table = routeTable(index);
+  const templates = requests.map(({ method, path }) => {
+    const parts = String(path || "").split("/");
+    const candidates = table.get(`${String(method || "").toUpperCase()} ${parts.length}`) || [];
+    const match = candidates.find((route) => route.parts.every((part, position) => (
+      part === parts[position] || part.startsWith(":") || part === "*"
+    )));
+    return match ? match.template : "";
+  });
+  return { templates, limits: { requests: USAGE_QUERY_LIMITS.routeRequests } };
+}
+
 const __testables = Object.freeze({ USAGE_QUERY_LIMITS });
 
 export {
   CALL_WEB_CACHE_SESSIONS,
   joinFunctions,
+  matchRoutes,
   readCallsWeb,
   readEntries,
   readFunction,

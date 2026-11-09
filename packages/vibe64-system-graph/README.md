@@ -138,12 +138,13 @@ the viewer never derives one from citations or imports.
 ## Usage
 
 Architecture's **Map | Usage** switch shows, for one Genesis entry point, only
-what it reaches. `src/server/usageWeb.js` answers four read actions
+what it reaches. `src/server/usageWeb.js` answers five read actions
 (`vibe64.system-graph.usage.entries.read`, `.web.read`, `.function.read`,
-`.join`) on `/vibe64/system-graph/sessions/:sessionId/usage/*`:
+`.join`, `.routes.match`) on `/vibe64/system-graph/sessions/:sessionId/usage/*`:
 
-- entries: the Machine City's `entryPoints`, searched, filtered by kind and
-  paged by a numeric cursor; pages keep Genesis' title, their registered address;
+- entries: the Machine City's `entryPoints`, searched, filtered by kind and by
+  exact `file` (Click in Preview's picked component) and paged by a numeric
+  cursor; pages keep Genesis' title, their registered address;
 - Imports: breadth-first over resolved, non-type-only file imports;
 - Calls: breadth-first over exact and probable calls and operation bridges in
   the Genesis call web, read only when its bytes match the City's `callWeb`
@@ -152,7 +153,10 @@ what it reaches. `src/server/usageWeb.js` answers four read actions
   City's UI component uses) as `renders` steps;
 - function: one function's calls, callers and unresolved calls;
 - join: recorded functions matched to the call web by hash and start, else
-  by name within three lines.
+  by name within three lines;
+- routes: up to 200 recorded requests' route templates, each the first route
+  entry whose template matches its method and path (`:name` and `*` stand for
+  one segment), so Recording names requests without reading every route.
 
 Refresh first keeps `.genesis/call-web.json` out of Git through a managed
 block in the clone's `.git/info/exclude`, because Genesis writes the call web

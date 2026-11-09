@@ -137,8 +137,9 @@ phone) shows:
   this submit ran**) with how many requests it probably started, such as **3
   requests**; that count covers the whole recording, including requests on
   pages not shown yet or hidden by the search or the switch. Each request
-  below it shows its method, route, status and how many files and functions
-  ran. Later requests that no click,
+  below it shows its method, route (the matching route of the last scan, such
+  as `/api/sessions/:id`, however many routes the project has; else its path),
+  status and how many files and functions ran. Later requests that no click,
   Enter or submit caused are listed under **Other requests**. A process's
   start-up work is **Start-up and work outside requests**, listed first (last
   when newest first), with a cog labelled **Start-up** where other rows show

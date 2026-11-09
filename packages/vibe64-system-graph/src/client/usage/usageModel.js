@@ -294,18 +294,6 @@ function callGroups(rows = [], heading) {
   })).filter((group) => group.rows.length);
 }
 
-// Routes are matched by their own template; `:name` and `*` stand for one segment.
-function routeTemplateFor(method = "", requestPath = "", routes = []) {
-  const parts = String(requestPath).split("/");
-  const match = routes.find((route) => {
-    const [routeMethod, template] = String(route.title || "").split(" ");
-    if (!template || routeMethod.toUpperCase() !== String(method).toUpperCase()) return false;
-    const templateParts = template.split("/");
-    return templateParts.length === parts.length && templateParts.every((part, position) => part === parts[position] || part.startsWith(":") || part === "*");
-  });
-  return match ? match.title.split(" ").slice(1).join(" ") : "";
-}
-
 // Worker and ASGI servers run every request in one process; their project
 // code is recorded under a background scope instead of per request.
 // Beside per-request rows, a background row is a process's start-up and other
@@ -328,11 +316,12 @@ function onlyBackground(requests = []) {
   return ran.length > 0 && ran.every(isBackgroundRequest);
 }
 
-// A request the full request log missed has no method or path.
-function requestTitle(request = {}, routes = [], requests = [request]) {
+// A request is named by its route template, which the server matched when
+// its page was read. A request the full request log missed has no method or path.
+function requestTitle(request = {}, requests = [request]) {
   if (isBackgroundRequest(request)) return onlyBackground(requests) ? BACKGROUND_TEXT : OUTSIDE_REQUESTS_TEXT;
   if (isReadinessRequest(request)) return READINESS_TEXT;
-  return routeTemplateFor(request.method, request.path, routes) || request.path || "Request not in the request log";
+  return request.routeTemplate || request.path || "Request not in the request log";
 }
 
 // Requests under the click that caused them, in recorded order. Other
@@ -485,7 +474,6 @@ export {
   requestCount,
   requestGroups,
   requestTitle,
-  routeTemplateFor,
   sameQuery,
   sameUsageState,
   subsystemCard,

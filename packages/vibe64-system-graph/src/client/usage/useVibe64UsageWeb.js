@@ -8,7 +8,6 @@ import { SYSTEM_GRAPH_API_SUFFIX } from "../composables/useVibe64SystemGraph.js"
 const ENTRY_PAGE = 100;
 const REQUEST_PAGE = 200;
 const RECORDED_FUNCTIONS = 1500;
-const ROUTE_PAGES = 5;
 
 const segment = (value) => encodeURIComponent(String(value || "").trim());
 
@@ -158,11 +157,26 @@ function useVibe64UsageWeb({ sessionId }) {
   const detail = latestRead((signal, functionId) => get(`${usagePath.value}/function`, { functionId }, signal));
   const recordings = latestRead((signal) => get(recordingPath.value, {}, signal));
   const targets = latestRead((signal) => get(`${recordingPath.value}/targets`, {}, signal));
-  const requests = requestPages((signal, { recordingId, q, includeEmpty, newestFirst }, cursor) => get(
+  // Each read page of requests names its rows' route templates, matched by
+  // the server against every route of the current scan.
+  async function withRouteTemplates(page, signal) {
+    const rows = page?.requests || [];
+    const keyOf = (row) => `${row.method} ${row.path}`;
+    const asked = [...new Map(rows.filter((row) => row.method && row.path).map((row) => [keyOf(row), row])).values()];
+    if (!asked.length) return page;
+    const answer = await client.request(`${usagePath.value}/routes`, {
+      method: "POST",
+      body: { requests: asked.map(({ method, path }) => ({ method, path })) },
+      signal
+    }).catch(() => null);
+    const templates = new Map(asked.map((row, position) => [keyOf(row), answer?.templates?.[position] || ""]));
+    return { ...page, requests: rows.map((row) => (templates.get(keyOf(row)) ? { ...row, routeTemplate: templates.get(keyOf(row)) } : row)) };
+  }
+  const requests = requestPages(async (signal, { recordingId, q, includeEmpty, newestFirst }, cursor) => withRouteTemplates(await get(
     `${recordingPath.value}/${segment(recordingId)}/requests`,
     { q, includeEmpty: includeEmpty ? "true" : "", order: newestFirst ? "newest" : "", cursor, limit: REQUEST_PAGE },
     signal
-  ));
+  ), signal));
   // What ran in one request, or in all the requests of one interaction (one
   // server read that merges them), then the same functions joined to the call
   // web. A request's own row comes along: it names the request when the pages
@@ -175,7 +189,7 @@ function useVibe64UsageWeb({ sessionId }) {
       ? [get(`${recordingBase}/interactions/${segment(interactionId)}/functions`, { limit: RECORDED_FUNCTIONS }, signal), null]
       : [
         get(`${requestsPath}/${segment(requestId)}/functions`, { limit: RECORDED_FUNCTIONS }, signal),
-        get(requestsPath, { requestId, limit: 1 }, signal).catch(() => null)
+        get(requestsPath, { requestId, limit: 1 }, signal).then((page) => withRouteTemplates(page, signal)).catch(() => null)
       ]);
     const functions = ran.functions || [];
     const join = await client.request(`${usagePath.value}/join`, {
@@ -190,22 +204,6 @@ function useVibe64UsageWeb({ sessionId }) {
       requestIds: interactionId ? ran.requests || [] : null
     };
   });
-
-  // Route entries let Recording show a request's route template.
-  const routes = shallowRef([]);
-  async function loadRoutes() {
-    const loaded = [];
-    let cursor = null;
-    for (let page = 0; page < ROUTE_PAGES; page += 1) {
-      const answer = await get(`${usagePath.value}/entries`, { kind: "route", cursor, limit: 200 }).catch(() => null);
-      if (!answer) break;
-      loaded.push(...answer.entries);
-      cursor = answer.nextCursor;
-      if (!cursor) break;
-    }
-    routes.value = loaded;
-    return loaded;
-  }
 
   return {
     entries: {
@@ -224,9 +222,7 @@ function useVibe64UsageWeb({ sessionId }) {
     recordings,
     targets,
     requests,
-    result,
-    routes,
-    loadRoutes
+    result
   };
 }
 

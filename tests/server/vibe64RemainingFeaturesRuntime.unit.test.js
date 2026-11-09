@@ -117,7 +117,7 @@ test("remaining Vibe64 features use named capabilities and register direct route
       "file.read", "file.create", "file.save"
     ].map((name) => `vibe64.source-editor.${name}`),
     ...["status.read", "architecture.read", "refresh", "refresh.cancel", "refresh.status",
-      "usage.entries.read", "usage.web.read", "usage.function.read", "usage.join"].map((name) => `vibe64.system-graph.${name}`)
+      "usage.entries.read", "usage.web.read", "usage.function.read", "usage.join", "usage.routes.match"].map((name) => `vibe64.system-graph.${name}`)
   ].sort());
   for (const action of actions.listDefinitions().filter(({ id }) => id.startsWith("vibe64.source-editor."))) {
     assert.equal(action.input.mode, "create");
@@ -125,9 +125,9 @@ test("remaining Vibe64 features use named capabilities and register direct route
       !["vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.save", "vibe64.source-editor.integrations.setup"].includes(action.id),
       "Only integration product controls are exposed; source tools belong to coding sessions.");
   }
-  // 59 project routes (Health's tool check, the 12 project-shared Files routes and Usage's 4 included). Learning v2: a
+  // 60 project routes (Health's tool check, the 12 project-shared Files routes and Usage's 5 included). Learning v2: a
   // practice project uses these ordinary project routes, so none is mirrored under /api/learning/:learningAttemptId.
-  assert.equal(routes.length, 59);
+  assert.equal(routes.length, 60);
   assert.equal(routes.filter((route) => String(route.path || route.url || "").startsWith("/api/learning/")).length, 0);
   for (const [method, suffix] of [
     ["GET", "/source-editor/download"],
@@ -142,7 +142,8 @@ test("remaining Vibe64 features use named capabilities and register direct route
     ["POST", "/system-graph/sessions/:sessionId/refresh/cancel"],
     ["GET", "/system-graph/sessions/:sessionId/refresh/status"],
     ["GET", "/system-graph/sessions/:sessionId/usage/web"],
-    ["POST", "/system-graph/sessions/:sessionId/usage/join"]
+    ["POST", "/system-graph/sessions/:sessionId/usage/join"],
+    ["POST", "/system-graph/sessions/:sessionId/usage/routes"]
   ]) {
     assert.equal(
       routes.filter((route) => route.method === method && !route.path.startsWith("/api/learning/") && route.path.endsWith(suffix)).length,

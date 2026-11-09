@@ -20,7 +20,7 @@ import {
  * `recordInteraction(interaction)` saves each interaction the bridge reports.
  * @typedef {object} PreviewUsage
  * @property {(request: { entryId?: string, mode: string }) => void} openUsage
- * @property {(query: { limit: number, q: string }) => Promise<{ entries?: object[] }>} readUsageEntries
+ * @property {(query: { file: string, limit: number }) => Promise<{ entries?: object[] }>} readUsageEntries
  * @property {(interaction: object) => Promise<{ ok?: boolean, nextInteraction?: number }>} recordInteraction
  * @property {import("vue").MaybeRefOrGetter<object | null>} recording
  */
@@ -121,7 +121,7 @@ function useVibe64PreviewPick({
     }
     previewPickBusy.value = true;
     try {
-      const answer = await readUsageEntries({ limit: 50, q: file.slice(-80) });
+      const answer = await readUsageEntries({ file, limit: 50 });
       const entry = previewUsageEntryForFile(answer?.entries, file);
       if (!entry) {
         showPreviewPickNotice(`${file.split("/").pop()} has no usage entry yet. Refresh the architecture scan, then pick again.`, { opensUsage: true });

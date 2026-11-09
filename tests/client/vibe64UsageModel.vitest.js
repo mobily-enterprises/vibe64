@@ -14,6 +14,7 @@ import {
 } from "../../packages/vibe64-system-graph/src/server/usageIndex.js";
 import {
   joinFunctions,
+  matchRoutes,
   readCallsWeb,
   readImportsWeb
 } from "../../packages/vibe64-system-graph/src/server/usageWeb.js";
@@ -34,7 +35,6 @@ import {
   requestCount,
   requestGroups,
   requestTitle,
-  routeTemplateFor,
   sameQuery,
   sameUsageState,
   subsystemCard,
@@ -141,9 +141,8 @@ describe("presentation", () => {
 
 describe("recordings", () => {
   it("names a request by its route template and groups requests under the click that caused them", () => {
-    const routes = [{ title: "GET /api/sessions/:id" }, { title: "POST /api/sessions" }];
-    expect(routeTemplateFor("get", "/api/sessions/42", routes)).toBe("/api/sessions/:id");
-    expect(routeTemplateFor("POST", "/api/sessions/42", routes)).toBe("");
+    expect(requestTitle({ id: "r_000001", method: "GET", path: "/api/sessions/42", routeTemplate: "/api/sessions/:id" })).toBe("/api/sessions/:id");
+    expect(requestTitle({ id: "r_000001", method: "POST", path: "/api/sessions/42" })).toBe("/api/sessions/42");
     const groups = requestGroups(requests.requests, requests.interactions);
     expect(groups.map((group) => [group.interaction?.id || null, group.requests.map((request) => request.id), group.offersInteraction])).toEqual([
       [null, ["bg_4242", "r_000002"], false], ["i_0001", ["r_000003", "r_000004"], true]
@@ -152,8 +151,8 @@ describe("recordings", () => {
     const split = requestGroups([third, { ...fourth, id: "r_000009", interaction: null }, fourth], requests.interactions);
     expect(split.map((group) => [group.interaction?.id || null, group.offersInteraction])).toEqual([["i_0001", true], [null, false], ["i_0001", false]]);
     // Start-up work beside per-request rows is not the shared-process case.
-    expect(requestTitle(requests.requests[0], routes, requests.requests)).toBe("Start-up and work outside requests");
-    expect(requestTitle(requests.requests[0], routes, [requests.requests[0]])).toBe("Not separated per request for this server");
+    expect(requestTitle(requests.requests[0], requests.requests)).toBe("Start-up and work outside requests");
+    expect(requestTitle(requests.requests[0], [requests.requests[0]])).toBe("Not separated per request for this server");
     expect(interactionTitle(groups[1].interaction)).toBe("Click: button \"Add\" (SessionList.vue)");
     expect(interactionParts(groups[1].interaction)).toEqual({ text: "Click: button \"Add\"", file: "(SessionList.vue)" });
     expect(interactionTitle({ ...groups[1].interaction, componentFile: null })).toBe("Click: button \"Add\"");
@@ -188,7 +187,6 @@ describe("recordings", () => {
   it("names background scopes as not separated per request", () => {
     const background = { id: "bg_4242", functionCount: 3 };
     expect(requestTitle(background)).toBe("Not separated per request for this server");
-    expect(requestTitle({ id: "r_000001", method: "GET", path: "/api/sessions/1" }, [{ title: "GET /api/sessions/:id" }])).toBe("/api/sessions/:id");
     expect(onlyBackground([{ id: "r_000001", functionCount: 0 }, background])).toBe(true);
     expect(onlyBackground([{ id: "r_000001", functionCount: 2 }, background])).toBe(false);
     expect(onlyBackground([{ id: "r_000001", functionCount: 0 }])).toBe(false);
@@ -212,6 +210,7 @@ describe("reads", () => {
       if (path.endsWith("/functions")) return Promise.resolve(ran);
       if (path.endsWith("/requests")) return Promise.resolve({ ...requests, requests: requests.requests.filter((row) => row.id === options.query.requestId) });
       if (path.endsWith("/usage/join")) return Promise.resolve(joinFunctions(index, calls, options.body));
+      if (path.endsWith("/usage/routes")) return Promise.resolve(matchRoutes(index, options.body));
       throw new Error(`unexpected ${path}`);
     });
     const usage = useVibe64UsageWeb({ sessionId: "s 1" });
@@ -226,16 +225,37 @@ describe("reads", () => {
     expect(sent[1]).toEqual(["GET", "/api/app/demo/vibe64/system-graph/sessions/s%201/usage/entries", { q: "route", kind: "route", limit: 100 }]);
 
     const result = await usage.result.run({ recordingId: "rec_1", requestId: "r_000004" });
-    expect(sent.at(-3)).toEqual(["GET", "/api/app/demo/vibe64/usage-recordings/sessions/s%201/rec_1/requests/r_000004/functions", { limit: 1500 }]);
-    expect(sent.at(-2)).toEqual(["GET", "/api/app/demo/vibe64/usage-recordings/sessions/s%201/rec_1/requests", { requestId: "r_000004", limit: 1 }]);
+    expect(sent.at(-4)).toEqual(["GET", "/api/app/demo/vibe64/usage-recordings/sessions/s%201/rec_1/requests/r_000004/functions", { limit: 1500 }]);
+    expect(sent.at(-3)).toEqual(["GET", "/api/app/demo/vibe64/usage-recordings/sessions/s%201/rec_1/requests", { requestId: "r_000004", limit: 1 }]);
+    expect(sent.at(-2)).toEqual(["POST", "/api/app/demo/vibe64/system-graph/sessions/s%201/usage/routes", { requests: [{ method: "GET", path: "/api/sessions" }] }]);
     expect(sent.at(-1)[0]).toBe("POST");
     expect(sent.at(-1)[2].functions[0]).toEqual({ path: ran.functions[0].path, hash: ran.functions[0].hash, name: ran.functions[0].name, start: ran.functions[0].start });
     expect(result).toMatchObject({ recordingId: "rec_1", requestId: "r_000004", total: 16, truncated: false });
-    expect(result.request).toMatchObject({ id: "r_000004", method: "GET", path: "/api/sessions" }, "the chosen request's own row comes along");
+    expect(result.request).toMatchObject({ id: "r_000004", method: "GET", path: "/api/sessions", routeTemplate: "/api/sessions" }, "the chosen request's own row comes along");
     expect(result.join.joined).toHaveLength(16);
 
     http.request = vi.fn(() => Promise.reject(Object.assign(new Error("This entry point is not in the current scan."), { code: "vibe64_usage_entry_not_found" })));
     expect(await usage.web.run({ entryId: "gone", mode: "calls" })).toBeNull();
     expect([usage.web.error.value, usage.web.errorCode.value]).toEqual(["This entry point is not in the current scan.", "vibe64_usage_entry_not_found"]);
+  });
+
+  it("names each page of requests by route templates the server matches, without reading the routes", async () => {
+    const sent = [];
+    http.request = vi.fn((path, options = {}) => {
+      sent.push([options.method, path, options.query || options.body]);
+      if (path.endsWith("/requests")) return Promise.resolve(requests);
+      if (path.endsWith("/usage/routes")) return Promise.resolve({ templates: options.body.requests.map(({ method }) => (method === "GET" ? "/api/sessions/:id" : "")) });
+      throw new Error(`unexpected ${path}`);
+    });
+    const usage = useVibe64UsageWeb({ sessionId: "s1" });
+    await usage.requests.run({ recordingId: "rec_1", q: "", includeEmpty: false, newestFirst: false });
+    expect(sent.map(([method, path]) => `${method} ${path.split("/").slice(-1)[0]}`)).toEqual(["GET requests", "POST routes"]);
+    expect(sent[1][2]).toEqual({ requests: [{ method: "GET", path: "/api/sessions" }, { method: "POST", path: "/api/sessions" }] }, "each method and path is asked once");
+    expect(usage.requests.data.value.requests.map((row) => requestTitle(row, usage.requests.data.value.requests)))
+      .toEqual(["Start-up and work outside requests", "/api/sessions/:id", "/api/sessions", "/api/sessions/:id"]);
+
+    http.request = vi.fn((path) => (path.endsWith("/usage/routes") ? Promise.reject(new Error("no scan")) : Promise.resolve(requests)));
+    await usage.requests.run({ recordingId: "rec_1", q: "x", includeEmpty: false, newestFirst: false });
+    expect(usage.requests.data.value.requests.map((row) => row.routeTemplate)).toEqual([undefined, undefined, undefined, undefined], "rows still show their paths");
   });
 });

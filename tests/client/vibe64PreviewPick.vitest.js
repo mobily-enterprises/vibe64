@@ -187,7 +187,7 @@ describe("Pick", () => {
     f.message({ type: PREVIEW_PICK_RESULT_MESSAGE_TYPE, componentFile: `${SOURCE_ROOT}/src/components/NoteCard.vue`,
       componentName: "NoteCard", elementLabel: "button \"Save\"" });
     await settle();
-    expect(f.usage.readUsageEntries).toHaveBeenCalledWith({ limit: 50, q: "src/components/NoteCard.vue" });
+    expect(f.usage.readUsageEntries).toHaveBeenCalledWith({ file: "src/components/NoteCard.vue", limit: 50 });
     expect(f.usage.openUsage).toHaveBeenCalledWith({ entryId: "entry:component:src/components/NoteCard.vue", mode: "calls" });
     expect(f.state.previewPicking.value).toBe(false);
     expect(f.state.previewPickNoticeVisible.value).toBe(false);

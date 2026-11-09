@@ -306,6 +306,7 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/workspace-setup/retry public app 
 POST /api/app/:slug/vibe64/system-graph/sessions/:sessionId/refresh public app 16384 vibe64.system-graph.refresh
 POST /api/app/:slug/vibe64/system-graph/sessions/:sessionId/refresh/cancel public app 16384 vibe64.system-graph.refresh.cancel
 POST /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/join public app 1048576 vibe64.system-graph.usage.join
+POST /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/routes public app 262144 vibe64.system-graph.usage.routes.match
 POST /api/app/:slug/vibe64/templates/apply public app - vibe64.project.templates.apply
 POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId public app 16384 vibe64.usage-recording.start
 POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/dismiss public app 16384 vibe64.usage-recording.dismiss
