@@ -133,48 +133,62 @@ function createCodexProviderConnectionStore({
       throw error;
     }
   }
-  async function list() {
-    return Promise.all(CURATED_CODEX_PROVIDERS.map(async (provider) => {
-      const states = {};
-      const engines = curatedProviderEngines(provider.id);
-      for (const engineId of engines) {
-        const saved = await read(provider.id, engineId);
-        const paths = codexProviderPaths(systemRoot, provider.id, engineId);
-        const status = saved ? await readCodexAuthStatus(paths.systemRoot) : null;
-        const marker = saved ? await readFile(codexAuthMarkerPath(paths.systemRoot), "utf8")
-          .then(JSON.parse).catch((error) => {
-            if (error.code === "ENOENT") return null;
-            throw error;
-          }) : null;
-        states[engineId] = {
-          configured: Boolean(saved),
-          connected: Boolean(saved && !status),
-          connectionIdentity: marker?.connected === true && typeof marker.generation === "string"
-            ? `curated:${engineId}:${provider.id}:${marker.generation}` : "",
-          status: status?.status || (saved ? "connected" : "not_connected"),
-          // What the owner entered, never the key itself.
-          ...(saved && provider.custom ? {
-            endpoint: {
-              baseUrl: saved.baseUrl,
-              model: saved.model,
-              contextWindow: saved.contextWindow,
-              keySaved: saved.apiKey !== ""
-            }
-          } : {})
-        };
-      }
-      return {
-        id: provider.id,
-        label: provider.label,
-        connected: states.codex.connected,
-        claudeReady: states.claude.connected,
-        configuredEngines: engines.filter((id) => states[id].configured),
-        connectionIdentity: states.codex.connectionIdentity,
-        claudeConnectionIdentity: states.claude.connectionIdentity,
-        status: states.codex.status,
-        engineStates: states
+  /**
+   * One curated provider's connection as the AI Accounts list shows it.
+   * @param {object} provider a curated provider
+   */
+  async function providerConnection(provider) {
+    const states = {};
+    const engines = curatedProviderEngines(provider.id);
+    for (const engineId of engines) {
+      const saved = await read(provider.id, engineId);
+      const paths = codexProviderPaths(systemRoot, provider.id, engineId);
+      const status = saved ? await readCodexAuthStatus(paths.systemRoot) : null;
+      const marker = saved ? await readFile(codexAuthMarkerPath(paths.systemRoot), "utf8")
+        .then(JSON.parse).catch((error) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        }) : null;
+      states[engineId] = {
+        configured: Boolean(saved),
+        connected: Boolean(saved && !status),
+        connectionIdentity: marker?.connected === true && typeof marker.generation === "string"
+          ? `curated:${engineId}:${provider.id}:${marker.generation}` : "",
+        status: status?.status || (saved ? "connected" : "not_connected"),
+        // What the owner entered, never the key itself.
+        ...(saved && provider.custom ? {
+          endpoint: {
+            baseUrl: saved.baseUrl,
+            model: saved.model,
+            contextWindow: saved.contextWindow,
+            keySaved: saved.apiKey !== ""
+          }
+        } : {})
       };
-    }));
+    }
+    return {
+      id: provider.id,
+      label: provider.label,
+      connected: states.codex.connected,
+      claudeReady: states.claude.connected,
+      configuredEngines: engines.filter((id) => states[id].configured),
+      connectionIdentity: states.codex.connectionIdentity,
+      claudeConnectionIdentity: states.claude.connectionIdentity,
+      status: states.codex.status,
+      engineStates: states
+    };
+  }
+  async function list() {
+    return Promise.all(CURATED_CODEX_PROVIDERS.map(providerConnection));
+  }
+  /**
+   * One curated provider's connection, as list() shows it, reading only that
+   * provider's files; null for a provider that is not curated.
+   * @param {string} providerId
+   */
+  async function connectionFor(providerId) {
+    const provider = curatedCodexProvider(providerId);
+    return provider ? providerConnection(provider) : null;
   }
   async function runtimeOptions(providerId) {
     const provider = curatedCodexProvider(providerId);
@@ -316,6 +330,7 @@ function createCodexProviderConnectionStore({
   }
   return Object.freeze({
     change,
+    connectionFor,
     customEndpointReachability,
     list,
     read,

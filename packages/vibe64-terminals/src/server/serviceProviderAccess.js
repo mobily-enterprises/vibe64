@@ -32,7 +32,7 @@ function createServiceProviderAccess({
       return state.assistantRuntime.readAssistantAccess(context);
     }
     if (curated) {
-      const connection = (await codexProviderConnections.list()).find(({ id }) => id === curated.id);
+      const connection = await codexProviderConnections.connectionFor(curated.id);
       const engineState = connection?.engineStates?.[openCodeCustom ? "opencode" : "codex"];
       const available = engineState?.connected === true;
       return {

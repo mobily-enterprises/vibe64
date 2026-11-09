@@ -85,6 +85,9 @@ test("a custom endpoint connects each engine without a key, on that engine's own
   assert.equal(row.connected && row.claudeReady && row.engineStates.opencode.connected, true);
   assert.deepEqual(row.engineStates.opencode.endpoint,
     { baseUrl: `${OLLAMA}/v1`, model: MODEL, contextWindow: 65536, keySaved: false });
+  // An assistant access check reads the one provider it needs, as the list shows it.
+  assert.deepEqual(await f.store.connectionFor("custom"), row);
+  assert.equal(await f.store.connectionFor("not-a-provider"), null);
   assert.deepEqual(f.stops.map(({ provider, modelProviderId }) => `${provider}:${modelProviderId}`),
     ["codex:custom", "claude:custom", "opencode:custom"]);
 

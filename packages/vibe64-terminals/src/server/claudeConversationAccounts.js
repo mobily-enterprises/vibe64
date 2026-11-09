@@ -159,7 +159,7 @@ function createClaudeConversationAccounts({
   async function assistantAccess(context) {
     const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
     if (external) {
-      const connection = (await providerConnections.list()).find(({ id }) => id === external.id);
+      const connection = await providerConnections.connectionFor(external.id);
       const available = connection?.claudeReady === true;
       return {
         available,

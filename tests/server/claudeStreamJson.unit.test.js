@@ -84,7 +84,10 @@ test("Claude Code names the Claude plan as AI Accounts does, so a missing sign-i
 
 test("a disconnected Claude plan or DeepSeek key is refused naming it as AI Accounts does", async () => {
   const accounts = createClaudeConversationAccounts({ owner: { createAccountQueries: () => ({}) },
-    providerConnections: { list: async () => [] }, connectionStatus: async () => false });
+    providerConnections: {
+      connectionFor: async () => null,
+      list: async () => { throw new Error("An access check reads only its own provider's connection."); }
+    }, connectionStatus: async () => false });
   for (const [modelProviderId, account] of [["anthropic", "Claude"], ["deepseek", "DeepSeek"]]) {
     const access = await accounts.assistantAccess({ assistantSelection: { engineId: "claude", modelProviderId } });
     assert.throws(() => assertCanUseVibe64Assistant(access), {
