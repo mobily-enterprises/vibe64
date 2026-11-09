@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { DASHBOARD_PATH, viewports } from "./support/base-shell-data";
 import { assistantStatusServer, json } from "./support/assistant-status-server";
-import { expectSteady } from "./support/settled-ui";
+import { closeMenu, expectSteady } from "./support/settled-ui";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 import { touchTarget } from "./support/touch-target";
 
@@ -165,9 +165,10 @@ test("long goal keeps Pause and full-goal Close visible on small screens", async
   await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
   await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
   await openChat(page);
+  const goalRunning = page.getByRole("button", { name: "Goal running", exact: true });
   for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 420 }, { width: 768, height: 1024 }, { width: 1280, height: 844 }]) {
     await page.setViewportSize(viewport);
-    await page.getByRole("button", { name: "Goal running", exact: true }).click();
+    await goalRunning.click();
     const pause = page.getByRole("button", { name: "Pause goal", exact: true });
     const cancel = page.getByRole("button", { name: "Cancel goal", exact: true });
     const full = page.getByRole("button", { name: "View full goal", exact: true });
@@ -185,9 +186,9 @@ test("long goal keeps Pause and full-goal Close visible on small screens", async
     await page.screenshot({ path: info.outputPath(`full-goal-${viewport.width}x${viewport.height}.png`), animations: "disabled" });
     await close.click();
     await expect(dialog).toHaveCount(0);
-    if (await pause.isVisible()) await page.keyboard.press("Escape");
+    await closeMenu(page, goalRunning);
   }
-  await page.getByRole("button", { name: "Goal running", exact: true }).click();
+  await goalRunning.click();
   await page.getByRole("button", { name: "Pause goal", exact: true }).click();
   await expect(page.getByRole("button", { name: "Resume goal", exact: true })).toBeEnabled();
   expect(actions).toEqual([expect.objectContaining({ action: "pause", expectedSegmentId: "codex:thread-long-goal", expectedGoalId: "goal-long" })]);
@@ -217,15 +218,16 @@ test("a blocked goal can be cancelled without resuming and stays cleared after r
   await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
   await openChat(page);
   await composer(page).fill("Keep my unsent draft.");
+  const goalBlocked = page.getByRole("button", { name: "Goal blocked", exact: true });
   for (const width of [390, 768, 1280]) {
     await page.setViewportSize({ width, height: 844 });
-    await page.getByRole("button", { name: "Goal blocked", exact: true }).click();
+    await goalBlocked.click();
     await expect(page.getByRole("button", { name: "Cancel goal", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole("button", { name: "Resume goal", exact: true })).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: info.outputPath(`blocked-goal-${width}.png`), animations: "disabled" });
-    await page.keyboard.press("Escape");
+    await closeMenu(page, goalBlocked);
   }
-  await page.getByRole("button", { name: "Goal blocked", exact: true }).click();
+  await goalBlocked.click();
   await page.getByRole("button", { name: "Cancel goal", exact: true }).click();
   await cancelReceived.promise;
   try {

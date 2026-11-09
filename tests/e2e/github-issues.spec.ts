@@ -513,6 +513,9 @@ for (const viewport of viewports) {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("textbox", { name: "Title", exact: true })).toHaveValue(issue.title);
     await expect(dialog.getByRole("textbox", { name: "Description", exact: true })).toHaveValue(issue.body);
+    // Title takes the focus once the dialog shows (Vuetify's autofocus, 50 ms after the field appears). Typing
+    // elsewhere before then loses the focus to Title between the fill's focus and its typing.
+    await expect(dialog.getByRole("textbox", { name: "Title", exact: true })).toBeFocused();
     await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Revised issue");
     await dialog.getByRole("textbox", { name: "Description", exact: true }).fill("Revised description");
     await dialog.getByRole("button", { name: "Save issue", exact: true }).click();

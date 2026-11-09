@@ -49,6 +49,20 @@ async function expandPanel(title: Locator) {
 }
 
 /**
+ * Closes a Vuetify menu with Escape when it is open, so that its activator opens it again on the next click. For 50 ms
+ * after a menu closes, Vuetify ignores clicks on its activator (useActivator's reopen lock, which keeps the click
+ * outside that closed it from opening it again at once). A person never clicks again that soon; a test does, and the
+ * menu stays shut. The lock ends on a page timer set as the menu closes, which the activator's aria-expanded="false"
+ * follows, so a page timer of the same length set after that ends after it. (A test that pauses the page clock moves
+ * it past the lock instead.)
+ */
+async function closeMenu(page: Page, activator: Locator) {
+  if (await activator.getAttribute("aria-expanded") === "true") await page.keyboard.press("Escape");
+  await expect(activator).toHaveAttribute("aria-expanded", "false");
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 50)));
+}
+
+/**
  * Asserts that `read()` keeps answering `expected` for the whole of `durationMs`: an observed quiet period for
  * something that must not happen, which fails as soon as it does instead of sleeping and checking once.
  */
@@ -61,4 +75,4 @@ async function expectSteady<T>(read: () => T | Promise<T>, expected: T, duration
   expect(await read()).toEqual(expected);
 }
 
-export { dismissFeedbackIfShown, expandPanel, expectSteady, openMenu, waitForFeedbackToClear };
+export { closeMenu, dismissFeedbackIfShown, expandPanel, expectSteady, openMenu, waitForFeedbackToClear };
