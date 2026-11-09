@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { runServerTests, serverTestRun } from "../../tooling/run-server-tests.mjs";
+import { runServerTests, serverTestOptions, serverTestRun } from "../../tooling/run-server-tests.mjs";
 import { targetedTestArguments } from "../../tooling/run-targeted-tests.mjs";
 import { loadTimeBudgets } from "../../tooling/test-time-budgets.mjs";
 import { BUDGET_VARIABLE, testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
@@ -83,6 +83,32 @@ test("the full server suite gives every test a hard deadline and stops at its wa
   // A file whose hung test left a server or timer open still ends with its tests.
   assert.ok(args.includes("--test-force-exit"));
   assert.equal(deadlineMs, budgets.wallMs);
+});
+
+test("CI runs the server suite in shards that together run every file once", async (t) => {
+  assert.deepEqual(serverTestOptions([]), {});
+  assert.deepEqual(serverTestOptions(["--shard=2/4"]), { shard: "2/4" });
+  for (const argv of [["--shard=0/4"], ["--shard=5/4"], ["--shard=1"], ["--shard=1/4", "--shard=2/4"], ["tests/server/one.unit.test.js"]]) {
+    assert.equal(serverTestOptions(argv), null, argv.join(" "));
+  }
+  const { args } = serverTestRun({}, loadTimeBudgets("server"), { shard: "2/4" });
+  assert.ok(args.includes("--test-shard=2/4"));
+  assert.equal(args.at(-1), "tests/server/*.test.js");
+  assert.equal(serverTestRun({}).args.some((arg) => arg.startsWith("--test-shard")), false);
+  // Node's --test-shard: each file of the pattern runs in exactly one of the shards.
+  const directory = await mkdtemp(path.join(os.tmpdir(), "v64-server-shards-"));
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  const names = ["a", "b", "c", "d", "e"];
+  await Promise.all(names.map((name) => writeFile(path.join(directory, `${name}.test.js`),
+    `require("node:fs").appendFileSync(${JSON.stringify(path.join(directory, "ran"))}, "${name}\\n");\n`)));
+  // This file runs under the test runner itself, whose NODE_TEST_CONTEXT would make the inner runner run nothing.
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  for (const shard of ["1/2", "2/2"]) {
+    const result = spawnSync(process.execPath, ["--test", `--test-shard=${shard}`, "*.test.js"], { cwd: directory, encoding: "utf8", env });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  }
+  assert.deepEqual((await readFile(path.join(directory, "ran"), "utf8")).trim().split("\n").sort(), names);
 });
 
 test("a server run past its deadline is stopped with every process it started", async (t) => {

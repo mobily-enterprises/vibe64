@@ -20,13 +20,18 @@ const DEADLINE_GRACE_MS = 10_000;
 // file then ends as soon as its other tests have (--test-force-exit), even
 // when the hung test left a server, child or timer open; and the whole run
 // stops at the suite's wall-clock bound, wallMs.
-export function serverTestRun(env = process.env, budgets = loadTimeBudgets("server")) {
+//
+// CI runs the suite in parallel jobs, one part each: with `shard` "I/N"
+// (npm run test:full -- --shard=I/N), Node's --test-shard runs every Nth
+// file from the Ith, so the N parts together run every file once.
+export function serverTestRun(env = process.env, budgets = loadTimeBudgets("server"), { shard = "" } = {}) {
   return {
     args: [
       "--test",
       `--test-concurrency=${testConcurrency({ env })}`,
       `--test-timeout=${budgets.testMs}`,
       "--test-force-exit",
+      ...(shard ? [`--test-shard=${shard}`] : []),
       "--test-reporter=spec",
       "--test-reporter-destination=stdout",
       "--test-reporter=./tooling/test-time-budget-reporter.mjs",
@@ -36,6 +41,14 @@ export function serverTestRun(env = process.env, budgets = loadTimeBudgets("serv
     deadlineMs: budgets.wallMs,
     env: withHostPathGuard(env)
   };
+}
+
+// The command line takes nothing, or one --shard=I/N with 1 <= I <= N;
+// anything else answers null.
+export function serverTestOptions(argv = []) {
+  if (argv.length === 0) return {};
+  const match = argv.length === 1 ? /^--shard=([1-9]\d*)\/([1-9]\d*)$/u.exec(argv[0]) : null;
+  return match && Number(match[1]) <= Number(match[2]) ? { shard: `${match[1]}/${match[2]}` } : null;
 }
 
 // Runs the suite in its own process group, so that its deadline stops the
@@ -86,5 +99,11 @@ export function runServerTests({ args, deadlineMs, env }, { graceMs = DEADLINE_G
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = await runServerTests(serverTestRun());
+  const options = serverTestOptions(process.argv.slice(2));
+  if (options) {
+    process.exitCode = await runServerTests(serverTestRun(process.env, loadTimeBudgets("server"), options));
+  } else {
+    console.error("npm run test:full runs every server test file, or one part of them: npm run test:full -- --shard=2/4");
+    process.exitCode = 1;
+  }
 }

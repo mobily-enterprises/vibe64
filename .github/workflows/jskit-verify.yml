@@ -1,4 +1,6 @@
 # Vibe64-owned application verification.
+# Every check of `npm run verify` runs here, in parallel jobs: the server suite,
+# the slowest part, in shards, and the other checks in one job beside them.
 name: Vibe64 Verify
 on:
   pull_request: null
@@ -11,11 +13,48 @@ env:
   npm_config_engine_strict: "true"
   npm_config_strict_allow_scripts: "true"
 jobs:
-  verify:
+  checks:
+    name: Lint, client tests, build and packages
     runs-on: ubuntu-latest
-    # Above the suites' own wall-clock bounds together (tooling/test-time-budgets.json),
-    # so a run that hangs anywhere ends here instead of at GitHub's six hours.
-    timeout-minutes: 75
+    # Above the client suite's wall-clock bound (tooling/test-time-budgets.json)
+    # with lint and the build, so a hang ends here instead of at GitHub's six hours.
+    timeout-minutes: 25
+    steps:
+      - id: checkout
+        name: Checkout
+        uses: actions/checkout@v7
+      - id: setup-node
+        name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - id: install-dependencies
+        name: Install dependencies
+        run: npm ci
+      - id: lint
+        name: Lint
+        run: npm run lint
+      - id: client-tests
+        name: Client tests
+        run: npm run test:client
+      - id: build
+        name: Build
+        run: npm run build
+      - id: verify-packages
+        name: Package boundaries
+        run: npm run verify:packages
+  server-tests:
+    name: Server tests ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    # Above the server suite's wall-clock bound (tooling/test-time-budgets.json),
+    # so a hang ends here instead of at GitHub's six hours.
+    timeout-minutes: 55
+    strategy:
+      # Every shard runs to its end, so one failing shard never hides another's failures.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - id: checkout
         name: Checkout
@@ -32,6 +71,8 @@ jobs:
       - id: install-browser
         name: Install test browser
         run: npx --no-install playwright install --with-deps chromium
-      - id: verify
-        name: Run verification
-        run: npm run verify
+      # Node's --test-shard: every fourth server test file from this shard's,
+      # so the four shards together run every file once.
+      - id: server-tests
+        name: Server tests
+        run: npm run test:full -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}

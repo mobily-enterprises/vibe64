@@ -220,10 +220,14 @@ overlap a test run already active for this checkout.
 - A hang fails fast instead of holding a run. In `npm run test:full`, each test
   has the server suite's `testMs` as a hard deadline and fails by name past
   it; its file then ends with its other tests, even when the hung test left a
-  server or timer open. The whole run stops at its wall-clock bound, and the
-  CI job has a `timeout-minutes` above the suites' bounds. A test that waits
-  for a hold, a child or an event also stops waiting when the work it waits
-  on has already ended.
+  server or timer open. The whole run stops at its wall-clock bound, and each
+  CI job has a `timeout-minutes` above the bounds of the suites it runs. A
+  test that waits for a hold, a child or an event also stops waiting when the
+  work it waits on has already ended.
+- CI runs every check of `npm run verify` in parallel jobs, the server suite
+  in shards: `npm run test:full -- --shard=I/N` runs every Nth server test
+  file from the Ith (Node's `--test-shard`), so the N shards together run
+  every file once.
 - Every test process, `npm run test:full` included, loads
   `tooling/test-host-path-guard.mjs`.
 - A test removes every temporary folder it creates by the time it ends, so a

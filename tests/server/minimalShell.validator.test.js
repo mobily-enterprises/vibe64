@@ -132,9 +132,19 @@ test("app-owned CI verifies the application on Node 26", async () => {
   assert.match(workflowSource, /node-version: 26/);
   assert.doesNotMatch(workflowSource, /id: database-migrations/);
   assert.doesNotMatch(workflowSource, /run: npm run db:migrate/);
-  assert.match(workflowSource, /run: npm run verify/);
-  // A hang ends the job long before GitHub's six-hour limit.
-  assert.match(workflowSource, /^ {4}timeout-minutes: \d+$/mu);
+  // Every check of npm run verify runs, in parallel jobs; the server suite runs in shards that,
+  // every one run to its end, together run every server test file.
+  const { scripts } = await readPackageJson();
+  for (const command of scripts.verify.split(" && ")) {
+    assert.match(workflowSource, new RegExp(`^ +run: ${command}(?: |$)`, "mu"), `CI runs ${command}`);
+  }
+  assert.match(workflowSource, /^ +run: npm run test:full -- --shard=\$\{\{ matrix\.shard \}\}\/\$\{\{ strategy\.job-total \}\}$/mu);
+  assert.match(workflowSource, /fail-fast: false/u);
+  // A hang ends each job long before GitHub's six-hour limit.
+  const jobsSource = workflowSource.slice(workflowSource.search(/^jobs:$/mu));
+  const jobs = jobsSource.match(/^ {2}[a-z-]+:$/gmu) || [];
+  assert.ok(jobs.length > 1);
+  assert.equal(jobsSource.match(/^ {4}timeout-minutes: \d+$/gmu)?.length, jobs.length);
   await assert.rejects(
     access(path.join(APP_ROOT, ".github", "workflows", "vibe64-verify.yml")),
     /ENOENT/
