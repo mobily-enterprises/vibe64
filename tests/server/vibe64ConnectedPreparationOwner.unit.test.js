@@ -35,7 +35,7 @@ import { projectRuntimeRoot, sourceMetadata, sourcePath, withTemporaryRoot } fro
 // through the real Git command service; only the gateway is replaced, so each
 // GitHub sign-in read names the person it reads, and returns that person's
 // token. The owner is this machine's own user: the service resolves the
-// owner's real home, as it does on a hosted VPS.
+// owner's real home, as it does in user account mode.
 
 const execFileAsync = promisify(execFile);
 const ENV = Object.freeze({ VIBE64_GITHUB_ACCOUNT_MODE: "user" });

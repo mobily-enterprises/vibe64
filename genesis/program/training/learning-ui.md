@@ -131,7 +131,7 @@ The Learning controller (`vibe64Learning.js`, its modes in
 `learner.changed` except `steps` and `notes`, and on every realtime reconnect
 (a switch made elsewhere while the tab was offline sent it no notice); an
 unreadable mode counts as Develop. A projects list read in the other mode than
-the tab shows (its `learnMode`, which Online's list carries) also rereads it
+the tab shows (its `learnMode`, when the list carries one) also rereads it
 (`watchProjectListMode`), and the projects list is cached per mode
 (`projectSelectionGateQueryKey`'s `learnMode`), so Learn's empty list never
 stands in for Develop's and each switch reads the new mode's list. `learnMode`, `lessonTitle` and `mode` are its getters, and

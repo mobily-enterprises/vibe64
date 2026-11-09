@@ -304,7 +304,7 @@ function projectSelectionGateEndpoint({
 }
 
 /**
- * Online lists no project of yours in Learn mode, so Learn's list is cached
+ * A server can list no project of yours in Learn mode, so Learn's list is cached
  * apart: Develop never shows it, and every switch of L reads the new mode's list.
  */
 function projectSelectionGateQueryKey({

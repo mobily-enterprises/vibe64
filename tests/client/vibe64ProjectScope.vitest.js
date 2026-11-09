@@ -421,7 +421,7 @@ describe("Vibe64 project client scope", () => {
   });
 
   it("never shows Learn mode's empty list in Develop, and a list read in a mode the tab missed rereads the mode", async () => {
-    // Online lists no project of yours in Learn mode and says which mode it read the list in.
+    // The server lists no project of yours in Learn mode and says which mode it read the list in.
     const server = { learnMode: false };
     const project = { slug: "alpha" };
     const reads = [];
