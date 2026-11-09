@@ -14,9 +14,12 @@ const UPDATE_HANDOFF = [
 ].join("\n");
 
 const UPDATE_SUCCEEDED_MESSAGE = "Session updated. Your changes were preserved. Nothing was pushed.";
-const UPDATE_WAITING_MESSAGE = "Update waits for the session's assistant to finish";
-// Update refused only because the session's assistant is still working waits for that turn.
-const WAITING_CODES = Object.freeze(["vibe64_session_update_agent_active", "vibe64_agent_write_mode_busy"]);
+// Update runs while the main chat's AI works. It waits only for another change to the session's files, and tries
+// again when a file it changes was written while it ran.
+const WAITING_MESSAGES = Object.freeze({
+  vibe64_agent_write_mode_busy: "Update waits for another change to this session to finish",
+  vibe64_session_update_worktree_changed: "A file changed while Update ran, so Vibe64 tries again shortly"
+});
 const REPAIRABLE_CODES = Object.freeze([
   "vibe64_session_update_conflict",
   "vibe64_session_update_history_diverged",
@@ -59,7 +62,7 @@ async function readUpdateProblem({ runtime, sessionId }) {
 function updateCheckResult(result) {
   if (result?.ok !== false) return { passed: true, message: UPDATE_SUCCEEDED_MESSAGE };
   const code = String(result.code || "");
-  if (WAITING_CODES.includes(code)) return { waiting: true, message: UPDATE_WAITING_MESSAGE };
+  if (Object.hasOwn(WAITING_MESSAGES, code)) return { waiting: true, message: WAITING_MESSAGES[code] };
   const error = String(result.error || "The operation failed.");
   const recovery = result.details?.conflictRecovery || null;
   const paths = result.details?.conflictPaths || recovery?.conflictPaths || [];

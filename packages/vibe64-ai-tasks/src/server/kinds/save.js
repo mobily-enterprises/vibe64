@@ -5,6 +5,7 @@ import { REPOSITORY_GIT_BOUNDARY } from "./repository.js";
 /** @typedef {import("../types.js").AiTaskKind} AiTaskKind */
 /** @typedef {import("../types.js").AiTaskCheckResult} AiTaskCheckResult */
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 const SAVE_HANDOFF = [
   "Repair only what stops Save, preserving the session's intended changes. Return kind=complete with a factual report as soon as the edits and focused checks are ready. Vibe64 then runs Save itself, which pushes this session's work, and returns any new Save problem to this same conversation.",
@@ -12,8 +13,9 @@ const SAVE_HANDOFF = [
 ].join("\n");
 
 const SAVE_SUCCEEDED_MESSAGE = "Session saved. Your work was pushed.";
-const SAVE_WAITING_MESSAGE = "Save waits for the session's assistant to finish";
-const WAITING_CODES = Object.freeze(["vibe64_session_save_agent_active", "vibe64_agent_write_mode_busy"]);
+const SAVE_WAITING_MESSAGE = "Save waits for another change to this session to finish";
+const MAIN_CHAT_WAITING_MESSAGE = "Save waits for the main chat's AI to finish";
+const WAITING_CODES = Object.freeze(["vibe64_agent_write_mode_busy"]);
 // Save refused for a reason only a person can settle. The AI is not asked again.
 const PERSON_MESSAGES = Object.freeze({
   vibe64_session_repository_review_changed: "Save needs your review of where it goes. Choose Save, review it, then Check now.",
@@ -81,11 +83,13 @@ function saveContext() {
 
 /**
  * Fix Save: the AI repairs what stopped Save, then Vibe64 runs Save itself to the destination the session
- * has now. Work a person saved meanwhile counts: nothing left to save means Save succeeded.
- * @param {{ sessions: SessionsService }} dependencies
+ * has now. Work a person saved meanwhile counts: nothing left to save means Save succeeded. While the main chat's
+ * AI is working, Save waits for it to finish, since Save would include its unfinished changes; the person can
+ * choose Save now instead.
+ * @param {{ sessions: SessionsService, terminals: TerminalsService }} dependencies
  * @returns {AiTaskKind}
  */
-function createSaveKind({ sessions }) {
+function createSaveKind({ sessions, terminals }) {
   return Object.freeze({
     id: "save",
     title: "Fix Save",
@@ -104,6 +108,10 @@ function createSaveKind({ sessions }) {
       label: "Running Save…",
       output: "Save output",
       unstoppable: "Save can't be interrupted. The fix ends as soon as this run finishes.",
+      whileAiWorks: {
+        action: "Save now",
+        note: "Vibe64 saves as soon as it finishes. Save now includes its unfinished changes."
+      },
       async run({ runtime, sessionId, taskId }, task) {
         const [work, saved] = await Promise.all([
           sessions.inspectSessionWork(sessionId, {}),
@@ -111,6 +119,14 @@ function createSaveKind({ sessions }) {
         ]);
         if (work?.ok === false) return saveCheckResult(work);
         if (!work.unsaved && saved?.status === "ready") return saveCheckResult({ ok: true });
+        if (!task.pending?.whileAiWorks) {
+          // The chat's own working indicator reads this same turn.
+          const session = await runtime.getSessionWithoutSource(sessionId);
+          const { turn } = await terminals.agentSessionState(sessionId, { runtime, session }) || {};
+          if (turn?.active === true) {
+            return { waiting: true, message: MAIN_CHAT_WAITING_MESSAGE, mainChatSince: String(turn.startedAt || "") };
+          }
+        }
         return saveCheckResult(await sessions.saveSessionWork(sessionId, {
           aiTaskId: taskId,
           destinationReview: work.destination,

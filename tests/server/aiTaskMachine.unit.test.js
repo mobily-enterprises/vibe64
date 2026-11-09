@@ -87,8 +87,24 @@ const ROWS = [
   ["checking: passed uses the kind's message when the check has none", taskIn("checking"), event("check_passed", { id: "check-1" }),
     { phase: "done", message: "Session updated." }],
   ["checking: waiting", taskIn("checking"), event("check_waiting", { id: "check-1", message: "Update waits." }),
-    { phase: "checking", waiting: true, message: "Update waits.", active: true,
+    { phase: "checking", waiting: true, message: "Update waits.", active: true, mainChatSince: "",
       pending: { effect: "check", id: "check-1", reviewedConflictId: "", retryAi: true } }],
+  ["checking: waiting for the main chat's AI records when its turn started", taskIn("checking"),
+    event("check_waiting", { id: "check-1", message: "Save waits.", mainChatSince: "2026-11-04T09:30:00.000Z" }),
+    { phase: "checking", waiting: true, mainChatSince: "2026-11-04T09:30:00.000Z",
+      pending: { effect: "check", id: "check-1", reviewedConflictId: "", retryAi: true } }],
+  ["checking, waiting for the AI: Save now runs the check at once",
+    taskIn("checking", { waiting: true, check: { ...taskIn("checking").check, whileAiWorks: { action: "Save now", note: "n" } } }),
+    event("check_now", { id: "check-2", whileAiWorks: true }),
+    { phase: "checking", waiting: false,
+      pending: { effect: "check", id: "check-2", reviewedConflictId: "", retryAi: true, whileAiWorks: true } }],
+  ["checking, waiting: a kind without Save now ignores it", taskIn("checking", { waiting: true }),
+    event("check_now", { id: "check-2", whileAiWorks: true }),
+    { phase: "checking", waiting: true, pending: { effect: "check", id: "check-1", reviewedConflictId: "", retryAi: true } }],
+  ["checking, running: Save now leaves the running check alone",
+    taskIn("checking", { check: { ...taskIn("checking").check, whileAiWorks: { action: "Save now", note: "n" } } }),
+    event("check_now", { id: "check-2", whileAiWorks: true }),
+    { phase: "checking", waiting: false, pending: { effect: "check", id: "check-1", reviewedConflictId: "", retryAi: true } }],
   ["checking: failed, new key, tries left", taskIn("checking"), checkFailure(),
     { phase: "working", attempt: 2, retryKeys: ["key-1"], turnMessageId: "send-2", active: true,
       pending: send("send-2", { message: "Repair the rest.", display: "Continue repairing the remaining conflicts." }) }],
@@ -181,7 +197,8 @@ test("AI task machine: a new task owes its opening message and carries what term
     label: "Running Update…",
     retryLimit: 3,
     output: "Update output",
-    unstoppable: "Update can't be interrupted."
+    unstoppable: "Update can't be interrupted.",
+    whileAiWorks: null
   });
   assert.equal(task.revision, 0);
   assert.equal(taskIn("starting", {}, "person").turn.structured, false);

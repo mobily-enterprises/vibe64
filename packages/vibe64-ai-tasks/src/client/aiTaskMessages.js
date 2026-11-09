@@ -16,7 +16,8 @@ const AI_TASK_MESSAGES = Object.freeze({
     hide: "Hide",
     keepGoing: "Keep going",
     openChat: "Open chat",
-    review: "Review resolved conflicts"
+    review: "Review resolved conflicts",
+    waitForAi: "Wait for the AI"
   }),
   button: Object.freeze({
     busy: "Being fixed…",
@@ -78,6 +79,7 @@ const AI_TASK_MESSAGES = Object.freeze({
   cancelConfirm: noun => `Cancel ${noun}`,
   cancelledByYou: noun => `You cancelled this ${noun}.`,
   cancelledBy: (name, noun) => `${name} cancelled this ${noun}.`,
+  mainChatSince: time => time ? `The main chat's AI has been working since ${time}.` : "The main chat's AI is working.",
   whatsNext: () => "The problem is still there. Anything the AI changed stays in the session. To try again, close this and choose Fix it with AI.",
   toast: (title, outcome) => `${title}: ${outcome}.`
 });

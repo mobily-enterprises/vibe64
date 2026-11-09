@@ -76,11 +76,20 @@ function useAiTaskHost({
     (target?.isConnected ? target : fallbackFocus())?.focus({ preventScroll: true });
   }
 
+  /** The task keeps waiting by itself; the person goes back to the main chat to watch the AI. */
+  async function waitForAi() {
+    taskWindow.hide();
+    await nextTick();
+    fallbackFocus()?.focus({ preventScroll: true });
+  }
+
   /** @param {string} actionId */
   function run(actionId) {
     const { task } = tasks;
     if (actionId === AI_TASK_ACTIONS.ANSWER || actionId === AI_TASK_ACTIONS.OPEN_CHAT) taskWindow.setView("chat");
     else if (actionId === AI_TASK_ACTIONS.CHECK) void tasks.check();
+    else if (actionId === AI_TASK_ACTIONS.RUN_NOW) void tasks.check({ whileAiWorks: true });
+    else if (actionId === AI_TASK_ACTIONS.WAIT_FOR_AI) void waitForAi();
     else if (actionId === AI_TASK_ACTIONS.CONTINUE) void tasks.continueTask();
     else if (actionId === AI_TASK_ACTIONS.FINISH) void tasks.finish();
     else if (actionId === AI_TASK_ACTIONS.END) void tasks.cancel();

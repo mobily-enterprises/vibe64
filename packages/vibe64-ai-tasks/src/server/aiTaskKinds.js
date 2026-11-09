@@ -27,7 +27,7 @@ import { createWorkspaceSetupKind } from "./kinds/workspaceSetup.js";
 function createAiTaskKinds({ databaseTools, pages, project, sessions, terminals }) {
   const kinds = [
     createUpdateKind({ sessions }),
-    createSaveKind({ sessions }),
+    createSaveKind({ sessions, terminals }),
     createWorkspaceSetupKind({ sessions }),
     createPreviewIdentityKind({ terminals }),
     createProjectSetupKind({ project }),

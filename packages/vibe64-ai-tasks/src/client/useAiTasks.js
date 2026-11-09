@@ -100,7 +100,7 @@ function useAiTasks({ sessionId, sessionsApiPath, projectSlug, enabled, request,
     cancelRequested.value = false;
   }
 
-  /** @param {{ reviewedConflictId?: string }} [input] */
+  /** @param {{ reviewedConflictId?: string, whileAiWorks?: boolean }} [input] */
   const check = (input = {}) => act("/check", input);
   const continueTask = () => act("/continue");
   const finish = () => act("/finish");

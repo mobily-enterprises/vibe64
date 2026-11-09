@@ -23,7 +23,9 @@ const aiTaskStartInput = validator({
 const aiTaskInput = validator({ taskId });
 const aiTaskCheckInput = validator({
   taskId,
-  reviewedConflictId: { type: "string", noTrim: false, required: false, maxLength: 200 }
+  reviewedConflictId: { type: "string", noTrim: false, required: false, maxLength: 200 },
+  // Run a check that waits for the main chat's AI now, as the person chose.
+  whileAiWorks: { type: "boolean", required: false }
 });
 
 export {

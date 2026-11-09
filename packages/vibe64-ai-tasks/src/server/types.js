@@ -23,7 +23,7 @@
 
 /**
  * @typedef {{ effect: "send", id: string, message: string, display: string }
- *   | { effect: "check", id: string, reviewedConflictId: string, retryAi: boolean }
+ *   | { effect: "check", id: string, reviewedConflictId: string, retryAi: boolean, whileAiWorks?: boolean }
  *   | { effect: "interrupt", id: string }} AiTaskPending
  */
 
@@ -34,7 +34,8 @@
  * @property {"fix"|"task"} noun
  * @property {string} tray what the app bar says while the task runs
  * @property {string[]} steps
- * @property {{ by: string, label: string, retryLimit: number, output: string, unstoppable: string }} check
+ * @property {{ by: string, label: string, retryLimit: number, output: string, unstoppable: string,
+ *   whileAiWorks: AiTaskWhileAiWorks | null }} check
  * @property {AiTaskTurn} turn
  * @property {string} doneMessage
  * @property {boolean} repository whether this task changes the repository: direct Update, Save and Prepare wait for it
@@ -43,7 +44,8 @@
  * @property {boolean} active
  * @property {string} reason
  * @property {string} message
- * @property {boolean} waiting whether a check waits for the session's assistant
+ * @property {boolean} waiting whether a check waits, for another change to the session or the main chat's AI
+ * @property {string} mainChatSince while a check waits for the main chat's AI, when its turn started
  * @property {AiTaskProblem} problem
  * @property {object} input
  * @property {object | null} startedBy
@@ -75,13 +77,20 @@
  * @property {string} [sendId]
  * @property {boolean} [hasDraft]
  * @property {string} [reviewedConflictId]
+ * @property {boolean} [whileAiWorks] run a check waiting for the main chat's AI now
+ * @property {string} [mainChatSince] when the main chat turn a check waits for started
  * @property {object} [facts] what a failed check learned, for the next try
  */
 
 /**
  * @typedef {{ passed: true, message: string }
  *   | { passed: false, message: string, retryKey: string, diagnostic: string, facts?: object }
- *   | { waiting: true, message: string }} AiTaskCheckResult
+ *   | { waiting: true, message: string, mainChatSince?: string }} AiTaskCheckResult
+ */
+
+/**
+ * A check that waits for the main chat's AI offers to run now: the action's label and what the wait means.
+ * @typedef {{ action: string, note: string }} AiTaskWhileAiWorks
  */
 
 /**
@@ -92,6 +101,7 @@
  *   label: string,
  *   output: string,
  *   unstoppable?: string,
+ *   whileAiWorks?: AiTaskWhileAiWorks,
  *   run: (
  *     context: { runtime: object, sessionId: string, signal: AbortSignal, taskId: string },
  *     task: AiTask

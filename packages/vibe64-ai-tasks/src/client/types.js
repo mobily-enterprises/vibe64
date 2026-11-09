@@ -13,7 +13,8 @@
  * @property {"fix"|"task"} noun
  * @property {string} tray
  * @property {string[]} steps
- * @property {{ by: string, label: string, retryLimit: number, output: string, unstoppable: string }} check
+ * @property {{ by: string, label: string, retryLimit: number, output: string, unstoppable: string,
+ *   whileAiWorks: { action: string, note: string } | null }} check
  * @property {number} revision
  * @property {string} phase
  * @property {boolean} active
@@ -21,6 +22,7 @@
  * @property {string} message
  * @property {string} diagnostic what the last failed check said, in its owner's words
  * @property {boolean} waiting
+ * @property {string} mainChatSince while a check waits for the main chat's AI, when its turn started
  * @property {boolean} checkRunning
  * @property {{ key: string, summary: string, details: string }} problem
  * @property {string} conflictReview

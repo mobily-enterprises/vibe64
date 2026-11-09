@@ -153,6 +153,8 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     overviewReads: 0,
     // The session's workspace preparation, as a session read carries it.
     workspaceSetup: { status: "succeeded" } as Record<string, unknown>,
+    // The main chat's turn, as the chat's working indicator reads it: idle unless a scenario says otherwise.
+    mainTurn: { active: false } as Record<string, unknown>,
     update: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
     save: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
     inspect: async (): Promise<Record<string, unknown>> => ({ ok: true, unsaved: true, destination: { mode: "local" } }),
@@ -179,7 +181,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
         terminals: { ...temporary!.terminals, verifyPreviewIdentity: (_sessionId, input) => {
           aiTaskWorld.signIns.push(input);
           return aiTaskWorld.signIn(input);
-        } },
+        }, agentSessionState: async () => ({ turn: aiTaskWorld.mainTurn }) },
         sessions: {
           updateSessionWork: (_sessionId, input) => {
             aiTaskWorld.updates.push(input);
@@ -207,6 +209,8 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       await aiTaskService.resumeInterruptedTasks();
     },
     settled: () => aiTaskService.resumeInterruptedTasks(),
+    // Main announces its finished turn with no conversation id, as the terminals do.
+    mainTurnEnded: () => aiTaskService.onTurnSettled({ sessionId: session.sessionId, conversationId: "", failure: null }),
     archive: () => aiTaskService.onSessionArchiving(session.sessionId)
   };
   if (temporary) aiTaskWorld.boot();

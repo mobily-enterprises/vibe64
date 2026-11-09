@@ -169,8 +169,8 @@ function createAiTasksService({ databaseTools, logger, pages, project, publishSe
     return act(sessionId, taskId, { type: "cancel", id: randomUUID(), by: vibe64User });
   }
 
-  function check(sessionId, { taskId, reviewedConflictId = "" }) {
-    return act(sessionId, taskId, { type: "check_now", id: randomUUID(), reviewedConflictId });
+  function check(sessionId, { taskId, reviewedConflictId = "", whileAiWorks = false }) {
+    return act(sessionId, taskId, { type: "check_now", id: randomUUID(), reviewedConflictId, whileAiWorks });
   }
 
   function continueTask(sessionId, { taskId }) {

@@ -62,7 +62,7 @@ function turnEvent(task, turn, restarted) {
  */
 function checkEvent(kind, id, result, record) {
   if (result.unknown) return { type: "check_unknown", id, message: "Vibe64 couldn't confirm the result" };
-  if (result.waiting) return { type: "check_waiting", id, message: result.message };
+  if (result.waiting) return { type: "check_waiting", id, message: result.message, mainChatSince: result.mainChatSince || "" };
   if (result.passed) return { type: "check_passed", id, message: result.message };
   const { retry } = kind.check;
   return {

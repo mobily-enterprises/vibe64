@@ -76,10 +76,10 @@ command to the background, where it keeps running, and reads the guidance within
 moments. This includes a repair that changes the project's Genesis files while it works:
 the message joins the running repair, and the changed project guidance applies from its
 next idle turn. Output already shown stays attached to its original request, and the
-follow-up response belongs to the new request, also after reload. **Reply ready ·
-background task still running…** means the answer is shown but a background command
-Claude started is still running; a later follow-up reply appears after the answer without
-replacing it. Completed replies and progress updates are saved about a second after they
+follow-up response belongs to the new request, also after reload. **Still working ·
+waiting on background commands…** means the answer is shown but a background command
+Claude started is still running, so the turn is still working and **Stop** still ends it;
+a later follow-up reply appears after the answer without replacing it. Completed replies and progress updates are saved about a second after they
 finish, even while nobody has the window open, so other viewers and a later reopen see
 them with their actual timing.
 
@@ -172,10 +172,20 @@ can be done next.
 | What Update said, after three failed checks | **Check now**, **Open chat** or **Review resolved conflicts**. |
 | What Save said, after three failed checks | **Check now** or **Open chat**. |
 | Save needs your review of where it goes | Choose **Save** and review it, then **Check now**. |
+| Save waits for the main chat's AI to finish | **Wait for the AI**, or **Save now** to include its unfinished changes. |
 | Preview isn't running | Start Preview, then **Check now**. |
 | This preview can't switch identity | Restart Preview, then **Check now**. |
 | Project setup waits for Update | Fix Update first, then **Check now**. |
 | The data overview could not be read | Check the database is available, then **Check now**. |
+
+When a repair is ready while the main chat's AI is still working, Fix Update runs
+Update straight away: Update and Save can run while the AI works. Fix Save asks
+first, because Save would include the AI's unfinished changes: the window names the
+main chat and the time its AI started working. **Wait for the AI** returns you to the
+main chat, and Vibe64 saves by itself as soon as that turn ends; **Save now** saves at
+once, unfinished changes included. When the main chat is idle, Fix Save saves straight
+away with no click. Both still wait while another Save, Update or preparation holds
+the session.
 
 **Review resolved conflicts** opens the same review as the Update error (see
 [Apply an Update after resolving conflicts](github-work.md#apply-an-update-after-resolving-conflicts)).

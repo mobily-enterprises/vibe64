@@ -99,6 +99,43 @@ describe("what the window says for each state", () => {
   });
 });
 
+describe("a Save waiting for the main chat's AI", () => {
+  const SAVE_CHECK = {
+    ...CHECK,
+    label: "Running Save…",
+    whileAiWorks: {
+      action: "Save now",
+      note: "Vibe64 saves as soon as it finishes. Save now includes its unfinished changes."
+    }
+  };
+  const since = "2026-11-09T10:15:00.000Z";
+  const time = new Date(since).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const waiting = {
+    kind: "save", check: SAVE_CHECK, phase: "checking", waiting: true, checkRunning: true,
+    message: "Save waits for the main chat's AI to finish", mainChatSince: since
+  };
+
+  it("names the main chat and when it started, and offers Wait for the AI and Save now", () => {
+    expect(projected(waiting)).toMatchObject({
+      status: "Save waits for the main chat's AI to finish",
+      note: `The main chat's AI has been working since ${time}. ${SAVE_CHECK.whileAiWorks.note}`,
+      actions: [
+        { id: ACTIONS.WAIT_FOR_AI, label: "Wait for the AI", primary: false },
+        { id: ACTIONS.RUN_NOW, label: "Save now", primary: true }
+      ]
+    });
+  });
+
+  it("offers nothing while it waits for another change to the session", () => {
+    expect(projected({ ...waiting, mainChatSince: "", message: "Save waits for another change to this session to finish" }))
+      .toMatchObject({ note: "", actions: [] });
+  });
+
+  it("offers nothing for a kind that cannot run while the AI works", () => {
+    expect(projected({ ...waiting, check: CHECK })).toMatchObject({ note: "", actions: [] });
+  });
+});
+
 describe("the footer", () => {
   it.each([
     ["question", [ACTIONS.ANSWER], []],

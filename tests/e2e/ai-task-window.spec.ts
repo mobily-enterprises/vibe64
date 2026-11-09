@@ -373,6 +373,38 @@ for (const viewport of [VIEWPORTS[5], VIEWPORTS[1]]) {
       await expectPhase(page, "not_done");
     });
 
+    test("Fix Save waits while the main chat's AI works, names when it started, and Save now saves at once", async ({ page }) => {
+      await saveTaskWorld(page, shared.server);
+      shared.server.aiTasks.mainTurn = { active: true, startedAt: "2026-11-09T10:15:00.000Z" };
+      const taskId = await openFix(page, shared.server);
+      await expectPhase(page, "working");
+      void endTurn(shared.server, taskId, "complete", "Fixed the lint errors.");
+      await expectPhase(page, "checking");
+      const window = taskWindow(page);
+      await expect(window.getByText("Save waits for the main chat's AI to finish").first()).toBeVisible();
+      await expect(window.getByText(/The main chat's AI has been working since .+\. Vibe64 saves as soon as it finishes\./u)).toBeVisible();
+      await expect(window.getByRole("button", { name: "Wait for the AI", exact: true })).toBeVisible();
+      expect(shared.server.aiTasks.saves).toHaveLength(0);
+      await window.getByRole("button", { name: "Save now", exact: true }).click();
+      await expectPhase(page, "done");
+      expect(shared.server.aiTasks.saves).toHaveLength(1);
+    });
+
+    test("Fix Save saves by itself once the main chat's AI finishes, after Wait for the AI", async ({ page }) => {
+      await saveTaskWorld(page, shared.server);
+      shared.server.aiTasks.mainTurn = { active: true, startedAt: "2026-11-09T10:15:00.000Z" };
+      const taskId = await openFix(page, shared.server);
+      await expectPhase(page, "working");
+      void endTurn(shared.server, taskId, "complete", "Fixed the lint errors.");
+      await expectPhase(page, "checking");
+      await taskWindow(page).getByRole("button", { name: "Wait for the AI", exact: true }).click();
+      await expect(taskWindow(page)).toBeHidden();
+      expect(shared.server.aiTasks.saves).toHaveLength(0);
+      shared.server.aiTasks.mainTurn = { active: false };
+      await shared.server.aiTasks.mainTurnEnded();
+      await expect.poll(() => shared.server.aiTasks.saves.length).toBe(1);
+    });
+
     test("Cancel during Update stops the run, stays Cancelling… and pressable until Update answers, then ends the fix", async ({ page }) => {
       await aiTaskWorld(page, shared.server);
       const taskId = await openFix(page, shared.server);

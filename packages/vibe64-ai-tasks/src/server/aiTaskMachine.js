@@ -44,7 +44,8 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
       label: check.by === AI_TASK_CHECKERS.VIBE64 ? check.label : "",
       retryLimit: check.by === AI_TASK_CHECKERS.VIBE64 ? check.retry.limit : 0,
       output: check.output || "",
-      unstoppable: check.unstoppable || ""
+      unstoppable: check.unstoppable || "",
+      whileAiWorks: check.whileAiWorks || null
     },
     turn: {
       context: kind.context(problem),
@@ -60,6 +61,7 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
     reason: brief ? "" : REASONS.YOUR_TURN,
     message: "",
     waiting: false,
+    mainChatSince: "",
     problem,
     input: taskInput,
     startedBy,
@@ -126,14 +128,17 @@ function notDone(task, reason, event, message, logText) {
   }, event, logText);
 }
 
-/** @type {(task: AiTask, event: AiTaskEvent, reviewedConflictId: string, retryAi: boolean) => AiTask} */
-function checking(task, event, reviewedConflictId, retryAi) {
+/**
+ * A check owed now. `whileAiWorks` runs it although the main chat's AI is working, as the person chose.
+ * @type {(task: AiTask, event: AiTaskEvent, reviewedConflictId: string, retryAi: boolean, whileAiWorks?: boolean) => AiTask}
+ */
+function checking(task, event, reviewedConflictId, retryAi, whileAiWorks = false) {
   return moved(task, {
     phase: PHASES.CHECKING,
     reason: "",
     message: "",
     waiting: false,
-    pending: { effect: "check", id: event.id, reviewedConflictId, retryAi }
+    pending: { effect: "check", id: event.id, reviewedConflictId, retryAi, ...(whileAiWorks ? { whileAiWorks } : {}) }
   }, event, task.check.label);
 }
 
@@ -228,12 +233,21 @@ function fromWorking(task, event) {
 }
 
 function fromChecking(task, event) {
+  // A check waiting for the main chat's AI runs now when the person chooses it.
+  if (event.type === "check_now") {
+    return task.waiting && event.whileAiWorks === true && task.check.whileAiWorks
+      ? checking(task, event, task.pending.reviewedConflictId, task.pending.retryAi, true) : task;
+  }
   if (event.id !== task.pending?.id) return task;
   switch (event.type) {
     case "check_passed":
       return done(task, event, event.message || task.doneMessage, "Vibe64 confirmed the result.");
     case "check_waiting":
-      return moved(task, { waiting: true, message: event.message }, event, task.waiting ? "" : event.message);
+      return moved(task, {
+        waiting: true,
+        message: event.message,
+        mainChatSince: event.mainChatSince || ""
+      }, event, task.waiting ? "" : event.message);
     case "check_failed":
       return checkFailed(task, event);
     case "check_unknown":

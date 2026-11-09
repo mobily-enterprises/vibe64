@@ -141,6 +141,20 @@ A completed repair runs its check by itself, on the server, whether or not any
 browser watched the turn end. A failed check returns to the same conversation.
 A person's Check, Continue or review carries on from where the task stopped.
 
+A check that answers `waiting` keeps its pending check and runs again when a
+turn settles or after thirty seconds. Update and Save can run while the AI works;
+Save asks first because it includes unfinished changes. So Fix Update waits only
+for its own conversation, and for another change holding the session
+(`vibe64_agent_write_mode_busy`) or a file written while Update ran. Fix Save
+also waits while the main chat's turn is open, read from
+`terminals.agentSessionState`, the same turn the chat's working indicator shows;
+its wait records `mainChatSince`, the turn's start. Its kind declares
+`check.whileAiWorks` (an action label and a note), so the window names the main
+chat and that time and offers Wait for the AI, which hides the window and
+focuses the main chat, and Save now, a `check_now` with `whileAiWorks` that runs
+the pending check at once with `pending.whileAiWorks`. An idle main chat saves
+without a click.
+
 Cancel is always accepted at once and recorded. A turn is stopped through the
 existing native Stop. A check that can stop receives an `AbortSignal`; the record
 write that saves Cancel aborts it, and the runner re-reads the task before the
@@ -342,8 +356,10 @@ text, and executable or data-URL links are not made clickable. Progress starts
 collapsed inside its assistant message; expanding it uses the scrollable transcript.
 The status above the composer uses normal chat's shared plain status component and
 says "Sending to assistant…" during admission, then "AI is working…" during
-execution, and "Reply ready · background task still running…" while a finished
-reply's background work continues. The transcript has no second working indicator and the status never
+execution, and "Still working · waiting on background commands…" while a finished
+reply's background work continues (`backgroundWorkLabel` in
+`src/lib/vibe64BackgroundWorkLabel.js`; Main chat adds the count Claude reports).
+The transcript has no second working indicator and the status never
 repeats reasoning paragraphs. Long progress cannot push Stop or the composer out of
 view, and the composer keeps its buttons visible while long drafts scroll within the
 input. An unavailable progress read keeps the draft and Stop available. Subsequent

@@ -39,7 +39,7 @@ function browserLikeHistory() {
 }
 
 /** One session view with its AI task host, under the shared navigation that keeps its conversation in the URL. */
-async function mountSession(start = "/app/project/demo?session=s1") {
+async function mountSession(start = "/app/project/demo?session=s1", { task = TASK, requests = [], mainChat = null } = {}) {
   const router = createRouter({
     history: browserLikeHistory(),
     routes: [{ path: "/app/project/:slug/:rest(.*)*", component: { render: () => null } }]
@@ -66,9 +66,12 @@ async function mountSession(start = "/app/project/demo?session=s1") {
     setup() {
       session.host = useAiTaskHost({
         sessionId: "s1", sessionsApiPath: "/api/vibe64/sessions", projectSlug: "demo", enabled: true, active: true,
-        request: async () => ({ tasks: [TASK], viewerId: "ana" }),
+        request: async (path, options = {}) => {
+          if (options.method === "POST") requests.push({ path, body: options.body });
+          return { tasks: [task], task, viewerId: "ana" };
+        },
         route: useRoute(), router: useRouter(),
-        openAiSetup() {}, reviewResolved() {}, fallbackFocus: () => null
+        openAiSetup() {}, reviewResolved() {}, fallbackFocus: () => mainChat
       });
       provide(VIBE64_AI_TASKS_KEY, session.host);
       return () => h(Workspace);
@@ -129,5 +132,42 @@ describe("an AI task window in a host that keeps the conversation in the URL", (
     const { host, route } = await mountSession("/app/project/demo?session=s1&conversation=task-1&aiTask=task-1");
     expect(host.open).toBe(true);
     expect(route.value.query).toEqual({ session: "s1", conversation: "task-1", aiTask: "task-1" });
+  });
+});
+
+describe("a Fix Save waiting for the main chat's AI", () => {
+  const waitingSave = {
+    ...TASK, kind: "save", title: "Fix Save", tray: "Fixing Save…", steps: ["The AI repairs what stopped Save", "Vibe64 runs Save"],
+    check: {
+      by: "vibe64", label: "Running Save…", retryLimit: 3, output: "Save output", unstoppable: "",
+      whileAiWorks: { action: "Save now", note: "Vibe64 saves as soon as it finishes. Save now includes its unfinished changes." }
+    },
+    phase: "checking", waiting: true, checkRunning: true, message: "Save waits for the main chat's AI to finish",
+    mainChatSince: "2026-11-09T10:15:00.000Z"
+  };
+
+  it("Wait for the AI hides the window and returns to the main chat, asking nothing of Vibe64", async () => {
+    const requests = [];
+    const mainChat = { focus: vi.fn() };
+    const { host, route } = await mountSession(undefined, { task: waitingSave, requests, mainChat });
+    host.show(null);
+    await settle();
+    expect(host.projection.actions.map(({ id }) => id)).toEqual(["wait-for-ai", "run-now"]);
+    host.run("wait-for-ai");
+    await settle();
+    expect(host.open).toBe(false);
+    expect(route.value.query).toEqual({ session: "s1", chat: "main" });
+    expect(mainChat.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(requests).toEqual([]);
+  });
+
+  it("Save now asks Vibe64 to run Save at once", async () => {
+    const requests = [];
+    const { host } = await mountSession(undefined, { task: waitingSave, requests });
+    host.show(null);
+    await settle();
+    host.run("run-now");
+    await settle();
+    expect(requests).toEqual([{ path: "/api/vibe64/sessions/s1/ai-tasks/task-1/check", body: { whileAiWorks: true } }]);
   });
 });

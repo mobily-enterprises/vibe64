@@ -111,6 +111,8 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
     signIn: async () => ({ ok: true }),
     onboarding: async () => onboardingAt("ready"),
     overview: async () => overviewRead(),
+    // The main chat's turn, as terminals reports it: null while the main chat is idle.
+    mainTurn: null,
     workspaceSetup: setupFailed || { status: "succeeded" }
   };
 
@@ -165,6 +167,10 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
       terminals: { ...terminalsWrap(conversations), async verifyPreviewIdentity(sessionId, input) {
         signIns.push(input);
         return server.signIn(input);
+      }, async agentSessionState(sessionId, { session }) {
+        // The engine is chosen from the session's own record, so the caller passes it.
+        assert.equal(session?.sessionId, sessionId);
+        return { turn: server.mainTurn };
       } }
     });
     return { aiTasks, conversations };
@@ -236,6 +242,56 @@ test("a completed Save repair runs Save on the server to the session's destinati
   assert.equal(f.saves[0].aiTaskId, task.id);
   assert.equal(f.updates.length, 0);
 }, { updateFailure: null, saveFailed: saveFailure }));
+
+test("Fix Save waits while the main chat's AI works, names when it started, and saves when that turn ends", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "save");
+  await f.quiet(running.aiTasks);
+  f.server.mainTurn = { active: true, startedAt: "2026-11-09T10:15:00.000Z" };
+  await f.finishTurn(running);
+  const waiting = await f.task(task.id);
+  assert.equal(waiting.phase, "checking");
+  assert.equal(waiting.waiting, true);
+  assert.equal(waiting.message, "Save waits for the main chat's AI to finish");
+  assert.equal(waiting.mainChatSince, "2026-11-09T10:15:00.000Z");
+  assert.deepEqual(waiting.check.whileAiWorks, {
+    action: "Save now",
+    note: "Vibe64 saves as soon as it finishes. Save now includes its unfinished changes."
+  });
+  assert.equal(f.saves.length, 0, "Save waits rather than include the AI's unfinished changes");
+  f.server.mainTurn = { active: false };
+  await running.aiTasks.onTurnSettled({ sessionId: SESSION, conversationId: "", failure: null });
+  await f.quiet(running.aiTasks);
+  assert.equal((await f.task(task.id)).phase, "done");
+  assert.equal(f.saves.length, 1);
+  running.aiTasks.closeRunner();
+}, { updateFailure: null, saveFailed: saveFailure }));
+
+test("Save now saves a waiting Fix Save at once while the main chat's AI keeps working", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks, OWNER, "save");
+  await f.quiet(running.aiTasks);
+  f.server.mainTurn = { active: true, startedAt: "2026-11-09T10:15:00.000Z" };
+  await f.finishTurn(running);
+  assert.equal((await f.task(task.id)).waiting, true);
+  await running.aiTasks.check(SESSION, { taskId: task.id, whileAiWorks: true, vibe64User: OWNER });
+  await f.quiet(running.aiTasks);
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "done");
+  assert.equal(saved.message, "Session saved. Your work was pushed.");
+  assert.equal(f.saves.length, 1);
+  running.aiTasks.closeRunner();
+}, { updateFailure: null, saveFailed: saveFailure }));
+
+test("Fix Update runs Update while the main chat's AI works: it waits only for its own conversation", () => withFixture(async (f) => {
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks);
+  await f.quiet(running.aiTasks);
+  f.server.mainTurn = { active: true, startedAt: "2026-11-09T10:15:00.000Z" };
+  await f.finishTurn(running);
+  assert.equal((await f.task(task.id)).phase, "done");
+  assert.equal(f.updates.length, 1);
+}));
 
 test("a Save only a person can settle stops for them without asking the AI again", () => withFixture(async (f) => {
   const running = f.boot();
@@ -920,16 +976,16 @@ test("crash in cancelling during a check: the restart ends it Not done without r
   assert.equal(f.updates.length, 1);
 }));
 
-test("Update refused while the session's assistant works waits, and runs when that turn ends", () => withFixture(async (f) => {
+test("Update refused while another change holds the session waits, and runs when a turn ends", () => withFixture(async (f) => {
   const running = f.boot();
   const { task } = await f.start(running.aiTasks);
   await f.quiet(running.aiTasks);
-  f.server.update = async () => ({ ok: false, code: "vibe64_session_update_agent_active", error: "busy" });
+  f.server.update = async () => ({ ok: false, code: "vibe64_agent_write_mode_busy", error: "busy" });
   await f.finishTurn(running);
   const waiting = await f.task(task.id);
   assert.equal(waiting.phase, "checking");
   assert.equal(waiting.waiting, true);
-  assert.equal(waiting.message, "Update waits for the session's assistant to finish");
+  assert.equal(waiting.message, "Update waits for another change to this session to finish");
   f.server.update = async () => ({ ok: true });
   await running.aiTasks.onTurnSettled({ sessionId: SESSION, conversationId: "", failure: null });
   await f.quiet(running.aiTasks);

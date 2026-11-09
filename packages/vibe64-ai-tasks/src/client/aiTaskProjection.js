@@ -14,7 +14,9 @@ const AI_TASK_ACTIONS = Object.freeze({
   END: "end",
   FINISH: "finish",
   OPEN_CHAT: "open-chat",
-  REVIEW: "review"
+  REVIEW: "review",
+  RUN_NOW: "run-now",
+  WAIT_FOR_AI: "wait-for-ai"
 });
 
 const action = (id, label, primary = false) => Object.freeze({ id, label, primary });
@@ -136,6 +138,9 @@ function noteOf(task, needs) {
 function projectAiTask(task, { viewerId }) {
   const ended = aiTaskEnded(task);
   const needs = task.phase === PHASES.NEEDS_YOU ? NEEDS_YOU[task.reason] : null;
+  // A check waiting for the main chat's AI says since when, and offers to run now.
+  const whileAiWorks = task.phase === PHASES.CHECKING && task.waiting && task.mainChatSince
+    ? task.check.whileAiWorks : null;
   const review = needs?.check && task.reason === REASONS.CHECK_STUCK && task.conflictReview
     ? [action(AI_TASK_ACTIONS.REVIEW, WORDS.actions.review)]
     : [];
@@ -151,9 +156,12 @@ function projectAiTask(task, { viewerId }) {
     opensOn: needs?.chat ? "chat" : "progress",
     composerOpen: Boolean(needs) || task.phase === PHASES.WORKING,
     composerHint: task.reason === REASONS.QUESTION ? WORDS.chat.answer : WORDS.chat.message,
-    note: running && task.phase !== PHASES.CANCELLING ? "" : noteOf(task, needs),
+    note: whileAiWorks ? `${WORDS.mainChatSince(aiTaskTime(task.mainChatSince))} ${whileAiWorks.note}`
+      : running && task.phase !== PHASES.CANCELLING ? "" : noteOf(task, needs),
     steps: stepsOf(task, needs),
-    actions: needs ? [...review, ...needs.actions] : [],
+    actions: needs ? [...review, ...needs.actions] : whileAiWorks
+      ? [action(AI_TASK_ACTIONS.WAIT_FOR_AI, WORDS.actions.waitForAi), action(AI_TASK_ACTIONS.RUN_NOW, whileAiWorks.action, true)]
+      : [],
     cancelQuestion: WORDS.cancelQuestion(task.noun),
     outcome: ended ? outcomeOf(task, viewerId) : null
   };
