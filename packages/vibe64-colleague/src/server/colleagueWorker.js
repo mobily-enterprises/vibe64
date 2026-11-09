@@ -33,6 +33,15 @@ function markObservationsDelivered(record, observations) {
 }
 
 /**
+ * What a watch poll can change in the Colleague record: its watches, its
+ * assignments and their turns, and the observations waiting for a turn.
+ * @param {Record<string, any>} record
+ */
+function watchedRecordState(record) {
+  return JSON.stringify([record.watches, record.assignments, record.observations]);
+}
+
+/**
  * Colleague's worker: one turn at a time per thread, on the API or a native
  * conversation, started by the person's send or woken by an observation, and
  * the polling of active watches that produces those observations.
@@ -610,6 +619,7 @@ function createColleagueWorker({
       return state.polling;
     }
     state.polling = (async () => {
+      const before = watchedRecordState(state.record);
       for (const watch of state.record.watches) {
         if (serviceState.lifecycle.closed || !state.requestContext) break;
         if (watch.status !== "active") continue;
@@ -626,7 +636,10 @@ function createColleagueWorker({
           );
         }
       }
-      await records.persist(state);
+      // An unchanged poll saves nothing: the record, with its previous
+      // conversations, is rewritten and its browsers told only when a watch,
+      // assignment or observation actually changed.
+      if (watchedRecordState(state.record) !== before) await records.persist(state);
       wakeForObservations(state);
     })().finally(() => {
       state.polling = null;

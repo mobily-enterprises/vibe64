@@ -1372,6 +1372,23 @@ test("a registered workspace conversation reuses code polling while the user kee
     { code: "ACTION_VALIDATION_FAILED" }, "Only the owning host action supplies a source.");
 });
 
+test("an idle watch poll does not rewrite the Colleague record; a changed one saves it", async (t) => {
+  const f = await fixture(t, [reply("The repair answered.")], { watching: true, watchPollMs: 15 });
+  registerWorkspaceConversation(f);
+  await f.service.watch(workspaceWatch, f.context);
+  await until(() => f.observations.reads >= 3);
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const saved = (await fs.stat(file)).ino;
+  const reads = f.observations.reads;
+  await until(() => f.observations.reads >= reads + 4);
+  assert.equal((await fs.stat(file)).ino, saved, "Polls that observe no change save nothing.");
+  f.observations.target = { ok: true, status: "completed", runId: "repair-run",
+    messages: [{ id: "repair-answer", role: "assistant", text: "The repair is ready." }] };
+  await until(() => f.observations.starts.length === 1);
+  assert.notEqual((await fs.stat(file)).ino, saved, "A poll that observes an answer saves it.");
+  assert.equal((await f.service.wait(f.context)).watches[0].status, "delivered");
+});
+
 test("workspace conversation watches recheck owner access and reject unavailable sources without falling back to coding sessions", async (t) => {
   const f = await fixture(t, [], { watchPollMs: 15 });
   registerWorkspaceConversation(f);
