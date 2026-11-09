@@ -15,7 +15,7 @@ import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { defineSessionRenewalHandoverText, sessionRenewalManualHandoverTemplate } from "./sessionRenewalHandover.js";
 import { AGENT_WRITE_WAIT_MS, runSessionRenewalOperation } from "./serviceSessionAccess.js";
-import { sessionAssistantWorking, sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
+import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
@@ -63,7 +63,9 @@ function createServiceAgentConversations({
   function changeSessionWorkPlan(sessionId, operation, input) {
     const restoring = operation === "restore";
     return vibe64Result(() => sessionAccess.runMainAgentWrite(sessionId, {}, async (context) => {
-      if (sessionAssistantWorking(context.session)) {
+      const request = assistantRoutingRequestFromMetadata(context.session.metadata);
+      if (sessionHasActiveAgentRun(context.session) || unresolvedRouting(request, context.session.metadata) ||
+          request?.status === "working" && request.workflow) {
         return {
           ok: false,
           error: restoring

@@ -184,8 +184,8 @@ first, because Save would include the AI's unfinished changes: the window names 
 main chat and the time its AI started working. It also waits between the steps of
 the main chat's work, such as an Auto review, so the time shown is then when the wait
 began. **Wait for the AI** returns you to the main chat, and Vibe64 saves by itself as
-soon as that work ends; **Save now** saves at once, unfinished changes included. When the main chat is idle, Fix Save saves straight
-away with no click. Both still wait while another Save, Update or preparation holds
+soon as that work ends; **Save now** saves at once, unfinished changes included. When the main chat is idle, or
+you stopped its AI, Fix Save saves straight away with no click. Both still wait while another Save, Update or preparation holds
 the session.
 
 **Review resolved conflicts** opens the same review as the Update error (see

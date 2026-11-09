@@ -149,8 +149,10 @@ for its own conversation, and for another change holding the session
 ran. Fix Save also waits while the main chat's AI works: its turn is open, read
 from `terminals.agentSessionState`, the same turn the chat's working indicator
 shows, or `terminals.sessionAssistantWorking` (`serviceSessionRecords.js`) finds
-an active run, an unresolved routed request or a workflow between its turns, the
-rule the work plan's archive and restore also wait for. Its wait records
+an active run or a request it has not stopped that is still `working`: being
+routed or sent, or a workflow between its turns. A delivery still being checked,
+or a stopped request's helper still being cleaned up, does not hold Save back,
+though the work plan's archive and restore still wait for them. Its wait records
 `mainChatSince`, the turn's start, or else when the wait began. Its kind declares
 `check.whileAiWorks` (an action label and a note), so the window names the main
 chat and that time and offers Wait for the AI, which hides the window and

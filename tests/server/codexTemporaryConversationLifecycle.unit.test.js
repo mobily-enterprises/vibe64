@@ -32,7 +32,7 @@ import { createCodexProviderConnectionStore } from "../../packages/vibe64-core/s
 
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 import { prepareCodexModelRouting } from "../../packages/vibe64-terminals/src/server/nativeConversationRetirement.js";
-import { sessionHasActiveAgentRun } from "../../packages/vibe64-terminals/src/server/serviceSessionRecords.js";
+import { sessionAssistantWorking, sessionHasActiveAgentRun } from "../../packages/vibe64-terminals/src/server/serviceSessionRecords.js";
 import {
   codexTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
@@ -3684,6 +3684,18 @@ test("a note to an idle main chat leads its next message, and a working turn is 
     assert.equal(captures.steers.length, 2);
     assert.ok(!await store.readMetadataValue(sessionId, "main_chat_note"));
   }, { throughTerminalService: true });
+});
+
+test("The main chat's AI counts as working while a turn runs or a request it has not stopped still works", () => {
+  const session = (request, agentRuns = []) => ({ agentRuns, metadata: { assistant_routing_request: JSON.stringify(request) } });
+  assert.equal(sessionAssistantWorking(session(null)), false);
+  assert.equal(sessionAssistantWorking(session(null, [{ active: true, state: "running" }])), true);
+  assert.equal(sessionAssistantWorking(session({ status: "working", delivery: "routing" })), true, "being routed");
+  assert.equal(sessionAssistantWorking(session({ status: "working", delivery: "accepted", workflow: true })), true, "between workflow turns");
+  // Neither a delivery still being checked nor a stopped request's helper cleanup is the AI at work.
+  assert.equal(sessionAssistantWorking(session({ status: "waiting", delivery: "uncertain", attemptedMessageId: "sent" })), false);
+  assert.equal(sessionAssistantWorking(session({ status: "waiting", delivery: "routing", stopped: true, helper: { id: "helper" } })), false);
+  assert.equal(sessionAssistantWorking(session({ status: "working", delivery: "accepted", stopped: true })), false);
 });
 
 // A Custom request ("Build the form.") delivered as the running turn, with Deslop after it when `deslop` is set.

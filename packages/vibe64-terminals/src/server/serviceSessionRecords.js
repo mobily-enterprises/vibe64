@@ -1,9 +1,5 @@
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
-import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
-import {
-  assistantRoutingRequestFromMetadata,
-  assistantRoutingRequestIsUnresolved
-} from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingRequestFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 
 function agentRunIsActive(run = {}) {
   // Codex acknowledges Resume before its scheduler starts the next turn.
@@ -26,15 +22,14 @@ function sessionHasActiveAgentRun(session = {}) {
 }
 
 /**
- * Whether the session's main-chat AI is at work: a turn runs, a routed request is not yet resolved, or a workflow,
- * such as Auto's review, is between its turns. What must wait for the AI to finish waits for this.
+ * Whether the session's main-chat AI is at work, as its chat shows: a turn runs, or a request it has not stopped is
+ * still working, being routed or sent, or between the turns of a workflow such as Auto's review. A delivery still
+ * being checked, or a stopped request's helper still being cleaned up, is not the AI at work.
  * @param {{ agentRuns?: object[], metadata?: Record<string, string> }} session
  */
 function sessionAssistantWorking(session = {}) {
   const request = assistantRoutingRequestFromMetadata(session.metadata);
-  return sessionHasActiveAgentRun(session) ||
-    assistantRoutingRequestIsUnresolved(request, vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })) ||
-    request?.status === "working" && Boolean(request.workflow);
+  return sessionHasActiveAgentRun(session) || request?.status === "working" && request.stopped !== true;
 }
 
 function sessionRecordId(session) {
