@@ -22,14 +22,16 @@ function sessionHasActiveAgentRun(session = {}) {
 }
 
 /**
- * Whether the session's main-chat AI is at work, as its chat shows: a turn runs, or a request it has not stopped is
- * still working, being routed or sent, or between the turns of a workflow such as Auto's review. A delivery still
- * being checked, or a stopped request's helper still being cleaned up, is not the AI at work.
+ * Whether the session's main-chat AI is at work, as its chat shows: a turn runs, or a working request it has not
+ * stopped is being routed or sent, or is a workflow, such as Auto's review, between its turns. A delivery still being
+ * checked, a stopped request's helper still being cleaned up, or a plain reply whose turn has ended is not the AI at
+ * work.
  * @param {{ agentRuns?: object[], metadata?: Record<string, string> }} session
  */
 function sessionAssistantWorking(session = {}) {
   const request = assistantRoutingRequestFromMetadata(session.metadata);
-  return sessionHasActiveAgentRun(session) || request?.status === "working" && request.stopped !== true;
+  return sessionHasActiveAgentRun(session) || request?.status === "working" && request.stopped !== true &&
+    (Boolean(request.workflow) || ["routing", "pending", "sending"].includes(request.delivery));
 }
 
 function sessionRecordId(session) {

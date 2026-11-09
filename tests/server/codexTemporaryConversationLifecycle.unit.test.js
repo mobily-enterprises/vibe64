@@ -3696,6 +3696,7 @@ test("The main chat's AI counts as working while a turn runs or a request it has
   assert.equal(sessionAssistantWorking(session({ status: "waiting", delivery: "uncertain", attemptedMessageId: "sent" })), false);
   assert.equal(sessionAssistantWorking(session({ status: "waiting", delivery: "routing", stopped: true, helper: { id: "helper" } })), false);
   assert.equal(sessionAssistantWorking(session({ status: "working", delivery: "accepted", stopped: true })), false);
+  assert.equal(sessionAssistantWorking(session({ status: "working", delivery: "accepted" })), false, "a plain reply whose turn ended");
 });
 
 // A Custom request ("Build the form.") delivered as the running turn, with Deslop after it when `deslop` is set.
