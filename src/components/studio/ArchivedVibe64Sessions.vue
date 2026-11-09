@@ -299,10 +299,6 @@ defineExpose({
   justify-content: center;
 }
 
-.studio-archived-sessions__more .v-btn {
-  min-height: 48px;
-}
-
 .studio-archived-sessions__view {
   flex: 0 0 auto;
   min-height: 40px;
