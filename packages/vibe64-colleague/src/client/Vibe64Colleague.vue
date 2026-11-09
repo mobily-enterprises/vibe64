@@ -331,7 +331,7 @@ onBeforeUnmount(() => {
           </template>
           <!-- An uncertain delivery of your own message shows on that message, so Start fresh sits there too. -->
           <template #user-message-actions="{ turn }">
-            <v-btn v-if="turn.user && turn.system?.delivery?.messageId === turn.user.messageId" variant="tonal" min-height="48" :disabled="freshBusy" @click="showFreshConfirmation">Start fresh</v-btn>
+            <v-btn v-if="turn.user && turn.system?.delivery?.messageId === turn.user.messageId" variant="tonal" :disabled="freshBusy" @click="showFreshConfirmation">Start fresh</v-btn>
           </template>
           <template #composer="{ adapter: { composer } }">
             <div class="vibe64-colleague__composer-region">
