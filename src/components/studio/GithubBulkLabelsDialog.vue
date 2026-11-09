@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { useQueryClient } from "@tanstack/vue-query";
-import { invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
+import { invalidateGithubIssueListQueries, invalidateGithubIssueQuery } from "@/lib/vibe64GithubProject.js";
 import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubNewLabelButton from "./GithubNewLabelButton.vue";
 
@@ -54,9 +54,17 @@ async function submit() {
     remaining.value = remaining.value.filter((value) => value !== number);
     emit("applied", { number, basePath: requestBasePath });
     try {
-      await invalidateGithubIssueQueries(queryClient, requestBasePath, issuePath);
+      await invalidateGithubIssueQuery(queryClient, issuePath);
     } catch (error) {
       feedback.error(error, `Labels updated for #${number}, but the issue could not refresh.`);
+    }
+  }
+  // The issue list and mentions reread once for the whole batch, not per issue.
+  if (remaining.value.length < numbers.length) {
+    try {
+      await invalidateGithubIssueListQueries(queryClient, requestBasePath);
+    } catch (error) {
+      feedback.error(error, "Labels were updated, but the issue list could not refresh.");
     }
   }
   pending.value = false;

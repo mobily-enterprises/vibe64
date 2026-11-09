@@ -155,8 +155,13 @@ async function inspectVibe64WorkspaceSetupForContext(context) {
   });
 }
 
+/**
+ * The session's Output targets as launch views. `options.outputs` is an
+ * inspection the caller has already made (its promise or result), so one
+ * composition of the Stack's outputs serves both; otherwise they are inspected.
+ */
 async function listVibe64OutputTargets(context = {}, options = {}) {
-  const outputs = await inspectVibe64OutputsForContext(context, options);
+  const outputs = await (options.outputs || inspectVibe64OutputsForContext(context, options));
   return (Array.isArray(outputs?.targets) ? outputs.targets : [])
     .map(vibe64OutputTargetView)
     .filter((target) => target.id && target.label);

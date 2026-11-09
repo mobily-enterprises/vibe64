@@ -500,6 +500,17 @@ test("a pending workspace recipe remains runnable so the request can prepare it"
   }), [outputTargetView()]);
 });
 
+test("an Outputs inspection already made serves the launch views without composing the Stack again", async (t) => {
+  const context = await outputContext(t);
+  context.session.workspaceSetup = { status: "unconfigured" };
+  context.project = { inspectWorkspaceSetup: () => ({ recipeHash: "", status: "unconfigured", steps: [] }) };
+  const inspection = Promise.resolve(outputsInspection([webOutputTarget()]));
+  assert.deepEqual(await listOutputTargets(context, {
+    inspectOutputs: () => assert.fail("The Outputs were already inspected."),
+    outputs: inspection
+  }), [outputTargetView()]);
+});
+
 test("web outputs translate through the existing private web-preview terminal seam", async (t) => {
   const context = await outputContext(t);
   const sourceSubdirectory = path.join(context.session.metadata.source_path, "web");

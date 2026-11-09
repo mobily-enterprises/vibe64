@@ -175,9 +175,11 @@ function createOutputTargetLaunchStatus({
   async function usageRecordingTargets(sessionId) {
     return vibe64Result(async () => {
       const context = await readLaunchContext(project, sessionId);
+      // One composition of the Stack's outputs serves the declared targets and their launch views.
+      const inspection = inspectVibe64OutputsForContext(context);
       const [outputs, targets] = await Promise.all([
-        inspectVibe64OutputsForContext(context),
-        listOutputTargets(context)
+        inspection,
+        listOutputTargets(context, { outputs: inspection })
       ]);
       const declared = new Map((outputs.targets || []).map((target) => [target.id, target]));
       const saved = outputTargetFromMetadata(context.session?.metadata || {});

@@ -103,9 +103,9 @@ async function readPreparedLaunchContext(project, sessionId, { ensureWorkspacePr
 }
 
 async function listOutputTargets(context, options = {}) {
-  const { inspectOutputs } = options;
+  const { inspectOutputs, outputs } = options;
   const [targets, setup] = await Promise.all([
-    listVibe64OutputTargets(context, inspectOutputs ? { inspect: inspectOutputs } : {}),
+    listVibe64OutputTargets(context, { ...(inspectOutputs ? { inspect: inspectOutputs } : {}), ...(outputs ? { outputs } : {}) }),
     inspectVibe64WorkspaceSetupForContext(context)
   ]);
   const disabledReason = workspaceSetupLaunchDisabledReason(context.session, setup);

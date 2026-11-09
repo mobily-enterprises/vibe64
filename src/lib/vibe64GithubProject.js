@@ -22,11 +22,23 @@ function githubIssueMentionsPath(issuesPath) {
   return githubIssuesSiblingPath(issuesPath, "issue-mentions");
 }
 
-function invalidateGithubIssueQueries(queryClient, basePath, issuePath) {
+// The open view of one issue, with its comments.
+function invalidateGithubIssueQuery(queryClient, issuePath) {
+  return queryClient.invalidateQueries({ queryKey: ["vibe64.issue", issuePath] });
+}
+
+// The issue lists and mention suggestions that show any issue of basePath.
+function invalidateGithubIssueListQueries(queryClient, basePath) {
   return Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["vibe64.issue", issuePath] }),
     queryClient.invalidateQueries({ queryKey: ["vibe64.issues", basePath] }),
     queryClient.invalidateQueries({ queryKey: ["vibe64.issueMentions", githubIssueMentionsPath(basePath)] })
+  ]);
+}
+
+function invalidateGithubIssueQueries(queryClient, basePath, issuePath) {
+  return Promise.all([
+    invalidateGithubIssueQuery(queryClient, issuePath),
+    invalidateGithubIssueListQueries(queryClient, basePath)
   ]);
 }
 
@@ -54,6 +66,8 @@ export {
   githubIssueMentionsPath,
   githubProjectAvailable,
   githubProjectRepositoryName,
+  invalidateGithubIssueListQueries,
+  invalidateGithubIssueQuery,
   invalidateGithubIssueQueries,
   invalidateGithubProjectQueries
 };
