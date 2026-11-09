@@ -173,12 +173,11 @@ async function browse(path = "", more = false) {
   loading.value = true;
   loadError.value = "";
   try {
-    const query = new URLSearchParams({ path, offset: more ? nextOffset.value : 0 });
+    const query = new URLSearchParams({ path, offset: more ? nextOffset.value : 0, type: "directory" });
     const result = await request(`${target.base}/tree?${query}`);
     if (current !== generation) return;
     folder.value = path;
-    const found = result.tree.children.filter((entry) => entry.type === "directory");
-    folders.value = more ? [...folders.value, ...found] : found;
+    folders.value = more ? [...folders.value, ...result.tree.children] : result.tree.children;
     hasMore.value = result.tree.hasMore === true;
     nextOffset.value = result.tree.nextOffset;
     expired.value = result.expired === true;

@@ -429,7 +429,8 @@ async function areaOperation(operation, context, input, readUpload) {
     case "tree": {
       const tree = await sourceEditorDirectoryPage(context, {
         path: relativePath,
-        offset: sourceEditorResultOffset(input.offset)
+        offset: sourceEditorResultOffset(input.offset),
+        type: input.type
       });
       if (context.area === "backups") {
         for (const entry of tree.children) {

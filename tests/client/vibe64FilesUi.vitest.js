@@ -222,13 +222,13 @@ describe("Move or copy", () => {
   ];
   const item = { name: "docs", path: "docs", type: "directory" };
 
-  it("starts as a copy to another area and lists only its folders", async () => {
-    mocks.responses = () => tree([{ type: "directory", name: "2026", path: "2026" }, { type: "file", name: "a.txt", path: "a.txt" }]);
+  it("starts as a copy to another area and asks for only its folders", async () => {
+    mocks.responses = () => tree([{ type: "directory", name: "2026", path: "2026" }]);
     const { setupState: state } = mount(Vibe64FileTransferDialog, { destinations, item, sourceArea: "project-drop-zone", sourceBase: BASE, sourceLabel: "Project Dropzone" });
     await settle();
     expect(state.mode).toBe("copy");
     expect(state.destinationKey).toBe("backups");
-    expect(mocks.requests.at(-1).url).toBe("/api/vibe64/project-files/backups/tree?path=&offset=0");
+    expect(mocks.requests.at(-1).url).toBe("/api/vibe64/project-files/backups/tree?path=&offset=0&type=directory");
     expect(state.folders.map((entry) => entry.name)).toEqual(["2026"]);
   });
 

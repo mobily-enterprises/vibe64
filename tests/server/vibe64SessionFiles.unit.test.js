@@ -292,6 +292,20 @@ test("renewal snapshots exclude the old Drop Zone and a successor starts empty",
 });
 
 
+test("a folder's folders page alone, past any number of files", async (t) => {
+  const { stores, call } = await fixture(t);
+  const dropZone = stores.get("one").paths("shared-id").dropZoneRoot;
+  for (let number = 0; number < 45; number += 1) await writeFile(path.join(dropZone, `file-${number}.txt`), "");
+  for (const name of ["zeta", "alpha"]) await mkdir(path.join(dropZone, name));
+  const all = await call("tree", {}, "member");
+  assert.equal(all.tree.hasMore, true);
+  assert.equal(all.tree.total, 48);
+  const folders = await call("tree", { type: "directory" }, "member");
+  assert.deepEqual(folders.tree.children.map((entry) => entry.name), ["alpha", "zeta"]);
+  assert.equal(folders.tree.hasMore, false);
+  assert.equal(folders.tree.total, 2);
+});
+
 test("project backups share files across sessions, survive archival, and keep project boundaries", async (t) => {
   const { stores, call } = await fixture(t);
   const store = stores.get("one");

@@ -60,7 +60,8 @@ const areaTreeInputValidator = inputValidator({
   sessionId: areaSessionId,
   area: requiredFileArea,
   path: filePath,
-  offset: text
+  offset: text,
+  type: { type: "string", enum: ["directory"], required: false }
 });
 const areaPathInputValidator = inputValidator({
   sessionId: areaSessionId,

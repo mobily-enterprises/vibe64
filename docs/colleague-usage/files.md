@@ -115,7 +115,8 @@ open) and choose **Move or copy…**. In the dialog:
 1. choose **Copy** or **Move** at the top (a read-only Session item opens
    **Copy to**, which only copies);
 2. choose the destination area chip;
-3. open the destination folder in the list, using the breadcrumb to go back up;
+3. open the destination folder in the list, using the breadcrumb to go back up
+   (the list shows only folders; **Show more folders** loads the next ones);
 4. choose **Copy here** or **Move here**.
 
 The dialog shows **Into** and the destination it will use. It moves or copies a

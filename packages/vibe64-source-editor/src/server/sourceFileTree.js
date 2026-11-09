@@ -19,7 +19,9 @@ async function sourceEditorDirectoryPage(context = {}, options = {}) {
   const {
     limit = SOURCE_EDITOR_TREE_PAGE_LIMIT,
     offset = 0,
-    path: relativePathValue = ""
+    path: relativePathValue = "",
+    // "directory" pages through the folder's folders alone.
+    type = ""
   } = options;
   const {
     policy,
@@ -74,7 +76,7 @@ async function sourceEditorDirectoryPage(context = {}, options = {}) {
     if (sourceEditorPathExcluded(policy, childRelativePath) || entry.isSymbolicLink()) {
       continue;
     }
-    if (entry.isDirectory() || entry.isFile()) {
+    if (entry.isDirectory() || (entry.isFile() && type !== "directory")) {
       visibleEntries.push({
         entry,
         relativePath: childRelativePath

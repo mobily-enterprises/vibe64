@@ -68,7 +68,8 @@ function areaTreeQueryInput(request) {
   const query = requestQuery(request);
   return areaInput(request, {
     ...(Object.hasOwn(query, "path") ? { path: query.path } : {}),
-    ...(Object.hasOwn(query, "offset") ? { offset: query.offset } : {})
+    ...(Object.hasOwn(query, "offset") ? { offset: query.offset } : {}),
+    ...(Object.hasOwn(query, "type") ? { type: query.type } : {})
   });
 }
 

@@ -282,6 +282,7 @@ test("source operations share validated inputs and fresh project authority acros
     const cases = [
       ["GET", "/files", "file-areas.read", "readFileAreas", {}],
       ["GET", "/files/:area/tree", "file-area.tree", "readAreaTree", { offset: "next" }],
+      ["GET", "/files/:area/tree", "file-area.tree", "readAreaTree", { path: "docs", type: "directory" }],
       ["GET", "/files/:area/file", "file-area.file", "readAreaFile", { path: "readme.txt", offset: "0" }],
       ["PUT", "/files/:area/file", "file-area.save", "saveAreaFile", { path: "readme.txt", baseHash: "hash", text: "  keep whitespace\n" }],
       ["POST", "/files/:area/rename", "file-area.rename", "renameAreaItem", { path: "old.txt", destination: "new.txt" }],
