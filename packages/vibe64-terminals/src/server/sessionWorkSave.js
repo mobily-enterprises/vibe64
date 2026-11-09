@@ -467,6 +467,7 @@ async function saveSessionWorkDirect({
       checkpointTree: checkpoint.checkpointTree,
       kind: "checkpoint",
       message: "Session checkpoint captured.",
+      sessionHead: checkpoint.sessionHead,
       stage: "checkpointed"
     });
     await onProgress({ kind: "canonical", message: "Reading the current canonical branch.", stage: "canonical-reading" });

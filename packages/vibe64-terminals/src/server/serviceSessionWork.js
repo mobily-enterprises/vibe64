@@ -232,6 +232,7 @@ function createServiceSessionWork({
       checkpointTree: saveMessageInput.checkpoint.checkpointTree,
       kind: "message",
       message: "Writing a concise name for this work.",
+      sessionHead: saveMessageInput.checkpoint.sessionHead,
       stage: "message-writing"
     });
     const commitTitle = await nameSave(saveMessageInput, {

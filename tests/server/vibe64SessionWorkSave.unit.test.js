@@ -3340,6 +3340,43 @@ test("interrupted Save recovery verifies published authority and reconciles with
   }
 });
 
+test("interrupted Save recovery leaves the session on a commit made in it since that Save", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    const project = githubProject(root, fixture.remote);
+    await writeFile(path.join(session.sourcePath, "recovered.txt"), "recovered\n", "utf8");
+    let recovery = {};
+    await assert.rejects(saveSessionWork({
+      operationId: "save-recover-moved-head",
+      onProgress: async (progress) => {
+        recovery = { ...recovery, ...progress };
+        if (progress.stage === "published") {
+          throw new Error("simulated service restart");
+        }
+      },
+      project,
+      runCommand: commandRunner,
+      session
+    }), /simulated service restart/u);
+    // The session's AI commits before the recovery runs.
+    await writeFile(path.join(session.sourcePath, "later.txt"), "later\n", "utf8");
+    await git(session.sourcePath, ["add", "later.txt"]);
+    await git(session.sourcePath, ["commit", "-m", "Later work"]);
+    const later = await git(session.sourcePath, ["rev-parse", "HEAD"]);
+
+    const result = await recoverSessionWorkSave({ project, recovery, runCommand: commandRunner, session });
+
+    assert.equal(result.recovered, true);
+    assert.equal(result.reconciled, false);
+    assert.equal(result.status, "published_needs_reconcile");
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), later, "the commit made since the Save stays");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("interrupted Save recovery never republishes when authority is still unchanged", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-"));
   try {

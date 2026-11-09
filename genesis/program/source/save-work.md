@@ -405,7 +405,10 @@ the AI left it, as an unsaved change, and HEAD moves to the saved commit even wh
 files kept changing. Files written after the checkpoint stay unsaved and Save's
 notice counts them (`unsavedPathCount`); `refreshedPaths` lists the files Save
 changed on disk. Only a commit made in the session while Save ran leaves it on
-that commit with the result `published_needs_reconcile`. Update switches only the
+that commit with the result `published_needs_reconcile`. Save records the
+session's HEAD from its checkpoint onward (the `checkpointed` and
+`message-writing` progress), so its recovery, which can run during a turn, also
+leaves the session on a commit made since that Save. Update switches only the
 paths the merge changes, so edits elsewhere stay as unsaved work; when a path
 Update changes is written, deleted or renamed before or after its switch, Update
 stops with `vibe64_session_update_worktree_changed`, switches those paths back to
