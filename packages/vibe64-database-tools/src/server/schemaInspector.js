@@ -623,22 +623,19 @@ async function inspectSqliteSchema(knex, connection = {}) {
   const tableList = await rows(knex.raw("PRAGMA main.table_list"));
   // Every table's columns, indexes, index columns and foreign keys come in one
   // query each, not a few round trips per table and per index.
-  const eachTable = "FROM main.sqlite_schema AS m";
-  const userTables = "m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%'";
-  const columnRows = await rows(knex.raw(
-    `SELECT m.name AS table_name, c.* ${eachTable} JOIN pragma_table_xinfo(m.name) AS c WHERE ${userTables} ORDER BY m.name, c.cid`
-  ));
-  const indexRows = await rows(knex.raw(
-    `SELECT m.name AS table_name, i.* ${eachTable} JOIN pragma_index_list(m.name) AS i WHERE ${userTables} ORDER BY m.name, i.seq`
-  ));
-  const indexColumnRows = await rows(knex.raw(
-    `SELECT i.name AS index_name, x.* ${eachTable} JOIN pragma_index_list(m.name) AS i JOIN pragma_index_xinfo(i.name) AS x ` +
-    `WHERE ${userTables} AND x.key = 1 ORDER BY i.name, x.seqno`
-  ));
+  const columnRows = await rows(knex.raw(`SELECT m.name AS table_name, c.* FROM main.sqlite_schema AS m
+    JOIN pragma_table_xinfo(m.name) AS c
+    WHERE m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, c.cid`));
+  const indexRows = await rows(knex.raw(`SELECT m.name AS table_name, i.* FROM main.sqlite_schema AS m
+    JOIN pragma_index_list(m.name) AS i
+    WHERE m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, i.seq`));
+  const indexColumnRows = await rows(knex.raw(`SELECT i.name AS index_name, x.* FROM main.sqlite_schema AS m
+    JOIN pragma_index_list(m.name) AS i JOIN pragma_index_xinfo(i.name) AS x
+    WHERE m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%' AND x.key = 1 ORDER BY i.name, x.seqno`));
   const indexDefinitions = await rows(knex.raw("SELECT name, sql FROM main.sqlite_schema WHERE type = 'index'"));
-  const foreignKeyRows = await rows(knex.raw(
-    `SELECT m.name AS table_name, f.* ${eachTable} JOIN pragma_foreign_key_list(m.name) AS f WHERE ${userTables} ORDER BY m.name, f.id, f.seq`
-  ));
+  const foreignKeyRows = await rows(knex.raw(`SELECT m.name AS table_name, f.* FROM main.sqlite_schema AS m
+    JOIN pragma_foreign_key_list(m.name) AS f
+    WHERE m.type IN ('table', 'view') AND m.name NOT LIKE 'sqlite_%' ORDER BY m.name, f.id, f.seq`));
   const columnsOf = groupedRows(columnRows, (row) => row.table_name);
   const indexesOf = groupedRows(indexRows, (row) => row.table_name);
   const indexColumnsOf = groupedRows(indexColumnRows, (row) => row.index_name);
