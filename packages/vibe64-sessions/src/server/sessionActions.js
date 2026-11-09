@@ -37,6 +37,7 @@ import {
   sessionIdInputValidator,
   sessionInspectInputValidator,
   sessionListInputValidator,
+  archivedSessionListInputValidator,
   sessionPresenceActionInputValidator,
   sessionPreviewStateInputValidator,
   sessionRenewalConfirmationActionInputValidator,
@@ -186,12 +187,12 @@ function createSessionActions({ sessions }) {
     Object.freeze({
       ...VIBE64_QUERY,
       id: ACTION_LIST_ARCHIVED_SESSIONS,
-      input: { ...sessionListInputValidator, mode: "create" },
+      input: { ...archivedSessionListInputValidator, mode: "create" },
       extensions: {
         assistant: sessionTool(ASSISTANT_TOOL_DESCRIPTIONS.listArchivedSessions),
         vibe64: PROJECT_OPERATION
       },
-      execute: () => sessions.listArchivedSessions()
+      execute: (input) => sessions.listArchivedSessions(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,

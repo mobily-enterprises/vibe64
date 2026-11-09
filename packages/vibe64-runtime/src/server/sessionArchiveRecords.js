@@ -1,6 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
-import { isPlainObject, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { isMissingPathError, isPlainObject, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { fileIdentity } from "./sessionFiles.js";
 import {
   assertValidVibe64SessionId,
   assertVibe64SessionStatus,
@@ -27,6 +28,23 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
+
+// An archived session's record is published once, by renaming it into the
+// archive directory; a retried publication replaces it the same way. Listing
+// the archive keeps each record it has read while its file's identity (device,
+// inode, size and modification time) stays the same, so a list reads only the
+// records that are new or replaced, not the whole archive every time.
+const ARCHIVE_LIST_CACHE_DIRECTORIES = 64;
+/** @type {Map<string, Map<string, { identity: string, source: string }>>} */
+const archiveListCache = new Map();
+
+function rememberArchiveList(directory, records) {
+  archiveListCache.delete(directory);
+  archiveListCache.set(directory, records);
+  while (archiveListCache.size > ARCHIVE_LIST_CACHE_DIRECTORIES) {
+    archiveListCache.delete(archiveListCache.keys().next().value);
+  }
+}
 
 /**
  * Archive records: their JSON, index metadata and summaries, prepared renewal
@@ -89,15 +107,11 @@ function createSessionArchiveRecords({ state, storePaths }) {
     };
   }
 
-  async function readSessionArchiveRecordFromRoot(rootPaths, sessionId) {
-    const normalizedSessionId = assertValidVibe64SessionId(sessionId);
-    const metadataPath = sessionArchiveMetadataPath(rootPaths, normalizedSessionId);
-    if (!await pathExists(metadataPath)) {
-      return null;
-    }
+  function sessionArchiveRecordFromSource(rootPaths, sessionId, source) {
+    const metadataPath = sessionArchiveMetadataPath(rootPaths, sessionId);
     try {
-      return sessionArchiveRecordFromJson(JSON.parse(await readFile(metadataPath, "utf8")), {
-        archivePath: sessionArchivePath(rootPaths, normalizedSessionId),
+      return sessionArchiveRecordFromJson(JSON.parse(source), {
+        archivePath: sessionArchivePath(rootPaths, sessionId),
         metadataPath
       });
     } catch (error) {
@@ -107,6 +121,15 @@ function createSessionArchiveRecords({ state, storePaths }) {
       }
       throw new Error(`Invalid Vibe64 session archive metadata: ${metadataPath}`);
     }
+  }
+
+  async function readSessionArchiveRecordFromRoot(rootPaths, sessionId) {
+    const normalizedSessionId = assertValidVibe64SessionId(sessionId);
+    const metadataPath = sessionArchiveMetadataPath(rootPaths, normalizedSessionId);
+    if (!await pathExists(metadataPath)) {
+      return null;
+    }
+    return sessionArchiveRecordFromSource(rootPaths, normalizedSessionId, await readFile(metadataPath, "utf8"));
   }
 
   async function readSessionArchiveRecord(sessionId) {
@@ -150,13 +173,37 @@ function createSessionArchiveRecords({ state, storePaths }) {
 
   async function readSessionArchiveRecords() {
     const rootPaths = storePaths.paths();
-    const entries = await readDirectoryEntries(rootPaths.archivedSessionsRoot);
+    const directory = rootPaths.archivedSessionsRoot;
+    const entries = await readDirectoryEntries(directory);
     const metadataFileNames = sortedFileNames(entries, (name) => {
       return name.endsWith(".json") && isValidVibe64SessionId(name.slice(0, -".json".length));
     });
-    return (await Promise.all(metadataFileNames.map((fileName) => {
-      return readSessionArchiveRecordFromRoot(rootPaths, fileName.slice(0, -".json".length));
-    }))).filter(Boolean);
+    const known = archiveListCache.get(directory) || new Map();
+    const listed = new Map();
+    const records = await Promise.all(metadataFileNames.map(async (fileName) => {
+      const sessionId = fileName.slice(0, -".json".length);
+      const metadataPath = sessionArchiveMetadataPath(rootPaths, sessionId);
+      let identity;
+      try {
+        // The identity is taken before the read: a file replaced in between is
+        // read again next time instead of being kept under its new identity.
+        identity = fileIdentity(await lstat(metadataPath, { bigint: true }));
+      } catch (error) {
+        if (isMissingPathError(error)) return null;
+        throw error;
+      }
+      const cached = known.get(fileName);
+      const source = cached?.identity === identity ? cached.source : await readFile(metadataPath, "utf8").catch((error) => {
+        if (isMissingPathError(error)) return null;
+        throw error;
+      });
+      if (source === null) return null;
+      const record = sessionArchiveRecordFromSource(rootPaths, sessionId, source);
+      listed.set(fileName, { identity, source });
+      return record;
+    }));
+    rememberArchiveList(directory, listed);
+    return records.filter(Boolean);
   }
 
   function sessionArchiveIndexMetadata(metadata = {}) {

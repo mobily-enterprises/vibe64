@@ -120,8 +120,8 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
 
   routes.actionRoute("GET", "/sessions/archived", {
     actionId: ACTION_LIST_ARCHIVED_SESSIONS,
-    buildInput: noInput,
-    summary: "List archived Vibe64 sessions, newest first."
+    buildInput: archivedSessionsInput,
+    summary: "List archived Vibe64 sessions, newest first; sessionLimit and sessionOffset read one page."
   });
 
   routes.actionRoute("GET", "/assistants/capabilities", {
@@ -389,6 +389,14 @@ function sessionBodyWithoutUserInput(request) {
   return {
     ...withoutVibe64User(requestBody(request)),
     sessionId: request.params.sessionId
+  };
+}
+
+function archivedSessionsInput(request) {
+  const query = requestQuery(request);
+  return {
+    sessionLimit: firstValue(query.sessionLimit),
+    sessionOffset: firstValue(query.sessionOffset)
   };
 }
 

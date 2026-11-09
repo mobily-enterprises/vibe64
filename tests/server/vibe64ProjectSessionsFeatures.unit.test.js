@@ -8,6 +8,7 @@ import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vi
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { createSessionCatalogue } from "../../packages/vibe64-sessions/src/server/sessionCatalogue.js";
 import { createSessionStartupRecovery } from "../../packages/vibe64-sessions/src/server/sessionStartupRecovery.js";
 import { stopSessionWork } from "../../packages/vibe64-sessions/src/server/sessionShutdown.js";
 
@@ -68,6 +69,57 @@ test("session discovery pages every archived/open identity through canonical too
     assert.equal(calls, before);
     allowed = true;
   }
+});
+
+test("archived sessions list one page, newest archival first, when History asks for a page", async () => {
+  const summaries = Array.from({ length: 75 }, (_, i) => ({ sessionId: `session-${String(i).padStart(2, "0")}`,
+    status: "archived", archivedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString() }));
+  summaries.push({ sessionId: "missing", unavailable: { code: "vibe64_session_source_required" } });
+  const catalogue = createSessionCatalogue({
+    project: { createRuntimeWithoutSource: async () => ({ listSessionSummaries: async () => summaries.slice().reverse() }) },
+    publishSessionChanged: async () => {},
+    sessionPresence: { close() {} },
+    terminals: {}
+  });
+  const first = await catalogue.listArchivedSessions({ sessionLimit: 30 });
+  assert.equal(first.ok, true, first.error);
+  assert.deepEqual(first.sessions.map(({ sessionId }) => sessionId),
+    summaries.slice(0, 75).reverse().slice(0, 30).map(({ sessionId }) => sessionId));
+  assert.equal(first.sessionCount, 75);
+  assert.equal(first.nextSessionOffset, 30);
+  assert.deepEqual(first.unavailableSessions.map(({ sessionId }) => sessionId), ["missing"]);
+  const last = await catalogue.listArchivedSessions({ sessionLimit: 30, sessionOffset: 60 });
+  assert.deepEqual(last.sessions.map(({ sessionId }) => sessionId), ["session-14", "session-13", "session-12", "session-11", "session-10",
+    "session-09", "session-08", "session-07", "session-06", "session-05", "session-04", "session-03", "session-02", "session-01", "session-00"]);
+  assert.equal(last.nextSessionOffset, null);
+  const whole = await catalogue.listArchivedSessions();
+  assert.equal(whole.sessions.length, 75, "Without a page size the list stays complete.");
+  assert.equal(whole.sessionCount, undefined);
+
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
+  registerVibe64ActionContext(actions, {
+    projectContext: { currentPracticeProjectScope: () => null, projectsRoot: "/fixture", readWorkspaceProject: async () => ({ project: { path: "/fixture/project" } }) },
+    resolveUser: async () => ({ uid: 42, role: "member" }),
+    authorizeProject() {}
+  });
+  actions.register({ contributorId: "archived-pages", domain: "vibe64", actions: createSessionActions({ sessions: catalogue })
+    .filter(action => action.id === "vibe64.sessions.archived.list")
+    .map(action => ({ ...action, channels: ["api", "automation"], surfaces: ["app"] })) });
+  const native = await actions.execute({ actionId: "vibe64.sessions.archived.list",
+    input: { projectSlug: "project", sessionLimit: "30", sessionOffset: "30" }, context: { channel: "api", surface: "app" } });
+  assert.equal(native.sessions.length, 30);
+  assert.equal(native.sessions[0].sessionId, "session-44");
+  assert.equal(native.nextSessionOffset, 60);
+  const catalog = createServiceToolCatalog(actions), context = { channel: "automation", surface: "app" };
+  const toolSet = catalog.resolveToolSet(context);
+  const [tool] = toolSet.tools;
+  const page = await catalog.executeToolCall({ toolName: tool.name, toolSet, context,
+    argumentsText: JSON.stringify({ projectSlug: "project", sessionOffset: 70, sessionLimit: 30 }) });
+  assert.equal(page.ok, true, JSON.stringify(page));
+  assert.deepEqual(page.result.sessions.map(({ sessionId }) => sessionId), ["session-04", "session-03", "session-02", "session-01", "session-00"]);
+  assert.equal(page.result.sessionCount, 75);
+  assert.equal(page.result.nextSessionOffset, null);
+  assert.equal(page.result.sessionsTruncated, true);
 });
 
 test("project and sessions expose only named Feature capabilities", () => {

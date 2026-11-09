@@ -245,6 +245,13 @@ const sessionPresenceActionInputValidator = actionInput(withSessionId(sessionPre
 const sessionListInputValidator = actionInput({
   sessionOffset: { type: "integer", min: 0, required: false }
 });
+// The archive grows with every session ever archived, so its list reads one
+// page at a time when asked to. History asks for its newest sessions and
+// lengthens the page by thirty for each Show more.
+const archivedSessionListInputValidator = actionInput({
+  sessionOffset: { type: "integer", min: 0, required: false },
+  sessionLimit: { type: "integer", min: 1, max: 1000, required: false }
+});
 // The project comes from the action's project scope; a session watch names
 // one of its sessions.
 const projectWatchInputValidator = actionInput({ sessionId: optionalSessionIdField });
@@ -551,6 +558,7 @@ export {
   sessionRenewalRetryActionInputValidator,
   sessionRenewalRetryInputValidator,
   sessionListInputValidator,
+  archivedSessionListInputValidator,
   sessionPresenceActionInputValidator,
   projectWatchInputValidator,
   sessionPresenceInputValidator,

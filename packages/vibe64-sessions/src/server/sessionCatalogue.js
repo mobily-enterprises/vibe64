@@ -179,17 +179,31 @@ function createSessionCatalogue({
     });
   }
 
-  async function listArchivedSessions() {
+  /**
+   * Archived sessions, newest archival first. With a `sessionLimit`, one page
+   * from `sessionOffset` (0 by default) with the whole count and the next
+   * page's offset, so a long archive is never sent or shown in one piece;
+   * without one, every archived session.
+   * @param {{ sessionOffset?: number, sessionLimit?: number }} [input]
+   */
+  async function listArchivedSessions(input = {}) {
     return sessionResult(async () => {
       const runtime = await project.createRuntimeWithoutSource();
       const summaries = await runtime.listSessionSummaries({ statusGroup: "archived", includeUnavailable: true });
+      const sessions = summaries.filter((session) => !session.unavailable).sort((left, right) => (
+        normalizeText(right.archivedAt).localeCompare(normalizeText(left.archivedAt)) ||
+        normalizeText(right.sessionId).localeCompare(normalizeText(left.sessionId))
+      ));
+      const unavailableSessions = summaries.filter((session) => session.unavailable);
+      const limit = Number(input.sessionLimit || 0);
+      if (!limit) return { ok: true, unavailableSessions, sessions };
+      const offset = Number(input.sessionOffset || 0);
       return {
         ok: true,
-        unavailableSessions: summaries.filter((session) => session.unavailable),
-        sessions: summaries.filter((session) => !session.unavailable).sort((left, right) => (
-          normalizeText(right.archivedAt).localeCompare(normalizeText(left.archivedAt)) ||
-          normalizeText(right.sessionId).localeCompare(normalizeText(left.sessionId))
-        ))
+        unavailableSessions,
+        sessions: sessions.slice(offset, offset + limit),
+        sessionCount: sessions.length,
+        nextSessionOffset: offset + limit < sessions.length ? offset + limit : null
       };
     });
   }

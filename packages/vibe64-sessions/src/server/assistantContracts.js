@@ -183,15 +183,21 @@ function sessionTool(description) {
     transformResult(result, options = {}) {
       const { input = {} } = options;
       const offset = Number(input.sessionOffset || 0);
+      // A list the action already paged (sessionLimit) carries its count and
+      // next offset; a whole list is paged here, sixty at a time.
+      const listed = Array.isArray(result.sessions) ? result.sessions : [];
+      const paged = Number.isInteger(result.sessionCount);
+      const sessions = paged ? listed : listed.slice(offset, offset + 60);
+      const total = paged ? result.sessionCount : listed.length;
       return {
         ...sessionSummary(result),
         ok: result.ok === true,
         ...pickStrings(result, sessionResultStrings),
         ...(Array.isArray(result.sessions) ? {
-          sessions: result.sessions.slice(offset, offset + 60).map(sessionSummary),
-          sessionsTruncated: offset > 0 || result.sessions.length > 60,
-          sessionCount: result.sessions.length,
-          nextSessionOffset: offset + 60 < result.sessions.length ? offset + 60 : null,
+          sessions: sessions.map(sessionSummary),
+          sessionsTruncated: offset > 0 || total > offset + sessions.length,
+          sessionCount: total,
+          nextSessionOffset: paged ? result.nextSessionOffset ?? null : offset + 60 < total ? offset + 60 : null,
           unavailableSessionCount: result.unavailableSessions?.length || 0
         } : {})
       };

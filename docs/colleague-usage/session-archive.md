@@ -74,3 +74,12 @@ tells you how many, offers **Save**, and archives only after you confirm
 archiving without saving. It archives through the same action; the same pin,
 renewal and preparation guards apply, and it reports a failed cleanup for retry.
 Stopping an agent or ending Colleague is never an archive request.
+
+## Find an archived session
+
+Open the project's **Session history** page. It lists archived chats with the
+most recently archived first, thirty at a time. When there are more, the bottom
+of the list shows **Showing N of M** and **Show more**; each **Show more** adds
+the next thirty. **Refresh** reads the list again. Select **View** on a chat to
+read its saved history. Desktop and mobile show the same list. Colleague can
+list archived sessions for you, sixty at a time, newest archival first.

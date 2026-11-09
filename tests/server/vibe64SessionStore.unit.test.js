@@ -2183,6 +2183,45 @@ test("plain session store archives sessions into the archive namespace", async (
   });
 });
 
+test("archived session lists reuse unchanged archive records and reread replaced ones", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    for (const sessionId of ["first", "second"]) {
+      await store.createSession({ runtimeKind: "genesis", sessionId });
+      await store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ARCHIVED);
+      await store.publishSessionArchive(sessionId);
+    }
+    const archiveRoot = store.paths().archivedSessionsRoot;
+    const listed = async () => (await store.listSessionSummaries({ statusGroup: "archived" }))
+      .map(({ sessionId, sessionName }) => [sessionId, sessionName]);
+    const [first] = await listed();
+    assert.deepEqual((await listed()).map(([sessionId]) => sessionId), ["first", "second"]);
+    const reads = [];
+    const realReadFile = fs.readFile;
+    fs.readFile = async (file, ...rest) => {
+      if (path.dirname(String(file)) === archiveRoot) reads.push(path.basename(String(file)));
+      return realReadFile(file, ...rest);
+    };
+    syncBuiltinESMExports();
+    try {
+      for (let index = 0; index < 3; index += 1) assert.equal((await listed()).length, 2);
+      assert.deepEqual(reads, [], "An unchanged archive record is not read again.");
+      const file = path.join(archiveRoot, "second.json");
+      const saved = JSON.parse(await realReadFile(file, "utf8"));
+      const replacement = `${file}.replacement`;
+      await writeFile(replacement, JSON.stringify({ ...saved, index: { ...saved.index, sessionName: "Renamed" } }));
+      await fs.rename(replacement, file);
+      assert.deepEqual(await listed(), [first, ["second", "Renamed"]]);
+      assert.deepEqual(reads, ["second.json"], "Only the replaced record is read.");
+      await fs.unlink(path.join(archiveRoot, "first.json"));
+      assert.deepEqual((await listed()).map(([sessionId]) => sessionId), ["second"]);
+    } finally {
+      fs.readFile = realReadFile;
+      syncBuiltinESMExports();
+    }
+  });
+});
+
 test("plain session store bounds durable background-task events at write time", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createStore(targetRoot);

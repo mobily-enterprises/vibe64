@@ -102,6 +102,21 @@
         </v-card-text>
       </v-card>
     </div>
+
+    <div v-if="sessions.length && hasMore" class="studio-archived-sessions__more">
+      <span class="text-body-small on-surface-variant">
+        Showing {{ sessions.length }} of {{ sessionCount }}
+      </span>
+      <v-btn
+        :loading="loading"
+        :disabled="loading"
+        prepend-icon="$expand"
+        variant="tonal"
+        @click="showMore"
+      >
+        Show more
+      </v-btn>
+    </div>
   </section>
 </template>
 
@@ -124,10 +139,13 @@ const emit = defineEmits(archivedVibe64SessionsEmits);
 const {
   error,
   formatArchivedAt,
+  hasMore,
   loadSessions,
   loading,
+  sessionCount,
   sessionRoute,
   sessions,
+  showMore,
   unavailableSessions
 } = useArchivedVibe64Sessions(emit);
 
@@ -271,6 +289,18 @@ defineExpose({
 .studio-archived-sessions__quick-link:focus-visible {
   border-color: rgba(var(--v-theme-primary), 0.42);
   text-decoration: underline;
+}
+
+.studio-archived-sessions__more {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.studio-archived-sessions__more .v-btn {
+  min-height: 48px;
 }
 
 .studio-archived-sessions__view {

@@ -1,4 +1,4 @@
-import { computed, proxyRefs, watch } from "vue";
+import { computed, proxyRefs, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
@@ -28,6 +28,11 @@ import {
 } from "@/lib/vibe64ProjectScope.js";
 
 const archivedVibe64SessionsEmits = ["loading-changed"];
+// History lists the newest archived chats first, this many at a time; Show
+// more lists the next ones. The archive grows with every chat ever archived.
+const ARCHIVED_SESSIONS_PAGE_SIZE = 30;
+// The most one list asks for (the server's sessionLimit bound).
+const ARCHIVED_SESSIONS_MAX_LIMIT = 1000;
 const archivedAtFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
   timeStyle: "short"
@@ -62,6 +67,10 @@ function useArchivedVibe64Sessions(emit) {
     surface: VIBE64_SURFACE_ID
   }));
 
+  const shownLimit = ref(ARCHIVED_SESSIONS_PAGE_SIZE);
+  watch(projectSlug, () => {
+    shownLimit.value = ARCHIVED_SESSIONS_PAGE_SIZE;
+  });
   const sessionListResource = useEndpointResource({
     fallbackLoadError: "Archived sessions could not be loaded.",
     path: sessionsApiPath,
@@ -71,8 +80,18 @@ function useArchivedVibe64Sessions(emit) {
         ROUTE_VISIBILITY_PUBLIC,
         projectSlug.value
       ),
-      "archived"
+      "archived",
+      shownLimit.value
     ]),
+    // Show more reads the longer list from the start, so a chat archived
+    // meanwhile is neither skipped nor listed twice; the list stays on screen
+    // while it does.
+    queryOptions: {
+      placeholderData: (previous) => previous
+    },
+    readQuery: computed(() => ({
+      sessionLimit: String(shownLimit.value)
+    })),
     requestRecoveryLabel: "Archived sessions"
   });
 
@@ -92,11 +111,24 @@ function useArchivedVibe64Sessions(emit) {
     immediate: true
   });
 
+  const sessionCount = computed(() => Number(sessionListResource.data.value?.sessionCount ?? sessions.value.length));
+  const hasMore = computed(() => (
+    sessionListResource.data.value?.nextSessionOffset != null && shownLimit.value < ARCHIVED_SESSIONS_MAX_LIMIT
+  ));
+
+  function showMore() {
+    if (!hasMore.value || loading.value) return;
+    shownLimit.value = Math.min(shownLimit.value + ARCHIVED_SESSIONS_PAGE_SIZE, ARCHIVED_SESSIONS_MAX_LIMIT);
+  }
+
   return {
     unavailableSessions: computed(() => sessionListResource.data.value?.unavailableSessions || []),
     error,
+    hasMore,
     loadSessions,
     loading,
+    sessionCount,
+    showMore,
     formatArchivedAt,
     sessionRoute,
     sessions
