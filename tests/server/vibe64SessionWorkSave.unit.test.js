@@ -1014,6 +1014,7 @@ test("Update stops with nothing lost when a file it changes is written before it
     }), (error) => {
       assert.equal(error.code, "vibe64_session_update_worktree_changed");
       assert.match(error.message, /^A file changed while Update ran \(shared\.txt\), so Update stopped and put this session back as it was, keeping every change\. Nothing was lost\. Try Update again\.$/u);
+      assert.equal(error.details.undone, true);
       return true;
     });
     assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
@@ -1240,6 +1241,7 @@ test("a session that stays updated because files kept changing is on the saved v
     }), (error) => {
       assert.equal(error.code, "vibe64_session_update_worktree_changed");
       assert.match(error.message, /^Files kept changing while Update ran \(shared\.txt\), so this session stays updated/u);
+      assert.equal(error.details.undone, false);
       return true;
     });
     assert.equal(switches, 4);

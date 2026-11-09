@@ -142,7 +142,7 @@ function updateWorktreeChangedError(paths = [], { undone = true } = {}) {
       ? `A file changed while Update ran${files}, so Update stopped and put this session back as it was, keeping every change. Nothing was lost. Try Update again.`
       : `Files kept changing while Update ran${files}, so this session stays updated and keeps every file as last written. Nothing was lost. Check those files before saving.`,
     UPDATE_WORKTREE_CHANGED_CODE,
-    { changedPaths: paths }
+    { changedPaths: paths, undone }
   );
 }
 

@@ -2567,8 +2567,14 @@ test("a cancelled Update keeps the conflicts it was resuming, and a Cancel befor
   assert.equal(tasks.get("update-session"), conflicted);
 });
 
-for (const code of ["vibe64_session_update_worktree_changed", "vibe64_session_update_head_moved", "vibe64_session_update_ignored_file"]) {
-  test(`an Update that stops with ${code} keeps the conflicts it was resuming`, async () => {
+for (const { code, details, kept } of [
+  { code: "vibe64_session_update_worktree_changed", details: { undone: true }, kept: true },
+  { code: "vibe64_session_update_ignored_file", details: {}, kept: true },
+  { code: "vibe64_session_update_worktree_changed", details: { undone: false }, kept: false },
+  { code: "vibe64_session_update_head_moved", details: {}, kept: false }
+]) {
+  const stop = `${code}${details.undone === false ? ", staying updated," : ""}`;
+  test(`an Update that stops with ${stop} ${kept ? "keeps the conflicts it was resuming" : "has no conflicts left to resume"}`, async () => {
     const conflictRecovery = { canonicalCommit: "canonical", conflictPaths: ["shared.txt"], reviewId: "review-id" };
     const tasks = new Map([["update-session", { status: "failed", code: "vibe64_session_update_conflict",
       conflictPaths: ["shared.txt"], conflictRecovery, error: "One file needs review.", events: [] }]]);
@@ -2597,7 +2603,7 @@ for (const code of ["vibe64_session_update_worktree_changed", "vibe64_session_up
       terminals: {
         async updateSessionWork(_sessionId, input) {
           await input.onRepositoryWriteAcquired();
-          throw Object.assign(new Error("Update stopped and put this session back."), { code });
+          throw Object.assign(new Error("Update stopped."), { code, details });
         }
       }
     });
@@ -2605,8 +2611,13 @@ for (const code of ["vibe64_session_update_worktree_changed", "vibe64_session_up
     assert.equal(answer.code, code);
     const record = tasks.get("update-session");
     assert.equal(record.code, code);
-    assert.deepEqual(record.conflictRecovery, conflictRecovery, "the next repair check resumes the same conflicts");
-    assert.deepEqual(record.conflictPaths, ["shared.txt"]);
+    if (kept) {
+      assert.deepEqual(record.conflictRecovery, conflictRecovery, "the next repair check resumes the same conflicts");
+      assert.deepEqual(record.conflictPaths, ["shared.txt"]);
+    } else {
+      assert.equal(record.conflictRecovery, null, "the session no longer has the conflicts it was resuming");
+      assert.deepEqual(record.conflictPaths, []);
+    }
   });
 }
 

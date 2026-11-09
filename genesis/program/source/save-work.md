@@ -419,8 +419,10 @@ moves to the saved commit its files show. HEAD is read first and checked after
 each move: a commit made in the session while Update ran leaves every file as it
 is, sets the index to that commit and stops with
 `vibe64_session_update_head_moved`. Fix Update waits and tries again on the
-worktree-changed and head-moved codes, and a reviewed conflict's recovery
-survives all three stops for the next repair check.
+worktree-changed and head-moved codes. A reviewed conflict's recovery survives
+the stops that put the session back (the ignored-file stop, and a worktree change
+whose details say `undone: true`) for the next repair check; a session that
+stayed updated or is on a commit made meanwhile has no such conflicts left.
 
 After a successful Update the main chat's AI is told which files changed
 (the first twenty, with the full count), to re-read them before editing and
