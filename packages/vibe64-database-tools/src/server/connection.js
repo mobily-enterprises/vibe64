@@ -1,7 +1,4 @@
-import knexFactory from "knex";
 import path from "node:path";
-import { BoundedMysqlClient, BoundedPostgresClient } from "./boundedResultClients.js";
-import { SQLiteClient } from "./sqliteClient.js";
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
 
@@ -128,16 +125,19 @@ function resolveDatabaseConnection(endpoint = {}) {
   });
 }
 
-const KNEX_CLIENTS = Object.freeze({
-  mysql: BoundedMysqlClient,
-  postgresql: BoundedPostgresClient,
-  sqlite: SQLiteClient
-});
-
-function createSessionKnex(connection = {}) {
+// Knex, its dialects and the drivers they load are hundreds of modules the
+// server never needs to start, so they load with a session's first database
+// request instead of with the server.
+async function createSessionKnex(connection = {}) {
+  const [{ default: knexFactory }, { BoundedMysqlClient, BoundedPostgresClient }, { SQLiteClient }] = await Promise.all([
+    import("knex"),
+    import("./boundedResultClients.js"),
+    import("./sqliteClient.js")
+  ]);
+  const clients = { mysql: BoundedMysqlClient, postgresql: BoundedPostgresClient, sqlite: SQLiteClient };
   return knexFactory({
     acquireConnectionTimeout: DATABASE_POOL_ACQUIRE_TIMEOUT_MS,
-    client: KNEX_CLIENTS[connection.engine] || connection.client,
+    client: clients[connection.engine] || connection.client,
     connection: connection.connection,
     ...(connection.engine === "sqlite" ? { useNullAsDefault: true } : {}),
     pool: {
@@ -150,7 +150,7 @@ function createSessionKnex(connection = {}) {
 
 async function withSessionKnex(endpoint, operation) {
   const connection = resolveDatabaseConnection(endpoint);
-  const knex = createSessionKnex(connection);
+  const knex = await createSessionKnex(connection);
   try {
     return await operation({
       connection,

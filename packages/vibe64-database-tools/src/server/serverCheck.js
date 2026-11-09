@@ -1,6 +1,3 @@
-import mysql from "mysql2/promise";
-import pg from "pg";
-
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -174,6 +171,8 @@ async function mysqlCheck(endpoint, { timeoutMs }) {
         port: endpoint.port,
         user: endpoint.username
       };
+  // Each driver loads with its first check, not with the server.
+  const { default: mysql } = await import("mysql2/promise");
   let connection;
   try {
     connection = await withTimeout(mysql.createConnection(options), timeoutMs + 500);
@@ -185,7 +184,8 @@ async function mysqlCheck(endpoint, { timeoutMs }) {
   }
 }
 
-function pgClient(endpoint, timeoutMs) {
+async function pgClient(endpoint, timeoutMs) {
+  const { default: pg } = await import("pg");
   return new pg.Client(endpoint.url
     ? { connectionString: endpoint.url, connectionTimeoutMillis: timeoutMs }
     : {
@@ -199,7 +199,7 @@ function pgClient(endpoint, timeoutMs) {
 }
 
 async function postgresqlCheck(endpoint, { timeoutMs }) {
-  const client = pgClient(endpoint, timeoutMs);
+  const client = await pgClient(endpoint, timeoutMs);
   client.on("error", () => {});
   try {
     // Closing the client is best-effort cleanup; the check's own result or error is what the caller gets.
