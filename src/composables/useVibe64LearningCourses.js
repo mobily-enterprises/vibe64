@@ -61,10 +61,13 @@ export function useVibe64LearningCourses({ active }) {
   }
 
   // Every read waits for L to open: the overlay is mounted on every page, and
-  // opening L reads these again anyway (below). The official catalogue is
-  // read from GitHub by the server.
+  // opening L reads these again anyway (below). The saved lessons stay read
+  // once L has opened, since a start closes Courses before its progress
+  // reread. The official catalogue is read from GitHub by the server.
+  const opened = ref(false);
+  watch(open, (value) => { if (value) opened.value = true; }, { immediate: true, flush: "sync" });
   const coursesResource = readResource("courses", VIBE64_LEARNING_ROUTES.courses, open);
-  const learningResource = readResource("learning", VIBE64_LEARNING_ROUTES.learning, open);
+  const learningResource = readResource("learning", VIBE64_LEARNING_ROUTES.learning, opened);
   const availableResource = readResource("available", VIBE64_LEARNING_ROUTES.available, open);
   // A host's own reads beside the courses (hostRead), reread with them.
   const hostReads = new Set();
