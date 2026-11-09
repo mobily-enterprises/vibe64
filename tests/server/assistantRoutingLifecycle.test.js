@@ -1841,16 +1841,14 @@ test("Stop while a Save or Update holds the write lock stops a request being pre
   f.agent.stopEphemeralConversation = async () => { stops++; finish.resolve(); return { ok: true }; };
   const rejected = assert.rejects(f.service.send("session-1", request, f.context), /Routing cancelled/);
   await started.promise;
-  const write = f.holdLock();
+  const write = f.holdLock({ whileAssistantWorks: true });
   await write.started;
-  f.writingWhileAssistantWorks(true);
   try {
     assert.equal(await promptly(f.service.stop("session-1", f.context)), true, "an unsent request leaves no turn to interrupt");
     assert.equal(stops, 1, "its classifier stops at once");
     assert.equal(f.state().stopped, true, "the stopped request is recorded without the lock");
     assert.equal(f.state().status, "waiting");
   } finally {
-    f.writingWhileAssistantWorks(false);
     write.release();
   }
   await rejected;

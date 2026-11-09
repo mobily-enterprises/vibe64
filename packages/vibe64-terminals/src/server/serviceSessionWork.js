@@ -50,24 +50,6 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 
 /**
- * A repository write inside the agent-write lock. One that runs while the AI works is marked in `marks`
- * meanwhile, so Stop and steers never wait for it.
- * @param {Set<string> | null} marks
- * @param {string} sessionId
- * @param {() => Promise<unknown>} onAcquired
- * @param {() => Promise<unknown>} operation
- */
-async function runAcquiredRepositoryWrite(marks, sessionId, onAcquired, operation) {
-  if (marks) marks.add(sessionId);
-  try {
-    await onAcquired();
-    return await operation();
-  } finally {
-    if (marks) marks.delete(sessionId);
-  }
-}
-
-/**
  * Logs a Save or Update whose derived artifacts Genesis could not regenerate.
  * @param {RuntimeLogger} logger
  * @param {{ derivedArtifactsKept?: { code: string, message: string } } | null} result
@@ -300,7 +282,6 @@ function createServiceSessionWork({
     },
     operation
   ) {
-    const { onRepositoryWriteAcquired = doNothing } = options;
     const result = await sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
       if (!whileAssistantWorks && sessionHasActiveAgentRun(context.session)) {
         const activityCheck = await sessionAgent.ensureSession(sessionId, context);
@@ -312,8 +293,11 @@ function createServiceSessionWork({
           throw error;
         }
       }
-      const marks = whileAssistantWorks ? state.writesWhileAssistantWorks : null;
-      return runAcquiredRepositoryWrite(marks, sessionId, onRepositoryWriteAcquired, () => operation(context));
+      const write = async () => {
+        await (options.onRepositoryWriteAcquired || doNothing)();
+        return operation(context);
+      };
+      return whileAssistantWorks ? state.writesWhileAssistantWorks.hold(sessionId, write) : write();
     }, { operation: operationName, waitMs: 10_000 });
     return throwIfAgentWriteBusy(result);
   }
@@ -554,10 +538,7 @@ function createServiceSessionWork({
         throwIfUpdateCancelled(signal);
         await onRepositoryWriteAcquired();
       }
-    }, {
-      operation: "update-session-work",
-      whileAssistantWorks: true
-    }, async (context) => {
+    }, { operation: "update-session-work", whileAssistantWorks: true }, async (context) => {
       const { execution, runtime, session } = await sessionWorkExecution(sessionId, context, "session-update", { createsCommits: true });
       const projectRecord = await project.readCurrentProject();
       const beforeSourceChange = () => workspacePreparation.invalidateWorkspaceSetup(context);
@@ -632,10 +613,9 @@ function createServiceSessionWork({
 
   /**
    * Recovers an interrupted Save: first each copy it pushed but did not record, then the session's own
-   * repository.
+   * repository. Like Save, it keeps every file the AI writes meanwhile, so it runs while the AI works.
    */
   async function recoverSessionWorkSave(sessionId, input = {}) {
-    // Like Save, its recovery keeps every file the AI writes meanwhile, so it runs while the AI works.
     const admission = { operation: "recover-session-save", whileAssistantWorks: true };
     return runSessionRepositoryWrite(sessionId, input, admission, async ({ runtime, session }) => {
       const projectRecord = await project.readCurrentProject();

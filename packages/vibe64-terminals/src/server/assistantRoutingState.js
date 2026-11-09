@@ -15,6 +15,9 @@ function createAssistantRoutingState({ systemRoot, allowAuto }) {
   // Messages cancelled in this process whose lock-held cleanup has not settled.
   // A request naming one stays stopped, whichever operation saves it meanwhile.
   const cancelling = new Set();
+  // Messages of requests Stop recorded without the lock, while a Save or Update held it, kept stopped likewise
+  // until the next locked admission or settle.
+  const stopping = new Set();
   // That cleanup runs after Cancel answers; routing's close waits for it, so it
   // writes nothing once the server has closed.
   const settling = new Set();
@@ -26,6 +29,7 @@ function createAssistantRoutingState({ systemRoot, allowAuto }) {
     timings,
     liveFollowupRequests,
     cancelling,
+    stopping,
     settling
   });
 }

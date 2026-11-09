@@ -41,7 +41,8 @@ function createAssistantRoutingRecords({
   const isCancelling = (sessionId, context, messageId) => routingState.cancelling.has(cancelKey(sessionId, context, messageId));
   async function save(context, state) {
     const sessionId = context.session.sessionId;
-    if (assistantWorkflowMessageIds(state).some(id => isCancelling(sessionId, context, id))) {
+    if (assistantWorkflowMessageIds(state).some(id => isCancelling(sessionId, context, id) ||
+        routingState.stopping.has(cancelKey(sessionId, context, id)))) {
       state.stopped = true;
       state.status = "waiting";
     }

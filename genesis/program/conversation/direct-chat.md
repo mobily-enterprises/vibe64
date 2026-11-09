@@ -70,14 +70,24 @@ the agent-write lock as long as Main routing, because a sibling chat holds it
 through its assistant's startup.
 
 Stop never waits for a Save or Update, which hold the agent-write lock while the
-AI works (`writingWhileAssistantWorks`). Routing's `stop` looks at the lock every
-tenth of a second; while such a write holds it, Stop stops the request's routing
-task and records the request as stopped without the lock, as Cancel does, so
-nothing continues it once the lock frees, and the native turn is interrupted at
-once. Only releasing a routing helper no task is closing waits for the lock. A
-steer to the running turn likewise goes straight to it (`steerWithoutLock`); a
-message for no running turn, a cancelled or repeated one, and Auto's next steps
-still wait.
+AI works through `writesWhileAssistantWorks` (`writesWhileAssistantWorks.js`).
+Routing's `stop` queues one ordinary cancel for the lock; while such a write holds
+it, or as soon as one takes it, Stop instead stops the request's routing task and
+records the request as stopped without the lock (`stopWithoutLock`), as Cancel
+does: its workflow messages join `routingState.stopping`, so every routing save
+keeps the request stopped until the next locked admission or settle lets go of
+them, and the native turn is interrupted at once. The write lets the lock go only
+once that lock-free work is done, so what waits for the lock reads the stopped
+request. Only releasing a routing helper no task is closing waits for the lock.
+A steer to the running turn likewise goes straight to it (`steerWithoutLock`),
+with the locked path's checks: none while routing closes, a message being
+cancelled is not sent, and its turn is stopped if a Cancel arrives during the
+send. Its entry in a workflow's steering list joins the request's latest record
+in one session mutation, unless the request was stopped or replaced. A message
+for no running turn, a cancelled or repeated one, and new requests still wait.
+What a finished turn leaves to routing (`afterTurn`, a reported outcome) queues
+for the lock again while such a write holds it, instead of giving up after the
+usual minute.
 
 Before dispatching an idle turn, Codex, Claude and OpenCode share the same
 application-owned skill and integration preparation. The format gate uses

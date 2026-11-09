@@ -12,7 +12,7 @@ import {
   assistantFinishingMessage,
   assistantUnreviewedRequests
 } from "@local/vibe64-runtime/shared/assistantFinishing";
-import { failure, readCancelled, read, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { failure, readCancelled, read, usesWorkPlan, STATE_KEY } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -44,7 +44,7 @@ const EXPLICIT_TASKS = Object.freeze({
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
  * @param {(sessionId: string, input: object, context: object) => Promise<object>} dependencies.dispatch
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
- * @param {(sessionId: string) => boolean} dependencies.writingWhileAssistantWorks
+ * @param {import("./types.js").WritesWhileAssistantWorks} dependencies.writesWhileAssistantWorks
  * @param {(timing: object) => void} dependencies.onTiming
  */
 function createAssistantRoutingAdmission({
@@ -58,33 +58,59 @@ function createAssistantRoutingAdmission({
   open,
   dispatch,
   interrupt,
-  writingWhileAssistantWorks,
+  writesWhileAssistantWorks,
   onTiming,
   logger
 }) {
   let closing = false;
 
   /**
-   * A steer joins the running turn, so while a write that runs while the AI works (Save, Update) holds the
-   * agent-write lock it goes straight to that turn instead of waiting for the lock. Null leaves every other
-   * case (no running turn, a cancelled or repeated message) to the ordinary admission.
+   * A steer joins the running turn, so while a Save or Update holds the agent-write lock it goes straight to that turn
+   * instead of waiting for the lock, with the locked path's own checks: none while routing closes, and a message being
+   * cancelled is not sent, or its turn is stopped once sent. Its entry in a workflow's steering list joins the
+   * request's latest record unless the request was stopped or replaced. Null leaves every other case (no running
+   * turn, a cancelled or repeated message) to the ordinary admission.
    */
   async function steerWithoutLock(sessionId, input, options) {
+    const notSent = (message, code) => Object.assign(failure(message, code), { delivery: "not-sent" });
+    if (closing) throw notSent("The assistant is shutting down. Reconnect before sending.", "vibe64_assistant_routing_unavailable");
     const context = await open(sessionId, options);
     const store = context.runtime.store;
     if ((await readCancelled(store, sessionId)).some(entry => entry.messageId === input.messageId) ||
         await store.conversationMessageIdExists(sessionId, input.messageId) ||
         !(await agent.sessionState(sessionId, context))?.turn?.active) return null;
+    if (records.isCancelling(sessionId, context, input.messageId)) {
+      throw notSent("Routing cancelled. Your message was not sent.", "vibe64_assistant_routing_cancelled");
+    }
     const steered = await read(store, sessionId);
     const result = await dispatch(sessionId, input, context);
-    const persisted = result?.delivered === true && steered?.workflow === true ? await read(store, sessionId) : null;
-    if (persisted && persisted.messageId === steered.messageId &&
-        !persisted.steering.some(({ messageId }) => messageId === input.messageId)) {
-      persisted.steering.push({ messageId: input.messageId, text: input.displayMessage || input.message });
-      delete persisted.outcome;
-      await records.save(context, persisted);
+    if (result?.delivered === true && records.isCancelling(sessionId, context, input.messageId)) {
+      await interrupt(sessionId, context).catch((error) => logInterruptFailure(sessionId, error));
     }
+    let persisted = null;
+    if (result?.delivered === true && steered?.workflow === true) {
+      await store.mutateSession(sessionId, async () => {
+        const latest = await read(store, sessionId);
+        if (!latest || latest.stopped || latest.messageId !== steered.messageId ||
+            latest.steering.some(({ messageId }) => messageId === input.messageId)) return;
+        latest.steering.push({ messageId: input.messageId, text: input.displayMessage || input.message });
+        delete latest.outcome;
+        await store.writeMetadataValue(sessionId, STATE_KEY, JSON.stringify(latest));
+        persisted = latest;
+      });
+    }
+    if (persisted) await records.announce(context, persisted);
     return result;
+  }
+
+  function logInterruptFailure(sessionId, error) {
+    logOperationalEvent(logger, "warn", {
+      component: "vibe64.assistant_routing",
+      event: "vibe64.assistant_routing.interrupt_failed",
+      sessionId: sessionId,
+      code: error?.code,
+      error: error?.message
+    }, "Stopping a cancelled message's turn failed; the cancel stays recorded.");
   }
 
   async function send(sessionId, input, options) {
@@ -121,8 +147,8 @@ function createAssistantRoutingAdmission({
     // Cancel, instead of an unconfirmed receipt that no delivery check can settle.
     // A retry of an existing request keeps that request's own delivery state.
     let refusedBeforeAdmission = input.reviewAction !== "retry";
-    if (input.submissionKind === "steer" && !explicitTask && writingWhileAssistantWorks(sessionId)) {
-      const steered = await steerWithoutLock(sessionId, input, options);
+    if (input.submissionKind === "steer" && !explicitTask) {
+      const steered = await writesWhileAssistantWorks.withoutLock(sessionId, () => steerWithoutLock(sessionId, input, options));
       if (steered) return steered;
     }
     await exclusive(sessionId, options, async (current) => {
@@ -420,13 +446,7 @@ function createAssistantRoutingAdmission({
         records.mark(input.messageId, "dispatched");
         // A Cancel that arrived during dispatch stops the turn this message started.
         if (result?.delivered === true && records.isCancelling(sessionId, current, input.messageId)) {
-          await interrupt(sessionId, current).catch((error) => logOperationalEvent(logger, "warn", {
-            component: "vibe64.assistant_routing",
-            event: "vibe64.assistant_routing.interrupt_failed",
-            sessionId: sessionId,
-            code: error?.code,
-            error: error?.message
-          }, "Stopping a cancelled message's turn failed; the cancel stays recorded."));
+          await interrupt(sessionId, current).catch((error) => logInterruptFailure(sessionId, error));
         }
         if (result?.delivered === true && task.steeringRequestId) {
           const persisted = await read(current.runtime.store, sessionId);

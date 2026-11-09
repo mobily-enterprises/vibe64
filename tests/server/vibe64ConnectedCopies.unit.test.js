@@ -24,6 +24,7 @@ import {
 import { connectedCopyExecution } from "../../packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js";
 import { createServiceSessionWork } from "../../packages/vibe64-terminals/src/server/serviceSessionWork.js";
 import { createServiceSessionWorkInspection } from "../../packages/vibe64-terminals/src/server/serviceSessionWorkInspection.js";
+import { createWritesWhileAssistantWorks } from "../../packages/vibe64-terminals/src/server/writesWhileAssistantWorks.js";
 import { endChildInput } from "./childInputTestHelpers.js";
 
 // Every copy's GitHub URL reaches a local bare repository through Git's own
@@ -226,7 +227,7 @@ async function sessionService(f, { invalidateWorkspaceSetup = async () => {}, re
     project,
     sessionAccess,
     sessionAgent: {},
-    state: { lifecycle: { closing: false } },
+    state: { lifecycle: { closing: false }, writesWhileAssistantWorks: createWritesWhileAssistantWorks() },
     workspacePreparation: { invalidateWorkspaceSetup },
     workspaceSetup: { isRunning: () => false }
   });

@@ -5,6 +5,7 @@ import path from "node:path";
 import { __testables, readWorkPlan, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
+import { createWritesWhileAssistantWorks } from "../../packages/vibe64-terminals/src/server/writesWhileAssistantWorks.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileRequest } from "@local/vibe64-runtime/shared";
@@ -160,9 +161,9 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
   const interrupts = [];
   const discards = [];
   let dispatchGate = null;
-  let writing = false;
+  const writes = createWritesWhileAssistantWorks();
   const routingOptions = { systemRoot: root, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
-    writingWhileAssistantWorks: () => writing,
+    writesWhileAssistantWorks: writes,
     open: async (_id, options) => ({ ...context, ...options }),
     interrupt: async () => { interrupts.push(Date.now()); return { ok: true, interrupted: true }; },
     discardPending: async (_id, messageId) => { discards.push(messageId); },
@@ -187,15 +188,15 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
       const gate = dispatchGate;
       return { started: gate.started.promise, release: () => { dispatchGate = null; gate.held.resolve(); } };
     },
-    holdLock() {
+    // A write that runs while the AI works (Save, Update) holds the lock when `whileAssistantWorks` is set.
+    holdLock({ whileAssistantWorks = false } = {}) {
       const held = Promise.withResolvers();
       const started = Promise.withResolvers();
-      void exclusive("session-1", {}, () => { started.resolve(); return held.promise; });
+      const hold = () => { started.resolve(); return held.promise; };
+      void exclusive("session-1", {}, () => whileAssistantWorks ? writes.hold("session-1", hold) : hold());
       return { started: started.promise, release: () => held.resolve() };
     },
     restart: () => createAssistantRouting(routingOptions),
-    // Whether a write that runs while the AI works (Save, Update) holds the lock holdLock holds.
-    writingWhileAssistantWorks: value => { writing = value; },
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
     rejectAdmission: result => { rejectedAdmission = result; },
     failAdmission: (value = true) => { failAdmission = value; }, state: () => JSON.parse(metadata.assistant_routing_request || "null") };

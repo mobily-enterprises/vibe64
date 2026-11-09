@@ -3686,9 +3686,43 @@ test("a note to an idle main chat leads its next message, and a working turn is 
   }, { throughTerminalService: true });
 });
 
+// A Custom request ("Build the form.") delivered as the running turn, with Deslop after it when `deslop` is set.
+async function sendCustomRequest({ controllerOptions, sessionId, store, terminals }, options, { deslop, messageId }) {
+  await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
+  const selection = JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection);
+  await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "custom", deslop, review: false, override: selection }));
+  const sent = await terminals.sendAgentMessage(sessionId, { message: "Build the form.", messageId }, options);
+  assert.equal(sent.delivered, true, JSON.stringify(sent));
+}
+
+const routedRequest = async (store, sessionId) => JSON.parse((await store.readSession(sessionId)).metadata.assistant_routing_request);
+
+// Save or Update holding the session's agent-write lock until released; it then fails, having changed nothing.
+async function holdSessionWrite(terminals, sessionId, options, work) {
+  const held = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const input = {
+    ...options,
+    async onRepositoryWriteAcquired() {
+      held.resolve();
+      await release.promise;
+      throw new Error(`${work} held the lock for this test only.`);
+    }
+  };
+  const working = (work === "Save" ? terminals.saveSessionWork(sessionId, input) : terminals.updateSessionWork(sessionId, input))
+    .catch((error) => error);
+  await held.promise;
+  return { release: () => release.resolve(), working };
+}
+
+// Within a moment: it did not wait for the lock a Save or Update holds.
+const promptlyDuringWrite = (promise, work) => Promise.race([promise,
+  new Promise((_resolve, reject) => setTimeout(() => reject(new Error(`It waited for ${work} instead of answering.`)), 2000))]);
+
 for (const work of ["Save", "Update"]) {
   test(`Stop and a steer while ${work} holds the agent-write lock reach the running turn at once, and the stop is recorded`, async () => {
-    await withAgentMessageController(async ({ captures, controllerOptions, runtime, sessionId, store, terminals }) => {
+    await withAgentMessageController(async (harness) => {
+      const { captures, runtime, sessionId, store, terminals } = harness;
       const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
       const interrupts = [];
       captures.onProviderCreated = (provider) => {
@@ -3698,52 +3732,154 @@ for (const work of ["Save", "Update"]) {
           return { status: "interrupted" };
         };
       };
-      await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
-      const selection = JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection);
-      const routing = { mode: "custom", deslop: false, review: false, override: selection };
-      await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify(routing));
-      const sent = await terminals.sendAgentMessage(sessionId, { message: "Build the form.", messageId: "held-send" }, options);
-      assert.equal(sent.delivered, true, JSON.stringify(sent));
-      const routed = async () => JSON.parse((await store.readSession(sessionId)).metadata.assistant_routing_request);
-      assert.equal((await routed()).delivery, "accepted");
-
-      const held = Promise.withResolvers();
-      const release = Promise.withResolvers();
-      const input = {
-        runtime,
-        vibe64User: options.vibe64User,
-        async onRepositoryWriteAcquired() {
-          held.resolve();
-          await release.promise;
-          throw new Error(`${work} held the lock for this test only.`);
-        }
-      };
-      const working = (work === "Save" ? terminals.saveSessionWork(sessionId, input) : terminals.updateSessionWork(sessionId, input))
-        .catch((error) => error);
-      await held.promise;
-      // At once: neither waits for the lock the write holds.
-      const promptly = (promise) => Promise.race([promise,
-        new Promise((_resolve, reject) => setTimeout(() => reject(new Error(`It waited for ${work} instead of answering.`)), 2000))]);
+      await sendCustomRequest(harness, options, { deslop: false, messageId: "held-send" });
+      assert.equal((await routedRequest(store, sessionId)).delivery, "accepted");
+      const write = await holdSessionWrite(terminals, sessionId, options, work);
       try {
-        const steered = await promptly(terminals.sendAgentMessage(sessionId,
-          { message: "Also add a label.", messageId: "held-steer", submissionKind: "steer" }, options));
+        const steered = await promptlyDuringWrite(terminals.sendAgentMessage(sessionId,
+          { message: "Also add a label.", messageId: "held-steer", submissionKind: "steer" }, options), work);
         assert.equal(steered.delivered, true, JSON.stringify(steered));
         assert.equal(captures.steers.length, 1, "the steer joins the running turn");
         assert.equal(captures.turns.length, 1);
-        const stopped = await promptly(terminals.interruptAgentTurn(sessionId, {}, options));
+        const stopped = await promptlyDuringWrite(terminals.interruptAgentTurn(sessionId, {}, options), work);
         assert.equal(stopped.ok, true, JSON.stringify(stopped));
         assert.deepEqual(interrupts, ["turn-1"], "Stop interrupts the running turn at once");
-        const request = await routed();
+        const request = await routedRequest(store, sessionId);
         assert.equal(request.stopped, true, "the stopped request is recorded without the lock");
         assert.equal(request.status, "waiting");
       } finally {
-        release.resolve();
+        write.release();
       }
-      assert.match((await working).message, /held the lock for this test only/u);
-      assert.equal((await routed()).stopped, true, "the stop stands once the lock frees");
+      assert.match((await write.working).message, /held the lock for this test only/u);
+      assert.equal((await routedRequest(store, sessionId)).stopped, true, "the stop stands once the lock frees");
     }, { throughTerminalService: true });
   });
 }
+
+test("A Stop recorded as Save ends keeps the request stopped, so the finished turn's next workflow step never starts", async () => {
+  await withAgentMessageController(async (harness) => {
+    const { captures, runtime, sessionId, store, terminals } = harness;
+    const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
+    await sendCustomRequest(harness, options, { deslop: true, messageId: "ending-send" });
+    const request = await routedRequest(store, sessionId);
+    assert.equal(request.workflow, true);
+    // The turn reports its implementation done, so its end would start the Deslop step.
+    request.outcome = { decision: "handoff", explanation: "The form is built.", progress: true, turnId: request.turnId,
+      stage: request.stage, planRevision: null, progressRevision: null };
+    await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify(request));
+    const write = await holdSessionWrite(terminals, sessionId, options, "Save");
+    completeAgentMessageHarnessTurn(captures, captures.provider, request.turnId, "The form is built.");
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"), (run) => run?.active === false, "the turn to end");
+    // Stop's record waits until Save has ended, while the finished turn's routing waits for Save's lock.
+    const stopWriting = Promise.withResolvers();
+    const stopWrite = Promise.withResolvers();
+    const writeMetadata = store.writeMetadataValue;
+    store.writeMetadataValue = async (id, name, value) => {
+      if (name === "assistant_routing_request" && JSON.parse(value)?.stopped === true) {
+        stopWriting.resolve();
+        await stopWrite.promise;
+      }
+      return writeMetadata(id, name, value);
+    };
+    let stopping;
+    try {
+      stopping = terminals.interruptAgentTurn(sessionId, {}, options);
+      await stopWriting.promise;
+      write.release();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    } finally {
+      write.release();
+      stopWrite.resolve();
+    }
+    assert.equal((await stopping).ok, true);
+    assert.match((await write.working).message, /held the lock for this test only/u);
+    const settled = await waitForSessionValue(() => routedRequest(store, sessionId),
+      (state) => state.status !== "working" || captures.turns.length > 1, "the finished turn's routing to settle");
+    assert.equal(captures.turns.length, 1, "no Deslop turn starts after the Stop");
+    assert.equal(settled.stopped, true);
+    assert.equal(settled.status, "waiting");
+    store.writeMetadataValue = writeMetadata;
+  }, { throughTerminalService: true });
+});
+
+test("A steer sent while another records its entry, both during Save, both join the workflow's steering list", async () => {
+  await withAgentMessageController(async (harness) => {
+    const { captures, runtime, sessionId, store, terminals } = harness;
+    const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
+    await sendCustomRequest(harness, options, { deslop: true, messageId: "steered-send" });
+    assert.equal((await routedRequest(store, sessionId)).workflow, true);
+    const write = await holdSessionWrite(terminals, sessionId, options, "Save");
+    const steer = (messageId) => terminals.sendAgentMessage(sessionId,
+      { message: `Also do ${messageId}.`, messageId, submissionKind: "steer" }, options);
+    // Once the first steer has reached the turn and reads the request to record its entry, the second is sent, as a
+    // request of its own; the first's read answers once the second is done, or after half a second if it waits.
+    const recording = Promise.withResolvers();
+    const secondDone = Promise.withResolvers();
+    let readsWhileRecording = 0;
+    const readMetadata = store.readMetadataValue;
+    store.readMetadataValue = async (id, name) => {
+      const value = await readMetadata(id, name);
+      if (name === "assistant_routing_request" && captures.steers.length === 1 && readsWhileRecording++ === 0) {
+        recording.resolve();
+        await Promise.race([secondDone.promise, new Promise((resolve) => setTimeout(resolve, 500))]);
+      }
+      return value;
+    };
+    try {
+      const firstSteer = steer("first-steer");
+      await recording.promise;
+      const second = steer("second-steer").finally(() => secondDone.resolve());
+      const [first, later] = await Promise.all([firstSteer, second]);
+      assert.equal(first.delivered, true, JSON.stringify(first));
+      assert.equal(later.delivered, true, JSON.stringify(later));
+      assert.equal(captures.steers.length, 2);
+    } finally {
+      store.readMetadataValue = readMetadata;
+      write.release();
+    }
+    await write.working;
+    assert.deepEqual((await routedRequest(store, sessionId)).steering.map(({ messageId }) => messageId).sort(),
+      ["first-steer", "second-steer"], "neither steer's entry is lost");
+  }, { throughTerminalService: true });
+});
+
+test("Cancelling a steer while Save holds the agent-write lock stops the turn it joins once it is sent", async () => {
+  await withAgentMessageController(async (harness) => {
+    const { captures, runtime, sessionId, terminals } = harness;
+    const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
+    const interrupts = [];
+    captures.onProviderCreated = (provider) => {
+      provider.interruptTurn = async (threadId, turnId) => {
+        interrupts.push(turnId);
+        return { status: "interrupted" };
+      };
+    };
+    await sendCustomRequest(harness, options, { deslop: false, messageId: "cancel-send" });
+    const write = await holdSessionWrite(terminals, sessionId, options, "Save");
+    const steering = Promise.withResolvers();
+    const steered = Promise.withResolvers();
+    captures.onSteerTurn = async (context) => {
+      steering.resolve();
+      await steered.promise;
+      return { id: context.turnId };
+    };
+    try {
+      const sending = terminals.sendAgentMessage(sessionId,
+        { message: "Also add a label.", messageId: "cancelled-steer", submissionKind: "steer" }, options);
+      await steering.promise;
+      const cancelled = await promptlyDuringWrite(terminals.cancelAgentMessage(sessionId, { messageId: "cancelled-steer" }, options), "Save");
+      assert.equal(cancelled.ok, true, JSON.stringify(cancelled));
+      const before = interrupts.length;
+      steered.resolve();
+      await sending;
+      assert.equal(interrupts.length, before + 1, "the turn the cancelled steer reached is stopped");
+    } finally {
+      steered.resolve();
+      write.release();
+    }
+    await write.working;
+  }, { throughTerminalService: true });
+});
 
 test("Codex changeover resumes its original thread and sends one combined normal prompt", async () => {
   await withAgentMessageController(async ({ captures, controllerOptions, terminals, runtime, sessionId, store }) => {

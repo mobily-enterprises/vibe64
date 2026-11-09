@@ -1,4 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { assistantGoalIsActive, assistantWorkflowMessageIds } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -12,10 +11,7 @@ import {
   STATE_KEY
 } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
-import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
-
-// How often Stop looks again at an agent-write lock it waits for.
-const STOP_LOCK_RETRY_MS = 100;
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
@@ -38,7 +34,7 @@ const STOP_LOCK_RETRY_MS = 100;
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
  * @param {typeof import("./assistantChangeover.js").discardAssistantChangeoverMessage} dependencies.discardPending
- * @param {(sessionId: string) => boolean} dependencies.writingWhileAssistantWorks
+ * @param {import("./types.js").WritesWhileAssistantWorks} dependencies.writesWhileAssistantWorks
  */
 function createAssistantRoutingCancellation({
   routingState,
@@ -50,7 +46,7 @@ function createAssistantRoutingCancellation({
   open,
   interrupt,
   discardPending,
-  writingWhileAssistantWorks,
+  writesWhileAssistantWorks,
   logger
 }) {
   function inspectDelivery(sessionId, { messageId }, options) {
@@ -90,11 +86,12 @@ function createAssistantRoutingCancellation({
   }
 
   async function cancel(sessionId, routingOptions, options = {}) {
-    const { waitForCleanup = false, expectedMessageId, cleanupTimeoutMs = 30_000 } = options;
+    const { waitForCleanup = false, expectedMessageId, cleanupTimeoutMs = 30_000, superseded = () => false } = options;
     async function cancelRouting() {
       let stop;
       let finished;
       const result = await exclusive(sessionId, routingOptions, async context => {
+        if (superseded()) return false;
         const state = await read(context.runtime.store, sessionId);
         if (expectedMessageId !== undefined && state?.messageId !== expectedMessageId) {
           throw failure("The routing request changed. Retry the assistant selection.", "vibe64_assistant_routing_request_changed");
@@ -157,27 +154,37 @@ function createAssistantRoutingCancellation({
   }
 
   /**
-   * Stop's routing half, true when it stopped a request not yet sent, which leaves no turn to interrupt.
-   * Stop takes the agent-write lock as `cancel` does, except while a write that runs while the AI works
-   * (Save, Update) holds it: Stop never waits for that, and stops the request without the lock.
+   * Stop's routing half, true when it stopped a request not yet sent, which leaves no turn to interrupt. Stop
+   * queues for the agent-write lock as `cancel` does, except while a Save or Update holds it, now or once it takes
+   * it while Stop waits: Stop never waits for that write, and stops the request without the lock.
    */
   async function stop(sessionId, routingOptions) {
-    const deadline = Date.now() + AGENT_WRITE_WAIT_MS;
-    for (;;) {
-      if (writingWhileAssistantWorks(sessionId)) return stopWithoutLock(sessionId, routingOptions);
-      try {
-        return await cancel(sessionId, { ...routingOptions, lockWaitMs: 0 });
-      } catch (error) {
-        if (error?.code !== "vibe64_agent_write_mode_busy" || Date.now() >= deadline) throw error;
-      }
-      await delay(STOP_LOCK_RETRY_MS);
+    let stoppedWithoutLock = false;
+    const withoutLock = () => writesWhileAssistantWorks.withoutLock(sessionId, () => {
+      stoppedWithoutLock = true;
+      return stopWithoutLock(sessionId, routingOptions);
+    });
+    const now = withoutLock();
+    if (now) return now;
+    const giveUp = new AbortController();
+    const queued = cancel(sessionId, routingOptions, { superseded: () => stoppedWithoutLock });
+    try {
+      return await Promise.race([
+        queued,
+        writesWhileAssistantWorks.nextHold(sessionId, giveUp.signal).then(() => withoutLock() || queued)
+      ]);
+    } finally {
+      giveUp.abort();
+      // A Stop that went ahead without the lock leaves its queued cancel nothing to do once the lock frees.
+      queued.catch(doNothing);
     }
   }
 
   /**
-   * As Cancel does, it stops the request's routing task and records the request as stopped at once, so
-   * nothing continues it once the lock frees. Only releasing a routing helper no task is closing waits
-   * for the lock.
+   * Like Cancel, it stops the request's routing task and records the request as stopped at once. The Save or Update
+   * holding the lock lets it go only once this has finished, and until the next locked admission or settle any save of
+   * the request keeps it stopped, so nothing continues it once the lock frees. Only releasing a routing helper no task
+   * is closing waits for the lock.
    */
   async function stopWithoutLock(sessionId, routingOptions) {
     const context = await open(sessionId, routingOptions);
@@ -200,6 +207,9 @@ function createAssistantRoutingCancellation({
       state.status = "waiting";
       delete state.outcome;
       if (pending) delete state.error;
+      for (const messageId of assistantWorkflowMessageIds(state)) {
+        routingState.stopping.add(records.cancelKey(sessionId, context, messageId));
+      }
       await store.writeMetadataValue(sessionId, STATE_KEY, JSON.stringify(state));
     });
     if (!state) return false;
@@ -275,11 +285,15 @@ function createAssistantRoutingCancellation({
 
   /**
    * Cancel's lock-held cleanup: the native attempt, and the routing helper
-   * unless the message's own routing task is still closing it.
+   * unless the message's own routing task is still closing it. Holding the lock,
+   * it also lets go of the marks of requests Stop recorded without it.
    */
   async function settle(sessionId, context) {
     const store = context.runtime.store;
     const key = records.keyFor(sessionId, context);
+    for (const entry of routingState.stopping) {
+      if (entry.startsWith(`${key}\0`)) routingState.stopping.delete(entry);
+    }
     const unsettled = (await readCancelled(store, sessionId)).filter(entry => !entry.settled);
     if (!unsettled.length) return;
     const state = await read(store, sessionId).catch(() => null);

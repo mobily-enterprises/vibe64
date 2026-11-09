@@ -7,6 +7,7 @@ import { createAssistantRoutingAdmission } from "./assistantRoutingAdmission.js"
 import { createAssistantRoutingOutcomes } from "./assistantRoutingOutcomes.js";
 import { createAssistantRoutingGoals } from "./assistantRoutingGoals.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { NO_WRITES_WHILE_ASSISTANT_WORKS } from "./writesWhileAssistantWorks.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -38,8 +39,8 @@ function followNoCompletedPlan() {
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
  * @param {typeof import("./assistantChangeover.js").discardAssistantChangeoverMessage} dependencies.discardPending
- * @param {(sessionId: string) => boolean} [dependencies.writingWhileAssistantWorks] Whether a write that runs while
- *   the AI works (Save, Update) holds the agent-write lock, which Stop and steers then never wait for.
+ * @param {import("./types.js").WritesWhileAssistantWorks} [dependencies.writesWhileAssistantWorks] The Saves and
+ *   Updates holding the agent-write lock while the AI works, which Stop and steers never wait for.
  * @param {(timing: object) => void} [dependencies.onTiming]
  * @param {(sessionId: string, details: object) => unknown} [dependencies.onPlanCompleted]
  */
@@ -55,11 +56,27 @@ function createAssistantRouting({
   interrupt,
   discardPending,
   logger,
-  writingWhileAssistantWorks = () => false,
+  writesWhileAssistantWorks = NO_WRITES_WHILE_ASSISTANT_WORKS,
   onTiming = doNothing,
   onPlanCompleted = followNoCompletedPlan
 }) {
   const routingState = createAssistantRoutingState({ systemRoot, allowAuto });
+  /**
+   * The lock for what a turn leaves behind (its outcome, its after-turn review): a Save or Update holds the lock for
+   * its whole run, so rather than give up after the usual wait while one holds it, this queues again.
+   */
+  async function exclusiveAfterWrites(sessionId, options, operation) {
+    for (;;) {
+      const writing = writesWhileAssistantWorks.holds(sessionId);
+      const started = writesWhileAssistantWorks.started(sessionId);
+      try {
+        return await exclusive(sessionId, options, operation);
+      } catch (error) {
+        const writeBlocked = writing || writesWhileAssistantWorks.started(sessionId) !== started;
+        if (error?.code !== "vibe64_agent_write_mode_busy" || !writeBlocked) throw error;
+      }
+    }
+  }
   const records = createAssistantRoutingRecords({
     routingState,
     agent,
@@ -90,7 +107,7 @@ function createAssistantRouting({
     open,
     interrupt,
     discardPending,
-    writingWhileAssistantWorks,
+    writesWhileAssistantWorks,
     logger
   });
   const admission = createAssistantRoutingAdmission({
@@ -104,7 +121,7 @@ function createAssistantRouting({
     open,
     dispatch,
     interrupt,
-    writingWhileAssistantWorks,
+    writesWhileAssistantWorks,
     onTiming,
     logger
   });
@@ -115,7 +132,7 @@ function createAssistantRouting({
     delivery,
     admission,
     agent,
-    exclusive,
+    exclusive: exclusiveAfterWrites,
     publish,
     onPlanCompleted
   });

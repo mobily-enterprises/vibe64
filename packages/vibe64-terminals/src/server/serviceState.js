@@ -1,4 +1,5 @@
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { createWritesWhileAssistantWorks } from "./writesWhileAssistantWorks.js";
 
 /** @typedef {import("./types.js").ReadClaudeAccountStatus} ReadClaudeAccountStatus */
 /** @typedef {import("./types.js").AssistantRuntime} AssistantRuntime */
@@ -45,12 +46,8 @@ function createServiceState({ readClaudeAccountStatus }) {
     updateModelAccess: null
   };
 
-  /**
-   * The sessions whose agent-write lock a write that runs while the AI works (Save, Update, Save's recovery)
-   * holds now. Stop and steers never wait for it (`stop` in assistantRoutingCancellation.js).
-   * @type {Set<string>}
-   */
-  const writesWhileAssistantWorks = new Set();
+  // The Saves and Updates holding a session's agent-write lock while the AI works, which Stop and steers never wait for.
+  const writesWhileAssistantWorks = createWritesWhileAssistantWorks();
 
   return Object.freeze({
     assistantRuntime,
