@@ -30,13 +30,23 @@ const planDocument = ref("plan");
 const showHistory = computed(() => view.value === "history" && !archiveId.value);
 const pendingOperation = ref("");
 const feedback = useShellWebErrorRuntime();
-const resource = useEndpointResource({
+// The plan button needs only whether there is a current plan, its status and
+// the history list. The plan's text is read only while the dialog shows it;
+// the work-plan-changed event, not window focus, reads either again.
+const summaryResource = useEndpointResource({
   enabled, path: endpoint,
+  queryKey: computed(() => ["vibe64-work-plan-summary", projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]),
+  readQuery: { summary: "true" },
+  fallbackLoadError: "The plan could not be loaded.",
+  queryOptions: { meta: { jskit: { requestRecovery: false } }, retry: false, refetchOnMount: "always", refetchOnWindowFocus: false }
+});
+const resource = useEndpointResource({
+  enabled: computed(() => enabled.value && open.value), path: endpoint,
   queryKey: computed(() => ["vibe64-work-plan", projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value, archiveId.value]),
   fallbackLoadError: "The plan could not be loaded.",
   queryOptions: {
     meta: { jskit: { requestRecovery: false } }, retry: false,
-    refetchOnMount: "always", refetchOnWindowFocus: true,
+    refetchOnMount: "always", refetchOnWindowFocus: false,
     queryFn: async ({ signal }) => {
       const selectedArchive = archiveId.value;
       const path = endpoint.value;
@@ -61,22 +71,26 @@ useRealtimeEvent({
     ["work-plan-changed", "assistant-routing-changed"].includes(payload.reason),
   onEvent: ({ payload = {} } = {}) => {
     if (payload.planNotice) notice.value = payload.planNotice;
-    void resource.reload();
+    void reloadPlan();
   }
 });
+function reloadPlan() {
+  return Promise.all([summaryResource.reload(), open.value ? resource.reload() : null]);
+}
 const plan = computed(() => resource.data.value || null);
-const visible = computed(() => Boolean(plan.value?.available || plan.value?.history?.length || resource.loadError.value));
+const overview = computed(() => summaryResource.data.value || null);
+const visible = computed(() => Boolean(overview.value?.available || overview.value?.history?.length || summaryResource.loadError.value));
 const history = computed(() => (plan.value?.history || []).map(item => ({ ...item,
   archivedDate: new Date(item.archivedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 })));
 const selectedArchive = computed(() => history.value.find(item => item.id === archiveId.value));
 const selectedPlanReady = computed(() => Boolean(plan.value) && (plan.value.archiveId || "") === archiveId.value);
 const canChangePlan = computed(() => !props.busy && !pendingOperation.value && selectedPlanReady.value);
-const currentActive = computed(() => plan.value?.current?.status === "active");
+const currentActive = computed(() => overview.value?.current?.status === "active");
 const label = computed(() => currentActive.value ? "View active plan" : "View plan and history");
 function showPlan(requestedView = "default") {
   archiveId.value = "";
-  view.value = requestedView === "default" ? (plan.value?.current ? "current" : "history") : requestedView;
+  view.value = requestedView === "default" ? (overview.value?.current ? "current" : "history") : requestedView;
   open.value = true;
 }
 defineExpose({ showPlan });
@@ -86,8 +100,8 @@ const colleaguePlan = inject(VIBE64_COLLEAGUE_PLAN_KEY);
 const planViewer = {
   get projectSlug() { return projectSlug.value; },
   get sessionId() { return sessionId.value; },
-  get ready() { return enabled.value && Boolean(plan.value) && !resource.isFetching.value; },
-  get error() { return resource.loadError.value; },
+  get ready() { return enabled.value && Boolean(overview.value) && !summaryResource.isFetching.value; },
+  get error() { return summaryResource.loadError.value; },
   get open() { return enabled.value && open.value; },
   get view() { return view.value; },
   async openPlan(requestedView = "default", isCurrent = () => true) {
@@ -95,12 +109,12 @@ const planViewer = {
     const actor = actorKey.value;
     if (!enabled.value || !isCurrent()) throw new Error("This session's plan viewer is no longer available.");
     archiveId.value = "";
-    await resource.reload();
+    await summaryResource.reload();
     if (!enabled.value || !isCurrent() || target !== endpoint.value || actor !== actorKey.value) {
       throw new Error("The selected session changed before its plan opened.");
     }
-    if (resource.loadError.value) throw new Error(resource.loadError.value);
-    if (!plan.value?.current && !plan.value?.history?.length) throw new Error("This session has no current plan or plan history.");
+    if (summaryResource.loadError.value) throw new Error(summaryResource.loadError.value);
+    if (!overview.value?.current && !overview.value?.history?.length) throw new Error("This session has no current plan or plan history.");
     showPlan(requestedView);
     await nextTick();
     if (!planViewer.open || !isCurrent() || target !== endpoint.value || actor !== actorKey.value) {
@@ -132,7 +146,7 @@ async function changePlan(operation) {
     if (target !== endpoint.value || actor !== actorKey.value) return;
     notice.value = result.notice || (restoring ? "The plan is now current and active." : "The plan is archived and remains available in History.");
     if (restoring) archiveId.value = "";
-    await resource.reload();
+    await reloadPlan();
     if (target === endpoint.value && actor === actorKey.value) view.value = restoring ? "current" : "history";
   } catch (error) {
     if (target === endpoint.value && actor === actorKey.value) feedback.report({

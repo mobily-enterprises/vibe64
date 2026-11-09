@@ -199,14 +199,27 @@ async function readWorkPlanHistoryUnlocked(context) {
   const history = await Promise.all([...ids].map(id => readArchivedSummary(context, id)));
   return history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
 }
+function currentPlanSummary(current) {
+  return current ? {
+    title: current.title,
+    status: current.status,
+    revision: current.revision,
+    progressRevision: current.progressRevision || ""
+  } : null;
+}
 async function readWorkPlanPageUnlocked(context, options = {}) {
   const {
     offset = 0,
     limit = 16000,
     expectedRevision = "",
     expectedProgressRevision = "",
-    archiveId = ""
+    archiveId = "",
+    summary: summaryOnly = false
   } = options;
+  if (summaryOnly) {
+    const current = await readWorkPlanUnlocked(context);
+    return { available: Boolean(current), current: currentPlanSummary(current), history: await readWorkPlanHistoryUnlocked(context) };
+  }
   if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16000) {
     throw planError("Invalid plan page bounds.", "vibe64_work_plan_page_bounds_invalid");
   }
@@ -216,12 +229,7 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   const current = await readWorkPlanUnlocked(context);
   const plan = archiveId ? await readArchived(context, archiveId) : current;
   const history = offset === 0 ? await readWorkPlanHistoryUnlocked(context) : undefined;
-  const summary = current ? {
-    title: current.title,
-    status: current.status,
-    revision: current.revision,
-    progressRevision: current.progressRevision || ""
-  } : null;
+  const summary = currentPlanSummary(current);
   if (!plan) return { available: false, current: summary, ...(history ? { history } : {}) };
   if (expectedRevision && expectedRevision !== plan.revision || (offset > 0 || expectedProgressRevision) &&
       expectedProgressRevision !== (plan.progressRevision || "")) {

@@ -1,8 +1,8 @@
 import { createRenderer, h, nextTick, ref, shallowRef, ssrContextKey } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ options: null, realtime: null, resource: null, request: vi.fn(), report: vi.fn() }));
-vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({ useEndpointResource(options) { mocks.options = options; return mocks.resource; } }));
+const mocks = vi.hoisted(() => ({ options: null, reads: [], realtime: null, resource: null, request: vi.fn(), report: vi.fn() }));
+vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({ useEndpointResource(options) { mocks.options = options; mocks.reads.push(options); return mocks.resource; } }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent(options) { mocks.realtime = options; } }));
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: mocks.request }) }));
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: mocks.report }) }));
@@ -14,6 +14,7 @@ import { parseWorkPlanLines } from "../../packages/vibe64-terminals/src/shared/a
 let app;
 afterEach(() => { app?.unmount(); mocks.request.mockReset(); mocks.report.mockReset(); });
 function mount(data) {
+  mocks.reads = [];
   mocks.resource = { data: ref(data), loadError: ref(""), isFetching: ref(false), reload: vi.fn() };
   const props = ref({ active: true, session: { sessionId: "one" }, sessionsApiPath: "/api/projects/fixture/sessions" });
   const actor = ref({ actorKey: "local" });
@@ -304,4 +305,23 @@ it("uses the same native viewer to show automatically archived plans while prese
   expect(f.state().showHistory).toBe(true);
   expect(f.state().history[0].status).toBe("completed");
   expect(mocks.request).not.toHaveBeenCalled();
+});
+
+it("reads only the plan summary for its button and the plan text only while the dialog is open, never on focus", async () => {
+  const f = mount(active);
+  const [summary, document] = mocks.reads;
+  expect(summary.queryKey.value[0]).toBe("vibe64-work-plan-summary");
+  expect(summary.readQuery).toEqual({ summary: "true" });
+  expect(summary.enabled.value).toBe(true);
+  expect(summary.queryOptions.refetchOnWindowFocus).toBe(false);
+  expect(document.queryOptions.refetchOnWindowFocus).toBe(false);
+  expect(document.enabled.value).toBe(false, "The text is not read for the button.");
+  f.state().showPlan();
+  await nextTick();
+  expect(document.enabled.value).toBe(true);
+  mocks.realtime.onEvent({ payload: { projectSlug: "fixture", sessionId: "one", reason: "work-plan-changed" } });
+  expect(mocks.resource.reload).toHaveBeenCalledTimes(2);
+  f.state().open = false;
+  await nextTick();
+  expect(document.enabled.value).toBe(false);
 });

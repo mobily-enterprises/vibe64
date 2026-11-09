@@ -245,7 +245,10 @@ const workPlanReadInputValidator = validator({
   offset: { type: "integer", min: 0, required: false },
   limit: { type: "integer", min: 1, max: 16000, required: false },
   expectedRevision: { ...optionalText, minLength: 64, maxLength: 64 },
-  expectedProgressRevision: { ...workPlanProgressRevision, required: false }
+  expectedProgressRevision: { ...workPlanProgressRevision, required: false },
+  // Only whether there is a current plan, its status and the history list:
+  // what the plan button needs, without the plan's text.
+  summary: { type: "boolean", required: false }
 });
 const workPlanArchiveInputValidator = validator({
   sessionId: sessionIdField,

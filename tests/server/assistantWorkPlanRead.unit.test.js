@@ -81,11 +81,10 @@ test("plan service reads the actual session without AI and preserves private ren
   assert.equal((await service.restoreSessionWorkPlan(sessionId, { archiveId: archived.history[0].id })).code, "vibe64_session_renewal_private");
 });
 
-test("plan history reads an archived plan in full once and again only when its files change", async (t) => {
+async function archivedPlanFixture(t, sessionId) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-plan-history-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
-  const sessionId = "plan-history";
   await store.createSession({ sessionId, runtimeKind: "genesis" });
   const runtime = { stateRoot: root, store, getSession: (id) => store.readSession(id), getSessionWithoutSource(id) { return this.getSession(id); } };
   const unused = () => assert.fail("Reading a plan must not inspect or change project configuration.");
@@ -101,6 +100,12 @@ test("plan history reads an archived plan in full once and again only when its f
     if (patch.text !== null) { await mkdir(path.dirname(destination), { recursive: true }); await writeFile(destination, patch.text); }
   }
   await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 5, status: "complete", delivery: "accepted" }));
+  return { file, service, text };
+}
+
+test("plan history reads an archived plan in full once and again only when its files change", async (t) => {
+  const sessionId = "plan-history";
+  const { file, service, text } = await archivedPlanFixture(t, sessionId);
   const current = await service.readSessionWorkPlan(sessionId);
   const archived = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: current.revision });
   assert.equal(archived.ok, true, archived.error);
@@ -125,4 +130,17 @@ test("plan history reads an archived plan in full once and again only when its f
     fs.open = realOpen;
     syncBuiltinESMExports();
   }
+});
+
+test("a plan summary read names the current plan and history without the plan's text", async (t) => {
+  const sessionId = "plan-summary";
+  const { service } = await archivedPlanFixture(t, sessionId);
+  const current = await service.readSessionWorkPlan(sessionId);
+  assert.deepEqual(await service.readSessionWorkPlan(sessionId, { summary: true }), {
+    ok: true, sessionId, available: true, history: [],
+    current: { title: "Keep the tally", status: "completed", revision: current.revision, progressRevision: current.progressRevision }
+  });
+  const archived = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: current.revision });
+  assert.deepEqual(await service.readSessionWorkPlan(sessionId, { summary: true }),
+    { ok: true, sessionId, available: false, current: null, history: archived.history });
 });
