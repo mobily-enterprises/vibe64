@@ -168,14 +168,15 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
       projectContext: {
         targetRoot: projects[0].path,
         requestContextMatchesSelectedProject: () => false,
-        listWorkspaceProjects: async () => ({ projects })
+        readWorkspaceProject: async ({ slug }) => ({ ok: true, project: projects.find((item) => item.slug === slug) })
       },
       publishProjectChanged: createVibe64ProjectChangedPublisher({ events: { publish: async (event) => events.push(event) } })
     });
     const service = serviceForSession(session, {
       authorizeActorAccess: async ({ actor }) => ({ ok: actor.sessionId === session.sessionId }),
       refreshGithub: project.refreshGithub,
-      readCurrentProject: project.readCurrentProject,
+      currentProjectSlug: project.currentProjectSlug,
+      readCurrentProject: async () => { throw new Error("A link needs only the bound project's slug."); },
       runGatewayCommand: async () => { throw new Error("Refresh must not read credentials or execute GitHub commands."); }
     });
     const prepared = await runWithProjectRequestContext({ slug: "second", targetRoot: projects[1].path }, () => prepareCodexGitCommand({

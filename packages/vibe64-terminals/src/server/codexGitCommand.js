@@ -513,8 +513,7 @@ function createCodexGitCommandService({
         return finish({ ok: true, exitCode: 0, stdout: `${usage}\n` }, actor);
       }
       if (args.length === 2 && args[0] === "issue-link" && /^[1-9]\d*$/u.test(args[1]) && Number.isSafeInteger(Number(args[1]))) {
-        const projectRecord = await project.readCurrentProject();
-        const slug = normalizeText(projectRecord.slug);
+        const slug = currentProjectSlug(project);
         if (!slug) {
           return finish(commandFailure("The current project has no issue link.", "vibe64_github_issue_link_unavailable"), actor);
         }

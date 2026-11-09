@@ -29,10 +29,6 @@ function createProjectDevelopmentDatabase({
   selection,
   sessionWork
 }) {
-  async function currentDevelopmentDatabaseScope() {
-    return (await selection.currentDevelopmentDatabaseConfiguration()).developmentDatabaseScope;
-  }
-
   function managedDevelopmentDatabaseAvailable() {
     return resourceEnvironmentProvider.managedDevelopmentDatabase === true;
   }
@@ -87,11 +83,12 @@ function createProjectDevelopmentDatabase({
       : await (await sessionWork.createRuntimeWithoutSource()).listSessionSummaries({
         statusGroup: "open"
       });
+    const project = await selection.currentProjectState();
     return developmentDatabasePolicy({
       managed: managedDevelopmentDatabaseAvailable(),
       openSessions,
-      scope: await currentDevelopmentDatabaseScope(),
-      allowSharedDatabaseSessions: (await selection.currentProjectState())?.allowSharedDatabaseSessions === true
+      scope: normalizeDevelopmentDatabaseScope(project?.developmentDatabaseScope),
+      allowSharedDatabaseSessions: project?.allowSharedDatabaseSessions === true
     });
   }
 

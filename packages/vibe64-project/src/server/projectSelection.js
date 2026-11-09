@@ -19,6 +19,20 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
+// Why the catalogue listing has no record for the request's project: there
+// is no catalogue (local editor mode), the slug is not a catalogue name, its
+// directory is missing, a symlink or unusable, it has no repository, or it is
+// an old practice project awaiting its upgrade.
+const UNLISTED_PROJECT_CODES = new Set([
+  "vibe64_invalid_project_slug",
+  "vibe64_project_catalog_unavailable",
+  "vibe64_project_path_not_accessible",
+  "vibe64_project_path_not_directory",
+  "vibe64_project_path_symlink",
+  "vibe64_project_repository_missing",
+  "vibe64_project_training_invalid"
+]);
+
 function publicProject(project = {}, options = {}) {
   const {
     context = null,
@@ -217,9 +231,27 @@ function createProjectSelection({ logger, projectContext }) {
     };
   }
 
+  /**
+   * The current project's record. A request in a catalogue project reads that
+   * project alone, never the whole catalogue with every project's open state
+   * and waiting approvals. A project the catalogue would not list (no
+   * repository, no usable directory) still answers from the request's context.
+   */
   async function currentProjectState() {
-    const listed = await listProjectsState();
-    return listed.currentProject;
+    const requestContext = currentProjectRequestContext();
+    if (!requestContext?.targetRoot || projectContext.requestContextMatchesSelectedProject(requestContext)) {
+      return (await listProjectsState()).currentProject;
+    }
+    const project = await projectContext.readWorkspaceProject({ allowDeleting: true, slug: requestContext.slug })
+      .then((result) => result.project)
+      .catch((error) => {
+        if (UNLISTED_PROJECT_CODES.has(error?.code)) return {};
+        throw error;
+      });
+    return publicProject(project, {
+      context: requestContext,
+      selected: true
+    });
   }
 
   async function currentDevelopmentDatabaseConfiguration() {
