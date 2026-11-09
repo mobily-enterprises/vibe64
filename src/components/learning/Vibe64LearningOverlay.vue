@@ -93,6 +93,13 @@ useRealtimeEvent({
     if (open.value && payload?.reason !== "notes") void courses.learningResource.reload();
   }
 });
+// A switch of L made elsewhere while this tab was offline sent its notice to
+// no one here: each reconnect reads the mode again, as the tab's lists reread theirs.
+useRealtimeEvent({
+  event: "connect",
+  enabled: computed(() => Boolean(actorKey.value)),
+  onEvent: () => void learning.readLearningMode()
+});
 
 // Take the tour: read the courses and saved lessons afresh, then start the
 // orientation lesson through the ordinary start; with none to start here,

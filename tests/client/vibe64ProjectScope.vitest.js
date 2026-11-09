@@ -75,6 +75,8 @@ vi.mock("vuetify/components/VSkeletonLoader", () => ({ VSkeletonLoader: passthro
 vi.mock("vuetify/components/VTextField", () => ({ VTextField: passthroughComponent("input") }));
 
 import ProjectPage from "../../src/pages/app/project/[slug].vue";
+import { useVibe64ProjectsResource } from "../../src/composables/useVibe64ProjectsResource.js";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import ProjectSelectionGate from "../../src/components/studio/ProjectSelectionGate.vue";
 import { idleLearning } from "./helpers/learningHostParts.js";
 import Vibe64ProjectPaneControls from "../../src/components/studio/Vibe64ProjectPaneControls.vue";
@@ -406,6 +408,72 @@ describe("Vibe64 project client scope", () => {
       ...projectSelectionQueryKey("app", "public", "alpha_1"),
       "route-selection"
     ]);
+  });
+
+  it("caches Learn mode's project list apart from Develop's", () => {
+    const develop = projectSelectionGateQueryKey({ ownershipFilter: "public", surfaceId: "app" });
+    expect(develop).toEqual(projectSelectionQueryKey("app", "public", ""));
+    expect(projectSelectionGateQueryKey({ learnMode: true, ownershipFilter: "public", surfaceId: "app" }))
+      .toEqual([...develop, "learn"]);
+    expect(projectSelectionGateQueryKey({
+      learnMode: true, ownershipFilter: "public", projectSlug: "alpha_1", scopeSelectionToCurrentProject: true, surfaceId: "app"
+    })).toEqual([...projectSelectionQueryKey("app", "public", "alpha_1"), "route-selection", "learn"]);
+  });
+
+  it("never shows Learn mode's empty list in Develop, and a list read in a mode the tab missed rereads the mode", async () => {
+    // Online lists no project of yours in Learn mode and says which mode it read the list in.
+    const server = { learnMode: false };
+    const project = { slug: "alpha" };
+    const reads = [];
+    configureHttpWebClient({
+      request(url) {
+        reads.push(url);
+        return Promise.resolve({ ok: true, learnMode: server.learnMode, projects: server.learnMode ? [] : [project] });
+      }
+    });
+    const learning = Vue.reactive({
+      learnMode: false,
+      state: { actorKey: "owner", modeBusy: "", modeRead: true },
+      readLearningMode: vi.fn(async () => null)
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let projects;
+    const renderer = Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+    const app = renderer.createApp({ setup() { projects = useVibe64ProjectsResource().projects; return () => null; } });
+    app.use(VueQueryPlugin, { queryClient });
+    app.provide(VIBE64_LEARNING_KEY, learning);
+    app.mount({});
+    try {
+      await vi.waitFor(() => expect(projects.value).toEqual([project]));
+      // L to Learn: Learn's list is read and cached apart.
+      server.learnMode = true;
+      learning.learnMode = true;
+      await vi.waitFor(() => expect(reads).toHaveLength(2));
+      await vi.waitFor(() => expect(projects.value).toEqual([]));
+      // L back to Develop: Develop's own list at once, then read afresh.
+      server.learnMode = false;
+      learning.learnMode = false;
+      await Vue.nextTick();
+      expect(projects.value).toEqual([project]);
+      await vi.waitFor(() => expect(reads).toHaveLength(3));
+      expect(learning.readLearningMode).not.toHaveBeenCalled();
+
+      // A switch to Learn this tab never heard of: the next list says Learn, so the tab reads its mode again.
+      server.learnMode = true;
+      await queryClient.refetchQueries();
+      await vi.waitFor(() => expect(learning.readLearningMode).toHaveBeenCalledTimes(1));
+      // Mid-switch, L's own answer settles the mode.
+      learning.state.modeBusy = "set";
+      server.learnMode = false;
+      await queryClient.refetchQueries();
+      server.learnMode = true;
+      await queryClient.refetchQueries();
+      await Vue.nextTick();
+      expect(learning.readLearningMode).toHaveBeenCalledTimes(1);
+    } finally {
+      app.unmount();
+      queryClient.clear();
+    }
   });
 
   it("shares one scoped project query and initial request between the app and its gate", async () => {

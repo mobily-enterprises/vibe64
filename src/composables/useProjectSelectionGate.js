@@ -48,11 +48,16 @@ function useProjectSelectionGate(emit, {
     projectSlug: projectSlug.value,
     scopeSelectionToCurrentProject
   }));
+  // Learn mode (server-backed): the server lists no project of yours; the
+  // picker says why and offers no project creation.
+  const learning = useVibe64Learning();
+  const learnMode = computed(() => learning.learnMode === true);
 
   const selectionResource = useEndpointResource({
     fallbackLoadError: "Projects could not load.",
     path: selectionPath,
     queryKey: computed(() => projectSelectionGateQueryKey({
+      learnMode: learnMode.value,
       ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
       projectSlug: projectSlug.value,
       scopeSelectionToCurrentProject,
@@ -71,6 +76,7 @@ function useProjectSelectionGate(emit, {
       event: VIBE64_PROJECT_CHANGED_EVENT
     }
   });
+  watchProjectListMode(learning, selectionResource.data);
   if (scopeSelectionToCurrentProject) rereadSelectionWhenProjectDeleted();
 
   const projectSelectionView = proxyRefs({
@@ -128,10 +134,6 @@ function useProjectSelectionGate(emit, {
     writeMethod: "POST"
   });
 
-  // Learn mode (server-backed): the server lists no project of yours; the
-  // picker says why and offers no project creation.
-  const learning = useVibe64Learning();
-  const learnMode = computed(() => learning.learnMode === true);
   // A project the current mode does not allow was refused (the server's
   // message says which way to switch); the overlay's guard usually moves away first.
   const learningModeBlocked = computed(() =>
@@ -241,6 +243,7 @@ function useProjectSelectionGate(emit, {
 
   function selectionQueryHash() {
     return JSON.stringify(projectSelectionGateQueryKey({
+      learnMode: learnMode.value,
       ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
       projectSlug: projectSlug.value,
       scopeSelectionToCurrentProject,
@@ -300,16 +303,38 @@ function projectSelectionGateEndpoint({
     : PROJECT_SELECTION_ENDPOINT;
 }
 
+/**
+ * Online lists no project of yours in Learn mode, so Learn's list is cached
+ * apart: Develop never shows it, and every switch of L reads the new mode's list.
+ */
 function projectSelectionGateQueryKey({
+  learnMode = false,
   ownershipFilter,
   projectSlug = "",
   scopeSelectionToCurrentProject = false,
   surfaceId
 } = {}) {
   const baseKey = projectSelectionQueryKey(surfaceId, ownershipFilter, projectSlug);
-  return scopeSelectionToCurrentProject
+  const key = scopeSelectionToCurrentProject
     ? [...baseKey, "route-selection"]
     : baseKey;
+  return learnMode ? [...key, "learn"] : key;
+}
+
+/**
+ * A projects list says which mode the server read it in (`learnMode`). One
+ * read in the other mode than this tab shows means a switch made elsewhere
+ * never reached this tab, so the tab reads its mode again instead of showing
+ * that list as its own.
+ * @param {import("@/types.js").Vibe64Learning | undefined} learning
+ * @param {import("vue").Ref<{ learnMode?: boolean } | null | undefined>} data
+ */
+function watchProjectListMode(learning, data) {
+  watch(() => data.value?.learnMode, (serverLearnMode) => {
+    const state = learning?.state;
+    if (typeof serverLearnMode !== "boolean" || !state?.actorKey || !state.modeRead || state.modeBusy) return;
+    if (serverLearnMode !== (learning.learnMode === true)) void learning.readLearningMode();
+  }, { immediate: true });
 }
 
 export {
@@ -318,5 +343,6 @@ export {
   isPracticeNoticeForProject,
   projectSelectionGateEndpoint,
   projectSelectionGateQueryKey,
-  useProjectSelectionGate
+  useProjectSelectionGate,
+  watchProjectListMode
 };

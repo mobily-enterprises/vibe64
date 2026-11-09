@@ -127,9 +127,14 @@ pins are unchanged.
 The Learning controller (`vibe64Learning.js`, its modes in
 `vibe64LearningModes.js`) reads the learner's mode from `GET learning-mode`
 (`{on, currentAttemptId, lessonCode, lessonTitle, practiceSlug}`, normalized by
-`normalizeLearningMode`) once the overlay binds the viewer and again on every
-`learner.changed` except `steps` and `notes`; an unreadable mode
-counts as Develop. `learnMode`, `lessonTitle` and `mode` are its getters, and
+`normalizeLearningMode`) once the overlay binds the viewer, again on every
+`learner.changed` except `steps` and `notes`, and on every realtime reconnect
+(a switch made elsewhere while the tab was offline sent it no notice); an
+unreadable mode counts as Develop. A projects list read in the other mode than
+the tab shows (its `learnMode`, which Online's list carries) also rereads it
+(`watchProjectListMode`), and the projects list is cached per mode
+(`projectSelectionGateQueryKey`'s `learnMode`), so Learn's empty list never
+stands in for Develop's and each switch reads the new mode's list. `learnMode`, `lessonTitle` and `mode` are its getters, and
 the current attempt is shown (read) for the step bar and Colleague. `setMode` /
 `toggleMode` post `{on}`; the L button calls `toggleMode`, which saves the
 current route as the leaving mode's place and pushes the other mode's place

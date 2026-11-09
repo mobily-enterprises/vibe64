@@ -7,8 +7,10 @@ import {
 } from "@/lib/vibe64RequestConfig.js";
 import {
   projectSelectionGateEndpoint,
-  projectSelectionGateQueryKey
+  projectSelectionGateQueryKey,
+  watchProjectListMode
 } from "@/composables/useProjectSelectionGate.js";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
@@ -27,11 +29,13 @@ function useVibe64ProjectsResource({
     projectSlug: slug.value,
     scopeSelectionToCurrentProject: Boolean(slug.value)
   }));
+  const learning = useVibe64Learning();
   const resource = useEndpointResource({
     enabled,
     fallbackLoadError,
     path: selectionPath,
     queryKey: computed(() => projectSelectionGateQueryKey({
+      learnMode: learning?.learnMode === true,
       ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
       projectSlug: slug.value,
       scopeSelectionToCurrentProject: Boolean(slug.value),
@@ -40,6 +44,7 @@ function useVibe64ProjectsResource({
     refreshOnPull: true,
     requestRecoveryLabel: requestRecoveryLabel
   });
+  watchProjectListMode(learning, resource.data);
   const loadError = computed(() => vibe64ResourceResponseError(resource.data.value, fallbackLoadError) || resource.loadError.value);
   const currentProject = computed(() => resource.data.value?.currentProject || null);
   const projectsRoot = computed(() => String(resource.data.value?.projectsRoot || ""));

@@ -1354,6 +1354,13 @@ describe("Courses overlay", () => {
       await switching;
       await flush();
       expect([route.fullPath, replace.mock.calls.length]).toEqual([learnPlace, moves]);
+      // A switch made elsewhere while this tab was offline sent it no notice: the reconnect reads the mode again.
+      const reconnect = realtime.find(options => options.event === "connect");
+      expect(reconnect.enabled.value).toBe(true);
+      mode = { ...mode, on: false };
+      reconnect.onEvent();
+      await flush();
+      expect(learning.learnMode).toBe(false);
       viewer.value = { actorKey: "someone-else" };
       await flush();
       expect(learning.state.actorKey).toBe("someone-else");
