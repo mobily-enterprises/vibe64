@@ -1,7 +1,8 @@
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import fs, { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -78,4 +79,50 @@ test("plan service reads the actual session without AI and preserves private ren
   assert.equal(hidden.code, "vibe64_session_renewal_private");
   assert.equal(hidden.text, undefined);
   assert.equal((await service.restoreSessionWorkPlan(sessionId, { archiveId: archived.history[0].id })).code, "vibe64_session_renewal_private");
+});
+
+test("plan history reads an archived plan in full once and again only when its files change", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-plan-history-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
+  const sessionId = "plan-history";
+  await store.createSession({ sessionId, runtimeKind: "genesis" });
+  const runtime = { stateRoot: root, store, getSession: (id) => store.readSession(id), getSessionWithoutSource(id) { return this.getSession(id); } };
+  const unused = () => assert.fail("Reading a plan must not inspect or change project configuration.");
+  const service = createService(terminalsServiceCollaborators({ env: {}, logger: silentLogger, project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+    createSessionStore: async () => store, readCurrentProject: unused, readEnv: unused,
+    runInProjectContext: unused, saveEnvUserValues: unused },
+    codexTerminalController: { codexAppServerProviderFactory() { assert.fail("Reading a plan must not start AI."); } } }));
+  const file = workPlanPath({ runtime, session: await store.readSession(sessionId) });
+  const text = "# Keep the tally\nStatus: completed\n- [x] Count\n- [ ] Reset\n";
+  // Necessary persisted-format fixture adaptation: explicit offline publication, never a reader backfill.
+  for (const patch of planProgressUpgradeChanges([{ name: "current.md", text }])) {
+    const destination = path.join(path.dirname(file), patch.name);
+    if (patch.text !== null) { await mkdir(path.dirname(destination), { recursive: true }); await writeFile(destination, patch.text); }
+  }
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 5, status: "complete", delivery: "accepted" }));
+  const current = await service.readSessionWorkPlan(sessionId);
+  const archived = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: current.revision });
+  assert.equal(archived.ok, true, archived.error);
+  const [entry] = archived.history;
+  assert.deepEqual([entry.title, entry.status, entry.checked, entry.total], ["Keep the tally", "completed", 1, 2]);
+  const document = path.join(path.dirname(file), "plan", `${entry.revision}.md`);
+  const opened = [];
+  const realOpen = fs.open;
+  fs.open = async (target, ...rest) => {
+    opened.push(String(target));
+    return realOpen(target, ...rest);
+  };
+  syncBuiltinESMExports();
+  try {
+    for (let index = 0; index < 3; index += 1) assert.deepEqual((await service.readSessionWorkPlan(sessionId)).history, archived.history);
+    assert.equal(opened.filter(target => target === document).length, 0, "An unchanged archived plan is not read again.");
+    await writeFile(document, text.replace("Count", "Count again"));
+    const changed = await service.readSessionWorkPlan(sessionId);
+    assert.equal(changed.ok, false);
+    assert.equal(changed.code, "vibe64_work_plan_pair_missing", "A changed archived plan is read and checked again.");
+  } finally {
+    fs.open = realOpen;
+    syncBuiltinESMExports();
+  }
 });

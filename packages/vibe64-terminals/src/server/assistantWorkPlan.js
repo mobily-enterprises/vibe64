@@ -11,6 +11,14 @@ const PLAN_LIMIT = 256 * 1024;
 // Process-wide: whole pair reads and publication/cleanup of a plan file run
 // one at a time per plan path, whichever service asks.
 const workPlanQueue = createKeyedQueue();
+// An archived plan does not change: its record names content-addressed plan
+// and progress documents. Plan history keeps each archived plan's summary
+// while the identities (device, inode, size, times) of its record and
+// documents stay the same, so listing history reads in full only the plans
+// archived or changed since, not every archived plan on every read.
+const HISTORY_SUMMARY_LIMIT = 4096;
+/** @type {Map<string, { identities: string, documents: string[], summary: Record<string, unknown> }>} */
+const historySummaries = new Map();
 
 function planError(message, code, params) {
   return new AppError(409, message, { code, params });
@@ -132,6 +140,45 @@ async function readArchived(context, id) {
     archivedAt: (await lstat(archivePath(context, id))).mtime.toISOString()
   } : null);
 }
+async function planFileIdentity(file) {
+  try {
+    const info = await lstat(file, { bigint: true });
+    return `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`;
+  } catch (error) {
+    if (error.code === "ENOENT") return "missing";
+    throw error;
+  }
+}
+function rememberHistorySummary(key, entry) {
+  historySummaries.delete(key);
+  historySummaries.set(key, entry);
+  while (historySummaries.size > HISTORY_SUMMARY_LIMIT) historySummaries.delete(historySummaries.keys().next().value);
+}
+/** One archived plan's history entry: its summary, never its text. */
+async function readArchivedSummary(context, id) {
+  const records = [pairPath(context, id), archivePath(context, id)];
+  const cached = historySummaries.get(records[0]);
+  if (cached) {
+    const identities = await Promise.all([...records, ...cached.documents].map(planFileIdentity));
+    if (identities.join("\n") === cached.identities) return { ...cached.summary };
+  }
+  // Identities are taken before the reads: a file replaced in between is read
+  // again next time instead of being kept under its new identity.
+  const recordIdentities = await Promise.all(records.map(planFileIdentity));
+  const source = await readPlanFile(records[0], { plainText: true });
+  const record = source === null ? null : parsePairRecord(source, id);
+  const documents = record ? [
+    documentPath(context, "plan", record.planRevision),
+    ...(record.progressRevision === null ? [] : [documentPath(context, "progress", record.progressRevision)])
+  ] : [];
+  const documentIdentities = await Promise.all(documents.map(planFileIdentity));
+  const plan = await readArchived(context, id);
+  if (!plan) throw planError("Plan history changed while it was being read. Read it again.", "vibe64_work_plan_history_changed");
+  const { text: _text, progressText: _progress, legacy: _legacy, ...summary } = plan;
+  const entry = { ...summary, progressRevision: plan.progressRevision || "", progressAvailable: plan.progressText !== null, id };
+  rememberHistorySummary(records[0], { identities: [...recordIdentities, ...documentIdentities].join("\n"), documents, summary: entry });
+  return { ...entry };
+}
 async function readWorkPlanHistoryUnlocked(context) {
   try {
     if (!(await lstat(planDirectory(context))).isDirectory()) throw planError("The plan directory must not be a link.", "vibe64_work_plan_directory_link");
@@ -148,14 +195,8 @@ async function readWorkPlanHistoryUnlocked(context) {
     if (error.code === "ENOENT") return [];
     throw error;
   }
-  const history = [];
   const ids = new Set(entries.filter(name => /^[a-f0-9]{64}\.(md|json)$/u.test(name)).map(name => name.slice(0, 64)));
-  for (const id of ids) {
-    const plan = await readArchived(context, id);
-    if (!plan) throw planError("Plan history changed while it was being read. Read it again.", "vibe64_work_plan_history_changed");
-    const { text: _text, progressText: _progress, legacy: _legacy, ...summary } = plan;
-    history.push({ ...summary, progressRevision: plan.progressRevision || "", progressAvailable: plan.progressText !== null, id });
-  }
+  const history = await Promise.all([...ids].map(id => readArchivedSummary(context, id)));
   return history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
 }
 async function readWorkPlanPageUnlocked(context, options = {}) {

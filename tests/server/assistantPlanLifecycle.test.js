@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, open, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -491,6 +491,9 @@ test("direct pair readers hold the original per-path queue until referenced docu
       ? path.join(directory, "archive", saved.artifactRevision + ".json")
       : path.join(directory, "current.json");
     const recordText = await readFile(recordPath, "utf8");
+    // History keeps an unchanged archive's summary; a newer record time makes
+    // this reader read the record again, as its first read does.
+    if (reader === "history") await utimes(recordPath, new Date(), new Date(Date.now() + 1000));
     const probe = await open(recordPath, "r");
     const prototype = Object.getPrototypeOf(probe);
     await probe.close();
