@@ -382,6 +382,11 @@ function createService({
    * Keeps the newest recordings within the session's count and size budget
    * and deletes those older than the age limit. Running recordings stay.
    */
+  /**
+   * Removes the recordings past the retention rule and returns the kept
+   * ones' saved records by id (null where unreadable), so a read that follows
+   * need not read them again.
+   */
   async function applyRetention(directory) {
     const recordings = [];
     for (const id of (await readdir(directory).catch(() => [])).filter((name) => USAGE_RECORDING_ID_PATTERN.test(name))) {
@@ -389,37 +394,51 @@ function createService({
       const stored = storedRecording(await readJsonFile(path.join(recordingDirectory, "recording.json")));
       const startedAt = Date.parse(stored?.startedAt || "") ||
         await stat(recordingDirectory).then((info) => info.mtimeMs, () => 0);
-      recordings.push({ id, recordingDirectory, startedAt, bytes: await directorySize(recordingDirectory) });
+      recordings.push({ id, recordingDirectory, stored, startedAt, bytes: await directorySize(recordingDirectory) });
     }
     recordings.sort((left, right) => right.startedAt - left.startedAt);
-    let kept = 0;
+    const kept = new Map();
     let bytes = 0;
     for (const recording of recordings) {
       const running = live.has(recording.id);
-      const keep = running || (kept < USAGE_RECORDING_RETENTION.maxRecordings &&
+      const keep = running || (kept.size < USAGE_RECORDING_RETENTION.maxRecordings &&
         bytes + recording.bytes <= USAGE_RECORDING_RETENTION.maxBytes && now() - recording.startedAt <= USAGE_RECORDING_RETENTION.maxAgeMs);
       if (keep) {
-        kept += 1;
+        kept.set(recording.id, recording.stored);
         bytes += recording.bytes;
       } else {
         await rm(recording.recordingDirectory, { force: true, recursive: true });
         finishedReaders.delete(recording.recordingDirectory);
       }
     }
+    return kept;
   }
 
-  async function storedRecordings(context) {
+  // A recording left running by an earlier server process ends here.
+  async function endLeftRunning(recordingDirectory, record) {
+    if (ACTIVE_STATES.has(record.state) && !live.has(record.id)) {
+      await writeJsonFile(path.join(recordingDirectory, "control.json"), { state: "stopping" });
+      Object.assign(record, { state: "stopped", stopReason: "error", stoppedAt: record.stoppedAt || isoTime(now()) });
+      await writeJsonFile(path.join(recordingDirectory, "recording.json"), record);
+    }
+    return record;
+  }
+
+  /**
+   * The session's recordings, newest first. `saved` holds records just read
+   * by applyRetention, which are used instead of reading each again.
+   * @param {object} context
+   * @param {Map<string, object | null>} [saved]
+   */
+  async function storedRecordings(context, saved = null) {
     const recordings = [];
-    for (const id of (await readdir(context.directory).catch(() => [])).filter((name) => USAGE_RECORDING_ID_PATTERN.test(name))) {
-      const record = live.get(id)?.record || storedRecording(await readJsonFile(path.join(context.directory, id, "recording.json")));
+    const ids = saved ? [...saved.keys()]
+      : (await readdir(context.directory).catch(() => [])).filter((name) => USAGE_RECORDING_ID_PATTERN.test(name));
+    for (const id of ids) {
+      const record = live.get(id)?.record ||
+        (saved ? saved.get(id) : storedRecording(await readJsonFile(path.join(context.directory, id, "recording.json"))));
       if (!record || record.sessionId !== context.sessionId) continue;
-      // A recording left running by an earlier server process ends here.
-      if (ACTIVE_STATES.has(record.state) && !live.has(id)) {
-        await writeJsonFile(path.join(context.directory, id, "control.json"), { state: "stopping" });
-        Object.assign(record, { state: "stopped", stopReason: "error", stoppedAt: record.stoppedAt || isoTime(now()) });
-        await writeJsonFile(path.join(context.directory, id, "recording.json"), record);
-      }
-      recordings.push(record);
+      recordings.push(await endLeftRunning(path.join(context.directory, id), record));
     }
     return recordings.sort((left, right) => String(right.startedAt).localeCompare(String(left.startedAt)));
   }
@@ -576,8 +595,7 @@ function createService({
 
   async function readCurrent({ sessionId }) {
     const context = await sessionContext(sessionId);
-    await applyRetention(context.directory);
-    const recordings = await storedRecordings(context);
+    const recordings = await storedRecordings(context, await applyRetention(context.directory));
     const current = recordings.find((record) => ACTIVE_STATES.has(record.state)) ||
       recordings.find((record) => !record.dismissedAt && record.stoppedAt && now() - Date.parse(record.stoppedAt) <= CURRENT_WINDOW_MS);
     return { recording: current ? publicRecording(current) : null, serverTime: isoTime(now()) };
@@ -585,10 +603,9 @@ function createService({
 
   async function stop({ sessionId, recordingId }) {
     const context = await sessionContext(sessionId);
-    const { entry, record } = await recordingFor(context, recordingId);
+    const { directory, entry, record } = await recordingFor(context, recordingId);
     if (entry) return { recording: publicRecording(await stopEntry(entry, "person")) };
-    const [stored] = (await storedRecordings(context)).filter((candidate) => candidate.id === record.id);
-    return { recording: publicRecording(stored || record) };
+    return { recording: publicRecording(await endLeftRunning(directory, record)) };
   }
 
   async function dismiss({ sessionId, recordingId }) {

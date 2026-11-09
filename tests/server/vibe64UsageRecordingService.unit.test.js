@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { appendFile, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import fs, { appendFile, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -516,4 +517,35 @@ test("a recording left running by an earlier server process ends as an error", a
   assert.equal(recording.stopReason, "error");
   assert.deepEqual(await readJson(path.join(directory, "control.json")), { state: "stopping" });
   assert.equal((await readJson(path.join(directory, "recording.json"))).state, "stopped");
+});
+
+test("reading the current recording reads each saved recording once, and stopping one reads only it", async (t) => {
+  const { call, sessionRoot } = await recorder(t);
+  const ids = ["rec_aaaaaaaaaaaaaaaaaaaa", "rec_bbbbbbbbbbbbbbbbbbbb", "rec_cccccccccccccccccccc"];
+  for (const [index, id] of ids.entries()) {
+    const directory = path.join(sessionRoot, "usage-recordings", id);
+    await mkdir(directory, { recursive: true });
+    const startedAt = new Date(Date.now() - (index + 1) * 60_000).toISOString();
+    await writeFile(path.join(directory, "recording.json"), JSON.stringify({
+      schema: "vibe64.usage-recording.v1", id, sessionId: SESSION_ID, state: index === 0 ? "recording" : "stopped",
+      target: { id: "preview", kind: "web", label: "Preview" }, runtimes: ["nodejs"], tracers: [], startedAt,
+      stoppedAt: index === 0 ? null : startedAt, stopReason: index === 0 ? null : "person", counts: { requests: 0, functions: 0 },
+      truncated: false, dismissedAt: null, sourceIdentity: null
+    }));
+  }
+  const opened = [];
+  const realOpen = fs.open;
+  fs.open = async (target, ...options) => {
+    if (String(target).endsWith("recording.json")) opened.push(path.basename(path.dirname(String(target))));
+    return realOpen(target, ...options);
+  };
+  syncBuiltinESMExports();
+  try {
+    assert.equal((await call("readCurrent")).recording.stopReason, "error");
+    assert.deepEqual(opened.toSorted(), ids, "retention's read of each recording is the read the current one comes from");
+
+    opened.length = 0;
+    assert.equal((await call("stop", { recordingId: ids[1] })).recording.state, "stopped");
+    assert.deepEqual(opened, [ids[1]], "stopping a saved recording reads no other recording");
+  } finally { fs.open = realOpen; syncBuiltinESMExports(); }
 });
