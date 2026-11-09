@@ -31,6 +31,12 @@ function updateMainChatNote(result = {}) {
   return `Vibe64 updated this session to the saved version. These files changed: ${listed.join(", ")}${more > 0 ? ` and ${more} more` : ""}. Re-read them before editing them, and re-run any checks that touch them.`;
 }
 
+const UPDATE_STOPPED_CODES = new Set([
+  "vibe64_session_update_head_moved",
+  "vibe64_session_update_ignored_file",
+  "vibe64_session_update_worktree_changed"
+]);
+
 const SAVE_MAIN_CHAT_NOTE = "Vibe64 saved this session's work as it is now, including unfinished changes. No files changed, so nothing needs re-reading.";
 
 /**
@@ -474,9 +480,11 @@ function createSessionWork({
         if (!operationStarted) {
           throw error;
         }
-        // A cancelled Update changed nothing, so the conflicts it was resuming still stand for the next run.
+        // An Update cancelled, or stopped because the session changed while it ran, resolved nothing, so the
+        // conflicts it was resuming still stand for the next run.
         const cancelled = input.signal?.aborted === true;
-        const recovery = error?.details?.conflictRecovery || (cancelled ? conflictRecovery : null);
+        const stopped = cancelled || UPDATE_STOPPED_CODES.has(normalizeText(error?.code));
+        const recovery = error?.details?.conflictRecovery || (stopped ? conflictRecovery : null);
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
           event: {
             kind: cancelled ? "update-cancelled" : "update-failed",

@@ -2559,6 +2559,49 @@ test("a cancelled Update keeps the conflicts it was resuming, and a Cancel befor
   assert.equal(tasks.get("update-session"), conflicted);
 });
 
+for (const code of ["vibe64_session_update_worktree_changed", "vibe64_session_update_head_moved", "vibe64_session_update_ignored_file"]) {
+  test(`an Update that stops with ${code} keeps the conflicts it was resuming`, async () => {
+    const conflictRecovery = { canonicalCommit: "canonical", conflictPaths: ["shared.txt"], reviewId: "review-id" };
+    const tasks = new Map([["update-session", { status: "failed", code: "vibe64_session_update_conflict",
+      conflictPaths: ["shared.txt"], conflictRecovery, error: "One file needs review.", events: [] }]]);
+    const session = { agentRuns: [], metadata: {}, sessionId: "session-1", status: "active" };
+    const runtime = {
+      async getSession() { return session; },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+      store: {
+        async listSessionConversations() { return []; },
+        async readBackgroundTask(_sessionId, taskId) { return tasks.get(taskId) || null; },
+        async writeBackgroundTaskEvent(_sessionId, taskId, input) {
+          const prior = input.reset === true ? { events: [], id: taskId } : tasks.get(taskId) || { events: [], id: taskId };
+          const task = { ...prior, ...input.patch, events: [...(prior.events || []), input.event], id: taskId };
+          tasks.set(taskId, task);
+          return task;
+        }
+      }
+    };
+    const service = createService({
+      project: {
+        async createRuntime() { return runtime; },
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); }
+      },
+      async publishSessionChanged() {},
+      setupRunner: { async start() { assert.fail("A stopped Update prepares nothing."); } },
+      terminals: {
+        async updateSessionWork(_sessionId, input) {
+          await input.onRepositoryWriteAcquired();
+          throw Object.assign(new Error("Update stopped and put this session back."), { code });
+        }
+      }
+    });
+    const answer = await service.updateSessionWork("session-1", { reviewedConflictId: "review-id" });
+    assert.equal(answer.code, code);
+    const record = tasks.get("update-session");
+    assert.equal(record.code, code);
+    assert.deepEqual(record.conflictRecovery, conflictRecovery, "the next repair check resumes the same conflicts");
+    assert.deepEqual(record.conflictPaths, ["shared.txt"]);
+  });
+}
+
 test("one exact update check is shared, cached, and invalidates every sibling session", async () => {
   const metadata = [];
   const publications = [];
