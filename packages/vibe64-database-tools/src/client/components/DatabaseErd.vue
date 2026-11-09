@@ -3,6 +3,7 @@
     <Teleport :to="toolbarTarget || erdRoot" :disabled="!toolbarTarget || fullscreen">
       <!-- A relocated toolbar cannot bubble keyboard events to the ERD root. -->
       <header aria-label="ERD controls" class="database-erd__toolbar" @keydown="toolbarTarget && !fullscreen && onKeydown($event)">
+        <!-- readable-check: allow selection-field - data: tables and columns of the schema prop that draws the diagram, searched in memory and picked as objects -->
         <v-autocomplete
           v-model="searchChoice"
           v-model:search="searchText"
@@ -30,6 +31,7 @@
               <v-btn value="keys" size="small">Keys only</v-btn>
               <v-btn value="all" size="small">All columns</v-btn>
             </v-btn-toggle>
+            <!-- readable-check: allow selection-field - data: the diagram's own filters and the table groups of its layout prop, all in memory with the drawn schema -->
             <v-select
               :model-value="activeGroup" density="compact" :items="groupItems" label="Show tables"
               :menu-props="{ attach: erdRoot }" variant="outlined"
@@ -152,8 +154,10 @@
     <v-dialog v-model="groupDialog" :attach="erdRoot" max-width="520">
       <v-card title="Table groups">
         <v-card-text class="d-flex flex-column ga-4">
+          <!-- readable-check: allow selection-field - data: the table groups of the layout prop the diagram is drawn from -->
           <v-select v-if="groups.length" :model-value="editingGroup" :items="[{ title: 'New group', value: '' }, ...groups.map(group => ({ title: group.name, value: group.id }))]" label="Group to edit" :menu-props="{ attach: erdRoot }" @update:model-value="editGroup" />
           <v-text-field v-model="groupName" label="Group name" maxlength="80" />
+          <!-- readable-check: allow selection-field - data: the tables of the schema prop that draws the diagram, by qualified name -->
           <v-autocomplete v-model="groupTables" :items="tableItems" label="Tables in group" multiple chips closable-chips :menu-props="{ attach: erdRoot, location: 'top' }" />
         </v-card-text>
         <v-card-actions><v-btn v-if="editingGroup" @click="removeGroup">Remove group</v-btn><v-spacer /><v-btn @click="groupDialog = false">Cancel</v-btn><v-btn :disabled="!groupName.trim() || !groupTables.length" @click="saveGroup">Save group</v-btn></v-card-actions>

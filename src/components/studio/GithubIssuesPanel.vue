@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 import { useVibe64Issues } from "@/composables/useVibe64Issues.js";
 import { GITHUB_BODY_MAX_LENGTH } from "@/lib/vibe64GithubProject.js";
 import GithubIssueEditorDialog from "./GithubIssueEditorDialog.vue";
@@ -96,8 +97,8 @@ function date(value) {
             {{ labelCatalog.loadError.value }}
             <template #append><v-btn variant="text" @click="labelCatalog.reload()">Retry labels</v-btn></template>
           </v-alert>
-          <v-autocomplete
-            v-else :model-value="selectedLabels" :items="labelCatalog.data.value?.labels || []" class="issues-panel__label-filter"
+          <SelectField
+            v-else :model-value="selectedLabels" searchable :items="labelCatalog.data.value?.labels || []" :loading="labelCatalog.isLoading.value" class="issues-panel__label-filter"
             item-title="name" item-value="name" multiple chips closable-chips clearable
             label="Filter by labels" prepend-inner-icon="$label" variant="outlined" rounded="lg"
             :menu-props="{ maxHeight: 320 }" hint="Match all selected labels." persistent-hint
@@ -110,7 +111,7 @@ function date(value) {
                 <template #subtitle>{{ item.description }}</template>
               </v-list-item>
             </template>
-          </v-autocomplete>
+          </SelectField>
           <div v-if="labelCatalog.data.value?.canCreateLabels" class="d-flex justify-end">
             <GithubNewLabelButton :base-path="basePath" :labels="labelCatalog.data.value.labels" />
           </div>

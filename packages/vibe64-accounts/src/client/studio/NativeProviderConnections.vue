@@ -101,6 +101,7 @@ async function save({ remove = false, useSavedKey = false, endpoint = null, key 
     />
     <template v-else>
       <div v-if="selectProvider" class="mb-3">
+        <!-- readable-check: allow selection-field - data: the curated provider catalogue, a constant whose entries are all listed before connections load (a custom endpoint once set up or chosen), each labelled with its connection state -->
         <v-select
           v-model="providerId" :items="choices" item-title="label" item-value="id"
           :label="`Use ${engineLabel} with`" variant="outlined" hide-details :disabled="busy"

@@ -146,6 +146,10 @@ vi.mock("vuetify/components/VSelect", () => ({
   VSelect: passthroughComponent("select")
 }));
 
+vi.mock("@jskit-ai/http-web/client/components/SelectField", () => ({
+  default: passthroughComponent("select")
+}));
+
 vi.mock("vuetify/components/VSwitch", () => ({
   VSwitch: passthroughComponent("input")
 }));

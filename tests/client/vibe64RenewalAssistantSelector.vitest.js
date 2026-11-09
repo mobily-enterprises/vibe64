@@ -41,6 +41,11 @@ vi.mock("vuetify/components/VSelect", () => ({
 vi.mock("vuetify/components/VSkeletonLoader", () => ({
   VSkeletonLoader: passthroughComponent("div")
 }));
+// SelectField's own template is compiled for SSR here, like every SFC this file does not recompile; the fields'
+// bindings, loading included, are what this component owns.
+vi.mock("@jskit-ai/http-web/client/components/SelectField", () => ({
+  default: passthroughComponent("select")
+}));
 
 import Vibe64RenewalAssistantSelector from "../../src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue";
 
@@ -308,6 +313,7 @@ describe("Vibe64RenewalAssistantSelector", () => {
 
     expect(findField(mounted.container, "AI").props["model-value"]).toBe("codex");
     expect(findField(mounted.container, "Model").props["model-value"]).toBe("gpt-5.6");
+    expect(findField(mounted.container, "Model").props.loading).toBe(false);
     expect(mounted.selections.at(-1)).toEqual({
       ...initialSelection,
       catalogRevision: CODEX_REVISION
@@ -397,9 +403,12 @@ describe("Vibe64RenewalAssistantSelector", () => {
 
     selectorHarness.details.modelPage.isLoading.value = true;
     findField(mounted.container, "Provider").props["onUpdate:modelValue"]("deepseek");
+    await settle();
+    expect(findField(mounted.container, "Model").props.loading).toBe(true);
     selectorHarness.details.modelEngine.value = openCodeEngine({ providerId: "deepseek" });
     selectorHarness.details.modelPage.isLoading.value = false;
     await settle();
+    expect(findField(mounted.container, "Model").props.loading).toBe(false);
     findField(mounted.container, "Model").props["onUpdate:modelValue"]("deepseek-reasoner");
     await settle();
     findField(mounted.container, "Thinking").props["onUpdate:modelValue"]("high");

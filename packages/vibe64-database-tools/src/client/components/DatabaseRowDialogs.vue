@@ -4,14 +4,16 @@
       <v-card-title>Edit {{ editingColumn?.label }}</v-card-title>
       <v-card-text class="database-workspace__edit-form">
         <p v-if="editingColumn?.origin"><code>{{ editingColumn.origin.schema }}.{{ editingColumn.origin.table }}.{{ editingColumn.origin.column }}</code></p>
-        <v-autocomplete
+        <SelectField
           v-if="editingColumn?.lookup"
           v-model="selectedLookupItem"
           v-model:search="lookupSearch"
+          searchable
           :hint="lookupBusy ? 'Searching lookup table…' : 'Suggestions come from the declared foreign-key target.'"
           :items="lookupItems"
           item-title="display"
           label="Choose from referenced table"
+          :loading="lookupBusy"
           no-filter
           persistent-hint
           return-object
@@ -78,6 +80,7 @@
 
 <script setup>
 import { toRef } from "vue";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 
 import { useDatabaseRowEditing } from "../composables/useDatabaseRowEditing.js";
 

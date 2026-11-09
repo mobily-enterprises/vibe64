@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubNewLabelButton from "./GithubNewLabelButton.vue";
 import GithubMentionTextarea from "./GithubMentionTextarea.vue";
@@ -108,8 +109,8 @@ async function submit() {
             <template #append><v-btn variant="text" @click="catalog.reload()">Retry</v-btn></template>
           </v-alert>
           <template v-else>
-            <v-autocomplete
-              v-model="selectedLabels" :items="labels" item-title="name" item-value="name" multiple chips closable-chips
+            <SelectField
+              v-model="selectedLabels" searchable :items="labels" :loading="catalog.isLoading.value" item-title="name" item-value="name" multiple chips closable-chips
               label="Labels" variant="outlined" :disabled="pending || !canSetLabels" :menu-props="{ maxHeight: 320 }"
               :error-messages="selectedLabels.length > 100 ? 'Choose up to 100 labels.' : ''"
               :hint="canSetLabels ? 'Search and select repository labels.' : editing ? 'Your GitHub account cannot edit labels.' : 'GitHub requires write access to set labels on a new issue.'"
@@ -122,7 +123,7 @@ async function submit() {
                   <template #subtitle>{{ item.description }}</template>
                 </v-list-item>
               </template>
-            </v-autocomplete>
+            </SelectField>
             <div class="d-flex flex-wrap justify-space-between ga-2">
               <GithubNewLabelButton
                 v-if="catalog.data.value?.canCreateLabels" :base-path="basePath" :labels="labels" :disabled="pending"

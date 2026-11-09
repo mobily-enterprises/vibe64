@@ -79,9 +79,10 @@
               <v-btn variant="text" @click="branches.reload()">Try again</v-btn>
             </v-alert>
             <template v-else>
-              <v-select
+              <SelectField
                 v-model="branchName"
                 :items="branches.data.value?.branches || []"
+                :loading="branches.isLoading.value"
                 item-title="name"
                 item-value="name"
                 :label="createBranch ? 'Create from' : 'Branch'"
@@ -130,6 +131,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { VIBE64_SESSIONS_API_SUFFIX, vibe64RepositoryApiPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { requestVibe64AiOnboarding, useModelRouting } from "@local/vibe64-accounts/client";

@@ -77,6 +77,7 @@ async function submit() {
           <v-btn value="add">Add labels</v-btn>
           <v-btn value="remove">Remove labels</v-btn>
         </v-btn-toggle>
+        <!-- readable-check: allow selection-field - data: the labels prop is the label catalog the issues panel loaded before it offers bulk editing, the selection starts empty when the dialog opens, and each value is a label name -->
         <v-autocomplete
           v-model="selectedLabels" :items="labels" item-title="name" item-value="name" multiple chips closable-chips
           label="Labels to change" variant="outlined" :disabled="pending" :menu-props="{ maxHeight: 320 }"

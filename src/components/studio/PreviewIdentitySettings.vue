@@ -149,7 +149,6 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import {
   PREVIEW_IDENTITY_SELECTOR_EMAIL,
   PREVIEW_IDENTITY_SELECTOR_LOGIN,
-  PREVIEW_IDENTITY_SELECTOR_TYPES,
   PREVIEW_IDENTITY_SELECTOR_USER_ID
 } from "@local/vibe64-core/shared/previewIdentity";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
@@ -170,15 +169,12 @@ import {
 } from "@/lib/vibe64RequestConfig.js";
 import { reloadPage } from "@/lib/browser.js";
 
-const identityTypeLabels = Object.freeze({
-  [PREVIEW_IDENTITY_SELECTOR_EMAIL]: "Email",
-  [PREVIEW_IDENTITY_SELECTOR_LOGIN]: "Login name",
-  [PREVIEW_IDENTITY_SELECTOR_USER_ID]: "User ID"
-});
-const identityTypes = Object.freeze(PREVIEW_IDENTITY_SELECTOR_TYPES.map((value) => ({
-  label: identityTypeLabels[value],
-  value
-})));
+// The selector types in PREVIEW_IDENTITY_SELECTOR_TYPES order, each with its label.
+const identityTypes = Object.freeze([
+  { label: "Email", value: PREVIEW_IDENTITY_SELECTOR_EMAIL },
+  { label: "Login name", value: PREVIEW_IDENTITY_SELECTOR_LOGIN },
+  { label: "User ID", value: PREVIEW_IDENTITY_SELECTOR_USER_ID }
+]);
 
 const projectSlug = useVibe64ProjectSlug();
 const sessionSelection = useVibe64SessionSelection({

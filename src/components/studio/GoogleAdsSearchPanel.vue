@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 import { validateGoogleAdsSearchPlan } from "@jskit-ai/connectors-catalog/shared/google-ads-search";
 
 const props = defineProps({ modelValue: { type: Object, required: true }, integrationId: { type: String, required: true }, disabled: Boolean, managementDisabled: Boolean, result: { type: Object, default: null }, error: { type: String, default: "" }, loading: Boolean, applicationPublicUrl: { type: String, default: "" }, canPrepare: Boolean });
@@ -87,7 +88,7 @@ function performConfirmed() {
           <v-btn variant="tonal" :disabled="blocked || !accountValid" @click="manage('ads-discover', { customerId: draft.customerId })">Load account and goals</v-btn>
           <p v-if="discovery?.account" class="my-3">{{ discovery.account.descriptiveName }} · {{ discovery.account.currencyCode }} · {{ discovery.account.timeZone }} · {{ discovery.account.status }} {{ discovery.account.manager ? '(Manager: choose a client below)' : '' }}</p>
           <v-list v-if="discovery?.clients?.length" aria-label="Manager clients"><v-list-item v-for="row in discovery.clients" :key="row.customerClient.id" :title="`${row.customerClient.descriptiveName || ''} — ${row.customerClient.id}`" /></v-list>
-          <v-select v-model="draft.conversionActionId" :items="(discovery?.conversions || []).map(row => ({ title: `${row.conversionAction.name} (${row.conversionAction.id})`, value: String(row.conversionAction.id) }))" label="Website conversion goal" :disabled="disabled" persistent-hint hint="Enabled website goals only. Load the account to select one." />
+          <SelectField v-model="draft.conversionActionId" :items="(discovery?.conversions || []).map(row => ({ title: `${row.conversionAction.name} (${row.conversionAction.id})`, value: String(row.conversionAction.id) }))" :loading="loading" label="Website conversion goal" :disabled="disabled" persistent-hint hint="Enabled website goals only. Load the account to select one." />
           <v-text-field v-model="goalName" label="New website lead goal name" :disabled="blocked" maxlength="100" />
           <v-btn variant="outlined" :disabled="blocked || !accountValid || !goalName.trim()" @click="confirm = 'conversion'">Review new conversion goal</v-btn>
           <p class="mt-3">Creating a goal adds an enabled website lead conversion counted once per click. Reload account and goals afterwards. This does not install tracking in your site.</p>
@@ -115,7 +116,9 @@ function performConfirmed() {
           <p>The daily budget is an average, not a hard daily spending cap. Review Google's billing rules and your account's limits before launch.</p>
           <v-text-field v-model="locationName" label="Find a target location" :disabled="blocked" />
           <v-btn variant="outlined" :disabled="blocked || !accountValid || locationName.trim().length < 2" @click="manage('ads-targets', { customerId: draft.customerId, name: locationName.trim() })">Find locations and languages</v-btn>
+          <!-- readable-check: allow selection-field - data: a person may type known Google geo target IDs, as the hint says, and the location search only suggests them, so the field asks for and shows IDs -->
           <v-combobox v-model="draft.locationIds" :items="(targets?.locations || []).map(row => ({ title: row.geoTargetConstant.canonicalName, value: String(row.geoTargetConstant.id) }))" :return-object="false" label="Target location IDs" multiple chips :disabled="disabled" hint="Choose search results, or enter known Google geo target IDs. At least one, at most ten." persistent-hint />
+          <!-- readable-check: allow selection-field - data: a person may type a known Google language constant ID, and the location search only suggests languages, so the field asks for and shows an ID -->
           <v-combobox v-model="draft.languageId" :items="(targets?.languages || []).map(row => ({ title: row.languageConstant.name, value: String(row.languageConstant.id) }))" :return-object="false" label="Target language ID" :disabled="disabled" />
           <v-textarea v-model="draft.keywords" label="Phrase keywords — one per line" :disabled="disabled" hint="1–20 keywords, at most 80 characters each." persistent-hint />
           <v-textarea v-model="draft.headlines" label="Ad headlines — one per line" :disabled="disabled" hint="3–15 headlines, at most 30 characters each." persistent-hint />

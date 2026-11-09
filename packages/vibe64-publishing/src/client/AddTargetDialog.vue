@@ -2,6 +2,7 @@
 // Add a target: choose where it goes (with what it needs, how long it takes
 // and what it costs), then which package and which account.
 import { computed, ref, watch } from "vue";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 import { destinationAccent, destinationGap, destinationIcon } from "./publishFormat.js";
 
 const props = defineProps({
@@ -117,26 +118,28 @@ async function add() {
             </ul>
             <p>First time: {{ chosen.firstTime }}. Later: {{ chosen.repeat }}. {{ chosen.cost }}.</p>
           </section>
-          <v-select
+          <SelectField
             v-model="packageId"
             :items="packages"
             item-title="label"
             item-value="id"
             label="Package"
+            :loading="!state"
             variant="outlined"
           >
             <template #item="{ props: item, item: entry }">
               <v-list-item v-bind="item" :subtitle="packageLine(entry.raw || entry)" />
             </template>
-          </v-select>
+          </SelectField>
           <template v-if="needsAccount">
-            <v-select
+            <SelectField
               v-if="accounts.length"
               v-model="accountId"
               :items="accounts"
               item-title="label"
               item-value="id"
               :label="`${chosen.accountKind.label} account`"
+              :loading="!state"
               variant="outlined"
             />
             <v-alert v-else class="mb-4" type="info" variant="tonal">

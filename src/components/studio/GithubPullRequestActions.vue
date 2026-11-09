@@ -136,6 +136,7 @@ async function submit() {
         </p>
         <template v-else>
           <p class="text-body-medium ma-0">Merge the commits already on GitHub. Save any session work you want included first.</p>
+          <!-- readable-check: allow selection-field - data: the merge methods the opened confirmation already holds, titled from the written-out methodLabels; each value is a merge method name -->
           <v-select
             v-if="confirmation.methods.length > 1" v-model="mergeMethod" label="Merge method" variant="outlined" hide-details
             :items="confirmation.methods.map(value => ({ title: methodLabels[value], value }))" :disabled="pending"

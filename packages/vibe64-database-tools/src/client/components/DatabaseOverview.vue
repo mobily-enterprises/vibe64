@@ -118,14 +118,18 @@
       <v-card title="Edit main actors">
         <v-card-text>
           <p>Group supporting tables at any depth. Tables without a group appear under Other tables. Shared concepts can be their own actor.</p>
+          <!-- readable-check: allow selection-field - data: the actors of the overview draft being edited, picked by their place in it -->
           <v-select v-model="editing" :items="draftActors.map((actor, index) => ({ title: actor.name || 'New actor', value: index }))" label="Actor" hide-details />
           <div class="database-overview__editor-actions"><v-btn size="small" @click="addActor">Add actor</v-btn><v-btn v-if="draft" size="small" @click="removeActor">Remove actor</v-btn></div>
           <template v-if="draft">
             <v-text-field v-model="draft.name" label="Name" maxlength="120" />
+            <!-- readable-check: allow selection-field - data: the schema's tables that no other actor of the draft holds, by qualified name -->
             <v-autocomplete v-model="draft.table" :items="availableTables" label="Main table" @update:model-value="includeMainTable" />
             <v-textarea v-model="draft.description" label="What this actor contains" maxlength="600" rows="2" />
+            <!-- readable-check: allow selection-field - data: the schema's tables that no other actor of the draft holds, by qualified name -->
             <v-autocomplete v-model="draft.tables" :items="availableTables" label="Included tables" multiple chips closable-chips @update:model-value="includeMainTable" />
             <template v-if="draftActors.length > 1">
+              <!-- readable-check: allow selection-field - data: the draft's other actors, by their main table's qualified name -->
               <v-select v-model="mergeTarget" :items="draftActors.flatMap((actor, index) => index === editing ? [] : [{ title: actor.name, value: actor.table }])" label="Merge into another actor" clearable />
               <v-btn size="small" :disabled="!mergeTarget" @click="mergeActor">Merge actor and its tables</v-btn>
             </template>

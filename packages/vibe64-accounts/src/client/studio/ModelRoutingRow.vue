@@ -140,6 +140,7 @@ function chooseThinking(variantId) {
       <template v-else>
         <p class="routing-row__description">{{ role.description }}</p>
         <div class="routing-row__controls">
+          <!-- readable-check: allow selection-field - data: the model choices the parent passes in, plus an entry standing for a saved choice they no longer list, so the picked id is always one of them -->
           <v-autocomplete
             :model-value="pickerValue" :items="items" item-title="label" item-value="id" :label="`${role.label} model`"
             placeholder="Choose a model" variant="outlined" density="comfortable" hide-details="auto" :readonly="readonly"
@@ -171,6 +172,7 @@ function chooseThinking(variantId) {
               </span>
             </template>
           </v-autocomplete>
+          <!-- readable-check: allow selection-field - data: the thinking levels of the chosen model's catalogue entry, already in the choices the parent passes in -->
           <v-select
             v-if="variants.length" :model-value="value?.variantId || ''" :items="[{ id: '', label: 'Default' }, ...variants]"
             item-title="label" item-value="id" label="Thinking" :aria-label="`${role.label} thinking`" variant="outlined" density="comfortable"

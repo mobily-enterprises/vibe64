@@ -10,21 +10,21 @@
         <v-alert v-if="catalogError" type="error" variant="tonal" density="compact">
           {{ catalogError }} <v-btn variant="text" @click="reloadCatalog">Retry</v-btn>
         </v-alert>
-        <v-select
-          label="Orchestrator" :items="engineRows" item-title="label" item-value="engineId"
+        <SelectField
+          label="Orchestrator" :items="engineRows" :loading="connections.overview.isLoading.value" item-title="label" item-value="engineId"
           :model-value="engineId" :disabled="changesDisabled || saving || connections.overview.isInitialLoading.value"
           hide-details variant="outlined" @update:model-value="selectEngine"
         />
         <v-skeleton-loader v-if="catalogLoading" type="list-item-two-line@2" />
         <template v-else>
-          <v-autocomplete
-            label="Model" :items="modelRows" item-title="label" item-value="key"
+          <SelectField
+            label="Model" searchable :items="modelRows" :loading="catalogLoading" item-title="label" item-value="key"
             :model-value="selectedModel ? modelKey : null" :disabled="changesDisabled || saving" hide-details variant="outlined"
             no-data-text="No model is available yet" persistent-placeholder placeholder="None"
             @update:model-value="selectModel"
           />
-          <v-select
-            label="Thinking" :items="variantRows" item-title="label" item-value="id"
+          <SelectField
+            label="Thinking" :items="variantRows" :loading="catalogLoading" item-title="label" item-value="id"
             :model-value="variantId" :disabled="changesDisabled || saving || Boolean(selectedAgent?.variantId)"
             hide-details variant="outlined" @update:model-value="selectVariant"
           />
@@ -129,6 +129,7 @@
 
 <script setup>
 import { watch } from "vue";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 
 import { useVibe64SessionAssistantApply } from "@/composables/useVibe64SessionAssistantApply.js";
 import { useVibe64SessionAssistantChoice } from "@/composables/useVibe64SessionAssistantChoice.js";

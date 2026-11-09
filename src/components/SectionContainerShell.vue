@@ -104,6 +104,7 @@ onBeforeUnmount(() => {
       class="section-container-shell__panel"
     >
       <div class="section-container-shell__body">
+        <!-- readable-check: allow selection-field - data: the section links come from the mobileSectionLinks prop and each value is a route path -->
         <v-select
           v-if="mobileSectionsActive && !navigationCollapsed"
           class="section-container-shell__mobile-select"

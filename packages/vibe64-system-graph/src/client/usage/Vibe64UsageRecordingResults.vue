@@ -14,10 +14,11 @@
       <p v-else class="text-body-medium">No recordings yet. Use Record to capture what runs, then pick a request here.</p>
     </div>
     <template v-else>
-      <v-select
+      <SelectField
         :model-value="recordingId"
         :items="recordingItems"
         label="Recording"
+        :loading="loading"
         variant="outlined"
         density="comfortable"
         hide-details
@@ -117,6 +118,7 @@
 <script setup>
 import { Vibe64UsageRecordingSummary } from "@local/vibe64-usage-recording/client";
 import { computed } from "vue";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 
 import { BACKGROUND_TEXT, countLabel, interactionRunTitle, interactionTitle, isBackgroundRequest, isReadinessRequest, onlyBackground, pathParts, requestCount, requestGroups, requestTitle } from "./usageModel.js";
 

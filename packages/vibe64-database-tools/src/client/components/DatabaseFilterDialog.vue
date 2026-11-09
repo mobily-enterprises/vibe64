@@ -3,6 +3,7 @@
     <v-card>
       <v-card-title>Add a table filter</v-card-title>
       <v-card-text class="database-workspace__filter-form">
+        <!-- readable-check: allow selection-field - data: the columns prop of the table the dialog filters, by column name -->
         <v-select v-model="filterDraft.column" :items="filterColumnOptions" label="Column" variant="outlined" />
         <v-select v-model="filterDraft.operator" :items="FILTER_OPERATORS" label="Operator" variant="outlined" />
         <v-text-field v-if="!filterDraft.operator.startsWith('IS ')" v-model="filterDraft.value" label="Value" variant="outlined" />

@@ -53,41 +53,45 @@
     </v-alert>
 
     <div v-else class="studio-renewal-assistant__fields">
-      <v-select
+      <SelectField
         v-if="engineItems.length > 1"
         :disabled="disabled"
         hide-details="auto"
         :items="engineItems"
+        :loading="overviewLoading"
         label="AI"
         :model-value="engineId"
         variant="outlined"
         @update:model-value="selectEngine"
       />
-      <v-select
+      <SelectField
         v-if="providerItems.length > 1"
         :disabled="disabled || detailsLoading"
         hide-details="auto"
         :items="providerItems"
+        :loading="engineDetailsLoading || providerLoading"
         label="Provider"
         :model-value="modelProviderId"
         variant="outlined"
         @update:model-value="selectProvider"
       />
-      <v-select
+      <SelectField
         :disabled="disabled || detailsLoading || modelItems.length === 0"
         hide-details="auto"
         :items="modelItems"
+        :loading="modelLoading"
         label="Model"
         :model-value="modelId"
         no-data-text="No available models"
         variant="outlined"
         @update:model-value="selectModel"
       />
-      <v-select
+      <SelectField
         v-if="variantItems.length > 1"
         :disabled="disabled || detailsLoading"
         hide-details="auto"
         :items="variantItems"
+        :loading="modelLoading"
         label="Thinking"
         :model-value="variantId"
         variant="outlined"
@@ -107,6 +111,7 @@
 
 <script setup>
 import { computed, useId, watch } from "vue";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 
 import { useVibe64RenewalAssistantChoice } from "@/composables/useVibe64RenewalAssistantChoice.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";

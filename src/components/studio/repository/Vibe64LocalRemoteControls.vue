@@ -182,6 +182,7 @@
           <p>Existing sessions keep their original destination. To commit or Update those sessions, switch this folder back to their branch. New sessions start on the selected branch.</p>
           <p v-if="branchAction === 'create'">The new branch starts at the current local commit. Nothing is pushed.</p>
           <v-text-field v-if="branchAction === 'create'" v-model="branchName" label="New branch name" :disabled="isBusy" maxlength="255" />
+          <!-- readable-check: allow selection-field - data: the local branches of the repository state this dialog opened from, which no refresh replaces while it is open; each value is a branch name -->
           <v-select v-else v-model="branchName" :items="state?.localBranches || []" label="Local branch" :disabled="isBusy" />
           <p>Database contents stay as they are. Branch selection does not undo migrations.</p>
         </v-card-text>
@@ -206,8 +207,10 @@
         <v-card-text class="d-flex flex-column ga-3">
           <p class="local-remotes__message">Destinations for <strong>{{ state?.branch }}</strong>. Saved in this repository’s Git configuration, including for terminal commands.</p>
           <p v-if="!state?.remotes?.length">No remotes configured. Add one with <code>git remote add</code> in the project folder, then Fetch.</p>
+          <!-- readable-check: allow selection-field - data: the remotes of the repository state these settings opened from, which no refresh replaces while they are open; each value is a remote name -->
           <v-select v-model="settings.remote" :items="state?.remotes || []" item-title="name" item-value="name" label="Pull remote" :disabled="isBusy" />
           <v-text-field v-model="settings.branch" label="Pull branch" :disabled="isBusy" />
+          <!-- readable-check: allow selection-field - data: the remotes of the repository state these settings opened from, which no refresh replaces while they are open; each value is a remote name -->
           <v-select v-model="settings.pushRemote" :items="state?.remotes || []" item-title="name" item-value="name" label="Push remote" :disabled="isBusy" />
           <v-text-field v-model="settings.pushBranch" label="Push branch" :disabled="isBusy" />
         </v-card-text>

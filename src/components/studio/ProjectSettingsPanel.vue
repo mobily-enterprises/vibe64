@@ -42,7 +42,7 @@
 
         <div v-if="engineeringAvailable" class="project-settings__content text-body-medium">
           <div class="project-settings__engineering-field">
-            <v-select
+            <SelectField
               v-model="engineeringProfileDraft"
               :disabled="engineeringSaving"
               density="comfortable"
@@ -51,6 +51,7 @@
               item-title="name"
               item-value="id"
               :items="engineeringProfiles"
+              :loading="engineeringResource.isLoading.value"
               label="Engineering profile"
               persistent-hint
               variant="outlined"
@@ -179,7 +180,7 @@
 
         <div class="project-settings__content text-body-medium">
           <div class="project-settings__ai-fields">
-            <v-select
+            <SelectField
               v-model="collaborationDraft.tone"
               :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
               density="comfortable"
@@ -187,10 +188,11 @@
               item-title="label"
               item-value="value"
               :items="toneOptions"
+              :loading="resource.isLoading.value"
               label="Tone"
               variant="outlined"
             />
-            <v-select
+            <SelectField
               v-model="collaborationDraft.responseLength"
               :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
               density="comfortable"
@@ -198,10 +200,11 @@
               item-title="label"
               item-value="value"
               :items="responseLengthOptions"
+              :loading="resource.isLoading.value"
               label="Response length"
               variant="outlined"
             />
-            <v-select
+            <SelectField
               v-model="collaborationDraft.experience"
               :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
               density="comfortable"
@@ -209,10 +212,11 @@
               item-title="label"
               item-value="value"
               :items="experienceOptions"
+              :loading="resource.isLoading.value"
               label="Experience level"
               variant="outlined"
             />
-            <v-select
+            <SelectField
               v-model="collaborationDraft.explanationStyle"
               :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
               density="comfortable"
@@ -220,6 +224,7 @@
               item-title="label"
               item-value="value"
               :items="explanationStyleOptions"
+              :loading="resource.isLoading.value"
               label="Explanation style"
               variant="outlined"
             />
@@ -330,6 +335,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import SelectField from "@jskit-ai/http-web/client/components/SelectField";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
