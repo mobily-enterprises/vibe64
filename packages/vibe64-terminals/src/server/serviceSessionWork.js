@@ -50,6 +50,24 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 
 /**
+ * A repository write inside the agent-write lock. One that runs while the AI works is marked in `marks`
+ * meanwhile, so Stop and steers never wait for it.
+ * @param {Set<string> | null} marks
+ * @param {string} sessionId
+ * @param {() => Promise<unknown>} onAcquired
+ * @param {() => Promise<unknown>} operation
+ */
+async function runAcquiredRepositoryWrite(marks, sessionId, onAcquired, operation) {
+  if (marks) marks.add(sessionId);
+  try {
+    await onAcquired();
+    return await operation();
+  } finally {
+    if (marks) marks.delete(sessionId);
+  }
+}
+
+/**
  * Logs a Save or Update whose derived artifacts Genesis could not regenerate.
  * @param {RuntimeLogger} logger
  * @param {{ derivedArtifactsKept?: { code: string, message: string } } | null} result
@@ -294,8 +312,8 @@ function createServiceSessionWork({
           throw error;
         }
       }
-      await onRepositoryWriteAcquired();
-      return operation(context);
+      const marks = whileAssistantWorks ? state.writesWhileAssistantWorks : null;
+      return runAcquiredRepositoryWrite(marks, sessionId, onRepositoryWriteAcquired, () => operation(context));
     }, { operation: operationName, waitMs: 10_000 });
     return throwIfAgentWriteBusy(result);
   }

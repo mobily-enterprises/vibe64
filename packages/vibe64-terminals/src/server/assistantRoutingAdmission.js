@@ -41,8 +41,10 @@ const EXPLICIT_TASKS = Object.freeze({
  * @param {AssistantRoutingCancellation} dependencies.cancellation
  * @param {SessionAgentManager} dependencies.agent
  * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<object>} dependencies.exclusive
+ * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
  * @param {(sessionId: string, input: object, context: object) => Promise<object>} dependencies.dispatch
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
+ * @param {(sessionId: string) => boolean} dependencies.writingWhileAssistantWorks
  * @param {(timing: object) => void} dependencies.onTiming
  */
 function createAssistantRoutingAdmission({
@@ -53,12 +55,37 @@ function createAssistantRoutingAdmission({
   cancellation,
   agent,
   exclusive,
+  open,
   dispatch,
   interrupt,
+  writingWhileAssistantWorks,
   onTiming,
   logger
 }) {
   let closing = false;
+
+  /**
+   * A steer joins the running turn, so while a write that runs while the AI works (Save, Update) holds the
+   * agent-write lock it goes straight to that turn instead of waiting for the lock. Null leaves every other
+   * case (no running turn, a cancelled or repeated message) to the ordinary admission.
+   */
+  async function steerWithoutLock(sessionId, input, options) {
+    const context = await open(sessionId, options);
+    const store = context.runtime.store;
+    if ((await readCancelled(store, sessionId)).some(entry => entry.messageId === input.messageId) ||
+        await store.conversationMessageIdExists(sessionId, input.messageId) ||
+        !(await agent.sessionState(sessionId, context))?.turn?.active) return null;
+    const steered = await read(store, sessionId);
+    const result = await dispatch(sessionId, input, context);
+    const persisted = result?.delivered === true && steered?.workflow === true ? await read(store, sessionId) : null;
+    if (persisted && persisted.messageId === steered.messageId &&
+        !persisted.steering.some(({ messageId }) => messageId === input.messageId)) {
+      persisted.steering.push({ messageId: input.messageId, text: input.displayMessage || input.message });
+      delete persisted.outcome;
+      await records.save(context, persisted);
+    }
+    return result;
+  }
 
   async function send(sessionId, input, options) {
     const owned = Boolean(input?.messageId) && !routingState.timings.has(input.messageId);
@@ -94,6 +121,10 @@ function createAssistantRoutingAdmission({
     // Cancel, instead of an unconfirmed receipt that no delivery check can settle.
     // A retry of an existing request keeps that request's own delivery state.
     let refusedBeforeAdmission = input.reviewAction !== "retry";
+    if (input.submissionKind === "steer" && !explicitTask && writingWhileAssistantWorks(sessionId)) {
+      const steered = await steerWithoutLock(sessionId, input, options);
+      if (steered) return steered;
+    }
     await exclusive(sessionId, options, async (current) => {
       records.mark(input.messageId, "lock-acquired");
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.", "vibe64_assistant_routing_unavailable");

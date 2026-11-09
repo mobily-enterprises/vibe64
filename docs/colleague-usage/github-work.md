@@ -117,7 +117,10 @@ Update and Save can run while the AI works; Save asks first because it includes
 unfinished changes. Choosing **Save** while the main chat's AI is working opens
 **Save changes** with **The AI is still working. Save now, including its
 unfinished changes?**; its button reads **Save now**, and **Cancel** saves
-nothing. Update runs straight away.
+nothing. Update runs straight away. While either runs, **Stop** still stops the
+AI at once, and a message sent to the working AI joins its turn straight away.
+A new request waits for Save or Update to finish, and after a minute asks you to
+send it again.
 
 Nothing written, deleted or renamed while either runs is lost. A file the AI
 writes after Save has captured the work stays as unsaved work, and Save's notice

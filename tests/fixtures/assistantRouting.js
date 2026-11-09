@@ -160,7 +160,9 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
   const interrupts = [];
   const discards = [];
   let dispatchGate = null;
+  let writing = false;
   const routingOptions = { systemRoot: root, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
+    writingWhileAssistantWorks: () => writing,
     open: async (_id, options) => ({ ...context, ...options }),
     interrupt: async () => { interrupts.push(Date.now()); return { ok: true, interrupted: true }; },
     discardPending: async (_id, messageId) => { discards.push(messageId); },
@@ -192,6 +194,8 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
       return { started: started.promise, release: () => held.resolve() };
     },
     restart: () => createAssistantRouting(routingOptions),
+    // Whether a write that runs while the AI works (Save, Update) holds the lock holdLock holds.
+    writingWhileAssistantWorks: value => { writing = value; },
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
     rejectAdmission: result => { rejectedAdmission = result; },
     failAdmission: (value = true) => { failAdmission = value; }, state: () => JSON.parse(metadata.assistant_routing_request || "null") };

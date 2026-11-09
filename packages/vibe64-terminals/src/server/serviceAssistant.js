@@ -308,7 +308,7 @@ function createServiceAssistant({
 
   async function interruptAgentTurn(sessionId, input = {}, options = {}) {
     await goals.stopGoalIntent(sessionId, await assistantContext.assistantSessionOptions(sessionId, options));
-    if (await assistantRouting.cancel(sessionId, options)) return { ok: true, interrupted: true, routingCancelled: true };
+    if (await assistantRouting.stop(sessionId, options)) return { ok: true, interrupted: true, routingCancelled: true };
     return sessionAgent.interruptTurn(sessionId, input, options);
   }
 

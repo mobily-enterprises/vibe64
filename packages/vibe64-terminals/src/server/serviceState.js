@@ -45,6 +45,13 @@ function createServiceState({ readClaudeAccountStatus }) {
     updateModelAccess: null
   };
 
+  /**
+   * The sessions whose agent-write lock a write that runs while the AI works (Save, Update, Save's recovery)
+   * holds now. Stop and steers never wait for it (`stop` in assistantRoutingCancellation.js).
+   * @type {Set<string>}
+   */
+  const writesWhileAssistantWorks = new Set();
+
   return Object.freeze({
     assistantRuntime,
     lifecycle: Object.seal({ closing: false, goalRecovery: undefined }),
@@ -56,7 +63,8 @@ function createServiceState({ readClaudeAccountStatus }) {
       sourceEditorProvider: null
     }),
     shutdownWork,
-    trackShutdownWork
+    trackShutdownWork,
+    writesWhileAssistantWorks
   });
 }
 

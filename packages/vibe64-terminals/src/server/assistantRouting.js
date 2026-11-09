@@ -38,6 +38,8 @@ function followNoCompletedPlan() {
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
  * @param {typeof import("./assistantChangeover.js").discardAssistantChangeoverMessage} dependencies.discardPending
+ * @param {(sessionId: string) => boolean} [dependencies.writingWhileAssistantWorks] Whether a write that runs while
+ *   the AI works (Save, Update) holds the agent-write lock, which Stop and steers then never wait for.
  * @param {(timing: object) => void} [dependencies.onTiming]
  * @param {(sessionId: string, details: object) => unknown} [dependencies.onPlanCompleted]
  */
@@ -53,6 +55,7 @@ function createAssistantRouting({
   interrupt,
   discardPending,
   logger,
+  writingWhileAssistantWorks = () => false,
   onTiming = doNothing,
   onPlanCompleted = followNoCompletedPlan
 }) {
@@ -87,6 +90,7 @@ function createAssistantRouting({
     open,
     interrupt,
     discardPending,
+    writingWhileAssistantWorks,
     logger
   });
   const admission = createAssistantRoutingAdmission({
@@ -97,8 +101,10 @@ function createAssistantRouting({
     cancellation,
     agent,
     exclusive,
+    open,
     dispatch,
     interrupt,
+    writingWhileAssistantWorks,
     onTiming,
     logger
   });
@@ -123,6 +129,7 @@ function createAssistantRouting({
   return Object.freeze({
     send: admission.send,
     cancel: cancellation.cancel,
+    stop: cancellation.stop,
     cancelMessage: cancellation.cancelMessage,
     isCancelled: cancellation.isCancelled,
     inspectDelivery: cancellation.inspectDelivery,

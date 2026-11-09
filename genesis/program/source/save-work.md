@@ -370,7 +370,10 @@ source reads still wait). While the
 main chat's turn is open the Save confirmation says "The AI is still working.
 Save now, including its unfinished changes?" and its button reads Save now; that
 confirmation is the only gate. The write lock and the project source lock still
-make each operation exclusive.
+make each operation exclusive. A write that runs while the AI works marks its
+session in the service state's `writesWhileAssistantWorks` while it holds the
+agent-write lock (`runAcquiredRepositoryWrite`), and routing never makes Stop or a
+steer wait for it (see Direct chat).
 
 Nothing written while either runs is lost, because neither replaces the
 session's files wholesale. Both move the worktree with Git's two-tree switch

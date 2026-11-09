@@ -1828,6 +1828,36 @@ test("Cancel during classification stops the classifier without the write lock",
   assert.deepEqual(f.discards, [request.messageId]);
 });
 
+test("Stop while a Save or Update holds the write lock stops a request being prepared at once, without the lock", async t => {
+  const f = await fixture(t);
+  const started = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  let stops = 0;
+  f.router.respond = async () => {
+    started.resolve();
+    await finish.promise;
+    return { ok: true, text: '{"mode":"junior","reason":"implementation"}' };
+  };
+  f.agent.stopEphemeralConversation = async () => { stops++; finish.resolve(); return { ok: true }; };
+  const rejected = assert.rejects(f.service.send("session-1", request, f.context), /Routing cancelled/);
+  await started.promise;
+  const write = f.holdLock();
+  await write.started;
+  f.writingWhileAssistantWorks(true);
+  try {
+    assert.equal(await promptly(f.service.stop("session-1", f.context)), true, "an unsent request leaves no turn to interrupt");
+    assert.equal(stops, 1, "its classifier stops at once");
+    assert.equal(f.state().stopped, true, "the stopped request is recorded without the lock");
+    assert.equal(f.state().status, "waiting");
+  } finally {
+    f.writingWhileAssistantWorks(false);
+    write.release();
+  }
+  await rejected;
+  assert.equal(f.sends.length, 0, "nothing continues the stopped request once the lock frees");
+  assert.equal(f.state().stopped, true);
+});
+
 test("a Cancel that arrives during dispatch stops the turn the message started", async t => {
   const f = await fixture(t, { mode: "senior" });
   const dispatch = f.holdDispatch();

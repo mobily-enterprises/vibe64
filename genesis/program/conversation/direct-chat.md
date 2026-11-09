@@ -69,6 +69,16 @@ owner, so no caller surfaces it as a server error. Temporary routing waits for
 the agent-write lock as long as Main routing, because a sibling chat holds it
 through its assistant's startup.
 
+Stop never waits for a Save or Update, which hold the agent-write lock while the
+AI works (`writingWhileAssistantWorks`). Routing's `stop` looks at the lock every
+tenth of a second; while such a write holds it, Stop stops the request's routing
+task and records the request as stopped without the lock, as Cancel does, so
+nothing continues it once the lock frees, and the native turn is interrupted at
+once. Only releasing a routing helper no task is closing waits for the lock. A
+steer to the running turn likewise goes straight to it (`steerWithoutLock`); a
+message for no running turn, a cancelled or repeated one, and Auto's next steps
+still wait.
+
 Before dispatching an idle turn, Codex, Claude and OpenCode share the same
 application-owned skill and integration preparation. The format gate uses
 Genesis's narrow `inspectProjectFormat` operation through `inspectGenesisProjectFormat`,

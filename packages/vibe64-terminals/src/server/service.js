@@ -276,6 +276,7 @@ function createService({
     publish: publishAgentSessionChanged,
     prepareSelection: assistantPreparation.prepareRoutingSelection,
     open: (sessionId, options) => sessionAccess.readAssistantSession(sessionId, options),
+    writingWhileAssistantWorks: (sessionId) => state.writesWhileAssistantWorks.has(sessionId),
     /**
      * Cancel's interrupt: goal continuation pauses, then the native turn stops.
      * The pause never waits for the goal settings lock (requestGoalStop).

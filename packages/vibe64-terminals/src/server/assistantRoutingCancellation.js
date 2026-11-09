@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { assistantGoalIsActive, assistantWorkflowMessageIds } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -11,6 +12,10 @@ import {
   STATE_KEY
 } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
+
+// How often Stop looks again at an agent-write lock it waits for.
+const STOP_LOCK_RETRY_MS = 100;
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
@@ -33,6 +38,7 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
  * @param {typeof import("./assistantChangeover.js").discardAssistantChangeoverMessage} dependencies.discardPending
+ * @param {(sessionId: string) => boolean} dependencies.writingWhileAssistantWorks
  */
 function createAssistantRoutingCancellation({
   routingState,
@@ -44,6 +50,7 @@ function createAssistantRoutingCancellation({
   open,
   interrupt,
   discardPending,
+  writingWhileAssistantWorks,
   logger
 }) {
   function inspectDelivery(sessionId, { messageId }, options) {
@@ -139,6 +146,76 @@ function createAssistantRoutingCancellation({
     }
   }
 
+  function logHelperStopFailure(sessionId, error) {
+    logOperationalEvent(logger, "warn", {
+      component: "vibe64.assistant_routing",
+      event: "vibe64.assistant_routing.helper_stop_failed",
+      sessionId: sessionId,
+      code: error?.code,
+      error: error?.message
+    }, "A stopped or cancelled request's routing helper could not be stopped.");
+  }
+
+  /**
+   * Stop's routing half, true when it stopped a request not yet sent, which leaves no turn to interrupt.
+   * Stop takes the agent-write lock as `cancel` does, except while a write that runs while the AI works
+   * (Save, Update) holds it: Stop never waits for that, and stops the request without the lock.
+   */
+  async function stop(sessionId, routingOptions) {
+    const deadline = Date.now() + AGENT_WRITE_WAIT_MS;
+    for (;;) {
+      if (writingWhileAssistantWorks(sessionId)) return stopWithoutLock(sessionId, routingOptions);
+      try {
+        return await cancel(sessionId, { ...routingOptions, lockWaitMs: 0 });
+      } catch (error) {
+        if (error?.code !== "vibe64_agent_write_mode_busy" || Date.now() >= deadline) throw error;
+      }
+      await delay(STOP_LOCK_RETRY_MS);
+    }
+  }
+
+  /**
+   * As Cancel does, it stops the request's routing task and records the request as stopped at once, so
+   * nothing continues it once the lock frees. Only releasing a routing helper no task is closing waits
+   * for the lock.
+   */
+  async function stopWithoutLock(sessionId, routingOptions) {
+    const context = await open(sessionId, routingOptions);
+    const store = context.runtime.store;
+    const key = records.keyFor(sessionId, context);
+    const task = routingState.running.get(key);
+    routingState.liveFollowupRequests.delete(key);
+    if (task) {
+      task.cancelled = true;
+      // readable-check: allow optional-call - optional operation: a routing task has a stop once its helper has started
+      void Promise.resolve(task.stop?.()).catch(error => logHelperStopFailure(sessionId, error));
+    }
+    let state = null;
+    let pending = false;
+    await store.mutateSession(sessionId, async () => {
+      state = await read(store, sessionId);
+      if (!state) return;
+      pending = ["routing", "pending", "failed"].includes(state.delivery) && !state.attemptedMessageId;
+      state.stopped = true;
+      state.status = "waiting";
+      delete state.outcome;
+      if (pending) delete state.error;
+      await store.writeMetadataValue(sessionId, STATE_KEY, JSON.stringify(state));
+    });
+    if (!state) return false;
+    await records.announce(context, state);
+    if (!task && state.helper) {
+      const releasing = exclusive(sessionId, routingOptions, async current => {
+        const latest = await read(current.runtime.store, sessionId);
+        if (latest?.messageId === state.messageId && latest.stopped && latest.helper &&
+            !routingState.running.has(records.keyFor(sessionId, current))) await records.releaseHelper(current, latest);
+      }).catch(error => logHelperStopFailure(sessionId, error));
+      routingState.settling.add(releasing);
+      void releasing.then(() => routingState.settling.delete(releasing));
+    }
+    return pending;
+  }
+
   /**
    * Cancel means cancel, and it never waits for the agent-write lock. It records
    * the message as cancelled, stops its routing and classifier, interrupts a
@@ -176,13 +253,7 @@ function createAssistantRoutingCancellation({
     if (task?.messageId === messageId) {
       task.cancelled = true;
       // readable-check: allow optional-call - optional operation: a routing task has a stop once its helper has started
-      void Promise.resolve(task.stop?.()).catch((error) => logOperationalEvent(logger, "warn", {
-        component: "vibe64.assistant_routing",
-        event: "vibe64.assistant_routing.helper_stop_failed",
-        sessionId: sessionId,
-        code: error?.code,
-        error: error?.message
-      }, "A cancelled message's routing helper could not be stopped."));
+      void Promise.resolve(task.stop?.()).catch(error => logHelperStopFailure(sessionId, error));
     }
     // The running turn may be this message's when its routed delivery was
     // attempted or accepted, or when it is the chat's newest message.
@@ -240,6 +311,7 @@ function createAssistantRoutingCancellation({
   return Object.freeze({
     inspectDelivery,
     cancel,
+    stop,
     cancelMessage,
     settle,
     isCancelled
