@@ -1,4 +1,4 @@
-import { createRenderer, h, nextTick, ref } from "vue";
+import { createRenderer, h, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ save: vi.fn(), invalidate: vi.fn(), feedback: { error: vi.fn(), success: vi.fn(), message: { value: "" } } }));
@@ -16,6 +16,7 @@ async function mount(numbers) {
   const dialog = ref();
   app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
     .createApp({ render: () => h(component, { ref: dialog, modelValue: true, basePath, numbers, labels: [{ name: "bug" }] }) });
+  app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
   await nextTick();
   return dialog.value.$.setupState;
