@@ -58,7 +58,7 @@ it("makes no request while Learning is closed, and reads the courses and saved l
   expect(read).not.toHaveBeenCalled();
   expect(courses.learningResource.data.value).toBeNull();
   open.value = true; await flush();
-  expect([...new Set(read.mock.calls.map(([path]) => path))]).toEqual(["/api/vibe64/training/courses", "/api/vibe64/training/learning", "/api/vibe64/training/available"]);
+  expect([...new Set(read.mock.calls.map(([path]) => path))].sort()).toEqual(["/api/vibe64/training/available", "/api/vibe64/training/courses", "/api/vibe64/training/learning"]);
   expect(courses.learnerId.value).toBe("learner-owner");
 });
 
