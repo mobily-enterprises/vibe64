@@ -381,20 +381,21 @@ function createService({
   /**
    * Keeps the newest recordings within the session's count and size budget
    * and deletes those older than the age limit. Running recordings stay.
-   */
-  /**
-   * Removes the recordings past the retention rule and returns the kept
-   * ones' saved records by id (null where unreadable), so a read that follows
-   * need not read them again.
+   * Returns the kept ones' saved records by id (null where unreadable or live
+   * when read), so a read that follows need not read them again.
    */
   async function applyRetention(directory) {
     const recordings = [];
     for (const id of (await readdir(directory).catch(() => [])).filter((name) => USAGE_RECORDING_ID_PATTERN.test(name))) {
       const recordingDirectory = path.join(directory, id);
+      // A recording live as it is read may finish before its record is used,
+      // so only the record of one that is not live is kept for reuse.
+      const reusable = !live.has(id);
       const stored = storedRecording(await readJsonFile(path.join(recordingDirectory, "recording.json")));
       const startedAt = Date.parse(stored?.startedAt || "") ||
         await stat(recordingDirectory).then((info) => info.mtimeMs, () => 0);
-      recordings.push({ id, recordingDirectory, stored, startedAt, bytes: await directorySize(recordingDirectory) });
+      const bytes = await directorySize(recordingDirectory);
+      recordings.push({ id, recordingDirectory, stored: reusable ? stored : null, startedAt, bytes });
     }
     recordings.sort((left, right) => right.startedAt - left.startedAt);
     const kept = new Map();
@@ -426,17 +427,18 @@ function createService({
 
   /**
    * The session's recordings, newest first. `saved` holds records just read
-   * by applyRetention, which are used instead of reading each again.
+   * by applyRetention, which are used instead of reading each again; one it
+   * holds no record for (null) is read here, and one started since is live.
    * @param {object} context
    * @param {Map<string, object | null>} [saved]
    */
   async function storedRecordings(context, saved = null) {
     const recordings = [];
-    const ids = saved ? [...saved.keys()]
+    const ids = saved ? new Set([...saved.keys(), ...live.keys()])
       : (await readdir(context.directory).catch(() => [])).filter((name) => USAGE_RECORDING_ID_PATTERN.test(name));
     for (const id of ids) {
-      const record = live.get(id)?.record ||
-        (saved ? saved.get(id) : storedRecording(await readJsonFile(path.join(context.directory, id, "recording.json"))));
+      const record = live.get(id)?.record || saved?.get(id) ||
+        storedRecording(await readJsonFile(path.join(context.directory, id, "recording.json")));
       if (!record || record.sessionId !== context.sessionId) continue;
       recordings.push(await endLeftRunning(path.join(context.directory, id), record));
     }
