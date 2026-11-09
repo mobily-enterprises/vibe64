@@ -1378,14 +1378,20 @@ test("an idle watch poll does not rewrite the Colleague record; a changed one sa
   await f.service.watch(workspaceWatch, f.context);
   await until(() => f.observations.reads >= 3);
   const file = path.join(f.root, "colleague", "NDI", "conversation.json");
-  const saved = (await fs.stat(file)).ino;
+  // A save replaces the file. Two saves can reuse the first inode, so the
+  // modification time tells them apart too.
+  const version = async () => {
+    const { ino, mtimeNs } = await fs.stat(file, { bigint: true });
+    return `${ino}:${mtimeNs}`;
+  };
+  const saved = await version();
   const reads = f.observations.reads;
   await until(() => f.observations.reads >= reads + 4);
-  assert.equal((await fs.stat(file)).ino, saved, "Polls that observe no change save nothing.");
+  assert.equal(await version(), saved, "Polls that observe no change save nothing.");
   f.observations.target = { ok: true, status: "completed", runId: "repair-run",
     messages: [{ id: "repair-answer", role: "assistant", text: "The repair is ready." }] };
   await until(() => f.observations.starts.length === 1);
-  assert.notEqual((await fs.stat(file)).ino, saved, "A poll that observes an answer saves it.");
+  assert.notEqual(await version(), saved, "A poll that observes an answer saves it.");
   assert.equal((await f.service.wait(f.context)).watches[0].status, "delivered");
 });
 
