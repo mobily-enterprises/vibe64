@@ -148,13 +148,27 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
   });
   agent.resolveAssistantPurpose = (input, options) => manager.resolveAssistantPurpose(input, options);
   let lock = Promise.resolve();
+  // Like the agent-write lock, a waiter gives up after `lockWaitMs` unless it already holds the lock.
+  let lockWaitMs = Infinity;
   const exclusive = (_id, _options, operation) => {
+    let acquired = false;
+    let gaveUp = false;
     const next = lock.catch(() => {}).then(() => {
+      if (gaveUp) return undefined;
+      acquired = true;
       beforeExclusive?.();
       return operation({ ...context, ..._options });
     });
     lock = next;
-    return next;
+    if (!Number.isFinite(lockWaitMs)) return next;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (acquired) return;
+        gaveUp = true;
+        reject(Object.assign(new Error("Another assistant operation is starting."), { code: "vibe64_agent_write_mode_busy" }));
+      }, lockWaitMs);
+      next.then(resolve, reject).finally(() => clearTimeout(timer));
+    });
   };
   let failAdmission = false;
   let rejectedAdmission;
@@ -197,6 +211,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
       return { started: started.promise, release: () => held.resolve() };
     },
     restart: () => createAssistantRouting(routingOptions),
+    lockWait: (ms) => { lockWaitMs = ms; },
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
     rejectAdmission: result => { rejectedAdmission = result; },
     failAdmission: (value = true) => { failAdmission = value; }, state: () => JSON.parse(metadata.assistant_routing_request || "null") };

@@ -14,6 +14,7 @@ import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/cod
 
 import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
+import { createWritesWhileAssistantWorks } from "../../packages/vibe64-terminals/src/server/writesWhileAssistantWorks.js";
 
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
 
@@ -1854,6 +1855,85 @@ test("Stop while a Save or Update holds the write lock stops a request being pre
   await rejected;
   assert.equal(f.sends.length, 0, "nothing continues the stopped request once the lock frees");
   assert.equal(f.state().stopped, true);
+});
+
+test("A Stop already applied under the lock is not applied again when a Save or Update takes the lock next", async t => {
+  const f = await fixture(t);
+  const started = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  let stops = 0;
+  let write = null;
+  let recorded = null;
+  f.router.respond = async () => {
+    started.resolve();
+    await finish.promise;
+    return { ok: true, text: '{"mode":"junior","reason":"implementation"}' };
+  };
+  f.agent.stopEphemeralConversation = async () => {
+    stops++;
+    if (stops === 1) {
+      // The Stop has recorded the request under the lock and is stopping its classifier when a Save takes the lock.
+      const before = f.events.length;
+      write = f.holdLock({ whileAssistantWorks: true });
+      await write.started;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      recorded = f.events.slice(before);
+    }
+    finish.resolve();
+    return { ok: true };
+  };
+  const rejected = assert.rejects(f.service.send("session-1", request, f.context), /Routing cancelled/);
+  await started.promise;
+  const other = f.holdLock();
+  await other.started;
+  const stopping = f.service.stop("session-1", f.context);
+  other.release();
+  try {
+    assert.equal(await promptly(stopping), true);
+  } finally {
+    write?.release();
+  }
+  await rejected;
+  assert.deepEqual(recorded, [], "nothing records the Stop again once the Save holds the lock");
+  assert.equal(stops, 1, "the Stop stops the classifier once");
+  assert.equal(f.state().stopped, true);
+});
+
+test("A Stop woken by a Save never loses the wait of a Stop that starts after it", async () => {
+  const writes = createWritesWhileAssistantWorks();
+  const first = new AbortController();
+  const woken = writes.nextHold("session-1", first.signal);
+  await writes.hold("session-1", async () => {});
+  await woken;
+  const later = new AbortController();
+  let laterWoken = false;
+  void writes.nextHold("session-1", later.signal).then(() => { laterWoken = true; });
+  // The first Stop finishes after the later one started waiting.
+  first.abort();
+  await writes.hold("session-1", async () => {});
+  await Promise.resolve();
+  assert.equal(laterWoken, true, "the later Stop learns that a Save took the lock");
+  later.abort();
+});
+
+test("Reconciling gives up after the usual wait while a Save or Update holds the lock; a finished turn's routing waits on", async t => {
+  const f = await fixture(t);
+  const write = f.holdLock({ whileAssistantWorks: true });
+  await write.started;
+  f.lockWait(50);
+  let settled = false;
+  let finished;
+  try {
+    await assert.rejects(promptly(f.service.reconcile("session-1", f.context)), { code: "vibe64_agent_write_mode_busy" });
+    finished = f.service.afterTurn("session-1", { payload: { agentRun: { active: false, state: "completed" } } }, f.context)
+      .finally(() => { settled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(settled, false, "a finished turn's routing waits for the write to end");
+  } finally {
+    f.lockWait(Infinity);
+    write.release();
+  }
+  await finished;
 });
 
 test("a Cancel that arrives during dispatch stops the turn the message started", async t => {

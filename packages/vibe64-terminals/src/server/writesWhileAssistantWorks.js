@@ -5,6 +5,9 @@
  * a turn leaves behind waits for such a write to end instead of giving up after the usual wait (`holds`,
  * `started`), and a Stop already waiting for the lock learns when one takes it (`nextHold`).
  */
+// How long a finished write waits for the Stops and steers still running without the lock before letting it go.
+const LOCK_FREE_WAIT_MS = 30_000;
+
 function createWritesWhileAssistantWorks() {
   // Per session: the write holding its lock now, with the lock-free work it waits for.
   const holding = new Map();
@@ -33,7 +36,14 @@ function createWritesWhileAssistantWorks() {
       return await operation();
     } finally {
       holding.delete(sessionId);
-      await Promise.allSettled([...write.lockFree]);
+      let timer;
+      await Promise.race([
+        Promise.allSettled([...write.lockFree]),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, LOCK_FREE_WAIT_MS);
+        })
+      ]);
+      clearTimeout(timer);
     }
   }
 
@@ -66,7 +76,8 @@ function createWritesWhileAssistantWorks() {
       waiters.set(sessionId, wakes);
       const forget = () => {
         wakes.delete(wake);
-        if (!wakes.size) waiters.delete(sessionId);
+        // Only this set: once it emptied, a later Stop may have registered a set of its own.
+        if (!wakes.size && waiters.get(sessionId) === wakes) waiters.delete(sessionId);
       };
       const wake = () => {
         forget();

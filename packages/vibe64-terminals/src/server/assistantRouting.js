@@ -62,8 +62,8 @@ function createAssistantRouting({
 }) {
   const routingState = createAssistantRoutingState({ systemRoot, allowAuto });
   /**
-   * The lock for what a turn leaves behind (its outcome, its after-turn review): a Save or Update holds the lock for
-   * its whole run, so rather than give up after the usual wait while one holds it, this queues again.
+   * The lock for what a turn leaves behind (its reported outcome, its after-turn review): a Save or Update holds the
+   * lock for its whole run, so rather than give up after the usual wait while one holds it, this queues again.
    */
   async function exclusiveAfterWrites(sessionId, options, operation) {
     for (;;) {
@@ -132,7 +132,8 @@ function createAssistantRouting({
     delivery,
     admission,
     agent,
-    exclusive: exclusiveAfterWrites,
+    exclusive,
+    exclusiveAfterWrites,
     publish,
     onPlanCompleted
   });

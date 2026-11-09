@@ -72,12 +72,14 @@ through its assistant's startup.
 Stop never waits for a Save or Update, which hold the agent-write lock while the
 AI works through `writesWhileAssistantWorks` (`writesWhileAssistantWorks.js`).
 Routing's `stop` queues one ordinary cancel for the lock; while such a write holds
-it, or as soon as one takes it, Stop instead stops the request's routing task and
+it, or as soon as one takes it before that cancel has, Stop instead stops the
+request's routing task and
 records the request as stopped without the lock (`stopWithoutLock`), as Cancel
 does: its workflow messages join `routingState.stopping`, so every routing save
 keeps the request stopped until the next locked admission or settle lets go of
-them, and the native turn is interrupted at once. The write lets the lock go only
-once that lock-free work is done, so what waits for the lock reads the stopped
+them, and the native turn is interrupted at once. Each Stop is applied once, one
+way or the other. The write lets the lock go only once that lock-free work is
+done (or after thirty seconds), so what waits for the lock reads the stopped
 request. Only releasing a routing helper no task is closing waits for the lock.
 A steer to the running turn likewise goes straight to it (`steerWithoutLock`),
 with the locked path's checks: none while routing closes, a message being
@@ -87,7 +89,7 @@ in one session mutation, unless the request was stopped or replaced. A message
 for no running turn, a cancelled or repeated one, and new requests still wait.
 What a finished turn leaves to routing (`afterTurn`, a reported outcome) queues
 for the lock again while such a write holds it, instead of giving up after the
-usual minute.
+usual minute; everything else, `reconcile` included, still gives up after it.
 
 Before dispatching an idle turn, Codex, Claude and OpenCode share the same
 application-owned skill and integration preparation. The format gate uses

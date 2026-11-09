@@ -36,6 +36,8 @@ const MAX_WORKFLOW_STEPS = 8;
  * @param {AssistantRoutingAdmission} dependencies.admission
  * @param {SessionAgentManager} dependencies.agent
  * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<object>} dependencies.exclusive
+ * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<object>}
+ *   dependencies.exclusiveAfterWrites The lock for what a turn leaves behind, which waits out a Save or Update.
  * @param {PublishSessionChanged} dependencies.publish
  * @param {(sessionId: string, details: object) => unknown} dependencies.onPlanCompleted
  */
@@ -47,6 +49,7 @@ function createAssistantRoutingOutcomes({
   admission,
   agent,
   exclusive,
+  exclusiveAfterWrites,
   publish,
   onPlanCompleted
 }) {
@@ -54,7 +57,7 @@ function createAssistantRoutingOutcomes({
    * The active agent declares an outcome; this does not dispatch while its turn runs.
    */
   async function recordOutcome(sessionId, input, options) {
-    return exclusive(sessionId, options, async context => {
+    return exclusiveAfterWrites(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);
       if (!state || (!state.workflow && state.stage !== "planning") || state.stopped ||
           state.status !== "working" || state.delivery !== "accepted" || input.messageId !== state.messageId ||
@@ -128,7 +131,7 @@ function createAssistantRoutingOutcomes({
     const run = payload?.payload?.agentRun;
     if (!run || run.active) return;
     let completed;
-    await exclusive(sessionId, routingOptions, async context => {
+    await exclusiveAfterWrites(sessionId, routingOptions, async context => {
       const key = records.keyFor(sessionId, context);
       if (admission.isClosing() || routingState.running.has(key)) return;
       const state = await read(context.runtime.store, sessionId);

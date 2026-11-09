@@ -159,15 +159,21 @@ function createAssistantRoutingCancellation({
    * it while Stop waits: Stop never waits for that write, and stops the request without the lock.
    */
   async function stop(sessionId, routingOptions) {
-    let stoppedWithoutLock = false;
-    const withoutLock = () => writesWhileAssistantWorks.withoutLock(sessionId, () => {
-      stoppedWithoutLock = true;
+    // How this Stop is applied, once: under the lock by its queued cancel, or without it.
+    let applied = "";
+    const withoutLock = () => applied ? null : writesWhileAssistantWorks.withoutLock(sessionId, () => {
+      applied = "without the lock";
       return stopWithoutLock(sessionId, routingOptions);
     });
     const now = withoutLock();
     if (now) return now;
     const giveUp = new AbortController();
-    const queued = cancel(sessionId, routingOptions, { superseded: () => stoppedWithoutLock });
+    const queued = cancel(sessionId, routingOptions, {
+      superseded: () => {
+        applied ||= "under the lock";
+        return applied !== "under the lock";
+      }
+    });
     try {
       return await Promise.race([
         queued,
