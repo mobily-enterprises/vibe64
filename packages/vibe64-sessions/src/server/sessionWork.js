@@ -31,7 +31,7 @@ function updateMainChatNote(result = {}) {
   return `Vibe64 updated this session to the saved version. These files changed: ${listed.join(", ")}${more > 0 ? ` and ${more} more` : ""}. Re-read them before editing them, and re-run any checks that touch them.`;
 }
 
-// The Update stops that leave the session as it was before Update ran, unless they say it was not `undone`.
+// The Update stops that put the session back as it was before Update ran, unless they say it was not `undone`.
 const UPDATE_STOPPED_CODES = new Set([
   "vibe64_session_update_ignored_file",
   "vibe64_session_update_worktree_changed"
@@ -65,7 +65,12 @@ function connectedUpdateFailure(connected = []) {
   const copy = failed.find(entry => entry.conflictRecovery) || failed[0];
   if (!copy) return null;
   return vibe64Error(copy.error, copy.code || "vibe64_connected_copy_update_failed", {
-    details: { conflictPaths: copy.conflictPaths || [], conflictRecovery: copy.conflictRecovery || null, connectedRepository: copy.name },
+    details: {
+      conflictPaths: copy.conflictPaths || [],
+      conflictRecovery: copy.conflictRecovery || null,
+      connectedRepository: copy.name,
+      undone: copy.undone !== false
+    },
     status: 409
   });
 }
@@ -499,11 +504,10 @@ function createSessionWork({
           throw error;
         }
         // An Update cancelled, or stopped and put back because the session changed while it ran, resolved nothing,
-        // so the conflicts it was resuming still stand for the next run. One that left the session updated, or on a
-        // commit made meanwhile, has no such conflicts left to resume.
+        // so the conflicts it was resuming still stand for the next run. One that left the session, or a connected
+        // copy, updated or on a commit made meanwhile (`undone: false`) has no such conflicts left to resume.
         const cancelled = input.signal?.aborted === true;
-        const stopped = cancelled ||
-          UPDATE_STOPPED_CODES.has(normalizeText(error?.code)) && error?.details?.undone !== false;
+        const stopped = (cancelled || UPDATE_STOPPED_CODES.has(normalizeText(error?.code))) && error?.details?.undone !== false;
         const recovery = error?.details?.conflictRecovery || (stopped ? conflictRecovery : null);
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
           event: {

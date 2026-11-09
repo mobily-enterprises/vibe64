@@ -73,6 +73,8 @@ session's own repository. Each copy adds one line to the output:
 - `[Connected] library was already current.`
 - `[Connected] library was not updated and is unchanged: ...` followed by the
   reason, for example the files that conflict.
+- `[Connected] library: ...` when Update could not put the copy back as it was,
+  for example because its files kept changing; the reason says how it was left.
 
 A copy that cannot be updated stays exactly as it was, and the other copies and
 the session's own repository still update. The Update notice then shows that

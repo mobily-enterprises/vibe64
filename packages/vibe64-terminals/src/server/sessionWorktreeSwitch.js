@@ -153,7 +153,8 @@ function updateWorktreeChangedError(paths = [], { undone = true } = {}) {
 function updateHeadMovedError() {
   return saveError(
     "A Git commit was made in this session while Update ran, so Update stopped and left every file as it is, some perhaps already updated. Nothing was lost. Try Update again.",
-    UPDATE_HEAD_MOVED_CODE
+    UPDATE_HEAD_MOVED_CODE,
+    { undone: false }
   );
 }
 

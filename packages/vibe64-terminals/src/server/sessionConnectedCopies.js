@@ -541,7 +541,9 @@ async function updateConnectedCopies({
       const message = recovery
         ? conflictMessage(conflictPaths, copy.name)
         : normalizeText(error?.message) || "It could not be updated.";
-      const line = `[Connected] ${copy.name} was not updated and is unchanged: ${message}`;
+      // A copy Update could not put back (`undone: false`) says itself how it was left.
+      const undone = error?.details?.undone !== false;
+      const line = undone ? `[Connected] ${copy.name} was not updated and is unchanged: ${message}` : `[Connected] ${copy.name}: ${message}`;
       await onProgress({ connectedUpdate: null, kind: "connected", message: line, stage: "connected-failed" });
       results.push({
         code: normalizeText(error?.code),
@@ -550,7 +552,8 @@ async function updateConnectedCopies({
         error: message,
         line,
         name: copy.name,
-        status: "failed"
+        status: "failed",
+        undone
       });
     }
   }
