@@ -399,7 +399,8 @@ Every session work Git command that finds the index lock held, as the AI's own
 keeping every file written since: the target is the commit plus those files as
 they are now, so only paths nobody wrote change; a file written between reading
 the session and switching it, or while its kept files are read, makes it read
-again, three times at most. Save's
+again, three times at most; any other failure to read the kept files, with the
+session's files still as read, stands. Save's
 commit is its checkpoint; Save's reconcile (`reconcileSession` in
 `sessionWorkPublication.js`) moves the session from that checkpoint onto the saved
 commit this way, so a regenerated file the AI wrote or deleted meanwhile stays as

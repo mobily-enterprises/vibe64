@@ -124,16 +124,23 @@ async function switchSessionKeepingWrites(runCommand, context, project, { from, 
     const kept = [...writes.values()]
       .filter((write) => !(write.status === "D" && changes.get(write.path)?.status === "D"))
       .map((write) => write.path);
+    // With no paths, a worktree tree would take every file as it is now, so nothing written means `to` itself.
+    let target = to;
+    if (kept.length) {
+      try {
+        target = await sessionWorktreeTree(runCommand, context, project, { baseCommit: to, paths: kept });
+      } catch (error) {
+        // A kept file written or deleted while it was read leaves the session's files unlike `currentTree`: read
+        // them again. Any other failure stands.
+        if (await sessionWorktreeTree(runCommand, context, project) === currentTree) throw error;
+        continue;
+      }
+    }
     try {
-      // With no paths, a worktree tree would take every file as it is now, so nothing written means `to` itself.
-      const target = kept.length
-        ? await sessionWorktreeTree(runCommand, context, project, { baseCommit: to, paths: kept })
-        : to;
       await switchSessionWorktree(runCommand, context, currentTree, target, options);
       return { changes, moved: true, writes };
     } catch {
-      // Someone wrote a file between reading the session and switching it, or while its kept files were read: read
-      // it again.
+      // Someone wrote a file between reading the session and switching it: read it again.
     }
   }
   return { changes, moved: false, writes };
