@@ -19,8 +19,8 @@ import { workspaceSetupState, writeWorkspaceSetupState } from "../../packages/vi
 process.env.VIBE64_RUNTIME_NAMESPACE = "preview-preparation-test";
 const execFileAsync = promisify(execFile);
 
-async function fixture(t) {
-  const value = await createPreviewPreparationFixture();
+async function fixture(t, options = {}) {
+  const value = await createPreviewPreparationFixture(options);
   t.after(() => value.close());
   return value;
 }
@@ -118,7 +118,14 @@ test("prepared previews launch while the assistant lock is occupied and concurre
 
 for (const change of ["environment value", "missing environment file", "Git excludes", "setup recipe"]) {
   test(`changed ${change} waits for the assistant lock, then prepares and serves a real preview`, { timeout: 15_000 }, async (t) => {
-    const f = await fixture(t);
+    const environmentWaiting = Promise.withResolvers();
+    const f = await fixture(t, { logger: { ...console, warn(event, message) {
+      if (event?.event === "vibe64.session_lock.contended" && event.operation === "prepare-project-environment") {
+        environmentWaiting.resolve();
+      } else {
+        console.warn(event, message);
+      }
+    } } });
     await f.prepare();
     const envPath = path.join(f.sourceRoot, ".env");
     const excludePath = path.join(f.sourceRoot, ".git", "info", "exclude");
@@ -135,15 +142,26 @@ for (const change of ["environment value", "missing environment file", "Git excl
     const before = await readFile(envPath, "utf8").catch(() => null);
     const excludeBefore = await readFile(excludePath, "utf8");
     const release = await f.holdAssistantLock();
+    let starting = null;
     try {
-      const rejected = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
-      assert.equal(rejected.ok, false);
-      assert.equal(rejected.code, "vibe64_agent_write_mode_busy", JSON.stringify(rejected));
+      if (change === "setup recipe") {
+        // A start that must run setup again refuses at once while the assistant holds the lock.
+        const rejected = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+        assert.equal(rejected.ok, false);
+        assert.equal(rejected.code, "vibe64_agent_write_mode_busy", JSON.stringify(rejected));
+      } else {
+        // One that only writes the project environment waits for the holder, up to its ten-second
+        // grace for a brief one, and writes nothing meanwhile.
+        starting = f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+        const finishedFirst = await Promise.race([environmentWaiting.promise, starting.then((result) => ({ result }))]);
+        assert.equal(finishedFirst, undefined,
+          `The start finished without waiting for the assistant lock: ${JSON.stringify(finishedFirst?.result)}`);
+      }
       assert.equal(await f.setupRuns(), 1);
       assert.equal(await readFile(envPath, "utf8").catch(() => null), before);
       assert.equal(await readFile(excludePath, "utf8"), excludeBefore);
     } finally { await release(); }
-    const started = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+    const started = await (starting || f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" }));
     await assertServes(started, change === "environment value" ? "updated" : "initial");
     assert.equal(await f.setupRuns(), change === "setup recipe" ? 2 : 1);
   });

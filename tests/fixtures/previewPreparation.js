@@ -17,6 +17,8 @@ import { projectServiceCollaborators } from "../server/vibe64TestHelpers.js";
 const execFileAsync = promisify(execFile);
 
 export async function createPreviewPreparationFixture({
+  // The project's logger, which also reports the session store's lock events.
+  logger = console,
   publishSessionChanged = {}
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-preview-preparation-"));
@@ -84,7 +86,7 @@ require("node:http").createServer((request, response) => {
   response.end(request.url === "/installed" ? installed : "<h1>Preview works: " + process.env.PREVIEW_VALUE + "</h1>");
 }).listen(Number(process.argv[3]), process.argv[2]);
 `);
-  const project = createProjectService({ ...projectServiceCollaborators(), logger: console,
+  const project = createProjectService({ ...projectServiceCollaborators(), logger,
     env: {},
     projectContext: createStudioProjectContext({
       env: process.env,
