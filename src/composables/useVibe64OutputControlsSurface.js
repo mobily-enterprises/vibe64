@@ -140,7 +140,7 @@ function useVibe64OutputControlsSurface(props, {
 
   return {
     outputOptionsAction: options.outputOptionsAction,
-    previewWorkNotice: recovery.previewWorkNotice,
+    previewWorkNotice: computed(() => frame.previewLeftNotice.value || recovery.previewWorkNotice.value),
     previewTestNotice: outputs.previewTestNotice,
     outputOptionsAvailable: targets.outputOptionsAvailable,
     outputOptionsError: options.outputOptionsError,

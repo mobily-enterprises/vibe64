@@ -66,11 +66,29 @@ function previewFrameHarness() {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("a Preview frame that leaves the app for the editor's own site", () => {
+  it("says it reloaded the app for a minute", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers();
+    const { frame, load, stop } = previewFrameHarness();
+    try {
+      frame.requestPreviewFrame({ reason: "test" });
+      load(frameOnEditorSite(frame.previewFrameRequestId.value));
+      expect(frame.previewLeftNotice.value).toMatch(/your app was loaded again/u);
+      vi.advanceTimersByTime(59_000);
+      expect(frame.previewLeftNotice.value).not.toBe("");
+      vi.advanceTimersByTime(2_000);
+      expect(frame.previewLeftNotice.value).toBe("");
+    } finally {
+      stop();
+    }
+  });
+
   it("is told apart from the app's own pages and from an editor that previews its own site", () => {
     const options = { editorOrigin: EDITOR, previewBaseUrl: PREVIEW };
     expect(previewFrameLeftForEditor(frameOnEditorSite(1), options)).toEqual({
@@ -86,6 +104,7 @@ describe("a Preview frame that leaves the app for the editor's own site", () => 
 
   it("is recorded and loads the app again, and a repeat within a minute empties the frame", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers();
     const { frame, load, published, stop } = previewFrameHarness();
     try {
       expect(frame.requestPreviewFrame({ reason: "test" })).toBe(true);
@@ -106,10 +125,17 @@ describe("a Preview frame that leaves the app for the editor's own site", () => 
       expect(errors).toEqual({});
       expect(frame.previewFrameRequestId.value).toBe(firstRequest + 1);
       expect(frame.previewUrl.value).toMatch(/^https:\/\/preview\.example\//u);
+      expect(frame.previewLeftNotice.value).toMatch(/your app was loaded again/u);
 
       load(frameOnEditorSite(frame.previewFrameRequestId.value));
       expect(published).toHaveLength(2);
       expect(frame.previewUrl.value).toBe("");
+      expect(frame.previewLeftNotice.value).toMatch(/Use Reload preview/u);
+      vi.advanceTimersByTime(120_000);
+      expect(frame.previewLeftNotice.value).toMatch(/Use Reload preview/u);
+
+      expect(frame.requestPreviewFrame({ reason: "reload" })).toBe(true);
+      expect(frame.previewLeftNotice.value).toBe("");
     } finally {
       stop();
     }

@@ -27,6 +27,8 @@ const PREVIEW_DIAGNOSTICS_TIMEOUT_MS = 3000;
 const PREVIEW_IDENTITY_TIMEOUT_MS = 10000;
 // A frame that lands on the editor's own site again within this time stays empty instead of reloading in a loop.
 const PREVIEW_LEFT_RECOVERY_INTERVAL_MS = 60_000;
+const PREVIEW_LEFT_RELOADED_NOTICE = "Vibe64's own page had replaced your app here, so your app was loaded again.";
+const PREVIEW_LEFT_EMPTIED_NOTICE = "Vibe64's own page replaced your app here again, so the Preview was emptied. Use Reload preview to load your app.";
 
 /**
  * The embedded Preview's frame: the address it embeds, the page it loads (a
@@ -68,6 +70,8 @@ function useVibe64PreviewFrame({
     terminalSessionId
   } = outputs;
   const previewFrame = ref(null);
+  const previewLeftNotice = ref("");
+  let previewLeftNoticeTimer = null;
   const previewSuspended = ref(false);
   const previewBridgeVersion = ref(0);
   // The origin whose bridge announced itself in the frame. Requests go only to
@@ -280,6 +284,9 @@ function useVibe64PreviewFrame({
       src: nextSrc
     };
     followIdentityReload(previewFrameRequest.value.id);
+    if (previewLeftNotice.value === PREVIEW_LEFT_EMPTIED_NOTICE) {
+      previewLeftNotice.value = "";
+    }
     previewDebugLog("frame.requested", {
       force,
       reason,
@@ -415,9 +422,21 @@ function useVibe64PreviewFrame({
     if (now - previewLeftRecoveredAt < PREVIEW_LEFT_RECOVERY_INTERVAL_MS ||
       !requestPreviewFrame({ force: true, reason: "frame-left-preview" })) {
       clearPreviewFrame("frame-left-preview");
+      showPreviewLeftNotice(PREVIEW_LEFT_EMPTIED_NOTICE);
       return;
     }
     previewLeftRecoveredAt = now;
+    showPreviewLeftNotice(PREVIEW_LEFT_RELOADED_NOTICE);
+  }
+
+  // Said where the person sees it, so they can tell someone: the reload notice for a minute, the emptied one until the
+  // next frame request loads the app again.
+  function showPreviewLeftNotice(text) {
+    clearTimeout(previewLeftNoticeTimer);
+    previewLeftNotice.value = text;
+    previewLeftNoticeTimer = text === PREVIEW_LEFT_RELOADED_NOTICE
+      ? setTimeout(() => { previewLeftNotice.value = ""; }, PREVIEW_LEFT_RECOVERY_INTERVAL_MS)
+      : null;
   }
 
   // Every bridge message raises the bridge version the page speaks. A ready
@@ -452,6 +471,7 @@ function useVibe64PreviewFrame({
   }
 
   onBeforeUnmount(() => {
+    clearTimeout(previewLeftNoticeTimer);
     stopPreviewPick();
     previewBridgeRequests.rejectAll("The application preview closed.");
   });
@@ -475,6 +495,7 @@ function useVibe64PreviewFrame({
     previewFrameLoaded,
     previewFrameRequestId,
     previewIdentityLifecycleKey,
+    previewLeftNotice,
     previewLoadingOverlayVisible,
     previewPaneDisplayed,
     previewPicking,
