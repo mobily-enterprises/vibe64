@@ -13913,6 +13913,23 @@ test("Main Codex active goal continues once after service restart and explicit P
     assert.equal(initial.active, true);
     assert.equal(initial.native.threadId, captures.provider.threadId);
     await terminals.close();
+    // A goal waiting at its usage limit, or at its own token budget, gets no
+    // turn on a restart: recovery leaves it waiting for the person's Resume.
+    const stopped = goal.status;
+    project.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
+    project.runInProjectContext = async (_slug, operation) => operation();
+    for (const status of ["usageLimited", "budgetLimited"]) {
+      goal = { ...goal, status };
+      const waitingService = createService();
+      configure(waitingService);
+      const waiting = await waitingService.recoverActiveGoals();
+      assert.equal(waiting.results.find(result => result.sessionId === sessionId)?.waiting, true, JSON.stringify(waiting));
+      assert.deepEqual(writes.map(([action]) => action), ["set"], `a ${status} goal gets no turn on restart`);
+      assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent).active, true,
+        `${status}: the person's request to keep working is kept for their Resume`);
+      await waitingService.close();
+    }
+    goal = { ...goal, status: stopped };
     project.listProjects = async () => ({ projects: [
       { slug: "removed-project", runtime: { open: true } }, { slug: "test-project", runtime: { open: true } }
     ] });

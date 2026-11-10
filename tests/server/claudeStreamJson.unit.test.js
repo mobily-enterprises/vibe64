@@ -2918,6 +2918,31 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(impossibleRead.goal.reason, "The remaining checks need credentials from the user.");
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
         "a native failed evaluation must not be resumed after restart either");
+      // At the account's usage limit, or out of credit, Claude's own message
+      // ends the turn. A restart then sends nothing into that limit: the goal
+      // waits, with the reset time, for the person's Resume.
+      for (const [label, limit, waitingFields] of [
+        ["usage limit", { error: "rate_limit", apiError: "usage_limit_reached",
+          apiErrorParams: { rate_limit_info: { status: "rejected", resetsAt: 1794286800, rateLimitType: "five_hour" } },
+          text: "You've hit your session limit · resets 5am (UTC)" }, { resetsAt: 1794286800 }],
+        ["out of credit", { error: "billing_error", text: "Credit balance is too low" }, { outOfCredit: true }]
+      ]) {
+        const { text, ...apiError } = limit;
+        await writeFile(historyFile.path, beforeLoopLimit + JSON.stringify({ type: "assistant",
+          timestamp: new Date().toISOString(), isApiErrorMessage: true, ...apiError,
+          message: { role: "assistant", model: "<synthetic>", content: [{ type: "text", text }] } }) + "\n");
+        await service.close();
+        service = createService();
+        const waiting = await service.recoverActiveGoals();
+        assert.equal(waiting.results.at(-1).waiting, true, `${label}: ${JSON.stringify(waiting)}`);
+        const waitingRead = await service.readCanonicalAgentGoal("test", options);
+        assert.equal(waitingRead.goal.status, "usageLimited", label);
+        for (const [key, value] of Object.entries(waitingFields)) assert.equal(waitingRead.goal[key], value, `${label}: ${key}`);
+        assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
+          `${label}: a restart sends no turn into the limit`);
+        assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
+          `${label}: the person's request to keep working is kept for their Resume`);
+      }
       await service.close();
       await writeFile(historyFile.path, beforeLoopLimit);
       service = createService();

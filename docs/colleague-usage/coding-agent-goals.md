@@ -115,8 +115,12 @@ has a red light; it blinks only while the conversation reports work in progress
 and becomes steady between turns. Paused goals use a steady orange light.
 The chip beside the message box shows a clock only while the goal is running.
 A goal that is not running says so on the chip instead, with no clock:
-**Goal paused**, **Goal blocked**, **Goal waiting for allowance** or **Goal
-budget reached**. Open **Goal** to see how long it has been going.
+**Goal paused**, **Goal blocked** or **Goal budget reached**. A goal waiting
+because its AI account reached its usage limit shows **Waiting: AI usage limit,
+resets at** the reset time (for example 05:00, with the day when it is not
+today), or **Waiting: AI usage limit** when the AI does not say when; one whose
+account ran out of credit shows **Out of credit: top up or switch AI account**.
+Open **Goal** to see how long it has been going.
 The control shows native **Running time** when available. Claude currently supplies
 only creation and status timestamps, so its timer is labelled **Elapsed since
 goal started (including pauses)**; this is not measured active runtime. On narrow
@@ -166,9 +170,15 @@ it does not send a second goal command. A timeout stays visible on the goal cont
 **Pause goal**,
 **Cancel goal**, and **Stop** prevent that automatic continuation. A completed
 or cleared goal is not restarted. A Claude goal whose turn ended any other way,
-for example when the AI account reached its usage limit, is not paused: it shows
-as active with a steady red light, and a server restart or deploy continues it.
-To keep it from continuing, choose **Goal** → **Pause goal**. Existing goals are not guessed from their
+for example after **Stop**, is not paused: it shows as active with a steady red
+light, and a server restart or deploy continues it. To keep it from continuing,
+choose **Goal** → **Pause goal**. A goal waiting at its AI account's usage limit
+or out of credit (Claude or Codex), or a Codex goal that reached its token
+budget, is not continued by a restart or deploy, and no AI turn is spent on it.
+It does not continue by itself either: once the limit resets, or after you top up
+or switch AI account, choose **Goal** → **Resume goal** (for Claude, your next
+message also continues it). **Pause goal** (Claude) and **Cancel goal** work
+while it waits. Existing goals are not guessed from their
 old paused status: choose **Resume goal** once to enroll the intended goal.
 
 If the account changed, cleanup cannot be verified, or an interrupted goal
@@ -186,7 +196,8 @@ A copied development workspace never inherits permission to run its parent's
 goals. Restart continuation applies to supported Main native goals; temporary, AI task,
 logical and scoped conversations do not expose native goal controls or receipts.
 Colleague can read a session's current goal (its objective and whether it is
-active, paused, blocked or complete) and explain these controls. It cannot set,
+active, paused, blocked, waiting at a usage limit or out of credit, or complete)
+and explain these controls. It cannot set,
 pause, resume or cancel a goal itself: it tells you which **Goal** control to
 use and can draft an objective for **Set goal**.
 

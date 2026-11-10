@@ -180,7 +180,7 @@ function createTerminalActions({ terminals }) {
       input: sessionInputValidator,
       extensions: {
         assistant: {
-          description: "Read the exact session's Main chat goal: status (available, or unsupported when its AI has no goals), and goal with its objective and status (active, paused, blocked or complete), or goal null when there is none. Reading changes nothing. You cannot set, pause, resume or cancel a goal: tell the person which Goal control to use (Set goal, Pause goal, Resume goal or Cancel goal) and offer to draft an objective."
+          description: "Read the exact session's Main chat goal: status (available, or unsupported when its AI has no goals), and goal with its objective and status (active, paused, blocked, complete, budgetLimited, or usageLimited: waiting at its AI account's usage limit until resetsAt in epoch seconds when present, or out of credit when outOfCredit is true; it continues only when the person chooses Resume goal), or goal null when there is none. Reading changes nothing. You cannot set, pause, resume or cancel a goal: tell the person which Goal control to use (Set goal, Pause goal, Resume goal or Cancel goal) and offer to draft an objective."
         },
         vibe64: PROJECT_OPERATION
       },

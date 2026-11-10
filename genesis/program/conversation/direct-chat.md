@@ -2472,7 +2472,11 @@ presentation; goal updates still identify the complete original objective.
 The goal indicator flashes red while active, uses the app's warning color while paused, and shows
 elapsed active time when space permits. Only a running goal's chip shows a
 clock; a paused, blocked, usage-limited or budget-limited goal's chip names that
-state (for example **Goal paused**), and its details keep the elapsed time. The application omits goal controls for
+state (for example **Goal paused**), and its details keep the elapsed time. A
+goal waiting at its AI account's limit reads **Waiting: AI usage limit, resets
+at 05:00** (the reset time when the engine reports one) or **Out of credit: top
+up or switch AI account**, and its details say it does not continue by itself.
+The application omits goal controls for
 assistants without that capability.
 The app theme overrides the shared control's hard-coded paused color because
 the control does not expose a color prop.
@@ -4738,11 +4742,18 @@ Pause sends nothing to Claude and starts no process, so it takes effect at once
 even when the account is out of credit or at its usage limit; the later local
 `/goal clear` is handled by Claude Code without a model request, as is Cancel's.
 Only that retained Pause reads as paused. A goal whose turn ended any other way
-(a usage limit, Stop, a process or server restart) keeps Claude's checker armed:
-the next turn continues it and startup recovery resumes an active continuation
-intent, so it reads active, with Pause available. Before JSKIT's fix it read
-paused whenever no turn was running, so a usage-limited goal showed as paused
-while the next deploy's recovery resumed it into about twenty turns.
+(Stop, a process or server restart) keeps Claude's checker armed: the next turn
+continues it and startup recovery resumes an active continuation intent, so it
+reads active, with Pause available. When Claude's own history ends the goal's
+turn with its usage-limit message, JSKIT reads the goal as `usageLimited` with
+that message's reset time, and its credit-balance message as `usageLimited` with
+`outOfCredit`; a later answer makes it active again. Startup recovery skips a
+`usageLimited` or `budgetLimited` goal for Claude and Codex alike, as it skips a
+blocked one: the continuation intent stays recorded, no turn is sent into the
+limit, and Resume after the reset is the person's choice (no timer resumes it).
+Cancel, and for Claude Pause, work while it waits. Before JSKIT's fix a usage-limited goal
+read paused whenever no turn was running, while the next deploy's recovery
+resumed it into about twenty turns.
 
 
 Main Claude's instructions direct explicit goal-creation requests to the chat's
