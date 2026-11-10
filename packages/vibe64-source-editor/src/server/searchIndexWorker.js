@@ -182,6 +182,12 @@ async function refresh({ sourceRoot, directory, policy }) {
     return status;
   } finally {
     if (db.isTransaction) db.exec("ROLLBACK");
+    // The connection that closes last copies whatever the WAL still holds into
+    // the database while holding it exclusively, so a search opening meanwhile
+    // waits for those writes and syncs, on a busy disk past its busy timeout.
+    // Copy them now, while searches keep reading, and leave that close nothing
+    // to write.
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     db.close();
   }
 }

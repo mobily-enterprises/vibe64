@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { sourceEditorFilePolicy } from "../../packages/vibe64-source-editor/src/server/filePolicy.js";
 import { createSourceEditorSearchIndex, sourceEditorIndexDirectory } from "../../packages/vibe64-source-editor/src/server/searchIndex.js";
@@ -114,6 +115,33 @@ test("content index applies the source-editor file policy and drops rows it no l
   const restricted = { ...f.context, policy: { ...f.context.policy, exclude: [...f.context.policy.exclude, "generated"] } };
   index.invalidate(f.context.sourceRoot);
   assert.deepEqual((await ready(index, restricted, "needle")).results.map((r) => r.path), ["visible.txt"]);
+});
+
+test("a refresh leaves nothing for its closing connection to write while searches wait", async (t) => {
+  const f = await fixture(t);
+  const index = f.index();
+  await f.put("visible.txt", "needle");
+  await ready(index, f.context, "needle");
+  // The connection that closes last checkpoints the WAL while holding the
+  // database exclusively, and a search opening meanwhile waits for those writes
+  // and syncs. A reader kept open here stops the refresh's close from doing it,
+  // so the WAL shows what that close would have had to write.
+  const database = path.join(sourceEditorIndexDirectory(f.context), "content.sqlite");
+  const reader = new DatabaseSync(database, { readOnly: true });
+  try {
+    const countFiles = () => reader.prepare("SELECT count(*) AS files FROM files").get().files;
+    assert.equal(countFiles(), 1);
+    await f.put("added.txt", "another needle");
+    index.invalidate(f.context.sourceRoot);
+    await index.search(f.context, { query: "needle", limit: 120 });
+    // Closing the service waits for the refresh that search started, with no
+    // other search running beside it.
+    await index.close();
+    assert.equal((await stat(`${database}-wal`)).size, 0, "the refresh checkpointed its writes before closing");
+    assert.equal(countFiles(), 2);
+  } finally {
+    reader.close();
+  }
 });
 
 test("failed refreshes stop reporting progress and explicit refresh retries them", async (t) => {
