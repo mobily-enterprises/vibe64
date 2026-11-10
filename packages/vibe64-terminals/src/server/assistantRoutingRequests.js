@@ -1,6 +1,7 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import {
+  assistantRoutingFromMetadata,
   assistantRoutingGoalFromMetadata,
   assistantWorkflowStateIsSupported,
   assistantWorkflowMessageIds
@@ -18,6 +19,17 @@ const activeMessage = state => state.followup || state.input;
 const usesWorkPlan = state => state.planInvolved === true;
 function failure(message, code) {
   return new AppError(409, message, { code });
+}
+/**
+ * Whether finished work is saved automatically now: the chat's Automatically
+ * save changes switch. Unreadable preferences save nothing.
+ */
+function savesAutomatically(metadata) {
+  try {
+    return assistantRoutingFromMetadata(metadata)?.autoSave === true;
+  } catch {
+    return false;
+  }
 }
 function parseRequest(value) {
   const request = value ? JSON.parse(value) : null;
@@ -122,6 +134,7 @@ export {
   read,
   readCancelled,
   recentVisibleMessages,
+  savesAutomatically,
   usesWorkPlan,
   withSelection
 };

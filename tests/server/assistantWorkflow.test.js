@@ -485,6 +485,7 @@ test("a Senior chat executing a plan reviews, deslops, runs the UI pass and save
   assert.equal((await planHistory(f.context)).length, 1);
   assert.equal(f.sends.length, 3); assert.deepEqual(f.saves, [0], "Save runs once, last");
   assert.deepEqual(started(f), [STARTED.review, STARTED.deslop, STARTED.uiPass, STARTED.autoSave]);
+  for (const { input } of f.sends) assert.match(input.message, /Vibe64 saves this work automatically .*never ask the person to press Save\./, "every turn knows Save is automatic");
 });
 
 test("a Junior chat does the same steps itself and leaves the plan for Senior to complete", async t => {
@@ -613,6 +614,11 @@ test("with automatic save off, finished work is reviewed but not saved", async t
   await finish(f, "handoff", { involved: false }); await finish(f, "complete", { involved: false });
   assert.equal(f.state().status, "complete"); assert.deepEqual(f.saves, []);
   assert.deepEqual(started(f), [STARTED.review, STARTED.deslop]);
+  assert.equal(f.sends.length, 2);
+  for (const { input } of f.sends) {
+    assert.match(input.message, /the person saves finished work with the Save button\./, "every turn knows the person saves");
+    assert.doesNotMatch(input.message, /saved automatically/);
+  }
 });
 
 test("an explicit Deslop and generated Junior work run no finishing step", async t => {

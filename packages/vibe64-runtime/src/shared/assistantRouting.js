@@ -5,7 +5,8 @@ import {
   ASSISTANT_FINISHING_DEFAULTS,
   ASSISTANT_FINISHING_STEPS,
   ASSISTANT_NO_FINISHING,
-  assistantFinishingParts
+  assistantFinishingParts,
+  assistantSaveInstruction
 } from "./assistantFinishing.js";
 
 const ASSISTANT_MODES = Object.freeze([
@@ -524,8 +525,10 @@ function assistantGoalManagementMessage(message, turn = {}) {
     Boolean(prefix || text === "No goal set" || text === "No goal set. Usage: `/goal <condition>`");
 }
 
-function assistantWorkflowInstructions(state) {
-  if (state.mode !== "auto") return directWorkflowInstructions(state);
+/** @param {{ autoSave?: boolean }} [options] the chat's Automatically save changes switch */
+function assistantWorkflowInstructions(state, { autoSave = false } = {}) {
+  const save = state.workflow ? `\n${assistantSaveInstruction(autoSave)}` : "";
+  if (state.mode !== "auto") return directWorkflowInstructions(state) + save;
   return [
     `Auto workflow stage: ${state.stage}. The workflow remains Working until an explicit outcome is processed; a native turn ending does not finish the task.`,
     "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId, workflow.stage and BOTH Plan and Progress. This read works even without a plan. Read all pages when a plan is involved.",
@@ -537,7 +540,7 @@ function assistantWorkflowInstructions(state) {
     ...(assistantFinishingParts(state).length ? [] : [
       "This chat's settings turn off the automatic review, Deslop and UI pass: handoff after implementation finishes the work without a Senior turn."
     ])
-  ].join("\n");
+  ].join("\n") + save;
 }
 
 /**

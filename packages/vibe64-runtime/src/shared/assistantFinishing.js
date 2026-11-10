@@ -35,6 +35,17 @@ function assistantFinishingNotice(step, key) {
 }
 
 /**
+ * What every workflow turn tells its agent about saving: with the chat's
+ * Automatically save changes on, Vibe64 saves the finished work after its last turn.
+ * @param {boolean} autoSave
+ */
+function assistantSaveInstruction(autoSave) {
+  return autoSave
+    ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: say it will be saved automatically; never ask the person to press Save."
+    : "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
+}
+
+/**
  * The finishing turn's instructions: the enabled parts in order, done by one
  * agent in one turn. Only Senior completes an involved plan.
  * @param {{ review?: boolean, deslop?: boolean, uiPass?: boolean }} finishing
@@ -100,5 +111,6 @@ export {
   assistantFinishingMessage,
   assistantFinishingNotice,
   assistantFinishingParts,
+  assistantSaveInstruction,
   assistantUnreviewedRequests
 };

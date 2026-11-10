@@ -24,7 +24,8 @@ import {
   activeMessage,
   withSelection,
   usesWorkPlan,
-  recentVisibleMessages
+  recentVisibleMessages,
+  savesAutomatically
 } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
@@ -187,7 +188,9 @@ function createAssistantRoutingDelivery({
       const first = followup && finishingParts[0];
       genesisTask = ASSISTANT_FINISHING_STEPS.find(({ id }) => id === first)?.genesisTask || "review";
     }
-    if (state.workflow || state.mode === "auto" && state.stage === "planning") message += "\n\n" + assistantWorkflowInstructions(state);
+    if (state.workflow || state.mode === "auto" && state.stage === "planning") {
+      message += "\n\n" + assistantWorkflowInstructions(state, { autoSave: savesAutomatically(context.session.metadata) });
+    }
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
     // Save the delivery selection before the session selection changes. The

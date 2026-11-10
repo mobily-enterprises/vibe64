@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { savesAutomatically } from "../../packages/vibe64-terminals/src/server/assistantRoutingRequests.js";
 import { createService } from "@local/vibe64-accounts/server/service";
 import { createAccountsRuntime } from "@local/vibe64-accounts/server/accountsRuntime";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
@@ -301,6 +302,30 @@ test("workflow instructions delegate outcomes to the admitted agent and retain r
   assert.match(direct, /automatic Review, Deslop, UI pass yourself in one more turn/);
   assert.doesNotMatch(direct, /Senior review back to Junior/);
   assert.match(assistantWorkflowInstructions({ mode: "senior", stage: "implementation", finishing: {} }), /so handoff finishes the work/);
+});
+
+test("workflow instructions say what happens with saving, as the chat's Automatically save changes switch decides", () => {
+  const automatic = "Vibe64 saves this work automatically once it is finished, after any finishing turn: say it will be saved automatically; never ask the person to press Save.";
+  const manual = "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
+  for (const mode of ["auto", "senior", "junior", "custom"]) for (const stage of ["implementation", "review"]) {
+    const state = { mode, stage, workflow: true, finishing: { review: true, deslop: true, uiPass: true } };
+    const on = assistantWorkflowInstructions(state, { autoSave: true });
+    assert.ok(on.endsWith(`\n${automatic}`), `${mode} ${stage}: ${on}`);
+    assert.ok(!on.includes(manual));
+    const off = assistantWorkflowInstructions(state, { autoSave: false });
+    assert.ok(off.endsWith(`\n${manual}`), `${mode} ${stage}: ${off}`);
+    assert.ok(!off.includes(automatic));
+  }
+  // Auto's planning saves nothing, so it says nothing about saving.
+  const planning = assistantWorkflowInstructions({ mode: "auto", stage: "planning", workflow: false }, { autoSave: true });
+  assert.ok(!planning.includes(automatic) && !planning.includes(manual));
+  // The instruction and the save itself read the same switch.
+  const metadata = (saved) => ({ assistant_routing: JSON.stringify({ mode: "senior", review: true, deslop: true, uiPass: true, ...saved }) });
+  assert.equal(savesAutomatically(metadata({ autoSave: true })), true);
+  assert.equal(savesAutomatically(metadata({ autoSave: false })), false);
+  assert.equal(savesAutomatically({}), false, "a chat with no saved preferences runs no workflow to save");
+  assert.equal(savesAutomatically({ assistant_routing: JSON.stringify({ mode: "senior", autoSave: true }) }), false,
+    "unreadable preferences save nothing");
 });
 
 test("task intent sets permissions independently of the selected role", () => {

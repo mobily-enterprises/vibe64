@@ -1,7 +1,6 @@
 import { workPlanScope } from "../shared/assistantWorkPlan.js";
 import { readWorkPlan, manageWorkPlan } from "./assistantWorkPlan.js";
 import {
-  assistantRoutingFromMetadata,
   assistantRoutingOutcomeNotice,
   assistantWorkflowRole
 } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -13,7 +12,7 @@ import {
   assistantReplyAsksPerson,
   latestAssistantMessageAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
-import { read, failure, activeMessage, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { read, failure, activeMessage, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -119,11 +118,7 @@ function createAssistantRoutingOutcomes({
    * now; Save itself runs after the lock.
    */
   function saveAfter(context, state) {
-    let preferences = null;
-    try {
-      preferences = assistantRoutingFromMetadata(context.session.metadata);
-    } catch { /* Unreadable preferences save nothing. */ }
-    return preferences?.autoSave ? { context, state } : null;
+    return savesAutomatically(context.session.metadata) ? { context, state } : null;
   }
 
   async function afterTurn(sessionId, payload, routingOptions, options = {}) {
