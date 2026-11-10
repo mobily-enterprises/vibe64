@@ -2470,7 +2470,9 @@ View full goal opens the exact instruction in a
 scrollable dialog with a fixed Close action. Preview truncation affects only
 presentation; goal updates still identify the complete original objective.
 The goal indicator flashes red while active, uses the app's warning color while paused, and shows
-elapsed active time when space permits. The application omits goal controls for
+elapsed active time when space permits. Only a running goal's chip shows a
+clock; a paused, blocked, usage-limited or budget-limited goal's chip names that
+state (for example **Goal paused**), and its details keep the elapsed time. The application omits goal controls for
 assistants without that capability.
 The app theme overrides the shared control's hard-coded paused color because
 the control does not expose a color prop.
@@ -4732,6 +4734,15 @@ existing conversation storage before process interruption. The shared native own
 removes the restored checker with a verified local clear command before ordinary
 input is admitted. Ordinary chat and application restart therefore preserve Pause;
 Resume and Cancel update the retained goal only after their exact native receipt.
+Pause sends nothing to Claude and starts no process, so it takes effect at once
+even when the account is out of credit or at its usage limit; the later local
+`/goal clear` is handled by Claude Code without a model request, as is Cancel's.
+Only that retained Pause reads as paused. A goal whose turn ended any other way
+(a usage limit, Stop, a process or server restart) keeps Claude's checker armed:
+the next turn continues it and startup recovery resumes an active continuation
+intent, so it reads active, with Pause available. Before JSKIT's fix it read
+paused whenever no turn was running, so a usage-limited goal showed as paused
+while the next deploy's recovery resumed it into about twenty turns.
 
 
 Main Claude's instructions direct explicit goal-creation requests to the chat's

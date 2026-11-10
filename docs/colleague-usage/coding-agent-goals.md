@@ -113,6 +113,10 @@ To pause, resume or clear a Claude or Codex goal, see [Pause and resume a goal](
 Claude and Codex use the same **Goal** control and status light. An active goal
 has a red light; it blinks only while the conversation reports work in progress
 and becomes steady between turns. Paused goals use a steady orange light.
+The chip beside the message box shows a clock only while the goal is running.
+A goal that is not running says so on the chip instead, with no clock:
+**Goal paused**, **Goal blocked**, **Goal waiting for allowance** or **Goal
+budget reached**. Open **Goal** to see how long it has been going.
 The control shows native **Running time** when available. Claude currently supplies
 only creation and status timestamps, so its timer is labelled **Elapsed since
 goal started (including pauses)**; this is not measured active runtime. On narrow
@@ -161,12 +165,17 @@ is already starting, recovery waits up to one minute for that operation's lock;
 it does not send a second goal command. A timeout stays visible on the goal control.
 **Pause goal**,
 **Cancel goal**, and **Stop** prevent that automatic continuation. A completed
-or cleared goal is not restarted. Existing goals are not guessed from their
+or cleared goal is not restarted. A Claude goal whose turn ended any other way,
+for example when the AI account reached its usage limit, is not paused: it shows
+as active with a steady red light, and a server restart or deploy continues it.
+To keep it from continuing, choose **Goal** → **Pause goal**. Existing goals are not guessed from their
 old paused status: choose **Resume goal** once to enroll the intended goal.
 
 If the account changed, cleanup cannot be verified, or an interrupted goal
 command has uncertain delivery, recovery stays stopped. Check the original
-receipt and current account, then use **Resume goal**; an uncertain command is
+receipt and current account, then use **Resume goal** (a Claude goal that shows
+as active offers **Pause goal** instead: send a message to continue it, or choose
+**Pause goal** and then **Resume goal**); an uncertain command is
 never replaced with a blind send. After a crash, an accepted Claude command can
 be recovered only when its saved native attachment identifies that exact command.
 A different goal with the same text is insufficient; missing proof requires

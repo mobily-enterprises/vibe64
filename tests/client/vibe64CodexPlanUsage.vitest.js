@@ -670,5 +670,18 @@ it("labels Claude elapsed age honestly when native running-time usage is unavail
     expect(html).toContain("Elapsed since goal started (including pauses): 5:00");
     expect(html).not.toContain("Running time:");
     expect(html).not.toContain("assistant-goal__light--working");
+    // A goal that is not running says so on its chip, without a clock that
+    // looks alive; its details keep the elapsed time.
+    expect(html).toMatch(/<span class="assistant-goal__label"[^>]*>Goal blocked<\/span>/u);
+    expect(html).not.toContain("assistant-goal__elapsed");
+    mocks.goal = { status: "available", goal: { status: "paused", objective: "Finish the work", createdAt: "2026-10-17T12:00:00Z" } };
+    const paused = await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } });
+    expect(paused).toMatch(/<span class="assistant-goal__label"[^>]*>Goal paused<\/span>/u);
+    expect(paused).not.toContain("assistant-goal__elapsed");
+    expect(paused).toContain("Elapsed since goal started (including pauses): 5:00");
+    mocks.goal = { status: "available", goal: { status: "active", objective: "Finish the work", createdAt: "2026-10-17T12:00:00Z" } };
+    const active = await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } });
+    expect(active).toMatch(/<span class="assistant-goal__label"[^>]*>Goal<\/span>/u);
+    expect(active).toMatch(/<span class="assistant-goal__elapsed" aria-hidden="true"[^>]*>5:00<\/span>/u);
   } finally { mocks.goal = null; vi.useRealTimers(); }
 });

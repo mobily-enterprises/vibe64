@@ -2885,6 +2885,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
       "daemon shutdown preserves the person's active goal intent");
     service = createService();
+    // After a deploy restart a goal's Claude turn is no longer running. It once
+    // read paused, though nobody had paused it, while recovery resumed it.
+    // Only Pause makes a goal read paused.
+    const unpausedAfterRestart = await service.readCanonicalAgentGoal("test", options);
+    assert.equal(unpausedAfterRestart.goal.status, "active",
+      "a goal nobody paused reads active after a restart, so its control offers Pause, not Resume");
+    assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_routing_goal).status, "active");
     if (!busyGoal) {
       const historyFile = await claudeHistoryPath({ configRoot: f.providerOptions.env.CLAUDE_CONFIG_DIR,
         workdir: f.context.session.metadata.source_path, conversationId: state.thread.id });

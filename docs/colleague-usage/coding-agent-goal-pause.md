@@ -3,6 +3,17 @@
 This continues [Goals and model changes](coding-agent-goals.md) for Claude and Codex goals.
 
 For a Claude goal, **Pause goal** stops the current work and keeps the goal.
+It takes effect at once and sends nothing to the AI, so it works even when the
+AI account is out of credit or at its usage limit, and no AI turn is spent
+acknowledging it. The next time Claude starts, for your next message, Vibe64
+first stands Claude's own goal checker down with Claude's local `/goal clear`
+command, which makes no AI request; **Cancel goal** clears the goal with the same
+local command. Only **Pause goal**, or Claude's own structured Pause action, makes
+a Claude goal paused. When a turn ends any other way, for example at the
+account's usage limit, after **Stop** or after a server restart, the goal stays
+active: its light is steady red, **Pause goal** is offered, and your next message
+or a server restart continues it. A reply saying the work is paused does not
+change that; choose **Pause goal**.
 If Claude's native checker reports that the goal is impossible, or ends a turn
 after repeatedly preventing it from stopping, the goal shows **blocked**, with
 the native explanation. The
@@ -27,7 +38,7 @@ You can send that request as a new message or steer it into the running turn.
 After draining its work, Claude must invoke the application's structured Pause
 action. That uses the same goal control and records stopped continuation intent;
 a server restart must not resume it. An assistant reply saying “paused” alone is
-not confirmation: check that the goal control shows **paused**. If it does not,
+not confirmation: check that the goal chip shows **Goal paused**. If it does not,
 use **Pause goal**. Temporary chats, AI tasks, child agents and Colleague cannot invoke
 Main's self-pause or Block actions; Colleague can explain these steps.
 Closing, archiving or renewing a session never depends on these actions: an
