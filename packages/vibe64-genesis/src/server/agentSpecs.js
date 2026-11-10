@@ -243,6 +243,8 @@ ${list(DEPLOYMENT_ENTRY_FORMS)}
 - One Ready when entry is required (status 200 through 399). Workdir defaults to \`.\`. Each other entry appears at most once.
 - Recreate on restore lists project-relative globs (only \`*\` and \`**\`) that a restored deployment rebuilds with its Prepare step, such as installed dependencies. It requires a Prepare step.
 - Migrate applies pending migrations without destroying data.
+- Prepare and Build never need the database or another managed service: a host may run them alone, without those credentials, to check that a revision builds before it publishes it.
+- The host gives every step \`SIDE_EFFECTS\`: \`live\` only when the deployment's owner chose to act for real, otherwise \`simulate\`; unset means \`simulate\` too. No step, Generated secret or Setup code sets it. Following it is the application's job: unless it is exactly \`live\`, the deployment is a test copy that sends no real email, SMS, push notification, payment or third-party webhook, simulates each one and writes it to its log, and shows a small, always-visible "Test copy" banner on its pages. Read it when the application runs, never at build time: changing it restarts the running application without a new build. In Node, for example: \`if (process.env.SIDE_EFFECTS === "live") await mailer.send(message); else console.info("Test copy: email to %s not sent", message.to);\`
 `,
     example: `
 - Runtimes: \`nodejs\`

@@ -20,7 +20,7 @@ when my release is live”, “Tell me if the release fails” or “Tell me if 
 changes in that release”. Ask Colleague what it can watch here; it lists what
 this installation offers. A release or app that is already live is reported at
 once. Every reading checks your current access to
-that project; a watch only reports and never deploys, restarts or changes
+that project; a watch only reports and never publishes, restarts or changes
 anything.
 
 Use the eye-and-count **Watches and assignments** button beside Previous

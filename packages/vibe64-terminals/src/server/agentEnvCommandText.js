@@ -19,7 +19,7 @@ function usageText() {
     "  vibe64-helper env saved [--json]",
     "  vibe64-helper env link <development|production> <KEY> <saved-id> <field-id> [--json]",
     "  vibe64-helper env unlink <development|production> <KEY> [--json]",
-    "  vibe64-helper deployment status [--json]   this project's deployment, names only",
+    "  vibe64-helper deployment status [--json]   this project's Production, names only",
     "",
     "Values are accepted only on stdin and are never printed by this command.",
     "Zero-length stdin stores an empty value; whitespace is preserved as an exact value.",

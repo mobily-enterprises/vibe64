@@ -127,6 +127,16 @@ test("printed entry forms are the parsers' own tables, and unknown entries list 
   assert.match(identities, /Never create application accounts or change roles/u);
 });
 
+test("the Deployment spec states the SIDE_EFFECTS contract and keeps Prepare and Build free of the database", async () => {
+  const deployment = (await cli(["deployment"])).stdout;
+  assert.match(deployment, /The host gives every step `SIDE_EFFECTS`: `live` only when the deployment's owner chose to act for real, otherwise `simulate`; unset means `simulate` too\./u);
+  assert.match(deployment, /No step, Generated secret or Setup code sets it\. Following it is the application's job/u);
+  assert.match(deployment, /sends no real email, SMS, push notification, payment or third-party webhook, simulates each one and writes it to its log, and shows a small, always-visible "Test copy" banner/u);
+  assert.match(deployment, /Read it when the application runs, never at build time: changing it restarts the running application without a new build\./u);
+  assert.match(deployment, /process\.env\.SIDE_EFFECTS === "live"/u);
+  assert.match(deployment, /Prepare and Build never need the database or another managed service/u);
+});
+
 test("the Deployment spec gives a host's production mode to Serve only and lets the project's own value win", async () => {
   const deployment = (await cli(["deployment"])).stdout;
   assert.match(deployment, /A host may also give Serve, and only Serve, its runtime's conventional production setting/u);

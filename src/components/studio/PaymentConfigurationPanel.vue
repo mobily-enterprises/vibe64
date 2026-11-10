@@ -120,7 +120,7 @@ function setEnv(reference, value, secret) {
           <p>This report is not provider approval. Unknown and manual checks still need evidence before launch.</p>
           <dl>
             <template v-for="check in management.checks" :key="check.id">
-              <dt class="font-weight-bold mt-3">{{ ({ credentials: 'Credentials', account: 'Merchant identity', charges: 'Payment acceptance', payouts: 'Payouts', catalogue: 'Products and prices', webhook: 'Payment events', checkout: 'Checkout and billing portal', site: 'Website and provider approval', deployment: 'Deployed application' })[check.id] }} · {{ ({ passed: 'Passed', failed: 'Needs attention', unknown: 'Not verified', manual: 'Manual check required' })[check.status] }}</dt>
+              <dt class="font-weight-bold mt-3">{{ ({ credentials: 'Credentials', account: 'Merchant identity', charges: 'Payment acceptance', payouts: 'Payouts', catalogue: 'Products and prices', webhook: 'Payment events', checkout: 'Checkout and billing portal', site: 'Website and provider approval', deployment: 'Published application' })[check.id] }} · {{ ({ passed: 'Passed', failed: 'Needs attention', unknown: 'Not verified', manual: 'Manual check required' })[check.status] }}</dt>
               <dd class="ml-0">{{ check.detail }}</dd>
             </template>
           </dl>

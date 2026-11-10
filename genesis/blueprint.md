@@ -12,7 +12,7 @@ give the source that ecosystem's treatment, and custom treatment belongs to
 project scripts.
 The connection file travels with project source. Configuration requires
 the owner's connected account to have write access to the listed repositories.
-Configuration changes alone do not publish, merge or deploy work.
+Configuration changes alone do not publish or merge work.
 
 Every session works in its own copy of each listed repository, kept beside its
 source. Workspace preparation makes the missing copies, gives the project's

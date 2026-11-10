@@ -430,7 +430,10 @@ async function createServer(options = {}) {
     ),
     [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
     [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
-    [VIBE64_TARGET_ROOT_ENV]: targetRoot || undefined
+    [VIBE64_TARGET_ROOT_ENV]: targetRoot || undefined,
+    // Vibe64 itself acts for real, so JSKIT sends its email and shows no "Test copy" banner. Only its features see
+    // this: the projects it runs inherit the process environment, where an unset SIDE_EFFECTS keeps them test copies.
+    SIDE_EFFECTS: "live"
   };
   configureVibe64SessionDebugLog(providerEnv);
   const { createInstalledRuntime: createRuntime = createInstalledRuntime } = options;

@@ -55,7 +55,7 @@ test("helper help lists its fixed groups and invalid groups cannot select anothe
   const missing = await run(helper, ["env", "status"], { env: { ...process.env, PATH: root } });
   assert.equal(missing.code, 127);
   assert.match(missing.stderr, /env is unavailable in this session/u);
-  assert.match((await run(helper, ["--help"])).stdout.toString(), / {2}deployment +Project deployment status/u);
+  assert.match((await run(helper, ["--help"])).stdout.toString(), / {2}deployment +Production status/u);
   const deployment = await run(helper, ["deployment", "status"], { env: { ...process.env, PATH: root } });
   assert.equal(deployment.code, 127);
   assert.match(deployment.stderr, /deployment is unavailable in this session/u);

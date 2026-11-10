@@ -177,12 +177,13 @@ Vibe64 otherwise reports production as unavailable. A production `set` or
 the agent (as saved-value links do), so the host applies that person's
 permission; a host refusal reaches the agent as the host words it. The same provider's
 `readDeployment()` answers `vibe64-helper deployment status`, which the helper
-dispatches to the Env command: the bound project's deployment state, public
-addresses, current release (id, commit, deploy time, recorded Deployment
+dispatches to the Env command: the bound project's Production state (shown
+as published, publishing, failed, not published or offline), public
+addresses, current release (id, commit, publish time, recorded Deployment
 commands, the host's Serve defaults), production variable names with their
 source and generated mark, and missing-value messages. The command copies only
 those named fields, so a value a host might return never reaches the agent;
-without a provider it says the installation does not deploy projects. A host that keeps saved
+without a provider it says the installation does not publish projects. A host that keeps saved
 values provides the values linked into the Development Env as the optional
 `vibe64.project.saved-env-values` capability, and the helper's `saved`, `link`
 and `unlink` as the optional `vibe64.terminals.saved-env-value-links`

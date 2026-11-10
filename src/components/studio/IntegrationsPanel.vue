@@ -235,7 +235,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
       <v-btn value="development">Development</v-btn><v-btn value="production">Production</v-btn>
     </v-btn-toggle>
     <v-alert v-if="production" type="info" variant="tonal">
-      Deployed configuration{{ releaseId ? ` (${releaseId})` : '' }}. Make configuration changes in Development, then deploy them.
+      Published configuration{{ releaseId ? ` (${releaseId})` : '' }}. Make configuration changes in Development, then publish them.
       <p v-if="!dashboardContext.owner">Only the workspace owner can manage production connections.</p>
     </v-alert>
     <p v-if="!production && !dashboardContext.sessionId">Open a session to configure its integrations.</p>
@@ -253,7 +253,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
       <div class="integrations-panel__layout">
         <aside class="integrations-panel__catalogue" aria-label="Integrations catalogue">
           <v-text-field v-model="search" label="Search integrations" hide-details clearable @click:clear="search = ''" />
-          <h2 class="text-title-medium mt-6 mb-2">{{ production ? 'Configured in the deployed release' : 'Configured in this session' }}</h2>
+          <h2 class="text-title-medium mt-6 mb-2">{{ production ? 'Configured in the published release' : 'Configured in this session' }}</h2>
           <v-list v-if="filteredEntries.length" aria-label="Configured integrations" bg-color="transparent">
             <v-list-item
               v-for="[id, entry] in filteredEntries" :key="id" :active="selectedId === id" min-height="48"
@@ -428,7 +428,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <v-btn variant="text" :disabled="disabled" @click="registrationNeedsReview = false">I checked {{ provider.name }} and Env — allow another attempt</v-btn>
               </template>
             </section>
-            <p v-if="production">Production Env is managed on Deploy. Deploy changes to apply them to the running release.</p>
+            <p v-if="production">Production Env is managed on the Production page. Publish to apply changes to the running release.</p>
             <section v-for="credential in credentials" :key="credential.label" :aria-label="credential.label" class="mt-4">
               <h3 class="text-title-medium">{{ credential.label }}</h3>
               <p>Save the credential as {{ credential.key }} in {{ environment }} Env. Your application receives it through Env.</p>
@@ -481,7 +481,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             <v-expansion-panels v-if="provider?.setup" class="mt-4" static>
               <v-expansion-panel :title="`Set up ${provider.name}`">
                 <v-expansion-panel-text>
-                  <p v-if="production">For the credential and callback Env steps below, use Open production Env. Save values in the deployed application's environment.</p>
+                  <p v-if="production">For the credential and callback Env steps below, use Open production Env. Save values in the published application's environment.</p>
                   <ol class="integrations-panel__instructions">
                     <li v-for="step in integrationSetupSteps(provider, selected)" :key="step">{{ step }}</li>
                   </ol>
@@ -513,7 +513,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               </v-expansion-panel>
             </v-expansion-panels>
           </template>
-          <template v-else><h2>{{ production ? 'Select a deployed integration' : 'Add a service' }}</h2><p>Choose a service or an existing configuration to get started.</p></template>
+          <template v-else><h2>{{ production ? 'Select a published integration' : 'Add a service' }}</h2><p>Choose a service or an existing configuration to get started.</p></template>
         </main>
       </div>
       <footer v-if="!production" class="integrations-panel__footer">
@@ -541,7 +541,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
     </v-dialog>
     <v-dialog v-model="removeOpen" max-width="440">
       <v-card title="Remove this integration?">
-        <v-card-text v-if="configurationOnly">This removes the public settings when you save. Your application applies the change through its normal configuration or deployment lifecycle. It does not delete provider data or undo events already sent.</v-card-text>
+        <v-card-text v-if="configurationOnly">This removes the public settings when you save. Your application applies the change through its normal configuration or publishing lifecycle. It does not delete provider data or undo events already sent.</v-card-text>
         <v-card-text v-else>This changes the application's configuration when you save. Existing account grants and shared app registrations remain available.</v-card-text>
         <v-card-actions><v-btn @click="removeOpen = false">Cancel</v-btn><v-btn color="error" @click="remove">Remove integration</v-btn></v-card-actions>
       </v-card>

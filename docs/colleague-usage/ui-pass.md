@@ -6,7 +6,7 @@ behave at narrow and wide widths. For a Material 3 project it follows that
 guide's method and checks the screens against it. It keeps what each screen
 does; a defect that would need a behavior change is reported, not fixed. Senior
 checks the screens it changed in the managed browser and reports what changed
-and what it verified. It never commits, pushes or deploys.
+and what it verified. It never commits, pushes or publishes.
 
 The UI pass sits beside Deslop. Deslop cleans up code; the UI pass cleans up
 screens. Each runs either automatically after each piece of work, when its

@@ -103,6 +103,6 @@ fresh owner authority; a foreign request or unadmitted automation cannot claim
 the standalone owner merely by omitting a user.
 
 Colleague uses the same owner-authorized actions and bounded settings result.
-Configuration success is not source preparation, publication or deployment
+Configuration success is not source preparation or publication
 evidence. Removing a connection changes the list; it does not delete a copy that
 holds work.

@@ -58,6 +58,20 @@ sandbox allowance, is declared in the section, never installed or switched on
 by the script, and a host that lacks something makes it fail with one plain
 sentence.
 
+`SIDE_EFFECTS` belongs to the host. It gives every step `live` only when the
+deployment's owner chose to act for real, otherwise `simulate`, and an
+unset value means `simulate` too. The parser refuses a step argument that sets
+it (`SIDE_EFFECTS=...`) and a Generated secrets or Setup code entry naming it.
+The application follows it: unless it is exactly `live`, it is a test copy that
+simulates and logs email, SMS, push notifications, payments and third-party
+webhooks and shows a "Test copy" banner. The application reads it at run time,
+so a host can change it by restarting Serve without a new build. Prepare and
+Build never need the database or another managed service, so a host may run
+them alone, without those credentials, to check a revision builds.
+Vibe64 itself acts for real: its server gives `SIDE_EFFECTS=live` only to the
+environment its own features receive, so the projects it runs, which inherit
+the process environment, stay test copies.
+
 Genesis does not know what Deployment means. Vibe64 does not infer scripts from
 the selected language or framework. The application or technology Stack owns
 the scripts and checks; a project-owned section replaces a component proposal

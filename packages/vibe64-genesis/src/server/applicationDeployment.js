@@ -25,6 +25,9 @@ const SANDBOX_ALLOWS_PREFIX = "- Sandbox allows: ";
 // sandbox, from a closed set. A host grants only what its owner permits.
 const VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
 const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
+// The host owns SIDE_EFFECTS (live or simulate) and gives it to every step; the project never sets it.
+const SIDE_EFFECTS_NAME = "SIDE_EFFECTS";
+const SIDE_EFFECTS_OWNED_BY_HOST = "Deployment never sets SIDE_EFFECTS: the host gives it to every step, live only when the deployment's owner chose to act for real.";
 const STEP_ROLE_ORDER = Object.freeze({
   prepare: 0,
   build: 1,
@@ -136,6 +139,9 @@ function deploymentStep(match, deploymentPath, line) {
       "Deployment commands take no {host} or {port} placeholders; Serve reads HOST and PORT from its environment.",
       line
     );
+  }
+  if (argv.some((value) => value.startsWith(`${SIDE_EFFECTS_NAME}=`))) {
+    invalid(deploymentPath, SIDE_EFFECTS_OWNED_BY_HOST, line);
   }
   return {
     label: oneLineText(match[2], ERROR_CODE, deploymentPath, "Deployment step label", line),
@@ -268,6 +274,9 @@ function parseVibe64DeploymentLines(lines, options = {}) {
     }
   }
   if (!result.readiness) invalid(deploymentPath, "Deployment needs one Ready when entry.");
+  if ([...result.generatedSecrets, result.setupCode].includes(SIDE_EFFECTS_NAME)) {
+    invalid(deploymentPath, SIDE_EFFECTS_OWNED_BY_HOST);
+  }
   if (result.generatedSecrets.includes(result.setupCode)) {
     invalid(deploymentPath, "Deployment Setup code is generated already; leave it out of Generated secrets.");
   }

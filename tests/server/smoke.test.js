@@ -3,6 +3,7 @@ import { access, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createInstalledRuntime } from "@jskit-ai/kernel/server/platform";
 import {
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
@@ -217,6 +218,34 @@ test("composed server startup removes the private state of a project whose names
   } finally {
     await app.close();
     await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("Vibe64's own features act for real, while the process environment its projects inherit leaves SIDE_EFFECTS alone", async () => {
+  const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-side-effects-system-"));
+  const before = process.env.SIDE_EFFECTS;
+  let featureEnv = null;
+  const app = await createServer({
+    runtimeProfile: Object.freeze({
+      authRequired: false,
+      local: false,
+      mode: "composed",
+      projectCatalogEnabled: true,
+      singleTargetRoot: ""
+    }),
+    startupSlug: "local-target",
+    systemRoot,
+    createInstalledRuntime: async (options) => {
+      featureEnv = options.env;
+      return createInstalledRuntime(options);
+    }
+  });
+  try {
+    assert.equal(featureEnv.SIDE_EFFECTS, "live");
+    assert.equal(process.env.SIDE_EFFECTS, before);
+  } finally {
+    await app.close();
+    await rm(systemRoot, { force: true, recursive: true });
   }
 });
 

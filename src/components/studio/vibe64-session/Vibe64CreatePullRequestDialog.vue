@@ -87,7 +87,7 @@ async function submit() {
         <v-switch v-model="draft" color="primary" label="Create as draft" :disabled="pending" hide-details />
         <details class="pr-details text-body-small">
           <summary class="py-3">What gets pushed</summary>
-          <p>All saved file changes are committed and pushed to the PR branch. Database data and chat history are separate. GitHub automation may run; this does not deploy the app.</p>
+          <p>All saved file changes are committed and pushed to the PR branch. Database data and chat history are separate. GitHub automation may run; this does not publish the app.</p>
         </details>
       </v-card-text>
       <v-card-actions class="pa-5 pt-2">

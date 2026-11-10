@@ -140,9 +140,12 @@ verification.
 
 ## Deployment Terminology
 
-- The Deploy feature is product functionality that publishes the selected
-  user's project from its Vibe64-owned Deployment contract. Genesis composes
-  and returns that Stack section as opaque text; it does not define deployment.
+- The Publish feature is product functionality that publishes the selected
+  user's project to its Production from its Vibe64-owned Deployment contract.
+  A person always reads Publish and Production, never Deploy; internal
+  identifiers, routes and stored state may keep their deployment names.
+  Genesis composes and returns that Stack section as opaque text; it does not
+  define deployment.
 - This repository's `## Deployment` section describes only how this public
   Vibe64 application itself may run as a managed application. Its schema is
   interpreted mechanically by `@local/vibe64-genesis`, not by Genesis.

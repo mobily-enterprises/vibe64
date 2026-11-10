@@ -60,17 +60,17 @@ managed resource of the same name still wins.
 
 An application whose first account becomes its owner can name, in its Stack's
 `## Deployment`, the production variable holding the one-time code that first
-registration needs (``- Setup code: `NAME` ``). A host that deploys projects
-generates that code and shows it to the project owner alone; deployment status
-lists the name, never the code, so the coding agent sends the person to the
-host's deployment page for it.
+registration needs (``- Setup code: `NAME` ``). A host that publishes projects
+generates that code and shows it to the project owner alone; the Production
+status lists the name, never the code, so the coding agent sends the person to
+the host's Production page for it.
 
-When the host deploys projects, `vibe64-helper deployment status` shows the
-coding agent the session project's deployment: whether it is deployed, its
-public addresses, the current release with its commit, deploy time and recorded
+When the host publishes projects, `vibe64-helper deployment status` shows the
+coding agent the session project's Production: whether it is published, its
+public addresses, the current release with its commit, publish time and recorded
 Deployment commands, its production variable names with their source, and what
-is missing before the next deploy. It never shows a value and changes nothing.
-Where the installation does not deploy projects it says so. Changing a
+is missing before the next publish. It never shows a value and changes nothing.
+Where the installation does not publish projects it says so. Changing a
 production value from a session is the host's decision for the person whose
 session it is; when the host refuses, the agent reports the host's message
 instead of retrying.
@@ -88,8 +88,17 @@ Env value (or its Stack default), a launch's own settings, or the command itself
 (`NODE_ENV=test npm test`). Vibe64 never passes on the mode it runs in itself, so
 Workspace setup installs development dependencies, and Preview, terminals,
 tests and agent commands run without `NODE_ENV` unless the project sets it. To
-run them in another mode, add `NODE_ENV` in Development Env; a deployment's mode
-belongs on its Deployment Serve step. Colleague can explain this and open Env.
+run them in another mode, add `NODE_ENV` in Development Env; Production's mode
+belongs on the Stack's Deployment Serve step. Colleague can explain this and open Env.
+
+`SIDE_EFFECTS` works the same way: Vibe64 never sets it in Preview, terminals,
+tests or agent commands, so an application run there is a test copy. An
+application that follows the Stack's Deployment contract
+(`vibe64-helper spec deployment`) then simulates email, SMS, push
+notifications, payments and third-party webhooks, writes them to its log and
+shows a small "Test copy" banner. Only a host that publishes projects sets it,
+for Production; neither Env nor the project sets it. Colleague can explain
+this.
 
 For a long-running shell task, the coding agent can request its native tool's
 background mode and timeout. Binding the command to the Vibe64 session preserves

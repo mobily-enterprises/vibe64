@@ -68,7 +68,7 @@ Use **Save connected repositories** to write the complete list to
 `vibe64.connections.json` in the selected source. You must be the project owner
 and have write access to each listed repository through your connected GitHub
 account. The file is ordinary project source and follows normal project Save.
-Saving this configuration does not commit, push, merge or deploy source.
+Saving this configuration does not commit, push, merge or publish source.
 
 In the standalone editor, the local project owner can use these controls without
 signing in. A connected GitHub account still supplies repository access.

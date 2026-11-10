@@ -3,8 +3,16 @@
 
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
-const DEPLOYMENT_UNAVAILABLE_REASON = "This Vibe64 installation does not deploy projects.";
+const DEPLOYMENT_UNAVAILABLE_REASON = "This Vibe64 installation does not publish projects.";
 const DEPLOYMENT_STATES = new Set(["deployed", "deploying", "failed", "not-deployed", "offline"]);
+// The words a person reads for each state: the feature is Publish, the place it runs Production.
+const PRODUCTION_STATE_WORDS = Object.freeze({
+  deployed: "published",
+  deploying: "publishing",
+  failed: "failed",
+  "not-deployed": "not published",
+  offline: "offline"
+});
 const DEPLOYMENT_STEP_ROLES = Object.freeze(["prepare", "build", "migrate", "serve"]);
 
 function deploymentUsageText() {
@@ -12,9 +20,9 @@ function deploymentUsageText() {
     "Usage:",
     "  vibe64-helper deployment status [--json]",
     "",
-    "Shows this session project's deployment: whether it is deployed, its public addresses, the current release",
-    "(id, commit, when it was deployed and its recorded commands), its Production Env variable names with their",
-    "source, and anything missing before the next deploy. It never shows a value and changes nothing."
+    "Shows this session project's Production: whether it is published, its public addresses, the current release",
+    "(id, commit, when it was published and its recorded commands), its Production Env variable names with their",
+    "source, and anything missing before the next publish. It never shows a value and changes nothing."
   ].join("\n") + "\n";
 }
 
@@ -90,7 +98,7 @@ function recordLine(record) {
 }
 
 function humanDeploymentStatus(payload) {
-  const lines = [`Deployment: ${payload.state}`];
+  const lines = [`Production: ${PRODUCTION_STATE_WORDS[payload.state] || payload.state}`];
   if (payload.addresses.length > 0) {
     lines.push("Addresses:", ...payload.addresses.map((address) => (
       `  ${address.url}${address.label ? ` (${address.label})` : ""}`
@@ -100,7 +108,7 @@ function humanDeploymentStatus(payload) {
   if (release) {
     lines.push(`Current release: ${release.id || "unknown"}`);
     if (release.commit) lines.push(`  Commit: ${release.commit}`);
-    if (release.deployedAt) lines.push(`  Deployed: ${release.deployedAt}`);
+    if (release.deployedAt) lines.push(`  Published: ${release.deployedAt}`);
     for (const step of release.steps) {
       const role = `${step.role[0].toUpperCase()}${step.role.slice(1)}`;
       lines.push(`  ${role}${step.label ? ` (${step.label})` : ""}: ${step.command}`);
@@ -112,12 +120,12 @@ function humanDeploymentStatus(payload) {
     lines.push("Current release: none");
   }
   if (payload.latestDeploy) {
-    lines.push(`Latest deploy: ${payload.latestDeploy.status}${payload.latestDeploy.at ? ` at ${payload.latestDeploy.at}` : ""}`);
+    lines.push(`Latest publish: ${payload.latestDeploy.status}${payload.latestDeploy.at ? ` at ${payload.latestDeploy.at}` : ""}`);
   }
   lines.push("Production Env (names only; values are never shown):");
   lines.push(...(payload.records.length > 0 ? payload.records.map(recordLine) : ["  no variables"]));
   if (payload.blockers.length > 0) {
-    lines.push("Missing before the next deploy:", ...payload.blockers.map((blocker) => `  ${blocker}`));
+    lines.push("Missing before the next publish:", ...payload.blockers.map((blocker) => `  ${blocker}`));
   }
   lines.push(...payload.notes);
   return `${lines.join("\n")}\n`;

@@ -51,7 +51,7 @@ Groups:
   preview      Preview lifecycle, opening a page in the Preview pane, browser inspection, screenshots and logs
   playwright   Managed project browser test suites
   env          Project environment settings
-  deployment   Project deployment status: addresses, live release and Production Env names
+  deployment   Production status: addresses, published release and Production Env names
   database     Database refresh, overview and diagram operations
   github       GitHub view refresh
   pages        Publish, update and list pages everyone on the project can open

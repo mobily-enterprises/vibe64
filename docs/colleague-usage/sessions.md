@@ -294,7 +294,7 @@ not require an AI connection. Archive or renewal already in progress still block
 You can still browse and work in other session tabs; the server-selected source
 link stays on the pinned session. Cross-project requests addressed to the
 server-selected session also keep that destination. Pinning does not Save,
-push, freeze file contents, or deploy.
+push, freeze file contents, or publish.
 
 The pinned session cannot be archived or renewed, and the project cannot close
 or be closed by idle cleanup. Closing your browser does not remove the pin.

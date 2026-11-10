@@ -1,6 +1,6 @@
 # Review, Save and work with GitHub
 
-Source edits in a session, saving a project version and deploying an application
+Source edits in a session, saving a project version and publishing an application
 are separate operations. A different session has its own worktree. Check which
 project, session and branch you are using before saving or creating a pull request:
 the session tab's details show **Saves to**, the repository and branch its Save

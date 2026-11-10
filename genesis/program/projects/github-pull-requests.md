@@ -73,7 +73,7 @@ published PR identity and actual Save commit, when present; current commit and
 draft status come from a fresh PR read. Asynchronous branch updates remain pending,
 and ambiguous writes require inspection before any explicit retry. These tools
 do not automatically save to unblock a merge, update worktrees, archive sessions,
-delete branches or deploy. Opening a PR uses ordinary session creation with its
+delete branches or publish. Opening a PR uses ordinary session creation with its
 number, current GitHub identity and the existing source admission checks.
 Create PR first passes `githubApi.js`'s one GitHub project check
 (`requireGithubRepository`, "Pull requests are available only for GitHub
