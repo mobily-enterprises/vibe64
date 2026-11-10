@@ -45,7 +45,7 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.2.18",
+    "@jskit-ai/kernel": "0.2.19",
     "node-pty": "^1.1.0"
   }
 }
