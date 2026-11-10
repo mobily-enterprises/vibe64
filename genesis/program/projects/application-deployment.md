@@ -49,6 +49,15 @@ where its owner permits it and refuses a deploy that needs one it does not grant
 [Workflow accounting](../execution/workflow-accounting.md) says exactly what
 each adds to the sandbox.
 
+The Deployment guidance for assistants also says where host-level preparation
+beyond the package manager goes: one script per hosting environment,
+`scripts/hosting/<host>.sh`, named by the `HOSTING_SCRIPT` environment variable
+and run by the Prepare step, and only in an application that needs one. It
+never works around Vibe64's rules: what Vibe64 provides, such as a runtime or a
+sandbox allowance, is declared in the section, never installed or switched on
+by the script, and a host that lacks something makes it fail with one plain
+sentence.
+
 Genesis does not know what Deployment means. Vibe64 does not infer scripts from
 the selected language or framework. The application or technology Stack owns
 the scripts and checks; a project-owned section replaces a component proposal

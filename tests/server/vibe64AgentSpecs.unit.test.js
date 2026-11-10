@@ -141,6 +141,8 @@ test("the Deployment spec gives a host's production mode to Serve only and lets 
   assert.match(deployment, /- Sandbox allows: `fuse` `gvisor`\n/u);
   assert.match(deployment, /A host grants an allowance only where its owner permits it/u);
   assert.match(deployment, /An assistant never adds or changes this line on its own; it explains the failure and asks the person\./u);
+  assert.match(deployment, /goes in one script per hosting environment, `scripts\/hosting\/<host>\.sh`, which the `HOSTING_SCRIPT` environment variable names and the Prepare step runs/u);
+  assert.match(deployment, /It never works around Vibe64's rules: what Vibe64 provides, such as a runtime or a sandbox allowance, is declared in this section, never installed/u);
   assert.doesNotMatch(deployment, /hosted/u, "the public spec describes no hosting service");
   const [example] = fencedBlocks(deployment, "markdown");
   const serve = parseVibe64DeploymentLines(example.split("\n").slice(1)).steps.at(-1);
