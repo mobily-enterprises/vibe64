@@ -109,7 +109,7 @@
           },
           {
             "subpath": "./server/sessionUiSyncState",
-            "summary": "Shared Vibe64 per-session UI sync state snapshots."
+            "summary": "Shared Vibe64 per-session UI sync state snapshots and the editors' answers to Preview open requests."
           },
           {
             "subpath": "./server/sourceEditorRealtimeEvents",

@@ -2,9 +2,14 @@ import {
   logOperationalEvent,
   sanitizeLogText
 } from "@local/vibe64-core/server/logging";
+import { collectSessionPreviewOpenAnswers } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
   AGENT_PREVIEW_USAGE
 } from "@local/vibe64-execution/server";
+import {
+  PREVIEW_OPEN_REQUESTED_REASON,
+  previewAppPathError
+} from "../shared/launchPreviewProtocol.js";
 import {
   logsStdout,
   parsePreviewCommandArgs,
@@ -23,6 +28,9 @@ import { commandFailure } from "./commandFailure.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {typeof import("@local/vibe64-core/server/sessionUiSyncState").readSessionUiSyncStateForSession} ReadSessionUiSyncState */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+
+const PREVIEW_OPEN_USAGE = "Usage: vibe64-helper preview open <path> [--json]";
 
 /**
  * @param {RuntimeLogger} logger
@@ -57,14 +65,42 @@ function failedStatusResult(status, fallbackError) {
 }
 
 /**
+ * What `vibe64-helper preview open` prints: how many of the person's Previews
+ * moved to the page, as JSON or a line, and when none did, why and what to do.
+ * @param {{ errors: string[], moved: number, path: string }} report
+ * @param {boolean} json
+ */
+function previewOpenResult(report, json) {
+  const stdout = json ? `${JSON.stringify(report, null, 2)}\n` : "";
+  if (report.moved > 0) {
+    return {
+      exitCode: 0,
+      ok: true,
+      stdout: stdout || `moved: ${report.moved} open Preview${report.moved === 1 ? "" : "s"} to ${report.path}\n`
+    };
+  }
+  const reason = (report.errors.length
+    ? `the person's Preview did not move: ${report.errors.join(" ")}`
+    : "nobody has this session's Preview open").replace(/\.+$/u, "");
+  return commandFailure(
+    `moved: 0 - ${reason}. Give the person the path to type into their Preview address box instead: ${report.path}`,
+    "vibe64_agent_preview_open_not_moved",
+    { exitCode: 1, stdout }
+  );
+}
+
+/**
  * The `vibe64-helper preview` command line: status, targets, inspection URL,
- * logs, stop, ensure and restart, the project's managed app identities, and
- * the browser identity a Preview page asks for.
+ * logs, stop, ensure and restart, opening a page in the person's Preview, the
+ * project's managed app identities, and the browser identity a Preview page
+ * asks for.
  * @param {object} dependencies
  * @param {AgentPreviewWorkerRegistry} dependencies.workerRegistry
  * @param {OutputTargetTerminalController} dependencies.launchTarget
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {number} [dependencies.previewOpenTimeoutMs] How long an open waits for the first editor's answer.
  * @param {ReadSessionUiSyncState} dependencies.readSessionUiState
  */
 function createAgentPreviewCommandLine({
@@ -72,6 +108,8 @@ function createAgentPreviewCommandLine({
   launchTarget,
   logger,
   project,
+  publishSessionChanged,
+  previewOpenTimeoutMs,
   readSessionUiState
 }) {
   async function authorizeBrowserIdentity(sessionId = "", identity = "") {
@@ -181,6 +219,50 @@ function createAgentPreviewCommandLine({
     });
   }
 
+  /**
+   * Sends the session's open Preview panes to a page of the running app, as
+   * their address box would, through the session's editors; reports how many
+   * moved. Only a path inside the app is sent.
+   */
+  async function openPreviewPage(sessionId = "", args = [], json = false) {
+    const words = (Array.isArray(args) ? args : []).map(normalizeText).filter((word) => word && word !== "--json");
+    if (words.length !== 2 || words[0] !== "open") {
+      return commandFailure(PREVIEW_OPEN_USAGE, "vibe64_agent_preview_open_usage", { exitCode: 64 });
+    }
+    const pagePath = words[1];
+    const pathError = previewAppPathError(pagePath);
+    if (pathError) {
+      return commandFailure(`${pathError}\n${PREVIEW_OPEN_USAGE}`, "vibe64_agent_preview_open_path_invalid", { exitCode: 64 });
+    }
+    const status = await launchTarget.launchStatus(sessionId);
+    if (status?.ok === false) return failedStatusResult(status, "Vibe64 preview status failed.");
+    if (!inspectionUrl(status, sessionId)) {
+      return commandFailure(
+        "The Preview is not running, so it cannot show a page; nothing moved. Start it deliberately with vibe64-helper preview ensure --wait if the person wants it running.",
+        "vibe64_agent_preview_open_not_running",
+        { exitCode: 1 }
+      );
+    }
+    const projectSlug = workerRegistry.sessionProjectSlug(sessionId) || normalizeText(readSessionUiState(sessionId)?.projectSlug);
+    const answers = projectSlug
+      ? await collectSessionPreviewOpenAnswers({
+        projectSlug,
+        send: (requestId) => publishSessionChanged(sessionId, {
+          payload: { previewOpen: { path: pagePath, requestId } },
+          projectSlug,
+          reason: PREVIEW_OPEN_REQUESTED_REASON
+        }),
+        sessionId,
+        ...(previewOpenTimeoutMs ? { timeoutMs: previewOpenTimeoutMs } : {})
+      })
+      : [];
+    return previewOpenResult({
+      errors: [...new Set(answers.filter((answer) => !answer.moved).map((answer) => answer.error).filter(Boolean))],
+      moved: answers.filter((answer) => answer.moved).length,
+      path: pagePath
+    }, json);
+  }
+
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const parsed = parsePreviewCommandArgs(input.args);
@@ -287,6 +369,9 @@ function createAgentPreviewCommandLine({
           ? `${JSON.stringify(summary, null, 2)}\n`
           : `${previewSummaryLines(summary).join("\n")}\n`
       });
+    }
+    if (parsed.command === "open") {
+      return finish(await openPreviewPage(sessionId, input.args, parsed.json));
     }
     if (parsed.command === "identities") {
       const result = await previewIdentities(sessionId, input.args, input.stdin);

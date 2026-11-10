@@ -11,6 +11,7 @@ import {
   previewRoutePath,
   previewRoutesForTarget
 } from "@/lib/vibe64PreviewRoutes.js";
+import { previewAppPathError } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
 import {
   launchPreviewAddressNavigationUrl,
   normalizePreviewRoute,
@@ -37,6 +38,7 @@ function useVibe64PreviewAddress({ frame, projectSlug, props, targets }) {
     previewDebugLog,
     previewDisplayBaseUrl,
     previewReadyForIframe,
+    previewSuspended,
     previewVisitedUrl,
     requestPreviewFrame
   } = frame;
@@ -166,36 +168,79 @@ function useVibe64PreviewAddress({ frame, projectSlug, props, targets }) {
     recordPreviewHistory(normalizedUrl, reason);
   }
 
-  function navigatePreviewToDisplayUrl(displayUrl = "") {
-    const navigation = launchPreviewAddressNavigationUrl({
-      address: displayUrl,
+  function previewAddressNavigation(address = "") {
+    return launchPreviewAddressNavigationUrl({
+      address,
       currentUrl: previewDisplayedUrl.value,
       displayBaseUrl: previewDisplayBaseUrl.value,
       previewBaseUrl: previewBaseUrl.value
     });
+  }
+
+  /** Loads a resolved address in the frame and remembers it; whether the frame was asked to load it. */
+  function followPreviewAddressNavigation(navigation, reason = "") {
+    previewAddressError.value = "";
+    recordPreviewVisit(navigation.displayUrl, {
+      reason
+    });
+    const requested = requestPreviewFrame({
+      force: true,
+      reason,
+      src: navigation.previewUrl,
+      visitedUrl: navigation.displayUrl
+    });
+    previewDebugLog(`${reason}.navigate`, {
+      displayUrl: navigation.displayUrl,
+      previewUrl: navigation.previewUrl
+    });
+    return requested;
+  }
+
+  function navigatePreviewToDisplayUrl(displayUrl = "") {
+    const navigation = previewAddressNavigation(displayUrl);
     if (!navigation.ok) {
       previewAddressError.value = navigation.error;
       return false;
     }
-    previewAddressError.value = "";
     previewAddressDraft.value = previewAddressDisplayText(navigation.displayUrl, {
       displayBaseUrl: previewDisplayBaseUrl.value,
       previewBaseUrl: previewBaseUrl.value
     });
-    recordPreviewVisit(navigation.displayUrl, {
-      reason: "address"
-    });
-    requestPreviewFrame({
-      force: true,
-      reason: "address",
-      src: navigation.previewUrl,
-      visitedUrl: navigation.displayUrl
-    });
-    previewDebugLog("address.navigate", {
-      displayUrl: navigation.displayUrl,
-      previewUrl: navigation.previewUrl
-    });
+    followPreviewAddressNavigation(navigation, "address");
     return true;
+  }
+
+  /**
+   * Opens a page of the app the AI asked for (`vibe64-helper preview open`)
+   * exactly as the address box opens a typed one: the same address, Preview
+   * token, history and frame request. Only a path inside the app is opened,
+   * never a page on the editor's own site; a refusal leaves the address box,
+   * and a draft typed in it, alone.
+   * @param {string} path
+   * @returns {{ error: string, moved: boolean }}
+   */
+  function openPreviewPath(path = "") {
+    const refused = (error) => ({ error, moved: false });
+    const pathError = previewAppPathError(path);
+    if (pathError) return refused(pathError);
+    if (previewSuspended.value) return refused("The person's Preview is suspended; they can choose Resume preview.");
+    if (!previewReadyForIframe.value) return refused("The person's Preview is not showing the app yet.");
+    const navigation = previewAddressNavigation(path);
+    if (!navigation.ok) return refused(navigation.error);
+    if (previewFrameUrlOnEditorSite(navigation.previewUrl)) return refused("That page would show Vibe64 itself in the Preview.");
+    return followPreviewAddressNavigation(navigation, "ai-open")
+      ? { error: "", moved: true }
+      : refused("The person's Preview is not showing the app yet.");
+  }
+
+  // The frame never loads the editor's own site, unless the editor previews itself.
+  function previewFrameUrlOnEditorSite(url = "") {
+    try {
+      const editorOrigin = window.location.origin;
+      return new URL(url).origin === editorOrigin && new URL(previewBaseUrl.value).origin !== editorOrigin;
+    } catch {
+      return true;
+    }
   }
 
   function submitPreviewAddress() {
@@ -310,6 +355,7 @@ function useVibe64PreviewAddress({ frame, projectSlug, props, targets }) {
     previewRouteSelection,
     previewRoutes,
     previewRoutesAvailable,
+    openPreviewPath,
     resetPreviewAddressDraft,
     recordPreviewVisit,
     submitPreviewAddress,

@@ -5,6 +5,7 @@ import { useVibe64PreviewAddress } from "@/composables/useVibe64PreviewAddress.j
 import { useVibe64PreviewFrame } from "@/composables/useVibe64PreviewFrame.js";
 import { useVibe64PreviewIdentity } from "@/composables/useVibe64PreviewIdentity.js";
 import { useVibe64PreviewMessages } from "@/composables/useVibe64PreviewMessages.js";
+import { useVibe64PreviewOpenRequests } from "@/composables/useVibe64PreviewOpenRequests.js";
 import { useVibe64PreviewPick } from "@/composables/useVibe64PreviewPick.js";
 import { useVibe64PreviewPresentation } from "@/composables/useVibe64PreviewPresentation.js";
 import { useVibe64PreviewRecovery } from "@/composables/useVibe64PreviewRecovery.js";
@@ -61,6 +62,7 @@ function useVibe64OutputControlsSurface(props, {
     usage: { openUsage, readUsageEntries, recordInteraction, recording }
   });
   useVibe64PreviewMessages({ address, frame, outputs, pick, reload });
+  const openRequests = useVibe64PreviewOpenRequests({ address, outputs, projectSlug, props });
   const presentation = useVibe64PreviewPresentation({ address, frame, identity, outputs, props, recovery, targets });
   const { expandTerminal, minimizeTerminal, outputTargetsLoaded, previewState } = outputs;
   const { collapsePreviewToolbar } = toolbar;
@@ -140,7 +142,9 @@ function useVibe64OutputControlsSurface(props, {
 
   return {
     outputOptionsAction: options.outputOptionsAction,
-    previewWorkNotice: computed(() => frame.previewLeftNotice.value || recovery.previewWorkNotice.value),
+    previewWorkNotice: computed(() => (
+      frame.previewLeftNotice.value || openRequests.previewOpenNotice.value || recovery.previewWorkNotice.value
+    )),
     previewTestNotice: outputs.previewTestNotice,
     outputOptionsAvailable: targets.outputOptionsAvailable,
     outputOptionsError: options.outputOptionsError,

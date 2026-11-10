@@ -48,7 +48,7 @@ case "\${1-}" in
     printf '%s\\n' 'Usage: vibe64-helper <group> [arguments]
 
 Groups:
-  preview      Preview lifecycle, browser inspection, screenshots and logs
+  preview      Preview lifecycle, opening a page in the Preview pane, browser inspection, screenshots and logs
   playwright   Managed project browser test suites
   env          Project environment settings
   deployment   Project deployment status: addresses, live release and Production Env names

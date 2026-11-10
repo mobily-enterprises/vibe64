@@ -154,10 +154,18 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
     } catch { return false; } // Diagnostic delivery must never trigger Preview recovery.
   }
 
+  /**
+   * Tells the session the page this editor's Preview shows, and, with an
+   * `openRequestId`, its answer to a request to open a page there: `opened`,
+   * else `openError`.
+   * @param {{ openError?: string, openRequestId?: string, opened?: boolean, route?: string, title?: string }} previewState
+   */
   async function publishPreviewState(previewState = {}) {
     const currentSessionId = sessionId.value;
     const currentProjectSlug = projectSlug.value;
-    if (!currentSessionId || !currentProjectSlug || !String(previewState.route || "").trim()) {
+    const route = String(previewState.route || "").trim();
+    const openRequestId = String(previewState.openRequestId || "").trim();
+    if (!currentSessionId || !currentProjectSlug || (!route && !openRequestId)) {
       return false;
     }
     try {
@@ -166,8 +174,14 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
         {
           body: vibe64RealtimeOriginPayload({
             projectSlug: currentProjectSlug,
-            route: String(previewState.route || "").trim(),
-            title: String(previewState.title || "").trim()
+            ...(route ? { route, title: String(previewState.title || "").trim() } : {}),
+            ...(openRequestId
+              ? {
+                  openRequestId,
+                  opened: previewState.opened === true,
+                  ...(previewState.opened === true ? {} : { openError: String(previewState.openError || "").slice(0, 300) })
+                }
+              : {})
           }),
           method: "POST"
         }

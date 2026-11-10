@@ -162,11 +162,13 @@ async function writeWrapper({
  * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwnedExecutions]
  * @param {typeof vibe64ManagedExecutionProvider} [dependencies.resourceProvider]
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {number} [dependencies.previewOpenTimeoutMs] How long `preview open` waits for the first editor's answer.
  */
 function createAgentPreviewCommandService({
   launchTarget,
   logger,
   project,
+  previewOpenTimeoutMs,
   readSessionUiState = readSessionUiSyncStateForSession,
   runManagedCommand = runVibe64Command,
   stopManagedExecution = stopVibe64Execution,
@@ -196,6 +198,8 @@ function createAgentPreviewCommandService({
     launchTarget,
     logger,
     project,
+    publishSessionChanged,
+    previewOpenTimeoutMs,
     readSessionUiState
   });
 

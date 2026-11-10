@@ -4,6 +4,9 @@ Ask the coding agent in chat to test the running application in a browser and
 specify the flow to check. The agent uses the session's managed browser tools;
 you do not need to provide an execution ID or change application code to enable
 them. Application login may still require your credentials or interaction.
+The managed browser is the agent's own copy of the app, not your Preview. To
+see a page yourself, ask the agent to show it to you: it then opens that page in
+your Preview; see [Ask the AI to show you a page](preview.md#ask-the-ai-to-show-you-a-page).
 The managed browser keeps its page and login between the coding agent’s tool
 commands. After each command the page keeps running for 30 seconds, so a short
 wait before the next check still sees the page's own work. Then the page pauses

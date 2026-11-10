@@ -245,6 +245,29 @@ cleaned up but another close controller failed, the project remains open and
 Preview can start those services again; retry Close after addressing the reported
 controller.
 
+## Ask the AI to show you a page
+
+Ask the coding agent in chat to show you a page of the app, for example "show
+me order 42 in my Preview". It moves the Preview you have open in this session
+to that page, exactly as if you had typed the page's path into the **Preview
+URL** box: the same Preview access, signed-in identity and **Go back in
+preview** history. A note above the app says **The AI opened** and the path,
+for example **The AI opened /orders/42**, for ten seconds. Every browser tab
+showing this session's Preview moves, including one where **Dashboard** is in
+front; choose **Preview** to see it. On mobile, use **Show project** from chat.
+
+The agent opens only pages of the running app, by a path that starts with a
+single `/`, such as `/orders/42?tab=notes`. It cannot send your Preview to
+another site, to Vibe64's own pages or to an address carrying a Preview token.
+It is told whether your Preview moved. When nobody has this session's Preview
+open, or it is suspended or still starting, nothing moves and the agent gives
+you the path instead: type it into the **Preview URL** box, or choose **Resume
+preview** first. A stopped Preview stays stopped; the agent starts it only when
+you want it running. The agent's own managed browser for checks is a separate
+copy; its pages never appear in your Preview unless it opens them this way.
+Colleague can explain this; the coding agent in the session's chat opens the
+page, through `vibe64-helper preview open`.
+
 ## Show what an element uses
 
 **Pick element**, beside **Reload preview**, finds the component behind part of

@@ -191,8 +191,27 @@ const agentTurnInterruptFields = {
 const agentTurnInterruptInputValidator = patchSchema(agentTurnInterruptFields);
 const agentTurnInterruptActionInputValidator = actionInput(withSessionId(agentTurnInterruptFields));
 
+// The page an editor's Preview shows, and its answer to a request to open a
+// page there (`vibe64-helper preview open`): whether it opened, else why not.
+// An answer may come from an editor that shows no page yet.
 const sessionPreviewStateInputValidator = actionInput({
   ...optionalOrigin,
+  openError: {
+    type: "string",
+    noTrim: false,
+    maxLength: 300,
+    required: false
+  },
+  opened: {
+    type: "boolean",
+    required: false
+  },
+  openRequestId: {
+    type: "string",
+    noTrim: false,
+    maxLength: 64,
+    required: false
+  },
   projectSlug: {
     type: "string",
     noTrim: false,
@@ -201,7 +220,7 @@ const sessionPreviewStateInputValidator = actionInput({
   route: {
     type: "string",
     noTrim: false,
-    required: true
+    required: false
   },
   sessionId: sessionIdField,
   title: {

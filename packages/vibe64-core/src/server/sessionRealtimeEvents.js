@@ -39,8 +39,9 @@ const PRESENTATION_ONLY = Object.freeze({
 const ACCESS_ONLY = Object.freeze({ includeDetail: false, includeList: false });
 const NOT_LIST = Object.freeze({ includeList: false });
 const NOT_ACCESS = Object.freeze({ includeAccess: false });
-// Live presentation of a session's work: streamed text, progress and output
-// targets. They invalidate no client read.
+// Live presentation of a session's work: streamed text, progress, output
+// targets and a page the AI opens in its Preview. They invalidate no client
+// read.
 const PRESENTATION_REASONS = Object.freeze([
   "ai-task-changed",
   "assistant-response-bundle",
@@ -62,7 +63,8 @@ const PRESENTATION_REASONS = Object.freeze([
   "output-target-closed",
   "output-target-ready",
   "output-target-started",
-  "output-target-stopped"
+  "output-target-stopped",
+  "preview-open-requested"
 ]);
 // Streamed work, including each completed Claude message (which refreshes its
 // viewers' detail), changes no session list: only the session's viewers

@@ -1,6 +1,9 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { writeSessionUiSyncPreviewState } from "@local/vibe64-core/server/sessionUiSyncState";
+import {
+  answerSessionPreviewOpen,
+  writeSessionUiSyncPreviewState
+} from "@local/vibe64-core/server/sessionUiSyncState";
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import { readLastOpenedSessionId, rememberLastOpenedSessionId } from "./lastOpenedSession.js";
 import { sessionsOccupyingPolicySlots } from "./sessionPolicySlots.js";
@@ -96,6 +99,10 @@ function createSessionCatalogue({
     }, "The session could not be renamed.");
   }
 
+  /**
+   * The page an editor's Preview shows, kept as the session's Preview state,
+   * and its answer to a request to open a page there.
+   */
   async function broadcastSessionPreviewState(sessionId, input) {
     const preview = {
       originId: normalizeText(input.originId),
@@ -105,13 +112,26 @@ function createSessionCatalogue({
       title: normalizeText(input.title).slice(0, 256),
       updatedAt: new Date().toISOString()
     };
-    if (!preview.sessionId || !preview.projectSlug || !preview.route || !preview.originId) {
+    const openRequestId = normalizeText(input.openRequestId);
+    if (!preview.sessionId || !preview.projectSlug || !preview.originId || (!preview.route && !openRequestId)) {
       return {
-        error: "Preview updates require a session, project, route, and origin.",
+        error: "Preview updates require a session, project, origin, and a route or an open request.",
         ok: false
       };
     }
-    writeSessionUiSyncPreviewState(preview);
+    if (openRequestId) {
+      answerSessionPreviewOpen({
+        error: input.openError,
+        moved: input.opened === true,
+        originId: preview.originId,
+        projectSlug: preview.projectSlug,
+        requestId: openRequestId,
+        sessionId: preview.sessionId
+      });
+    }
+    if (preview.route) {
+      writeSessionUiSyncPreviewState(preview);
+    }
     return {
       ok: true,
       preview

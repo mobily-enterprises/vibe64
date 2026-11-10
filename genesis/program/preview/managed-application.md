@@ -112,6 +112,9 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
 - `tests/server/agentPreviewCommand.unit.test.js`
+- `tests/server/agentPreviewOpenCommand.unit.test.js`
+- `tests/client/vibe64PreviewOpenRequest.vitest.js`
+- `packages/vibe64-core/src/server/sessionUiSyncState.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-terminals/src/server/serviceSessionTerminals.js`
 - `packages/vibe64-terminals/src/server/serviceProjectRuntime.js`
@@ -166,6 +169,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `src/composables/useVibe64PreviewAddress.js`
 - `src/composables/useVibe64PreviewPick.js`
 - `src/composables/useVibe64PreviewMessages.js`
+- `src/composables/useVibe64PreviewOpenRequests.js`
 - `src/composables/useVibe64PreviewAttachments.js`
 - `src/composables/useVibe64PreviewPresentation.js`
 - `src/lib/vibe64PreviewAddress.js`
@@ -290,6 +294,20 @@ Working directories resolve relative to the session source. An ordinary name
 such as `..build` is valid; a path resolving outside that source is rejected.
 
 Agents discover declared targets through `vibe64-helper preview targets --json`.
+`vibe64-helper preview open <path> [--json]` moves the person's open Preview
+panes to a page of the running app. Only a path inside the app is sent
+(`previewAppPathError` in the shared Preview protocol: one leading `/`, no scheme,
+`//`, backslash, whitespace or control character, no `/__vibe64` page and no
+Preview token), and only while the Preview is ready. The command publishes a
+presentation-only `preview-open-requested` session change to the session's
+viewers; each embedded Preview (`useVibe64PreviewOpenRequests.js`) opens the
+path through the address bar's own navigation, so token, history and frame
+request match a typed address and the frame never lands on the editor's site.
+It shows **The AI opened <path>** above the Preview for ten seconds and answers
+through its ordinary Preview-state post with the request id. The session UI sync
+state collects answers for up to four seconds, or 750 ms after the first, and the
+command reports `moved: N`, or `moved: 0` with why, so the agent can give the
+path instead.
 `vibe64-helper playwright --help` prints usage before inspecting project packages
 or managed runtimes, without starting Preview or a browser. Actual suite execution
 still requires an installed project Playwright and its matching managed runtime;
