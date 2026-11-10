@@ -10,6 +10,8 @@ import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agent
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createAiTaskActions } from "../../packages/vibe64-ai-tasks/src/server/aiTaskActions.js";
+import { createAiTaskKinds } from "../../packages/vibe64-ai-tasks/src/server/aiTaskKinds.js";
+import { createAiTaskSave } from "../../packages/vibe64-ai-tasks/src/server/hostKinds.js";
 import { createAiTasksService } from "../../packages/vibe64-ai-tasks/src/server/service.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
@@ -47,7 +49,7 @@ const overviewRead = ({ present = true, error = "", unreviewed = [], missing = [
   coverage: { unreviewed, missing, missingRelationships: [], others: [] },
   schema: { tables: [{ qualifiedName: "public.items", reference: "items" }, { qualifiedName: "public.orders", reference: "orders" }] } });
 
-async function taskFixture(root, { updateFailure = conflictFailure, saveFailed = null, setupFailed = null } = {}) {
+async function taskFixture(root, { updateFailure = conflictFailure, saveFailed = null, setupFailed = null, hostKinds = [] } = {}) {
   const selection = { engineId: "codex", modelProviderId: "openai", agentId: "codex", modelId: "main-model", variantId: "high",
     catalogRevision: `sha256:${"a".repeat(64)}` };
   const capabilities = { engineId: "codex", transportId: "codex_app_server", revision: `sha256:${"b".repeat(64)}`, defaults: selection,
@@ -144,37 +146,41 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
         settled: (sessionId, conversationId, failure = null) => aiTasks.onTurnSettled({ sessionId, conversationId, failure })
       }
     });
+    const sessions = {
+      async updateSessionWork(sessionId, input) {
+        updates.push(input);
+        return server.update(input);
+      },
+      async saveSessionWork(sessionId, input) {
+        saves.push(input);
+        return server.save(input);
+      },
+      inspectSessionWork: () => server.inspect(),
+      async retryWorkspaceSetup(sessionId, input) {
+        setups.push({ input });
+        return server.setup(input);
+      }
+    };
+    const terminals = { ...terminalsWrap(conversations), async verifyPreviewIdentity(sessionId, input) {
+      signIns.push(input);
+      return server.signIn(input);
+    }, async agentSessionState(sessionId, { session }) {
+      // The engine is chosen from the session's own record, so the caller passes it.
+      assert.equal(session?.sessionId, sessionId);
+      return { turn: server.mainTurn };
+    }, sessionAssistantWorking(session) {
+      assert.equal(session?.sessionId, SESSION);
+      return server.assistantWorking === true;
+    } };
     aiTasks = createAiTasksService({
       databaseTools: { readOverview: input => server.overview(input) },
+      // A host's kinds are made from the same owners as public's own.
+      hostKinds: hostKinds.map(make => make({ sessions, terminals })),
       logger: silentLogger,
       project,
       publishSessionChanged: async (_id, event) => { published.push(event); },
-      sessions: {
-        async updateSessionWork(sessionId, input) {
-          updates.push(input);
-          return server.update(input);
-        },
-        async saveSessionWork(sessionId, input) {
-          saves.push(input);
-          return server.save(input);
-        },
-        inspectSessionWork: () => server.inspect(),
-        async retryWorkspaceSetup(sessionId, input) {
-          setups.push({ input });
-          return server.setup(input);
-        }
-      },
-      terminals: { ...terminalsWrap(conversations), async verifyPreviewIdentity(sessionId, input) {
-        signIns.push(input);
-        return server.signIn(input);
-      }, async agentSessionState(sessionId, { session }) {
-        // The engine is chosen from the session's own record, so the caller passes it.
-        assert.equal(session?.sessionId, sessionId);
-        return { turn: server.mainTurn };
-      }, sessionAssistantWorking(session) {
-        assert.equal(session?.sessionId, SESSION);
-        return server.assistantWorking === true;
-      } }
+      sessions,
+      terminals
     });
     return { aiTasks, conversations };
   }
@@ -356,6 +362,70 @@ test("work a person saved meanwhile ends the Save fix Done without saving again"
   assert.equal((await f.task(task.id)).phase, "done");
   assert.equal(f.saves.length, 0);
 }, { updateFailure: null, saveFailed: saveFailure }));
+
+/**
+ * A host's own kind, as a host adds one: its check saves the AI's repair through public's Save, then runs the
+ * host's own step as the person who started the task.
+ * @param {string[]} hostRuns who each run of the host's step ran as
+ */
+function hostStepKind(hostRuns) {
+  return ({ sessions, terminals }) => {
+    const saveForAiTask = createAiTaskSave({ sessions, terminals });
+    return {
+      id: "host-step",
+      title: "Fix the host step",
+      noun: "fix",
+      tray: "Fixing the host step…",
+      routing: "fix",
+      repository: true,
+      busy: "The host step is being fixed. Finish that first.",
+      opening: "Fix the host step.",
+      async problem({ vibe64User }) {
+        if (vibe64User?.role !== "owner") throw new Error("Only the workspace owner runs the host step.");
+        return { key: "host-step", summary: "The host step failed: exit 3.", details: "", facts: {} };
+      },
+      brief: problem => `${problem.summary}\nReturn kind=complete once it is fixed.`,
+      context: () => "",
+      steps: ["The AI fixes the host step", "Vibe64 saves the fix", "The host runs its step"],
+      check: {
+        by: "vibe64",
+        label: "Running the host step…",
+        output: "",
+        async run(context, task) {
+          const saved = await saveForAiTask(context, task, await sessions.inspectSessionWork(context.sessionId, {}));
+          if (saved.passed !== true) return saved;
+          hostRuns.push(task.startedBy.id);
+          return { passed: true, message: "Saved, and the host step ran." };
+        },
+        retry: { limit: 3, display: "Continue fixing the host step.", message: diagnostic => diagnostic }
+      },
+      done: "The host step ran."
+    };
+  };
+}
+
+test("a host's own kind runs like public's: only the person it allows starts it, and its check saves before the host's step", async () => {
+  const hostRuns = [];
+  await withFixture(async (f) => {
+    const running = f.boot();
+    await assert.rejects(f.start(running.aiTasks, { id: "member", role: "member" }, "host-step"), /Only the workspace owner/u);
+    const { task } = await f.start(running.aiTasks, OWNER, "host-step");
+    assert.equal(task.title, "Fix the host step");
+    await f.quiet(running.aiTasks);
+    assert.match(f.native.turns[0].message, /The host step failed: exit 3\./u);
+    await f.finishTurn(running);
+    const saved = await f.task(task.id);
+    assert.equal(saved.phase, "done");
+    assert.equal(saved.message, "Saved, and the host step ran.");
+    assert.equal(f.saves.length, 1, "the repair was saved through public's Save");
+    assert.deepEqual(f.saves[0].destinationReview, { mode: "github", branch: "main" });
+    assert.equal(f.saves[0].aiTaskId, task.id);
+    assert.deepEqual(hostRuns, ["owner"], "the host's step ran once, as the person who started the task");
+  }, { updateFailure: null, hostKinds: [hostStepKind(hostRuns)] });
+  assert.throws(() => createAiTaskKinds({
+    databaseTools: {}, hostKinds: [{ id: "save" }], pages: {}, project: {}, sessions: {}, terminals: {}
+  }), /AI task kind save is defined twice\./u, "a host can't replace one of public's kinds");
+});
 
 test("a completed preparation repair runs preparation on the server as a person's Prepare, and the task ends Done", () => withFixture(async (f) => {
   const running = f.boot();

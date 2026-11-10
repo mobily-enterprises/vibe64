@@ -7,6 +7,7 @@ import {
   VIBE64_CONVERSATION_TURN_STARTING_EVENT
 } from "@local/vibe64-terminals/server/events";
 import { createAiTaskActions } from "./aiTaskActions.js";
+import { AI_TASK_HOST_KINDS_TOKEN } from "./hostKinds.js";
 import { createPageRefreshTasks } from "./pageRefreshTasks.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createAiTasksService } from "./service.js";
@@ -63,6 +64,9 @@ const Vibe64AiTasksFeature = defineFeature({
     sessions: "vibe64.sessions",
     terminals: "vibe64.terminals"
   },
+  optional: {
+    hostKinds: AI_TASK_HOST_KINDS_TOKEN
+  },
   provides: {
     aiTasks: "vibe64.ai-tasks"
   },
@@ -71,6 +75,7 @@ const Vibe64AiTasksFeature = defineFeature({
    * @param {DatabaseToolsService} capabilities.databaseTools
    * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeEvents} capabilities.events
+   * @param {readonly import("./types.js").AiTaskKind[] | null} capabilities.hostKinds a host's own kinds
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
    * @param {PagesService} capabilities.pages
@@ -78,9 +83,10 @@ const Vibe64AiTasksFeature = defineFeature({
    * @param {SessionsService} capabilities.sessions
    * @param {TerminalsService} capabilities.terminals
    */
-  setup({ databaseTools, env, events, http, logger, pages, project, sessions, terminals }) {
+  setup({ databaseTools, env, events, hostKinds, http, logger, pages, project, sessions, terminals }) {
     const aiTasks = createAiTasksService({
       databaseTools,
+      hostKinds: hostKinds ?? [],
       logger,
       pages,
       project,

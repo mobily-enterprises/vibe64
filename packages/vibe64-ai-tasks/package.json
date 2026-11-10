@@ -10,7 +10,8 @@
     "./client/types": "./src/client/types.js",
     "./server/types": "./src/server/types.js",
     "./shared": "./src/shared/index.js",
-    "./server/actions": "./src/server/aiTaskActions.js"
+    "./server/actions": "./src/server/aiTaskActions.js",
+    "./server/hostKinds": "./src/server/hostKinds.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -52,6 +53,10 @@
           {
             "subpath": "./server/actions",
             "summary": "Defines the actions that start, read, cancel, check, continue, finish and close a session's AI tasks."
+          },
+          {
+            "subpath": "./server/hostKinds",
+            "summary": "Names the optional token through which a host adds its own kinds of AI task, and the Save step such a kind runs before its check."
           }
         ],
         "capabilities": [

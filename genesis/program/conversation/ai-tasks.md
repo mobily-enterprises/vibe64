@@ -24,6 +24,7 @@ upgrade cleans up the closing records older archives still hold.
 - `packages/vibe64-ai-tasks/src/server/aiTaskMachine.js`
 - `packages/vibe64-ai-tasks/src/server/aiTaskRunner.js`
 - `packages/vibe64-ai-tasks/src/server/aiTaskKinds.js`
+- `packages/vibe64-ai-tasks/src/server/hostKinds.js`
 - `packages/vibe64-ai-tasks/src/server/aiTaskActions.js`
 - `packages/vibe64-ai-tasks/src/server/registerRoutes.js`
 - `packages/vibe64-ai-tasks/src/server/inputSchemas.js`
@@ -39,6 +40,7 @@ upgrade cleans up the closing records older archives still hold.
 - `packages/vibe64-ai-tasks/src/server/kinds/pageRefresh.js`
 - `packages/vibe64-ai-tasks/src/server/pageRefreshTasks.js`
 - `packages/vibe64-ai-tasks/src/shared/aiTaskPhases.js`
+- `packages/vibe64-ai-tasks/src/client/aiTaskKey.js`
 - `packages/vibe64-ai-tasks/src/client/useAiTaskHost.js`
 - `packages/vibe64-ai-tasks/src/client/useAiTasks.js`
 - `packages/vibe64-ai-tasks/src/client/useAiTaskWindow.js`
@@ -115,6 +117,17 @@ Finish ends it Done. It follows the starter's chat mode (`routing: "inherit"`) a
 copy recent Main messages into its conversation; both choices come with the request
 (`problem.conversation`). A kind with no opening message starts at
 `needs_you(your_turn)`: a Colleague review waits for Colleague's first request.
+A host adds kinds of its own through the optional token `vibe64.ai-tasks.host-kinds`
+(`server/hostKinds.js`): an array of kinds, made by a feature set up before
+`vibe64.ai-tasks`, that run in the same window through the same machine, runner and
+check, and whose ids must differ from public's and each other's. A host's check calls
+the host's own owners; one that must save the AI's repair before its own step runs
+`createAiTaskSave`, the Save that Save's own check runs, waiting for the main chat's
+AI in the same way. A kind's problem receives the person starting the task
+(`vibe64User`), so a kind whose work only some people may do refuses everyone else
+before a task opens. A host page that can show outside a session's AI task host
+injects `VIBE64_AI_TASKS_KEY` with the named default `NO_AI_TASKS`
+(`client/aiTaskKey.js`) and leaves out its AI task buttons there.
 Input is untrusted text: a check hands it
 back to its owner, which validates it again. Any other failed check goes
 back to the same conversation up to three times, carrying the check's diagnostic.

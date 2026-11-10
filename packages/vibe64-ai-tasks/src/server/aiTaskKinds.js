@@ -15,16 +15,18 @@ import { createWorkspaceSetupKind } from "./kinds/workspaceSetup.js";
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 /**
- * Every kind of AI task. A check calls its owner directly: this package sits above them all.
+ * Every kind of AI task. A check calls its owner directly: this package sits above them all. A host adds
+ * its own kinds, whose checks call the host's owners (server/hostKinds.js).
  * @param {object} dependencies
  * @param {DatabaseToolsService} dependencies.databaseTools
+ * @param {readonly AiTaskKind[]} dependencies.hostKinds
  * @param {PagesService} dependencies.pages
  * @param {ProjectService} dependencies.project
  * @param {SessionsService} dependencies.sessions
  * @param {TerminalsService} dependencies.terminals
  * @returns {Record<string, AiTaskKind>}
  */
-function createAiTaskKinds({ databaseTools, pages, project, sessions, terminals }) {
+function createAiTaskKinds({ databaseTools, hostKinds, pages, project, sessions, terminals }) {
   const kinds = [
     createUpdateKind({ sessions }),
     createSaveKind({ sessions, terminals }),
@@ -33,9 +35,15 @@ function createAiTaskKinds({ databaseTools, pages, project, sessions, terminals 
     createProjectSetupKind({ project }),
     createDatabaseOverviewKind({ databaseTools }),
     createPageRefreshKind({ pages }),
-    ...createRequestKinds()
+    ...createRequestKinds(),
+    ...hostKinds
   ];
-  return Object.freeze(Object.fromEntries(kinds.map(kind => [kind.id, kind])));
+  const byId = {};
+  for (const kind of kinds) {
+    if (Object.hasOwn(byId, kind.id)) throw new Error(`AI task kind ${kind.id} is defined twice.`);
+    byId[kind.id] = kind;
+  }
+  return Object.freeze(byId);
 }
 
 export { createAiTaskKinds };

@@ -49,6 +49,7 @@ function presentAiTask({ conversationId, task }) {
  * Every AI task of a session: the one Vibe64 is doing, and any that ended and waits for Close.
  * @param {object} dependencies
  * @param {DatabaseToolsService} dependencies.databaseTools
+ * @param {readonly import("./types.js").AiTaskKind[]} dependencies.hostKinds the host's own kinds
  * @param {RuntimeLogger} dependencies.logger
  * @param {PagesService} dependencies.pages
  * @param {ProjectService} dependencies.project
@@ -56,8 +57,10 @@ function presentAiTask({ conversationId, task }) {
  * @param {SessionsService} dependencies.sessions
  * @param {TerminalsService} dependencies.terminals
  */
-function createAiTasksService({ databaseTools, logger, pages, project, publishSessionChanged, sessions, terminals }) {
-  const kinds = createAiTaskKinds({ databaseTools, pages, project, sessions, terminals });
+function createAiTasksService({
+  databaseTools, hostKinds, logger, pages, project, publishSessionChanged, sessions, terminals
+}) {
+  const kinds = createAiTaskKinds({ databaseTools, hostKinds, pages, project, sessions, terminals });
   const runner = createAiTaskRunner({ kinds, logger, project, publishSessionChanged, terminals, present: presentAiTask });
 
   async function taskRecords(sessionId) {
@@ -119,7 +122,7 @@ function createAiTasksService({ databaseTools, logger, pages, project, publishSe
     if (named) return { ok: true, task: presentAiTask(named) };
     const open = records.find(record => !aiTaskEnded(record.task));
     const runtime = await project.createRuntimeWithoutSource();
-    const problem = await kind.problem({ runtime, sessionId }, input).catch((error) => {
+    const problem = await kind.problem({ runtime, sessionId, vibe64User }, input).catch((error) => {
       if (open?.task.kind === kind.id) return null;
       throw error;
     });

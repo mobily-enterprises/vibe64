@@ -121,7 +121,8 @@
  * @property {string} busy why another task can't start while this one is open
  * @property {boolean} [repository]
  * @property {boolean} [updateRepair]
- * @property {(context: { runtime: object, sessionId: string }, input: object) => Promise<AiTaskProblem>} problem reads the real state
+ * @property {(context: { runtime: object, sessionId: string, vibe64User: object | null }, input: object) => Promise<AiTaskProblem>} problem
+ *   reads the real state; it refuses a person the task's own work is not open to
  * @property {(problem: AiTaskProblem) => string} brief what the AI is told first
  * @property {(problem: AiTaskProblem) => string} context reminder above each message the person sends
  * @property {string[]} steps

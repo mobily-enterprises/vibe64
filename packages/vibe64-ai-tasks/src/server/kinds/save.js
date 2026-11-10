@@ -68,6 +68,38 @@ function saveCheckResult(result) {
   };
 }
 
+/**
+ * Save as a task's check runs it, after the AI's repair: while the main chat's AI is working it waits, since Save
+ * would include its unfinished changes, unless the person chose to run the check now. A host's kind that saves the
+ * session's work before its own step runs this same Save.
+ * @param {{ sessions: SessionsService, terminals: TerminalsService }} dependencies
+ */
+function createAiTaskSave({ sessions, terminals }) {
+  /**
+   * @param {{ runtime: object, sessionId: string, taskId: string }} context
+   * @param {import("../types.js").AiTask} task
+   * @param {{ destination?: object }} work what `sessions.inspectSessionWork` answered
+   * @returns {Promise<AiTaskCheckResult>}
+   */
+  return async function saveForAiTask({ runtime, sessionId, taskId }, task, work) {
+    if (!task.pending?.whileAiWorks) {
+      // The chat's own working indicator reads this same turn; between the turns of a workflow such as Auto's
+      // review the AI is still at work, and the wait then names when it began.
+      const session = await runtime.getSessionWithoutSource(sessionId);
+      const { turn } = await terminals.agentSessionState(sessionId, { runtime, session }) || {};
+      if (turn?.active === true || terminals.sessionAssistantWorking(session)) {
+        const since = turn?.active === true && turn.startedAt || task.mainChatSince || new Date().toISOString();
+        return { waiting: true, message: MAIN_CHAT_WAITING_MESSAGE, mainChatSince: String(since) };
+      }
+    }
+    return saveCheckResult(await sessions.saveSessionWork(sessionId, {
+      aiTaskId: taskId,
+      destinationReview: work.destination,
+      vibe64User: task.startedBy
+    }));
+  };
+}
+
 function saveBrief(problem) {
   return [
     "Help resolve this Vibe64 Save problem. Inspect the current session and canonical repository state and preserve all work:",
@@ -90,6 +122,7 @@ function saveContext() {
  * @returns {AiTaskKind}
  */
 function createSaveKind({ sessions, terminals }) {
+  const saveForAiTask = createAiTaskSave({ sessions, terminals });
   return Object.freeze({
     id: "save",
     title: "Fix Save",
@@ -112,28 +145,15 @@ function createSaveKind({ sessions, terminals }) {
         action: "Save now",
         note: "Vibe64 saves as soon as it finishes. Save now includes its unfinished changes."
       },
-      async run({ runtime, sessionId, taskId }, task) {
+      async run(context, task) {
+        const { runtime, sessionId } = context;
         const [work, saved] = await Promise.all([
           sessions.inspectSessionWork(sessionId, {}),
           runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID)
         ]);
         if (work?.ok === false) return saveCheckResult(work);
         if (!work.unsaved && saved?.status === "ready") return saveCheckResult({ ok: true });
-        if (!task.pending?.whileAiWorks) {
-          // The chat's own working indicator reads this same turn; between the turns of a workflow such as Auto's
-          // review the AI is still at work, and the wait then names when it began.
-          const session = await runtime.getSessionWithoutSource(sessionId);
-          const { turn } = await terminals.agentSessionState(sessionId, { runtime, session }) || {};
-          if (turn?.active === true || terminals.sessionAssistantWorking(session)) {
-            const since = turn?.active === true && turn.startedAt || task.mainChatSince || new Date().toISOString();
-            return { waiting: true, message: MAIN_CHAT_WAITING_MESSAGE, mainChatSince: String(since) };
-          }
-        }
-        return saveCheckResult(await sessions.saveSessionWork(sessionId, {
-          aiTaskId: taskId,
-          destinationReview: work.destination,
-          vibe64User: task.startedBy
-        }));
+        return saveForAiTask(context, task, work);
       },
       retry: {
         limit: 3,
@@ -146,6 +166,7 @@ function createSaveKind({ sessions, terminals }) {
 }
 
 export {
+  createAiTaskSave,
   createSaveKind,
   saveCheckResult
 };
