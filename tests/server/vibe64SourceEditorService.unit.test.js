@@ -2983,6 +2983,7 @@ test("source editor coalesces concurrent identical explanation requests", async 
   let agentCalls = 0;
   let markStarted = () => {};
   let releaseAgent = () => {};
+  let releaseOnCacheArrival = false;
   const started = new Promise((resolve) => {
     markStarted = resolve;
   });
@@ -2991,6 +2992,19 @@ test("source editor coalesces concurrent identical explanation requests", async 
   });
   const fixture = await createSourceEditorFixture({
     agentAccountIdentitySignature: "",
+    // The second request prepares its session, helper and file before it
+    // reaches the explanation cache, and only there joins the generation in
+    // flight. The cache reads its clock as a request arrives and joins in that
+    // same step, so the agent answers only once the second request is waiting
+    // on it: released any earlier, the first generation could finish first and
+    // the second, finding nothing in flight, would rightly generate again.
+    explanationCacheNow() {
+      if (releaseOnCacheArrival) {
+        releaseOnCacheArrival = false;
+        releaseAgent();
+      }
+      return Date.now();
+    },
     terminals: {
       async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         agentCalls += 1;
@@ -3038,6 +3052,7 @@ test("source editor coalesces concurrent identical explanation requests", async 
       }
     });
     await started;
+    releaseOnCacheArrival = true;
     const second = fixture.service.streamExplanation(request("coalesce_b"), {
       emit(event) {
         eventsB.push(event);
@@ -3046,8 +3061,9 @@ test("source editor coalesces concurrent identical explanation requests", async 
         return false;
       }
     });
-    releaseAgent();
-    await Promise.all([first, second]);
+    // A second request that ends before reaching the cache releases the agent
+    // too, so the assertions below report it instead of the test hanging.
+    await Promise.all([first, second.finally(releaseAgent)]);
 
     assert.equal(agentCalls, 1);
     const firstFinished = eventsA.find((event) => event.type === "source-explanation.finished");
