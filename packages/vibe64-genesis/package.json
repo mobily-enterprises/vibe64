@@ -49,7 +49,7 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/assistant-core": "0.2.41",
+    "@jskit-ai/assistant-core": "0.2.42",
     "genesis-compiler": "^1.10.16",
     "genesis-stack": "^1.4.7"
   }
