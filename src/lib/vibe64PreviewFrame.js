@@ -39,6 +39,43 @@ function previewLifecycleIdentity(parts = [], url = "") {
     : "";
 }
 
+/**
+ * What a Preview frame shows when it has left the app for the editor's own site, or null. The editor never frames its
+ * own site and can read only a same-origin frame, so a readable web page there is one the Preview never asked for: it
+ * would show Vibe64 itself inside the app's Preview. What took it there is kept for the diagnostic: the page that
+ * navigated it (its referrer) and whether the browser restored it from history (the navigation type).
+ * @param {{ contentWindow?: Window | null } | null} frame
+ * @param {{ editorOrigin?: string, previewBaseUrl?: string }} [options]
+ * @returns {{ frameUrl: string, navigationType: string, referrer: string } | null}
+ */
+function previewFrameLeftForEditor(frame, { editorOrigin = "", previewBaseUrl = "" } = {}) {
+  let previewOrigin = "";
+  try {
+    previewOrigin = new URL(String(previewBaseUrl || "")).origin;
+  } catch {
+    return null;
+  }
+  if (!editorOrigin || previewOrigin === editorOrigin) {
+    return null;
+  }
+  try {
+    const frameWindow = frame?.contentWindow;
+    const location = frameWindow?.location;
+    // Reading a cross-origin frame's location throws: that frame is where the Preview belongs.
+    if (!location || !/^https?:$/u.test(location.protocol) || location.origin !== editorOrigin) {
+      return null;
+    }
+    const navigation = frameWindow.performance.getEntriesByType("navigation")[0];
+    return {
+      frameUrl: String(location.href || ""),
+      navigationType: String(navigation?.type || ""),
+      referrer: String(frameWindow.document?.referrer || "")
+    };
+  } catch {
+    return null;
+  }
+}
+
 function isPreviewBridgeReadyMessage(value = {}) {
   return String(value.type || "") === PREVIEW_BRIDGE_READY_MESSAGE_TYPE;
 }
@@ -167,6 +204,7 @@ function createPreviewBridgeRequestRegistry() {
 export {
   createPreviewBridgeRequestRegistry,
   isPreviewBridgeReadyMessage,
+  previewFrameLeftForEditor,
   previewFrameLifecycleIdentity,
   previewIdentityLifecycleIdentity,
   previewLoadingOverlayShouldShow,

@@ -147,8 +147,8 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
     try {
       const result = await getHttpWebClient().request(
         vibe64SessionPath(sessionsApiPath.value, sessionId.value, "/preview-diagnostics"),
-        { method: "POST", body: { ...record, enabled: true,
-          frameUrl: previewDiagnosticUrl(record.frameUrl), resourceUrl: previewDiagnosticUrl(record.resourceUrl) } }
+        { method: "POST", body: { ...record, enabled: true, frameUrl: previewDiagnosticUrl(record.frameUrl),
+          referrer: previewDiagnosticUrl(record.referrer), resourceUrl: previewDiagnosticUrl(record.resourceUrl) } }
       );
       return result?.recorded === true;
     } catch { return false; } // Diagnostic delivery must never trigger Preview recovery.

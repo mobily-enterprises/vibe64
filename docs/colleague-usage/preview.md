@@ -85,6 +85,10 @@ If the previewed application shows its own login screen, enter that application'
 credentials. Its login and realtime connection run through the Preview address.
 HTTPS previews retain the HTTPS scheme for applications that use it to set
 secure login cookies and redirects.
+Preview only ever shows the application. If the browser ever puts Vibe64's own
+page inside the Preview frame, the editor records where the frame came from in
+Vibe64's log and loads the application again; if that repeats within a minute,
+the frame stays empty until **Reload preview** or the Preview restarts.
 Preview tells the application its browser-facing address through the standard
 forwarded headers. An application configured to trust its local proxy then
 builds absolute links, asset URLs and callbacks on the Preview address. If pages

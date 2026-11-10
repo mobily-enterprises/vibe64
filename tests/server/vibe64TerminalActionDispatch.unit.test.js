@@ -325,6 +325,21 @@ test("canonical Main goals reuse internal terminal actions with fresh authority 
   });
 });
 
+test("a Preview frame that left the app for the editor's site is recorded with what sent it there", () => {
+  const entries = [];
+  const record = createPreviewDiagnosticRecorder({ logger: { warn: entry => entries.push(entry) } });
+  const scope = { projectSlug: "gym", sessionId: "session-1" };
+  assert.equal(record({ enabled: true, event: "frame.left-preview", timestamp: "2026-11-10T00:35:58Z",
+    frameUrl: "https://studio.example/?tab=launcher", referrer: "https://preview.example/auth/login?returnTo=%2F",
+    navigationType: "back_forward", frameRequestId: 4 }, scope).recorded, true);
+  assert.equal(entries[0].stage, "frame.left-preview");
+  assert.equal(entries[0].frameUrl, "https://studio.example/");
+  assert.equal(entries[0].referrer, "https://preview.example/auth/login");
+  assert.equal(entries[0].navigationType, "back_forward");
+  record({ enabled: true, event: "frame.left-preview", navigationType: "<script>" }, scope);
+  assert.equal(entries[1].navigationType, "");
+});
+
 test("opt-in Preview diagnostics retain module identity without credentials and cap the private log", () => {
   const entries = [];
   let time = 60_000;

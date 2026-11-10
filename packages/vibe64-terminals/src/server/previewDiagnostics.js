@@ -5,8 +5,9 @@ import { previewDiagnosticUrl } from "../shared/launchPreviewProtocol.js";
 
 const PREVIEW_DIAGNOSTIC_EVENTS = new Set([
   "resource.failed", "resource.retry", "resource.retry.skipped", "resource.retry.unavailable",
-  "frame.requested", "iframe.loaded", "iframe.ready"
+  "frame.requested", "iframe.loaded", "iframe.ready", "frame.left-preview"
 ]);
+const NAVIGATION_TYPES = new Set(["navigate", "reload", "back_forward", "prerender"]);
 
 /**
  * @param {object} dependencies
@@ -35,6 +36,9 @@ function createPreviewDiagnosticRecorder({ logger, now = Date.now }) {
       observedAt: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null,
       resourceUrl: previewDiagnosticUrl(input.resourceUrl),
       frameUrl: previewDiagnosticUrl(input.frameUrl),
+      // For a frame that left the app for the editor's site: the page that sent it there, and how.
+      referrer: previewDiagnosticUrl(input.referrer),
+      navigationType: NAVIGATION_TYPES.has(input.navigationType) ? input.navigationType : "",
       resourceKind: ["script", "link", "fetch", "resource"].includes(input.resourceKind) ? input.resourceKind : "resource",
       frameRequestId: Math.max(0, Math.min(1_000_000_000, Number(input.frameRequestId) || 0)),
       retryCount: Math.max(0, Math.min(100, Number(input.retryCount) || 0)),

@@ -17,6 +17,7 @@ import {
 import {
   createPreviewBridgeRequestRegistry,
   isPreviewBridgeReadyMessage,
+  previewFrameLeftForEditor,
   previewFrameLifecycleIdentity,
   previewIdentityLifecycleIdentity,
   previewLoadingOverlayShouldShow
@@ -24,6 +25,8 @@ import {
 
 const PREVIEW_DIAGNOSTICS_TIMEOUT_MS = 3000;
 const PREVIEW_IDENTITY_TIMEOUT_MS = 10000;
+// A frame that lands on the editor's own site again within this time stays empty instead of reloading in a loop.
+const PREVIEW_LEFT_RECOVERY_INTERVAL_MS = 60_000;
 
 /**
  * The embedded Preview's frame: the address it embeds, the page it loads (a
@@ -377,6 +380,14 @@ function useVibe64PreviewFrame({
       });
       return;
     }
+    const leftPreview = previewFrameLeftForEditor(frame, {
+      editorOrigin: window.location.origin,
+      previewBaseUrl: previewBaseUrl.value
+    });
+    if (leftPreview) {
+      recoverPreviewFrameFromEditorPage(leftPreview);
+      return;
+    }
     if (!previewFrameLoaded.value) {
       resetPreviewBridge("iframe-loaded-without-bridge-ready");
       markPreviewFrameReady(requestId, "iframe-load");
@@ -385,6 +396,28 @@ function useVibe64PreviewFrame({
       requestId
     });
     requestPreviewState();
+  }
+
+  // The frame shows the editor's own site, Vibe64 itself, inside the app's Preview. What took it there is recorded,
+  // and the app's page is loaded again; a second time within a minute empties the frame instead.
+  let previewLeftRecoveredAt = 0;
+  function recoverPreviewFrameFromEditorPage(leftPreview) {
+    void publishPreviewDiagnostic({
+      event: "frame.left-preview",
+      frameRequestId: previewFrameRequestId.value,
+      frameUrl: leftPreview.frameUrl,
+      navigationType: leftPreview.navigationType,
+      referrer: leftPreview.referrer,
+      timestamp: new Date().toISOString()
+    });
+    console.error("[Vibe64 preview] The Preview frame left the app for Vibe64's own page; loading the app again.");
+    const now = Date.now();
+    if (now - previewLeftRecoveredAt < PREVIEW_LEFT_RECOVERY_INTERVAL_MS ||
+      !requestPreviewFrame({ force: true, reason: "frame-left-preview" })) {
+      clearPreviewFrame("frame-left-preview");
+      return;
+    }
+    previewLeftRecoveredAt = now;
   }
 
   // Every bridge message raises the bridge version the page speaks. A ready
