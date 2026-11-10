@@ -3550,8 +3550,8 @@ for (const mode of ["history-completed", "failed", "foreign-completed"]) {
     const reads = trace.slice(dispatchIndex + 1).filter(row => row.method === "thread/read" || row.method === "thread/turns/list");
     assert.ok(reads.some(row => row.method === "thread/turns/list"), "Recovery inspects actual saved native turns");
     assert.ok(reads.every(row => row.params.threadId === history.id), "History reads stay with the exact dispatched native thread");
-    assert.equal(trace.some(row => row.notification?.method === "item/agentMessage/delta" || row.notification?.method === "item/completed"), false,
-      "No live answer item supplies this result");
+    assert.equal(withoutUserMessageReceipts(trace).some(row => row.notification?.method === "item/agentMessage/delta" ||
+      row.notification?.method === "item/completed"), false, "No live answer item supplies this result");
     if (recovered) {
       assert.equal(trace.some(row => row.notification?.method === "turn/completed"), false, "The native completion frame was omitted");
       const status = trace.find(row => row.notification?.method === "thread/status/changed").notification;
@@ -3940,7 +3940,7 @@ for (const mode of ["error-only-active", "error-only-completed"]) {
         threadId: history.id, turnId: authored.id,
         error: { message: "Controlled native provider error" }, willRetry: false
       });
-      assert.equal(trace.some(row => row.notification?.method === "item/completed" ||
+      assert.equal(withoutUserMessageReceipts(trace).some(row => row.notification?.method === "item/completed" ||
         row.notification?.method === "item/agentMessage/delta" || row.notification?.method === "thread/status/changed"), false,
         "No live final or idle frame supplies the response");
       assert.equal(trace.slice(0, errorIndex).some(row => row.notification?.method === "turn/completed"), false,
@@ -4005,7 +4005,7 @@ test("Colleague native error without a turn ID recovers only its exact saved com
       threadId: history.id, error: { message: "Controlled native provider error" }, willRetry: false
     });
     assert.equal(Object.hasOwn(errors[0].notification.params, "turnId"), false);
-    assert.equal(trace.some(row => ["item/completed", "item/agentMessage/delta", "turn/completed", "thread/status/changed"]
+    assert.equal(withoutUserMessageReceipts(trace).some(row => ["item/completed", "item/agentMessage/delta", "turn/completed", "thread/status/changed"]
       .includes(row.notification?.method)), false, "Only the error frame wakes exact saved-history recovery");
     const record = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
     const canonical = record.conversationLog.filter(turn => turn.user?.messageId === "user-1");
@@ -4995,6 +4995,12 @@ function holdCompletedColleagueAuthorization(t, f, ordinal = 1) {
   return { held: held.promise, release: () => release.resolve() };
 }
 
+// Codex reports each turn's user message as an item before its answer. That
+// receipt supplies no part of the response the native checks look for.
+function withoutUserMessageReceipts(trace) {
+  return trace.filter(row => row.notification?.params?.item?.type !== "userMessage");
+}
+
 function completedColleagueNativeInputs(trace) {
   return trace.filter(row => row.method === "turn/start").map(row => {
     const text = row.params.input[0].text;
@@ -5357,7 +5363,8 @@ test("native completed Colleague never displays or executes a full streamed tool
     assert.equal(deltas.length, text.length, "Every JSON character crosses the actual held native stream");
     assert.ok(deltas.every(delta => delta.length === 1));
     assert.equal(deltas.join(""), text, "The complete valid tool JSON was streamed character by character before completion");
-    assert.equal(trace.some(row => row.notification?.method === "item/completed" || row.notification?.method === "turn/completed"), false);
+    assert.equal(withoutUserMessageReceipts(trace).some(row => row.notification?.method === "item/completed" ||
+      row.notification?.method === "turn/completed"), false);
     // Wait for the actual consumed full buffer and its original public callback,
     // not a producer count, revision or sleep. The native completion stays held.
     await until(() => consumedProjection !== null);
@@ -5372,7 +5379,8 @@ test("native completed Colleague never displays or executes a full streamed tool
     const heldHistory = JSON.parse(await readFile(path.join(f.root, "controlled-native", "codex-history.json"), "utf8"));
     assert.equal(heldHistory.id, held.threadId);
     assert.equal(heldHistory.turns.find(turn => turn.id === held.turnId).status, "inProgress");
-    assert.equal((await f.native.trace()).some(row => ["item/completed", "turn/completed"].includes(row.notification?.method)), false);
+    assert.equal(withoutUserMessageReceipts(await f.native.trace()).some(row =>
+      ["item/completed", "turn/completed"].includes(row.notification?.method)), false);
     const current = await f.service.read({}, f.context);
     assert.equal(current.status, "working");
     assert.equal(current.streamingReply, null);
@@ -5544,6 +5552,22 @@ test("native completed Colleague retains 24 operations at exhaustion and admits 
   assert.deepEqual(inputs.at(-1).data.userMessages, [{ messageId: "follow-up", text: "Tell me the retained result." }]);
   const after = JSON.parse(await readFile(file, "utf8"));
   assert.deepEqual(after.conversationLog.slice(0, before.conversationLog.length), before.conversationLog);
+});
+
+// A slow turn/start reply let a completed answer overtake its authored request,
+// which lost the Codex observation. Codex's user-message receipt comes first.
+test("native completed Colleague keeps an answer that arrives before Codex answers turn/start", async t => {
+  const f = await fixture(t, [{ text: reply("The answer arrived first."), mode: "late-turn-start-reply" }], { native: true });
+  await f.send("Answer this.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.equal(final.messages.at(-1).text, "The answer arrived first.");
+  let late;
+  for (let attempts = 0; attempts < 3000 && !late; attempts++) {
+    late = (await f.native.trace()).find(row => row.lateTurnStartReply)?.lateTurnStartReply;
+    if (!late) await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(late?.answerSaved, true, "Codex answered turn/start only after the answer was saved");
 });
 
 test("native completed Colleague unknown effect retains the original receipt through duplicate admission and restart", async t => {

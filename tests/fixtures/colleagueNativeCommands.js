@@ -144,11 +144,16 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         thread.turns.push(turn); save();
         emit("turn/started", { turn });
         if (text === "lost") return;
-        reply({ turn });
         const emitTurn = (method, value) => emit(method, { turnId: turn.id, ...value });
         const queue = JSON.parse(readFileSync(process.env.TEST_RESPONSES, "utf8"));
         const response = queue.shift();
         writeFileSync(process.env.TEST_RESPONSES, JSON.stringify(queue));
+        if (response?.mode !== "late-turn-start-reply") reply({ turn });
+        // Codex reports the turn's user message as an item before any answer.
+        // That receipt saves the authored request, so the answer's
+        // notifications cannot overtake it while turn/start bookkeeping runs.
+        emitTurn("item/started", { item: turn.items[0] });
+        emitTurn("item/completed", { item: turn.items[0] });
         if (!response) {
           turn.status = "failed"; save();
           emitTurn("turn/completed", { turn: { ...turn, error: { message: "Unexpected native prompt" } } });
@@ -304,6 +309,21 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         emitTurn("item/completed", { item: answer });
         turn.status = "completed"; save();
         emitTurn("turn/completed", { turn });
+        if (response.mode === "late-turn-start-reply") {
+          // Codex answers turn/start only once the whole answer is saved.
+          const deadline = Date.now() + 30000;
+          let answerSaved = false;
+          while (ws.readyState === 1 && Date.now() < deadline) {
+            const saved = existsSync(process.env.TEST_INPUT_RECEIPT)
+              ? JSON.parse(readFileSync(process.env.TEST_INPUT_RECEIPT, "utf8")) : null;
+            answerSaved = saved?.conversationLog.some(row => row.metadata?.runtime?.nativeTurnId === turn.id &&
+              row.assistant?.text === response.text) === true;
+            if (answerSaved) break;
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          log({ lateTurnStartReply: { threadId: thread.id, turnId: turn.id, answerSaved } });
+          reply({ turn });
+        }
         return;
       }
       ws.send(JSON.stringify({ id, error: { code: -32601, message: "Unsupported method: " + method } }));
