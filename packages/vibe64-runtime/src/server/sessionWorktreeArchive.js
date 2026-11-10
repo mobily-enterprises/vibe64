@@ -14,6 +14,7 @@ import {
   RECOVERY_BRANCH_BUNDLE_ARTIFACT,
   RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT,
   recoveryWorktreePath,
+  removeEmptySessionSourceFolder,
   removeSessionOwnedWorktreeDirectory,
   renewalSourceDeletionPath,
   renewalSourceStagePath,
@@ -399,6 +400,7 @@ async function commitRenewalSessionSourceStage({
     recursive: true,
     retryDelay: 100
   });
+  await removeEmptySessionSourceFolder(sourcePath);
   return {
     changed: stageExists || deletionExists,
     deletionPath,
@@ -465,6 +467,7 @@ async function archiveSessionSource({
       recursive: true,
       retryDelay: 100
     });
+    await removeEmptySessionSourceFolder(worktreePath);
   }
   await writeMetadataValues(store, sessionId, {
     source_removed: "yes",

@@ -348,6 +348,7 @@ test("renewal stages the connected copies with the source, restores them on fail
     await fixture.runtime.commitRenewalSessionSourceRemoval(fixture.sourceSessionId, options);
     assert.equal(await pathExists(stagedRoot), false);
     assert.equal(await pathExists(connectedRoot), false);
+    assert.equal(await pathExists(path.dirname(fixture.sourcePath)), false);
   });
 });
 

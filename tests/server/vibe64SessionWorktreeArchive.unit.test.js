@@ -16,6 +16,7 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import {
+  managedSessionSourceRoot,
   projectRuntimeRoot,
   sourceMetadata,
   sourcePath as testSessionSourcePath,
@@ -331,6 +332,9 @@ test("archive saves each connected copy's commits and unsaved work, removes the 
     assert.equal(archiveResult.dirty, true);
     assert.equal(await pathExists(worktreePath), false);
     assert.equal(await pathExists(connectedRoot), false);
+    // The session's emptied folder goes too; the folder of all sessions stays.
+    assert.equal(await pathExists(path.dirname(worktreePath)), false);
+    assert.equal(await pathExists(path.dirname(path.dirname(worktreePath))), true);
 
     const metadata = await runtime.store.readMetadata(sessionId);
     const recovery = JSON.parse(metadata.connected_copies_recovery);
@@ -364,6 +368,58 @@ test("archive saves each connected copy's commits and unsaved work, removes the 
       await git(own, ["apply", artifact("recovery/worktree.patch")]);
       assert.equal(await readFile(path.join(own, "app.txt"), "utf8"), "own unsaved change\n");
     });
+  });
+});
+
+test("archive keeps the session's folder while anything else is still in it", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const baseCommit = await createGitProject(targetRoot);
+    const runtime = new Vibe64SessionRuntime({
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+    });
+    const sessionId = "folder_with_file";
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+    await runtime.createSession({
+      metadata: {
+        base_branch: "main",
+        base_commit: baseCommit,
+        branch: `vibe64/${sessionId}`,
+        ...sourceMetadata(targetRoot, sessionId)
+      },
+      sessionId
+    });
+    await createSessionClone({ baseCommit, branch: `vibe64/${sessionId}`, sourcePath: worktreePath, targetRoot });
+    const besideSource = path.join(path.dirname(worktreePath), "notes.txt");
+    await writeFile(besideSource, "not the archive's\n", "utf8");
+
+    const archiveResult = await runtime.archiveSessionSource(await runtime.getSession(sessionId), { reason: "archived" });
+    assert.equal(archiveResult.removed, true);
+    assert.equal(await pathExists(worktreePath), false);
+    assert.equal(await readFile(besideSource, "utf8"), "not the archive's\n");
+  });
+});
+
+test("archiving a session whose source creation failed removes its emptied folder", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "failed_creation";
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+    const runtime = new Vibe64SessionRuntime({
+      async createSessionSource() {
+        await writeProjectFile(worktreePath, "partial.txt", "interrupted clone\n");
+        throw new Error("clone failed");
+      },
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+      projectSessionSourceRoot: managedSessionSourceRoot(targetRoot)
+    });
+    await assert.rejects(() => runtime.createSession({ metadata: {}, sessionId }), /clone failed/u);
+    assert.equal(await pathExists(worktreePath), true);
+
+    await runtime.archiveSession(sessionId);
+    assert.equal((await runtime.store.readSession(sessionId)).status, "archived");
+    assert.equal(await pathExists(worktreePath), false);
+    assert.equal(await pathExists(path.dirname(worktreePath)), false);
   });
 });
 

@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+import { rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 
 import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
@@ -191,6 +191,23 @@ async function removeSessionOwnedWorktreeDirectory({
   };
 }
 
+/**
+ * Removes the session's own folder around its source once archive or renewal has emptied it.
+ * rmdir never removes a folder that still holds anything, so whatever else is there stays.
+ * @param {string} sourcePath the session's managed source path
+ * @returns {Promise<boolean>} whether the folder was removed
+ */
+async function removeEmptySessionSourceFolder(sourcePath = "") {
+  if (!sourcePath) return false;
+  try {
+    await rmdir(path.dirname(path.resolve(sourcePath)));
+    return true;
+  } catch (error) {
+    if (["EEXIST", "ENOENT", "ENOTDIR", "ENOTEMPTY"].includes(error?.code)) return false;
+    throw error;
+  }
+}
+
 export {
   inspectWorktreeDirty,
   isExactGitWorktree,
@@ -205,6 +222,7 @@ export {
   RECOVERY_UNTRACKED_LIST_ARTIFACT,
   recoverySessionName,
   recoveryWorktreePath,
+  removeEmptySessionSourceFolder,
   removeSessionOwnedWorktreeDirectory,
   renewalSourceDeletionPath,
   renewalSourceStagePath,

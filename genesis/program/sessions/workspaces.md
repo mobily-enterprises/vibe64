@@ -184,9 +184,12 @@ source. Renewal requires every copy clean, saved and current, because the
 renewal rules read the session's own inspection and update check, which include
 the copies. It keeps their recovery, stages the `connected` folder beside the
 source as `connected.renewal-<id>`, restores it when the renewal fails and
-removes it once the predecessor's archive is published. The successor carries no
-`connected_copies`; its preparation copies the repositories again from their
-mains.
+removes it once the predecessor's archive is published. Archive, the archive of
+a session whose source creation failed, and renewal's removal then remove the
+session's own folder around them with `removeEmptySessionSourceFolder`, a plain
+`rmdir`: only once nothing is left in it, so anything else there stays. The
+successor carries no `connected_copies`; its preparation copies the
+repositories again from their mains.
 
 The `20261106-connected-repository-copies` state upgrade retires the session
 links copies replaced. Runtime's `connectedRepositoryCopiesUpgrade.js`, supplied
