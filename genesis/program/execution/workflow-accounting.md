@@ -357,7 +357,14 @@ and `BindPaths=/dev/fuse`, the only device beyond the standard ones). Nothing
 else changes: inside a user namespace its processes hold capabilities only over
 what that namespace owns, the mounts it inherits stay locked, so the read-only
 file system, the inaccessible paths and the writable area hold, its files keep
-their real owner outside, and it may trace only its own processes. Only the
+their real owner outside, and it may trace only its own processes. An opt-in
+real-host test (`tests/server/vibe64ApplicationSandboxAllowances.integration.test.js`,
+`VIBE64_TEST_APPLICATION_SANDBOX=1` with `VIBE64_TEST_RUNSC`) runs these exact
+lines as systemd units through sudo: without an allowance no namespace,
+`/dev/fuse` or gVisor; with `fuse` a FUSE mount the host and the rest of the
+unit never see; with `gvisor` a rootless `runsc` sandbox; and without any one
+namespace, system call group or device an allowance adds, what it allows fails
+again. Only the
 daemon reaches the helper (its sudo rule names the daemon alone, and an
 application's sandbox gives no new privileges), and the release and service
 records live in the daemon's deployment state, outside every application's
