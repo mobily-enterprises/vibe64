@@ -2,9 +2,9 @@
 import ShellPageTitle from "@jskit-ai/shell-web/client/components/ShellPageTitle";
 import StudioAppShellLayout from "./StudioAppShellLayout.vue";
 
-// A page outside the project workspace in the Studio bar: the L button, the Up arrow on inner pages and the page's
-// title, its own top-left and top-right content, then the AI task tray and the Colleague launcher. There is no
-// navigation drawer; the page's title is its route's meta.jskit.title (or useShellPageTitle), else `title`.
+// A page outside the project workspace in the Studio bar: the L button and the page's title, its own top-left and
+// top-right content, then the AI task tray and the Colleague launcher. There is no navigation drawer; the page's
+// title is its route's meta.jskit.title (or useShellPageTitle), else `title`.
 defineOptions({ inheritAttrs: false });
 defineProps({
   // The title of pages that declare none and set none. A message key or plain text.

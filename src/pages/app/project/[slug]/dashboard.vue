@@ -3,10 +3,8 @@ import { redirectToChild } from "@jskit-ai/kernel/client/pageRedirects";
 import { RouterView } from "vue-router";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 
-// The Dashboard opens inside the project, so Up on its pages returns to the project's Preview.
 definePage({
-  redirect: redirectToChild("env"),
-  meta: { jskit: { parent: "/project/:slug" } }
+  redirect: redirectToChild("env")
 });
 
 const props = defineProps({

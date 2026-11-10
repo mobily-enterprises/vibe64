@@ -1,6 +1,7 @@
 <template>
   <section class="ui-storyboard" aria-label="UI and Engine architecture">
     <header class="ui-storyboard__toolbar">
+      <slot name="navigation" />
       <div class="ui-storyboard__heading">
         <h2>Architecture</h2>
         <p v-if="refreshProgress" role="status">{{ refreshProgress.message }} · {{ refreshProgress.elapsedSeconds }}s</p>

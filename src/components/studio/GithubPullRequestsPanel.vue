@@ -1,4 +1,5 @@
 <script setup>
+import Vibe64DashboardBackButton from "./Vibe64DashboardBackButton.vue";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useQueryClient } from "@tanstack/vue-query";
@@ -112,7 +113,12 @@ async function actionFinished({ apiPath }) {
 <template>
   <section class="pull-requests d-flex flex-column ga-2">
     <div class="d-flex align-center flex-wrap ga-2">
-      <v-btn v-if="available && number" color="primary" variant="text" @click="navigate({ pr: undefined })">All pull requests</v-btn>
+      <Vibe64DashboardBackButton
+        :to="available && number ? undefined : projectAppPath(projectSlug, '/dashboard/env')"
+        @click="available && number && navigate({ pr: undefined })"
+      >
+        {{ available && number ? 'All pull requests' : 'Back to dashboard' }}
+      </Vibe64DashboardBackButton>
       <v-spacer />
       <v-btn
         v-if="available" prepend-icon="$refresh" variant="text" size="small" :disabled="resource.isFetching.value"

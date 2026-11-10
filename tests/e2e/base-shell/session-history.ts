@@ -28,7 +28,7 @@ test.describe("session history navigation", () => {
         await expect(page.getByRole("link", { name: /^Session History$/u }).first()).toBeVisible();
       }
       expect(archiveRequests.some((request) => {
-        return request.endsWith("/vibe64/sessions/archived");
+        return request.split("?")[0].endsWith("/vibe64/sessions/archived");
       })).toBe(true);
 
       await page.getByRole("link", { name: "View", exact: true }).first().click();
@@ -39,7 +39,7 @@ test.describe("session history navigation", () => {
       const archiveConversationBody = page.locator(".studio-archived-session-detail__conversation .assistant-transcript__body");
       await expect(archiveConversationBody).toHaveCSS("overflow-y", "auto");
       await expect(archiveConversationBody).toHaveCSS("overscroll-behavior-y", "contain");
-      await page.locator("[data-testid=jskit-shell-back]").click();
+      await page.getByRole("link", { name: "Back to sessions" }).click();
       await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/history$`, "u"));
 
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/history/open-session`);

@@ -16,6 +16,7 @@ conversation, application preview, files and engineering tools.
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/Vibe64SessionPanel.vue`
+- `src/components/studio/Vibe64DashboardBackButton.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionToolPane.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`

@@ -16,6 +16,7 @@ import Vibe64PageStarButton from "./Vibe64PageStarButton.vue";
 const PAGE_SANDBOX = "allow-scripts allow-forms allow-modals";
 
 const props = defineProps({
+  pagesPath: { type: String, required: true },
   pageId: { type: String, required: true },
   projectSlug: { type: String, required: true }
 });
@@ -104,6 +105,7 @@ watch(() => [props.projectSlug, props.pageId, themeName.value], open);
 <template>
   <section class="vibe64-page-viewer" data-test="page-viewer" :data-page-id="pageId">
     <header class="vibe64-page-viewer__toolbar">
+      <v-btn prepend-icon="$arrowBack" :to="pagesPath" color="primary" rounded="pill" variant="text">All pages</v-btn>
       <div class="vibe64-page-viewer__heading">
         <h2 class="vibe64-page-viewer__title text-title-medium" data-test="page-viewer-title">{{ page?.title || "Page" }}</h2>
         <span v-if="page" class="vibe64-page-viewer__meta text-body-small">

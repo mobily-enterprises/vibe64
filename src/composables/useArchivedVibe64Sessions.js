@@ -188,6 +188,9 @@ function useArchivedVibe64SessionDetail() {
     const enrichedSession = enrichVibe64SessionForDisplay(payload);
     return isArchivedVibe64Session(enrichedSession) ? enrichedSession : null;
   });
+  const backTo = computed(() => ({
+    path: `${projectAppPath(projectSlug.value)}/dashboard/history`
+  }));
   const conversationLog = proxyRefs(useArchivedVibe64ConversationHistory({
     active: computed(() => Boolean(session.value)),
     projectSlug,
@@ -196,6 +199,7 @@ function useArchivedVibe64SessionDetail() {
   }));
 
   return {
+    backTo,
     conversationLog,
     error: computed(() => String(sessionResource.loadError.value || "")),
     loading: computed(() => Boolean(sessionResource.isLoading.value || sessionResource.isInitialLoading?.value)),

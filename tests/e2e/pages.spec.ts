@@ -340,7 +340,9 @@ test.describe("Vibe64 pages", () => {
     await page.screenshot({ path: testInfo.outputPath("page-versions.png") });
     await page.keyboard.press("Escape");
 
-    await page.locator("[data-testid=jskit-shell-back]").click();
+    // The top bar has no Up arrow; the viewer's own All pages returns to the list.
+    await expect(page.locator("[data-testid=jskit-shell-back]")).toHaveCount(0);
+    await page.getByRole("link", { name: "All pages" }).click();
     await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/pages$`, "u"));
     const current = page.locator('[data-test="pages-tab-current"]');
     const archived = page.locator('[data-test="pages-tab-archived"]');
@@ -528,7 +530,7 @@ test.describe("Vibe64 pages", () => {
       await log.getByRole("button", { name: "Close", exact: true }).click();
       await page.screenshot({ path: testInfo.outputPath(`refresh-viewer-${width}.png`) });
 
-      await page.locator("[data-testid=jskit-shell-back]").click();
+      await page.getByRole("link", { name: "All pages" }).click();
       if (width < 600 && await page.getByRole("button", { name: "Show project", exact: true }).isVisible()) {
         await page.getByRole("button", { name: "Show project", exact: true }).click();
       }

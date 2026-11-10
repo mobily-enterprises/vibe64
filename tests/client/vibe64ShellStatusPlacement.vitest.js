@@ -49,7 +49,8 @@ vi.mock("@jskit-ai/shell-web/client/components/ShellOutlet", async () => {
   };
 });
 
-// The shell's app-bar pieces, as markers: the Studio bar renders them, and these tests read where they sit.
+// The shell's app-bar pieces, as markers: the Studio bar renders them, and these tests read where they sit. Its Up
+// arrow is one too, so a bar that drew it again would show it here.
 vi.mock("@jskit-ai/shell-web/client/components/ShellUpButton", async () => {
   const { defineComponent: defineVueComponent, h: createElement } = await import("vue");
   return { default: defineVueComponent({ name: "ShellUpButtonTestDouble", setup: () => () => createElement("span", { "data-test": "shell-up" }) }) };
@@ -72,8 +73,6 @@ vi.mock("@jskit-ai/shell-web/client/components/ShellPageActionsTarget", async ()
 });
 
 vi.mock("@jskit-ai/shell-web/client/composables/useShellAppBar", () => ({ useShellAppBar() {} }));
-
-vi.mock("@jskit-ai/shell-web/client/navigation/useShellNavigation", () => ({ useShellNavigation: () => ({ upTarget: { value: "" } }) }));
 
 import ShellLayout from "../../src/components/ShellLayout.vue";
 import StudioAppShellLayout from "../../src/components/StudioAppShellLayout.vue";
@@ -246,7 +245,7 @@ describe("controlled Learning shell", () => {
     expect(await renderLearningShell({ actorKey: "" })).not.toContain('aria-label="Learn mode"');
   });
 
-  it("leads management page headers with the same L button, then Up and the page's title", async () => {
+  it("leads management page headers with the same L button, then the page's title, with no Up arrow", async () => {
     const app = createSSRApp({
       render: () => h(ShellLayout, { title: "Account" }, { "top-left": () => h("span", { "data-test": "page-controls" }) })
     });
@@ -254,7 +253,9 @@ describe("controlled Learning shell", () => {
     app.provide(VIBE64_LEARNING_KEY, reactive({ state: { actorKey: "member" }, learnMode: false, toggleMode() {}, openCourses() {} }));
     const html = await renderToString(app);
     expect(html.match(/aria-label="Learn mode"/gu)).toHaveLength(1);
-    const order = ['aria-label="Learn mode"', 'data-test="shell-up"', 'data-test="shell-page-title"', 'data-test="page-controls"',
+    // The bar has no Up arrow: a screen that covers the Dashboard has its own button back.
+    expect(html).not.toContain('data-test="shell-up"');
+    const order = ['aria-label="Learn mode"', 'data-test="shell-page-title"', 'data-test="page-controls"',
       'data-test="shell-page-actions"', 'data-shell-outlet="shell-layout:top-right"'].map((marker) => html.indexOf(marker));
     expect(order.every((position) => position >= 0)).toBe(true);
     expect([...order].sort((left, right) => left - right)).toEqual(order);

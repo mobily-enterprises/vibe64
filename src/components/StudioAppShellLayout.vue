@@ -11,7 +11,6 @@
     @touchcancel="cancelPaneSwipe"
   >
     <Vibe64LearningButton class="studio-app-shell-layout__learning-plate" />
-    <ShellUpButton :data-vibe64-guide-pane="upGuidePane" />
     <slot name="top-left" />
     <v-spacer />
     <ShellPageActionsTarget />
@@ -42,12 +41,10 @@
 </template>
 
 <script setup>
-import { computed, watch } from "vue";
+import { watch } from "vue";
 import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
 import ShellPageActionsTarget from "@jskit-ai/shell-web/client/components/ShellPageActionsTarget";
-import ShellUpButton from "@jskit-ai/shell-web/client/components/ShellUpButton";
 import { useShellAppBar } from "@jskit-ai/shell-web/client/composables/useShellAppBar";
-import { useShellNavigation } from "@jskit-ai/shell-web/client/navigation/useShellNavigation";
 import Vibe64AiTaskTrayTarget from "./Vibe64AiTaskTrayTarget.vue";
 import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
 import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
@@ -66,14 +63,11 @@ const props = defineProps({
 const emit = defineEmits(["update:chatCollapsed"]);
 let paneSwipe = null;
 
-// This bar is the shell's top app bar: its pages enter the navigation trail, the Up arrow follows the L button on
-// inner pages, and a page's ShellPageActions show before the account controls. Each page puts its title
-// (ShellPageTitle, the page's one h1) in its top-left content.
+// This bar is the shell's top app bar: its pages enter the navigation trail and a page's ShellPageActions show
+// before the account controls. It has no Up arrow: a screen that covers the Dashboard (Files, Database,
+// Architecture, Current changes, Issues, Pull requests, a page, an archived session) has its own button back.
+// Each page puts its title (ShellPageTitle, the page's one h1) in its top-left content.
 useShellAppBar();
-const { upTarget } = useShellNavigation();
-// A tool pane that covers the Dashboard (Files, Database, Architecture, Current changes, Issues) returns to it with
-// Up, so there Up is the lesson guide's Dashboard place, as the section menu is on the Dashboard itself.
-const upGuidePane = computed(() => (/\/dashboard\/[^/?#]+/u.test(upTarget.value) ? "dashboard" : undefined));
 
 watch(() => [props.mobilePaneSwipeEnabled, props.chatCollapsed], cancelPaneSwipe);
 

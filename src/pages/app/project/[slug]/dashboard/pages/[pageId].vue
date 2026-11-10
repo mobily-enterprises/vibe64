@@ -1,6 +1,7 @@
 <template>
   <Vibe64PageViewer
     :page-id="pageId"
+    :pages-path="projectAppPath(projectSlug, '/dashboard/pages')"
     :project-slug="projectSlug"
   />
 </template>
@@ -9,9 +10,7 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { Vibe64PageViewer } from "@local/vibe64-pages/client";
-import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
-
-definePage({ meta: { jskit: { parent: "/project/:slug/dashboard/pages" } } });
+import { projectAppPath, projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 
 const route = useRoute();
 const projectSlug = computed(() => projectSlugFromRoute(route));
