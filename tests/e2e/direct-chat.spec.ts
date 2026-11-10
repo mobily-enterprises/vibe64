@@ -297,6 +297,41 @@ test.describe("direct chat", () => {
     }
   });
 
+  // The mouse drags the divider from the default width both ways, as a person
+  // does; the minimum-width test below starts at the limit, so it cannot show
+  // a drag that changes nothing.
+  hintTest("@chat-resize-drag widens and narrows the chat by dragging the divider and keeps the width", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const agentTurn = { active: false, id: "", state: "idle" };
+    await mockDirectChat(page, { agentTurn });
+    const session = { ...directSession({ agentTurn }), assistantSelection: { engineId: "codex" } };
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, route => fulfillJson(route, {
+      ok: true, ...session.agentSession
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const chat = page.getByRole("region", { name: "Session chat", exact: true });
+    const separator = page.getByRole("separator", { name: "Resize chat" });
+    await expect(separator).toHaveAttribute("aria-valuenow", "512");
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(512);
+    const savedWidth = () => page.evaluate(() => JSON.parse(localStorage.getItem("vibe64:studio-chat-column-width")!));
+    for (const [dx, width] of [[120, 632], [-200, 432]]) {
+      const handle = (await separator.boundingBox())!;
+      const x = handle.x + handle.width / 2;
+      const y = handle.y + handle.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + dx, y, { steps: 8 });
+      await page.mouse.up();
+      await expect(separator).toHaveAttribute("aria-valuenow", String(width));
+      await expect.poll(async () => (await chat.boundingBox())!.width).toBe(width);
+      expect(await savedWidth()).toBe(width);
+    }
+    await page.reload();
+    await expect(separator).toHaveAttribute("aria-valuenow", "432");
+    await expect.poll(async () => (await chat.boundingBox())!.width).toBe(432);
+  });
+
   hintTest("@chat-minimum-width keeps Send on the toolbar row at the resize limit", async ({ page, hintRealtime }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.addInitScript(() => {
