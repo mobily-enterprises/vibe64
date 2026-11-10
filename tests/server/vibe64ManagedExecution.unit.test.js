@@ -108,6 +108,21 @@ test("application accounts are only for finite application commands", () => {
     assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...change }),
       { code: "vibe64_command_application_account_invalid" });
   }
+  // What its release allows the application's sandbox travels only with the
+  // application's own command; the host helper decides what it grants.
+  assert.deepEqual(normalizeVibe64CommandRequest(request).sandboxAllowances, []);
+  assert.deepEqual(normalizeVibe64CommandRequest({ ...request, sandboxAllowances: ["fuse", "gvisor"] }).sandboxAllowances,
+    ["fuse", "gvisor"]);
+  for (const change of [
+    { applicationAccount: undefined, sandboxAllowances: ["gvisor"] },
+    { sandboxAllowances: "gvisor" },
+    { sandboxAllowances: ["gvisor", "gvisor"] },
+    { sandboxAllowances: ["G Visor"] },
+    { sandboxAllowances: [1] }
+  ]) {
+    assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...change }),
+      { code: "vibe64_command_sandbox_allowances_invalid" }, JSON.stringify(change));
+  }
 });
 
 test("application account commands run as that account and never fall back to local execution", async (t) => {

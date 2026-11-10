@@ -11,6 +11,7 @@ import {
   applicationIdentity,
   applicationReleaseEnvironmentFile,
   applicationReleaseServiceFiles,
+  applicationSandboxAllowances,
   assertApplicationAreaNosuid,
   assertReleaseServiceClaim,
   ensureApplicationAccount,
@@ -19,7 +20,7 @@ import {
   resolveApplicationCwd,
   retireApplicationAccount
 } from "../../packages/vibe64-execution/src/host/applicationAccounts.js";
-import { helperChildEnv } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
+import { helperChildEnv, helperSettings } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
 import { openManagedExecutionReceipts } from "../../packages/vibe64-execution/src/host/executionReceipts.js";
 import {
   APPLICATION_USERNAME_PREFIX,
@@ -29,6 +30,7 @@ import {
 import { assertActablePerson, registerPerson } from "../../packages/vibe64-execution/src/host/personRegistry.js";
 import {
   accountUnitLines,
+  applicationSandboxLines,
   assertValidDeploymentUnitName,
   deploymentServiceUnit
 } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
@@ -530,7 +532,7 @@ test("an application's execution is finite, and its receipt sits where only root
   assert.match(operation, /if \(application && mode !== "capture"\) \{\n {4}throw new Error\("An application account runs only finite commands\."\);/u);
   assert.match(operation, /if \(!application\) \{\n {6}throw new Error\("Release environment requires an application's own execution\."\);/u);
   assert.match(operation, /\? openApplicationExecutionReceipts\(owner, \{ create: true \}\)/u);
-  assert.match(operation, /\.\.\.accountUnitLines\(targetUser, \{ receiptRoot \}\)\.map/u);
+  assert.match(operation, /\.\.\.accountUnitLines\(targetUser, \{ receiptRoot, sandboxAllowances \}\)\.map/u);
   // Inspecting, stopping and releasing find an application's receipt too.
   assert.equal(source.match(/openAllExecutionReceipts\(owner\)/gu).length, 3);
 
@@ -640,6 +642,119 @@ test("a release service unit runs as its application in its sandbox, listening o
   for (const port of [0, 80, 1023, 65536, "4100; rm", undefined]) {
     assert.throws(() => unit(port), /release service port/u, String(port));
   }
+});
+
+test("a release's sandbox allowances add only what each names to its application's sandbox", () => {
+  const identity = { appRoot: "/area/app", databaseRoot: "/area/database" };
+  const plain = applicationSandboxLines(identity, ["/receipt"]);
+  const changed = (allowances) => {
+    const lines = applicationSandboxLines(identity, ["/receipt"], allowances);
+    return {
+      added: lines.filter((line) => !plain.includes(line)),
+      removed: plain.filter((line) => !lines.includes(line))
+    };
+  };
+  assert.deepEqual(applicationSandboxLines(identity, ["/receipt"], []), plain);
+  assert.ok(plain.includes("RestrictNamespaces=yes") && plain.includes("SystemCallFilter=@system-service"));
+  assert.equal(plain.some((line) => /^(DeviceAllow|BindPaths)=/u.test(line)), false);
+  // gVisor's rootless runsc: its own namespaces (never a cgroup or time one),
+  // its mounts inside them and tracing its own subprocesses.
+  assert.deepEqual(changed(["gvisor"]), {
+    added: ["RestrictNamespaces=user mnt pid ipc uts net", "SystemCallFilter=@system-service @mount ptrace"],
+    removed: ["RestrictNamespaces=yes", "SystemCallFilter=@system-service"]
+  });
+  // FUSE inside a user and mount namespace of its own, through the host's /dev/fuse.
+  assert.deepEqual(changed(["fuse"]), {
+    added: ["DeviceAllow=/dev/fuse rw", "BindPaths=/dev/fuse", "RestrictNamespaces=user mnt",
+      "SystemCallFilter=@system-service @mount"],
+    removed: ["RestrictNamespaces=yes", "SystemCallFilter=@system-service"]
+  });
+  // Both: beyond gvisor, fuse adds only the device.
+  const both = changed(["fuse", "gvisor"]);
+  assert.deepEqual(both.added.filter((line) => !changed(["gvisor"]).added.includes(line)),
+    ["DeviceAllow=/dev/fuse rw", "BindPaths=/dev/fuse"]);
+  assert.deepEqual(applicationSandboxLines(identity, ["/receipt"], ["gvisor", "fuse"]),
+    applicationSandboxLines(identity, ["/receipt"], ["fuse", "gvisor"]));
+  // Everything else holds: no privileges, no capabilities, the same writable
+  // paths, closed devices but for /dev/fuse, the same files out of reach.
+  for (const line of ["NoNewPrivileges=yes", "CapabilityBoundingSet=", "PrivateDevices=yes", "ProtectSystem=strict",
+    "ReadWritePaths=/area/app /area/database /receipt", `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "ProtectHome=yes",
+    "ProtectProc=invisible", "ProtectKernelTunables=yes", "ProtectKernelModules=yes", "ProtectControlGroups=yes",
+    "SystemCallErrorNumber=EPERM", "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK"]) {
+    assert.ok(applicationSandboxLines(identity, ["/receipt"], ["fuse", "gvisor"]).includes(line), line);
+  }
+  assert.throws(() => applicationSandboxLines(identity, [], ["docker"]), /unknown application sandbox allowance/u);
+
+  // The release unit and an execution's properties carry them.
+  const user = { application: identity, username: applicationUser("0123456789ab") };
+  const unit = deploymentServiceUnit({
+    environmentFile: "/area/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort: 4100,
+    owner: { username: daemonUser("test") }, sandboxAllowances: ["fuse", "gvisor"], servicePath: "/usr/bin",
+    startScript: "/area/handover/r1/start.sh", unitName: "vibe64-release-test-shop-1.service", user,
+    workingDirectory: "/area/app/releases/r1/workspace"
+  }).split("\n");
+  for (const line of ["DeviceAllow=/dev/fuse rw", "BindPaths=/dev/fuse", "RestrictNamespaces=user mnt pid ipc uts net",
+    "SystemCallFilter=@system-service @mount ptrace", "SocketBindAllow=tcp:4100", "SocketBindDeny=any"]) {
+    assert.ok(unit.includes(line), line);
+  }
+  assert.deepEqual(accountUnitLines(user, { receiptRoot: "/receipt", sandboxAllowances: ["gvisor"] }).slice(3),
+    applicationSandboxLines(identity, ["/receipt"], ["gvisor"]));
+  // A person's or the daemon's execution has no application sandbox to widen.
+  assert.deepEqual(accountUnitLines({ username: "alice" }, { sandboxAllowances: ["gvisor"] }),
+    ["User=alice", "Group=vibe64", "SupplementaryGroups=nix-users", "UMask=0007"]);
+});
+
+test("the helper grants a sandbox allowance only where the host's owner lists it", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-sandbox-allowances-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const file = path.join(root, "exec-helper.env");
+  const settingsWith = async (text) => {
+    await writeFile(file, text, { mode: 0o644 });
+    return helperSettings(file, UID);
+  };
+  const refused = /does not permit it \(VIBE64_APPLICATION_SANDBOX_ALLOWANCES\)/u;
+  const unknown = /sandbox allowance it does not know/u;
+
+  // A host whose owner lists nothing grants nothing, though a release with no
+  // allowances runs as ever.
+  const none = await settingsWith("VIBE64_APPLICATION_AREA_ROOT=/srv/applications\n");
+  assert.deepEqual(applicationSandboxAllowances(undefined, none), []);
+  assert.deepEqual(applicationSandboxAllowances([], none), []);
+  assert.throws(() => applicationSandboxAllowances(["gvisor"], none), refused);
+
+  const gvisorOnly = await settingsWith("VIBE64_APPLICATION_SANDBOX_ALLOWANCES=gvisor\n");
+  assert.deepEqual(applicationSandboxAllowances(["gvisor"], gvisorOnly), ["gvisor"]);
+  assert.throws(() => applicationSandboxAllowances(["fuse"], gvisorOnly), /refused application sandbox allowance fuse:/u);
+  assert.throws(() => applicationSandboxAllowances(["fuse", "gvisor"], gvisorOnly), refused);
+
+  const both = await settingsWith("VIBE64_APPLICATION_SANDBOX_ALLOWANCES=\"gvisor fuse\"\n");
+  assert.deepEqual(applicationSandboxAllowances(["gvisor", "fuse"], both), ["fuse", "gvisor"]);
+  for (const value of [["docker"], ["gvisor", "gvisor"], "gvisor", [1], { gvisor: true }, ["GVISOR"]]) {
+    assert.throws(() => applicationSandboxAllowances(value, both), unknown, JSON.stringify(value));
+  }
+  // A setting that names an allowance the helper does not know is refused,
+  // never read as a narrower or wider list.
+  const odd = await settingsWith("VIBE64_APPLICATION_SANDBOX_ALLOWANCES=gvisor docker\n");
+  assert.throws(() => applicationSandboxAllowances([], odd), /settings name an unknown application sandbox allowance/u);
+});
+
+test("only the daemon's request for an application's own execution or release unit carries sandbox allowances", async () => {
+  const source = await execHelperSource();
+  const execution = source.slice(source.indexOf("function handleManagedExecutionOperation("),
+    source.indexOf("function runManagedExecutionPayload("));
+  assert.match(execution, /if \(payload\.sandboxAllowances !== undefined && !application\) \{\n {4}throw new Error\("Sandbox allowances require an application's own execution\."\);/u);
+  assert.match(execution, /const sandboxAllowances = application \? applicationSandboxAllowances\(payload\.sandboxAllowances\) : \[\];/u);
+  const service = source.slice(source.indexOf("function handleDeploymentServiceOperation("),
+    source.indexOf("function inspectDeploymentServiceUnit("));
+  assert.ok(service.indexOf("registeredApplicationUser(owner, payload.applicationAccount)") <
+    service.indexOf("applicationSandboxAllowances(payload.sandboxAllowances)"));
+  // The host gate is read from root's settings alone: the default argument,
+  // never a value from the payload.
+  assert.equal(source.match(/applicationSandboxAllowances\(/gu).length, 3, "the definition and its two callers");
+  assert.match(source, /function applicationSandboxAllowances\(value, settings = helperSettings\(\)\)/u);
+  // Both operations act for the calling daemon: SUDO_USER, which only sudo
+  // sets, names it, and only a workspace daemon has release units.
+  assert.match(source, /function resolveOwnerUser\(\) \{\n {2}const sudoUser = safeUsername\(process\.env\.SUDO_USER \|\| ""\);/u);
 });
 
 test("a daemon names, stops, removes and reads only its own workspace's release units", () => {

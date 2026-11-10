@@ -19,7 +19,7 @@ const SYSTEMD_UNIT_ROOT = "/etc/systemd/system";
 // A person's or the daemon's execution runs as a member of the shared group;
 // an application's only as itself, inside its sandbox, where its area and its
 // receipt are all it may write.
-function accountUnitLines(targetUser = {}, { receiptRoot = "" } = {}) {
+function accountUnitLines(targetUser = {}, { receiptRoot = "", sandboxAllowances = [] } = {}) {
   if (!targetUser.application) {
     return [
       `User=${targetUser.username}`,
@@ -32,7 +32,7 @@ function accountUnitLines(targetUser = {}, { receiptRoot = "" } = {}) {
     `User=${targetUser.username}`,
     `Group=${targetUser.username}`,
     "UMask=0077",
-    ...applicationSandboxLines(targetUser.application, [receiptRoot])
+    ...applicationSandboxLines(targetUser.application, [receiptRoot], sandboxAllowances)
   ];
 }
 
@@ -58,11 +58,59 @@ function releaseServicePort(value) {
 // RestrictSUIDSGID=: under it systemd refuses openat2() with ENOSYS, since it
 // cannot see the mode inside struct open_how, and GNU tar makes every file and
 // folder it unpacks with openat2(), so tar and dpkg-deb could unpack nothing.
-function applicationSandboxLines(identity = {}, writablePaths = []) {
+//
+// A release whose Deployment section says `Sandbox allows:` gets more, and only
+// on a host whose owner lists the allowance (applicationSandboxAllowances):
+// - `gvisor` lets its code start gVisor's rootless runsc, which makes its own
+//   user, mount, PID, IPC, UTS and network namespaces, mounts inside them and
+//   traces its own subprocesses (systrap);
+// - `fuse` lets it mount a FUSE file system inside a user and mount namespace
+//   of its own, through the host's /dev/fuse.
+// Neither weakens anything above: inside a user namespace a process holds
+// capabilities only over what that namespace owns, the mounts it inherits are
+// locked (so ProtectSystem=, InaccessiblePaths= and ReadWritePaths= hold), its
+// files keep their real owner outside, and it can trace only its own processes.
+const APPLICATION_SANDBOX_ALLOWANCES = Object.freeze({
+  fuse: Object.freeze({
+    devices: Object.freeze(["/dev/fuse"]),
+    namespaces: Object.freeze(["user", "mnt"]),
+    systemCalls: Object.freeze(["@mount"])
+  }),
+  gvisor: Object.freeze({
+    devices: Object.freeze([]),
+    namespaces: Object.freeze(["user", "mnt", "pid", "ipc", "uts", "net"]),
+    systemCalls: Object.freeze(["@mount", "ptrace"])
+  })
+});
+const NAMESPACE_ORDER = Object.freeze(["user", "mnt", "pid", "ipc", "uts", "net"]);
+
+function applicationSandboxAllowanceLines(allowances = []) {
+  const profiles = allowances.map((name) => {
+    const profile = APPLICATION_SANDBOX_ALLOWANCES[name];
+    if (!profile) {
+      throw new Error("Vibe64 exec helper rejected an unknown application sandbox allowance.");
+    }
+    return profile;
+  });
+  const devices = [...new Set(profiles.flatMap((profile) => profile.devices))];
+  const namespaces = new Set(profiles.flatMap((profile) => profile.namespaces));
+  const systemCalls = [...new Set(profiles.flatMap((profile) => profile.systemCalls))];
+  return {
+    devices: devices.flatMap((device) => [`DeviceAllow=${device} rw`, `BindPaths=${device}`]),
+    namespaces: namespaces.size > 0
+      ? `RestrictNamespaces=${NAMESPACE_ORDER.filter((name) => namespaces.has(name)).join(" ")}`
+      : "RestrictNamespaces=yes",
+    systemCalls: ["SystemCallFilter=@system-service", ...systemCalls].join(" ")
+  };
+}
+
+function applicationSandboxLines(identity = {}, writablePaths = [], allowances = []) {
+  const allowed = applicationSandboxAllowanceLines(allowances);
   return [
     "NoNewPrivileges=yes",
     "PrivateTmp=yes",
     "PrivateDevices=yes",
+    ...allowed.devices,
     "PrivateIPC=yes",
     "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
     "ProtectSystem=strict",
@@ -74,12 +122,12 @@ function applicationSandboxLines(identity = {}, writablePaths = []) {
     "ProtectKernelModules=yes",
     "ProtectKernelLogs=yes",
     "ProtectControlGroups=yes",
-    "RestrictNamespaces=yes",
+    allowed.namespaces,
     "LockPersonality=yes",
     "CapabilityBoundingSet=",
     "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK",
     "SystemCallArchitectures=native",
-    "SystemCallFilter=@system-service",
+    allowed.systemCalls,
     "SystemCallErrorNumber=EPERM",
     // The host's own settings, people and applications are no business of a
     // project's code, though some of those files are readable by every account.
@@ -192,6 +240,7 @@ function deploymentServiceUnit({
   loopbackPort = 0,
   owner = {},
   requiredUnits = [],
+  sandboxAllowances = [],
   servicePath = "",
   startScript = "",
   unitName = "",
@@ -210,7 +259,7 @@ function deploymentServiceUnit({
     "",
     "[Service]",
     "Type=simple",
-    ...accountUnitLines(user),
+    ...accountUnitLines(user, { sandboxAllowances }),
     ...serviceResourceUnitLines(owner),
     // It may listen on its own loopback port and nowhere else, so it can never
     // take over another service's port while that service is down. UDP stays
@@ -281,6 +330,7 @@ function systemdUnitSafeValue(value = "") {
 
 export {
   accountUnitLines,
+  APPLICATION_SANDBOX_ALLOWANCES,
   applicationSandboxLines,
   assertSafeManagedServicePath,
   assertValidDeploymentUnitName,

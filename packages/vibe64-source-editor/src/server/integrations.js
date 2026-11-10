@@ -184,12 +184,14 @@ async function inspectApplicationIntegrationSetup(context, input) {
  * Called only with a source root and execution context selected by the host.
  * A host that runs the application under its own account reads the committed
  * configuration from sourceRoot and runs the command as applicationAccount in
- * the application's executionRoot.
+ * the application's executionRoot, with the sandbox allowances its release
+ * declares.
  */
 async function runApplicationIntegrationSetup({
   sourceRoot,
   executionRoot = sourceRoot,
   applicationAccount,
+  sandboxAllowances = [],
   env,
   releaseEnvironmentFile,
   project,
@@ -209,6 +211,7 @@ async function runApplicationIntegrationSetup({
     command: checked.setup.command,
     sourceRoot: executionRoot,
     applicationAccount,
+    sandboxAllowances,
     runtimes: checked.runtime.runtimes,
     env,
     releaseEnvironmentFile,

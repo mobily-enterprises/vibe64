@@ -8,7 +8,11 @@ import { createConnection } from "node:net";
 import { constants as osConstants } from "node:os";
 import process from "node:process";
 
-import { applicationReleaseEnvironmentFile, resolveApplicationCwd } from "./applicationAccounts.js";
+import {
+  applicationReleaseEnvironmentFile,
+  applicationSandboxAllowances,
+  resolveApplicationCwd
+} from "./applicationAccounts.js";
 import {
   ALLOWED_COMMANDS,
   helperChildEnv,
@@ -145,6 +149,12 @@ function handleManagedExecutionOperation(payload = {}) {
       gid: targetUser.gid
     });
   }
+  // Only an application's own commands may run with what its release's
+  // Deployment section allows, and only what this host permits.
+  if (payload.sandboxAllowances !== undefined && !application) {
+    throw new Error("Sandbox allowances require an application's own execution.");
+  }
+  const sandboxAllowances = application ? applicationSandboxAllowances(payload.sandboxAllowances) : [];
   const memoryMaxBytes = managedExecutionInteger(
     payload.memoryMaxBytes,
     MANAGED_EXECUTION_MEMORY_MIN_BYTES,
@@ -214,7 +224,7 @@ function handleManagedExecutionOperation(payload = {}) {
     "--service-type=exec",
     `--slice=${executionSlice}`,
     `--property=Description=Vibe64 ${kind} execution`,
-    ...accountUnitLines(targetUser, { receiptRoot }).map((line) => `--property=${line}`),
+    ...accountUnitLines(targetUser, { receiptRoot, sandboxAllowances }).map((line) => `--property=${line}`),
     `--property=WorkingDirectory=${cwd}`,
     "--property=KillMode=control-group",
     "--property=ExitType=cgroup",

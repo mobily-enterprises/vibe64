@@ -402,7 +402,7 @@ test("execution helper gives daemon-owned services the shared primary group, and
   assert.match(source, /function serviceAccountUnitLines\(owner = \{\}\)/u);
   assert.equal(source.match(/\.\.\.serviceAccountUnitLines\(owner\)/gu)?.length, 1, "managed services");
   const release = source.slice(source.indexOf("function deploymentServiceUnit("), source.indexOf("function managedServiceUnit("));
-  assert.match(release, /\.\.\.accountUnitLines\(user\),/u);
+  assert.match(release, /\.\.\.accountUnitLines\(user, \{ sandboxAllowances \}\),/u);
   assert.match(source, /`Group=\$\{VIBE64_GROUP\}`/u);
   assert.match(source, /"SupplementaryGroups=nix-users"/u);
   assert.match(source, /"UMask=0007"/u);

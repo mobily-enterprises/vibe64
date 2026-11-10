@@ -16,7 +16,8 @@ named `Deployment`, validates it under the Vibe64-owned
 `vibe64.application-deployment.v1` contract, and combines it with the Stack's
 declared resources. The source is strict Markdown; its normalized result
 contains exact argument arrays, working directory, runtime requirements,
-release-recreation paths, generated secret names, the setup code name, and success condition. Invalid, absent, and competing
+release-recreation paths, generated secret names, the setup code name, sandbox
+allowances, and success condition. Invalid, absent, and competing
 declarations remain explicit states.
 
 Commands are exact argument arrays with no placeholder expansion; `{host}` and
@@ -38,6 +39,15 @@ project owner can create that account. The host generates it like a generated
 secret, which is why a name may not be in both entries, and shows its value
 only to the project owner. It never prints the value or gives it to an
 assistant. A project declares it only when its application reads that variable.
+
+`- Sandbox allows:` names, from the closed set `fuse` and `gvisor`, what the
+application's own commands and release service may do beyond an ordinary
+production sandbox; the result lists them sorted, each at most once. `gvisor`
+lets them start gVisor's rootless `runsc`; `fuse` lets them mount a FUSE file
+system inside a user and mount namespace of their own. A host grants each only
+where its owner permits it and refuses a deploy that needs one it does not grant;
+[Workflow accounting](../execution/workflow-accounting.md) says exactly what
+each adds to the sandbox.
 
 Genesis does not know what Deployment means. Vibe64 does not infer scripts from
 the selected language or framework. The application or technology Stack owns

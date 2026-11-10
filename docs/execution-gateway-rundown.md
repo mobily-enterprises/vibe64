@@ -150,8 +150,10 @@ On a managed host, an `app` capture may also name `applicationAccount`: the OS
 account of a published application, which the host helper made and registered
 for the daemon's workspace. The command then runs as that account, in its own
 area and sandbox, never as a person; `releaseEnvironmentFile` is accepted only
-for such a command. A person's own computer has no application accounts and
-refuses the field.
+for such a command, and so is `sandboxAllowances`, the allowances its release's
+Deployment section declares, which the helper grants only where the host's
+owner permits them. A person's own computer has no application accounts and
+refuses the fields.
 
 ### `purpose`
 

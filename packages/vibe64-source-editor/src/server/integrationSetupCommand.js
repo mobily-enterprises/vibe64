@@ -349,6 +349,7 @@ async function runIntegrationSetupCommand({
   command,
   sourceRoot,
   applicationAccount,
+  sandboxAllowances = [],
   runtimes,
   env,
   releaseEnvironmentFile,
@@ -368,6 +369,7 @@ async function runIntegrationSetupCommand({
     result = await runCommand({
       actor: "app",
       ...(applicationAccount ? { applicationAccount } : {}),
+      ...(applicationAccount && sandboxAllowances.length > 0 ? { sandboxAllowances } : {}),
       allowedRoots: [sourceRoot],
       command: executable,
       args,

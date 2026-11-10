@@ -138,6 +138,9 @@ test("the Deployment spec gives a host's production mode to Serve only and lets 
   assert.match(deployment, /- Setup code: `NAME`\n/u);
   assert.match(deployment, /Setup code names the one production secret the application asks for when its first account registers/u);
   assert.match(deployment, /shows its value only to the project owner; it is never printed, logged or given to an assistant/u);
+  assert.match(deployment, /- Sandbox allows: `fuse` `gvisor`\n/u);
+  assert.match(deployment, /A host grants an allowance only where its owner permits it/u);
+  assert.match(deployment, /An assistant never adds or changes this line on its own; it explains the failure and asks the person\./u);
   assert.doesNotMatch(deployment, /hosted/u, "the public spec describes no hosting service");
   const [example] = fencedBlocks(deployment, "markdown");
   const serve = parseVibe64DeploymentLines(example.split("\n").slice(1)).steps.at(-1);

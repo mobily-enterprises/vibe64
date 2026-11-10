@@ -55,7 +55,21 @@ test("setup command uses declared argv and private Env while sending only bounde
     assert.equal(execution.timeout, 30000);
     assert.equal(execution.maxBuffer, 32768);
     assert.deepEqual(execution.allowedRoots, [options.sourceRoot]);
+    assert.equal(Object.hasOwn(execution, "sandboxAllowances"), false);
   }
+  // An application account's setup runs with what its release allows its sandbox.
+  let execution;
+  const runCommand = async (value) => {
+    execution = value;
+    return { ok: true, stdout: JSON.stringify({ ...reply(), requestId: JSON.parse(value.input).requestId }) };
+  };
+  const command = { argv: ["node", "scripts/integrations.js"], workdir: "." };
+  await runIntegrationSetupCommand({ ...options, applicationAccount: "v64a_0123456789ab", command, runCommand,
+    runtimes: [], sandboxAllowances: ["fuse", "gvisor"] });
+  assert.equal(execution.applicationAccount, "v64a_0123456789ab");
+  assert.deepEqual(execution.sandboxAllowances, ["fuse", "gvisor"]);
+  await runIntegrationSetupCommand({ ...options, command, runCommand, runtimes: [], sandboxAllowances: ["gvisor"] });
+  assert.equal(Object.hasOwn(execution, "sandboxAllowances"), false, "only an application account's setup");
 });
 
 test("setup protocol crosses the real execution gateway with stdin, working directory and private Env", async () => {

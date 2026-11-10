@@ -241,6 +241,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     runtimeRequirements: ["nodejs"],
     generatedSecrets: [],
     setupCode: "",
+    sandboxAllowances: [],
     readiness: {
       kind: "http",
       method: "GET",
@@ -261,6 +262,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     runtimeRequirements: [],
     generatedSecrets: [],
     setupCode: "",
+    sandboxAllowances: [],
     readiness: null,
     steps: []
   });
@@ -277,6 +279,17 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     generatedSecrets: ["SESSION_SECRET"],
     setupCode: "FIRST_ACCOUNT_SETUP_CODE"
   });
+  // What the application's own commands and service may do beyond an
+  // ordinary sandbox, in a stable order whatever order the line names it.
+  assert.deepEqual(parseVibe64DeploymentLines([
+    "- Sandbox allows: `gvisor` `fuse`",
+    ...deploymentLines()
+  ]), {
+    ...parseVibe64DeploymentLines(deploymentLines()),
+    sandboxAllowances: ["fuse", "gvisor"]
+  });
+  assert.deepEqual(parseVibe64DeploymentLines(["- Sandbox allows: `gvisor`", ...deploymentLines()]).sandboxAllowances,
+    ["gvisor"]);
 });
 
 test("Deployment rejects unsafe paths, shell strings, placeholders, missing proof, and phase reordering", () => {
@@ -308,6 +321,12 @@ test("Deployment rejects unsafe paths, shell strings, placeholders, missing proo
     ["- Setup code: `A`", "- Setup code: `B`", ...deploymentLines()],
     ["- Setup code: SETUP_CODE", ...deploymentLines()],
     ["- Generated secrets: `SESSION_SECRET` `SETUP_CODE`", "- Setup code: `SETUP_CODE`", ...deploymentLines()],
+    ["- Sandbox allows: `docker`", ...deploymentLines()],
+    ["- Sandbox allows: `gvisor` `gvisor`", ...deploymentLines()],
+    ["- Sandbox allows: `gvisor`", "- Sandbox allows: `fuse`", ...deploymentLines()],
+    ["- Sandbox allows: gvisor", ...deploymentLines()],
+    ["- Sandbox allows: `GVISOR`", ...deploymentLines()],
+    ["- Sandbox allows: ", ...deploymentLines()],
     deploymentLines({ steps: ["- Serve `Start`: `php` `artisan` `serve` `--port={port}`"] })
   ];
   for (const lines of invalid) {

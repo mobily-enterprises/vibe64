@@ -12,6 +12,7 @@ import process from "node:process";
 
 import {
   applicationReleaseServiceFiles,
+  applicationSandboxAllowances,
   assertApplicationAreaNosuid,
   assertReleaseServiceClaim,
   registeredApplicationUser
@@ -68,6 +69,7 @@ function handleDeploymentServiceOperation(payload = {}) {
   // A release service runs as its project's own application account.
   const user = registeredApplicationUser(owner, payload.applicationAccount);
   const service = applicationReleaseServiceFiles(payload, user.application, { daemonUid: owner.uid, gid: user.gid });
+  const sandboxAllowances = applicationSandboxAllowances(payload.sandboxAllowances);
   const requiredUnits = [...new Set((Array.isArray(payload.requiredUnits) ? payload.requiredUnits : [])
     .map((requiredUnit) => assertValidManagedServiceUnitName(requiredUnit, owner)))];
   const loopbackPort = releaseServicePort(payload.loopbackPort);
@@ -79,6 +81,7 @@ function handleDeploymentServiceOperation(payload = {}) {
     loopbackPort,
     owner,
     requiredUnits,
+    sandboxAllowances,
     servicePath: helperCommandPath(),
     unitName,
     user

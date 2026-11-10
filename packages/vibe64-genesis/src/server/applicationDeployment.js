@@ -20,6 +20,10 @@ const STEP_LINE = /^- (Prepare|Build|Migrate|Serve) `([^`\r\n]+)`:[ \t]+(.+)$/u;
 const RESTORE_PATHS_PREFIX = "- Recreate on restore: ";
 const GENERATED_SECRETS_PREFIX = "- Generated secrets: ";
 const SETUP_CODE_PREFIX = "- Setup code: ";
+const SANDBOX_ALLOWS_PREFIX = "- Sandbox allows: ";
+// What an application's own commands and service may do beyond an ordinary
+// sandbox, from a closed set. A host grants only what its owner permits.
+const VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
 const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
 const STEP_ROLE_ORDER = Object.freeze({
   prepare: 0,
@@ -35,6 +39,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   `${RESTORE_PATHS_PREFIX}\`glob\`...`,
   `${GENERATED_SECRETS_PREFIX}\`NAME\`...`,
   `${SETUP_CODE_PREFIX}\`NAME\``,
+  `${SANDBOX_ALLOWS_PREFIX}${VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES.map((name) => `\`${name}\``).join(" ")}`,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
 ]);
@@ -102,6 +107,27 @@ function setupCode(source, deploymentPath, line) {
   return name;
 }
 
+function sandboxAllowances(source, deploymentPath, line) {
+  const values = backtickedArguments(
+    source.slice(SANDBOX_ALLOWS_PREFIX.length),
+    ERROR_CODE,
+    deploymentPath,
+    "Deployment Sandbox allows",
+    line
+  );
+  if (values.some((value) => !VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES.includes(value))) {
+    invalid(
+      deploymentPath,
+      `Deployment Sandbox allows takes only ${VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES.map((name) => `\`${name}\``).join(" and ")}.`,
+      line
+    );
+  }
+  if (new Set(values).size !== values.length) {
+    invalid(deploymentPath, "Deployment Sandbox allows names an allowance twice.", line);
+  }
+  return [...values].sort();
+}
+
 function deploymentStep(match, deploymentPath, line) {
   const argv = processArguments(match[3], ERROR_CODE, deploymentPath, "Deployment command", line);
   if (argv.some((value) => /\{(?:host|port)\}/u.test(value))) {
@@ -126,6 +152,7 @@ function emptyDeployment() {
     runtimeRequirements: [],
     generatedSecrets: [],
     setupCode: "",
+    sandboxAllowances: [],
     readiness: null,
     steps: []
   };
@@ -200,6 +227,12 @@ function parseVibe64DeploymentLines(lines, options = {}) {
       result.setupCode = setupCode(source, deploymentPath, line);
       continue;
     }
+    if (source.startsWith(SANDBOX_ALLOWS_PREFIX)) {
+      if (seen.has("sandbox-allows")) invalid(deploymentPath, "Duplicate Deployment Sandbox allows.", line);
+      seen.add("sandbox-allows");
+      result.sandboxAllowances = sandboxAllowances(source, deploymentPath, line);
+      continue;
+    }
     if (source.startsWith("- Ready when: ")) {
       if (seen.has("readiness")) invalid(deploymentPath, "Duplicate Deployment Ready when.", line);
       seen.add("readiness");
@@ -265,6 +298,7 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
     runtimeRequirements: parsed.runtimeRequirements,
     generatedSecrets: parsed.generatedSecrets,
     setupCode: parsed.setupCode,
+    sandboxAllowances: parsed.sandboxAllowances,
     readiness: parsed.readiness,
     steps: parsed.steps
   };
@@ -287,6 +321,7 @@ export {
   DEPLOYMENT_STEP_ROLES,
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
   VIBE64_APPLICATION_DEPLOYMENT_SECTION,
+  VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES,
   parseVibe64DeploymentLines,
   vibe64DeploymentInspection
 };

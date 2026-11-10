@@ -371,6 +371,18 @@ function normalizeVibe64CommandRequest(input = {}) {
       (!APPLICATION_ACCOUNT_PATTERN.test(applicationAccount) || request.actor !== "app" || mode !== "capture"))) {
     throw commandRequestError("Application accounts run only finite application commands.", "vibe64_command_application_account_invalid");
   }
+  // What the application's release allows its sandbox; the host helper grants
+  // each allowance only where the host's owner permits it.
+  const sandboxAllowances = request.sandboxAllowances ?? [];
+  if (!Array.isArray(sandboxAllowances) ||
+      sandboxAllowances.some((name) => typeof name !== "string" || !/^[a-z][a-z0-9-]*$/u.test(name)) ||
+      new Set(sandboxAllowances).size !== sandboxAllowances.length ||
+      (sandboxAllowances.length > 0 && !applicationAccount)) {
+    throw commandRequestError(
+      "Sandbox allowances belong only to an application account's own commands.",
+      "vibe64_command_sandbox_allowances_invalid"
+    );
+  }
   return {
     actor: normalizeEnum(request.actor, VIBE64_COMMAND_ACTORS, "daemon", "actor"),
     applicationAccount,
@@ -385,6 +397,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     envFactory: normalizedEnv.envFactory,
     envPolicy: normalizeEnum(request.envPolicy, VIBE64_COMMAND_ENV_POLICIES, "session", "env_policy"),
     releaseEnvironmentFile,
+    sandboxAllowances: [...sandboxAllowances],
     execution: normalizeExecutionDescriptor(request.execution, {
       mode,
       project,

@@ -51,7 +51,7 @@ import {
   REGISTRATION_LIMIT_BYTES,
   writeRegistration
 } from "./personRegistry.js";
-import { SYSTEMD_UNIT_ROOT } from "./systemdUnits.js";
+import { APPLICATION_SANDBOX_ALLOWANCES, SYSTEMD_UNIT_ROOT } from "./systemdUnits.js";
 
 const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
 const APPLICATION_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "applications");
@@ -78,6 +78,31 @@ function applicationAreaRoot(settings = helperSettings()) {
     throw new Error("This host's Vibe64 exec helper settings name no application area (VIBE64_APPLICATION_AREA_ROOT).");
   }
   return configured;
+}
+
+// What an application's execution or release service may do beyond its
+// ordinary sandbox: what its release's Deployment section asks for, each
+// allowance one this host's owner lists in VIBE64_APPLICATION_SANDBOX_ALLOWANCES.
+// Anything else, or a setting naming an allowance the helper does not know, is
+// refused rather than dropped, so nothing runs with less than it asked for.
+function applicationSandboxAllowances(value, settings = helperSettings()) {
+  const known = Object.keys(APPLICATION_SANDBOX_ALLOWANCES);
+  const permitted = String(settings.VIBE64_APPLICATION_SANDBOX_ALLOWANCES || "").split(/\s+/u).filter(Boolean);
+  if (permitted.some((name) => !known.includes(name))) {
+    throw new Error("This host's Vibe64 exec helper settings name an unknown application sandbox allowance " +
+      "(VIBE64_APPLICATION_SANDBOX_ALLOWANCES).");
+  }
+  const requested = value === undefined || value === null ? [] : value;
+  if (!Array.isArray(requested) || requested.some((name) => typeof name !== "string" || !known.includes(name)) ||
+      new Set(requested).size !== requested.length) {
+    throw new Error("Vibe64 exec helper rejected an application sandbox allowance it does not know.");
+  }
+  const refused = requested.filter((name) => !permitted.includes(name));
+  if (refused.length > 0) {
+    throw new Error(`Vibe64 exec helper refused application sandbox allowance ${refused.join(", ")}: this host's ` +
+      "owner does not permit it (VIBE64_APPLICATION_SANDBOX_ALLOWANCES).");
+  }
+  return [...requested].sort();
 }
 
 // Each published project runs as its own application account: a system
@@ -626,6 +651,7 @@ export {
   applicationIdentity,
   applicationReleaseEnvironmentFile,
   applicationReleaseServiceFiles,
+  applicationSandboxAllowances,
   assertApplicationAreaNosuid,
   assertReleaseServiceClaim,
   ensureApplicationAccount,

@@ -341,8 +341,28 @@ since it cannot see the mode inside `struct open_how`, and GNU tar creates
 every file and folder it unpacks with `openat2()`, so tar and dpkg-deb could
 unpack nothing. A person's own computer has no application accounts, so it
 needs no such mount.
-Builds with Node, npm, esbuild, Python, tar, dpkg-deb and SQLite run unchanged in it. Its
-receipt sits in
+Builds with Node, npm, esbuild, Python, tar, dpkg-deb and SQLite run unchanged in it.
+A release whose Deployment section says `- Sandbox allows:` asks for more, and
+the daemon passes what its release record holds (`sandboxAllowances`) with
+each of the application's executions and its release unit. The helper accepts
+it only for an application's own execution or release unit, and only for
+allowances the host's owner lists in its root-owned helper settings
+(`VIBE64_APPLICATION_SANDBOX_ALLOWANCES`, for example `gvisor fuse`); anything
+else, or a setting naming an allowance the helper does not know, refuses the
+command rather than run it with less. `gvisor` (gVisor's rootless `runsc`)
+turns `RestrictNamespaces=yes` into `user mnt pid ipc uts net` and adds
+`@mount` and `ptrace` to the system calls; `fuse` turns it into `user mnt`,
+adds `@mount`, and exposes the host's `/dev/fuse` (`DeviceAllow=/dev/fuse rw`
+and `BindPaths=/dev/fuse`, the only device beyond the standard ones). Nothing
+else changes: inside a user namespace its processes hold capabilities only over
+what that namespace owns, the mounts it inherits stay locked, so the read-only
+file system, the inaccessible paths and the writable area hold, its files keep
+their real owner outside, and it may trace only its own processes. Only the
+daemon reaches the helper (its sudo rule names the daemon alone, and an
+application's sandbox gives no new privileges), and the release and service
+records live in the daemon's deployment state, outside every application's
+writable area.
+Its receipt sits in
 root's own runtime directory for the workspace's applications (`0711`), which
 the account can traverse but not list, because it is in no group that reaches
 the daemon's runtime directory. Inspect, stop and release-ended find receipts
