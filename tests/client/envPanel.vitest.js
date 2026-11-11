@@ -19,6 +19,12 @@ describe("Env panel", () => {
     expect(source).toMatch(/\[record\.key\]:\s*\{\s*remove:\s*true/u);
   });
 
+  it("drops a final line ending from the added value, as the agent's env set does", () => {
+    const source = componentSource("src/components/studio/EnvPanel.vue");
+
+    expect(source).toContain("value: envValueWithoutFinalLineEnding(newValue.value.value)");
+  });
+
   it("keeps managed database lifetime separate from application Env", () => {
     const envSource = componentSource("src/components/studio/EnvPanel.vue");
     const settingsSource = [

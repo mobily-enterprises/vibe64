@@ -346,6 +346,51 @@ test("agent Env creates development values through the project service and never
   }]);
 });
 
+test("agent Env drops one final line ending from stdin and keeps every other character", async () => {
+  const project = createProjectService();
+  const production = createProductionProvider();
+  const command = createAgentEnvCommandService({ logger: silentLogger,
+    productionEnvironmentProvider: production,
+    savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    project
+  });
+  await command.bindSession("line-ending-session");
+  const setValue = (scope, key, stdin) => command.run({
+    args: ["set", scope, key, "--json"],
+    sessionId: "line-ending-session",
+    stdin
+  });
+  const cases = [
+    // `echo "$KEY" |`: the newline echo adds is not part of the key.
+    ["ECHOED", "provider-api-key-0123456789\n", "provider-api-key-0123456789"],
+    // `printf '%s' "$KEY" |`: no line ending, nothing dropped.
+    ["PRINTED", "exact-value", "exact-value"],
+    // A value that really ends with a line break arrives with two and keeps one.
+    ["DOUBLED", "-----END KEY-----\n\n", "-----END KEY-----\n"],
+    ["WINDOWS", "crlf-value\r\n", "crlf-value"],
+    ["SPACED", "  inner  spaces\tand tab \n", "  inner  spaces\tand tab "],
+    ["MULTILINE", "first\nsecond\n", "first\nsecond"],
+    ["LONE_CR", "carriage\r", "carriage\r"]
+  ];
+
+  for (const [key, stdin, stored] of cases) {
+    const result = await setValue("development", key, stdin);
+    assert.equal(result.ok, true, key);
+    assert.deepEqual(project.state.saves.at(-1).values, { [key]: { value: stored } }, key);
+  }
+
+  const echoedEmpty = await setValue("development", "ECHOED_EMPTY", "\n");
+  assert.equal(JSON.parse(echoedEmpty.stdout).empty, true);
+  assert.equal(project.state.saves.at(-1).values.ECHOED_EMPTY.value, "");
+
+  const productionResult = await setValue("production", "TOGETHER_API_KEY", "together-key\n");
+  assert.equal(JSON.parse(productionResult.stdout).empty, false);
+  assert.equal(production.state.sets.at(-1).value, "together-key");
+  assert.equal(production.state.sets.at(-1).secret, true);
+  await setValue("production", "PRODUCTION_DOUBLED", "pem\n\n");
+  assert.equal(production.state.sets.at(-1).value, "pem\n");
+});
+
 test("agent Env production writes use only the host production provider", async () => {
   const project = createProjectService();
   const production = createProductionProvider();
@@ -559,6 +604,28 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
     assert.equal(empty.code, 0);
     assert.match(empty.stdout, /Created development Env EMPTY_WRAPPER_VALUE with an empty value/u);
     assert.equal(project.state.saves[1].values.EMPTY_WRAPPER_VALUE.value, "");
+
+    // The shell pipelines an agent writes: echo's newline is dropped, printf '%s' is kept exactly.
+    const pipelineEnv = {
+      ...process.env,
+      ...prepared.env,
+      PIPED_VALUE: "piped-value-with-trailing-space "
+    };
+    const echoed = await runWithInput("sh", [
+      "-c",
+      "echo \"$PIPED_VALUE\" | \"$0\" env set development ECHOED_VALUE",
+      path.join(root, "vibe64-helper")
+    ], { env: pipelineEnv });
+    const printed = await runWithInput("sh", [
+      "-c",
+      "printf '%s' \"$PIPED_VALUE\" | \"$0\" env set development PRINTED_VALUE",
+      path.join(root, "vibe64-helper")
+    ], { env: pipelineEnv });
+
+    assert.equal(echoed.code, 0, echoed.stderr);
+    assert.equal(printed.code, 0, printed.stderr);
+    assert.equal(project.state.saves[2].values.ECHOED_VALUE.value, "piped-value-with-trailing-space ");
+    assert.equal(project.state.saves[3].values.PRINTED_VALUE.value, "piped-value-with-trailing-space ");
   } finally {
     await command.closeAllForSession(sessionId);
     await rm(root, {

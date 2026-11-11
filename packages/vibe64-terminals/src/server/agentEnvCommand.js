@@ -19,6 +19,7 @@ import {
 import {
   agentEnvWrapperSource
 } from "@local/vibe64-execution/server";
+import { envValueWithoutFinalLineEnding } from "@local/vibe64-project/shared/contracts";
 import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
@@ -288,19 +289,20 @@ function createAgentEnvCommandService({
     const previous = recordForKey(previousRecords, key);
     assertRecordEditable(previous, parsed.scope, key);
     const secret = parsed.secret || previous?.secret === true || runtimeConfigKeyLooksSecret(key);
+    const value = envValueWithoutFinalLineEnding(stdin);
     await environment.setVariable({
       actor,
       key,
       projectSlug,
       secret,
       sessionId,
-      value: stdin
+      value
     });
     return mutationPayload({
       action: "set",
       changed: true,
       created: !environment.isUserValueRecord(previous),
-      empty: stdin.length === 0,
+      empty: value.length === 0,
       key,
       scope: parsed.scope,
       secret

@@ -48,6 +48,12 @@ coding agent generates it with the framework's own command and stores it as a
 **Secret** Development value through `vibe64-helper env set`. It never writes the
 value into a generated `.env` file: Vibe64 rewrites that file from Env, so an
 edit there would be lost. The key then appears in **Env** with its value hidden.
+`vibe64-helper env set`, in Development and Production alike, stores what is
+piped to it without its one final line break, the one `echo` or a generator
+such as `openssl rand` prints, so `echo "$KEY" |` stores exactly the key. Every
+other character, spaces included, is kept; a value that must end with a line
+break is piped with two. Env's **Value** field holds one line and drops a final
+line break the same way.
 
 When the host offers saved values, `vibe64-helper env saved` lists their names,
 descriptions and fields, never their values. To use one, link it to the

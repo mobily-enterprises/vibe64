@@ -263,6 +263,7 @@ import {
   useVibe64SessionSelection
 } from "@/composables/useVibe64SessionSelection.js";
 import { reloadPage } from "@/lib/browser.js";
+import { envValueWithoutFinalLineEnding } from "@local/vibe64-project/shared/contracts";
 
 const projectSlug = useVibe64ProjectSlug();
 const sessionSelection = useVibe64SessionSelection({
@@ -405,10 +406,12 @@ async function saveNewValue() {
   addBusy.value = true;
   addError.value = "";
   try {
+    // Typing and pasting cannot leave a line break in this single-line field,
+    // but a prefill link can; like the agent's env set, it drops a final one.
     await saveValues({
       [key]: {
         secret: newValue.value.secret === true,
-        value: newValue.value.value
+        value: envValueWithoutFinalLineEnding(newValue.value.value)
       }
     });
     newValue.value = emptyNewValue();

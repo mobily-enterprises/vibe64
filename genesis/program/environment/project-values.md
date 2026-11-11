@@ -63,6 +63,12 @@ and applies values to session preparation, checks, launches, and agent work.
 Agents store an application secret they generate (such as an application key)
 by piping it to `vibe64-helper env set <scope> <KEY> --secret`, never by editing a
 generated environment file, which Vibe64 rewrites from Env.
+`env set` stores stdin without its one final line ending (`\n` or `\r\n`, which
+`echo`, generators and heredocs add) and keeps every other character exactly,
+so a key piped with `echo` is not stored with a newline that breaks it; a value
+that must end with a line break is piped with two. The project's shared
+`envValueWithoutFinalLineEnding` contract applies the same rule to Env's
+single-line **Value** field, which a prefill link can otherwise fill with one.
 Saved user values live in one private (`0600`) file per project that every
 session shares. Saves queue per file, so concurrent saves from different
 sessions keep each other's values, and each one replaces the file atomically:
