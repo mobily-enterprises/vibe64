@@ -89,6 +89,10 @@ Each review covers everything changed since the last one, so a quick follow-up
 is reviewed on its own, and work that stopped or waited before review is
 included in the next.
 
+A message you steer into a working turn, such as a status question, changes
+none of this: the agent answers it and carries on, and when that turn finishes
+the work the next step runs, then **Save**, as it would have without your message.
+
 With review, Deslop and the UI pass all off, finished work goes straight to
 **Save** (when it is on) and the chat notes **Work finished.**
 

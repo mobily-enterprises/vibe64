@@ -453,6 +453,38 @@ test("Claude provider admits prompts in order, steers, projects thinking and tex
   assert.equal((await f.provider.sendMessage(f.context, { message: "First", messageId: "first" })).duplicate, true);
 });
 
+test("a message Claude absorbs mid-turn keeps the turn, and the replies after it join that message, final reply included", async t => {
+  // Routing confirms a finishing turn's final reply from this transcript.
+  const f = await fixture(t);
+  f.behavior.lifecycle = true;
+  await f.provider.sendMessage(f.context, { message: "Continue Senior review.", messageId: "review" });
+  const { id: turnId } = (await f.provider.sessionState(f.context)).turn;
+  const event = f.processes[0].options.onEvent;
+  const tool = id => ({ type: "tool_use", id, name: "Read", input: { file_path: "src/form.js" } });
+  await event({ type: "assistant", message: { id: "checking", stop_reason: "tool_use",
+    content: [{ type: "text", text: "Checking the form." }, tool("read-1")] } });
+  const steered = await f.provider.sendMessage(f.context, { message: "status?", messageId: "status" });
+  assert.equal(steered.deliveryMode, "steer");
+  await event({ type: "assistant", message: { id: "almost", stop_reason: "tool_use",
+    content: [{ type: "text", text: "Almost done." }, tool("read-2")] } });
+  await event({ type: "assistant", message: { id: "final", stop_reason: "end_turn", content: [{ type: "text", text: "Review complete." }] } });
+  await event({ type: "result", subtype: "success", result: "Review complete.", uuid: "result" });
+  await (await f.open()).wait();
+  const turn = (await f.provider.sessionState(f.context)).turn;
+  assert.equal(turn.active, false);
+  assert.equal(turn.id, turnId, "steering never starts another native turn");
+  const run = f.publications.filter(publication => publication.payload?.agentRun).at(-1).payload.agentRun;
+  assert.deepEqual([run.active, run.state, run.providerTurnId], [false, "completed", turnId]);
+  const [review, status] = await f.context.runtime.store.readConversationTail("test", { userLimit: 2 });
+  assert.equal(review.user.messageId, "review");
+  assert.ok(!review.assistant, "the turn's own message keeps only its commentary");
+  assert.deepEqual(review.messages.filter(({ role }) => role !== "user").map(({ role, text }) => [role, text]), [["commentary", "Checking the form."]]);
+  assert.equal(status.user.messageId, "status");
+  assert.equal(status.assistant.text, "Review complete.");
+  assert.deepEqual(status.messages.filter(({ role }) => role !== "user").map(({ role, text }) => [role, text]),
+    [["commentary", "Almost done."], ["assistant", "Review complete."]]);
+});
+
 test("Claude local command provenance survives the public writer and reload", async t => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "/goal clear", messageId: "goal-clear" });

@@ -1985,8 +1985,11 @@ through this SAME revision-fenced plan owner. It compares the reviewed scope
 bytes with the current completed document before invoking archive; unrelated,
 replaced, active, stopped and failed scopes remain current. Progress is captured
 at the current paired revision. The bounded canonical transcript tail must also
-contain a nonempty final assistant reply for this exact review message; commentary
-and another request's answer cannot stand in for the final explanation. A missing
+contain a nonempty final assistant reply for this exact review message, or for a
+message this request accepted as steering after it: a steered message starts its
+own transcript turn, which holds the review turn's later replies. Commentary, a
+reply before the review message and another request's answer cannot stand in for
+the final explanation. A missing
 reply leaves the completed pair current with a truthful recovery notice.
 There is no inference of acceptance from native
 success, historical scan, second writer or storage conversion. Chat receives an
@@ -2180,7 +2183,8 @@ After the exact native turn succeeds, continue retains role/stage; handoff moves
 implementation to Senior review or Senior's saved substantial in-scope rework to
 Junior; in a direct chat the same agent reworks and finishes again. Review,
 Deslop, the UI pass and save are separate choices. Real blockers wait; accepted steering invalidates an older outcome
-and retains the running role. Stop prevents late work. Failed/interrupted turns,
+and retains the running role; once the steered turn reports again and succeeds, it
+advances, completes and saves as an unsteered turn would. Stop prevents late work. Failed/interrupted turns,
 missing outcomes, changed plans and missing final-explanation proof remain waiting.
 Two no-progress turns or eight automatic steps wait for inspection. An explicit stage-specific Continue action resets that allowance. Planning never admits implementation itself.
 

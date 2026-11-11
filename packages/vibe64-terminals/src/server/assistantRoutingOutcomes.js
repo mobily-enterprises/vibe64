@@ -188,9 +188,13 @@ function createAssistantRoutingOutcomes({
         return;
       }
       if (outcome.decision === "complete") {
-        const replies = await context.runtime.store.readConversationTail(sessionId, { userLimit: 2 });
-        const hasFinal = replies.some(turn =>
-          turn.user?.messageId === (activeMessage(state).messageId || state.messageId) && turn.assistant?.text?.trim());
+        // A message the person steers into the turn starts its own chat turn,
+        // which then holds the turn's later replies, its final one included.
+        const steered = (state.steering || []).map(({ messageId }) => messageId);
+        const replies = await context.runtime.store.readConversationTail(sessionId, { userLimit: 2 + steered.length });
+        const own = replies.findIndex(turn => turn.user?.messageId === (activeMessage(state).messageId || state.messageId));
+        const hasFinal = own >= 0 && replies.slice(own).some((turn, index) =>
+          (index === 0 || steered.includes(turn.user?.messageId)) && turn.assistant?.text?.trim());
         if (!hasFinal) {
           state.status = "waiting";
           state.error = "Review finished, but its final explanation was not confirmed. Check delivery before completing recovery.";
