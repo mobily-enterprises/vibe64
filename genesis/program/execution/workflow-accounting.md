@@ -315,9 +315,9 @@ kept.
 While a host lets a project's AI sessions use its production, the helper's
 `production-access` operation (`productionLogin.js`, `productionAccess.js`)
 gives the project's application account a way in for them: `grant` writes the
-project's one `ssh-ed25519` public key as root's own file
-`/etc/vibe64/production-ssh/<account>` (loopback only, no forwarding), a
-`visudo`-checked rule in `/etc/sudoers.d/vibe64-production-<account>` that lets
+project's one `ssh-ed25519` public key as a root-owned key file for the
+account in the helper's settings folder (loopback only, no forwarding), a
+`visudo`-checked sudoers rule of its own (`productionSudoersPath`) that lets
 the account run exactly `vibe64-exec-helper production-service *`, and the
 login shell `/bin/bash`, which the account check accepts only while that key
 file exists; `revoke` removes all three and ends the account's open logins

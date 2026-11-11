@@ -19,14 +19,15 @@ const OTHER_SOFTWARE_LOCATIONS = new Set([
   // Database and Ruby packages' own install and data folders.
   "/usr/lib/postgresql", "/var/lib/postgres", "/var/lib/pgsql", "/var/lib/mysql", "/opt/mariadb", "/var/lib/gems"
 ]);
-// Known blocker: the privileged helper (every module of its folder), its two
-// test files and its release packaging still describe the host they run on.
+// Known blocker: the privileged helper (every module of its folder), its test
+// files and its release packaging still describe the host they run on.
 // They leave this repository together in the helper extraction; until then they
 // are the only exceptions.
 const HELPER_FOLDER = "packages/vibe64-execution/src/host";
 const ALLOWED_FILES = new Set([
   ...readdirSync(path.join(REPO_ROOT, HELPER_FOLDER)).map((name) => `${HELPER_FOLDER}/${name}`),
   "tests/server/executionBoundarySecurity.unit.test.js",
+  "tests/server/vibe64ExecutionProductionAccess.unit.test.js",
   "tests/server/vibe64ManagedWorkflow.unit.test.js",
   "tooling/release/runtime-package.mjs"
 ]);
