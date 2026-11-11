@@ -15,10 +15,14 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-import { applicationIdentity, installedReleaseUnits, registeredApplicationUser } from "./applicationAccounts.js";
+import {
+  APPLICATION_USERNAME_PATTERN,
+  applicationIdentity,
+  installedReleaseUnits,
+  registeredApplicationUser
+} from "./applicationAccounts.js";
 import { readEnvironmentFile } from "./commandEnvironment.js";
 import {
-  APPLICATION_USERNAME_PREFIX,
   resolveOsUser,
   resolveOwnerUser,
   runRootCommand,
@@ -29,7 +33,6 @@ import {
 import { installProductionAccess, PRODUCTION_LOGIN_SHELL, productionAccessGranted, removeProductionAccess } from "./productionAccess.js";
 import { deploymentServiceJournalWindow, printDeploymentServiceUnit } from "./serviceOperations.js";
 
-const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
 // The one key Vibe64 makes per project: an Ed25519 public key in OpenSSH's one-line form.
 const PRODUCTION_PUBLIC_KEY_PATTERN = /^ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI[A-Za-z0-9+/]{43}$/u;
 // What each login records in the host's journal, as the application account: what it ran, from which session.
@@ -101,9 +104,14 @@ function productionActivity(user, { runRootAllowFailure = runRootCommandAllowFai
   });
 }
 
+// A value as the release unit writes it, its backslash escapes undone.
+function unitText(value = "") {
+  return value.replace(/\\(.)/gu, "$1");
+}
+
 function unitValue(lines = [], prefix = "") {
   const line = lines.find((candidate) => candidate.startsWith(prefix));
-  return line ? line.slice(prefix.length).replace(/\\(.)/gu, "$1") : "";
+  return line ? unitText(line.slice(prefix.length)) : "";
 }
 
 /**
@@ -123,22 +131,20 @@ function liveReleaseUnit(username, {
     throw new Error(`Release unit ${unit.name} does not start a Vibe64 release service.`);
   }
   return {
-    environmentFile: started[1].replace(/\\(.)/gu, "$1"),
+    environmentFile: unitText(started[1]),
     name: unit.name,
     path: unitValue(unit.lines, "Environment=PATH="),
-    startScript: started[2].replace(/\\(.)/gu, "$1"),
+    startScript: unitText(started[2]),
     workingDirectory: unitValue(unit.lines, "WorkingDirectory=")
   };
 }
 
+// production-enter, production-logs, production-restart and production-status, as functions bash imports.
 function productionShellFunctions(helperPath = "") {
-  const helper = `sudo -n ${helperPath} production-service`;
-  return {
-    "BASH_FUNC_production-enter%%": `() {  ${helper} enter "$@"\n}`,
-    "BASH_FUNC_production-logs%%": `() {  ${helper} logs "$@"\n}`,
-    "BASH_FUNC_production-restart%%": `() {  ${helper} restart "$@"\n}`,
-    "BASH_FUNC_production-status%%": `() {  ${helper} status "$@"\n}`
-  };
+  return Object.fromEntries(["enter", "logs", "restart", "status"].map((action) => [
+    `BASH_FUNC_production-${action}%%`,
+    `() {  sudo -n ${helperPath} production-service ${action} "$@"\n}`
+  ]));
 }
 
 /**

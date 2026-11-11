@@ -8,12 +8,11 @@ import { lstatSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from "nod
 import path from "node:path";
 import process from "node:process";
 
-import { HOST_SETTINGS_ROOT, runRootCommand, runRootCommandAllowFailure } from "./hostAccounts.js";
+import { APPLICATION_SHELL, HOST_SETTINGS_ROOT, runRootCommand, runRootCommandAllowFailure } from "./hostAccounts.js";
 
 const PRODUCTION_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "production-ssh");
 const PRODUCTION_SUDOERS_ROOT = "/etc/sudoers.d";
 const PRODUCTION_LOGIN_SHELL = "/bin/bash";
-const APPLICATION_NO_LOGIN_SHELL = "/usr/sbin/nologin";
 const ROOT_UID = 0;
 
 function productionKeysPath(username = "", keysRoot = PRODUCTION_KEYS_ROOT) {
@@ -114,7 +113,7 @@ function removeProductionAccess(user, username, {
   const removedKey = removeIfPresent(productionKeysPath(username, keysRoot));
   const removedRule = removeIfPresent(productionSudoersPath(username, sudoersRoot));
   if (user && user.shell === PRODUCTION_LOGIN_SHELL) {
-    runRoot("usermod", ["--shell", APPLICATION_NO_LOGIN_SHELL, username]);
+    runRoot("usermod", ["--shell", APPLICATION_SHELL, username]);
   }
   // A user without a login has nothing to end, which loginctl reports as a failure.
   if (user) runRootAllowFailure("loginctl", ["terminate-user", username]);
@@ -122,12 +121,8 @@ function removeProductionAccess(user, username, {
 }
 
 export {
-  APPLICATION_NO_LOGIN_SHELL,
   installProductionAccess,
-  PRODUCTION_KEYS_ROOT,
   PRODUCTION_LOGIN_SHELL,
   productionAccessGranted,
-  productionKeysPath,
-  productionSudoersPath,
   removeProductionAccess
 };

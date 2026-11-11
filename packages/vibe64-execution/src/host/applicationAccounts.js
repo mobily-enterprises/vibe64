@@ -20,6 +20,7 @@ import path from "node:path";
 import process from "node:process";
 
 import {
+  APPLICATION_SHELL,
   APPLICATION_USERNAME_PREFIX,
   DAEMON_USERNAME_PREFIX,
   HOST_SETTINGS_ROOT,
@@ -57,7 +58,6 @@ import { APPLICATION_SANDBOX_ALLOWANCES, SYSTEMD_UNIT_ROOT } from "./systemdUnit
 const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
 const APPLICATION_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "applications");
 const APPLICATION_REGISTRATION_SCHEMA = "vibe64.application-account";
-const APPLICATION_SHELL = "/usr/sbin/nologin";
 const APPLICATION_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/u;
 // A learner's practice project lives below the workspace's projects at
 // .learning/<learner>/<practice>/training-<practice id without dashes>
@@ -656,6 +656,7 @@ function assertReleaseServiceClaim({ loopbackPort = 0, owner = {}, unitName = ""
 
 export {
   APPLICATION_LIMIT_PER_WORKSPACE,
+  APPLICATION_USERNAME_PATTERN,
   applicationAreaRoot,
   applicationIdentity,
   applicationReleaseEnvironmentFile,

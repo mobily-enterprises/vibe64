@@ -20,6 +20,8 @@ const RESERVED_HUMAN_USERNAMES = new Set([
 ]);
 const HOST_SETTINGS_ROOT = "/etc/vibe64";
 const APPLICATION_USERNAME_PREFIX = "v64a_";
+// An application account has no login, except while production access gives it one (productionAccess.js).
+const APPLICATION_SHELL = "/usr/sbin/nologin";
 
 function safeUsername(value = "") {
   const username = String(value || "").trim();
@@ -212,6 +214,7 @@ function workspaceTempRoot(ownerUsername = "") {
 
 export {
   addUserToGroup,
+  APPLICATION_SHELL,
   APPLICATION_USERNAME_PREFIX,
   assertEnabledForVibe64,
   assertExpectedId,
