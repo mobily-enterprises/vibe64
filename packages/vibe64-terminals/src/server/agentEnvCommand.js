@@ -548,23 +548,62 @@ function createAgentEnvCommandService({
 }
 
 // The session's ssh, scp and sftp, beside its other managed commands and before the system's on its PATH: a
-// command line naming the host `production` (ssh production, scp file production:dir, rsync over ssh, git)
-// asks the Env command for the host's `Host production` configuration first, and runs with it, or stops with
-// the host's reason; any other command line runs the system's own command unchanged.
-const PRODUCTION_SSH_COMMANDS = Object.freeze({ scp: "/usr/bin/scp", sftp: "/usr/bin/sftp", ssh: "/usr/bin/ssh" });
+// command line whose destination is the host `production` (ssh production, scp file production:dir, rsync over
+// ssh, git) asks the Env command for the host's `Host production` configuration first, and runs with it, or stops
+// with the host's reason; any other command line runs the system's own command unchanged. Only the destination
+// counts, read as OpenSSH reads its command line: options and their values are skipped, ssh and sftp take the
+// first operand (what follows it is ssh's remote command), and scp any operand naming a remote file.
+const PRODUCTION_SSH_COMMANDS = Object.freeze({
+  scp: Object.freeze({
+    destinations: "production:*|*@production:*|scp://production|scp://production[:/]*|scp://*@production|scp://*@production[:/]*",
+    firstOperandOnly: false,
+    optionValues: "DFJMPScilXo",
+    system: "/usr/bin/scp"
+  }),
+  sftp: Object.freeze({
+    destinations: "production|*@production|production:*|*@production:*|sftp://production|sftp://production[:/]*|sftp://*@production|sftp://*@production[:/]*",
+    firstOperandOnly: true,
+    optionValues: "BDFJPRSXbcilos",
+    system: "/usr/bin/sftp"
+  }),
+  ssh: Object.freeze({
+    destinations: "production|*@production|ssh://production|ssh://production:*|ssh://*@production|ssh://*@production:*",
+    firstOperandOnly: true,
+    optionValues: "BDEFIJLOPQRSWbceilmopw",
+    system: "/usr/bin/ssh"
+  })
+});
 
 function productionSshWrapperSource(name = "", envCommandPath = "") {
-  const system = PRODUCTION_SSH_COMMANDS[name];
+  const { destinations, firstOperandOnly, optionValues, system } = PRODUCTION_SSH_COMMANDS[name];
   return [
     "#!/bin/sh",
     `# Vibe64: ${name} reaches this project's production as \`production\` where the host allows this session.`,
+    "value=\"\" operands=\"\" production=\"\"",
     "for argument in \"$@\"; do",
-    "  case \"$argument\" in",
-    "    production|*@production|production:*|*@production:*)",
-    `      config="$(${shellQuote(envCommandPath)} deployment ssh-config -- ${name} "$@")" || exit 255`,
-    `      exec ${system} -F "$config" "$@" ;;`,
-    "  esac",
+    "  if [ -n \"$value\" ]; then value=\"\"; continue; fi",
+    "  if [ -z \"$operands\" ]; then",
+    "    case \"$argument\" in",
+    "      --) operands=1; continue ;;",
+    "      -?*)",
+    "        # Options, one or more letters: the first that takes a value takes the rest, or the next argument.",
+    "        letters=\"${argument#-}\"",
+    "        while [ -n \"$letters\" ]; do",
+    "          rest=\"${letters#?}\"",
+    `          case "\${letters%"$rest"}" in [${optionValues}]) [ -n "$rest" ] || value=1; break ;; esac`,
+    "          letters=\"$rest\"",
+    "        done",
+    "        continue ;;",
+    "    esac",
+    "  fi",
+    "  operands=1",
+    `  case "$argument" in ${destinations}) production=1 ;; esac`,
+    ...(firstOperandOnly ? ["  break"] : []),
     "done",
+    "if [ -n \"$production\" ]; then",
+    `  config="$(${shellQuote(envCommandPath)} deployment ssh-config -- ${name} "$@")" || exit 255`,
+    `  exec ${system} -F "$config" "$@"`,
+    "fi",
     `exec ${system} "$@"`,
     ""
   ].join("\n");

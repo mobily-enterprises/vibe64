@@ -198,7 +198,9 @@ with the values the live release runs with, secrets included, and its
 `Host production` logs in to the live release; both receive the actor, project
 and session, so the host decides, words any refusal and records the use. Where
 the provider is a host's, preparing the Env command also installs `ssh`, `scp`
-and `sftp` wrappers beside it: a command line naming the host `production`
+and `sftp` wrappers beside it: a command line whose destination is the host
+`production` (read as OpenSSH reads its arguments: options and their values
+skipped, ssh's and sftp's first operand, any scp operand naming a remote file)
 first asks `vibe64-helper deployment ssh-config` for that configuration
 (passing its command line for the host's record) and runs the system command
 with it, or stops with the host's reason; every other command line runs the

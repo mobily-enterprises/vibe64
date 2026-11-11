@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { access, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -90,9 +90,9 @@ function run(command, args) {
   return command.run({ args, sessionId: "prod-session" });
 }
 
-function runProcess(file, args, env) {
+function runProcess(file, args, env, cwd = undefined) {
   return new Promise((resolve, reject) => {
-    const child = spawn(file, args, { env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(file, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; });
@@ -234,6 +234,61 @@ test("the ssh wrappers name the system command and quote the Env command's path"
   const source = __testables.productionSshWrapperSource("scp", "/srv/it's here/vibe64-env");
   assert.match(source, /^#!\/bin\/sh\n/u);
   assert.match(source, /config="\$\('\/srv\/it'\\''s here\/vibe64-env' deployment ssh-config -- scp "\$@"\)" \|\| exit 255/u);
-  assert.match(source, /exec \/usr\/bin\/scp -F "\$config" "\$@" ;;/u);
+  assert.match(source, /exec \/usr\/bin\/scp -F "\$config" "\$@"\nfi\n/u);
   assert.match(source, /\nexec \/usr\/bin\/scp "\$@"\n$/u);
+});
+
+test("the ssh wrappers ask for production only when the command's destination is the host production", async (t) => {
+  for (const name of ["ssh", "scp", "sftp"]) {
+    try {
+      await access(`/usr/bin/${name}`);
+    } catch {
+      t.skip(`this host has no /usr/bin/${name}`);
+      return;
+    }
+  }
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-production-destination-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  // A stand-in Env command that notes each command line it is asked about and refuses, as a host with the tick off.
+  const asked = path.join(root, "asked");
+  const envCommand = path.join(root, "vibe64-env");
+  await writeFile(envCommand, `#!/bin/sh\nshift 3\nprintf '%s\\n' "$*" >> '${asked}'\necho refused >&2\nexit 1\n`, { mode: 0o755 });
+  for (const name of ["ssh", "scp", "sftp"]) {
+    await writeFile(path.join(root, name), __testables.productionSshWrapperSource(name, envCommand), { mode: 0o755 });
+  }
+  // Never a connection: ssh -G only prints its configuration, and every other host's command fails at once.
+  const nowhere = ["-o", "ProxyCommand=false", "-o", "BatchMode=yes"];
+  const cases = [
+    ["ssh", ["-G", "example.test", "ls", "production"], false],
+    ["ssh", ["-G", "-l", "production", "example.test"], false],
+    ["ssh", ["-G", "-oUser=production", "example.test"], false],
+    ["ssh", ["-G", "production.example.test", "production"], false],
+    ["ssh", ["-G", "-p", "2222", "production"], true],
+    ["ssh", ["-vG", "-p2222", "deploy@production", "uptime"], true],
+    ["ssh", ["-G", "--", "production"], true],
+    ["ssh", ["-G", "ssh://production:22"], true],
+    ["scp", [...nowhere, "production", "example.test:copy"], false],
+    ["scp", [...nowhere, "-i", "production:key", "missing-a", "missing-b"], false],
+    ["scp", [...nowhere, "-r", "dist", "production:app/"], true],
+    ["scp", [...nowhere, "file", "deploy@production:"], true],
+    ["scp", [...nowhere, "scp://production/dir", "."], true],
+    ["sftp", [...nowhere, "-b", "production", "example.test"], false],
+    ["sftp", [...nowhere, "-P", "2222", "production:dir"], true],
+    ["sftp", [...nowhere, "deploy@production"], true]
+  ];
+  for (const [name, args, production] of cases) {
+    await rm(asked, { force: true });
+    const result = await runProcess(path.join(root, name), args, { ...process.env, PATH: `${root}:${process.env.PATH}` }, root);
+    const line = `${name} ${args.join(" ")}`;
+    if (production) {
+      assert.equal(await readFile(asked, "utf8"), `${line}\n`, line);
+      assert.equal(result.code, 255, line);
+      assert.equal(result.stderr, "refused\n", line);
+    } else {
+      await assert.rejects(access(asked), { code: "ENOENT" }, `${line} must run the system's ${name} unchanged`);
+    }
+  }
+  const elsewhere = await runProcess(path.join(root, "ssh"), ["-G", "example.test", "ls", "production"], process.env, root);
+  assert.equal(elsewhere.code, 0, elsewhere.stderr);
+  assert.match(elsewhere.stdout, /^hostname example\.test$/mu);
 });
