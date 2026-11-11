@@ -71,6 +71,15 @@ function notSentDeliveryError(error, messageId) {
   );
 }
 
+/** One warning for every way a main chat message fails to reach its assistant. */
+function logMessageDeliveryFailed(logger, fields) {
+  logOperationalEvent(logger, "warn", {
+    component: "vibe64.agent_message",
+    event: "vibe64.agent_message.delivery_failed",
+    ...fields
+  }, "Vibe64 assistant message delivery failed.");
+}
+
 /**
  * A session's assistant: its access, selection and configuration, the conversation host it opens, and
  * the messages, cancels, interrupts and browser conversations of its turns.
@@ -477,17 +486,14 @@ function createServiceAssistant({
             sessionId
           }, "Session naming could not start.");
         }
+        // The person's message continues an active goal Stop left without continuation.
+        if (result.delivered === true) await goals.continueGoalIntentAfterMessage(sessionId, options);
       }
-      // The person's message continues an active goal Stop left without continuation.
-      if (result?.ok === true && result.delivered === true && !result.duplicate && !options.purpose && !input.reviewAction &&
-          !state.lifecycle.closing) await goals.continueGoalIntentAfterMessage(sessionId, options);
       if (result?.ok === false) {
-        logOperationalEvent(logger, "warn", {
+        logMessageDeliveryFailed(logger, {
           code: result.code,
-          component: "vibe64.agent_message",
           durationMs: Date.now() - startedAt,
           error: result.error || result.errors?.[0]?.message,
-          event: "vibe64.agent_message.delivery_failed",
           username,
           messageId: input.messageId,
           operationOutcome: result.operationOutcome,
@@ -496,21 +502,19 @@ function createServiceAssistant({
           sessionId,
           threadId: result.thread?.id,
           turnId: result.turn?.id
-        }, "Vibe64 assistant message delivery failed.");
+        });
       }
       return result;
     } catch (error) {
-      logOperationalEvent(logger, "warn", {
+      logMessageDeliveryFailed(logger, {
         code: error?.code,
-        component: "vibe64.agent_message",
         durationMs: Date.now() - startedAt,
         error,
-        event: "vibe64.agent_message.delivery_failed",
         username,
         messageId: input.messageId,
         nativeStartupStderr: error?.nativeStartupStderr,
         sessionId
-      }, "Vibe64 assistant message delivery failed.");
+      });
       if (error?.delivery === "not-sent") throw notSentDeliveryError(error, input.messageId);
       throw error;
     }
