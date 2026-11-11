@@ -92,6 +92,20 @@ included in the next.
 With review, Deslop and the UI pass all off, finished work goes straight to
 **Save** (when it is on) and the chat notes **Work finished.**
 
+## How each turn ends
+
+While review, Deslop or the UI pass is on, the work is not finished when the
+agent stops implementing, so a turn that the finishing turn follows ends by
+saying what it changed and what it checked. It does not ask you to try or
+publish the work, and it offers no next steps. It may still say **Ready to
+try** while its checks run, so you can try the change early. Only the last turn
+of the piece of work ends normally: the finishing turn, or, with review, Deslop
+and the UI pass all off, the turn that finished the work. A question the agent
+only answers ends normally too. Every turn also knows how the work is saved:
+with **Automatically save changes** on, the agent says it will be saved
+automatically and never asks you to choose **Save**; with it off, it leaves
+**Save** to you.
+
 ## What the chat shows
 
 Each step that a switch starts adds a notice to the chat as it starts, for

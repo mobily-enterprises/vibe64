@@ -2152,6 +2152,20 @@ so stopped, waiting and unreported work folds into the next finishing turn.
 Only Senior completes an involved plan; a Junior or Custom finishing turn
 completes the request and leaves the plan active.
 
+Every workflow turn's instructions (`assistantWorkflowInstructions`, composed
+by routing delivery for Auto and direct chats alike) end with how the turn ends
+(`assistantWorkflowEnding`). An implementation turn whose request has a
+finishing part on (`assistantContinuationInstruction`, from
+`assistantFinishingParts`) is told that after a continue or handoff the piece
+of work continues automatically, so its final reply reports what changed and
+what was verified without asking the person to try, publish or deploy the work
+or offering next steps; the line never names the finishing turn. The finishing
+turn, which ends the piece of work, an implementation turn with every part off,
+Auto planning and requests that run no finishing step keep their normal ending.
+Save is not a turn, so it alone adds no such line. Then every turn hears how the
+work is saved (`assistantSaveInstruction`), from the same `autoSave` switch the
+automatic save reads (`savesAutomatically`).
+
 The admitted agent uses the existing authenticated session-helper socket's
 `plan read` and `plan outcome` operations. The read supplies exact request/turn/stage
 identity, including when there is no plan. Outcome accepts continue/handoff/wait/

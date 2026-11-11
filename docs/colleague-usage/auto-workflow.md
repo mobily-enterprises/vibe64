@@ -97,9 +97,12 @@ authorise another turn. Colleague's watches treat Waiting as needing attention.
 In Auto, Senior always does the finishing steps after implementation, even when
 Senior implemented it or both roles use the same model: the review, Deslop and
 [UI pass](ui-pass.md) the chat's **Chat settings** switches turn on, in one
-Senior turn, then **Save**. **Automatically review changes**, **Automatically
-deslop changes**, **Automatically UI pass changes** and **Automatically save
-changes** are all on for new chats. Each step a switch starts adds a notice
+Senior turn, then **Save**. The implementation turns before it end by saying
+what changed and what was checked, without asking you to try or publish the
+work, and only that last turn ends normally; see [How each turn
+ends](chat-settings.md#how-each-turn-ends). **Automatically review changes**,
+**Automatically deslop changes**, **Automatically UI pass changes** and
+**Automatically save changes** are all on for new chats. Each step a switch starts adds a notice
 such as **Review started automatically (Chat settings: Automatically review
 changes)**. Turning a switch off asks first and says what is lost; **Cancel**
 keeps it on. When review, Deslop and the UI pass are all off, a handoff after

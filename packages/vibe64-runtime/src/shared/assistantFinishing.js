@@ -35,6 +35,21 @@ function assistantFinishingNotice(step, key) {
 }
 
 /**
+ * What an implementation turn tells its agent when the chat's finishing turn
+ * follows it automatically: the piece of work goes on after a continue or a
+ * handoff, so its final reply reports instead of inviting the person to try or
+ * publish unfinished work. It never names the finishing turn. The finishing turn
+ * ends the piece of work, as does a turn no finishing turn follows, so both end
+ * normally.
+ * @param {object} request the workflow request being delivered
+ * @returns {string} the line, or "" when this turn ends normally
+ */
+function assistantContinuationInstruction(request) {
+  if (request.stage !== "implementation" || !assistantFinishingParts(request).length) return "";
+  return "When you report continue or handoff, this piece of work continues automatically after your turn: end your final reply with what you changed and what you verified, and don't use it to ask the person to try, publish or deploy the work or to offer next steps.";
+}
+
+/**
  * What every workflow turn tells its agent about saving: with the chat's
  * Automatically save changes on, Vibe64 saves the finished work after its last turn.
  * @param {boolean} autoSave
@@ -43,6 +58,17 @@ function assistantSaveInstruction(autoSave) {
   return autoSave
     ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: say it will be saved automatically; never ask the person to press Save."
     : "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
+}
+
+/**
+ * How a workflow turn's instructions end: whether the piece of work continues
+ * after this turn, then what happens with saving. Other turns add nothing.
+ * @param {object} request the request being delivered
+ * @param {boolean} autoSave the chat's Automatically save changes switch
+ */
+function assistantWorkflowEnding(request, autoSave) {
+  if (!request?.workflow) return "";
+  return [assistantContinuationInstruction(request), assistantSaveInstruction(autoSave)].filter(Boolean).map(line => `\n${line}`).join("");
 }
 
 /**
@@ -111,6 +137,6 @@ export {
   assistantFinishingMessage,
   assistantFinishingNotice,
   assistantFinishingParts,
-  assistantSaveInstruction,
-  assistantUnreviewedRequests
+  assistantUnreviewedRequests,
+  assistantWorkflowEnding
 };

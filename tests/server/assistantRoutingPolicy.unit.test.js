@@ -328,6 +328,32 @@ test("workflow instructions say what happens with saving, as the chat's Automati
     "unreadable preferences save nothing");
 });
 
+test("an implementation turn the chat's finishing turn follows says the work continues; the finishing turn and every other turn end normally", () => {
+  const continues = "When you report continue or handoff, this piece of work continues automatically after your turn: end your final reply with what you changed and what you verified, and don't use it to ask the person to try, publish or deploy the work or to offer next steps.";
+  const save = (autoSave) => autoSave
+    ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: say it will be saved automatically; never ask the person to press Save."
+    : "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
+  const switches = [{ review: true, deslop: true, uiPass: true }, { review: true }, { deslop: true }, { uiPass: true }, { review: false, deslop: false, uiPass: false }];
+  for (const mode of ["auto", "senior", "junior", "custom"]) for (const finishing of switches) for (const autoSave of [true, false]) {
+    const label = `${mode} ${JSON.stringify(finishing)} save ${autoSave}`;
+    const follows = Object.values(finishing).some(Boolean);
+    const implementation = assistantWorkflowInstructions({ mode, stage: "implementation", workflow: true, finishing }, { autoSave });
+    assert.ok(implementation.endsWith(follows ? `\n${continues}\n${save(autoSave)}` : `\n${save(autoSave)}`), label);
+    assert.equal(implementation.split(continues).length - 1, follows ? 1 : 0, label);
+    // The finishing turn ends the piece of work.
+    const finishingTurn = assistantWorkflowInstructions({ mode, stage: "review", workflow: true, finishing }, { autoSave });
+    assert.ok(finishingTurn.endsWith(`\n${save(autoSave)}`) && !finishingTurn.includes(continues), label);
+  }
+  // Auto's planning, and requests that run no finishing step (an explicit task,
+  // generated work, a goal, a temporary chat or a lesson), say nothing of it.
+  const all = { review: true, deslop: true, uiPass: true };
+  assert.ok(!assistantWorkflowInstructions({ mode: "auto", stage: "planning", workflow: false, finishing: all }, { autoSave: true }).includes(continues));
+  assert.ok(!assistantWorkflowInstructions({ mode: "senior", stage: "implementation", workflow: false, finishing: all }, { autoSave: true }).includes(continues));
+  assert.ok(!assistantWorkflowInstructions({ mode: "senior", stage: "implementation", workflow: true, finishing: null }, { autoSave: true }).includes(continues));
+  // It never names what follows, so the first pass stays as careful as ever.
+  assert.doesNotMatch(continues, /review|deslop|ui pass|senior|save/iu);
+});
+
 test("task intent sets permissions independently of the selected role", () => {
   const text = "The original human text.";
   assert.match(assistantModePrompt("senior", text, { intent: "planning", planInstructions: "Auto planning instructions" }), /Do not change application files/);
