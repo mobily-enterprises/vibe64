@@ -51,7 +51,7 @@ function createServiceState({ readClaudeAccountStatus }) {
 
   return Object.freeze({
     assistantRuntime,
-    lifecycle: Object.seal({ closing: false, goalRecovery: undefined }),
+    lifecycle: Object.seal({ closing: false, goalRecovery: undefined, goalRecoveryRetry: undefined, goalRecoveryTimer: undefined }),
     shutdownSignal,
     slots: Object.seal({
       databaseToolsProvider: null,

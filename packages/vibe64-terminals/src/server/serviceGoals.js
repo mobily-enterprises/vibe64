@@ -23,7 +23,8 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
-import { AGENT_WRITE_WAIT_MS, openProjectRuntimeRecords } from "./serviceSessionAccess.js";
+import { createServiceGoalRecovery } from "./serviceGoalRecovery.js";
+import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
 
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
@@ -630,67 +631,9 @@ function createServiceGoals({
     }
   }
 
-  /**
-   * Run once per daemon after all host admission and execution facilities are
-   * configured. This is continuation of saved intent, never history repair.
-   */
-  function recoverActiveGoals() {
-    if (state.lifecycle.goalRecovery) return state.lifecycle.goalRecovery;
-    state.lifecycle.goalRecovery = (async () => {
-      const results = [];
-      const reportFailure = (error, target) => {
-        const result = { ...target, ok: false, code: error.code, error: error.message };
-        results.push(result);
-        logOperationalEvent(logger, "warn", {
-          ...result,
-          event: "vibe64.agent_goal.recovery_failed",
-          component: "vibe64.agent_goal"
-        }, "An active goal needs attention after server restart.");
-      };
-      /**
-       * A failure names its project and the person who set the goal: session
-       * IDs repeat across projects, so the operator needs both.
-       */
-      const recoverCurrentProject = async projectSlug => {
-        for (const session of await sessionAccess.listOpenProjectRuntimeSessions()) {
-          if (state.lifecycle.closing) break;
-          try {
-            results.push(await recoverSessionGoal(session.sessionId));
-          } catch (error) {
-            let actor = "";
-            try {
-              actor = String(readGoalIntent(session)?.actor?.username || "");
-            } catch { /* An unreadable intent names no one. */ }
-            try {
-              const context = await assistantContext.assistantSessionOptions(session.sessionId);
-              const expected = readGoalIntent(session);
-              await changeGoalIntent(
-                session.sessionId,
-                context,
-                latest => latest?.active && (latest.id === expected?.id || latest.restartOf === expected?.id) ? {
-                  ...latest,
-                  error: `Goal continuation after restart failed: ${String(error.message || "Recovery could not be verified.").slice(0, 500)}`
-                } : null
-              );
-            } catch { /* The original recovery failure remains visible in the operational log. */ }
-            reportFailure(error, { projectSlug, sessionId: session.sessionId, ...(actor ? { actor } : {}) });
-          }
-        }
-      };
-      const listed = await project.listProjects();
-      if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
-      for (const projectRecord of openProjectRuntimeRecords(listed)) {
-        if (state.lifecycle.closing) break;
-        try {
-          await project.runInProjectContext(projectRecord.slug, () => recoverCurrentProject(projectRecord.slug));
-        } catch (error) {
-          reportFailure(error, { projectSlug: projectRecord.slug });
-        }
-      }
-      return { ok: results.every(result => result.ok !== false), results };
-    })();
-    return state.lifecycle.goalRecovery;
-  }
+  const recoverActiveGoals = createServiceGoalRecovery({
+    state, logger, project, sessionAccess, assistantContext, recoverSessionGoal, readGoalIntent, changeGoalIntent
+  });
 
   async function applyGoalSelection(sessionId, selection, preferences, context) {
     const result = await assistantRouting.applyGoalSelection(sessionId, selection, preferences, context);

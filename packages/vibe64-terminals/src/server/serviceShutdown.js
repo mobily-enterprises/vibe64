@@ -65,7 +65,8 @@ function createServiceShutdown({
       })),
       Promise.resolve().then(() => outputTarget.close())
     ]);
-    await Promise.allSettled([state.lifecycle.goalRecovery]);
+    clearTimeout(state.lifecycle.goalRecoveryTimer);
+    await Promise.allSettled([state.lifecycle.goalRecovery, state.lifecycle.goalRecoveryRetry]);
     const failures = [];
     const agentResult = agentClose.status === "fulfilled"
       ? agentClose.value

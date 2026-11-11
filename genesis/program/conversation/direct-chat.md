@@ -706,6 +706,13 @@ a browser session or treats serialized user metadata as signed-in authority.
 A goal that cannot continue after restart, including when its actor can no
 longer be resolved, records `vibe64.agent_goal.recovery_failed` with its project,
 session and the username that set the goal, besides the visible goal error.
+Recovery is one pass over the open projects' sessions, repeated after 30 seconds,
+2 minutes and 10 minutes while a pass failed, since the AI can still be busy or
+slow to start after the restart; shutdown cancels the next pass. A repeated pass
+sends nothing twice: it skips intent this server already continued, and a
+continuation that may have been dispatched keeps that server's intent. The
+visible error says when another attempt follows, and the continuation's new
+intent clears it.
 Main OpenCode's common driver consumes the original shared runtime directly.
 Its native-state read selects the existing target/thread, reads the existing PTY
 snapshot, then projects the same native turn map. Vibe64 supplies current context,
@@ -1166,7 +1173,9 @@ cache, poll or POST. Claude and Codex share JSKIT's goal control, keyed to the
 existing project/session/actor scope so late admission cannot clear a new draft.
 Its activity light follows canonical working state, while elapsed display uses
 native running-time usage when supplied or explicitly labelled wall elapsed time
-including pauses from the native creation timestamp. Recovery controls precede
+including pauses, from the goal's first start: JSKIT's Claude history keeps that
+start when Resume or restart recovery sends the same unfinished objective again,
+including after the clear that suspends a paused goal. Recovery controls precede
 long objective and blocker text. Standalone common goal delivery is unchanged.
 A native-history duplicate with no authored application row retains its exact
 native result; canonical callers receive an explicit missing-receipt error instead
@@ -1449,6 +1458,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/serviceAssistantContext.js`
 - `packages/vibe64-terminals/src/server/serviceMainConversationHost.js`
 - `packages/vibe64-terminals/src/server/serviceGoals.js`
+- `packages/vibe64-terminals/src/server/serviceGoalRecovery.js`
+- `tests/server/claudeGoalRestart.unit.test.js`
 - `packages/vibe64-terminals/src/server/codexSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/openCodeSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/mainConversationBinding.js`

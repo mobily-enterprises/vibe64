@@ -123,7 +123,12 @@ account ran out of credit shows **Out of credit: top up or switch AI account**.
 Open **Goal** to see how long it has been going.
 The control shows native **Running time** when available. Claude currently supplies
 only creation and status timestamps, so its timer is labelled **Elapsed since
-goal started (including pauses)**; this is not measured active runtime. On narrow
+goal started (including pauses)**; this is not measured active runtime. It counts
+from the goal's first start: **Pause goal**, **Resume goal** and a server restart
+or deploy, whether the goal continues by itself or you resume it, never set it
+back to zero. A goal you cancel or finish and then set again starts a new clock.
+With no goal set, **Goal** opens a 360-pixel-wide panel (the screen's width on a
+narrow phone) whose objective box fills it. On narrow
 panes, open **Goal** to see the timer. Pause, Resume and Cancel appear before long
 objectives or blocker explanations, so recovery does not require scrolling
 through the explanation.
@@ -159,6 +164,9 @@ for the native goal record linked to that exact command before saving its restar
 identity. It does not wait for the work to finish. If this record is still missing
 after 30 seconds, the control reports that the command was accepted but its goal
 attachment is pending. Check the original receipt; do not resend it blindly.
+Whenever **Set goal** or **Resume goal** fails, the goal control shows the
+server's reason, even when the command already appears in the conversation,
+instead of only **Could not change the goal.**
 
 A Main-chat goal started or explicitly resumed after this release retains your
 request to keep working across server restarts, including an unexpected server
@@ -166,7 +174,13 @@ exit. Vibe64 verifies the previous process has stopped, rechecks your current
 project and AI access, then resumes the same native goal. Recovery does not
 need a browser tab or the original browser login cookie. If workspace preparation
 is already starting, recovery waits up to one minute for that operation's lock;
-it does not send a second goal command. A timeout stays visible on the goal control.
+it does not send a second goal command. If continuing fails right after the
+restart (for example the AI is still busy, slow to start or cannot be checked
+yet), Vibe64 tries again about 30 seconds, 2 minutes and 10 minutes later. Until
+then the goal control shows the error ending in **Vibe64 tries again shortly.**;
+it disappears once the goal continues. A goal is never sent twice: an attempt
+that may have reached the AI is checked, not repeated. An error still shown after
+the last attempt stays visible on the goal control.
 **Pause goal**,
 **Cancel goal**, and **Stop** prevent that automatic continuation. A completed
 or cleared goal is not restarted. A Claude goal whose turn ended any other way,
