@@ -19,10 +19,33 @@ function deploymentUsageText() {
   return [
     "Usage:",
     "  vibe64-helper deployment status [--json]",
+    "  ssh production [command]          scp, sftp and rsync reach production:<path> the same way",
     "",
-    "Shows this session project's Production: whether it is published, its public addresses, the current release",
-    "(id, commit, when it was published and its recorded commands), its Production Env variable names with their",
-    "source, and anything missing before the next publish. It never shows a value and changes nothing."
+    "deployment status shows this session project's Production: whether it is published, its public addresses,",
+    "the current release (id, commit, when it was published and its recorded commands), its Production Env variable",
+    "names with their source, anything missing before the next publish, and whether this session may use production",
+    "itself. It never shows a value and changes nothing.",
+    "",
+    "Using production itself, where the host offers it and allows this session:",
+    "- ssh production logs in to the production host as the live release's own application account, in its",
+    "  folder, with the Env it runs with, its database connection included: its files, data folders, database",
+    "  client (mariadb or mysql, psql, sqlite3) and its own scripts work there as the app's do. It is not root",
+    "  and has no general sudo, since the same host may run Vibe64 and other projects. Inside it,",
+    "  production-logs [--lines <n>] [--since <time>], production-status and production-restart read or restart",
+    "  the app's own service.",
+    "- vibe64-helper env get production <KEY> prints one value the live release runs with, secrets included, and",
+    "  vibe64-helper env export production prints them all as export lines.",
+    "The host records each login and Env read. Where it does not allow this session, both say why and do",
+    "nothing; deployment status says so too.",
+    "",
+    "Working on production, when possible:",
+    "- Read before you change anything: logs, status and read-only commands first. Production holds real",
+    "  people's data, and a mistake there reaches them at once.",
+    "- Before changing data or files, take a backup (a database dump or a copy, kept in the app's home on the",
+    "  production host rather than in this session's source, where real people's data could reach Git) and say",
+    "  what will change and why, so the person can follow it and undo it.",
+    "- Treat production values as secrets: use them in commands, and keep them out of source, messages and",
+    "  summaries."
   ].join("\n") + "\n";
 }
 
@@ -63,6 +86,15 @@ function deploymentRelease(release = null) {
   };
 }
 
+// Whether this session may use production itself (ssh production, production Env values) and, if not, the
+// host's reason.
+function deploymentAiAccess(access = null) {
+  return {
+    enabled: access?.enabled === true,
+    reason: access?.enabled === true ? "" : toText(access?.reason)
+  };
+}
+
 /**
  * The deployment a host reports, reduced to the fields this command shows.
  * @param {object} deployment
@@ -71,6 +103,7 @@ function deploymentStatusPayload(deployment = {}) {
   const state = toText(deployment.state);
   const latest = deployment.latestDeploy;
   return {
+    aiAccess: deploymentAiAccess(deployment.aiAccess),
     addresses: list(deployment.addresses)
       .map((address) => ({ label: toText(address?.label), url: toText(address?.url) }))
       .filter((address) => address.url),
@@ -119,6 +152,9 @@ function humanDeploymentStatus(payload) {
   } else {
     lines.push("Current release: none");
   }
+  lines.push(payload.aiAccess.enabled
+    ? "AI access to production: on for this session (ssh production; vibe64-helper env get|export production)"
+    : `AI access to production: off${payload.aiAccess.reason ? ` — ${payload.aiAccess.reason}` : ""}`);
   if (payload.latestDeploy) {
     lines.push(`Latest publish: ${payload.latestDeploy.status}${payload.latestDeploy.at ? ` at ${payload.latestDeploy.at}` : ""}`);
   }

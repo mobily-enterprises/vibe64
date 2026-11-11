@@ -75,11 +75,32 @@ When the host publishes projects, `vibe64-helper deployment status` shows the
 coding agent the session project's Production: whether it is published, its
 public addresses, the current release with its commit, publish time and recorded
 Deployment commands, its production variable names with their source, and what
-is missing before the next publish. It never shows a value and changes nothing.
-Where the installation does not publish projects it says so. Changing a
-production value from a session is the host's decision for the person whose
-session it is; when the host refuses, the agent reports the host's message
-instead of retrying.
+is missing before the next publish, and whether the session may use production
+itself. It never shows a value and changes nothing. Where the installation does
+not publish projects it says so. Changing a production value from a session is
+the host's decision for the person whose session it is; when the host refuses,
+the agent reports the host's message instead of retrying.
+
+Where the host offers it and allows the session, the coding agent can also work
+on production itself, to find out what is wrong there:
+
+- `ssh production` logs in to the production host as the live release's own
+  application account, in its folder, with the Env it runs with (its database
+  connection included). `scp`, `sftp` and `rsync` reach `production:<path>` the
+  same way. Inside, `production-logs [--lines <n>] [--since <time>]`,
+  `production-status` and `production-restart` read or restart the app's own
+  service. It is not root and has no general sudo, since the host may also run
+  Vibe64 and other projects.
+- `vibe64-helper env get production <KEY>` prints one value the live release
+  runs with, secrets included, and `vibe64-helper env export production` prints
+  them all as shell `export` lines.
+
+The host records each login and value read. Where it does not allow the
+session, both say why and do nothing. The command's own help asks the agent to
+read first (logs, status, read-only commands), to back up before changing data
+or files and to say what will change, since production holds real people's
+data, and to keep production values out of source, messages and summaries.
+Local Vibe64 publishes nothing, so it has no production to reach.
 
 Each managed shell command reads current Development Env, so the coding agent's
 next command receives added or changed values without restarting its conversation.

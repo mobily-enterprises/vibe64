@@ -197,6 +197,9 @@ test("execution helper source is the real host helper, not the package stub", as
   assert.match(source, /"github-workflow-command"/u);
   assert.match(source, /"health-status"/u);
   assert.match(source, /"vibe64-command"/u);
+  assert.match(source, /"production-access"/u);
+  assert.match(source, /process\.argv\[2\] === "production-shell" && process\.argv\.length === 3/u);
+  assert.match(source, /process\.argv\[2\] === "production-service"/u);
   assert.doesNotMatch(source, /has not been installed from this source package/u);
 });
 
@@ -416,7 +419,12 @@ test("execution helper reports bounded release service diagnostics", async () =>
   assert.match(source, /function inspectDeploymentServiceUnit/u);
   assert.match(source, /ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,NRestarts/u);
   assert.match(source, /runRootCommandAllowFailure\("journalctl"/u);
-  assert.match(source, /"--lines=80"/u);
+  // 80 lines unless the reader names how many, never more than 5000, from a start time journalctl reads as a
+  // single --since argument (no option can hide in it).
+  assert.match(source, /const DEPLOYMENT_JOURNAL_DEFAULT_LINES = 80;/u);
+  assert.match(source, /const DEPLOYMENT_JOURNAL_MAX_LINES = 5000;/u);
+  assert.match(source, /const DEPLOYMENT_JOURNAL_SINCE_PATTERN = \/\^\[0-9A-Za-z\]/u);
+  assert.match(source, /`--lines=\$\{lines\}`,\n {4}\.\.\.\(since \? \[`--since=\$\{since\}`\] : \[\]\)/u);
 });
 
 test("execution helper gives release services explicit managed-service dependencies", async () => {

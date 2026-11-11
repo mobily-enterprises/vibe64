@@ -189,7 +189,27 @@ addresses, current release (id, commit, publish time, recorded Deployment
 commands, the host's Serve defaults), production variable names with their
 source and generated mark, and missing-value messages. The command copies only
 those named fields, so a value a host might return never reaches the agent;
-without a provider it says the installation does not publish projects. A host that keeps saved
+without a provider it says the installation does not publish projects. Its
+`aiAccess` field says whether the actor's session may use production itself,
+with the host's reason when not. The provider's `readProductionValues()`
+answers `vibe64-helper env get production <KEY>` and `env export production`
+with the values the live release runs with, secrets included, and its
+`openProductionSsh()` gives the path of an ssh configuration whose
+`Host production` logs in to the live release; both receive the actor, project
+and session, so the host decides, words any refusal and records the use. Where
+the provider is a host's, preparing the Env command also installs `ssh`, `scp`
+and `sftp` wrappers beside it: a command line naming the host `production`
+first asks `vibe64-helper deployment ssh-config` for that configuration
+(passing its command line for the host's record) and runs the system command
+with it, or stops with the host's reason; every other command line runs the
+system command unchanged. The root helper's `production-access` operation
+installs the project's public key as root's own file for the application
+account, with a narrow sudo rule and a login shell, removes them again and
+reads the login records; its `production-shell` is the host SSH policy's forced
+command for those logins (the account, the live release's folder, its Env and
+start script's runtimes, no root) and `production-service` the one thing such a
+login may run through sudo: its own release service's output, state and
+restart. A host that keeps saved
 values provides the values linked into the Development Env as the optional
 `vibe64.project.saved-env-values` capability, and the helper's `saved`, `link`
 and `unlink` as the optional `vibe64.terminals.saved-env-value-links`

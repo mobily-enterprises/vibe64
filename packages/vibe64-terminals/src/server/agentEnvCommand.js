@@ -260,8 +260,14 @@ function createAgentEnvCommandService({
 
   // Read-only and names-only: the host answers for the bound project, and
   // only the fields deploymentStatusPayload copies reach the agent.
-  async function deploymentResult(parsed = {}, projectSlug = "") {
-    const result = await productionEnvironmentProvider.readDeployment({ projectSlug });
+  async function deploymentResult(parsed = {}, binding = {}, sessionId = "") {
+    if (toText(parsed.positionals[1]) === "ssh-config") {
+      return sshConfigResult(parsed, binding, sessionId);
+    }
+    const result = await productionEnvironmentProvider.readDeployment({
+      actor: binding.actor || null,
+      projectSlug: toText(binding.projectSlug)
+    });
     if (result?.ok === false) {
       return commandLineFailure(
         toText(result.error) || "The deployment could not be read.",
@@ -273,6 +279,67 @@ function createAgentEnvCommandService({
       exitCode: 0,
       ok: true,
       stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : humanDeploymentStatus(payload)
+    };
+  }
+
+  function hostRefusal(result, fallback, fallbackCode) {
+    return commandLineFailure(toText(result?.error) || fallback, toText(result?.code) || fallbackCode);
+  }
+
+  // The session's ssh wrapper asks for the configuration of `Host production` before each production login;
+  // the host decides whether this session may log in and records the command line it is about to run.
+  async function sshConfigResult(parsed = {}, binding = {}, sessionId = "") {
+    const result = await productionEnvironmentProvider.openProductionSsh({
+      actor: binding.actor || null,
+      command: (parsed.passthrough || []).join(" ").slice(0, 2000),
+      projectSlug: toText(binding.projectSlug),
+      sessionId
+    });
+    const configPath = toText(result?.configPath);
+    if (result?.ok === false || !path.isAbsolute(configPath)) {
+      return hostRefusal(result, "Production could not be reached from this session.", "vibe64_agent_production_ssh_unavailable");
+    }
+    return { exitCode: 0, ok: true, stdout: `${configPath}\n` };
+  }
+
+  // Production's values, secrets included, only where the host allows this session; the host records the read.
+  async function productionValuesResult(parsed = {}, binding = {}, sessionId = "") {
+    const key = parsed.command === "get" ? normalizeRuntimeConfigKey(parsed.key) : "";
+    const result = await productionEnvironmentProvider.readProductionValues({
+      actor: binding.actor || null,
+      keys: key ? [key] : [],
+      projectSlug: toText(binding.projectSlug),
+      sessionId
+    });
+    if (result?.ok === false) {
+      return hostRefusal(result, "Production values could not be read.", "vibe64_agent_production_values_unavailable");
+    }
+    const releaseId = toText(result?.releaseId);
+    const variables = (Array.isArray(result?.variables) ? result.variables : [])
+      .map((variable) => ({ key: toText(variable?.key), value: String(variable?.value ?? "") }))
+      .filter((variable) => variable.key && (!key || variable.key === key))
+      .sort((left, right) => left.key.localeCompare(right.key));
+    if (key) {
+      const variable = variables[0];
+      if (!variable) {
+        const release = releaseId ? `The live release ${releaseId}` : "The live release";
+        return commandLineFailure(`${release} runs without ${key}.`, "vibe64_agent_production_value_missing");
+      }
+      return {
+        exitCode: 0,
+        ok: true,
+        stdout: parsed.json ? `${JSON.stringify({ key, ok: true, releaseId, value: variable.value }, null, 2)}\n` : `${variable.value}\n`
+      };
+    }
+    return {
+      exitCode: 0,
+      ok: true,
+      stdout: parsed.json
+        ? `${JSON.stringify({ ok: true, releaseId, variables }, null, 2)}\n`
+        : [
+            `# The Env release ${releaseId || "(unknown)"} runs with: production's secrets. Use them in commands; keep them out of source, messages and summaries.`,
+            ...variables.map((variable) => `export ${variable.key}='${variable.value.replaceAll("'", "'\\''")}'`)
+          ].join("\n") + "\n"
     };
   }
 
@@ -405,7 +472,10 @@ function createAgentEnvCommandService({
       return statusResult(parsed, toText(input.sessionId), projectSlug);
     }
     if (parsed.command === "deployment") {
-      return deploymentResult(parsed, projectSlug);
+      return deploymentResult(parsed, binding, toText(input.sessionId));
+    }
+    if (parsed.command === "get" || parsed.command === "export") {
+      return productionValuesResult(parsed, binding, toText(input.sessionId));
     }
     if (parsed.command === "saved") {
       return savedResult(parsed, toText(input.sessionId), binding);
@@ -469,9 +539,38 @@ function createAgentEnvCommandService({
   return Object.freeze({
     logger,
     bindSession,
+    // Whether the session's ssh, scp and sftp reach production through the host (prepareAgentEnvCommand).
+    offersProduction: offersProductionEnvironment(productionEnvironmentProvider),
     closeAllForSession,
     run
   });
+}
+
+// The session's ssh, scp and sftp, beside its other managed commands and before the system's on its PATH: a
+// command line naming the host `production` (ssh production, scp file production:dir, rsync over ssh, git)
+// asks the Env command for the host's `Host production` configuration first, and runs with it, or stops with
+// the host's reason; any other command line runs the system's own command unchanged.
+const PRODUCTION_SSH_COMMANDS = Object.freeze({ scp: "/usr/bin/scp", sftp: "/usr/bin/sftp", ssh: "/usr/bin/ssh" });
+
+function shellQuote(value = "") {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+function productionSshWrapperSource(name = "", envCommandPath = "") {
+  const system = PRODUCTION_SSH_COMMANDS[name];
+  return [
+    "#!/bin/sh",
+    `# Vibe64: ${name} reaches this project's production as \`production\` where the host allows this session.`,
+    "for argument in \"$@\"; do",
+    "  case \"$argument\" in",
+    "    production|*@production|production:*|*@production:*)",
+    `      config="$(${shellQuote(envCommandPath)} deployment ssh-config -- ${name} "$@")" || exit 255`,
+    `      exec ${system} -F "$config" "$@" ;;`,
+    "  esac",
+    "done",
+    `exec ${system} "$@"`,
+    ""
+  ].join("\n");
 }
 
 /**
@@ -500,6 +599,14 @@ async function prepareAgentEnvCommand({
       contractVersion: AGENT_ENV_COMMAND_CONTRACT_VERSION
     })
   );
+  if (commandService.offersProduction) {
+    for (const name of Object.keys(PRODUCTION_SSH_COMMANDS)) {
+      await writeExecutableFileIfChanged(
+        path.join(normalizedWrapperHostDir, name),
+        productionSshWrapperSource(name, commandWrapperHostPath(normalizedWrapperHostDir))
+      );
+    }
+  }
   const server = await commandServers.ensure({
     commandService,
     sessionId: normalizedSessionId,
@@ -522,6 +629,7 @@ async function prepareAgentEnvCommand({
 
 const __testables = Object.freeze({
   AGENT_ENV_COMMAND_NAME,
+  productionSshWrapperSource,
   VIBE64_AGENT_ENV_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_ENV_COMMAND_SESSION_ID_ENV
 });

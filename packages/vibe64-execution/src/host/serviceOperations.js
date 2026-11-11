@@ -94,8 +94,34 @@ function handleDeploymentServiceOperation(payload = {}) {
   });
 }
 
+// How much of a release service's output a read takes: 80 lines unless the reader names how many (at most
+// 5000), optionally from a time in a form journalctl's --since takes ("2026-11-11 08:00:00", "1 hour ago",
+// "today").
+const DEPLOYMENT_JOURNAL_DEFAULT_LINES = 80;
+const DEPLOYMENT_JOURNAL_MAX_LINES = 5000;
+const DEPLOYMENT_JOURNAL_SINCE_PATTERN = /^[0-9A-Za-z][0-9A-Za-z :.+-]{0,63}$/u;
+
+function deploymentServiceJournalWindow({ lines = DEPLOYMENT_JOURNAL_DEFAULT_LINES, since = "" } = {}) {
+  if (!Number.isSafeInteger(lines) || lines < 1 || lines > DEPLOYMENT_JOURNAL_MAX_LINES) {
+    throw new Error(`Vibe64 exec helper reads 1 to ${DEPLOYMENT_JOURNAL_MAX_LINES} lines of a service's output.`);
+  }
+  if (since && !DEPLOYMENT_JOURNAL_SINCE_PATTERN.test(since)) {
+    throw new Error("Vibe64 exec helper rejected a service output start time.");
+  }
+  return { lines, since };
+}
+
 function inspectDeploymentServiceUnit(unitName = "", owner = {}) {
   assertValidDeploymentUnitName(unitName, owner);
+  printDeploymentServiceUnit(unitName);
+}
+
+// A release unit's state, then its newest output, for a unit its caller has checked is the caller's to read.
+function printDeploymentServiceUnit(unitName = "", {
+  lines = DEPLOYMENT_JOURNAL_DEFAULT_LINES,
+  since = "",
+  timestamps = false
+} = {}) {
   const state = runRootCommand("systemctl", [
     "show",
     unitName,
@@ -106,8 +132,9 @@ function inspectDeploymentServiceUnit(unitName = "", owner = {}) {
     "--unit",
     unitName,
     "--no-pager",
-    "--output=cat",
-    "--lines=80"
+    timestamps ? "--output=short-iso" : "--output=cat",
+    `--lines=${lines}`,
+    ...(since ? [`--since=${since}`] : [])
   ]);
   const journal = String(journalResult.stdout || journalResult.stderr || "").trim();
   process.stdout.write([
@@ -434,9 +461,11 @@ function runReleaseService(environmentFile = "", startScript = "") {
 }
 
 export {
+  deploymentServiceJournalWindow,
   ensureManagedServiceProcessOwnership,
   handleDeploymentServiceOperation,
   handleManagedServiceOperation,
+  printDeploymentServiceUnit,
   runReleaseService,
   stopManagedServiceUnit
 };

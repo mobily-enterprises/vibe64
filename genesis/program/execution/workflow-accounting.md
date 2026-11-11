@@ -18,6 +18,8 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/terminalSessionClosing.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessionRegistry.js`
 - `packages/vibe64-execution/src/host/managedWorkflows.js`
+- `packages/vibe64-execution/src/host/productionAccess.js`
+- `packages/vibe64-execution/src/host/productionLogin.js`
 - `packages/vibe64-execution/src/host/executionReceipts.js`
 - `packages/vibe64-execution/src/host/executionState.js`
 - `packages/vibe64-execution/src/server/policy/cwdPolicy.js`
@@ -309,6 +311,31 @@ gives it back into its own production database directory before it retires the
 application, which leaves `database/` empty; a database still there (one the
 editor did not know of, or made under an earlier path) stops the retire and is
 kept.
+
+While a host lets a project's AI sessions use its production, the helper's
+`production-access` operation (`productionLogin.js`, `productionAccess.js`)
+gives the project's application account a way in for them: `grant` writes the
+project's one `ssh-ed25519` public key as root's own file
+`/etc/vibe64/production-ssh/<account>` (loopback only, no forwarding), a
+`visudo`-checked rule in `/etc/sudoers.d/vibe64-production-<account>` that lets
+the account run exactly `vibe64-exec-helper production-service *`, and the
+login shell `/bin/bash`, which the account check accepts only while that key
+file exists; `revoke` removes all three and ends the account's open logins
+(`loginctl terminate-user`), and `retire` does the same first. The host's SSH
+policy, not the helper, admits application accounts from loopback alone, with
+that key file and `vibe64-exec-helper production-shell` as their forced
+command. That command runs as the account, finds the release unit root
+installed for it (the running one), and starts the client's command, the
+account's shell (no profile or rc file) or an SFTP server in that release's folder with its
+Env file, the unit's PATH and, for a release whose start script runs the
+command it is given, that script's runtimes and Serve defaults; it adds
+`production-logs`, `production-status` and `production-restart` and logs each
+login's start and end (session, command, exit status, duration) to the journal
+under `vibe64-production`, which `activity` reads back for the account. Such a
+login runs outside the release service's sandbox, as a person's own login
+would, so mounts the service makes in namespaces of its own are not there.
+`production-service`, through sudo, accepts only an application account with
+its key installed, and reads or restarts only that account's own release unit.
 
 A managed execution runs as an application only when the daemon asks for its
 registered account by name (`applicationAccount`), and only as a finite capture.

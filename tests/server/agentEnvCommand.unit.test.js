@@ -751,12 +751,17 @@ test("agent deployment status shows the bound project's deployment and never a v
       assert.equal(output.includes(leaked), false, `${leaked} never reaches the agent`);
     }
   }
-  assert.deepEqual(Object.keys(payload).sort(), ["addresses", "blockers", "latestDeploy", "notes", "ok", "records", "release", "state"]);
+  assert.deepEqual(Object.keys(payload).sort(),
+    ["addresses", "aiAccess", "blockers", "latestDeploy", "notes", "ok", "records", "release", "state"]);
+  // A host that says nothing about it does not let the session use production itself.
+  assert.deepEqual(payload.aiAccess, { enabled: false, reason: "" });
+  assert.match(human.stdout, /^AI access to production: off$/mu);
   assert.deepEqual(payload.records.map((record) => Object.keys(record).sort())[0],
     ["configured", "generated", "key", "requiredFor", "secret", "source", "sourceLabel"]);
   assert.deepEqual(payload.release.steps.map((step) => step.role), ["prepare", "serve"]);
   // Only the session's bound project is asked for.
-  assert.deepEqual(production.state.deploymentReads, [{ projectSlug: "demo" }, { projectSlug: "demo" }]);
+  assert.deepEqual(production.state.deploymentReads,
+    [{ actor: null, projectSlug: "demo" }, { actor: null, projectSlug: "demo" }]);
   assert.deepEqual(project.state.contexts, ["demo", "demo"]);
   assert.deepEqual(production.state.sets, []);
   assert.deepEqual(production.state.removes, []);
@@ -798,7 +803,7 @@ test("vibe64-helper deployment status reaches the session's Env command socket",
     assert.equal(executed.code, 0, executed.stderr);
     assert.match(executed.stdout, /^Production: published$/mu);
     assert.doesNotMatch(executed.stdout, /host-secret-value/u);
-    assert.deepEqual(production.state.deploymentReads, [{ projectSlug: "demo" }]);
+    assert.deepEqual(production.state.deploymentReads, [{ actor: null, projectSlug: "demo" }]);
   } finally {
     await command.closeAllForSession(sessionId);
     await rm(root, { force: true, recursive: true });

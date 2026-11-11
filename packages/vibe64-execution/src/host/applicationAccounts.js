@@ -51,6 +51,7 @@ import {
   REGISTRATION_LIMIT_BYTES,
   writeRegistration
 } from "./personRegistry.js";
+import { PRODUCTION_LOGIN_SHELL, productionAccessGranted, removeProductionAccess } from "./productionAccess.js";
 import { APPLICATION_SANDBOX_ALLOWANCES, SYSTEMD_UNIT_ROOT } from "./systemdUnits.js";
 
 const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
@@ -106,7 +107,9 @@ function applicationSandboxAllowances(value, settings = helperSettings()) {
 }
 
 // Each published project runs as its own application account: a system
-// account with only its own group, no login and no Vibe64 group. Root
+// account with only its own group, no login (a login shell only while the
+// workspace owner lets the project's AI sessions use production, see
+// productionAccess.js) and no Vibe64 group. Root
 // registers it for the daemon's workspace like the workspace's people, in a
 // registry of its own, so an operation as a person never acts as an
 // application nor the reverse. The helper derives the account and its area
@@ -174,7 +177,8 @@ function hostApplicationFacts(username = "") {
   return {
     groupGid: group.status === 0 ? Number(String(group.stdout).split(":")[2]) : -1,
     groups,
-    loginUids
+    loginUids,
+    productionAccess: productionAccessGranted(username)
   };
 }
 
@@ -184,7 +188,9 @@ function applicationAccountProblem(user = {}, identity = {}, facts = {}) {
       user.uid >= facts.loginUids.min) {
     return `${user.username} is not a system account.`;
   }
-  if (user.home !== identity.home || user.shell !== APPLICATION_SHELL) {
+  const shellAllowed = user.shell === APPLICATION_SHELL ||
+    (user.shell === PRODUCTION_LOGIN_SHELL && facts.productionAccess === true);
+  if (user.home !== identity.home || !shellAllowed) {
     return `${user.username} does not have its application's home and no login.`;
   }
   if (facts.groupGid !== user.gid || facts.groups.length !== 1 || facts.groups[0] !== user.username) {
@@ -421,6 +427,7 @@ function retireApplicationAccount(owner = {}, project = "", {
   areaRoot = applicationAreaRoot(),
   areaUid = 0,
   deleteUser = (username) => runRootCommand("userdel", [username]),
+  endProductionAccess = removeProductionAccess,
   facts = hostApplicationFacts,
   registryRoot = APPLICATION_REGISTRY_ROOT,
   registryUid = 0,
@@ -461,6 +468,8 @@ function retireApplicationAccount(owner = {}, project = "", {
   };
   const unregistered = Boolean(registration && user);
   if (unregistered) unregister();
+  // Its AI sessions' way into production goes with it, and so do their open logins.
+  if (user) endProductionAccess(user, identity.username);
   if (user && running(user.uid)) {
     if (unregistered) writeApplicationRegistration(identity, user, registry);
     throw new Error("The application still runs. Stop its release service before retiring it.");
@@ -656,6 +665,7 @@ export {
   assertReleaseServiceClaim,
   ensureApplicationAccount,
   handleApplicationAccountOperation,
+  installedReleaseUnits,
   readApplicationRegistration,
   registeredApplicationUser,
   resolveApplicationCwd,

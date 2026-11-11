@@ -65,6 +65,7 @@ async function applicationHost(t) {
   const accounts = new Map();
   const created = [];
   const deleted = [];
+  const ended = [];
   const grants = [];
   const options = {
     areaGid: GID,
@@ -80,6 +81,7 @@ async function applicationHost(t) {
       deleted.push(username);
       accounts.delete(username);
     },
+    endProductionAccess: (_user, username) => ended.push(username),
     facts: (username) => ({ groupGid: GID, groups: [username], loginUids: LOGIN_UIDS }),
     grantDaemonSearch: (descriptor) => grants.push(descriptor),
     managedRoot,
@@ -92,7 +94,7 @@ async function applicationHost(t) {
     unitUid: UID
   };
   return {
-    accounts, created, deleted, grants, options, owner, root,
+    accounts, created, deleted, ended, grants, options, owner, root,
     ensure: (project, overrides = {}) => ensureApplicationAccount(owner, project, { ...options, ...overrides }),
     retire: (project, overrides = {}) => retireApplicationAccount(owner, project, { ...options, ...overrides })
   };
@@ -140,6 +142,23 @@ test("each project of a workspace gets its own registered account and area", asy
   assert.notEqual(other.username, account.username);
   assert.notEqual(applicationIdentity({ username: daemonUser("other") }, "shop", host.options).username, account.username);
   assert.equal(applicationIdentity({ username: daemonUser("test") }, "shop", host.options).username, account.username);
+});
+
+test("an application account has a login shell only while root holds its production key", async (t) => {
+  const host = await applicationHost(t);
+  const account = host.ensure("shop");
+  const user = host.accounts.get(account.username);
+  const withAccess = (productionAccess) => ({
+    ...host.options,
+    facts: (username) => ({ ...host.options.facts(username), productionAccess })
+  });
+  user.shell = "/bin/bash";
+  assert.throws(() => registeredApplicationUser(host.owner, account.username, withAccess(false)),
+    /does not have its application's home and no login/u);
+  assert.equal(registeredApplicationUser(host.owner, account.username, withAccess(true)).username, account.username);
+  user.shell = "/bin/sh";
+  assert.throws(() => registeredApplicationUser(host.owner, account.username, withAccess(true)),
+    /does not have its application's home and no login/u);
 });
 
 test("the daemon names only a project of its own workspace", async (t) => {
@@ -319,6 +338,8 @@ test("retiring a project removes its application, its registration and its whole
 
   assert.throws(() => host.retire("shop", { running: () => true }), /still runs/u);
   assert.deepEqual(host.retire("shop"), { retired: true });
+  // Its AI sessions' way into production, and their open logins, end before it goes.
+  assert.deepEqual(host.ended, [account.username, account.username]);
   assert.deepEqual(await readdir(path.join(host.options.areaRoot, "test")), []);
   assert.equal(readApplicationRegistration("test", account.username, host.options), null);
   assert.deepEqual(host.deleted, [account.username]);

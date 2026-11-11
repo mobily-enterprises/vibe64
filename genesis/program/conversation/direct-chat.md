@@ -2455,7 +2455,8 @@ session executables for Codex and OpenCode. Its fixed groups are `preview`,
 comes from the existing command owner. The dispatcher replaces itself with
 the matching sibling executable, preserving stdin, argv, environment, cwd,
 exit status and signal handling; `deployment` is the Env executable asked for
-`deployment`, the read-only deployment status of the session's project. Missing groups fail without searching PATH
+`deployment`, the read-only deployment status of the session's project and, where a host allows the session,
+how it reaches production itself (`ssh production`). Missing groups fail without searching PATH
 for a substitute. Each underlying command retains its session binding and
 authorization. The individual executables stay installed for existing
 conversations and scripts; new session guidance uses the common entry point.

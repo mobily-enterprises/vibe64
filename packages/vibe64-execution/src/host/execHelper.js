@@ -30,6 +30,7 @@ import {
   registerPerson,
   upgradePersonRegistry
 } from "./personRegistry.js";
+import { handleProductionAccessOperation, runProductionService, runProductionShell } from "./productionLogin.js";
 import { handleDeploymentServiceOperation, handleManagedServiceOperation, runReleaseService } from "./serviceOperations.js";
 
 const ALLOWED_OPERATIONS = new Set([
@@ -47,6 +48,7 @@ const ALLOWED_OPERATIONS = new Set([
   "managed-execution",
   "managed-service",
   "opencode-app-server",
+  "production-access",
   "vibe64-command",
   "workspace-cache-command"
 ]);
@@ -58,6 +60,17 @@ async function main() {
   }
   if (process.argv[2] === "run-release-service") {
     runReleaseService(process.argv[3] || "", process.argv[4] || "");
+    return;
+  }
+  // sshd's forced command for an application account's production login, run
+  // as that account (productionLogin.js), and the one thing that login may run
+  // through sudo: its own release service's output, state and restart.
+  if (process.argv[2] === "production-shell" && process.argv.length === 3) {
+    runProductionShell();
+    return;
+  }
+  if (process.argv[2] === "production-service") {
+    runProductionService(process.argv.slice(3));
     return;
   }
   // Root-only: the daemon's sudo rule names only
@@ -116,6 +129,10 @@ async function main() {
   }
   if (operation === "application-account") {
     handleApplicationAccountOperation(payload);
+    return;
+  }
+  if (operation === "production-access") {
+    handleProductionAccessOperation(payload);
     return;
   }
   const username = safeUsername(payload.username);
