@@ -89,7 +89,10 @@ on production itself, to find out what is wrong there:
   connection included). `scp`, `sftp` and `rsync` reach `production:<path>` the
   same way. Inside, `production-logs [--lines <n>] [--since <time>]`,
   `production-status` and `production-restart` read or restart the app's own
-  service. It is not root and has no general sudo, since the host may also run
+  service, and `production-enter [command]` runs the command, or a shell, where
+  that running service runs: the files it sees, its own mounts included (its
+  private `/tmp`, a FUSE volume it mounted), which the login itself does not
+  see. It is not root and has no general sudo, since the host may also run
   Vibe64 and other projects.
 - `vibe64-helper env get production <KEY>` prints one value the live release
   runs with, secrets included, and `vibe64-helper env export production` prints

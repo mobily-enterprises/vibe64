@@ -4,12 +4,13 @@
 // - `production-shell` is the forced command of every such login: as the application account, in its live
 //   release's folder, with the Env and runtimes that release runs with, never root;
 // - `production-service`, which that login reaches through its own narrow sudo rule, reads its live release
-//   service's output and state, or restarts it, and nothing else.
+//   service's output and state, restarts it, or enters it, and nothing else;
+// - `production-enter`, which that last one starts, runs as the account where the running service runs.
 // The login runs outside the release service's sandbox, as the person's own login would, so mounts the service
-// makes in namespaces of its own are not there.
+// makes in namespaces of its own (its private /tmp, a FUSE volume) are there only through production-enter.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -41,6 +42,7 @@ const PRODUCTION_SESSION_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 const START_SCRIPT_RUNS_ARGUMENTS = "[ \"$#\" -eq 0 ] || exec \"$@\"";
 const SFTP_SERVERS = Object.freeze(["/usr/lib/openssh/sftp-server", "/usr/libexec/openssh/sftp-server", "/usr/lib/sftp-server"]);
 const RUN_RELEASE_SERVICE_PATTERN = / run-release-service "((?:[^"\\]|\\.)*)" "((?:[^"\\]|\\.)*)"$/u;
+const NSENTER = "/usr/bin/nsenter";
 
 function writeJson(value) {
   process.stdout.write(`${JSON.stringify({ ok: true, ...value })}\n`);
@@ -132,6 +134,7 @@ function liveReleaseUnit(username, {
 function productionShellFunctions(helperPath = "") {
   const helper = `sudo -n ${helperPath} production-service`;
   return {
+    "BASH_FUNC_production-enter%%": `() {  ${helper} enter "$@"\n}`,
     "BASH_FUNC_production-logs%%": `() {  ${helper} logs "$@"\n}`,
     "BASH_FUNC_production-restart%%": `() {  ${helper} restart "$@"\n}`,
     "BASH_FUNC_production-status%%": `() {  ${helper} status "$@"\n}`
@@ -147,11 +150,19 @@ function productionShellFunctions(helperPath = "") {
  */
 function productionShellCommand(original = "", sftpServer = SFTP_SERVERS.find((candidate) => existsSync(candidate))) {
   if (!original) return { argv: [PRODUCTION_LOGIN_SHELL, "--norc"], sftp: false };
-  if (original === "internal-sftp" || SFTP_SERVERS.includes(original.split(" ")[0])) {
+  // sshd names the sftp subsystem as its configured command, "internal-sftp " for scp and sftp.
+  const program = original.trim().split(/\s+/u)[0];
+  if (program === "internal-sftp" || SFTP_SERVERS.includes(program)) {
     if (!sftpServer) throw new Error("This host has no SFTP server for scp and sftp.");
     return { argv: [sftpServer], sftp: true };
   }
   return { argv: [PRODUCTION_LOGIN_SHELL, "-c", original], sftp: false };
+}
+
+// A release published since production logins exist: its start script runs the command it is given in the
+// release's Env, with its runtimes and Serve defaults, instead of Serve.
+function startScriptRunsArguments(startScript = "") {
+  return readFileSync(startScript, "utf8").split("\n").includes(START_SCRIPT_RUNS_ARGUMENTS);
 }
 
 function recordProductionLogin(event = {}) {
@@ -161,8 +172,8 @@ function recordProductionLogin(event = {}) {
 /**
  * sshd's forced command for an application account's production login, run as that account: it starts what the
  * client asked for in the live release's folder with that release's Env (its database connection included),
- * runtimes and PATH, plus production-logs, production-status and production-restart, and records the login's
- * start and end.
+ * runtimes and PATH, plus production-logs, production-status, production-restart and production-enter, and
+ * records the login's start and end.
  */
 function runProductionShell({ env = process.env, helperPath = path.resolve(process.argv[1]) } = {}) {
   const username = os.userInfo().username;
@@ -182,10 +193,11 @@ function runProductionShell({ env = process.env, helperPath = path.resolve(proce
   };
   const command = productionShellCommand(original);
   recordProductionLogin({ ...login, command: original.slice(0, 2000), event: "start" });
-  const runsArguments = readFileSync(unit.startScript, "utf8").split("\n").includes(START_SCRIPT_RUNS_ARGUMENTS);
   // A release published before its start script ran other commands gets its Env file and the service's PATH,
   // without what its start script adds (its runtimes and Serve defaults such as NODE_ENV).
-  const [file, ...args] = runsArguments && !command.sftp ? [unit.startScript, ...command.argv] : command.argv;
+  const [file, ...args] = !command.sftp && startScriptRunsArguments(unit.startScript)
+    ? [unit.startScript, ...command.argv]
+    : command.argv;
   const started = Date.now();
   // Like a shell waiting for its foreground job: an interrupt from the terminal is for the command, and this
   // process stays to record how the login ended.
@@ -211,7 +223,9 @@ function productionServiceUsage() {
     "Usage, inside a production login:",
     "  production-logs [--lines <n>] [--since <time>]   the live release service's newest output (200 lines)",
     "  production-status                                its state and newest output",
-    "  production-restart                               restart it, then show its state"
+    "  production-restart                               restart it, then show its state",
+    "  production-enter [command...]                    run the command, or a shell, where the running service",
+    "                                                   runs: the files it sees, its own mounts included"
   ].join("\n"));
 }
 
@@ -236,7 +250,8 @@ function productionLogWindow(args = []) {
 
 /**
  * `production-service`, which only an application account with production access may run, through sudo: the
- * output, state or restart of its own live release service, found as root installed it.
+ * output, state or restart of its own live release service, found as root installed it, or a command where
+ * that service runs.
  * @param {string[]} args
  */
 function runProductionService(args = [], { env = process.env } = {}) {
@@ -250,6 +265,10 @@ function runProductionService(args = [], { env = process.env } = {}) {
   const unit = liveReleaseUnit(caller);
   if (!unit) throw new Error("This project has no release installed on this host.");
   const [action = "", ...rest] = args;
+  if (action === "enter") {
+    enterProductionService(unit, resolveOsUser(caller), rest[0] === "--" ? rest.slice(1) : rest, { env });
+    return;
+  }
   if (action === "logs") {
     printDeploymentServiceUnit(unit.name, { ...productionLogWindow(rest), timestamps: true });
     return;
@@ -259,14 +278,116 @@ function runProductionService(args = [], { env = process.env } = {}) {
   printDeploymentServiceUnit(unit.name, { lines: 20, timestamps: true });
 }
 
+/**
+ * How root starts `production-enter`: nsenter enters the mount namespace of the running service's main process
+ * and becomes the application account (its own group only, no supplementary ones) before anything there runs,
+ * since that namespace may be one the application made itself; there the helper's `production-enter` starts
+ * the command with the release's files. A main process in a user namespace of the application's own is joined
+ * there too, as the ids the account has in it.
+ * @param {object} options
+ * @param {{ uid: number, gid: number } | null} [options.userNamespace] the account's ids in that user namespace
+ */
+function productionEnterCommand({ command = [], env = {}, helperPath = "", pid = 0, unit = {}, user = {}, userNamespace = null } = {}) {
+  const ids = userNamespace || user;
+  return {
+    args: [NSENTER, `--target=${pid}`, "--mount", ...(userNamespace ? ["--user"] : []), `--setgid=${ids.gid}`,
+      `--setuid=${ids.uid}`, "--", helperPath, "production-enter", unit.environmentFile, unit.startScript,
+      unit.workingDirectory, ...command],
+    env: {
+      HOME: user.home,
+      LANG: env.LANG || "C.UTF-8",
+      LOGNAME: user.username,
+      PATH: unit.path || env.PATH || "",
+      SHELL: PRODUCTION_LOGIN_SHELL,
+      TERM: env.TERM || "dumb",
+      USER: user.username,
+      VIBE64_RELEASE_UNIT: unit.name
+    },
+    file: NSENTER
+  };
+}
+
+function idInsideNamespace(map = "", id = -1) {
+  for (const line of String(map).split("\n")) {
+    const [inside, outside, count] = line.trim().split(/\s+/u).map(Number);
+    if (id >= outside && id < outside + count) return inside + id - outside;
+  }
+  return null;
+}
+
+/**
+ * The account's ids in the user namespace of the service's main process, when the application made one of its
+ * own (to mount a FUSE volume, which with allow_other admits only that namespace's processes), or null when it
+ * runs in the host's.
+ * @param {number} pid
+ * @param {{ uid: number, gid: number }} user
+ */
+function serviceUserNamespace(pid, user, {
+  link = (file) => readlinkSync(file),
+  read = (file) => readFileSync(file, "utf8")
+} = {}) {
+  if (link(`/proc/${pid}/ns/user`) === link("/proc/self/ns/user")) return null;
+  const ids = { gid: idInsideNamespace(read(`/proc/${pid}/gid_map`), user.gid), uid: idInsideNamespace(read(`/proc/${pid}/uid_map`), user.uid) };
+  if (ids.uid === null || ids.gid === null) {
+    throw new Error("The live release service runs in a user namespace of its own that does not include its account, " +
+      "so production-enter cannot join it.");
+  }
+  return ids;
+}
+
+function enterProductionService(unit = {}, user = {}, command = [], { env = process.env } = {}) {
+  const pid = Number(runRootCommand("systemctl", ["show", unit.name, "--property=MainPID", "--value"]));
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    throw new Error(`The live release service ${unit.name} is not running, so there is nothing to enter. ` +
+      "production-status shows why; production-restart starts it again.");
+  }
+  const entered = productionEnterCommand({ command, env, helperPath: path.resolve(process.argv[1]), pid, unit, user,
+    userNamespace: serviceUserNamespace(pid, user) });
+  process.execve(entered.file, entered.args, entered.env);
+}
+
+/**
+ * What `production-enter` runs, as the login would: the command, or the account's shell, through the release's
+ * start script when it runs the command it is given, otherwise directly with the Env file alone.
+ * @param {string[]} command
+ * @param {string} startScript the start script, or "" for a release whose start script runs only Serve
+ */
+function productionEnterArgv(command = [], startScript = "") {
+  const argv = command.length > 0 ? command : [PRODUCTION_LOGIN_SHELL, "--norc"];
+  if (startScript) return [startScript, ...argv];
+  return command.length > 0 ? [PRODUCTION_LOGIN_SHELL, "-c", "exec \"$@\"", "production-enter", ...command] : argv;
+}
+
+/**
+ * `production-enter`'s second half, which root starts as the application account inside its running release
+ * service's mount namespace: the command in the release's folder with the release's Env, which the account
+ * itself reads there.
+ * @param {string[]} args the release's Env file, start script and folder, then the command
+ */
+function runProductionEnter([environmentFile = "", startScript = "", workingDirectory = "", ...command] = [], {
+  env = process.env
+} = {}) {
+  // Root starts it already as the account; inside the application's own user namespace that may be uid 0 there.
+  if (![environmentFile, startScript, workingDirectory].every((value) => path.isAbsolute(value))) {
+    throw new Error("Only production-enter, in an application account's production login, starts here.");
+  }
+  process.chdir(workingDirectory);
+  const [file, ...args] = productionEnterArgv(command, startScriptRunsArguments(startScript) ? startScript : "");
+  process.execve(file, [file, ...args], { ...env, ...readEnvironmentFile(environmentFile) });
+}
+
 export {
   handleProductionAccessOperation,
   liveReleaseUnit,
   productionActivity,
+  productionEnterArgv,
+  productionEnterCommand,
   productionLogWindow,
   productionShellCommand,
   productionShellFunctions,
+  runProductionEnter,
   runProductionService,
   runProductionShell,
+  serviceUserNamespace,
   START_SCRIPT_RUNS_ARGUMENTS
 };

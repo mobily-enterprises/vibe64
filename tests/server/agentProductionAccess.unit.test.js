@@ -154,6 +154,9 @@ test("deployment ssh-config answers with the host's configuration only for a ses
 
   const status = await run(owner, ["deployment", "status"]);
   assert.match(status.stdout, /^AI access to production: on for this session \(ssh production; vibe64-helper env get\|export production\)$/mu);
+  // With how to treat real people's data there, and where its commands are listed.
+  assert.match(status.stdout, /^ {2}It holds real people's data: when possible read first, back up what you will change/mu);
+  assert.match(status.stdout, /vibe64-helper deployment --help lists what works there \(production-logs, production-enter, \.\.\.\)\.$/mu);
 
   for (const args of [["deployment", "ssh-config", "--json"], ["deployment", "status", "--", "ls"], ["status", "--", "ls"]]) {
     assert.equal((await run(owner, args)).exitCode, 2, args.join(" "));

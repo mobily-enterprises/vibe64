@@ -15,9 +15,12 @@ import {
 import {
   liveReleaseUnit,
   productionActivity,
+  productionEnterArgv,
+  productionEnterCommand,
   productionLogWindow,
   productionShellCommand,
   productionShellFunctions,
+  serviceUserNamespace,
   START_SCRIPT_RUNS_ARGUMENTS
 } from "../../packages/vibe64-execution/src/host/productionLogin.js";
 import { deploymentServiceUnit } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
@@ -161,16 +164,68 @@ test("a production login runs the account's shell, the client's command or an SF
   assert.deepEqual(productionShellCommand("", "/usr/lib/openssh/sftp-server"), { argv: ["/bin/bash", "--norc"], sftp: false });
   assert.deepEqual(productionShellCommand("ls -la 'a b'", "/usr/lib/openssh/sftp-server"),
     { argv: ["/bin/bash", "-c", "ls -la 'a b'"], sftp: false });
-  assert.deepEqual(productionShellCommand("internal-sftp", "/usr/lib/openssh/sftp-server"),
-    { argv: ["/usr/lib/openssh/sftp-server"], sftp: true });
+  // As sshd hands over the sftp subsystem scp and sftp ask for: its configured command and a space.
+  for (const subsystem of ["internal-sftp ", "internal-sftp", "/usr/lib/openssh/sftp-server -l INFO"]) {
+    assert.deepEqual(productionShellCommand(subsystem, "/usr/lib/openssh/sftp-server"),
+      { argv: ["/usr/lib/openssh/sftp-server"], sftp: true }, subsystem);
+  }
   assert.throws(() => productionShellCommand("internal-sftp", ""), /no SFTP server/u);
   // The start script a publishing host writes for a release runs the command it is given instead of Serve.
   assert.equal(START_SCRIPT_RUNS_ARGUMENTS, "[ \"$#\" -eq 0 ] || exec \"$@\"");
   assert.deepEqual(productionShellFunctions(HELPER), {
+    "BASH_FUNC_production-enter%%": `() {  sudo -n ${HELPER} production-service enter "$@"\n}`,
     "BASH_FUNC_production-logs%%": `() {  sudo -n ${HELPER} production-service logs "$@"\n}`,
     "BASH_FUNC_production-restart%%": `() {  sudo -n ${HELPER} production-service restart "$@"\n}`,
     "BASH_FUNC_production-status%%": `() {  sudo -n ${HELPER} production-service status "$@"\n}`
   });
+});
+
+test("production-enter becomes the application account before anything in the service's mount namespace runs", () => {
+  const unit = {
+    environmentFile: "/var/lib/vibe64-apps/test/shop/handover/r2/environment",
+    name: "vibe64-release-test-shop-bbbbbbbbbbbb.service",
+    path: "/opt/vibe64/runtime-packs/node26/bin:/usr/bin:/bin",
+    startScript: "/var/lib/vibe64-apps/test/shop/handover/r2/start.sh",
+    workingDirectory: "/var/lib/vibe64-apps/test/shop/app/releases/r2/workspace"
+  };
+  const user = { gid: 990, home: "/var/lib/vibe64-apps/test/shop/app/home", uid: 991, username: ACCOUNT };
+  // Root's own environment (sudo's) gives the terminal and language, nothing else.
+  const entered = productionEnterCommand({ command: ["ls", "-la"], env: { SECRET: "no", TERM: "xterm" }, helperPath: HELPER, pid: 4242, unit, user });
+  assert.equal(entered.file, "/usr/bin/nsenter");
+  assert.deepEqual(entered.args, ["/usr/bin/nsenter", "--target=4242", "--mount", "--setgid=990", "--setuid=991", "--",
+    HELPER, "production-enter", unit.environmentFile, unit.startScript, unit.workingDirectory, "ls", "-la"]);
+  assert.deepEqual(entered.env, {
+    HOME: user.home,
+    LANG: "C.UTF-8",
+    LOGNAME: ACCOUNT,
+    PATH: unit.path,
+    SHELL: "/bin/bash",
+    TERM: "xterm",
+    USER: ACCOUNT,
+    VIBE64_RELEASE_UNIT: unit.name
+  });
+  // A main process in a user namespace the application made itself (its FUSE volume) is joined there too, as
+  // the ids the account has in it; one in the host's is not.
+  const inOwn = productionEnterCommand({ command: [], env: {}, helperPath: HELPER, pid: 4242, unit, user,
+    userNamespace: { gid: 0, uid: 0 } });
+  assert.deepEqual(inOwn.args.slice(0, 7), ["/usr/bin/nsenter", "--target=4242", "--mount", "--user", "--setgid=0", "--setuid=0", "--"]);
+  const proc = (userLink, maps) => ({
+    link: (file) => (file === "/proc/self/ns/user" ? "user:[4026531837]" : userLink),
+    read: (file) => maps[path.basename(file)]
+  });
+  assert.equal(serviceUserNamespace(4242, user, proc("user:[4026531837]", {})), null);
+  assert.deepEqual(serviceUserNamespace(4242, user, proc("user:[4026532700]", { gid_map: "         0        990          1\n",
+    uid_map: "         0        991          1\n" })), { gid: 0, uid: 0 });
+  assert.deepEqual(serviceUserNamespace(4242, user, proc("user:[4026532700]", { gid_map: "1000 900 100\n",
+    uid_map: "0 5000 1\n2000 950 100\n" })), { gid: 1090, uid: 2041 });
+  assert.throws(() => serviceUserNamespace(4242, user, proc("user:[4026532700]", { gid_map: "0 990 1\n", uid_map: "0 5000 1\n" })),
+    /does not include its account, so production-enter cannot join it/u);
+  // There it runs the command, or the shell, through the release's start script as the login does; a release
+  // whose start script runs only Serve gets the command, found on its PATH, or the shell directly.
+  assert.deepEqual(productionEnterArgv(["ls", "-la"], unit.startScript), [unit.startScript, "ls", "-la"]);
+  assert.deepEqual(productionEnterArgv([], unit.startScript), [unit.startScript, "/bin/bash", "--norc"]);
+  assert.deepEqual(productionEnterArgv(["ls", "-la"], ""), ["/bin/bash", "-c", "exec \"$@\"", "production-enter", "ls", "-la"]);
+  assert.deepEqual(productionEnterArgv([], ""), ["/bin/bash", "--norc"]);
 });
 
 test("production-logs reads 200 lines unless told, from a time journalctl takes as one argument", () => {
@@ -203,7 +258,7 @@ test("production activity is what the account itself logged under Vibe64's tag, 
   assert.deepEqual(productionActivity(null), []);
 });
 
-test("only an application account's own production login reaches production-shell and production-service", async () => {
+test("only an application account's own production login reaches production-shell, production-service and production-enter", async () => {
   const run = (args, env) => promisify(execFile)(process.execPath, [EXEC_HELPER, ...args], { env }).then(
     () => ({ code: 0, stderr: "" }),
     (error) => ({ code: error.code, stderr: error.stderr })
@@ -211,7 +266,12 @@ test("only an application account's own production login reaches production-shel
   const shell = await run(["production-shell"], { ...process.env, SSH_ORIGINAL_COMMAND: "id" });
   assert.equal(shell.code, 2);
   assert.match(shell.stderr, /Only an application account's production login starts here\./u);
-  const service = await run(["production-service", "restart"], { ...process.env, SUDO_UID: String(UID), SUDO_USER: os.userInfo().username });
-  assert.equal(service.code, 2);
-  assert.match(service.stderr, /Only an application account's production login may use production-service\./u);
+  for (const action of ["restart", "enter"]) {
+    const service = await run(["production-service", action], { ...process.env, SUDO_UID: String(UID), SUDO_USER: os.userInfo().username });
+    assert.equal(service.code, 2);
+    assert.match(service.stderr, /Only an application account's production login may use production-service\./u);
+  }
+  const enter = await run(["production-enter", "environment", "start.sh", "release", "id"], process.env);
+  assert.equal(enter.code, 2);
+  assert.match(enter.stderr, /Only production-enter, in an application account's production login, starts here\./u);
 });

@@ -32,7 +32,9 @@ function deploymentUsageText() {
     "  client (mariadb or mysql, psql, sqlite3) and its own scripts work there as the app's do. It is not root",
     "  and has no general sudo, since the same host may run Vibe64 and other projects. Inside it,",
     "  production-logs [--lines <n>] [--since <time>], production-status and production-restart read or restart",
-    "  the app's own service.",
+    "  the app's own service, and production-enter [command] runs the command, or a shell, where that running",
+    "  service runs: the files it sees, its own mounts included (its private /tmp, a FUSE volume it mounted),",
+    "  which the login itself does not see.",
     "- vibe64-helper env get production <KEY> prints one value the live release runs with, secrets included, and",
     "  vibe64-helper env export production prints them all as export lines.",
     "The host records each login and Env read. Where it does not allow this session, both say why and do",
@@ -152,9 +154,15 @@ function humanDeploymentStatus(payload) {
   } else {
     lines.push("Current release: none");
   }
-  lines.push(payload.aiAccess.enabled
-    ? "AI access to production: on for this session (ssh production; vibe64-helper env get|export production)"
-    : `AI access to production: off${payload.aiAccess.reason ? ` — ${payload.aiAccess.reason}` : ""}`);
+  if (payload.aiAccess.enabled) {
+    lines.push(
+      "AI access to production: on for this session (ssh production; vibe64-helper env get|export production)",
+      "  It holds real people's data: when possible read first, back up what you will change and say what will",
+      "  change. vibe64-helper deployment --help lists what works there (production-logs, production-enter, ...)."
+    );
+  } else {
+    lines.push(`AI access to production: off${payload.aiAccess.reason ? ` — ${payload.aiAccess.reason}` : ""}`);
+  }
   if (payload.latestDeploy) {
     lines.push(`Latest publish: ${payload.latestDeploy.status}${payload.latestDeploy.at ? ` at ${payload.latestDeploy.at}` : ""}`);
   }

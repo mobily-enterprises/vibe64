@@ -329,13 +329,24 @@ installed for it (the running one), and starts the client's command, the
 account's shell (no profile or rc file) or an SFTP server in that release's folder with its
 Env file, the unit's PATH and, for a release whose start script runs the
 command it is given, that script's runtimes and Serve defaults; it adds
-`production-logs`, `production-status` and `production-restart` and logs each
-login's start and end (session, command, exit status, duration) to the journal
-under `vibe64-production`, which `activity` reads back for the account. Such a
-login runs outside the release service's sandbox, as a person's own login
-would, so mounts the service makes in namespaces of its own are not there.
+`production-logs`, `production-status`, `production-restart` and
+`production-enter` and logs each login's start and end (session, command, exit
+status, duration) to the journal under `vibe64-production`, which `activity`
+reads back for the account. Such a login runs outside the release service's
+sandbox, as a person's own login would, so mounts the service makes in
+namespaces of its own (its private `/tmp`, a FUSE volume) are not there.
 `production-service`, through sudo, accepts only an application account with
-its key installed, and reads or restarts only that account's own release unit.
+its key installed, and reads, restarts or enters only that account's own
+release unit. `enter` refuses a unit with no running main process; otherwise
+root runs `nsenter`, which enters that process's mount namespace and becomes
+the account (its own group only) before anything in that namespace runs, since
+an application with the FUSE or gVisor allowance may have made that namespace
+itself. A main process in a user namespace of the application's own is joined
+there too, as the ids the account has in it, because a FUSE volume mounted
+there admits only that namespace's processes. There the helper's
+`production-enter`, as the account, reads the release's Env file and starts the
+command, or the shell, in the release's folder through its start script, as
+the login does.
 
 A managed execution runs as an application only when the daemon asks for its
 registered account by name (`applicationAccount`), and only as a finite capture.
