@@ -194,6 +194,15 @@ The database tool works on a project's own database, not on tables an
 application feature owns, so its Knex modules take JSKIT's data-access
 infrastructure exception, each listed in `jskit-data-access.json`. Its own SQL
 is written as literals with bindings; the SQL a person writes runs as written.
+A cell edit, row insert or row delete takes its table, columns and key from the
+refreshed schema and refuses generated and identity columns. Every cell, original,
+key and new-row value it binds must be NULL, text, a number, a boolean, binary
+data (`{ kind: "binary", base64 }`) or, for an insert, `{ useDefault: true }`;
+only a JSON column takes an object or array (bound as JSON text), and a
+PostgreSQL array column an array of plain values. Anything else is refused with
+`vibe64_database_value_invalid` before any SQL is built, because MySQL's driver
+writes an object binding as `column` = value pairs and an array as a list, which
+would set other columns of the edited row.
 Copilot resolves the submitting user's Explain & check role (`database_assistant`)
 before inference: the owner's setup for the owner, the team setup for everyone
 else. It may use another orchestrator, and a team member's question uses the team

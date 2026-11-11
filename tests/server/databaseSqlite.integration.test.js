@@ -72,6 +72,10 @@ test("SQLite schema, results, edits, read isolation and cancellation use real da
       await updateDatabaseCell({ knex, schema, edit: {
         table: { schema: "main", name: "people" }, column: "name", key: { columns: [{ column: "id", value: "1" }] }, originalValue: "Alice"
       }, value: "Alicia" });
+      // An object value is refused before any SQL, so it cannot write the row's other columns.
+      await assert.rejects(updateDatabaseCell({ knex, schema, edit: {
+        table: { schema: "main", name: "people" }, column: "name", key: { columns: [{ column: "id", value: "1" }] }, originalValue: "Alicia"
+      }, value: { name: "Mallory", visits: 99 } }), { code: "vibe64_database_value_invalid" });
       await insertDatabaseRow({ knex, schema, table: { schema: "main", name: "people" }, values: {
         name: "Bob", team_id: 1, visits: { useDefault: true }
       } });

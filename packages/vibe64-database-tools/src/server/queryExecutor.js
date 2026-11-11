@@ -110,20 +110,37 @@ function jsonSafeValue(value, depth = 0) {
   return String(value);
 }
 
+function plainValue(value) {
+  return value == null || ["bigint", "boolean", "number", "string"].includes(typeof value);
+}
+
+function plainArray(value) {
+  return Array.isArray(value) && value.every((entry) => plainValue(entry) || plainArray(entry));
+}
+
+/**
+ * A cell, original, key or new-row value as the Knex binding for its column in the inspected schema: a plain value as
+ * it is, `{ kind: "binary", base64 }` as bytes, an object or array as JSON text in a JSON column, and an array of
+ * plain values in a PostgreSQL array column. Anything else is refused before any SQL is built: the MySQL driver writes
+ * an object binding as `column` = value pairs and an array as a list, which could set other columns of the row.
+ */
 function databaseValue(value, column = {}) {
-  if (
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    value.kind === "binary" &&
-    typeof value.base64 === "string"
-  ) {
+  if (plainValue(value)) {
+    return value;
+  }
+  if (value.kind === "binary" && typeof value.base64 === "string") {
     return Buffer.from(value.base64, "base64");
   }
-  if (value && typeof value === "object" && /json/iu.test(column.nativeType || column.dataType || "")) {
+  if (/json/iu.test(column.nativeType || column.dataType || "")) {
     return JSON.stringify(value);
   }
-  return value;
+  if (/\[\]$/u.test(column.nativeType || "") && plainArray(value)) {
+    return value;
+  }
+  throw vibe64Error(
+    `The value for ${text(column.name) || "this column"} must be text, a number, true or false, NULL or binary data; only a JSON column takes an object or array, and an array column an array of text, numbers, true or false or NULL.`,
+    "vibe64_database_value_invalid"
+  );
 }
 
 function boundedRows(rows = []) {

@@ -53,7 +53,10 @@ import {
 } from "../../packages/vibe64-database-tools/src/server/databaseDialect.js";
 import {
   __testables as queryExecutorTestables,
-  executeDatabaseQuery
+  deleteDatabaseRow,
+  executeDatabaseQuery,
+  insertDatabaseRow,
+  updateDatabaseCell
 } from "../../packages/vibe64-database-tools/src/server/queryExecutor.js";
 import {
   __testables as schemaAccessTestables,
@@ -481,6 +484,94 @@ test("database values restore binary payloads and serialize JSON for Knex bindin
   assert.equal(binary.toString("utf8"), "hello");
   assert.equal(databaseValue({ available: true }, { nativeType: "jsonb" }), "{\"available\":true}");
   assert.deepEqual(databaseValue([1, 2], { nativeType: "integer[]" }), [1, 2]);
+  assert.deepEqual(databaseValue([["a", null]], { nativeType: "text[]" }), [["a", null]]);
+  const refused = { code: "vibe64_database_value_invalid" };
+  assert.throws(() => databaseValue({ id: 999 }, { name: "title", nativeType: "text" }), refused);
+  assert.throws(() => databaseValue(["a", "b"], { name: "title", nativeType: "text" }), refused);
+  assert.throws(() => databaseValue([{ id: 999 }], { name: "tags", nativeType: "integer[]" }), refused);
+});
+
+// A MySQL table whose `id` is an identity column, beside a text and a JSON column.
+function valueEditSchema() {
+  return { tables: [{
+    columns: [
+      { immutable: true, name: "id", nativeType: "int" },
+      { immutable: false, name: "name", nativeType: "varchar(40)" },
+      { immutable: false, name: "settings", nativeType: "json" }
+    ],
+    keys: [{ columns: ["id"], name: "PRIMARY", primary: true }],
+    kind: "table",
+    name: "items",
+    qualifiedName: "shop.items",
+    schema: "shop",
+    updatable: true
+  }] };
+}
+
+// A Knex stand-in that records every query it is asked to build.
+function recordingKnex() {
+  const calls = [];
+  const knex = (name) => {
+    const builder = {
+      delete: async () => { calls.push(["delete"]); return 1; },
+      insert: async (record) => { calls.push(["insert", record]); return [7]; },
+      update: async (record) => { calls.push(["update", record]); return 1; },
+      where: (column, value) => { calls.push(["where", column, value]); return builder; },
+      whereNull: (column) => { calls.push(["whereNull", column]); return builder; },
+      withSchema: (schema) => { calls.push(["table", schema, name]); return builder; }
+    };
+    return builder;
+  };
+  knex.client = { dialect: "mysql" };
+  knex.raw = (sql) => ({ raw: sql });
+  return { calls, knex };
+}
+
+test("cell edits, row inserts and row deletes refuse a value that is not plain before building any SQL", async () => {
+  const schema = valueEditSchema();
+  const table = { name: "items", schema: "shop" };
+  const key = { columns: [{ column: "id", value: 1 }] };
+  const objectKey = { columns: [{ column: "id", value: { id: 999 } }] };
+  const refused = { code: "vibe64_database_value_invalid" };
+  const { calls, knex } = recordingKnex();
+  // MySQL's driver writes the object { x: 1, id: 999 } as `x` = 1, `id` = 999, which would set the identity column too.
+  await assert.rejects(updateDatabaseCell({ knex, schema, value: { x: 1, id: 999 },
+    edit: { table, column: "name", key, originalValue: "Alice" } }), refused);
+  await assert.rejects(updateDatabaseCell({ knex, schema, value: ["Alicia", 999],
+    edit: { table, column: "name", key, originalValue: "Alice" } }), refused);
+  await assert.rejects(updateDatabaseCell({ knex, schema, value: { useDefault: true },
+    edit: { table, column: "name", key, originalValue: "Alice" } }), refused);
+  await assert.rejects(updateDatabaseCell({ knex, schema, value: "Alicia",
+    edit: { table, column: "name", key, originalValue: { id: 999 } } }), refused);
+  await assert.rejects(updateDatabaseCell({ knex, schema, value: "Alicia",
+    edit: { table, column: "name", key: objectKey, originalValue: "Alice" } }), refused);
+  await assert.rejects(insertDatabaseRow({ knex, schema, table, values: { name: { x: 1, id: 999 } } }), refused);
+  await assert.rejects(insertDatabaseRow({ knex, schema, table, values: { name: ["Bob", 999] } }), refused);
+  await assert.rejects(deleteDatabaseRow({ knex, schema, table, confirmed: true, key: objectKey }), refused);
+  assert.deepEqual(calls, []);
+});
+
+test("cell edits and row inserts keep plain, default and JSON-column values", async () => {
+  const schema = valueEditSchema();
+  const table = { name: "items", schema: "shop" };
+  const key = { columns: [{ column: "id", value: 1 }] };
+  const edit = recordingKnex();
+  await updateDatabaseCell({ knex: edit.knex, schema, value: "Alicia",
+    edit: { table, column: "name", key, originalValue: "Alice" } });
+  await updateDatabaseCell({ knex: edit.knex, schema, value: { tags: ["a"], theme: "dark" },
+    edit: { table, column: "settings", key, originalValue: { theme: "light" } } });
+  assert.deepEqual(edit.calls, [
+    ["table", "shop", "items"], ["where", "id", 1], ["where", "name", "Alice"], ["update", { name: "Alicia" }],
+    ["table", "shop", "items"], ["where", "id", 1], ["where", "settings", "{\"theme\":\"light\"}"],
+    ["update", { settings: "{\"tags\":[\"a\"],\"theme\":\"dark\"}" }]
+  ]);
+  const insert = recordingKnex();
+  await insertDatabaseRow({ knex: insert.knex, schema, table,
+    values: { id: 5, name: { useDefault: true }, settings: [1, { on: true }] } });
+  assert.deepEqual(insert.calls, [
+    ["table", "shop", "items"],
+    ["insert", { name: { raw: "DEFAULT" }, settings: "[1,{\"on\":true}]" }]
+  ]);
 });
 
 test("PostgreSQL inspection normalizes every visible object, relationship, index, and comment", async () => {
