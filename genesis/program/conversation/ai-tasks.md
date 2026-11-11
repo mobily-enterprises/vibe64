@@ -213,6 +213,11 @@ Cancel. The window opens on Chat when the AI asked something or the person decid
 the end, otherwise on Progress, and never switches view by itself. When an Update
 check is stuck on a conflict review, the footer also offers **Review resolved
 conflicts**, the same file-list acknowledgement the session's Update error offers.
+The status line, the problem, the note under the steps and the outcome's problem,
+what happened and what the AI did are Markdown whose inline code the window renders
+as code through JSKIT's `LongTextInlineParts`, as the conversation does; the problem's
+tooltip keeps its raw text, and the title, the activity list, **Details** and the
+check's output stay literal.
 
 Esc hides an active task and closes an ended one. Clicking outside does nothing. Focus
 goes to the title on open, never the composer, then to the outcome heading when the

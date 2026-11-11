@@ -28,7 +28,8 @@
         <div class="ai-task__heading">
           <h2 :id="titleId" ref="title" tabindex="-1">{{ projection.ended ? projection.outcome.heading : task.title }}</h2>
           <p aria-live="polite" class="ai-task__status" data-vibe64-ai-task-status>
-            {{ projection.ended ? task.title : projection.status }}
+            <template v-if="projection.ended">{{ task.title }}</template>
+            <LongTextInlineParts v-else :text="projection.status" />
           </p>
         </div>
         <div v-if="!projection.ended" class="ai-task__commands">
@@ -46,7 +47,7 @@
 
       <template v-if="!projection.ended">
         <div class="ai-task__problem">
-          <span class="ai-task__problem-line" :title="task.problem.summary">{{ task.problem.summary }}</span>
+          <span class="ai-task__problem-line" :title="task.problem.summary"><LongTextInlineParts :text="task.problem.summary" /></span>
           <button
             v-if="task.problem.details"
             :aria-expanded="detailsOpen ? 'true' : 'false'"
@@ -164,6 +165,7 @@
 <script setup>
 import { computed, nextTick, ref, useId, watch } from "vue";
 import { useDisplay } from "vuetify";
+import { LongTextInlineParts } from "@jskit-ai/assistant-core/client/conversation";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 import { aiTaskFit } from "./aiTaskFit.js";
 import { aiTaskFooterActions } from "./aiTaskProjection.js";

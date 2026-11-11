@@ -13,7 +13,7 @@
       </li>
     </ol>
 
-    <p v-if="projection.note" class="ai-task-progress__note">{{ projection.note }}</p>
+    <p v-if="projection.note" class="ai-task-progress__note"><LongTextInlineParts :text="projection.note" /></p>
 
     <details v-if="$slots['check-output'] && output" class="ai-task-progress__output">
       <summary>{{ task.check.output }}</summary>
@@ -34,6 +34,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { LongTextInlineParts } from "@jskit-ai/assistant-core/client/conversation";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 import { aiTaskTime } from "./aiTaskProjection.js";
 

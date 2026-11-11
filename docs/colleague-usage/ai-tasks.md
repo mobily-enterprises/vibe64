@@ -34,7 +34,9 @@ the same at every size.
 ## What the window shows
 
 The header names the fix and says, in one line, what is happening now. Below it,
-the problem stays in view. Choose **Details** to read all of it.
+the problem stays in view. Choose **Details** to read all of it. Names in the
+problem, such as a Stack's `## Deployment` section, show as code, as they do in
+Chat; hover the problem to see it as written.
 
 Two views sit under the problem, and only one shows at a time:
 

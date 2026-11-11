@@ -2,15 +2,15 @@
   <div class="ai-task-outcome">
     <section>
       <h3>{{ WORDS.outcome.problem }}</h3>
-      <p>{{ task.problem.summary }}</p>
+      <p><LongTextInlineParts :text="task.problem.summary" /></p>
     </section>
     <section>
       <h3>{{ WORDS.outcome.whatHappened }}</h3>
-      <p>{{ projection.outcome.happened }}</p>
+      <p><LongTextInlineParts :text="projection.outcome.happened" /></p>
     </section>
     <section v-if="projection.outcome.report">
       <h3>{{ WORDS.outcome.whatTheAiDid }}</h3>
-      <p>{{ projection.outcome.report }}</p>
+      <p><LongTextInlineParts :text="projection.outcome.report" /></p>
     </section>
     <section v-if="projection.outcome.next">
       <h3>{{ WORDS.outcome.whatsNext }}</h3>
@@ -28,6 +28,7 @@
 </template>
 
 <script setup>
+import { LongTextInlineParts } from "@jskit-ai/assistant-core/client/conversation";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 
 defineProps({
