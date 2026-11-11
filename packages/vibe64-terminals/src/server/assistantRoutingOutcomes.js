@@ -188,13 +188,12 @@ function createAssistantRoutingOutcomes({
         return;
       }
       if (outcome.decision === "complete") {
-        // A message the person steers into the turn starts its own chat turn,
-        // which then holds the turn's later replies, its final one included.
         const steered = (state.steering || []).map(({ messageId }) => messageId);
-        const replies = await context.runtime.store.readConversationTail(sessionId, { userLimit: 2 + steered.length });
-        const own = replies.findIndex(turn => turn.user?.messageId === (activeMessage(state).messageId || state.messageId));
-        const hasFinal = own >= 0 && replies.slice(own).some((turn, index) =>
-          (index === 0 || steered.includes(turn.user?.messageId)) && turn.assistant?.text?.trim());
+        const entries = await context.runtime.store.readConversationTail(sessionId, { userLimit: 2 + steered.length });
+        // The turn's span: its own entry, then each later one that a steer of it or no user message starts, up to any other message.
+        const own = entries.findIndex(turn => turn.user?.messageId === (activeMessage(state).messageId || state.messageId));
+        const other = entries.findIndex((turn, index) => index > own && turn.user && !steered.includes(turn.user.messageId));
+        const hasFinal = own >= 0 && entries.slice(own, other < 0 ? undefined : other).some(turn => turn.assistant?.text?.trim());
         if (!hasFinal) {
           state.status = "waiting";
           state.error = "Review finished, but its final explanation was not confirmed. Check delivery before completing recovery.";

@@ -533,19 +533,45 @@ async function steer(f, messageId = "status", message = "status?") {
   await f.service.send("session-1", { messageId, message, submissionKind: "steer" }, f.context);
   f.agent.sessionState = async () => ({ turn: { active: false } });
 }
+// The store reads the newest entries back to the userLimit-th one with a user message.
+function transcript(f, entries) {
+  f.context.runtime.store.readConversationTail = async (_sessionId, { userLimit = 2 } = {}) => {
+    const tail = [];
+    let users = 0;
+    for (const turn of [...entries].reverse()) {
+      tail.unshift(turn);
+      if (turn.user && ++users >= userLimit) break;
+    }
+    return tail;
+  };
+}
+// A transcript entry: the user message that starts it, if any, its commentary and its final reply, if any.
+const entry = (messageId, final = "") => ({
+  user: messageId ? { messageId, text: messageId } : null,
+  assistant: final ? { role: "assistant", text: final } : null,
+  messages: [...messageId ? [{ role: "user", text: messageId }] : [], { role: "commentary", text: "Checking the form." },
+    ...final ? [{ role: "assistant", text: final }] : []]
+});
 // The transcript a steered Claude turn leaves (the Claude stream test proves it):
 // the turn's own message keeps its commentary, and the reply to the steer and the
 // turn's final reply join the steered message.
 function steeredTail(f, steerId, final) {
   const turnMessage = f.state().followup?.messageId || f.state().messageId;
-  f.context.runtime.store.readConversationTail = async () => [
+  transcript(f, [
     { user: { messageId: turnMessage, text: "Continue Senior review." }, assistant: null,
       messages: [{ role: "user", text: "Continue Senior review." }, { role: "commentary", text: "Checking the form." }] },
     { user: { messageId: steerId, text: "status?" }, assistant: final ? { role: "assistant", text: final } : null,
       messages: [{ role: "user", text: "status?" }, { role: "commentary", text: "Almost done." },
         ...final ? [{ role: "assistant", text: final }] : []] }
-  ];
+  ]);
 }
+// The receipt of a project message the turn sends: a system notice in an entry of
+// its own, so the runtime writes the turn's later output into a fresh entry after it.
+const receipt = {
+  user: null, assistant: null,
+  system: { role: "system", messageId: "project-message:other-app:session-2:reply-1", text: "Message to other-app: delivered\n\nThe check passes." },
+  messages: [{ role: "system", text: "Message to other-app: delivered\n\nThe check passes." }]
+};
 const senior = { mode: "senior", review: true, deslop: false, uiPass: false, autoSave: true };
 
 test("a finishing turn the person steered completes and saves once it reports complete and ends", async t => {
@@ -605,6 +631,54 @@ test("an implementation turn the person steered starts its finishing turn once i
   assert.deepEqual(started(f), [STARTED.review]);
   assert.equal(f.sends.length, 3, "the request, the steer and the finishing turn");
   assert.match(f.sends.at(-1).input.message, /Accepted steering: .*status\?/);
+});
+
+for (const stage of ["implementation", "review"]) test(`a ${stage} turn whose final reply follows its own project message's receipt completes`, async t => {
+  const f = await savingFixture(t, senior, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  if (stage === "review") await finish(f, "handoff", { involved: false });
+  await report(f, "complete", { involved: false });
+  transcript(f, [entry(f.state().followup?.messageId || request.messageId), receipt, entry("", "Done; I told the other app the check passes.")]);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.state().status, "complete", f.state().error);
+  assert.deepEqual(f.saves, stage === "review" ? [0] : [], "only finished work's finishing turn saves, once");
+  assert.deepEqual(started(f), stage === "review" ? [STARTED.review, STARTED.autoSave] : []);
+});
+
+test("a finishing turn steered twice completes and saves once with its final reply under the second steer", async t => {
+  const f = await savingFixture(t, senior, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "handoff", { involved: false });
+  await steer(f, "status", "status?");
+  await steer(f, "eta", "how long?");
+  await report(f, "complete", { involved: false });
+  transcript(f, [entry(f.state().followup.messageId), entry("status"), entry("eta", "Review complete.")]);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.state().status, "complete", f.state().error);
+  assert.deepEqual(f.saves, [0]);
+});
+
+test("a steered implementation turn that changed nothing completes with no finishing step and no Save", async t => {
+  const f = await savingFixture(t, senior, { readyPlan: false });
+  await f.service.send("session-1", { ...request, message: "What does the form validate?" }, f.context);
+  await steer(f);
+  await report(f, "complete", { involved: false, explanation: "Answered; no files changed." });
+  steeredTail(f, "status", "It rejects a blank name; nothing changed.");
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.state().status, "complete"); assert.equal(f.state().error, undefined);
+  assert.deepEqual(started(f), []); assert.deepEqual(f.saves, []);
+  assert.equal(f.sends.length, 2, "the request and the steer");
+});
+
+test("a finishing turn still waits when the only reply comes after another request's message", async t => {
+  const f = await savingFixture(t, senior, { readyPlan: false });
+  await f.service.send("session-1", request, f.context);
+  await finish(f, "handoff", { involved: false });
+  await report(f, "complete", { involved: false });
+  transcript(f, [entry(f.state().followup.messageId), entry("another-request"), entry("", "Unrelated answer.")]);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.state().status, "waiting"); assert.match(f.state().error, /final explanation was not confirmed/);
+  assert.deepEqual(f.saves, []);
 });
 
 test("Stop means no review; the stopped request's changes fold into the next one", async t => {

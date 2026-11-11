@@ -92,6 +92,8 @@ included in the next.
 A message you steer into a working turn, such as a status question, changes
 none of this: the agent answers it and carries on, and when that turn finishes
 the work the next step runs, then **Save**, as it would have without your message.
+The same holds when the agent messages another session during the turn and the
+chat shows that sent message before the agent's final reply.
 
 With review, Deslop and the UI pass all off, finished work goes straight to
 **Save** (when it is on) and the chat notes **Work finished.**

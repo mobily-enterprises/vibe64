@@ -1985,11 +1985,12 @@ through this SAME revision-fenced plan owner. It compares the reviewed scope
 bytes with the current completed document before invoking archive; unrelated,
 replaced, active, stopped and failed scopes remain current. Progress is captured
 at the current paired revision. The bounded canonical transcript tail must also
-contain a nonempty final assistant reply for this exact review message, or for a
-message this request accepted as steering after it: a steered message starts its
-own transcript turn, which holds the review turn's later replies. Commentary, a
-reply before the review message and another request's answer cannot stand in for
-the final explanation. A missing
+contain a nonempty final assistant reply in this review turn's span: the review
+message's transcript turn, then each later one that a message this request accepted
+as steering starts or that has no user message (a receipt the turn's own project
+message writes mid-turn, and the turn's later output after it), up to any other
+user message. Commentary, a reply before the review message and a reply after
+another request's message cannot stand in for the final explanation. A missing
 reply leaves the completed pair current with a truthful recovery notice.
 There is no inference of acceptance from native
 success, historical scan, second writer or storage conversion. Chat receives an
