@@ -110,23 +110,28 @@ one.
 
 To pause, resume or clear a Claude or Codex goal, see [Pause and resume a goal](coding-agent-goal-pause.md).
 
-Claude and Codex use the same **Goal** control and status light. An active goal
-has a red light; it blinks only while the conversation reports work in progress
-and becomes steady between turns. Paused goals use a steady orange light.
-The chip beside the message box shows a clock only while the goal is running.
-A goal that is not running says so on the chip instead, with no clock:
-**Goal paused**, **Goal blocked** or **Goal budget reached**. A goal waiting
+Claude and Codex use the same **Goal** control and status light. The light is
+red and blinks, and the chip beside the message box shows the goal's clock, only
+while the AI is working on the goal. Paused goals use a steady orange light.
+A goal that is not running says so on the chip instead, with no red light and
+no clock. An active goal that nothing is working on right now (between turns,
+after **Stop**, or after a server restart until its continuation starts) shows
+**Goal not running**; open **Goal** to see any error that stopped it, and your
+next message continues it. The others show **Goal paused**, **Goal blocked** or
+**Goal budget reached**. A goal waiting
 because its AI account reached its usage limit shows **Waiting: AI usage limit,
 resets at** the reset time (for example 05:00, with the day when it is not
 today), or **Waiting: AI usage limit** when the AI does not say when; one whose
 account ran out of credit shows **Out of credit: top up or switch AI account**.
-Open **Goal** to see how long it has been going.
-The control shows native **Running time** when available. Claude currently supplies
-only creation and status timestamps, so its timer is labelled **Elapsed since
-goal started (including pauses)**; this is not measured active runtime. It counts
-from the goal's first start: **Pause goal**, **Resume goal** and a server restart
-or deploy, whether the goal continues by itself or you resume it, never set it
-back to zero. A goal you cancel or finish and then set again starts a new clock.
+Open **Goal** to see its **Running time**: how long the AI has actually spent
+working on the goal. Codex reports its own; for Claude, Vibe64 adds up the time
+Claude worked on the goal from its conversation history. It counts only while
+the goal is being worked on: time between turns, while paused, waiting at a
+usage limit or across a server restart or deploy never counts. When work
+resumes the clock carries on from its total: **Pause goal**, **Resume goal**, a
+server restart or deploy, and Claude compacting its context during a long goal
+never set it back to zero. A goal you cancel or finish and then set again starts
+from zero.
 With no goal set, **Goal** opens a 360-pixel-wide panel (the screen's width on a
 narrow phone) whose objective box fills it. On narrow
 panes, open **Goal** to see the timer. Pause, Resume and Cancel appear before long
@@ -183,10 +188,12 @@ that may have reached the AI is checked, not repeated. An error still shown afte
 the last attempt stays visible on the goal control.
 **Pause goal**,
 **Cancel goal**, and **Stop** prevent that automatic continuation. A completed
-or cleared goal is not restarted. A Claude goal whose turn ended any other way,
-for example after **Stop**, is not paused: it shows as active with a steady red
-light, and a server restart or deploy continues it. To keep it from continuing,
-choose **Goal** → **Pause goal**. A goal waiting at its AI account's usage limit
+or cleared goal is not restarted. A Claude goal whose turn ended any other way
+is not paused: it shows **Goal not running**, and a server restart or deploy
+continues it, including after Claude compacted its context during a long goal.
+After **Stop**, a restart does not continue it, but your next message does;
+once you choose **Pause goal** and then **Resume goal**, restarts continue it
+again. To keep it from continuing, choose **Goal** → **Pause goal**. A goal waiting at its AI account's usage limit
 or out of credit (Claude or Codex), or a Codex goal that reached its token
 budget, is not continued by a restart or deploy, and no AI turn is spent on it.
 It does not continue by itself either: once the limit resets, or after you top up

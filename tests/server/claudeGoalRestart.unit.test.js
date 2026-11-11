@@ -115,6 +115,34 @@ createInterface({ input: process.stdin }).on('line', line => {
       emit({ type: 'result', subtype: 'success', local_command: 'goal', user_message_uuid: frame.uuid, result: '' });
       return;
     }
+    // A goal whose turn ends with a progress report waits between turns, its checker still armed.
+    const report = () => {
+      const answer = { type: 'assistant', uuid: frame.uuid + '-report', parentUuid: frame.uuid, timestamp: new Date().toISOString(),
+        message: { id: frame.uuid + '-report', role: 'assistant', content: [{ type: 'text', text: 'Progress report' }] } };
+      record(answer);
+      emit(answer);
+      emit({ type: 'result', subtype: 'success', result: 'Progress report' });
+    };
+    // Later in a long turn Claude compacts its context, as its history saves it:
+    // the boundary, a summary timestamped before it, and the goal re-attached
+    // with a sentinel that no /goal command follows.
+    if (condition.includes('compacted')) {
+      setTimeout(() => {
+        const boundary = { type: 'system', subtype: 'compact_boundary', uuid: frame.uuid + '-boundary', parentUuid: null,
+          logicalParentUuid: frame.uuid, timestamp: new Date().toISOString(), compactMetadata: { trigger: 'auto' } };
+        record(boundary);
+        record({ type: 'user', uuid: frame.uuid + '-summary', parentUuid: boundary.uuid, isCompactSummary: true,
+          isVisibleInTranscriptOnly: true, timestamp: new Date(Date.now() - 300).toISOString(),
+          message: { role: 'user', content: 'This session is being continued from a previous conversation.' } });
+        record({ ...marker, uuid: frame.uuid + '-reattached', parentUuid: frame.uuid + '-summary', timestamp: new Date(Date.now() + 50).toISOString() });
+        report();
+      }, 1000);
+      return;
+    }
+    if (condition.startsWith('Between turns')) {
+      report();
+      return;
+    }
     emit({ type: 'stream_event', event: { type: 'message_start', message: { id: frame.uuid + '-reply' } } });
     emit({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
     emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Working on the goal' } } });
@@ -189,8 +217,8 @@ createInterface({ input: process.stdin }).on('line', line => {
       service = createService();
       return service;
     },
-    /** A goal Main chat started, with Claude still working on it. */
-    async startRunningGoal(objective) {
+    /** A goal Main chat started, with Claude still working on it, or between turns once its turn finishes. */
+    async startRunningGoal(objective, { finishes = false } = {}) {
       const sent = await service.sendAgentMessage("test", { message: "Work", messageId: "before-goal" }, options);
       assert.equal(sent.delivered, true, JSON.stringify(sent));
       await waitFor(async () => !await turnActive(), "the first message completes");
@@ -211,7 +239,8 @@ createInterface({ input: process.stdin }).on('line', line => {
       await waitFor(async () => (await intent())?.pending === null, "the goal's attachment is reconciled");
       const read = await service.readCanonicalAgentGoal("test", options);
       assert.equal(read.goal.status, "active");
-      assert.equal(await turnActive(), true, "Claude is still working on the goal");
+      if (finishes) await waitFor(async () => !await turnActive(), "the goal's turn ends with its report");
+      else assert.equal(await turnActive(), true, "Claude is still working on the goal");
       return read;
     }
   };
@@ -232,6 +261,24 @@ test("a Claude goal that was working when the server stopped continues by itself
     assert.equal(read.error, undefined);
     assert.equal(await h.turnActive(), true, "Claude works on the goal again");
     // The same server's recovery never continues it twice.
+    await h.service.recoverActiveGoals();
+    assert.equal(await h.goalCommands(), commandsBefore + 1);
+  });
+});
+
+for (const [name, objective] of [["between turns", "Between turns: all checks pass"],
+  ["between turns after Claude compacted its context", "Between turns, compacted: all checks pass"]])
+test(`a Claude goal ${name} when the server stopped continues by itself, once, after restart`, { timeout: 60_000 }, async t => {
+  const h = await goalHarness(t);
+  await h.inProject(async () => {
+    await h.startRunningGoal(objective, { finishes: true });
+    const commandsBefore = await h.goalCommands();
+    await h.restart();
+    const recovery = await h.service.recoverActiveGoals({ retryDelaysMs: [] });
+    const evidence = async () => JSON.stringify({ recovery, intent: await h.intent(), warnings: h.warnings });
+    assert.equal(recovery.ok, true, await evidence());
+    assert.equal(recovery.results.at(-1).resumed, true, await evidence());
+    assert.equal(await h.goalCommands(), commandsBefore + 1, "the goal continues with exactly one native command");
     await h.service.recoverActiveGoals();
     assert.equal(await h.goalCommands(), commandsBefore + 1);
   });

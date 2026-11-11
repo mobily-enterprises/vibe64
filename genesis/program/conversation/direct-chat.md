@@ -1171,11 +1171,15 @@ plus Vibe64's plain objective and pinned selection. The panel retains Auto polic
 capability-driven controls and full-objective preview without a separate goal
 cache, poll or POST. Claude and Codex share JSKIT's goal control, keyed to the
 existing project/session/actor scope so late admission cannot clear a new draft.
-Its activity light follows canonical working state, while elapsed display uses
-native running-time usage when supplied or explicitly labelled wall elapsed time
-including pauses, from the goal's first start: JSKIT's Claude history keeps that
-start when Resume or restart recovery sends the same unfinished objective again,
-including after the clear that suspends a paused goal. Recovery controls precede
+Its red light and chip clock show only while canonical working state reports
+work on an active goal; an active goal with nothing working on it reads **Goal
+not running**. The clock is native running time: Codex's `timeUsedSeconds`, and
+for Claude JSKIT's history sum of the time up to each frame Claude saved itself,
+never the wait before an authored message (between turns, paused, or across a
+restart), carried across Resume, restart recovery's resend, the clear that
+suspends a paused goal, and compaction. The control adds the time since that
+sample only while working, from the later of the sample and the turn start it
+saw. Recovery controls precede
 long objective and blocker text. Standalone common goal delivery is unchanged.
 A native-history duplicate with no authored application row retains its exact
 native result; canonical callers receive an explicit missing-receipt error instead
@@ -4714,6 +4718,11 @@ Main records continuation identity only after that proof, never from the previou
 goal snapshot or matching condition text. Restart recovery can resolve an accepted
 pending command through the same proof. Stop and replacement keep the existing
 intent-generation fence, and missing attachment evidence remains actionable.
+Claude re-attaches an unfinished goal after compacting its context, with a
+sentinel that no authored command follows; JSKIT keeps that goal's `createdAt`,
+id and command, so recovery's identity check still matches it. Before that fix
+any restart after a goal's auto-compaction failed every pass with "The native
+goal changed after continuation was requested."
 
 
 The numbered `20261016-claude-command-messages` repair restores presentation
@@ -4774,7 +4783,8 @@ even when the account is out of credit or at its usage limit; the later local
 Only that retained Pause reads as paused. A goal whose turn ended any other way
 (Stop, a process or server restart) keeps Claude's checker armed: the next turn
 continues it and startup recovery resumes an active continuation intent, so it
-reads active, with Pause available. When Claude's own history ends the goal's
+reads active, with Pause available. Stop ends the continuation intent, so after
+Stop only the next message continues it; Pause and Resume enroll it again. When Claude's own history ends the goal's
 turn with its usage-limit message, JSKIT reads the goal as `usageLimited` with
 that message's reset time, and its credit-balance message as `usageLimited` with
 `outOfCredit`; a later answer makes it active again. Startup recovery skips a
