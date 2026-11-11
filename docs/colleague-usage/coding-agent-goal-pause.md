@@ -13,7 +13,7 @@ a Claude goal paused. When a turn ends any other way, for example after
 **Stop** or a server restart, the goal stays active and its chip says **Goal not
 running**, with no red light and no clock: **Pause goal** is offered, and your
 next message continues it. A server restart or deploy continues it too, except
-after **Stop**. At the account's usage limit, or out of credit, the goal shows **Waiting: AI
+after **Stop** until your next message. At the account's usage limit, or out of credit, the goal shows **Waiting: AI
 usage limit, resets at** the reset time, or **Out of credit: top up or switch AI
 account**, instead: a server restart does not continue it, and **Pause goal**,
 **Resume goal** and **Cancel goal** are offered. A reply saying the work is paused does not

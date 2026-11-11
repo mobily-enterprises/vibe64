@@ -4783,8 +4783,14 @@ even when the account is out of credit or at its usage limit; the later local
 Only that retained Pause reads as paused. A goal whose turn ended any other way
 (Stop, a process or server restart) keeps Claude's checker armed: the next turn
 continues it and startup recovery resumes an active continuation intent, so it
-reads active, with Pause available. Stop ends the continuation intent, so after
-Stop only the next message continues it; Pause and Resume enroll it again. When Claude's own history ends the goal's
+reads active, with Pause available. Stop, or Cancel of a sending message, ends
+the continuation intent, so a restart after it continues nothing. The person's
+next delivered message continues the still-active native goal and enrolls the
+same intent again (`continueGoalIntentAfterMessage` in
+[serviceGoals.js](../../../packages/vibe64-terminals/src/server/serviceGoals.js)),
+only when that goal is the intent's exact thread, creation time and objective,
+so a restart during or after that turn continues it once. Automatic workflow
+turns and duplicate deliveries enroll nothing. When Claude's own history ends the goal's
 turn with its usage-limit message, JSKIT reads the goal as `usageLimited` with
 that message's reset time, and its credit-balance message as `usageLimited` with
 `outOfCredit`; a later answer makes it active again. Startup recovery skips a

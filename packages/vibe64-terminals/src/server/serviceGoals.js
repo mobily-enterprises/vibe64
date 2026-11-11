@@ -163,6 +163,39 @@ function createServiceGoals({
     });
   }
 
+  /**
+   * Stop ends a goal's continuation until the person's next message, which
+   * continues the still-active native goal: that message enrolls the same
+   * goal's continuation again, so a restart during or after its turn continues
+   * the goal, once. A paused, finished, cancelled or different goal is left alone.
+   */
+  async function continueGoalIntentAfterMessage(sessionId, options = {}) {
+    try {
+      const context = await assistantContext.assistantSessionOptions(sessionId, options);
+      const intent = readGoalIntent(context.session);
+      if (!intent || intent.active || intent.pending || !intent.native) return false;
+      const native = await sessionAgent.readGoal(sessionId, context);
+      if (native?.status !== "available" || native.goal?.status !== "active" || native.threadId !== intent.native.threadId ||
+          native.goal.createdAt !== intent.native.createdAt || native.goal.objective !== intent.native.objective) return false;
+      let enrolled = false;
+      await changeGoalIntent(sessionId, context, latest => {
+        if (latest?.id !== intent.id || latest.active) return null;
+        enrolled = true;
+        return { ...latest, active: true, daemonId: goalRuntimeId, error: null };
+      });
+      return enrolled;
+    } catch (error) {
+      logOperationalEvent(logger, "warn", {
+        component: "vibe64.agent_goal",
+        event: "vibe64.agent_goal.message_continuation_failed",
+        sessionId,
+        code: error?.code,
+        error: error?.message
+      }, "A message continued the goal, but a restart may not continue it.");
+      return false;
+    }
+  }
+
   async function completeGoalIntent(sessionId, context, intent, result) {
     if (!intent || result?.ok === false || !result.goal) return;
     // Explicit Stop/Pause can run while native acknowledgement is outstanding.
@@ -653,6 +686,7 @@ function createServiceGoals({
     applyGoalSelection,
     cancelGoalIfMainAiChanged,
     continueGoalAfterAccountChange,
+    continueGoalIntentAfterMessage,
     readAgentGoal,
     readCanonicalAgentGoal,
     readGoalIntent,

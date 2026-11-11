@@ -187,13 +187,14 @@ it disappears once the goal continues. A goal is never sent twice: an attempt
 that may have reached the AI is checked, not repeated. An error still shown after
 the last attempt stays visible on the goal control.
 **Pause goal**,
-**Cancel goal**, and **Stop** prevent that automatic continuation. A completed
+**Cancel goal**, and **Stop** (until your next message) prevent that automatic
+continuation. A completed
 or cleared goal is not restarted. A Claude goal whose turn ended any other way
 is not paused: it shows **Goal not running**, and a server restart or deploy
 continues it, including after Claude compacted its context during a long goal.
-After **Stop**, a restart does not continue it, but your next message does;
-once you choose **Pause goal** and then **Resume goal**, restarts continue it
-again. To keep it from continuing, choose **Goal** → **Pause goal**. A goal waiting at its AI account's usage limit
+After **Stop**, a restart does not continue it until you send your next
+message: that message continues the goal, and a restart during or after its
+turn continues it again, never twice. To keep it from continuing, choose **Goal** → **Pause goal**. A goal waiting at its AI account's usage limit
 or out of credit (Claude or Codex), or a Codex goal that reached its token
 budget, is not continued by a restart or deploy, and no AI turn is spent on it.
 It does not continue by itself either: once the limit resets, or after you top up

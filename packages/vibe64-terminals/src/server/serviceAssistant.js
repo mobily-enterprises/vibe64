@@ -478,6 +478,9 @@ function createServiceAssistant({
           }, "Session naming could not start.");
         }
       }
+      // The person's message continues an active goal Stop left without continuation.
+      if (result?.ok === true && result.delivered === true && !result.duplicate && !options.purpose && !input.reviewAction &&
+          !state.lifecycle.closing) await goals.continueGoalIntentAfterMessage(sessionId, options);
       if (result?.ok === false) {
         logOperationalEvent(logger, "warn", {
           code: result.code,
