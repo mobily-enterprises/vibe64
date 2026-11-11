@@ -23,7 +23,7 @@
 
     <ArchivedVibe64SessionDetail
       v-if="session"
-      :back-to="backTo"
+      :session-history-to="sessionHistoryTo"
       :conversation-log="conversationLog"
       :session="session"
       :sessions-api-path="sessionsApiPath"
@@ -40,11 +40,11 @@
       <p>Session {{ sessionId || "unknown" }} could not be loaded.</p>
       <div class="vibe64-dashboard-page__empty-actions">
         <v-btn
-          prepend-icon="$arrowBack"
-          :to="backTo"
+          prepend-icon="$history"
+          :to="sessionHistoryTo"
           variant="tonal"
         >
-          Back to sessions
+          Session history
         </v-btn>
         <v-btn
           prepend-icon="$refresh"
@@ -65,12 +65,12 @@ import {
 } from "@/composables/useArchivedVibe64Sessions.js";
 
 const {
-  backTo,
   conversationLog,
   error,
   loading,
   reload,
   session,
+  sessionHistoryTo,
   sessionId,
   sessionsApiPath,
   projectSlug

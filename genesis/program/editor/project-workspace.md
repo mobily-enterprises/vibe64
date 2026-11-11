@@ -16,7 +16,7 @@ conversation, application preview, files and engineering tools.
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/Vibe64SessionPanel.vue`
-- `src/components/studio/Vibe64DashboardBackButton.vue`
+- `src/components/studio/Vibe64DestinationButton.vue`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionToolPane.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
@@ -30,9 +30,13 @@ suspending their automatic reads. Session changes use the existing session owner
 and do not adopt another conversation's native identity or source authority.
 
 Architecture, Changes, Files, Database and the GitHub panels use one shared
-dashboard back control. It owns the arrow and text-button presentation; the
-calling view retains its existing destination or navigation handler, including
-returning to Architecture or to an issue/pull-request list.
+destination button, labelled with the place it opens and showing that place's
+icon: **Dashboard**, **Architecture** in Files or Database opened from
+Architecture, and **All issues** or **All pull requests** inside an issue or
+pull request. It owns the text-button presentation and that closed list of
+places, so it can never read as Back or show a back arrow, as JSKIT's
+`nav/back-control` requires; the calling view chooses the place and keeps its
+destination or navigation handler (`openDashboard`, `openArchitecture`).
 
 Files retains Repo, Session Dropzone and Session browsing; the project-wide
 Project Dropzone and Project Backups live on the Dashboard's Project files page

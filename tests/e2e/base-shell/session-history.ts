@@ -39,12 +39,14 @@ test.describe("session history navigation", () => {
       const archiveConversationBody = page.locator(".studio-archived-session-detail__conversation .assistant-transcript__body");
       await expect(archiveConversationBody).toHaveCSS("overflow-y", "auto");
       await expect(archiveConversationBody).toHaveCSS("overscroll-behavior-y", "contain");
-      await page.getByRole("link", { name: "Back to sessions" }).click();
+      await page.locator(".studio-archived-session-detail").getByRole("link", { name: "Session history", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/history$`, "u"));
 
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/history/open-session`);
       await showProjectPaneIfNeeded(page);
       await expect(page.getByText("Archived session unavailable")).toBeVisible();
+      await expect(page.locator(".vibe64-dashboard-page__empty").getByRole("link", { name: "Session history", exact: true }))
+        .toHaveAttribute("href", new RegExp(`${DASHBOARD_PATH}/history$`, "u"));
       await expect(page.getByText("Read-only history. Source restore is not available from archived sessions.")).toHaveCount(0);
 
       await expectNoHorizontalOverflow(page);

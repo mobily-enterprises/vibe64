@@ -11,23 +11,24 @@ highlighted pill marks the open section, and each page's header repeats that
 section's icon and title with a one-line description and its actions.
 
 On mobile, **Show project** reveals the project from chat. Use **Dashboard section**
-to choose a tool and **Back to dashboard** to return from its detail. **Show chat**
-returns to the coding conversation. A link, reload or Back to a session tool such
+to choose a tool and the tool's **Dashboard** button to return from its detail. **Show chat**
+returns to the coding conversation. A link, reload or the browser's Back to a session tool such
 as Files, Changes, Database or Architecture opens on that tool, not on chat. On a
 desktop the header's **Preview** and **Dash** (Dashboard) switch between the two panes. Preview and Dashboard retain their own selected
 state when hidden; leaving the preview does not stop its application.
 
 Architecture, Current changes, Files, Database, Issues and Pull requests fill
-the Dashboard, with its section menu hidden. The left-arrow **Back to dashboard**
-control has the same appearance in each of them, including the same readable
-text size on phones. When space is limited, the Issues **Refresh** and then
-**New issue** buttons show only their icons beside it, and on the narrowest
-screens they wrap below it. From a session tool it returns to the Dashboard
-page you opened the tool from (Env, when you opened it from a link); from Issues
-and Pull requests it opens Env. Use Tab to focus it and Enter to activate it. Files
-and Database opened from Architecture instead show **Back to Architecture**,
-returning to that view. Inside an individual issue or pull request, the same
-control says **All issues** or **All pull requests** and returns to its list.
+the Dashboard, with its section menu hidden. Each shows a **Dashboard** button,
+with the Dashboard icon, at its top left; it looks the same in each of them,
+including the same readable text size on phones. When space is limited,
+the Issues **Refresh** and then **New issue** buttons show only their icons
+beside it, and on the narrowest screens they wrap below it. From a session tool
+it opens the Dashboard page you opened the tool from (Env, when you opened it
+from a link); from Issues and Pull requests it opens Env. Use Tab to focus it
+and Enter to activate it. Files and Database opened from Architecture instead
+show **Architecture**, with the Architecture icon, which opens that view as you
+left it. Inside an individual issue or pull request, the same button says
+**All issues** or **All pull requests**, with a list icon, and opens its list.
 The top bar has no back arrow.
 
 **Git log** is in the project section above the active session's tools. Open it

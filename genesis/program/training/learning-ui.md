@@ -268,7 +268,7 @@ each session tool pane by its `guideId` (`vibe64SessionToolGuideId`), and the
 Dashboard section navigation (`SectionContainerShell` `navigationGuidePane`,
 its menu or, at phone width, its section select) as `dashboard`. Standalone
 tool panes (Files, Database, Architecture, Current changes) hide the Dashboard
-shell, so each pane's `Vibe64DashboardBackButton` is also a `dashboard` pane
+shell, so each pane's Dashboard button (`Vibe64DestinationButton`) is also a `dashboard` pane
 anchor. For each step
 a visible control wins over its pane, so desktop still rings tabs; on a phone,
 where tabs and the Dashboard menu are hidden, Show me rings the real open pane.

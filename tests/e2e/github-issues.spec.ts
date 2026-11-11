@@ -393,7 +393,7 @@ for (const viewport of viewports) {
     await expect(panel.getByRole("heading", { name: "Issues", exact: true })).toHaveCount(0);
     await expect(panel.getByText("example/project", { exact: true })).toHaveCount(0);
     const toolbar = panel.locator(".issues-panel__toolbar");
-    await expect(toolbar.getByRole("link", { name: "Back to dashboard", exact: true })).toBeVisible();
+    await expect(toolbar.getByRole("link", { name: "Dashboard", exact: true })).toBeVisible();
     // The Dashboard menu stays hidden while Issues is open, and the top bar has no Up arrow.
     await expect(page.getByRole("navigation", { name: "Dashboard sections" })).not.toBeVisible();
     await expect(page.getByRole("combobox", { name: "Dashboard section" })).not.toBeVisible();

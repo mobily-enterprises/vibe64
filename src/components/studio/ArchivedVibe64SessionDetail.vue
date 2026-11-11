@@ -14,14 +14,14 @@
         </div>
       </div>
       <v-btn
-        v-if="backTo"
-        class="studio-archived-session-detail__back"
-        prepend-icon="$arrowBack"
+        v-if="sessionHistoryTo"
+        class="studio-archived-session-detail__session-history"
+        prepend-icon="$history"
         size="small"
-        :to="backTo"
+        :to="sessionHistoryTo"
         variant="tonal"
       >
-        Back to sessions
+        Session history
       </v-btn>
     </div>
 
@@ -90,7 +90,7 @@ import { shortVibe64SessionId } from "@/lib/vibe64SessionViewModel.js";
 const props = defineProps({
   sessionsApiPath: { type: String, default: "" },
   projectSlug: { type: String, default: "" },
-  backTo: {
+  sessionHistoryTo: {
     default: null,
     type: [Object, String]
   },
@@ -152,7 +152,7 @@ const conversationLoadingMore = computed(() => Boolean(props.conversationLog?.lo
   margin: 0;
 }
 
-.studio-archived-session-detail__back {
+.studio-archived-session-detail__session-history {
   flex: 0 0 auto;
 }
 

@@ -69,7 +69,7 @@ confirmed writes. HTTP retains the complete existing result contract.
 The single Issues/PR menu entry appears only for projects with a GitHub repository.
 It sits above session tools, with tabs that return to the respective lists,
 clearing the destination's selected item while preserving URL filters and pagination.
-Both collapse Dashboard navigation while open. Back to dashboard restores
+Both collapse Dashboard navigation while open. Their Dashboard button restores
 the ordinary navigation. Open/Closed/All, literal title/body search, selected
 labels and list pagination live in the URL; issue details, tabs and browser
 history retain those filters when returning. The label selector uses repository
@@ -206,11 +206,11 @@ Each issue rechecks repository label permissions and catalog membership. Success
 issues are deselected and their caches refreshed; failed issues remain selected
 with individual messages and an explicit retry that only targets those failures.
 A refresh failure never makes an already confirmed write eligible for retry.
-The browser uses the available pane width without the Dashboard frame. Back to
-dashboard, Refresh and New issue share one toolbar row, without an Issues heading
+The browser uses the available pane width without the Dashboard frame.
+Dashboard, Refresh and New issue share one toolbar row, without an Issues heading
 or repository subtitle. As the toolbar narrows, Refresh and then New issue show
 only their icons and keep their accessible names; only a toolbar too narrow for
-those icons wraps. Issue details replace Back to dashboard with All issues.
+those icons wraps. Issue details replace Dashboard with All issues.
 Toolbar, tabs and filters use compact spacing; the shared tabs use Vuetify's
 compact density. Compact issue rows place labels beside the title in a wrapping
 row, followed by issue metadata. Repeated tab clicks keep the project mounted.

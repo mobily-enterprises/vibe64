@@ -2,7 +2,7 @@
 
 Open **Database** in the selected session's Dashboard. You need project access and
 a configured database. On mobile, reveal the project and use **Dashboard section**;
-**Back to dashboard** returns without requiring the database to finish loading.
+its **Dashboard** button returns without requiring the database to finish loading.
 
 Select **Overview**, **ERD** or **Data**. The selection stays in the URL across
 navigation and reload. In Data, choose a listed table to inspect it. Returning to

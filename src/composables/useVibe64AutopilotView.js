@@ -609,12 +609,13 @@ function useVibe64AutopilotView(props, emit, {
     workspaceSetupStatus: workspaceSetupActivity.workspaceSetupStatus,
     workspaceSetupTitle: workspaceSetupActivity.workspaceSetupTitle,
     // The project side's tools
-    backToDashboard: sessionToolPane.backToDashboard,
-    backToSystemFromEditor: sessionToolPane.backToSystemFromEditor,
     dashboardRouteVisible: sessionToolPane.dashboardRouteVisible,
     dashboardSessionContext: sessionToolPane.dashboardSessionContext,
     dashboardShellVisible: sessionToolPane.dashboardShellVisible,
     databaseOpenRequest: sessionToolPane.databaseOpenRequest,
+    openArchitecture: sessionToolPane.openArchitecture,
+    openDashboard: sessionToolPane.openDashboard,
+    openedFromArchitecture: sessionToolPane.openedFromArchitecture,
     openSourceEditorFile: sessionToolPane.openSourceEditorFile,
     openSubsystemTable: sessionToolPane.openSubsystemTable,
     rightPaneTab: sessionToolPane.rightPaneTab,
@@ -622,7 +623,6 @@ function useVibe64AutopilotView(props, emit, {
     selectSessionTool: sessionToolPane.selectSessionTool,
     sourceEditorOpenRequest: sessionToolPane.sourceEditorOpenRequest,
     sourceToolLoading: sessionToolPane.sourceToolLoading,
-    systemBackAvailable: sessionToolPane.systemBackAvailable,
     systemRestoreRequest: sessionToolPane.systemRestoreRequest,
     // The chat transcript pane
     chatReloading: chatPane.chatReloading,

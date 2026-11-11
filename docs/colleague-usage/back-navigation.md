@@ -1,25 +1,28 @@
 # Review Back navigation in a JSKIT app
 
 Open the project's working session and use its coding chat to request a
-navigation review. For example: “Check every page for a sensible Back button.
-Back should normally return to the previous page, preserving its filters and
-selected tab. Explain any fixed destination or page that should omit Back.”
-The same chat request works on desktop and mobile.
+navigation review. For example: “Check every page's Up arrow. Up should
+return to the previous page, preserving its filters and selected tab, and
+open the page's parent after a direct link. Explain any page whose Up goes
+somewhere else.” The same chat request works on desktop and mobile.
 
-The coding agent checks the button's presence, placement, label and actual
-destination using the project's JSKIT guidance. A fixed **Back to appointments**
-link can be appropriate, but ordinary **Back** should follow the route the person
-took. Direct links and new tabs need a sensible fallback when there is no usable
-previous page. Loading, error and narrow-screen layouts still need usable
-navigation.
+In a JSKIT app the browser provides Back, and the app's only way back is the
+Up arrow JSKIT draws in the top bar of every inner page; the coding agent
+checks it against the project's JSKIT guidance. Up follows the route the
+person took. Direct links and new tabs open the page's declared parent when
+there is no usable previous page. The app draws no Back button, back arrow or
+breadcrumb of its own, and `jskit check` fails on one. A button that opens a
+named place, such as **Appointments** or **All invoices**, is fine: it is
+labelled with that place and its own icon, never **Back** or a back arrow.
+Loading, error and narrow-screen layouts still need usable navigation.
 
 Ask the agent to enter the same page from two different places and check each
 return path, including filters, tabs and pagination. A review should identify
-which paths it verified and which still need checking. If Back goes somewhere
+which paths it verified and which still need checking. If Up goes somewhere
 unexpected, report both the starting page and the route taken to reach it.
 
-When you request **Deslop** for UI changes, its JSKIT audit also checks Back's
-position and navigational meaning. Deslop preserves behavior: navigation defects
+When you request **Deslop** for UI changes, its JSKIT audit also checks
+navigation against these rules. Deslop preserves behavior: navigation defects
 outside the requested correction scope remain findings for a separate fix.
 To authorize repairs, explicitly ask the coding agent to fix those findings.
 A [UI pass](ui-pass.md) on those screens follows the project's UI guidance the

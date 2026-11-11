@@ -1,5 +1,5 @@
 <script setup>
-import Vibe64DashboardBackButton from "./Vibe64DashboardBackButton.vue";
+import Vibe64DestinationButton from "./Vibe64DestinationButton.vue";
 import { computed, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import SelectField from "@jskit-ai/http-web/client/components/SelectField";
@@ -53,12 +53,11 @@ function date(value) {
 <template>
   <section class="issues-panel d-flex flex-column ga-2">
     <div class="issues-panel__toolbar d-flex flex-wrap align-center ga-2">
-      <Vibe64DashboardBackButton
+      <Vibe64DestinationButton
+        :place="available && number ? 'issue-list' : 'dashboard'"
         :to="available && number ? undefined : projectAppPath(projectSlug, '/dashboard/env')"
         @click="available && number && navigate({ issue: undefined })"
-      >
-        {{ available && number ? 'All issues' : 'Back to dashboard' }}
-      </Vibe64DashboardBackButton>
+      />
       <v-spacer />
       <v-btn
         v-if="available" class="issues-panel__refresh"
@@ -320,7 +319,7 @@ function date(value) {
 .issues-panel__issue-link { color: inherit; }
 .issues-panel__title, .issues-panel__markdown { overflow-wrap: anywhere; }
 .issues-panel__markdown { min-width: 0; overflow-x: auto; }
-/* Back to dashboard keeps its readable label, so the actions beside it narrow to icons, keeping their accessible names, to stay on one row. */
+/* Dashboard keeps its readable label, so the actions beside it narrow to icons, keeping their accessible names, to stay on one row. */
 @container issues-toolbar (max-width: 28rem) {
   .issues-panel__refresh { min-width: 48px; padding-inline: 0; }
   .issues-panel__refresh :deep(.v-btn__prepend) { margin-inline: 0; }

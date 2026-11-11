@@ -1614,10 +1614,10 @@ for (const route of ["session", "repository", "changes", "files", "database", "s
     // The top bar has no Up arrow on any Dashboard page.
     await expect(page.locator("[data-testid=jskit-shell-back]")).toHaveCount(0);
     if (["changes", "files", "database", "system", "issues", "pull-requests"].includes(route)) {
-      const back = page.getByRole("button", { name: "Back to dashboard", exact: true })
-        .or(page.getByRole("link", { name: "Back to dashboard", exact: true }));
-      await expect(back).toBeInViewport();
-      await back.click();
+      const dashboard = page.getByRole("button", { name: "Dashboard", exact: true })
+        .or(page.getByRole("link", { name: "Dashboard", exact: true }));
+      await expect(dashboard).toBeInViewport();
+      await dashboard.click();
       await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/env(?:\\?|$)`));
     }
     await page.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Dashboard section" }) }).click();

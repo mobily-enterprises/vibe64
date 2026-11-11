@@ -140,10 +140,47 @@ describe("useVibe64AutopilotView route hydration", () => {
     expect(view.rightPaneTab.value).toBe("changes");
     expect(view.dashboardShellVisible.value).toBe(false);
     expect(view.dashboardRouteVisible.value).toBe(false);
-    view.backToDashboard();
+    view.openDashboard();
     expect(router.push).toHaveBeenCalledExactlyOnceWith(
       `/app/project/chat-test/dashboard/${direct ? "env" : "health"}`
     );
+  });
+
+  it("opens Architecture again, as it was, from a file opened there", async () => {
+    route.path = "/app/project/chat-test/dashboard/system";
+    const props = viewProps();
+    props.session = {
+      ...props.session,
+      metadata: {
+        source_kind: "session_clone",
+        source_path: "/tmp/sessions/active/session-1/source",
+        source_path_authority: "managed_session_source"
+      },
+      sourcePath: "/tmp/sessions/active/session-1/source"
+    };
+    const { useVibe64AutopilotView } = await import(
+      "../../src/composables/useVibe64AutopilotView.js"
+    );
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
+    expect(view.openedFromArchitecture.value).toBe(false);
+
+    const usage = { selected: "orders" };
+    expect(view.openSourceEditorFile({ path: "src/a.js", origin: "system", systemContext: { usage } })).toBe(true);
+    expect(router.push).toHaveBeenLastCalledWith("/app/project/chat-test/dashboard/files");
+    route.path = "/app/project/chat-test/dashboard/files";
+    await nextTick();
+    expect(view.rightPaneTab.value).toBe("editor");
+    expect(view.openedFromArchitecture.value).toBe(true);
+
+    expect(view.openArchitecture()).toBe(true);
+    expect(view.rightPaneTab.value).toBe("system");
+    expect(view.systemRestoreRequest.value).toMatchObject({ usage, sessionId: "session-1" });
+    expect(router.push).toHaveBeenLastCalledWith("/app/project/chat-test/dashboard/system");
+
+    // A file opened another way has no Architecture to return to.
+    expect(view.openSourceEditorFile({ path: "src/b.js" })).toBe(true);
+    expect(view.openedFromArchitecture.value).toBe(false);
+    expect(view.openArchitecture()).toBe(false);
   });
 
   it.each([

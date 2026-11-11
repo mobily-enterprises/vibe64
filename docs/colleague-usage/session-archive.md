@@ -81,5 +81,7 @@ Open the project's **Session history** page. It lists archived chats with the
 most recently archived first, thirty at a time. When there are more, the bottom
 of the list shows **Showing N of M** and **Show more**; each **Show more** adds
 the next thirty. **Refresh** reads the list again. Select **View** on a chat to
-read its saved history; **Back to sessions** returns to the list. Desktop and mobile show the same list. Colleague can
+read its saved history; its **Session history** button opens the list again.
+A chat that cannot be loaded says **Archived session unavailable** and offers
+**Session history** and **Retry**. Desktop and mobile show the same list. Colleague can
 list archived sessions for you, sixty at a time, newest archival first.

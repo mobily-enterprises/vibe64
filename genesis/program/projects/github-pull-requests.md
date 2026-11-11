@@ -97,7 +97,7 @@ the Dashboard menu while open. Open, Closed, Merged and All filters, literal
 title/body search, and 25-item pagination use URL state. Descriptions use the
 existing safe Markdown renderer. The source repository and branch, base branch,
 draft state and change counts appear before Open as session.
-The browser keeps Back to dashboard, Refresh and Create from session in its
+The browser keeps Dashboard, Refresh and Create from session in its
 toolbar without a separate title/repository header. Compact tabs sit close to
 the toolbar and filters. List rows use compact spacing and place branch details
 beside metadata when space permits, wrapping at narrower widths.

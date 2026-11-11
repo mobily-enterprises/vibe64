@@ -45,7 +45,7 @@
       role="tabpanel"
     >
       <header class="studio-autopilot__session-tool-header">
-        <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="backToDashboard" />
+        <Vibe64DestinationButton data-vibe64-guide-pane="dashboard" place="dashboard" @click="openDashboard" />
       </header>
       <div class="studio-autopilot__right-pane-page">
         <slot name="dashboard" :dashboard-context="dashboardContext" />
@@ -59,9 +59,11 @@
       role="tabpanel"
     >
       <header class="studio-autopilot__session-tool-header">
-        <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
-          {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
-        </Vibe64DashboardBackButton>
+        <Vibe64DestinationButton
+          data-vibe64-guide-pane="dashboard"
+          :place="openedFromArchitecture ? 'architecture' : 'dashboard'"
+          @click="openedFromArchitecture ? openArchitecture() : openDashboard()"
+        />
       </header>
       <Vibe64SessionFiles
         :key="assistantAccessScopeKey"
@@ -90,9 +92,11 @@
       role="tabpanel"
     >
       <header class="studio-autopilot__session-tool-header">
-        <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="systemBackAvailable ? backToSystemFromEditor() : backToDashboard()">
-          {{ systemBackAvailable ? "Back to Architecture" : "Back to dashboard" }}
-        </Vibe64DashboardBackButton>
+        <Vibe64DestinationButton
+          data-vibe64-guide-pane="dashboard"
+          :place="openedFromArchitecture ? 'architecture' : 'dashboard'"
+          @click="openedFromArchitecture ? openArchitecture() : openDashboard()"
+        />
       </header>
       <Vibe64DatabaseWorkspace
         :key="assistantAccessScopeKey"
@@ -132,7 +136,7 @@
         @open-source-file="openSourceEditorFile"
       >
         <template #navigation>
-          <Vibe64DashboardBackButton data-vibe64-guide-pane="dashboard" @click="backToDashboard" />
+          <Vibe64DestinationButton data-vibe64-guide-pane="dashboard" place="dashboard" @click="openDashboard" />
         </template>
         <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
         <template #file-interface="{ request, active, architecture, openFile, updateLocation, openProgram }">
@@ -208,7 +212,7 @@
 </template>
 
 <script setup>
-import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
+import Vibe64DestinationButton from "../Vibe64DestinationButton.vue";
 import { defineAsyncComponent, inject, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
@@ -237,13 +241,14 @@ const emit = defineEmits(["project-attention"]);
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
   agentActive, askAssistantAboutFile, assistantAccessScopeKey, assistantCanUsePurpose,
-  assistantDraftAvailable, assistantFixAllowed, assistantPurposes, backToDashboard, backToSystemFromEditor,
+  assistantDraftAvailable, assistantFixAllowed, assistantPurposes,
   aiTaskComposer, composerInput, dashboardContext, dashboardRouteVisible, dashboardShellVisible, databaseOpenRequest,
   fileBookmarks, lessonShown,
-  openSourceEditorFile, openSubsystemTable, openUsage, prefillComposer, projectSlug, props,
+  openArchitecture, openDashboard, openedFromArchitecture, openSourceEditorFile, openSubsystemTable, openUsage,
+  prefillComposer, projectSlug, props,
   repositoryOperationActive, rightPaneTab, rightPaneTabMounted, selectedAssistantSessionId, selectSessionTool,
   sessionId, sessionSourceRoot, sourceEditorOpenRequest, sourceOperationsSuspended, sourceToolLoading,
-  systemBackAvailable, systemRestoreRequest, temporaryAiWorkspace,
+  systemRestoreRequest, temporaryAiWorkspace,
   updatePreviewAttachmentState, updateTestApproval, usageOpenRequest, Vibe64OutputControls
 } = view;
 /** @type {import("@local/vibe64-ai-tasks/client/types").AiTaskHost} */

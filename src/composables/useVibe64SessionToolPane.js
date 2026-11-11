@@ -121,7 +121,8 @@ function useVibe64SessionToolPane(props, emit, {
     "info",
     "repository"
   ].includes(rightPaneTab.value));
-  const sessionToolBackPath = computed(() => (
+  // The Dashboard page a session tool was opened from, or Env when it was opened from a link.
+  const dashboardPagePath = computed(() => (
     lastDashboardRoutePath.value || projectAppPath(projectSlug.value, "/dashboard/env")
   ));
 
@@ -188,8 +189,8 @@ function useVibe64SessionToolPane(props, emit, {
     return true;
   }
 
-  function backToDashboard() {
-    const targetPath = sessionToolBackPath.value;
+  function openDashboard() {
+    const targetPath = dashboardPagePath.value;
     if (targetPath && normalizeProjectRoutePath(targetPath) !== normalizeProjectRoutePath(route.path)) {
       void router.push(targetPath);
     }
@@ -230,7 +231,8 @@ function useVibe64SessionToolPane(props, emit, {
     workState: props.workState || null
   }));
 
-  const systemBackAvailable = computed(() => Boolean(
+  // Files or Database opened from Architecture in this session, so its own button opens Architecture again.
+  const openedFromArchitecture = computed(() => Boolean(
     systemReturnContext.value?.sessionId === sessionId.value
   ));
 
@@ -267,8 +269,8 @@ function useVibe64SessionToolPane(props, emit, {
     return selectSessionTool("database");
   }
 
-  function backToSystemFromEditor() {
-    if (!systemBackAvailable.value) {
+  function openArchitecture() {
+    if (!openedFromArchitecture.value) {
       return false;
     }
     systemRestoreSequence += 1;
@@ -319,12 +321,13 @@ function useVibe64SessionToolPane(props, emit, {
   });
 
   return {
-    backToDashboard,
-    backToSystemFromEditor,
     dashboardRouteVisible,
     dashboardSessionContext,
     dashboardShellVisible,
     databaseOpenRequest,
+    openArchitecture,
+    openDashboard,
+    openedFromArchitecture,
     openSourceEditorFile,
     openSubsystemTable,
     rightPaneTab,
@@ -332,7 +335,6 @@ function useVibe64SessionToolPane(props, emit, {
     selectSessionTool,
     sourceEditorOpenRequest,
     sourceToolLoading,
-    systemBackAvailable,
     systemRestoreRequest
   };
 }
