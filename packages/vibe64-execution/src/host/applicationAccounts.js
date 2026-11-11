@@ -468,12 +468,14 @@ function retireApplicationAccount(owner = {}, project = "", {
   };
   const unregistered = Boolean(registration && user);
   if (unregistered) unregister();
-  // Its AI sessions' way into production goes with it, and so do their open logins.
-  if (user) endProductionAccess(user, identity.username);
+  // Refused before anything else changes, so a refused retire leaves its AI sessions' production access as it was.
   if (user && running(user.uid)) {
     if (unregistered) writeApplicationRegistration(identity, user, registry);
-    throw new Error("The application still runs. Stop its release service before retiring it.");
+    throw new Error("The application still runs: its release service, or a production login of its AI sessions. " +
+      "Stop its release service, and end its AI sessions' production access, before retiring it.");
   }
+  // Its AI sessions' way into production goes with it.
+  if (user) endProductionAccess(user, identity.username);
   let projectRoot = -1;
   try {
     projectRoot = openApplicationProjectRoot(identity, { areaUid, create: false });

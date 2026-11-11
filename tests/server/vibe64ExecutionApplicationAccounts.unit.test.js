@@ -152,11 +152,11 @@ test("an application account has a login shell only while root holds its product
     ...host.options,
     facts: (username) => ({ ...host.options.facts(username), productionAccess })
   });
-  user.shell = "/bin/bash";
+  user.shell = "/bin/sh";
   assert.throws(() => registeredApplicationUser(host.owner, account.username, withAccess(false)),
     /does not have its application's home and no login/u);
   assert.equal(registeredApplicationUser(host.owner, account.username, withAccess(true)).username, account.username);
-  user.shell = "/bin/sh";
+  user.shell = "/bin/bash";
   assert.throws(() => registeredApplicationUser(host.owner, account.username, withAccess(true)),
     /does not have its application's home and no login/u);
 });
@@ -336,10 +336,13 @@ test("retiring a project removes its application, its registration and its whole
   assert.deepEqual(host.deleted, []);
   await rm(left);
 
-  assert.throws(() => host.retire("shop", { running: () => true }), /still runs/u);
+  // A refused retire leaves its AI sessions' production access as it was.
+  assert.throws(() => host.retire("shop", { running: () => true }),
+    /still runs: its release service, or a production login of its AI sessions/u);
+  assert.deepEqual(host.ended, []);
   assert.deepEqual(host.retire("shop"), { retired: true });
-  // Its AI sessions' way into production, and their open logins, end before it goes.
-  assert.deepEqual(host.ended, [account.username, account.username]);
+  // Its AI sessions' way into production ends before it goes.
+  assert.deepEqual(host.ended, [account.username]);
   assert.deepEqual(await readdir(path.join(host.options.areaRoot, "test")), []);
   assert.equal(readApplicationRegistration("test", account.username, host.options), null);
   assert.deepEqual(host.deleted, [account.username]);

@@ -2,7 +2,10 @@
 // application account's root-owned SSH key file, which host setup's SSH policy names for application accounts
 // alone, and the sudo rule for that account's own service log and restart. Root writes and removes both; the
 // account itself can never add a key or a rule. While they exist the account also has a login shell, since
-// sshd starts even its forced command through that shell.
+// sshd starts even its forced command through that shell: /bin/sh, which reads no file of the account's own
+// before that command (bash, started by sshd, would read the ~/.bashrc the application can write). sshd's PAM
+// stack may still read an environment file of the account's (Ubuntu's reads ~/.pam_environment), so what a
+// login reports about itself stays only what it says; the host's record of each login is logind's.
 
 import { lstatSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -12,7 +15,7 @@ import { APPLICATION_SHELL, HOST_SETTINGS_ROOT, runRootCommand, runRootCommandAl
 
 const PRODUCTION_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "production-ssh");
 const PRODUCTION_SUDOERS_ROOT = "/etc/sudoers.d";
-const PRODUCTION_LOGIN_SHELL = "/bin/bash";
+const PRODUCTION_LOGIN_SHELL = "/bin/sh";
 const ROOT_UID = 0;
 
 function productionKeysPath(username = "", keysRoot = PRODUCTION_KEYS_ROOT) {
@@ -98,9 +101,20 @@ function installProductionAccess(user, publicKey, helperPath, {
   if (user.shell !== PRODUCTION_LOGIN_SHELL) runRoot("usermod", ["--shell", PRODUCTION_LOGIN_SHELL, user.username]);
 }
 
+// The account's own at jobs, from root's list of every user's: the job number first, the user last.
+function removeAtJobs(username = "", runRootAllowFailure = runRootCommandAllowFailure) {
+  const listed = runRootAllowFailure("atq", []);
+  if (listed.status !== 0) return;
+  const jobs = String(listed.stdout || "").split("\n").map((line) => line.trim().split(/\s+/u))
+    .filter((fields) => fields.length > 1 && fields.at(-1) === username)
+    .map(([job]) => job);
+  if (jobs.length > 0) runRootAllowFailure("atrm", jobs);
+}
+
 /**
  * Takes the account's production access back: its key, its sudo rule and its login shell, then ends the
- * logins still open. The account's release service runs outside any login and keeps running.
+ * logins still open and removes what a login could leave to run later, outside any login: the account's
+ * crontab, its at jobs and lingering. The account's release service runs outside any login and keeps running.
  * @param {{ username: string, shell?: string } | null} user the application account, if it still exists
  * @param {string} username
  */
@@ -112,11 +126,13 @@ function removeProductionAccess(user, username, {
 } = {}) {
   const removedKey = removeIfPresent(productionKeysPath(username, keysRoot));
   const removedRule = removeIfPresent(productionSudoersPath(username, sudoersRoot));
-  if (user && user.shell === PRODUCTION_LOGIN_SHELL) {
-    runRoot("usermod", ["--shell", APPLICATION_SHELL, username]);
-  }
-  // A user without a login has nothing to end, which loginctl reports as a failure.
-  if (user) runRootAllowFailure("loginctl", ["terminate-user", username]);
+  if (!user) return removedKey || removedRule;
+  if (user.shell !== APPLICATION_SHELL) runRoot("usermod", ["--shell", APPLICATION_SHELL, username]);
+  // Each of these reports a failure when there is nothing to end or remove.
+  runRootAllowFailure("loginctl", ["disable-linger", username]);
+  runRootAllowFailure("loginctl", ["terminate-user", username]);
+  runRootAllowFailure("crontab", ["-u", username, "-r"]);
+  removeAtJobs(username, runRootAllowFailure);
   return removedKey || removedRule;
 }
 

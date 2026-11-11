@@ -319,32 +319,49 @@ project's one `ssh-ed25519` public key as a root-owned key file for the
 account in the helper's settings folder (loopback only, no forwarding), a
 `visudo`-checked sudoers rule of its own (`productionSudoersPath`) that lets
 the account run exactly `vibe64-exec-helper production-service *`, and the
-login shell `/bin/bash`, which the account check accepts only while that key
-file exists; `revoke` removes all three and ends the account's open logins
-(`loginctl terminate-user`), and `retire` does the same first. The host's SSH
+login shell `/bin/sh`, which the account check accepts only while that key
+file exists. sshd starts even the forced command through that shell, and
+`/bin/sh -c` reads no file of the account's, where bash started by sshd would
+read the `~/.bashrc` the application can write. `revoke` removes all three,
+turns off lingering, ends the account's open logins (`loginctl
+terminate-user`) and removes the account's crontab and at jobs, which a login
+could leave to run later; `retire` refuses while anything of the account still
+runs (a production login included) and only then revokes. The host's SSH
 policy, not the helper, admits application accounts from loopback alone, with
 that key file and `vibe64-exec-helper production-shell` as their forced
 command. That command runs as the account, finds the release unit root
-installed for it (the running one), and starts the client's command, the
-account's shell (no profile or rc file) or an SFTP server in that release's folder with its
-Env file, the unit's PATH and, for a release whose start script runs the
-command it is given, that script's runtimes and Serve defaults; it adds
-`production-logs`, `production-status`, `production-restart` and
-`production-enter` and logs each login's start and end (session, command, exit
-status, duration) to the journal under `vibe64-production`, which `activity`
-reads back for the account. Such a login runs outside the release service's
-sandbox, as a person's own login would, so mounts the service makes in
-namespaces of its own (its private `/tmp`, a FUSE volume) are not there.
+installed for it (the running one), and starts the client's command, bash
+(`--noprofile --norc`, and no `BASH_ENV` or `ENV` from the login's
+environment) or an SFTP server in that release's folder with its Env file, the
+unit's PATH and, for a release whose start script runs the command it is
+given, that script's runtimes and Serve defaults; it adds `production-logs`,
+`production-status`, `production-restart` and `production-enter`. `activity`
+reads two records for the account, each its newest 500 entries, and says when
+older ones are left out: the host's own, root's logind entries for each of the
+account's login sessions (its start, and its end however it ended: logout, a
+dropped connection or revoke's `terminate-user`), which the account cannot
+write; and what each login reported itself, which the forced command logs as
+the account to the journal under `vibe64-production` (its command word for
+word, the session id the client sent, its logind session, exit status and
+duration). The account could write those lines too, and sshd's PAM stack may
+set a login's environment from a file of the account's (Ubuntu's reads
+`~/.pam_environment`, which could name a library every program of the login
+loads), so they are only what the login says. Such a login runs outside the release service's sandbox, as a
+person's own login would, so mounts the service makes in namespaces of its own
+(its private `/tmp`, a FUSE volume) are not there.
 `production-service`, through sudo, accepts only an application account with
 its key installed, and reads, restarts or enters only that account's own
-release unit. `enter` refuses a unit with no running main process; otherwise
-root runs `nsenter`, which enters that process's mount namespace and becomes
-the account (its own group only) before anything in that namespace runs, since
-an application with the FUSE or gVisor allowance may have made that namespace
-itself. A main process in a user namespace of the application's own is joined
-there too, as the ids the account has in it, because a FUSE volume mounted
-there admits only that namespace's processes. There the helper's
-`production-enter`, as the account, reads the release's Env file and starts the
+release unit. `enter` refuses a unit with no running main process, or one
+whose main process is not in the unit's own cgroup when root reads its
+namespaces or after (a main process that ended leaves its number to any
+process); otherwise root runs `nsenter`, which enters that process's mount
+namespace and becomes the account (its own group only) before anything in that
+namespace runs, since an application with the FUSE or gVisor allowance may have
+made that namespace itself. A main process in a user namespace of the
+application's own is joined there too, as the ids the account has in it,
+because a FUSE volume mounted there admits only that namespace's processes.
+There the helper's `production-enter`, as the account, refuses unless it is in
+the mount namespace root read, then reads the release's Env file and starts the
 command, or the shell, in the release's folder through its start script, as
 the login does.
 
