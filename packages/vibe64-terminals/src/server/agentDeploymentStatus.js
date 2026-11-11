@@ -37,8 +37,8 @@ function deploymentUsageText() {
     "  which the login itself does not see.",
     "- vibe64-helper env get production <KEY> prints one value the live release runs with, secrets included, and",
     "  vibe64-helper env export production prints them all as export lines.",
-    "The host records each login and Env read. Where it does not allow this session, both say why and do",
-    "nothing; deployment status says so too.",
+    "The host records each login and Env read, and each login's commands word for word. Where it does not",
+    "allow this session, both say why and do nothing; deployment status says so too.",
     "",
     "Working on production, when possible:",
     "- Read before you change anything: logs, status and read-only commands first. Production holds real",
@@ -47,7 +47,8 @@ function deploymentUsageText() {
     "  production host rather than in this session's source, where real people's data could reach Git) and say",
     "  what will change and why, so the person can follow it and undo it.",
     "- Treat production values as secrets: use them in commands, and keep them out of source, messages and",
-    "  summaries."
+    "  summaries. Inside ssh production the release's Env is already loaded, so name a value ($DB_PASSWORD)",
+    "  instead of writing it into a command line, which the host records word for word."
   ].join("\n") + "\n";
 }
 

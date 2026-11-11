@@ -98,8 +98,10 @@ on production itself, to find out what is wrong there:
   runs with, secrets included, and `vibe64-helper env export production` prints
   them all as shell `export` lines.
 
-The host records each login and value read. Where it does not allow the
-session, both say why and do nothing. The command's own help asks the agent to
+The host records each value read and each login's start and end. Each login
+also reports the commands it runs, word for word, so secrets belong in Env,
+never on a command line. Where the host does not allow the session, both say
+why and do nothing. The command's own help asks the agent to
 read first (logs, status, read-only commands), to back up before changing data
 or files and to say what will change, since production holds real people's
 data, and to keep production values out of source, messages and summaries.
