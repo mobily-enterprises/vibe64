@@ -17,7 +17,8 @@ import {
   vibe64ErrorResponse
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  agentEnvWrapperSource
+  agentEnvWrapperSource,
+  shellQuote
 } from "@local/vibe64-execution/server";
 import { envValueWithoutFinalLineEnding } from "@local/vibe64-project/shared/contracts";
 import {
@@ -551,10 +552,6 @@ function createAgentEnvCommandService({
 // asks the Env command for the host's `Host production` configuration first, and runs with it, or stops with
 // the host's reason; any other command line runs the system's own command unchanged.
 const PRODUCTION_SSH_COMMANDS = Object.freeze({ scp: "/usr/bin/scp", sftp: "/usr/bin/sftp", ssh: "/usr/bin/ssh" });
-
-function shellQuote(value = "") {
-  return `'${String(value).replaceAll("'", "'\\''")}'`;
-}
 
 function productionSshWrapperSource(name = "", envCommandPath = "") {
   const system = PRODUCTION_SSH_COMMANDS[name];
