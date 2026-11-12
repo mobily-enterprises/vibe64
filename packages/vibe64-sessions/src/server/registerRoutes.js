@@ -392,12 +392,13 @@ function sessionBodyWithoutUserInput(request) {
   };
 }
 
+// Only the page fields the query names: an absent one read as "" is refused
+// as a whole number, and without sessionLimit the list is complete.
 function archivedSessionsInput(request) {
   const query = requestQuery(request);
-  return {
-    sessionLimit: firstValue(query.sessionLimit),
-    sessionOffset: firstValue(query.sessionOffset)
-  };
+  return Object.fromEntries(["sessionLimit", "sessionOffset"]
+    .filter((name) => Object.hasOwn(query, name))
+    .map((name) => [name, firstValue(query[name])]));
 }
 
 function historyPageInput(request) {
