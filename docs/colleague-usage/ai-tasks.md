@@ -195,7 +195,8 @@ the main chat's work, such as an Auto review, so the time shown is then when the
 began. **Wait for the AI** returns you to the main chat, and Vibe64 saves by itself as
 soon as that work ends; **Save now** saves at once, unfinished changes included. When the main chat is idle, or
 you stopped its AI, Fix Save saves straight away with no click. Both still wait while another Save, Update or preparation holds
-the session.
+the session. Fix Update's Update waits for a running workspace preparation by itself; if that preparation is still running
+after 20 minutes, the window says "Update waits for workspace preparation to finish" and tries again when it can.
 
 **Review resolved conflicts** opens the same review as the Update error (see
 [Apply an Update after resolving conflicts](github-work.md#apply-an-update-after-resolving-conflicts)).

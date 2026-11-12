@@ -1911,3 +1911,17 @@ OS user that owns the session state and Claude's storage (`CLAUDE_CONFIG_DIR` or
 an archive's native-history retirement as finished must retire it again for the
 bindings this adds. Focused evidence: `archivedClosingChatsUpgrade.unit.test.js`
 and `stateUpgrades.unit.test.js`.
+
+## Workspace prepared tree (`20261112-workspace-prepared-tree`)
+
+Prospective boundary for optional `preparedTree` on `workspace_setup` records:
+the recipe hash, the session source's commit and a digest of its uncommitted
+changes, and the same for each connected repository by name, as a successful
+preparation leaves them. An Update keeps the record while it marks preparation
+`required`, so preparing the very same tree again runs no step; a failed,
+cancelled or running record never keeps one. This script neither reads nor
+rewrites historical session setup: a record without the field matches no tree,
+so that session's next Update runs its declared recipe as before, and records
+the tree from then on. Preflight reports that rule; apply records the boundary in the existing
+ledger, and retry is a no-op. No application files change, so this boundary
+needs no backup.

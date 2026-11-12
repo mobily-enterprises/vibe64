@@ -161,10 +161,9 @@ function createServiceAssistantPreparation({
         "the packages; if this session is behind its project, Update this session first to take the project's newer ones."
     });
     if (noticed) {
-      await workspacePreparation.invalidateWorkspaceSetup(
-        context,
-        `${diagnostic} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`
-      );
+      await workspacePreparation.invalidateWorkspaceSetup(context, {
+        diagnostic: `${diagnostic} Run workspace preparation to restore the project's declared dependencies. Chat remains available.`
+      });
     }
     logOperationalEvent(logger, "warn", {
       code: error.code,

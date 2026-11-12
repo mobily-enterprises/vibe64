@@ -1008,8 +1008,13 @@ refresh lifecycle.
 An unavailable project skill package leaves chat usable and identifies the
 workspace preparation needed to restore the project's declared dependencies.
 Update marks preparation as required before replacing session source, even
-when its setup commands stay the same. People can also explicitly rerun a
-previously successful preparation to repair missing installed dependencies.
+when its setup commands stay the same, and preparation then runs unless the
+source, its connected repositories and the recipe are exactly what the last
+successful preparation prepared. One preparation runs at a time in a session:
+other tabs and turns watch it, and an Update started meanwhile waits for it,
+saying so, instead of being refused. A refusal while the session is busy names
+what holds it. People can also explicitly rerun a previously successful
+preparation to repair missing installed dependencies.
 
 People can configure application integrations in the session's Integrations
 page. Available services are grouped into collapsible categories with counts.

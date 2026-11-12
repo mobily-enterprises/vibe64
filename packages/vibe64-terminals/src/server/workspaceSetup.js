@@ -7,6 +7,7 @@ import { createWorkspaceSetupExecution } from "./workspaceSetupExecution.js";
 import { createWorkspaceSetupMigration } from "./workspaceSetupMigration.js";
 import { createWorkspaceSetupStart } from "./workspaceSetupStart.js";
 import { createWorkspaceSetupStatus } from "./workspaceSetupStatus.js";
+import { readPreparedTree } from "./workspaceSetupTree.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
@@ -20,6 +21,7 @@ import { createWorkspaceSetupStatus } from "./workspaceSetupStatus.js";
  * @param {(request: object) => Promise<object>} [dependencies.startWorkflow]
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
  * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {typeof readPreparedTree} [dependencies.readTree] reads the tree a preparation prepares
  */
 function createWorkspaceSetupRunner({
   inspectProjectFormat = inspectGenesisProjectFormat,
@@ -27,6 +29,7 @@ function createWorkspaceSetupRunner({
   project,
   startWorkflow = startResourceWorkflow,
   finishWorkflow = finishVibe64Workflow,
+  readTree = readPreparedTree,
   runCommand = runVibe64Command
 }) {
   const runnerState = createWorkspaceSetupRunnerState({ inspect: project.inspectWorkspaceSetup });
@@ -34,6 +37,7 @@ function createWorkspaceSetupRunner({
     connectedPreparation,
     finishWorkflow,
     project,
+    readTree,
     runCommand,
     runnerState,
     startWorkflow

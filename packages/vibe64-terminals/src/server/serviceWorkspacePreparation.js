@@ -1,4 +1,8 @@
+import { setTimeout as delay } from "node:timers/promises";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
 import { agentWriteBusyError, runVibe64RenewalAgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
@@ -10,6 +14,9 @@ import { inProjectContext } from "./workspaceSetupRules.js";
 /** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 
+// How long an Update waits for a running preparation before it refuses, naming that preparation.
+const RUNNING_PREPARATION_WAIT_MS = 20 * 60_000;
+
 /**
  * A session's workspace setup as the service runs it: prepared inside the agent write, for renewal
  * too, invalidated when sources change, and observed while it runs. Each run that succeeds
@@ -20,27 +27,78 @@ import { inProjectContext } from "./workspaceSetupRules.js";
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {(sessionId: string, setup: { finishedAt: string }) => Promise<object>} dependencies.restartPreviewAfterSetup
  * @param {WorkspaceSetupRunner} dependencies.workspaceSetup
+ * @param {number} [dependencies.runningPreparationWaitMs] how long an Update waits for a running preparation
  */
 function createServiceWorkspacePreparation({
   sessionAccess,
   project,
   publishSessionChanged,
   restartPreviewAfterSetup,
-  workspaceSetup
+  workspaceSetup,
+  runningPreparationWaitMs = RUNNING_PREPARATION_WAIT_MS
 }) {
-  async function invalidateWorkspaceSetup(context, diagnostic = "Run this session's declared setup steps after updating its source.") {
-    await workspaceSetup.invalidate({ ...context, diagnostic });
+  /**
+   * Marks preparation required. `sourceChange` (an Update) keeps the record of the tree last prepared, so
+   * preparing a tree that is still that one runs no step.
+   */
+  async function invalidateWorkspaceSetup(context, {
+    diagnostic = "Run this session's declared setup steps after updating its source.",
+    sourceChange = false
+  } = {}) {
+    await workspaceSetup.invalidate({ ...context, diagnostic, sourceChange });
     await sessionAccess.publishTerminalSessionChanged("agentTerminal", context.session.sessionId, "workspace-setup-updated");
   }
 
+  /**
+   * Starts preparation inside the agent write and returns once it has started: its completion is awaited
+   * outside the lock, so an Update or a message is never held back while the steps run.
+   */
   async function prepareWorkspaceSetup(sessionId = "", options = {}) {
-    return sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
-      const setup = await prepareWorkspaceSetupInsideAgentWrite(sessionId, context);
-      if (options.waitForCompletion && setup.completion) {
-        await setup.completion;
-      }
-      return setup;
-    }, { operation: "prepare-workspace", waitMs: options.waitMs });
+    const prepare = (context) => prepareWorkspaceSetupInsideAgentWrite(sessionId, context);
+    return sessionAccess.runMainAgentWrite(sessionId, options, prepare, { operation: "prepare-workspace", waitMs: options.waitMs });
+  }
+
+  /**
+   * What a Preview start and a finished turn need: the running preparation when one runs, nothing when the
+   * session is prepared, and otherwise a preparation started. Neither checking nor watching takes the lock.
+   * @param {string} sessionId
+   * @param {object} [input] the caller's runtime and session, when it has them
+   * @param {object} [options] passed to prepareWorkspaceSetup: `waitMs` for the lock, `rerunFailed`
+   */
+  async function ensureWorkspacePrepared(sessionId, input = {}, options = {}) {
+    const running = workspaceSetup.wait(sessionId);
+    if (running) return { completion: running, state: null };
+    const context = await sessionAccess.sessionContext(sessionId, input);
+    if (await workspaceSetup.isPrepared(context)) return { completion: null, state: context.session.workspaceSetup };
+    return prepareWorkspaceSetup(sessionId, { ...options, publish: true });
+  }
+
+  /**
+   * Waits for this session's running preparation, if one runs, saying what it waits for. One still running
+   * after `runningPreparationWaitMs` refuses, naming it; `signal` (Update's Cancel) ends the wait.
+   * Resolves whether there was a run to wait for.
+   * @param {string} sessionId
+   * @param {object} [options]
+   * @param {(progress: object) => unknown} [options.onProgress]
+   * @param {object | null} [options.session]
+   * @param {AbortSignal | null} [options.signal]
+   */
+  async function waitForRunningPreparation(sessionId, { onProgress = doNothing, session = null, signal = null } = {}) {
+    const running = workspaceSetup.wait(sessionId);
+    if (!running) return false;
+    const step = toText(session?.workspaceSetup?.currentLabel);
+    const preparing = `The workspace is being prepared${step ? ` (${step})` : ""}`;
+    await onProgress({ kind: "workspace-setup-wait", message: `${preparing}; waiting for it to finish.`, stage: "workspace-setup-waiting" });
+    const finished = new AbortController();
+    const ended = await Promise.race([
+      running.then(() => "finished", () => "finished"),
+      delay(runningPreparationWaitMs, "timeout", { signal: AbortSignal.any([finished.signal, ...(signal ? [signal] : [])]) })
+        .catch(() => "stopped")
+    ]).finally(() => finished.abort());
+    if (ended === "timeout") {
+      throw vibe64Error(`${preparing}. Try again when it finishes.`, "vibe64_workspace_setup_running", { status: 409 });
+    }
+    return true;
   }
 
   async function prepareRenewalWorkspaceSetup(sessionId = "", options = {}) {
@@ -151,9 +209,11 @@ function createServiceWorkspacePreparation({
   }
 
   return Object.freeze({
+    ensureWorkspacePrepared,
     invalidateWorkspaceSetup,
     prepareRenewalWorkspaceSetup,
     prepareWorkspaceSetup,
+    waitForRunningPreparation,
     waitForWorkspaceSetup,
     workspaceSetupIsPrepared,
     workspaceSetupIsRunning

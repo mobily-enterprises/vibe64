@@ -2,7 +2,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { GENESIS_STACK_SECTION_AMBIGUOUS } from "@local/vibe64-genesis/server";
-import { workspaceSetupState } from "@local/vibe64-runtime/server/workspaceSetupState";
+import { samePreparedTree, workspaceSetupState } from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import { loadProjectExecutionEnvRecords, projectExecutionEnvFromRecords } from "./projectExecutionEnv.js";
 import { failed, persist, persistInspectedState } from "./workspaceSetupRecords.js";
@@ -303,6 +303,23 @@ function createWorkspaceSetupStart({
       return { completion: null, state };
     }
     let preparedEnvironment;
+    // Update marks preparation required before it changes the source. When it left the very tree a
+    // successful preparation recorded (nothing came in, or it was undone), that preparation still holds:
+    // only its resources are checked, as for any succeeded one.
+    const samePrepared = !migrationTranscript && retry !== true && stateBase.status === "required" &&
+      stateBase.preparedTree?.recipeHash === recipe.recipeHash &&
+      samePreparedTree(await setupExecution.currentTree({ runtime, session, setup, sourcePath }), stateBase.preparedTree);
+    if (samePrepared) stateBase = { ...stateBase, diagnostic: "", recipeHash: recipe.recipeHash, status: "succeeded" };
+    const reused = async () => ({
+      completion: null,
+      state: samePrepared
+        ? await persist(runtime, sessionId, {
+          ...stateBase,
+          finishedAt: new Date().toISOString(),
+          transcript: appendWorkspaceSetupTranscript(stateBase.transcript, "This source is already prepared, so no step runs again.")
+        }, renewal)
+        : stateBase
+    });
     if (
       !migrationTranscript &&
       retry !== true &&
@@ -314,7 +331,7 @@ function createWorkspaceSetupStart({
       }
       const environmentStatus = await project.projectEnvironmentStatus({ sessionId, session });
       const sameResources = resourceIdentityMatches(stateBase, environmentStatus);
-      if (environmentStatus.status === "ready" && sameResources) return { completion: null, state: stateBase };
+      if (environmentStatus.status === "ready" && sameResources) return reused();
       if (sameResources && stateBase.resourceIdentity) {
         // Restore host resource readiness separately. Cached application setup
         // is reusable only when its exact resources existed before provisioning.
@@ -342,7 +359,7 @@ function createWorkspaceSetupStart({
           if (preparedEnvironment.resourcePreparation?.preserved === true &&
               preparedEnvironment.resourcePreparation.identity === stateBase.resourceIdentity &&
               restored.resourcePreparation?.identity === stateBase.resourceIdentity) {
-            return { completion: null, state: stateBase };
+            return reused();
           }
         } catch (error) {
           return {

@@ -5,7 +5,11 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { runVibe64AgentWriteExclusive, throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
+import {
+  runVibe64AgentWriteExclusive,
+  runVibe64RenewalAgentWriteExclusive,
+  throwIfAgentWriteBusy
+} from "@local/vibe64-runtime/server/agentWriteLock";
 import { projectRuntimeRoot, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function fixture(targetRoot, onLog = () => {}) {
@@ -234,6 +238,38 @@ test("preparation timeout identifies the actual blocker without exposing lock ow
     }
     assert.equal(result.value.details.blockingOperation, "prepare-agent-session");
     assert.equal((await run("save-session-work", () => "saved", 60)).value, "saved");
+  });
+});
+
+test("a busy refusal names what its holder is doing, for renewal too, and an unnamed holder stays another assistant operation", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { run, store } = await fixture(targetRoot);
+    const renewalRun = () => runVibe64RenewalAgentWriteExclusive({ store }, "lock-diagnostics", () => assert.fail("must not enter"),
+      { operation: "prepare-renewal-workspace" });
+    for (const [holder, message] of [
+      ["prepare-workspace", "The workspace is being prepared. Try again when it is ready."],
+      ["update-session-work", "This session is being updated. Try again when Update finishes."],
+      ["start-agent-terminal", "Another assistant operation is starting. Try again in a moment."]
+    ]) {
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const holding = run(holder, async () => {
+        entered.resolve();
+        await release.promise;
+      });
+      await entered.promise;
+      try {
+        for (const refused of [await run("update-session-work", () => assert.fail("must not enter")), await renewalRun()]) {
+          assert.equal(refused.acquired, false);
+          assert.equal(refused.value.code, "vibe64_agent_write_mode_busy");
+          assert.equal(refused.value.error, message, holder);
+          assert.deepEqual(refused.value.details, holder === "start-agent-terminal" ? undefined : { blockingOperation: holder });
+        }
+      } finally {
+        release.resolve();
+        await holding;
+      }
+    }
   });
 });
 

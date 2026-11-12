@@ -91,7 +91,8 @@ const setupReruns = {
   },
   // Prepare workspace, Retry and an AI task's check.
   async Retry(f) {
-    await f.terminals.prepareWorkspaceSetup(f.sessionId, { retry: true, waitForCompletion: true });
+    const setup = await f.terminals.prepareWorkspaceSetup(f.sessionId, { retry: true });
+    await setup.completion;
   }
 };
 
@@ -167,21 +168,26 @@ for (const change of ["environment value", "missing environment file", "Git excl
   });
 }
 
-test("preview preparation holds the source lock until its command finishes and keeps shutdown admission intact", { timeout: 15_000 }, async (t) => {
+test("a Preview's preparation frees the agent-write lock while its command runs, another trigger joins that run, and shutdown admission stays intact", { timeout: 15_000 }, async (t) => {
   const f = await fixture(t);
   const holdPath = path.join(f.sourceRoot, "hold-setup");
   await writeFile(holdPath, "hold");
   const starting = f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
   const namespace = outputTargetTerminalNamespace(f.sessionId);
+  let joined;
   try {
     await eventually(() => readFile(path.join(f.sourceRoot, "setup-entered.txt")));
-    const contender = await f.runtime.store.runSessionExclusive(f.sessionId, "agent-write-mode", () => {
-      assert.fail("Preparation released its source lock while the command was still running.");
-    });
-    assert.equal(contender.acquired, false);
+    // Only starting the run took the lock, so an Update or a message is not held back by its command.
+    const contender = await f.runtime.store.runSessionExclusive(f.sessionId, "agent-write-mode", () => "entered");
+    assert.equal(contender.value, "entered", "The preparation held the lock while its command ran.");
+    // Another trigger on the same tree (another tab, the preparation after an Update) joins the running one.
+    joined = await f.terminals.prepareWorkspaceSetup(f.sessionId);
+    assert.notEqual(joined.ok, false, JSON.stringify(joined));
+    assert.ok(joined.completion, "The second trigger did not find the running preparation.");
     assert.equal(freezeTerminalNamespaceAdmission(namespace, { owner: "test-renewal" }).code, "terminal_admission_busy");
   } finally { await rm(holdPath, { force: true }); }
   await assertServes(await starting);
+  assert.equal((await joined.completion).status, "succeeded");
   assert.equal(freezeTerminalNamespaceAdmission(namespace, { owner: "test-renewal" }).ok, true);
   try {
     const rejected = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app", forceRestart: true });
@@ -199,7 +205,7 @@ test("failed preparation does not launch a preview and leaves the source lock us
   assert.equal(failed.id, undefined);
   assert.equal((await f.runtime.store.runSessionExclusive(f.sessionId, "agent-write-mode", () => null)).acquired, true);
   await rm(path.join(f.sourceRoot, "fail-setup"));
-  const retry = await f.terminals.prepareWorkspaceSetup(f.sessionId, { retry: true, waitForCompletion: true });
+  const retry = await f.terminals.prepareWorkspaceSetup(f.sessionId, { retry: true });
   await retry.completion;
   await assertServes(await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" }));
 });

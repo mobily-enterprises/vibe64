@@ -11,6 +11,26 @@ const VIBE64_AGENT_WRITE_BUSY_RESULT = Object.freeze({
   retryable: true
 });
 
+// What a refusal says is running, by the operation its holder recorded on the lock. A holder not named here
+// is "another assistant operation".
+const AGENT_WRITE_HOLDERS = new Map([
+  ["prepare-agent-session", "The assistant is still reconnecting. Wait until it is ready, then try again."],
+  ["prepare-renewal-workspace", "The workspace is being prepared. Try again when it is ready."],
+  ["prepare-workspace", "The workspace is being prepared. Try again when it is ready."],
+  ["recover-session-save", "An interrupted Save is being recovered. Try again when it finishes."],
+  ["recover-session-update", "An interrupted Update is being recovered. Try again when it finishes."],
+  ["save-session-work", "This session is being saved. Try again when Save finishes."],
+  ["update-session-work", "This session is being updated. Try again when Update finishes."]
+]);
+
+/** The refusal of a lock that `blockingOperation` holds, naming what it is doing when it says. */
+function agentWriteBusyResult(blockingOperation = "") {
+  const error = AGENT_WRITE_HOLDERS.get(blockingOperation);
+  return error
+    ? { ...VIBE64_AGENT_WRITE_BUSY_RESULT, error, details: { blockingOperation } }
+    : VIBE64_AGENT_WRITE_BUSY_RESULT;
+}
+
 /**
  * @param {Vibe64SessionRuntime} runtime
  * @param {string} [sessionId]
@@ -24,18 +44,7 @@ async function runVibe64AgentWriteExclusive(runtime, sessionId, operation, optio
     operation,
     { ...options, operation: options.operation || "assistant-operation" }
   );
-  return exclusive.acquired
-    ? exclusive
-    : {
-        acquired: false,
-        value: exclusive.blockingOperation === "prepare-agent-session"
-          ? {
-              ...VIBE64_AGENT_WRITE_BUSY_RESULT,
-              error: "The assistant is still reconnecting. Wait until it is ready, then try again.",
-              details: { blockingOperation: exclusive.blockingOperation }
-            }
-          : VIBE64_AGENT_WRITE_BUSY_RESULT
-      };
+  return exclusive.acquired ? exclusive : { acquired: false, value: agentWriteBusyResult(exclusive.blockingOperation) };
 }
 
 /**
@@ -51,12 +60,7 @@ async function runVibe64RenewalAgentWriteExclusive(runtime, sessionId, operation
     operation,
     { ...options, operation: options.operation || "session-renewal" }
   );
-  return exclusive.acquired
-    ? exclusive
-    : {
-        acquired: false,
-        value: VIBE64_AGENT_WRITE_BUSY_RESULT
-      };
+  return exclusive.acquired ? exclusive : { acquired: false, value: agentWriteBusyResult(exclusive.blockingOperation) };
 }
 
 /**

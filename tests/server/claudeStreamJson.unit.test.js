@@ -3044,7 +3044,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
         const timedOut = await service.recoverActiveGoals();
         assert.equal(timedOut.ok, false);
         assert.equal(timedOut.results[0].code, "vibe64_agent_write_mode_busy");
-        assert.match((await service.readCanonicalAgentGoal("test", options)).error, /Another assistant operation/u);
+        // The refusal names what holds the session.
+        assert.match((await service.readCanonicalAgentGoal("test", options)).error,
+          /The workspace is being prepared\. Try again when it is ready\./u);
         assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
           "lock timeout is visible and never dispatches or retries a goal");
       } finally { release.resolve(); runtime.store = store; }

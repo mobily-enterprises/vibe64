@@ -38,6 +38,7 @@ const WORKSPACE_SETUP_CANCELLED = "Workspace preparation was cancelled. Prepare 
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
  * @param {typeof import("@local/vibe64-execution/server").finishVibe64Workflow} dependencies.finishWorkflow
  * @param {ProjectService} dependencies.project
+ * @param {typeof import("./workspaceSetupTree.js").readPreparedTree} dependencies.readTree
  * @param {typeof import("@local/vibe64-execution/server").runVibe64Command} dependencies.runCommand
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
  * @param {(request: object) => Promise<object>} dependencies.startWorkflow
@@ -46,6 +47,7 @@ function createWorkspaceSetupExecution({
   connectedPreparation,
   finishWorkflow,
   project,
+  readTree,
   runCommand,
   runnerState,
   startWorkflow
@@ -58,6 +60,19 @@ function createWorkspaceSetupExecution({
       throw new Error("Connected source selection changed. Prepare the workspace again before running commands.");
     }
     return inputs.sourceRoots;
+  }
+
+  /**
+   * The tree a preparation of this setup's recipe finds now, in the session source and its
+   * connected repositories; null when it cannot be read.
+   */
+  async function currentTree({ runtime, session, setup, sourcePath }) {
+    try {
+      const connectedRoots = await connectedSourceRoots(setup, runtime, session);
+      return await readTree({ connectedRoots, recipeHash: setup.recipeHash, sourcePath });
+    } catch {
+      return null;
+    }
   }
 
   async function execute({
@@ -201,10 +216,13 @@ function createWorkspaceSetupExecution({
         );
       }
       outcome = "succeeded";
+      // What this run prepared, as it leaves it: what its own steps changed (a rewritten lockfile) is prepared too.
+      const preparedTree = await currentTree({ runtime, session, setup: admittedSetup, sourcePath });
       return await persist(runtime, session.sessionId, {
         currentLabel: context.currentLabel,
         diagnostic: "",
         finishedAt: new Date().toISOString(),
+        preparedTree,
         recipeHash: recipe.recipeHash,
         resourceIdentity: environmentRecords.resourcePreparation?.identity,
         startedAt,
@@ -261,6 +279,7 @@ function createWorkspaceSetupExecution({
 
   return Object.freeze({
     connectedSourceRoots,
+    currentTree,
     execute,
     observe
   });

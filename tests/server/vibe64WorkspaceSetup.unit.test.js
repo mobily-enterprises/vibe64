@@ -429,6 +429,101 @@ test("source invalidation survives restart and reruns an unchanged preparation r
   });
 });
 
+/** A Git repository at `root` with one commit, as a session source or a connected copy is. */
+async function gitRepository(root) {
+  await mkdir(root, { recursive: true });
+  const git = (...args) => execFileAsync("git", ["-c", "user.name=Vibe64 Test", "-c", "user.email=vibe64@example.test", ...args],
+    { cwd: root });
+  await git("init", "--quiet", "--initial-branch=main");
+  await writeFile(path.join(root, "README.md"), "initial\n");
+  await git("add", ".");
+  await git("commit", "--quiet", "-m", "initial");
+  return git;
+}
+
+test("a successful preparation records the exact tree it prepared, and only that tree skips its steps after an Update", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session, sourceRoot } = await workspaceSession(targetRoot);
+    const libraryRoot = path.join(path.dirname(sourceRoot), "connected", "library");
+    const source = await gitRepository(sourceRoot);
+    const library = await gitRepository(libraryRoot);
+    let recipeHash = "sha256:recipe";
+    let failing = false;
+    let steps = 0;
+    const runner = createWorkspaceSetupRunner({
+      async connectedPreparation({ mode }) {
+        return mode === "inspect" ? { inputsHash: "sha256:connected", sourceRoots: [libraryRoot] } : { inputsHash: "sha256:connected", lines: [] };
+      },
+      project: {
+        ...readyProject(),
+        inspectWorkspaceSetup: () => readySetup({ connectedDevelopment: { inputsHash: "sha256:connected" }, recipeHash }),
+        async projectExecutionEnvironment() { return { environment: {}, resourceConfigurationFingerprint: "c".repeat(64) }; }
+      },
+      async runCommand() {
+        steps += 1;
+        return failing ? { exitCode: 1, ok: false, output: "npm failed" } : { exitCode: 0, ok: true, output: "" };
+      }
+    });
+    const current = () => runtime.getSessionWithoutSource(session.sessionId);
+    // As Update does before it changes the source, then the preparation that follows it.
+    const afterUpdate = async ({ sourceChange = true } = {}) => {
+      await runner.invalidate({ runtime, session: await current(), diagnostic: "Source updated.", sourceChange });
+      const started = await runner.start({ runtime, session: await current() });
+      return started.completion ? (await started.completion).status : `${started.state.status} without a run`;
+    };
+    const head = async (git) => (await git("rev-parse", "HEAD")).stdout.trim();
+
+    assert.equal((await (await runner.start({ runtime, session })).completion).status, "succeeded");
+    const recorded = (await current()).workspaceSetup.preparedTree;
+    assert.equal(recorded.recipeHash, "sha256:recipe");
+    assert.equal(recorded.commit, await head(source));
+    assert.match(recorded.changes, /^sha256:[0-9a-f]{64}$/u);
+    assert.deepEqual(recorded.connected.map(({ name, commit }) => ({ name, commit })), [{ name: "library", commit: await head(library) }]);
+
+    assert.equal(await afterUpdate(), "succeeded without a run", "an unchanged tree skips preparation");
+    assert.match((await current()).workspaceSetup.transcript, /This source is already prepared, so no step runs again\.$/u);
+    assert.equal(steps, 1);
+
+    await writeFile(path.join(sourceRoot, "README.md"), "changed\n");
+    assert.equal(await afterUpdate(), "succeeded", "a changed source prepares");
+    await library("commit", "--quiet", "--allow-empty", "-m", "peer");
+    assert.equal(await afterUpdate(), "succeeded", "a changed connected repository prepares");
+    recipeHash = "sha256:recipe-2";
+    assert.equal(await afterUpdate(), "succeeded", "a changed recipe prepares");
+    assert.equal(steps, 4);
+    assert.equal(await afterUpdate({ sourceChange: false }), "succeeded", "a reason other than a source change prepares any tree");
+    assert.equal(steps, 5);
+
+    failing = true;
+    await writeFile(path.join(sourceRoot, "README.md"), "half installed\n");
+    assert.equal(await afterUpdate(), "failed");
+    assert.equal(Object.hasOwn((await current()).workspaceSetup, "preparedTree"), false, "a failed preparation records no tree");
+    failing = false;
+    // Back on the last prepared tree: the failed run may have changed what that preparation installed.
+    await writeFile(path.join(sourceRoot, "README.md"), "changed\n");
+    assert.equal(await afterUpdate(), "succeeded");
+    assert.equal(steps, 7);
+  });
+});
+
+test("only a successful or required setup keeps a well-formed prepared tree", () => {
+  const preparedTree = {
+    changes: `sha256:${"b".repeat(64)}`,
+    commit: "a".repeat(40),
+    connected: [{ changes: `sha256:${"d".repeat(64)}`, commit: "c".repeat(40), name: "library" }],
+    recipeHash: "sha256:recipe"
+  };
+  for (const status of ["succeeded", "required"]) {
+    assert.deepEqual(workspaceSetupState({ preparedTree, status }).preparedTree, preparedTree);
+  }
+  for (const state of [{ status: "failed", preparedTree }, { status: "running", preparedTree },
+    { status: "succeeded", preparedTree: { ...preparedTree, commit: "not-a-commit" } },
+    { status: "succeeded", preparedTree: { ...preparedTree, connected: [{ ...preparedTree.connected[0], name: "../escape" }] } },
+    { status: "succeeded", preparedTree: { ...preparedTree, recipeHash: "" } }]) {
+    assert.equal(Object.hasOwn(workspaceSetupState(state), "preparedTree"), false, JSON.stringify(state));
+  }
+});
+
 test("workspace preparation state bounds and normalizes durable transcripts", () => {
   const oldState = workspaceSetupStateFromMetadata({
     workspace_setup: JSON.stringify({

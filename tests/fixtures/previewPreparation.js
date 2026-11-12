@@ -118,10 +118,11 @@ require("node:http").createServer((request, response) => {
   return {
     project, root, runtime, sessionId, sourceRoot, stackPath, terminals,
     async prepare() {
-      const setup = await terminals.prepareWorkspaceSetup(sessionId, { waitForCompletion: true });
+      const setup = await terminals.prepareWorkspaceSetup(sessionId);
       if (setup.ok === false) {
         throw new Error(JSON.stringify(setup));
       }
+      await setup.completion;
       const session = await runtime.getSessionWithoutSource(sessionId);
       if (session.workspaceSetup.status !== "succeeded") {
         throw new Error(JSON.stringify(session.workspaceSetup));

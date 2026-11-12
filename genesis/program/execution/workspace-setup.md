@@ -13,6 +13,7 @@ contract transported by the project's Stack.
 - `packages/vibe64-terminals/src/server/workspaceSetupRecords.js`
 - `packages/vibe64-terminals/src/server/workspaceSetupRunnerState.js`
 - `packages/vibe64-terminals/src/server/workspaceSetupRules.js`
+- `packages/vibe64-terminals/src/server/workspaceSetupTree.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/serviceWorkspacePreparation.js`
 - `packages/vibe64-runtime/src/server/workspaceSetupState.js`
@@ -151,7 +152,30 @@ clears the successful recipe identity and retains the earlier transcript with
 the reason for invalidation. An unchanged installer command cannot certify
 dependencies for updated source. A no-op Update retains preparation. The next
 preparation uses the existing managed execution and admission path; Update
-does not run installers itself. The required-state banner offers Prepare
+does not run installers itself.
+
+A successful run records `preparedTree` (`workspaceSetupTree.js`): the recipe
+hash, the session source's commit with a digest of its uncommitted changes, and
+the same for each connected repository by name, read after the steps ran so what
+they rewrote counts as prepared. Each repository costs one
+`git status --porcelain=v2 -z --untracked-files=all` plus a hash of only the
+files it lists (ignored ones excluded); more than a thousand listed files, or a
+repository without a commit, records nothing. Update's invalidation keeps that
+record (a missing Agent Skill's does not). The next start that is not an explicit
+retry compares the current tree, and on a match restores `succeeded` and checks
+only resources, as for any reused success; any difference runs every step.
+Failed, cancelled and running states never carry the record, and a session
+without one runs its steps after its next Update
+(`20261112-workspace-prepared-tree`).
+
+Update waits inside its admission for a preparation already running, reporting
+the running step as Update progress, so that run never records the updated source
+as the one it prepared; Cancel ends the wait and leaves the session unchanged, and
+a run still going after twenty minutes refuses the Update, naming it. No other
+preparation can start meanwhile, because starting one needs the same admission.
+A refused admission names its holder's recorded operation for preparation,
+Update, Save and their recoveries (`agentWriteLock.js`); other holders keep the
+generic refusal. The required-state banner offers Prepare
 workspace directly, without requiring AI. Its message remains accurate after
 Update finishes instead of claiming source is still changing. The server accepts
 that explicit request in the required state and runs the full declared recipe,
@@ -161,10 +185,14 @@ reruns even a previously successful recipe, allowing repair of removed installed
 files. The public Prepare workspace action also permits this explicit rerun
 after success, including when the prior success notice was dismissed.
 
-Preview can inspect whether the current recipe already succeeded without taking
-assistant-write admission. If preparation is needed, it rereads the session under
-that admission and holds it until the preparation command finishes. A busy
-admission result prevents the preview from continuing with an unprepared recipe.
+Preview and the end of a turn ask `ensureWorkspacePrepared`: a running preparation
+is watched without assistant-write admission, and a session whose current recipe
+already succeeded needs nothing. Otherwise it starts preparation under that
+admission, which it holds only while the run starts; a second trigger then finds
+the run and joins it, so one session never runs two preparations. Preview awaits
+the run's completion outside admission, so an Update or a message is not held
+back by its commands. A busy admission result prevents the preview from
+continuing with an unprepared recipe.
 
 A run that succeeds while the session's managed Preview is running restarts that
 Preview, so it runs on what the run installed: a development server such as Vite

@@ -193,8 +193,7 @@ function createService({
     sendAgentMessage: (sessionId, message, options) => assistant.sendAgentMessage(sessionId, message, options),
     sessionAccess,
     state,
-    workspacePreparation,
-    workspaceSetup
+    workspacePreparation
   });
   const {
     agentDatabaseCommand,

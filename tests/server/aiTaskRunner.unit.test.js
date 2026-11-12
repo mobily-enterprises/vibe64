@@ -1167,22 +1167,27 @@ test("crash in cancelling during a check: the restart ends it Not done without r
   assert.equal(f.updates.length, 1);
 }));
 
-test("Update refused while another change holds the session waits, and runs when a turn ends", () => withFixture(async (f) => {
-  const running = f.boot();
-  const { task } = await f.start(running.aiTasks);
-  await f.quiet(running.aiTasks);
-  f.server.update = async () => ({ ok: false, code: "vibe64_agent_write_mode_busy", error: "busy" });
-  await f.finishTurn(running);
-  const waiting = await f.task(task.id);
-  assert.equal(waiting.phase, "checking");
-  assert.equal(waiting.waiting, true);
-  assert.equal(waiting.message, "Update waits for another change to this session to finish");
-  f.server.update = async () => ({ ok: true });
-  await running.aiTasks.onTurnSettled({ sessionId: SESSION, conversationId: "", failure: null });
-  await f.quiet(running.aiTasks);
-  assert.equal((await f.task(task.id)).phase, "done");
-  running.aiTasks.closeRunner();
-}));
+for (const [holder, code, message] of [
+  ["another change holds the session", "vibe64_agent_write_mode_busy", "Update waits for another change to this session to finish"],
+  ["a long workspace preparation runs", "vibe64_workspace_setup_running", "Update waits for workspace preparation to finish"]
+]) {
+  test(`Update refused while ${holder} waits, and runs when a turn ends`, () => withFixture(async (f) => {
+    const running = f.boot();
+    const { task } = await f.start(running.aiTasks);
+    await f.quiet(running.aiTasks);
+    f.server.update = async () => ({ ok: false, code, error: "busy" });
+    await f.finishTurn(running);
+    const waiting = await f.task(task.id);
+    assert.equal(waiting.phase, "checking");
+    assert.equal(waiting.waiting, true);
+    assert.equal(waiting.message, message);
+    f.server.update = async () => ({ ok: true });
+    await running.aiTasks.onTurnSettled({ sessionId: SESSION, conversationId: "", failure: null });
+    await f.quiet(running.aiTasks);
+    assert.equal((await f.task(task.id)).phase, "done");
+    running.aiTasks.closeRunner();
+  }));
+}
 
 test("one task at a time: the same problem reopens it, another is refused, an ended one is closed by the next", () => withFixture(async (f) => {
   const running = f.boot();

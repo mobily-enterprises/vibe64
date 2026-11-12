@@ -24,6 +24,7 @@ import {
 import { connectedCopyExecution } from "../../packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js";
 import { createServiceSessionWork } from "../../packages/vibe64-terminals/src/server/serviceSessionWork.js";
 import { createServiceSessionWorkInspection } from "../../packages/vibe64-terminals/src/server/serviceSessionWorkInspection.js";
+import { createServiceWorkspacePreparation } from "../../packages/vibe64-terminals/src/server/serviceWorkspacePreparation.js";
 import { createWritesWhileAssistantWorks } from "../../packages/vibe64-terminals/src/server/writesWhileAssistantWorks.js";
 import { endChildInput } from "./childInputTestHelpers.js";
 
@@ -188,7 +189,7 @@ function update(f, input = {}) {
  * This session's own repository `example/project`, cloned as its source, and the Save and Update
  * service over it and its copies. Every Git command of the service goes through the fixture's GitHub.
  */
-async function sessionService(f, { invalidateWorkspaceSetup = async () => {}, requirePullRequest = false } = {}) {
+async function sessionService(f, { invalidateWorkspaceSetup = async () => {}, requirePullRequest = false, workspacePreparation = null } = {}) {
   const own = await githubRepository(f, "project");
   await git(f.root, ["clone", own.bare, f.session.sourcePath]);
   await git(f.session.sourcePath, ["checkout", "-B", `vibe64/session/${SESSION_ID}`]);
@@ -228,7 +229,7 @@ async function sessionService(f, { invalidateWorkspaceSetup = async () => {}, re
     sessionAccess,
     sessionAgent: {},
     state: { lifecycle: { closing: false }, writesWhileAssistantWorks: createWritesWhileAssistantWorks() },
-    workspacePreparation: { invalidateWorkspaceSetup },
+    workspacePreparation: workspacePreparation || { invalidateWorkspaceSetup, waitForRunningPreparation: async () => false },
     workspaceSetup: { isRunning: () => false }
   });
   return {
@@ -744,4 +745,86 @@ test("an interrupted Update recovers the copy it was applying before the session
   assert.equal(await git(copyPath(f, "library"), ["rev-parse", "HEAD"]), peer);
   assert.equal(await readFile(path.join(copyPath(f, "library"), "work.txt"), "utf8"), "session work\n");
   assert.equal(f.copies()[0].canonicalCommit, peer);
+});
+
+/**
+ * An Update of a session whose copy `library` has a peer's work to take, while a preparation runs: the session's
+ * workspace preparation service over a runner whose run ends when `finishPreparation` is called.
+ */
+async function updateDuringPreparation(t, { runningPreparationWaitMs } = {}) {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  await prepare(f, ["library"]);
+  const peer = await pushPeer(library, "peer.txt", "peer\n");
+  const run = Promise.withResolvers();
+  let running = true;
+  const order = [];
+  f.session.workspaceSetup = { currentLabel: "Install dependencies", status: "running" };
+  const workspacePreparation = createServiceWorkspacePreparation({
+    project: {},
+    publishSessionChanged: {},
+    restartPreviewAfterSetup: async () => ({ ok: true }),
+    runningPreparationWaitMs,
+    sessionAccess: { publishTerminalSessionChanged: async () => {} },
+    workspaceSetup: {
+      invalidate: async ({ sourceChange }) => { order.push(`required, source change: ${sourceChange}`); },
+      wait: () => running ? run.promise : null
+    }
+  });
+  const service = await sessionService(f, { workspacePreparation });
+  const waiting = Promise.withResolvers();
+  const progress = [];
+  const finishPreparation = () => {
+    order.push("preparation finished");
+    running = false;
+    run.resolve({ status: "succeeded" });
+  };
+  const update = (input = {}) => service.work.updateSessionWork(SESSION_ID, {
+    onProgress: async (entry) => {
+      progress.push(entry.message);
+      if (entry.stage === "workspace-setup-waiting") waiting.resolve();
+    },
+    operationId: "update-1",
+    ...input
+  });
+  // Resolves once the Update waits for the preparation; an Update that ends first did not wait.
+  const waitingFor = (updating) => Promise.race([waiting.promise, updating.then(
+    (result) => assert.fail(`Update did not wait for the running preparation: ${JSON.stringify(result)}`),
+    (error) => assert.fail(`Update did not wait for the running preparation: ${error.message}`)
+  )]);
+  return { f, finishPreparation, library, order, peer, progress, update, waitingFor };
+}
+
+test("an Update during a running preparation waits for it, saying so, and then updates", async (t) => {
+  const { f, finishPreparation, order, peer, progress, update, waitingFor } = await updateDuringPreparation(t);
+  const updating = update();
+  await waitingFor(updating);
+  assert.deepEqual(progress, ["The workspace is being prepared (Install dependencies); waiting for it to finish."]);
+  assert.deepEqual(order, [], "Update changes nothing while the preparation runs");
+  finishPreparation();
+  const updated = await updating;
+  assert.equal(updated.connected[0].status, "updated");
+  assert.equal(await git(copyPath(f, "library"), ["rev-parse", "HEAD"]), peer);
+  // Marked required only after the run ended, keeping the record of what it prepared.
+  assert.deepEqual(order, ["preparation finished", "required, source change: true"]);
+});
+
+test("Cancel ends an Update that waits for a running preparation, and a preparation past the wait's bound refuses, naming it", async (t) => {
+  const cancelled = await updateDuringPreparation(t);
+  const controller = new AbortController();
+  const updating = cancelled.update({ signal: controller.signal });
+  await cancelled.waitingFor(updating);
+  controller.abort();
+  await assert.rejects(updating, { code: "vibe64_session_update_cancelled" });
+  assert.deepEqual(cancelled.order, []);
+  assert.equal(await git(copyPath(cancelled.f, "library"), ["rev-parse", "HEAD"]), cancelled.library.base);
+
+  const stuck = await updateDuringPreparation(t, { runningPreparationWaitMs: 20 });
+  await assert.rejects(stuck.update(), {
+    code: "vibe64_workspace_setup_running",
+    message: "The workspace is being prepared (Install dependencies). Try again when it finishes."
+  });
+  assert.deepEqual(stuck.order, []);
+  assert.equal(await git(copyPath(stuck.f, "library"), ["rev-parse", "HEAD"]), stuck.library.base);
+  stuck.finishPreparation();
 });

@@ -72,10 +72,8 @@ function createServiceTurnPublication({
           code: error.code
         }, "A goal on the previous main AI could not be cancelled.");
       }),
-      workspacePreparation.prepareWorkspaceSetup(sessionId, {
-        publish: true,
-        waitMs: AGENT_WRITE_WAIT_MS
-      }).catch((error) => {
+      // A prepared session, or one whose preparation runs, needs nothing from the turn's end.
+      workspacePreparation.ensureWorkspacePrepared(sessionId, {}, { waitMs: AGENT_WRITE_WAIT_MS }).catch((error) => {
         vibe64SessionDebugLog("server.terminals.workspaceSetup.afterTurn.error", {
           error: vibe64SessionDebugError(error),
           sessionId

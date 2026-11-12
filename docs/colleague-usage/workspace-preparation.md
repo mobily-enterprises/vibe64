@@ -57,6 +57,42 @@ it succeeds. A failure goes back to the same conversation. Cancelling the fix
 while that preparation runs stops its running step; the card then reports the
 preparation as cancelled, and the next preparation runs every step again.
 
+## Preparation runs once per source
+
+A successful preparation remembers the exact source it prepared: the session's
+commit and uncommitted changes, each connected repository's commit and
+uncommitted changes, and the setup recipe (files Git ignores, such as installed
+dependencies, are not part of it). After **Update this session**, preparation
+runs only when one of these differs from what the last successful preparation
+prepared. An Update that brought nothing in, or whose changes were undone, says
+`This source is already prepared, so no step runs again.` in the preparation
+output and runs no step. Any difference, even in one documentation file, still
+runs every declared step. A failed or cancelled preparation is never remembered,
+so the next one runs every step. **Prepare workspace** and **Retry** always run
+every step. A session prepared before this behaviour runs its steps after its
+next Update, as before, and is remembered from then on.
+
+One preparation runs at a time in a session, whichever starts it. A Preview
+start in another tab, or the end of an assistant turn, waits for the running
+preparation instead of starting another; a session that is already prepared
+starts its Preview without waiting for anything else.
+
+**Update this session** started while preparation runs waits for it: Update's
+progress says, for example,
+`The workspace is being prepared (Install dependencies); waiting for it to finish.`
+and continues by itself once preparation ends. An AI task's **Cancel** ends that
+wait and leaves the session unchanged. If preparation is still running after 20
+minutes, Update stops with
+`The workspace is being prepared (Install dependencies). Try again when it finishes.`
+
+When another operation briefly holds the session, the refusal names it, for
+example `The workspace is being prepared. Try again when it is ready.`,
+`This session is being updated. Try again when Update finishes.` or
+`This session is being saved. Try again when Save finishes.` Try again when that
+operation ends; nothing has changed. Colleague can explain these messages and
+the current preparation result; starting preparation again needs the person's
+request.
+
 ## Retrying a failed setup
 
 Only a successful setup is reused. A failed one is never treated as done:

@@ -25,7 +25,6 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 /** @typedef {import("./types.js").ServiceWorkspacePreparation} ServiceWorkspacePreparation */
 /** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
-/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 
 /**
  * The command helpers a session's assistant runs (Git, Preview, Env, Database and Session) and the output target
@@ -46,7 +45,6 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceState} dependencies.state
  * @param {ServiceWorkspacePreparation} dependencies.workspacePreparation
- * @param {WorkspaceSetupRunner} dependencies.workspaceSetup
  */
 function createServiceCommandServices({
   env,
@@ -63,8 +61,7 @@ function createServiceCommandServices({
   sendAgentMessage,
   sessionAccess,
   state,
-  workspacePreparation,
-  workspaceSetup
+  workspacePreparation
 }) {
   const codexGitCommand = createCodexGitCommandService({
     env,
@@ -77,16 +74,9 @@ function createServiceCommandServices({
   const outputTarget = createOutputTargetTerminalController({
     ensureProjectServices: projectServices.ensure,
     env,
-    ensureWorkspacePrepared: async (sessionId, context = {}) => {
-      if (await workspaceSetup.isPrepared(context)) {
-        return { completion: null, state: context.session.workspaceSetup };
-      }
-      return workspacePreparation.prepareWorkspaceSetup(sessionId, {
-        publish: true,
-        rerunFailed: context.rerunFailedSetup === true,
-        waitForCompletion: true
-      });
-    },
+    ensureWorkspacePrepared: (sessionId, context = {}) => workspacePreparation.ensureWorkspacePrepared(sessionId, context, {
+      rerunFailed: context.rerunFailedSetup === true
+    }),
     project,
     stopPreviewBrowsers: (sessionId) => agentPreviewCommand.stopBrowsersForSession(sessionId),
     publishSessionChanged: publishSessionChanged.outputTarget,

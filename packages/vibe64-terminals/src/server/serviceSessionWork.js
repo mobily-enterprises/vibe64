@@ -71,6 +71,21 @@ function logDerivedArtifactsKept(logger, result, operation, operationId, session
 }
 
 /**
+ * A running preparation prepares the source an Update changes, so Update first waits for it, saying so: the run would
+ * otherwise record the updated source as the one it prepared. No other one starts while Update holds the lock. A
+ * Cancel ends the wait as it ends Update.
+ * @param {ServiceWorkspacePreparation} workspacePreparation
+ * @param {string} sessionId
+ * @param {{ runtime: object, session: object }} context the Update's, whose session is read again after the wait
+ * @param {{ onProgress?: (progress: object) => unknown, signal?: AbortSignal | null }} input
+ */
+async function waitForRunningPreparation(workspacePreparation, sessionId, context, { onProgress, signal = null }) {
+  if (!await workspacePreparation.waitForRunningPreparation(sessionId, { onProgress, session: context.session, signal })) return;
+  throwIfUpdateCancelled(signal);
+  context.session = await context.runtime.getSessionWithoutSource(sessionId);
+}
+
+/**
  * A session's work in its repository and its connected copies: the work execution, saving and its
  * recovery, updates, pull requests, the session source and its exclusive reads, and the Git command
  * actor.
@@ -540,9 +555,10 @@ function createServiceSessionWork({
         await onRepositoryWriteAcquired();
       }
     }, { operation: "update-session-work", whileAssistantWorks: true }, async (context) => {
+      await waitForRunningPreparation(workspacePreparation, sessionId, context, input);
       const { execution, runtime, session } = await sessionWorkExecution(sessionId, context, "session-update", { createsCommits: true });
       const projectRecord = await project.readCurrentProject();
-      const beforeSourceChange = () => workspacePreparation.invalidateWorkspaceSetup(context);
+      const beforeSourceChange = () => workspacePreparation.invalidateWorkspaceSetup(context, { sourceChange: true });
       const runProjectSourceExclusive = project.runProjectSourceExclusive.bind(project);
       const copies = sessionConnectedCopies(session);
       if (copies.length) {
@@ -592,11 +608,10 @@ function createServiceSessionWork({
    */
   async function recoverSessionWorkUpdate(sessionId, input = {}) {
     return runSessionRepositoryWrite(sessionId, input, { operation: "recover-session-update" }, async (context) => {
-      const { execution, runtime, session } = await sessionWorkExecution(sessionId, context, "session-update-recovery", {
-        createsCommits: true
-      });
+      await waitForRunningPreparation(workspacePreparation, sessionId, context, input);
+      const { execution, runtime, session } = await sessionWorkExecution(sessionId, context, "session-update-recovery", { createsCommits: true });
       const recoveryInput = {
-        beforeSourceChange: () => workspacePreparation.invalidateWorkspaceSetup(context),
+        beforeSourceChange: () => workspacePreparation.invalidateWorkspaceSetup(context, { sourceChange: true }),
         project: await project.readCurrentProject(),
         recovery: input.recovery || {},
         runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),

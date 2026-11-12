@@ -252,11 +252,8 @@ const UNATTENDED_STARTS = Object.freeze([
     await setup.completion;
   }],
   ["by a Preview start", async (hosted) => {
-    await hosted.workspacePreparation.prepareWorkspaceSetup(SESSION_ID, {
-      publish: true,
-      rerunFailed: true,
-      waitForCompletion: true
-    });
+    const setup = await hosted.workspacePreparation.ensureWorkspacePrepared(SESSION_ID, {}, { rerunFailed: true });
+    await setup.completion;
   }]
 ]);
 
@@ -337,7 +334,7 @@ test("Prepare workspace by a person who does not own the session still copies wi
 test("Prepare workspace selected in a session that waits for a person copies as them and prepares the workspace", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const hosted = await hostedSession(targetRoot);
-    await hosted.workspacePreparation.prepareWorkspaceSetup(SESSION_ID, { publish: true, waitForCompletion: true });
+    await (await hosted.workspacePreparation.prepareWorkspaceSetup(SESSION_ID, { publish: true })).completion;
     await assertWaitsForPerson(hosted, "before Prepare workspace");
     const retried = await hosted.workspacePreparation.prepareWorkspaceSetup(SESSION_ID, {
       publish: true,
