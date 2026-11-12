@@ -119,10 +119,11 @@ after **Stop**, or after a server restart until its continuation starts) shows
 **Goal not running**; open **Goal** to see any error that stopped it, and your
 next message continues it. The others show **Goal paused**, **Goal blocked** or
 **Goal budget reached**. A goal waiting
-because its AI account reached its usage limit shows **Waiting: AI usage limit,
-resets at** the reset time (for example 05:00, with the day when it is not
-today), or **Waiting: AI usage limit** when the AI does not say when; one whose
-account ran out of credit shows **Out of credit: top up or switch AI account**.
+because its AI account reached its usage limit shows **Goal paused: usage
+limit**, and one whose account ran out of credit shows **Goal paused: no
+credit**. The chip keeps to those few words; open **Goal** for the explanation:
+when the limit resets (for example 05:00, with the day when it is not today, if
+the AI says when) and what to do next.
 Open **Goal** to see its **Running time**: how long the AI has actually spent
 working on the goal. Codex reports its own; for Claude, Vibe64 adds up the time
 Claude worked on the goal from its conversation history. It counts only while

@@ -2507,10 +2507,11 @@ presentation; goal updates still identify the complete original objective.
 The goal indicator flashes red while active, uses the app's warning color while paused, and shows
 elapsed active time when space permits. Only a running goal's chip shows a
 clock; a paused, blocked, usage-limited or budget-limited goal's chip names that
-state (for example **Goal paused**), and its details keep the elapsed time. A
-goal waiting at its AI account's limit reads **Waiting: AI usage limit, resets
-at 05:00** (the reset time when the engine reports one) or **Out of credit: top
-up or switch AI account**, and its details say it does not continue by itself.
+state in a few words (for example **Goal paused**), and its details keep the
+elapsed time. A goal waiting at its AI account's limit reads **Goal paused:
+usage limit** or **Goal paused: no credit**; its details give the reset time
+when the engine reports one, what to do, and that it does not continue by
+itself.
 The application omits goal controls for
 assistants without that capability.
 The app theme overrides the shared control's hard-coded paused color because
