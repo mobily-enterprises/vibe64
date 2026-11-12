@@ -352,11 +352,16 @@ it("cancels a paused goal while a chat message is sending or unconfirmed, but ho
 it("uses the shared running and paused indicators for native goal state", async () => {
   for (const status of ["active", "paused", "blocked", "usageLimited", "budgetLimited", "complete"]) {
     mocks.goal = { status: "available", goal: { status, objective: "Finish migration" } };
-    const html = await render({ status: "available", windows: [{ remainingPercent: 1, windowDurationMins: 10080 }] });
-    expect(html.includes("Pause goal")).toBe(status === "active");
-    expect(html.includes("Cancel goal")).toBe(status !== "complete");
-    expect(html.includes("assistant-goal__light--running")).toBe(status === "active");
-    expect(html.includes("assistant-goal__light--paused")).toBe(status === "paused");
+    for (const working of [false, true]) {
+      const html = await render({ status: "available", windows: [{ remainingPercent: 1, windowDurationMins: 10080 }] },
+        undefined, undefined, { working });
+      expect(html.includes("Pause goal")).toBe(status === "active");
+      expect(html.includes("Cancel goal")).toBe(status !== "complete");
+      // Only a goal the AI is working on right now looks running.
+      expect(html.includes("assistant-goal__light--running")).toBe(status === "active" && working);
+      // The shared control decides which stopped states share the paused light; its own tests cover a usage limit.
+      if (status !== "usageLimited") expect(html.includes("assistant-goal__light--paused")).toBe(status === "paused");
+    }
   }
   mocks.goal = null;
 });
@@ -643,15 +648,16 @@ it.each(["codex", "claude"])("%s shares elapsed time, actual activity and reacha
   mocks.goal = { status: "available", goal: { status: "active", objective: "Finish the work", timeUsedSeconds: 65 } };
   for (const working of [false, true]) {
     const html = await render(null, props, undefined, { working });
-    expect(html).toContain("assistant-goal__light--running");
-    expect(html.includes("assistant-goal__light--working")).toBe(working);
+    // An active goal looks running only while its conversation works on it, and says so otherwise.
+    expect(html.includes("assistant-goal__light--running")).toBe(working);
+    expect(html.includes("Goal not running")).toBe(!working);
     expect(html).toContain("Running time: 1:05");
     expect(html).toContain("Pause goal");
   }
   mocks.goal = { status: "available", goal: { status: "blocked", objective: "Finish the work",
     timeUsedSeconds: 65, reason: "A long blocker explanation. ".repeat(100) } };
   const html = await render(null, props, undefined, { working: true });
-  expect(html).not.toContain("assistant-goal__light--working");
+  expect(html).not.toContain("assistant-goal__light--running");
   expect(html.indexOf("Resume goal")).toBeLessThan(html.indexOf("A long blocker explanation."));
   expect(html.indexOf("Cancel goal")).toBeLessThan(html.indexOf("A long blocker explanation."));
   expect(html).toContain(engineId === "claude" ? "Cancel stops the current turn and clears the goal."
@@ -660,28 +666,31 @@ it.each(["codex", "claude"])("%s shares elapsed time, actual activity and reacha
 });
 
 
-it("labels Claude elapsed age honestly when native running-time usage is unavailable", async () => {
+it("shows no Claude clock when its running time is unavailable, instead of counting from the goal's start", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-17T12:05:00Z"));
   try {
+    const props = { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } };
     mocks.goal = { status: "available", goal: { status: "blocked", objective: "Finish the work",
       createdAt: "2026-10-17T12:00:00Z", updatedAt: "2026-10-17T12:02:00Z" } };
-    const html = await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } });
-    expect(html).toContain("Elapsed since goal started (including pauses): 5:00");
+    const html = await render(null, props);
     expect(html).not.toContain("Running time:");
-    expect(html).not.toContain("assistant-goal__light--working");
-    // A goal that is not running says so on its chip, without a clock that
-    // looks alive; its details keep the elapsed time.
+    expect(html).not.toContain("5:00");
+    expect(html).not.toContain("assistant-goal__light--running");
+    // A goal that is not running says so on its chip, without a clock that looks alive.
     expect(html).toMatch(/<span class="assistant-goal__label"[^>]*>Goal blocked<\/span>/u);
     expect(html).not.toContain("assistant-goal__elapsed");
     mocks.goal = { status: "available", goal: { status: "paused", objective: "Finish the work", createdAt: "2026-10-17T12:00:00Z" } };
-    const paused = await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } });
+    const paused = await render(null, props);
     expect(paused).toMatch(/<span class="assistant-goal__label"[^>]*>Goal paused<\/span>/u);
     expect(paused).not.toContain("assistant-goal__elapsed");
-    expect(paused).toContain("Elapsed since goal started (including pauses): 5:00");
     mocks.goal = { status: "available", goal: { status: "active", objective: "Finish the work", createdAt: "2026-10-17T12:00:00Z" } };
-    const active = await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } });
+    const idle = await render(null, props);
+    expect(idle).toMatch(/<span class="assistant-goal__label"[^>]*>Goal not running<\/span>/u);
+    const active = await render(null, props, undefined, { working: true });
     expect(active).toMatch(/<span class="assistant-goal__label"[^>]*>Goal<\/span>/u);
-    expect(active).toMatch(/<span class="assistant-goal__elapsed" aria-hidden="true"[^>]*>5:00<\/span>/u);
+    expect(active).toContain("assistant-goal__light--running");
+    expect(active).not.toContain("assistant-goal__elapsed");
+    expect(active).not.toContain("Running time:");
   } finally { mocks.goal = null; vi.useRealTimers(); }
 });
