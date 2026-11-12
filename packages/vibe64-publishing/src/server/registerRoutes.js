@@ -32,10 +32,13 @@ function targetBodyInput(request) {
 }
 
 /**
- * The history page size, when the query names one.
+ * The history page size, only when the query names one: the action's input
+ * refuses a field that is present but undefined, and its schema refuses a
+ * limit that is not a whole number from 1 to 100.
  */
 function historyInput(request) {
-  return { limit: Number(requestQuery(request).limit) || undefined };
+  const query = requestQuery(request);
+  return Object.hasOwn(query, "limit") ? { limit: query.limit } : {};
 }
 
 function releaseInput(request) {
