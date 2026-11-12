@@ -173,10 +173,11 @@ ${list([WORKSPACE_SETUP_ENTRY_FORM])}
 - \`\` in \`workdir\` \`\` runs the command in that project directory (default \`.\`).
 - \`\` when \`path\` exists \`\` waits: setup stays waiting until the path exists (for example a manifest the agent has not created yet).
 - \`\` if \`path\` exists \`\` skips the step while the path is missing.
-- Steps run in order through managed execution with the session's development Env. Vibe64 records success against the exact recipe; changing any step runs setup again, and Outputs stay pending until it succeeds. Keep every step repeatable and non-destructive.
+- \`\` from \`path\`... \`\` names every file the command reads: project files or folders (a folder covers every file below it), where \`*\` matches within one path segment and \`**\` across segments. Ignored files are never seen. After the step succeeds Vibe64 records what those files held and the command; a later preparation skips the step while both are unchanged and the session's resources are the ones it ran on. Name the lockfile too, and leave \`from\` out when unsure: a step without it runs whenever preparation runs.
+- Steps run in order through managed execution with the session's development Env. Vibe64 records success against the exact recipe; changing any step runs setup again, and Outputs stay pending until it succeeds. Prepare workspace runs every step. Keep every step repeatable and non-destructive.
 `,
     example: `
-- Prepare \`Install dependencies\` with \`nodejs\`: \`npm\` \`ci\`
+- Prepare \`Install dependencies\` from \`package.json\` \`package-lock.json\` with \`nodejs\`: \`npm\` \`ci\`
 - Prepare \`Migrate database\` with \`nodejs\` if \`migrations\` exists: \`npm\` \`run\` \`db:migrate\`
 - Prepare \`Install client\` with \`nodejs\` in \`client\` when \`client/package.json\` exists: \`npm\` \`ci\`
 `

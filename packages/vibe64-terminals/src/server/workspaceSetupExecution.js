@@ -18,6 +18,7 @@ import {
   inProjectContext,
   operationRedactionSecrets,
   safeSetupLabel,
+  stepRecordValue,
   stepStatus
 } from "./workspaceSetupRules.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -26,18 +27,29 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
 
 const WORKSPACE_SETUP_CANCELLED = "Workspace preparation was cancelled. Prepare workspace runs every step again.";
+const STEP_SKIPPED = "Skipped: what it reads and runs is unchanged since it last succeeded";
+
+/** The transcript without its last line when that line is `line`. */
+function withoutLastLine(transcript, line) {
+  if (transcript === line) return "";
+  return transcript.endsWith(`\n${line}`) ? transcript.slice(0, -line.length - 1) : transcript;
+}
 
 /**
  * Runs a prepared recipe's steps in an admitted resource workflow, inside the
  * session source and its connected sources, and observes each run until it
- * settles, recording a failure it did not record itself. A run's `signal`
- * (an AI task's Cancel) stops the step that is running and every later one;
- * the run is recorded as failed and cancelled, and the next preparation runs
- * every step again, as after a failed step.
+ * settles, recording a failure it did not record itself. A step that names its
+ * inputs is skipped while its command and what those inputs hold are unchanged
+ * since it last succeeded on the same resources, and recorded each time it
+ * succeeds. A run's `signal` (an AI task's Cancel) stops the step that is
+ * running and every later one; the run is recorded as failed and cancelled,
+ * and, as after a failed step, that step and every later one keep no record,
+ * so the next preparation runs them again.
  * @param {object} dependencies
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
  * @param {typeof import("@local/vibe64-execution/server").finishVibe64Workflow} dependencies.finishWorkflow
  * @param {ProjectService} dependencies.project
+ * @param {typeof import("./workspaceSetupTree.js").readStepInputs} dependencies.readInputs
  * @param {typeof import("./workspaceSetupTree.js").readPreparedTree} dependencies.readTree
  * @param {typeof import("@local/vibe64-execution/server").runVibe64Command} dependencies.runCommand
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
@@ -47,6 +59,7 @@ function createWorkspaceSetupExecution({
   connectedPreparation,
   finishWorkflow,
   project,
+  readInputs,
   readTree,
   runCommand,
   runnerState,
@@ -75,8 +88,12 @@ function createWorkspaceSetupExecution({
     }
   }
 
+  /**
+   * `preparedSteps` are the step records this run may skip by: none for an explicit retry.
+   */
   async function execute({
     context,
+    preparedSteps = [],
     recipe,
     runtime,
     session,
@@ -104,9 +121,21 @@ function createWorkspaceSetupExecution({
     if (currentSetup?.status !== "ready" || currentSetup.recipeHash !== recipe.recipeHash) {
       throw new Error("Workspace setup changed while preparing its environment. Retry preparation to run the current steps.");
     }
-    const cancelled = currentLabel => failed(runtime, session.sessionId, {
+    // Resources created just now (a new database) run every step.
+    const resourcePreparation = environmentRecords.resourcePreparation;
+    const resources = resourcePreparation?.identity || "";
+    const records = new Map(!resourcePreparation || resourcePreparation.preserved === true
+      ? preparedSteps.map(({ step, inputs }) => [step, inputs])
+      : []);
+    // The records of the steps before the one at `until`: a step that did not finish may have changed
+    // what any later step relies on, so neither it nor they keep one.
+    const recorded = (until = recipe.steps.length) => [...new Set(recipe.steps.slice(0, until).map(({ recordKey }) => recordKey))]
+      .filter(step => records.has(step))
+      .map(step => ({ inputs: records.get(step), step }));
+    const cancelled = (currentLabel, index = 0) => failed(runtime, session.sessionId, {
       currentLabel,
       diagnostic: WORKSPACE_SETUP_CANCELLED,
+      preparedSteps: recorded(index),
       recipeHash: recipe.recipeHash,
       redactionSecrets,
       renewal: context.renewal,
@@ -147,8 +176,19 @@ function createWorkspaceSetupExecution({
         context.currentLabel = currentLabel;
         if (signal?.aborted) {
           outcome = "stopped";
-          return await cancelled(currentLabel);
+          return await cancelled(currentLabel, index);
         }
+        const inputs = step.recordKey ? await readInputs({ inputs: step.inputs, sourcePath }) : null;
+        const record = inputs ? stepRecordValue(inputs, resources) : "";
+        if (record && records.get(step.recordKey) === record) {
+          // The first step was announced as running before this run knew it would skip it.
+          context.transcript = appendWorkspaceSetupTranscript(
+            index === 0 ? withoutLastLine(context.transcript, stepStatus(currentLabel, "Running", redactionSecrets)) : context.transcript,
+            stepStatus(currentLabel, STEP_SKIPPED, redactionSecrets)
+          );
+          continue;
+        }
+        records.delete(step.recordKey);
         if (index > 0) {
           context.transcript = appendWorkspaceSetupTranscript(
             context.transcript,
@@ -159,6 +199,7 @@ function createWorkspaceSetupExecution({
           currentLabel,
           diagnostic: "",
           finishedAt: "",
+          preparedSteps: recorded(index),
           recipeHash: recipe.recipeHash,
           startedAt,
           status: "running",
@@ -196,12 +237,13 @@ function createWorkspaceSetupExecution({
         // A step whose processes could not be stopped keeps that failure: it names what is still running.
         if (result?.ok !== true && signal?.aborted && !executionCleanupRequired(result)) {
           outcome = "stopped";
-          return await cancelled(currentLabel);
+          return await cancelled(currentLabel, index);
         }
         if (result?.ok !== true) {
           return failed(runtime, session.sessionId, {
             currentLabel,
             diagnostic: commandDiagnostic(result, currentLabel, redactionSecrets),
+            preparedSteps: recorded(index),
             recipeHash: recipe.recipeHash,
             redactionSecrets,
             renewal: context.renewal,
@@ -210,6 +252,8 @@ function createWorkspaceSetupExecution({
             transcript: context.transcript
           });
         }
+        // What its inputs held when it started: a file changed while it ran is not one it prepared.
+        if (record) records.set(step.recordKey, record);
         context.transcript = appendWorkspaceSetupTranscript(
           context.transcript,
           stepStatus(currentLabel, "Succeeded", redactionSecrets)
@@ -222,6 +266,7 @@ function createWorkspaceSetupExecution({
         currentLabel: context.currentLabel,
         diagnostic: "",
         finishedAt: new Date().toISOString(),
+        preparedSteps: recorded(),
         preparedTree,
         recipeHash: recipe.recipeHash,
         resourceIdentity: environmentRecords.resourcePreparation?.identity,

@@ -50,12 +50,13 @@ async function persistInspectedState(runtime, sessionId, previous, value, renewa
 
 /**
  * A run that did not prepare the workspace. `stepOutcome` is how its last step ended in the output:
- * Failed, or Cancelled for a run Cancel stopped.
+ * Failed, or Cancelled for a run Cancel stopped. `preparedSteps` are the step records still true.
  */
 async function failed(runtime, sessionId, options = {}) {
   const {
     currentLabel = "",
     diagnostic = "Workspace preparation failed.",
+    preparedSteps = [],
     recipeHash = "",
     redactionSecrets = [],
     resourceAdmissionId = "",
@@ -71,6 +72,7 @@ async function failed(runtime, sessionId, options = {}) {
     currentLabel: safeLabel,
     diagnostic: safeDiagnostic,
     finishedAt: new Date().toISOString(),
+    preparedSteps,
     recipeHash,
     resourceAdmissionId,
     runtimes,

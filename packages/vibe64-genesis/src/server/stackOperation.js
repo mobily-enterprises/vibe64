@@ -119,6 +119,32 @@ function projectPath(value, code, operationPath, label, line, options = {}) {
   return value;
 }
 
+/**
+ * Backticked project-relative paths, each named once, whose only wildcards are `*` (within one path
+ * segment) and `**` (across segments).
+ */
+function projectGlobs(source, code, operationPath, label, line) {
+  const values = backtickedArguments(source, code, operationPath, label, line);
+  if (values.some((value) => (
+    value.startsWith("/")
+    || value.includes("\\")
+    || value.includes("***")
+    || /[?[\]{}!]/u.test(value)
+    || value.split("/").some((segment) => !segment || [".", ".."].includes(segment))
+  ))) {
+    invalidStackOperation(
+      code,
+      operationPath,
+      `${label} must be canonical project-relative globs using only * and ** wildcards.`,
+      line
+    );
+  }
+  if (new Set(values).size !== values.length) {
+    invalidStackOperation(code, operationPath, `${label} must name each path once.`, line);
+  }
+  return values;
+}
+
 function runtimeArguments(source, code, operationPath, label, line) {
   const values = backtickedArguments(source, code, operationPath, label, line);
   if (values.some((value) => !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value))) {
@@ -249,6 +275,7 @@ export {
   invalidStackOperation,
   oneLineText,
   processArguments,
+  projectGlobs,
   projectPath,
   runtimeArguments,
   stackCommand,

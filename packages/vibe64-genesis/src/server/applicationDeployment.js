@@ -6,6 +6,7 @@ import {
   isExplicitlyEmptyStackSection,
   oneLineText,
   processArguments,
+  projectGlobs,
   projectPath,
   runtimeArguments,
   stackOperationHash,
@@ -52,30 +53,13 @@ function invalid(deploymentPath, message, line, details = {}) {
 }
 
 function disposablePaths(source, deploymentPath, line) {
-  const values = backtickedArguments(
+  return projectGlobs(
     source.slice(RESTORE_PATHS_PREFIX.length),
     ERROR_CODE,
     deploymentPath,
     "Deployment Recreate on restore paths",
     line
   );
-  if (values.some((value) => (
-    value.startsWith("/")
-    || value.includes("\\")
-    || value.includes("***")
-    || /[?[\]{}!]/u.test(value)
-    || value.split("/").some((segment) => !segment || [".", ".."].includes(segment))
-  ))) {
-    invalid(
-      deploymentPath,
-      "Deployment Recreate on restore paths must be canonical project-relative globs using only * and ** wildcards.",
-      line
-    );
-  }
-  if (new Set(values).size !== values.length) {
-    invalid(deploymentPath, "Deployment contains a duplicate Recreate on restore path.", line);
-  }
-  return values;
 }
 
 function generatedSecrets(source, deploymentPath, line) {

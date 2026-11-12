@@ -5,6 +5,7 @@ import {
   invalidStackOperation,
   isExplicitlyEmptyStackSection,
   oneLineText,
+  projectGlobs,
   stackCommand,
   stackOperationHash,
   uniqueSorted
@@ -13,8 +14,10 @@ import {
 const VIBE64_WORKSPACE_SETUP_CONTRACT = "vibe64.workspace-setup.v1";
 const VIBE64_WORKSPACE_SETUP_SECTION = "Workspace setup";
 const ERROR_CODE = "VIBE64_WORKSPACE_SETUP_INVALID";
-const WORKSPACE_SETUP_ENTRY_FORM = "- Prepare `label` with `runtime` [in `workdir`] [when|if `path` exists]: `command` `argument`...";
+const WORKSPACE_SETUP_ENTRY_FORM = "- Prepare `label` [from `path`...] with `runtime` [in `workdir`] [when|if `path` exists]: `command` `argument`...";
 const PREPARE_LINE = /^- Prepare `([^`\r\n]+)` (.+)$/u;
+// The files a step reads, before its runtimes: from `package.json` `package-lock.json` with ...
+const INPUTS_CLAUSE = /^from ((?:`[^`\r\n]+`[ \t]+)+)(with .+)$/u;
 
 function invalid(setupPath, message, line, details = {}) {
   invalidStackOperation(ERROR_CODE, setupPath, message, line, details);
@@ -35,7 +38,8 @@ function parseVibe64WorkspaceSetupLines(lines, options = {}) {
     if (!source) continue;
     const line = index + 1;
     const entry = source.match(PREPARE_LINE);
-    if (!entry) {
+    const inputs = entry?.[2].match(INPUTS_CLAUSE);
+    if (!entry || (entry[2].startsWith("from ") && !inputs)) {
       invalid(
         setupPath,
         `Every Workspace setup entry must use: ${WORKSPACE_SETUP_ENTRY_FORM}`,
@@ -46,7 +50,8 @@ function parseVibe64WorkspaceSetupLines(lines, options = {}) {
 
     steps.push({
       label: oneLineText(entry[1], ERROR_CODE, setupPath, "Workspace setup step label", line),
-      ...stackCommand(entry[2], ERROR_CODE, setupPath, "Workspace setup", line, {
+      ...(inputs ? { inputs: projectGlobs(inputs[1].trimEnd(), ERROR_CODE, setupPath, "Workspace setup inputs", line) } : {}),
+      ...stackCommand(inputs ? inputs[2] : entry[2], ERROR_CODE, setupPath, "Workspace setup", line, {
         form: WORKSPACE_SETUP_ENTRY_FORM,
         observed: source
       })

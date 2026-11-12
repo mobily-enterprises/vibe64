@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
@@ -35,23 +36,38 @@ function diagnosticsInclude(diagnostics = [], code = "") {
     .some((diagnostic) => toText(diagnostic?.code) === code);
 }
 
+function sha256(value) {
+  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+/**
+ * A recipe step as the runner runs it. A step that names its inputs also has the key its record is kept
+ * under: a digest of its command, where and with what it runs, and the inputs it names.
+ */
 function setupStep(step = {}, index = 0, sourcePath = "") {
   const argv = Array.isArray(step.argv) ? step.argv.map((value) => String(value)) : [];
   if (!toText(argv[0])) {
     throw new Error(`Workspace preparation step ${index + 1} has no command.`);
   }
-  const cwd = path.resolve(sourcePath, toText(step.workdir) || ".");
+  const workdir = toText(step.workdir) || ".";
+  const cwd = path.resolve(sourcePath, workdir);
   if (!pathInsideOrEqual(sourcePath, cwd)) {
     throw new Error(`Workspace preparation step ${index + 1} has a work directory outside the session source.`);
   }
+  const runtimeRequirements = Array.isArray(step.runtimeRequirements) ? step.runtimeRequirements : [];
+  const inputs = Array.isArray(step.inputs) && step.inputs.length ? step.inputs.map((input) => String(input)) : null;
   return {
     argv,
     cwd,
     label: toText(step.label) || `Workspace preparation step ${index + 1}`,
-    runtimeRequirements: Array.isArray(step.runtimeRequirements)
-      ? step.runtimeRequirements
-      : []
+    runtimeRequirements,
+    ...(inputs ? { inputs, recordKey: sha256(JSON.stringify({ argv, inputs, runtimeRequirements, workdir })) } : {})
   };
+}
+
+/** What a step's record holds: what its inputs held and the resources it ran on. */
+function stepRecordValue(inputs = "", resources = "") {
+  return sha256(`${inputs}\0${resources}`);
 }
 
 function preparedRecipe(setup = {}, sourcePath = "") {
@@ -181,6 +197,7 @@ export {
   preparedRecipe,
   resourceIdentityMatches,
   safeSetupLabel,
+  stepRecordValue,
   stepStatus,
   workspaceSetupRunKey
 };

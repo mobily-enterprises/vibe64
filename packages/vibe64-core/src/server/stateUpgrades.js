@@ -67,6 +67,7 @@ import connectedRepositoryCopies from "./stateUpgrades/20261106-connected-reposi
 import chatFinishingSteps from "./stateUpgrades/20261107-chat-finishing-steps.js";
 import archivedClosingChats from "./stateUpgrades/20261110-archived-closing-chats.js";
 import workspacePreparedTree from "./stateUpgrades/20261112-workspace-prepared-tree.js";
+import workspacePreparedSteps from "./stateUpgrades/20261113-workspace-prepared-steps.js";
 
 const upgrades = [
   codexLoginId,
@@ -121,7 +122,8 @@ const upgrades = [
   connectedRepositoryCopies,
   chatFinishingSteps,
   archivedClosingChats,
-  workspacePreparedTree
+  workspacePreparedTree,
+  workspacePreparedSteps
 ];
 
 async function readLedger(ledgerPath) {

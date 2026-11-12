@@ -9,6 +9,10 @@ const WORKSPACE_SETUP_METADATA_NAME = "workspace_setup";
 const PREPARED_COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const PREPARED_CHANGES = /^sha256:[0-9a-f]{64}$/u;
 const PREPARED_CONNECTED_NAME = /^[a-z0-9_.-]{1,100}$/u;
+// More step records than this are no record: a recipe has far fewer steps that name their inputs.
+const MAX_PREPARED_STEPS = 64;
+// The statuses whose record of prepared steps still holds: a run records each step as it succeeds.
+const PREPARED_STEPS_STATUSES = new Set(["failed", "required", "running", "succeeded"]);
 const WORKSPACE_SETUP_DIAGNOSTIC_MAX_LENGTH = 1600;
 const WORKSPACE_SETUP_TRANSCRIPT_MAX_LENGTH = 32 * 1024;
 const WORKSPACE_SETUP_TRANSCRIPT_TRUNCATED_MARKER = "[Earlier workspace preparation output was truncated.]\n";
@@ -69,6 +73,21 @@ function preparedTree(value) {
 }
 
 /**
+ * The steps that name their inputs, each as it last succeeded: a digest of its command (`step`) and one of
+ * what its inputs held, with the resources it ran on (`inputs`). Anything else is no record.
+ * @param {unknown} value
+ * @returns {{ step: string, inputs: string }[]}
+ */
+function preparedSteps(value) {
+  if (!Array.isArray(value) || value.length > MAX_PREPARED_STEPS || !value.every(isPlainObject)) return [];
+  const records = value.map(entry => ({ step: toText(entry.step), inputs: toText(entry.inputs) }));
+  return records.every(({ step, inputs }) => PREPARED_CHANGES.test(step) && PREPARED_CHANGES.test(inputs)) &&
+    new Set(records.map(({ step }) => step)).size === records.length
+    ? records
+    : [];
+}
+
+/**
  * Whether the tree preparation finds now is the one a successful preparation recorded.
  * @param {object | null} current
  * @param {object | null} recorded
@@ -87,10 +106,12 @@ function workspaceSetupState(value = {}) {
   // An Update keeps what was prepared while it marks preparation required: the next
   // preparation skips its steps when it finds that same tree.
   const prepared = ["required", "succeeded"].includes(status) ? preparedTree(source.preparedTree) : null;
+  const steps = PREPARED_STEPS_STATUSES.has(status) ? preparedSteps(source.preparedSteps) : [];
   return {
     currentLabel: boundedText(source.currentLabel, 160),
     diagnostic: boundedText(source.diagnostic, WORKSPACE_SETUP_DIAGNOSTIC_MAX_LENGTH),
     finishedAt: toText(source.finishedAt),
+    ...(steps.length ? { preparedSteps: steps } : {}),
     ...(prepared ? { preparedTree: prepared } : {}),
     recipeHash: boundedText(source.recipeHash, 128),
     ...((status === "succeeded" || prepared) && typeof source.resourceIdentity === "string" &&

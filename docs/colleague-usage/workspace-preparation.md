@@ -66,11 +66,26 @@ dependencies, are not part of it). After **Update this session**, preparation
 runs only when one of these differs from what the last successful preparation
 prepared. An Update that brought nothing in, or whose changes were undone, says
 `This source is already prepared, so no step runs again.` in the preparation
-output and runs no step. Any difference, even in one documentation file, still
-runs every declared step. A failed or cancelled preparation is never remembered,
+output and runs no step. A failed or cancelled preparation is never remembered,
 so the next one runs every step. **Prepare workspace** and **Retry** always run
 every step. A session prepared before this behaviour runs its steps after its
 next Update, as before, and is remembered from then on.
+
+When the source did change, a step that names the files it reads runs only when
+those files changed since it last succeeded. In `genesis/stack.md` such a step
+lists them after `from`, for example
+``- Prepare `Install dependencies` from `package.json` `package-lock.json` with `nodejs`: `npm` `ci` ``.
+After an Update that changed only documentation, that step adds
+`[Install dependencies] Skipped: what it reads and runs is unchanged since it last succeeded.`
+to the preparation output and installs nothing. A changed file it names, a
+changed command, new or recreated databases, or a failure of that step the last
+time runs it again. A step without `from` runs every time, as before. Genesis's
+Stack technologies propose `from` for their install and database steps; a
+project's existing `genesis/stack.md` keeps its steps as written until the
+project's coding assistant or the person adds it. To run every step anyway,
+select **Prepare workspace**. Colleague can explain a skipped step from the
+preparation output; editing `genesis/stack.md` belongs to the coding assistant
+or the person.
 
 One preparation runs at a time in a session, whichever starts it. A Preview
 start in another tab, or the end of an assistant turn, waits for the running

@@ -416,6 +416,8 @@ function createWorkspaceSetupStart({
       sessionId,
       inProjectContext(projectContext, () => setupExecution.execute({
         context,
+        // An explicit retry (Prepare workspace) runs every step, as does the first run after a migration.
+        preparedSteps: retry === true || migrationTranscript ? [] : stateBase.preparedSteps || [],
         recipe,
         runtime,
         session,

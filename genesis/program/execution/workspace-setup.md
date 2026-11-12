@@ -120,8 +120,12 @@ script edits. Those changes can use this explicit rerun without a separate cache
 ledger or automatic custom rebuild watcher.
 
 `vibe64.workspace-setup.v1` is the only accepted schema. Its source is strict,
-readable Markdown: each `Prepare` entry declares a label, runtimes, optional
-working directory and path condition, then separate backticked argv values.
+readable Markdown: each `Prepare` entry declares a label, the files it reads
+after an optional `from`, runtimes, optional working directory and path
+condition, then separate backticked argv values. Those inputs are canonical
+project-relative paths or globs (`*` within a segment, `**` across segments; a
+folder covers every file below it), parsed by the same `projectGlobs` rule as
+Deployment's Recreate on restore paths.
 Vibe64 parses that opaque Stack section mechanically and runs the normalized
 argv with the project's resolved environment. It runs once for a fresh recipe,
 records progress and exact recipe identity, waits before dependent work, and
@@ -167,6 +171,24 @@ only resources, as for any reused success; any difference runs every step.
 Failed, cancelled and running states never carry the record, and a session
 without one runs its steps after its next Update
 (`20261112-workspace-prepared-tree`).
+
+When the tree differs, a step that names its inputs runs only when they changed.
+Its record (`preparedSteps`) is kept under a digest of its argv, runtimes, working
+directory and inputs, and holds a digest of what those inputs held, read before
+the step ran, with the identity of the resources it ran on. `readStepInputs`
+reads that with one `git ls-files --stage` and one `git status` over the inputs'
+`:(glob)` pathspecs, hashing only the files status lists, as Git blobs, so a
+file reads the same committed, staged or not; ignored files are excluded and
+more than a thousand listed files records nothing. A matching step adds
+`[label] Skipped: what it reads and runs is unchanged since it last succeeded.`
+and runs nothing; a step without `from` runs whenever preparation runs. A failed
+or cancelled step drops its record and every later step's; records of steps no
+longer in the recipe are dropped. An explicit retry, the first run after a
+Genesis migration and resources that were not preserved (`preserved !== true`)
+run every step. Update's invalidation keeps the records; another reason drops
+them (`20261113-workspace-prepared-steps`). Each step answers only for its own
+inputs, so a step that depends on another step's result names that step's
+inputs too.
 
 Update waits inside its admission for a preparation already running, reporting
 the running step as Update progress, so that run never records the updated source

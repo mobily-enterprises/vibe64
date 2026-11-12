@@ -1925,3 +1925,20 @@ so that session's next Update runs its declared recipe as before, and records
 the tree from then on. Preflight reports that rule; apply records the boundary in the existing
 ledger, and retry is a no-op. No application files change, so this boundary
 needs no backup.
+
+## Workspace prepared steps (`20261113-workspace-prepared-steps`)
+
+Prospective boundary for optional `preparedSteps` on `workspace_setup` records:
+for each Workspace setup step that names the files it reads (`from`), a digest
+of its command (argv, working directory, runtimes and named inputs) and a
+digest of what those files held when it last succeeded, with the identity of
+the resources it ran on. Each step is recorded as it succeeds; a failed or
+cancelled step, and every step after it, keep no record. An Update keeps the
+records while it marks preparation `required`; any other invalidation drops
+them. A preparation that is not an explicit Prepare workspace skips a recorded
+step while both digests are unchanged and the resources were not created
+again. This script neither reads nor rewrites historical session setup: a
+record without the field matches no step, so that session's next preparation
+runs every step as before, and records them from then on. Preflight reports
+that rule; apply records the boundary in the existing ledger, and retry is a
+no-op. No application files change, so this boundary needs no backup.

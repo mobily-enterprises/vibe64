@@ -90,6 +90,53 @@ test("Workspace setup Markdown normalizes exact argv, paths, and conditions", ()
   assert.deepEqual(parseVibe64WorkspaceSetupLines(["- Nothing."]), []);
 });
 
+test("Workspace setup names the files a step reads after from: paths, folders and * or ** globs", () => {
+  assert.deepEqual(parseVibe64WorkspaceSetupLines([
+    "- Prepare `Install dependencies` from `package.json` `package-lock.json` `packages/*/package.json` with `nodejs` when `package.json` exists: `npm` `install`",
+    "- Prepare `Migrate database` from `database/migrations` `**/schema.sql` with `php` in `api`: `php` `artisan` `migrate`",
+    "- Prepare `Build assets` with `nodejs`: `npm` `run` `build`"
+  ]), [{
+    label: "Install dependencies",
+    inputs: ["package.json", "package-lock.json", "packages/*/package.json"],
+    argv: ["npm", "install"],
+    runtimeRequirements: ["nodejs"],
+    workdir: ".",
+    condition: { pathExists: "package.json", onMissing: "wait" }
+  }, {
+    label: "Migrate database",
+    inputs: ["database/migrations", "**/schema.sql"],
+    argv: ["php", "artisan", "migrate"],
+    runtimeRequirements: ["php"],
+    workdir: "api"
+  }, {
+    // Without from, a step names nothing it reads: it has no inputs at all.
+    label: "Build assets",
+    argv: ["npm", "run", "build"],
+    runtimeRequirements: ["nodejs"],
+    workdir: "."
+  }]);
+  const invalid = [
+    "- Prepare `Install` from with `nodejs`: `npm` `install`",
+    "- Prepare `Install` from package.json with `nodejs`: `npm` `install`",
+    "- Prepare `Install` from `package.json`: `npm` `install`",
+    "- Prepare `Install` with `nodejs` from `package.json`: `npm` `install`",
+    "- Prepare `Install` from `../package.json` with `nodejs`: `npm` `install`",
+    "- Prepare `Install` from `/package.json` with `nodejs`: `npm` `install`",
+    "- Prepare `Install` from `.` with `nodejs`: `npm` `install`",
+    "- Prepare `Install` from `packages//package.json` with `nodejs`: `npm` `install`",
+    "- Prepare `Install` from `package?.json` with `nodejs`: `npm` `install`",
+    "- Prepare `Install` from `package.json` `package.json` with `nodejs`: `npm` `install`"
+  ];
+  for (const entry of invalid) {
+    assert.throws(
+      () => parseVibe64WorkspaceSetupLines([entry]),
+      (error) => error?.code === "VIBE64_WORKSPACE_SETUP_INVALID" &&
+        /Exact grammar: vibe64-helper spec workspace-setup\.$/u.test(error.message),
+      entry
+    );
+  }
+});
+
 test("Workspace setup rejects shell strings, traversal, and malformed runtimes", () => {
   const invalid = [
     "- Prepare `Install` with `nodejs`: `npm install`",

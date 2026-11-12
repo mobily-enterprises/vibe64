@@ -28,8 +28,9 @@ function createWorkspaceSetupStatus({
 }) {
   /**
    * Marks preparation required again. A source change (an Update) keeps what the last successful
-   * preparation prepared, so the next one runs no step when it finds that same tree; any other reason
-   * (a missing Agent Skill) runs them whatever the tree.
+   * preparation prepared, so the next one runs no step when it finds that same tree, and the record of
+   * each step's inputs, so it skips a step whose inputs are unchanged; any other reason (a missing Agent
+   * Skill) runs them all whatever the tree.
    */
   async function invalidate({ runtime, session, diagnostic, sourceChange = false } = {}) {
     const previous = workspaceSetupState(session.workspaceSetup);
@@ -37,7 +38,9 @@ function createWorkspaceSetupStatus({
       currentLabel: "",
       diagnostic,
       finishedAt: "",
-      ...(sourceChange ? { preparedTree: previous.preparedTree, resourceIdentity: previous.resourceIdentity } : {}),
+      ...(sourceChange
+        ? { preparedSteps: previous.preparedSteps, preparedTree: previous.preparedTree, resourceIdentity: previous.resourceIdentity }
+        : {}),
       recipeHash: "",
       startedAt: "",
       status: "required",

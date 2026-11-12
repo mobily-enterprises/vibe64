@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -522,6 +523,210 @@ test("only a successful or required setup keeps a well-formed prepared tree", ()
     { status: "succeeded", preparedTree: { ...preparedTree, recipeHash: "" } }]) {
     assert.equal(Object.hasOwn(workspaceSetupState(state), "preparedTree"), false, JSON.stringify(state));
   }
+});
+
+const STEP_SKIPPED = "Skipped: what it reads and runs is unchanged since it last succeeded.";
+
+/**
+ * A session whose source is a Git repository with dependency manifests, a migrations folder and docs, and
+ * a runner over a recipe that installs from `package.json` and `package-lock.json`, migrates from
+ * `database/migrations` and builds without naming what it reads. Changing `f.steps` changes the recipe, as
+ * editing the Stack does; `f.failing` names a step that fails; `f.resourcePreparation` is what the host
+ * reports about the session's resources.
+ */
+async function declaredInputsSession(targetRoot) {
+  const { runtime, session, sourceRoot } = await workspaceSession(targetRoot);
+  const git = await gitRepository(sourceRoot);
+  const write = async (file, content) => {
+    await mkdir(path.dirname(path.join(sourceRoot, file)), { recursive: true });
+    await writeFile(path.join(sourceRoot, file), content);
+  };
+  await write("package.json", "{\"name\":\"app\"}\n");
+  await write("package-lock.json", "{\"lockfileVersion\":3}\n");
+  await write("database/migrations/001-create.sql", "create table notes (id integer);\n");
+  await write("docs/guide.md", "# Guide\n");
+  await git("add", ".");
+  await git("commit", "--quiet", "-m", "application");
+  const step = (label, argv, inputs) => ({ argv, ...(inputs ? { inputs } : {}), label, runtimeRequirements: ["nodejs"], workdir: "." });
+  const f = {
+    commit: async (message) => { await git("add", "."); await git("commit", "--quiet", "-m", message); },
+    failing: "",
+    ran: [],
+    resourcePreparation: null,
+    steps: [
+      step("Install dependencies", ["npm", "install"], ["package.json", "package-lock.json"]),
+      step("Migrate database", ["npm", "run", "migrate"], ["database/migrations"]),
+      step("Build assets", ["npm", "run", "build"])
+    ],
+    write
+  };
+  const runner = createWorkspaceSetupRunner({
+    project: {
+      ...readyProject(),
+      inspectWorkspaceSetup: () => readySetup({
+        recipeHash: `sha256:${createHash("sha256").update(JSON.stringify(f.steps)).digest("hex")}`,
+        steps: f.steps
+      }),
+      async projectExecutionEnvironment() {
+        return {
+          environment: {},
+          resourceConfigurationFingerprint: "c".repeat(64),
+          ...(f.resourcePreparation ? { resourcePreparation: f.resourcePreparation } : {})
+        };
+      }
+    },
+    async runCommand(request) {
+      f.ran.push(request.execution.label);
+      return request.execution.label === f.failing
+        ? { exitCode: 1, ok: false, output: `${f.failing} failed` }
+        : { exitCode: 0, ok: true, output: "" };
+    }
+  });
+  f.sourceRoot = sourceRoot;
+  f.current = async () => (await runtime.getSessionWithoutSource(session.sessionId)).workspaceSetup;
+  f.invalidate = async ({ diagnostic = "Source updated.", sourceChange = true } = {}) => runner.invalidate({
+    runtime,
+    session: await runtime.getSessionWithoutSource(session.sessionId),
+    diagnostic,
+    sourceChange
+  });
+  /** One preparation, as after an Update (or an explicit retry): its status and the steps it ran. */
+  f.prepare = async ({ retry = false, update = true } = {}) => {
+    if (update) await f.invalidate();
+    f.ran = [];
+    const started = await runner.start({ retry, runtime, session: await runtime.getSessionWithoutSource(session.sessionId) });
+    const state = started.completion ? await started.completion : started.state;
+    const attempt = state.transcript.split(/^Workspace preparation (?:retry )?started[^\n]*$/mu).at(-1);
+    return { attempt, ran: f.ran, status: state.status };
+  };
+  return f;
+}
+
+test("a docs-only Update after a full preparation runs no install step, and says it skipped it", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const f = await declaredInputsSession(targetRoot);
+    const first = await f.prepare({ update: false });
+    assert.equal(first.status, "succeeded");
+    assert.deepEqual(first.ran, ["Install dependencies", "Migrate database", "Build assets"]);
+    assert.equal((await f.current()).preparedSteps.length, 2, "each step that names its inputs is recorded");
+
+    await f.write("docs/guide.md", "# Guide\n\nMore.\n");
+    await f.write("README.md", "Read me.\n");
+    await f.commit("docs");
+    const docs = await f.prepare();
+    assert.equal(docs.status, "succeeded");
+    assert.deepEqual(docs.ran, ["Build assets"], "only the step that names nothing it reads runs");
+    assert.match(docs.attempt, new RegExp(`^\\[Install dependencies\\] ${STEP_SKIPPED.replaceAll(".", "\\.")}$`, "mu"));
+    assert.match(docs.attempt, new RegExp(`^\\[Migrate database\\] ${STEP_SKIPPED.replaceAll(".", "\\.")}$`, "mu"));
+    assert.doesNotMatch(docs.attempt, /\[(?:Install dependencies|Migrate database)\] Running\./u);
+    assert.match(docs.attempt, /\[Build assets\] Running\.[\s\S]*Workspace preparation succeeded\.$/u);
+  });
+});
+
+test("a changed input reruns only its step, committed, uncommitted or untracked, and an undeclared step runs every time", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const f = await declaredInputsSession(targetRoot);
+    await f.prepare({ update: false });
+
+    await f.write("package-lock.json", "{\"lockfileVersion\":3,\"packages\":{}}\n");
+    assert.deepEqual((await f.prepare()).ran, ["Install dependencies", "Build assets"], "an uncommitted lockfile change");
+    // An unchanged tree runs no step at all; a docs change beside it reaches the per-step records.
+    await f.write("docs/guide.md", "# Guide\n\nAgain.\n");
+    assert.deepEqual((await f.prepare()).ran, ["Build assets"], "the same lockfile again");
+    await f.commit("lock");
+    assert.deepEqual((await f.prepare()).ran, ["Build assets"], "committing the prepared lockfile changes nothing it reads");
+
+    await f.write("database/migrations/002-index.sql", "create index notes_id on notes (id);\n");
+    assert.deepEqual((await f.prepare()).ran, ["Migrate database", "Build assets"], "an untracked migration");
+    await f.commit("migration");
+    await f.write("package.json", "{\"name\":\"app\",\"dependencies\":{\"left-pad\":\"1.3.0\"}}\n");
+    await f.commit("dependency");
+    assert.deepEqual((await f.prepare()).ran, ["Install dependencies", "Build assets"], "a committed manifest change");
+  });
+});
+
+test("a changed command reruns its step even when what it reads is unchanged", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const f = await declaredInputsSession(targetRoot);
+    await f.prepare({ update: false });
+    f.steps[0] = { ...f.steps[0], argv: ["npm", "ci"] };
+    assert.deepEqual((await f.prepare()).ran, ["Install dependencies", "Build assets"]);
+    f.steps[1] = { ...f.steps[1], workdir: "database" };
+    assert.deepEqual((await f.prepare()).ran, ["Migrate database", "Build assets"]);
+    f.steps[1] = { ...f.steps[1], inputs: ["database/migrations", "database/seeds"] };
+    assert.deepEqual((await f.prepare()).ran, ["Migrate database", "Build assets"], "naming other inputs is another step");
+    await f.write("docs/guide.md", "# Guide\n\nAgain.\n");
+    assert.deepEqual((await f.prepare()).ran, ["Build assets"], "its new record skips it next time");
+  });
+});
+
+test("a failed step is never recorded: it runs again, while a step that succeeded before it stays skipped", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const f = await declaredInputsSession(targetRoot);
+    await f.prepare({ update: false });
+    const recorded = (await f.current()).preparedSteps;
+
+    await f.write("database/migrations/002-broken.sql", "create broken;\n");
+    f.failing = "Migrate database";
+    const failed = await f.prepare();
+    assert.equal(failed.status, "failed");
+    assert.deepEqual(failed.ran, ["Migrate database"]);
+    const kept = (await f.current()).preparedSteps;
+    assert.deepEqual(kept, recorded.filter((_, index) => index === 0), "the failed step's record is gone, the install's stays");
+
+    // Even back on the migrations it last succeeded with: the failed run may have half-applied them.
+    await rm(path.join(f.sourceRoot, "database/migrations/002-broken.sql"));
+    f.failing = "";
+    assert.deepEqual((await f.prepare()).ran, ["Migrate database", "Build assets"]);
+    assert.deepEqual((await f.current()).preparedSteps, recorded);
+  });
+});
+
+test("an explicit retry and new or changed resources run every step", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const f = await declaredInputsSession(targetRoot);
+    const all = ["Install dependencies", "Migrate database", "Build assets"];
+    f.resourcePreparation = { identity: "a".repeat(64), preserved: false };
+    assert.deepEqual((await f.prepare({ update: false })).ran, all);
+    f.resourcePreparation = { identity: "a".repeat(64), preserved: true };
+    assert.deepEqual((await f.prepare()).ran, ["Build assets"], "the resources the steps last ran on");
+
+    assert.deepEqual((await f.prepare({ retry: true, update: false })).ran, all, "Prepare workspace runs every step");
+    f.resourcePreparation = { identity: "b".repeat(64), preserved: true };
+    assert.deepEqual((await f.prepare()).ran, all, "other resources");
+    f.resourcePreparation = { identity: "b".repeat(64), preserved: false };
+    assert.deepEqual((await f.prepare()).ran, all, "a database created again");
+    f.resourcePreparation = { identity: "b".repeat(64), preserved: true };
+    assert.deepEqual((await f.prepare()).ran, ["Build assets"]);
+  });
+});
+
+test("only well-formed step records are kept, and only an Update's invalidation keeps them", async () => {
+  const digest = (character) => `sha256:${character.repeat(64)}`;
+  const preparedSteps = [{ inputs: digest("b"), step: digest("a") }, { inputs: digest("d"), step: digest("c") }];
+  for (const status of ["succeeded", "required", "running", "failed"]) {
+    assert.deepEqual(workspaceSetupState({ preparedSteps, status }).preparedSteps, preparedSteps, status);
+  }
+  for (const state of [{ status: "unconfigured", preparedSteps },
+    { status: "succeeded", preparedSteps: [{ ...preparedSteps[0], inputs: "sha256:short" }] },
+    { status: "succeeded", preparedSteps: [preparedSteps[0], { ...preparedSteps[1], step: preparedSteps[0].step }] },
+    { status: "succeeded", preparedSteps: Array.from({ length: 65 }, (_, index) => ({ inputs: digest("b"), step: `sha256:${index.toString(16).padStart(64, "0")}` })) },
+    { status: "succeeded", preparedSteps: { [digest("a")]: digest("b") } }]) {
+    assert.equal(Object.hasOwn(workspaceSetupState(state), "preparedSteps"), false, JSON.stringify(state).slice(0, 200));
+  }
+
+  await withTemporaryRoot(async (targetRoot) => {
+    const f = await declaredInputsSession(targetRoot);
+    await f.prepare({ update: false });
+    const recorded = (await f.current()).preparedSteps;
+    await f.write("docs/guide.md", "# Guide\n\nAgain.\n");
+    assert.deepEqual((await f.prepare()).ran, ["Build assets"]);
+    assert.deepEqual((await f.current()).preparedSteps, recorded);
+    // Another reason (a missing Agent Skill) asks for every step to run again, as before.
+    await f.invalidate({ diagnostic: "Reinstall the packages.", sourceChange: false });
+    assert.equal(Object.hasOwn(await f.current(), "preparedSteps"), false);
+    assert.deepEqual((await f.prepare({ update: false })).ran, ["Install dependencies", "Migrate database", "Build assets"]);
+  });
 });
 
 test("workspace preparation state bounds and normalizes durable transcripts", () => {
