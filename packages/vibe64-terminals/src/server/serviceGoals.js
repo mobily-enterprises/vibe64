@@ -284,9 +284,15 @@ function createServiceGoals({
     if (intent.pending) {
       const messageId = intent.pending.messageId;
       let accepted = messageId && await context.runtime.store.conversationMessageIdExists(sessionId, messageId);
+      let receipt = null;
       if (!accepted && messageId) {
-        const receipt = await sessionAgent.inspectMessageAdmission(sessionId, { messageId, threadId: native.threadId }, context);
+        // An inspection that fails decides nothing: the delivery stays uncertain.
+        receipt = await sessionAgent.inspectMessageAdmission(sessionId, { messageId, threadId: native.threadId }, context)
+          .catch(() => null);
         accepted = receipt?.ok !== false && receipt?.admission === "accepted";
+      }
+      if (!accepted && receipt?.ok !== false && receipt?.admission === "not-admitted") {
+        throw new Error("The interrupted goal command never reached the AI, so nothing was sent. Set or resume the goal again.");
       }
       if (!accepted) throw new Error("The interrupted goal command's delivery is uncertain. Check its original receipt before resuming.");
       // The native history owner links this attachment to the exact authored

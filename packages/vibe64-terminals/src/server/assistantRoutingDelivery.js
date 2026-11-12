@@ -77,9 +77,17 @@ function createAssistantRoutingDelivery({
     selectedContext.expectedConnectionIdentity = decisions.destinations(state.decision || {})[modelRole]?.connectionIdentity;
     const uncertain = state.delivery === "uncertain";
     if (uncertain || state.attemptedMessageId === messageId) {
+      // An inspection that fails decides nothing: the receipt stays unknown.
       const receipt = await agent.inspectMessageAdmission(sessionId, { messageId, threadId: state.threadId }, selectedContext)
         .catch(error => {
-          if (!inspectionOnly) throw error;
+          logOperationalEvent(logger, "warn", {
+            component: "vibe64.assistant_routing",
+            event: "vibe64.assistant_routing.admission_inspection_failed",
+            sessionId,
+            messageId,
+            code: error?.code,
+            error: error?.message
+          }, "A routed request's delivery could not be checked; it stays unconfirmed.");
           return null;
         });
       // Only the AI's proof that it never received the attempt makes it
@@ -94,7 +102,7 @@ function createAssistantRoutingDelivery({
         if (inspectionOnly && receipt?.admission !== "accepted") return { ok: false, delivered: false, messageId };
         if (receipt?.admission !== "accepted") {
           throw failure(
-            "Delivery is uncertain. Retry to check the receipt; this will not send a duplicate.",
+            "Delivery is uncertain. Retry to check the receipt; this will not send a duplicate. Or Cancel this request so other messages can be sent.",
             "vibe64_assistant_routing_delivery_uncertain"
           );
         }

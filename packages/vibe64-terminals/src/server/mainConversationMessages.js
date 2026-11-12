@@ -20,8 +20,12 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
 /** @typedef {import("./types.js").OpenCodeConversationEvents} OpenCodeConversationEvents */
 /** @typedef {import("./types.js").OpenCodeConversationPresentation} OpenCodeConversationPresentation */
+/** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").RecordSessionGitCommandActor} RecordSessionGitCommandActor */
+
+// Failed dispatches remembered for admission inspection, newest last.
+const MAX_FAILED_OPENCODE_DISPATCHES = 256;
 
 /**
  * Main message policy runs at the existing native owner's preparation and
@@ -339,6 +343,7 @@ function createClaudeConversationMessagePolicy({
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
  * @param {OpenCodeConversationEvents} dependencies.events
  * @param {OpenCodeConversationPresentation} dependencies.presentation
+ * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
  */
 function createOpenCodeMainMessagePreparation({
   project,
@@ -346,11 +351,42 @@ function createOpenCodeMainMessagePreparation({
   recordGitActor,
   hostPreparation,
   events,
-  presentation
+  presentation,
+  sharedRuntime
 }) {
   const { prepareProcess, storedUpstreamSessionId, upstreamSessionOptions } = hostPreparation;
   const { writeRun, messageMonitorProjection } = events;
   const { publishConversationTurn } = presentation;
+  /**
+   * This server's own failed dispatches, by native prompt ID: whether the
+   * prompt request was made, and the shared OpenCode servers current when it
+   * started and when it ended. The request reached one of them, or a server
+   * started and replaced in between. Memory only: a dispatch an earlier
+   * server made is never proved unsent.
+   */
+  const failedDispatches = new Map();
+
+  function rememberDispatch(nativeId, dispatch) {
+    failedDispatches.delete(nativeId);
+    if (dispatch) failedDispatches.set(nativeId, dispatch);
+    if (failedDispatches.size > MAX_FAILED_OPENCODE_DISPATCHES) failedDispatches.delete(failedDispatches.keys().next().value);
+  }
+
+  /**
+   * OpenCode stores a prompt under the ID Vibe64 gave it when it admits it, and
+   * only the server process that received the request can store it. A prompt
+   * missing from the conversation's complete history therefore never arrived
+   * when this server's dispatch of it ended without making the request, or when
+   * every server that could have received it has stopped: the process owner
+   * replaces a shared server only after proving that its process exited. A
+   * turn still dispatching or observing the prompt proves nothing.
+   */
+  function provedNotAdmitted(nativeId, key) {
+    const dispatch = failedDispatches.get(nativeId);
+    const turn = sharedRuntime.turns.get(key);
+    if (!dispatch || turn?.active && toText(turn.inputMessageId) === nativeId) return false;
+    return !dispatch.requested || !dispatch.servers.includes(sharedRuntime.current);
+  }
 
   async function contextFor(sessionId = "", options = {}) {
     return readSessionConversationContext("opencode", project, sessionId, options);
@@ -470,15 +506,19 @@ function createOpenCodeMainMessagePreparation({
       get inputMessageId() {
         return upstreamMessageId(messageId);
       },
+      // A history that could not be read decides nothing. A complete one
+      // without the prompt proves it never arrived only as provedNotAdmitted says.
       project(observation) {
         if (!observation) return { ok: true, admission: "unknown", messageId, threadId };
         const { accepted } = observation;
+        const nativeId = upstreamMessageId(messageId);
+        if (accepted) rememberDispatch(nativeId, null);
         return {
           ok: true,
-          admission: accepted ? "accepted" : "unknown",
+          admission: accepted ? "accepted" : provedNotAdmitted(nativeId, context.key) ? "not-admitted" : "unknown",
           messageId,
           threadId,
-          turnId: accepted ? upstreamMessageId(messageId) : ""
+          turnId: accepted ? nativeId : ""
         };
       }
     };
@@ -492,6 +532,8 @@ function createOpenCodeMainMessagePreparation({
     const duplicate = await context.runtime.store.conversationMessageIdExists(context.sessionId, messageId);
     let actorFailure = null;
     let actorMetadata = null;
+    // The shared server current as the prompt request starts; unset until dispatch.
+    let dispatchServer;
     prepared.input.duplicate = duplicate;
     return {
       key: prepared.key,
@@ -564,9 +606,12 @@ function createOpenCodeMainMessagePreparation({
             get attachments() {
               return input.attachments;
             },
-            beforeDispatch: threadId => onPromptSending({
-              threadId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata
-            })
+            beforeDispatch: threadId => {
+              dispatchServer = sharedRuntime.current;
+              return onPromptSending({
+                threadId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata
+              });
+            }
           };
         },
         async commit(admitted) {
@@ -590,6 +635,11 @@ function createOpenCodeMainMessagePreparation({
         }
       },
       project(result) {
+        // A failure after dispatch began is remembered for a later inspection;
+        // any other result makes an earlier record of this prompt obsolete.
+        rememberDispatch(prepared.input.id, result.failure && dispatchServer !== undefined
+          ? { requested: result.failure.attempted === true, servers: [dispatchServer, sharedRuntime.current] }
+          : null);
         return prepared.project(result, actorFailure);
       }
     };

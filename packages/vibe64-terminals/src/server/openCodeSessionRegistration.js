@@ -171,7 +171,8 @@ function createOpenCodeSessionRegistration({
     recordGitActor,
     hostPreparation,
     events,
-    presentation
+    presentation,
+    sharedRuntime
   });
   const { contextFor } = mainMessagePreparation;
   const accounts = createOpenCodeConversationAccounts({

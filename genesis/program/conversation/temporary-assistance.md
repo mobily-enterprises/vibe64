@@ -144,11 +144,16 @@ ordinary Main Stop remains acknowledgement-only. Native deletion still precedes
 observer retirement and registry publication. Vibe64 retains authorized target
 selection, scoped Helper release and the parent's durable cleanup receipt.
 An uncertain delivery is inspected by its original message identity rather than
-replayed; an unreadable or absent receipt remains uncertain. Only the native
-owner's proof of non-admission (`not-admitted`, from Claude) makes the routed
-attempt unsent: routing clears its attempt and reports `not-sent`, and a
-changeover holding the same attempt settles it through its own owner. Retry
-then sends it normally. Cancel is decided by the server: JSKIT's delivery cancel
+replayed; an unreadable or absent receipt, or an inspection that throws,
+remains uncertain. Only the native owner's proof of non-admission
+(`not-admitted`, from Claude; OpenCode proves it for Main messages only)
+makes the routed attempt unsent:
+routing clears its attempt and reports `not-sent`, and a changeover holding the
+same attempt settles it through its own owner. Retry then sends it normally.
+While an attempt stays unconfirmed, a different message to the same chat is
+refused as not sent (`vibe64_assistant_earlier_delivery_unconfirmed`, naming
+the earlier message), never reported as possibly received; a cancelled route
+is replaceable, so Cancel frees the chat. Cancel is decided by the server: JSKIT's delivery cancel
 aborts a running check and an unsent request, keeps the message as
 Cancelling… and calls `POST …/deliveries/:messageId/cancel`, which reaches
 `cancelTemporaryConversationMessage` without opening the native conversation.

@@ -998,6 +998,35 @@ test("OpenCode reports local persistence failure after upstream admission withou
   assert.equal(harness.userMessages.length, 0);
 });
 
+// A prompt request whose answer was lost may still have reached the server it
+// went to; only that server's proven exit shows the prompt never arrived.
+test("OpenCode proves a lost prompt never arrived once the server that could have received it has stopped", async (t) => {
+  let restarted = null;
+  const harness = await controllerHarness();
+  t.after(async () => {
+    await restarted?.closeAllForProject();
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const options = { runtime: harness.runtime, session: harness.session, vibe64User: { username: "ada" } };
+  harness.failPrompt();
+  await assert.rejects(harness.controller.sendMessage("session-1", { message: "Lost", messageId: "lost-message" }, options),
+    /admission failed/u);
+  const threadId = harness.promptCalls[0].id;
+  const inspect = (controller = harness.controller) => controller.inspectMessageAdmission("session-1", { messageId: "lost-message", threadId });
+  assert.equal((await inspect()).admission, "unknown", "the server that may have received it is still running");
+  const stops = harness.processStops.length;
+  // An unhealthy server is replaced only after its exit is proven.
+  harness.failHealth();
+  await harness.controller.ensureSession("session-1", options);
+  assert.equal(harness.processStops.length, stops + 1);
+  assert.deepEqual(await inspect(), { ok: true, admission: "not-admitted", messageId: "lost-message", threadId, turnId: "" });
+  await harness.controller.closeAllForProject();
+  restarted = harness.createController();
+  assert.equal((await inspect(restarted)).admission, "unknown", "a later server process cannot prove an earlier one's dispatch");
+  assert.equal(harness.promptCalls.length, 1, "inspection never resends");
+});
+
 test("OpenCode persists a user message and its display attachments only after upstream admission", async (t) => {
   const harness = await controllerHarness();
   t.after(async () => {

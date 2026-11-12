@@ -138,15 +138,17 @@ function createAssistantRoutingOutcomes({
         return;
       }
       if (!state.turnId) {
+        // An inspection that fails decides nothing; the request still settles
+        // as waiting, never stays working.
         const receipt = await agent.inspectMessageAdmission(sessionId, {
           messageId: activeMessage(state).messageId || state.messageId,
           threadId: state.threadId
-        }, context);
+        }, context).catch(() => null);
         if (receipt?.admission === "accepted") state.turnId = receipt.turnId || "";
       }
       if (!state.turnId) {
         state.status = "waiting";
-        state.error = "The original native turn could not be confirmed. Inspect its delivery before resuming.";
+        state.error = "The AI's turn for this request could not be confirmed. Resume to continue it, or Cancel this request.";
         await records.save(context, state);
         return;
       }

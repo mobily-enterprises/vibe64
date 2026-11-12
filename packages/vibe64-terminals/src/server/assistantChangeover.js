@@ -89,12 +89,32 @@ export function discardAssistantChangeoverMessage(sessionId, messageId, context)
   return changeoverFor(context.runtime.store, sessionId, { context }).discard({ messageId });
 }
 
+/**
+ * A changeover holds one native attempt at a time. While an earlier message's
+ * receipt is undecided, it answers every other message with that earlier
+ * message's unconfirmed result, before preparing or dispatching this one. This
+ * message was therefore not sent: say so, and name the way out, instead of
+ * reporting it as possibly received. Its own unconfirmed result passes unchanged.
+ * @param {object} result the native send's result
+ * @param {string} messageId the message this send carried
+ */
+export function requireOwnDeliveryResult(result, messageId) {
+  if (result?.code !== MAIN_CONVERSATION_PRESENTATION.unconfirmedCode || !result.messageId ||
+      result.messageId === messageId) return result;
+  throw Object.assign(new AppError(
+    409,
+    "Not sent: this chat is waiting on an earlier message whose delivery to the AI could not be confirmed, so nothing is sent twice. " +
+      "In this chat, Retry that earlier message to check its receipt, or Cancel it, then send this message again.",
+    { code: "vibe64_assistant_earlier_delivery_unconfirmed", details: { unconfirmedMessageId: result.messageId } }
+  ), { delivery: "not-sent" });
+}
+
 export async function sendWithAssistantChangeover(sessionId, input, context, agent, log = () => {}, initialMessages = []) {
   requireCompletedConversationRewind(context.session);
   const store = context.runtime.store;
   const engineId = sessionConversationKey(context.session);
   const messages = [...initialMessages, ...await readMainConversationHistory(store, sessionId)];
-  return changeoverFor(store, sessionId, {
+  return requireOwnDeliveryResult(await changeoverFor(store, sessionId, {
     agent,
     context,
     log,
@@ -104,5 +124,5 @@ export async function sendWithAssistantChangeover(sessionId, input, context, age
     messages,
     input,
     turnMetadata: { engineId: engineId.split("/")[0] }
-  });
+  }), input.messageId);
 }

@@ -320,11 +320,11 @@ function assistantRoutingStatusIsPending(request) {
   return request?.status !== "complete" && ["routing", "pending", "sending", "uncertain"].includes(request?.delivery);
 }
 
-/**
- * Delivery belongs to the original message and assistant, independently of stage.
- */
+// Delivery belongs to the original message and assistant, independently of stage. A cancelled message is
+// given up for good, so even its unconfirmed delivery holds nothing; a stopped one's still holds its chat.
 function assistantRoutingRequestCanBeReplaced(request, selection) {
   if (request?.helper) return false;
+  if (request?.cancelled) return true;
   const previous = request?.deliverySelection || request?.observedSelection;
   if (request?.stopped && previous && selection && !sameVibe64AssistantSelection(previous, selection)) return true;
   return request?.delivery === "pending" && (request.status === "waiting" || Boolean(request.error)) && !request.attemptedMessageId;

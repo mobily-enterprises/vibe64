@@ -29,7 +29,7 @@ const MAIN_CONVERSATION_PRESENTATION = Object.freeze({
   sharedContext: "The workspace and visible conversation are shared.",
   replacementUnavailableCode: "vibe64_conversation_replacement_unavailable",
   unconfirmedCode: "vibe64_changeover_delivery_unconfirmed",
-  unconfirmedMessage: "The AI may have received this message, but delivery could not be confirmed. Retry this same message to check its receipt without sending it twice. You can still choose another AI."
+  unconfirmedMessage: "The AI may have received this message, but delivery could not be confirmed. Retry this same message to check its receipt without sending it twice, or Cancel it so later messages can be sent. You can still choose another AI."
 });
 
 function requireCompletedConversationRewind(session) {

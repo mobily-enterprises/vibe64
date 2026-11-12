@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
-import { sessionConversationKey, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+import { discardAssistantChangeoverMessage, sessionConversationKey, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 import { readMainConversationHistory } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 
 function selection(engineId, providerId = "") {
@@ -29,7 +29,7 @@ async function harness(t) {
   let serial = 0;
   const api = {
     get store() { return store; },
-    calls, logs, receipts, failure: "", inspectUnknown: false, provisional: new Set(),
+    calls, logs, receipts, failure: "", inspectUnknown: false, notAdmitted: false, provisional: new Set(),
     nativeThread: "", closeFailure: false,
     // Named store operations a test replaces; a restart starts with the real ones.
     storeDoubles: {},
@@ -54,6 +54,7 @@ async function harness(t) {
       if (old !== sessionConversationKey({ metadata: { assistant_selection: JSON.stringify(next) } })) await rememberAssistantBeforeChangeover(context, old);
       await store.writeMetadataValue(sessionId, "assistant_selection", serializeVibe64AssistantSelection(next));
     },
+    async cancel(messageId) { return discardAssistantChangeoverMessage(sessionId, messageId, await api.context()); },
     async send(message, messageId = `message-${++serial}`) {
       return sendWithAssistantChangeover(sessionId, { message, messageId }, await api.context(), agent, (entry) => logs.push(entry));
     },
@@ -70,7 +71,8 @@ async function harness(t) {
       return { ok: true };
     },
     async inspectMessageAdmission(_id, { messageId, threadId }) {
-      return { admission: !api.inspectUnknown && receipts.has(`${threadId}/${messageId}`) ? "accepted" : "unknown" };
+      if (!api.inspectUnknown && receipts.has(`${threadId}/${messageId}`)) return { admission: "accepted" };
+      return { admission: api.notAdmitted ? "not-admitted" : "unknown" };
     },
     async sendMessage(_id, input, context) {
       const selected = JSON.parse(context.session.metadata.assistant_selection);
@@ -79,6 +81,7 @@ async function harness(t) {
       if (api.failure === "preflight") return { ok: false, delivered: false };
       await input.onPromptSending?.({ threadId });
       calls.push({ engineId, threadId, messageId: input.messageId, message: input.message });
+      if (api.failure === "lost-before-acceptance") throw new Error("connection lost before native acceptance");
       if (api.failure === "rejected") {
         await input.onPromptRejected?.();
         return { ok: false, delivered: false };
@@ -327,6 +330,34 @@ test("uncertain receipt blocks replay but permits switching to another engine", 
   assert.equal((await h.send("Use this AI instead")).delivered, true);
   assert.equal(h.calls.length, 3);
 });
+
+// Production incident: one lost message made every later message to its chat fail.
+for (const wayOut of ["proof it never arrived", "Cancel"]) {
+  test(`an unconfirmed attempt blocks only its own retry: a newer message is not sent until ${wayOut} decides it`, async (t) => {
+    const h = await harness(t);
+    await h.send("Background");
+    h.failure = "lost-before-acceptance";
+    await assert.rejects(h.send("Lost", "lost-message"), /before native acceptance/);
+    h.failure = "";
+    await assert.rejects(h.send("Next request", "next-message"), error => {
+      assert.equal(error.code, "vibe64_assistant_earlier_delivery_unconfirmed");
+      assert.equal(error.statusCode, 409);
+      assert.equal(error.delivery, "not-sent", "the newer message was never prepared or dispatched");
+      assert.deepEqual(error.details, { unconfirmedMessageId: "lost-message" });
+      assert.match(error.message, /Retry that earlier message .* or Cancel it/);
+      return true;
+    });
+    const retry = await h.send("Lost", "lost-message");
+    assert.equal(retry.code, "vibe64_changeover_delivery_unconfirmed");
+    assert.match(retry.error, /Cancel it so later messages can be sent/);
+    assert.equal(h.calls.length, 2, "neither the retry nor the newer message is dispatched");
+    if (wayOut === "Cancel") await h.cancel("lost-message");
+    else h.notAdmitted = true;
+    assert.equal((await h.send("Next request", "next-message")).delivered, true);
+    assert.deepEqual(h.calls.map(call => call.messageId), ["message-1", "lost-message", "next-message"]);
+    assert.equal(JSON.parse(await h.store.readMetadataValue("changeover", "assistant_changeover")).engines.codex.pending, undefined);
+  });
+}
 
 test("Codex models share one native history across providers and restart", async (t) => {
   const h = await harness(t);

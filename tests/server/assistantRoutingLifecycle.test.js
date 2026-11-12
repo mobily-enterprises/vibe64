@@ -367,6 +367,43 @@ test("a request the AI proved it never received is not sent, and Retry sends it 
   }
 });
 
+// Production incident: a message whose delivery could not be confirmed held
+// its chat, so every later message to it was refused.
+test("an unconfirmed request blocks only its own retry: a failing check stays uncertain, and Cancel frees the chat", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
+  f.failAdmission(false);
+  f.agent.inspectMessageAdmission = async () => { throw new Error("Native history unavailable."); };
+  await assert.rejects(f.service.send("session-1", request, f.context),
+    { code: "vibe64_assistant_routing_delivery_uncertain", message: /Or Cancel this request/ });
+  assert.equal(f.state().delivery, "uncertain");
+  const next = { ...request, messageId: "request-2", message: "Do this instead." };
+  await assert.rejects(f.service.send("session-1", next, f.context), { code: "vibe64_assistant_routing_request_unresolved" });
+  await f.service.cancelMessage("session-1", { messageId: request.messageId }, f.context);
+  assert.equal((await f.service.send("session-1", next, f.context)).delivered, true);
+  assert.deepEqual(f.sends.map(({ input }) => input.messageId), [request.messageId, next.messageId]);
+  assert.deepEqual(f.discards, [request.messageId]);
+  assert.equal(f.state().messageId, next.messageId);
+});
+
+test("a finished turn whose receipt check fails leaves its request waiting with a way out, never working", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
+  await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId });
+  f.agent.sessionState = async () => ({ turn: { active: true, id: "turn-1" } });
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().status, "working");
+  assert.equal(f.state().turnId || "", "");
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  f.agent.inspectMessageAdmission = async () => { throw new Error("Native history unavailable."); };
+  await f.service.afterTurn("session-1", completion("turn-1"), f.context);
+  assert.equal(f.state().status, "waiting");
+  assert.match(f.state().error, /Resume to continue it, or Cancel this request/);
+  assert.equal(f.sends.length, 1);
+});
+
 test("successful direct and automatic sends never publish uncertain delivery", async (t) => {
   for (const mode of ["senior", "junior", "auto"]) {
     const f = await fixture(t, { mode, review: true });

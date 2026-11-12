@@ -1607,6 +1607,30 @@ route never returns its text to the draft, and an unreachable server leaves
 the message with Cancel again. Accepted history remains. Retry resends after
 proof of non-admission even when the route is failed.
 
+An unconfirmed message never holds its chat for good. JSKIT's changeover keeps
+one native attempt per engine, and while that attempt's receipt is undecided it
+answers every other message with the attempt's unconfirmed result before
+preparing it. `requireOwnDeliveryResult` (`assistantChangeover.js`, used by
+Main's routing dispatch and temporary chats) turns such an answer for a
+different message into a definite not-sent refusal
+(`vibe64_assistant_earlier_delivery_unconfirmed`, `details.unconfirmedMessageId`)
+that names Retry and Cancel; only the attempt's own retry stays unconfirmed. A
+cancelled route is replaceable (`assistantRoutingRequestCanBeReplaced`), so
+Cancel frees the chat at once, while Stop keeps an unconfirmed attempt holding
+it. An inspection that throws is unknown, never a refusal: routing's retry
+reports the uncertain receipt with its Retry/Cancel hint, a finished turn whose
+receipt cannot be confirmed leaves its route waiting with the same way out
+instead of working, and goal recovery reports an unknown command as uncertain
+and a command proved not admitted as never sent. A claimed integration
+continuation that the AI proved it never received goes through the routed Send
+once. OpenCode proves non-admission for Main messages
+(`createOpenCodeMainMessagePreparation`): the prompt is absent from the
+conversation's complete history and this Vibe64 process's own dispatch of it
+either never made the prompt request or made it only to shared OpenCode servers
+that have since been replaced, which happens only after their exit is proven. A
+turn still dispatching or observing the prompt, an unreadable history and a
+dispatch from before a Vibe64 restart stay unknown.
+
 Main’s composer allows attachment uploads and submission during a steerable
 active turn, using the existing attachment identities and receipt handling.
 Nonsteerable active turns retain their attachment guard; upload readiness and

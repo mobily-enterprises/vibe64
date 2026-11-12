@@ -365,13 +365,14 @@ function createServiceAssistant({
         return { ok: true, integrationSetup: saved };
       }
       const route = assistantRoutingRequestFromMetadata(context.session.metadata);
-      // A previously claimed delivery without a routing request is only
-      // inspected. Never turn its old receipt into a fresh routed Send.
+      // A previously claimed delivery without a routing request is only inspected: never turn its
+      // old receipt into a fresh routed Send, unless the AI proved it never received it.
       if (saved.continuation.status === "sending" && route?.messageId !== saved.continuationMessageId) {
         let delivered = await store.conversationMessageIdExists(sessionId, saved.continuationMessageId);
+        let admission = null;
         if (!delivered && vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId === saved.continuation.engineId) {
           try {
-            const admission = await sessionAgent.inspectMessageAdmission(sessionId, {
+            admission = await sessionAgent.inspectMessageAdmission(sessionId, {
               messageId: saved.continuationMessageId,
               threadId: saved.continuation.threadId
             }, context);
@@ -380,6 +381,7 @@ function createServiceAssistant({
             // Keep the original receipt for another read after reconnection.
           }
         }
+        if (!delivered && admission?.ok !== false && admission?.admission === "not-admitted") return { saved, runtime: context.runtime };
         if (!delivered) return unconfirmed(saved);
         const accepted = await store.acceptIntegrationContinuation(sessionId, {
           ...input,

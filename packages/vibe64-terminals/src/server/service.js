@@ -8,7 +8,7 @@ import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shar
 import { createPreviewDiagnosticRecorder } from "./previewDiagnostics.js";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { createSessionConversations } from "./sessionConversations.js";
-import { discardAssistantChangeoverMessage, requireCompletedConversationRewind } from "./assistantChangeover.js";
+import { discardAssistantChangeoverMessage, requireCompletedConversationRewind, requireOwnDeliveryResult } from "./assistantChangeover.js";
 import { createProviderUsage } from "./providerUsage.js";
 import { createSessionNaming } from "./sessionNaming.js";
 import { createTerminalControls } from "./terminalControls.js";
@@ -316,7 +316,7 @@ function createService({
       vibe64AssistantSelectionFromMetadata(context.session.metadata);
       const note = pendingMainChatNote(context.session);
       const noted = messageWithMainChatNote(input, note);
-      const result = await sessionAgent.sendMessage(sessionId, noted || input, context);
+      const result = requireOwnDeliveryResult(await sessionAgent.sendMessage(sessionId, noted || input, context), input.messageId);
       if (noted && result?.delivered === true &&
         await context.runtime.store.readMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY) === note) {
         await context.runtime.store.deleteMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY);

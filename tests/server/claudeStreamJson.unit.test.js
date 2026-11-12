@@ -3013,11 +3013,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
       await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify({ ...intentBeforeRestart,
         pending: { action: "resume", messageId: "unknown-goal-receipt", objective: nativeObjective } }));
       service = createService();
-      const uncertain = await service.recoverActiveGoals();
-      assert.equal(uncertain.ok, false);
-      assert.match(uncertain.results[0].error, /delivery is uncertain/u);
+      // Claude proves this command never arrived: its history lacks it and no
+      // work of it is pending. Recovery says so and still sends nothing itself.
+      const neverSent = await service.recoverActiveGoals();
+      assert.equal(neverSent.ok, false);
+      assert.match(neverSent.results[0].error, /never reached the AI, so nothing was sent/u);
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
-        "unknown goal delivery is never replaced with a new Resume");
+        "a goal command that never arrived is not replaced with a new Resume by recovery");
       await service.close();
       await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify(intentBeforeRestart));
       service = createService();

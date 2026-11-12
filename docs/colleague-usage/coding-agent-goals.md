@@ -144,13 +144,16 @@ Failed Main-chat messages offer **Retry** and **Cancel** on desktop and mobile.
 already delivered, the failure controls disappear without another send. If the
 AI proves it never received the message, Retry sends it once with the same ID;
 while delivery is unknown, nothing is sent.
-**Cancel** removes an old local failed attempt immediately without stopping a
-newer goal or deleting delivered conversation history. For a request still
-owned by the current route, the bubble hides while cancellation is checked. An
-unconfirmed request is removed only once the AI proves it never received it:
-while that is unknown, Cancel stops the turn and checks once more. The bubble
-returns if delivery remains unknown or cancellation fails. Only Claude can
-currently prove that a message never arrived. Colleague can explain
+**Cancel** gives the message up for good, without stopping a newer goal or
+deleting delivered conversation history. The server records it as cancelled and
+stops any turn it may have started; the bubble shows that it is cancelling until
+the server agrees, which it always does once it can be reached, and the message
+never returns as a draft. While a message is unconfirmed, a newer message to the
+same chat is not sent: its bubble says so and names the earlier message to
+**Retry** or **Cancel**. Cancel frees the chat at once. Claude can prove that a
+message never arrived once its work has settled without it in its history;
+OpenCode once the OpenCode server that could have received it has stopped.
+Colleague can explain
 these controls; the person presses them in Main chat.
 
 New goals pass exactly your objective to the native goal evaluator. Model and
@@ -209,7 +212,9 @@ command has uncertain delivery, recovery stays stopped. Check the original
 receipt and current account, then use **Resume goal** (a Claude goal that shows
 as active offers **Pause goal** instead: send a message to continue it, or choose
 **Pause goal** and then **Resume goal**); an uncertain command is
-never replaced with a blind send. After a crash, an accepted Claude command can
+never replaced with a blind send. When the AI proves the interrupted command
+never arrived, the goal control says that nothing was sent: set or resume the
+goal again. After a crash, an accepted Claude command can
 be recovered only when its saved native attachment identifies that exact command.
 A different goal with the same text is insufficient; missing proof requires
 explicit confirmation. Each goal that stays stopped after a restart shows its

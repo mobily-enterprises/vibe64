@@ -82,7 +82,10 @@ and message. It does not wait for native delivery, an acknowledgement or task
 completion. Ask the recipient to ping back later if you need a result.
 **Accepted · delivery not confirmed** is not proof of delivery. **Delivered to
 assistant** confirms native acceptance, not task completion. **Delivery failed**
-includes the reported failure; it also remains in the workspace log. Do not resend solely
+includes the reported failure; it also remains in the workspace log. When the
+destination chat is still waiting on an earlier message whose delivery could not
+be confirmed, the failure says so: nothing was sent. Send it again once the
+person there has retried or cancelled that earlier message. Do not resend solely
 because no immediate reply appeared. Pending dispatch is not a durable inbox and
 is not promised to survive a daemon shutdown.
 The recipient uses the same command to send requested answers, results or blockers
