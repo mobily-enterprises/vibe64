@@ -697,8 +697,9 @@ admitted-request checks and is refused (`vibe64_main_goal_nothing_to_resume`)
 unless the turn's thread holds a paused, blocked or `usageLimited` goal. Claude
 calls it mid-turn, while the canonical Resume steers `/goal` into a turn and
 waits for its attachment, so the action does not resume at once: it saves a new
-active continuation intent marked `resumeRequested`, with the person as actor and
-the observed native goal, and answers `resuming`. After that Main turn ends,
+active continuation intent marked `resumeRequested`, with the person as actor
+(none in standalone Vibe64, which has no signed-in person, as for a restart's
+continuation) and the observed native goal, and answers `resuming`. After that Main turn ends,
 `resumeGoalAfterTurn`
 ([serviceGoalChatContinuation.js](../../../packages/vibe64-terminals/src/server/serviceGoalChatContinuation.js))
 claims the mark under the goal settings lock and runs the Resume goal control's
@@ -712,8 +713,12 @@ resumes; a failure is recorded on the goal. Because a retained Pause or Block st
 own checker down with `/goal clear`, the Claude message policy
 ([mainConversationMessages.js](../../../packages/vibe64-terminals/src/server/mainConversationMessages.js))
 appends to each Main message, while the conversation retains such a goal, a
-notice naming its status and objective and the Resume action, so Claude does not
-read the goal as gone.
+notice naming its status and objective, saying that a "Goal cleared" line only
+means Vibe64 switched that checker off, and giving Resume's exact
+`assistant_action_contract` and `assistant_action_execute` calls, so Claude does
+not read the goal as gone and resumes it in one step when the person asks. JSKIT
+lists the application tools as always loaded (`anthropic/alwaysLoad`), so Claude
+calls them without searching for them first.
 Advertising these tools only decorates the assistant context. A session without
 a durable assistant selection receives no Main tools, so close, interrupt and
 renewal cleanup never fail on the missing selection; delivery still requires one.
@@ -4835,8 +4840,12 @@ native-owner tests cover exact thread selection and shared process/thread reuse.
 
 Explicit Claude Pause retains the native goal objective and identity in the
 existing conversation storage before process interruption. The shared native owner
-removes the restored checker with a verified local clear command before ordinary
-input is admitted. Ordinary chat and application restart therefore preserve Pause;
+removes the checker with a local clear command beside that Pause or Block, on the
+process still running, when Claude paused or blocked the goal itself (its turn is
+interrupted first) or was idle; otherwise, or when that clear fails, it removes
+the restored checker with a verified local clear command when the process next
+starts, before ordinary input is admitted. So no "Goal cleared" lands above the
+person's next message unless the Pause came during a turn. Ordinary chat and application restart therefore preserve Pause;
 Resume and Cancel update the retained goal only after their exact native receipt.
 Pause sends nothing to Claude and starts no process, so it takes effect at once
 even when the account is out of credit or at its usage limit; the later local

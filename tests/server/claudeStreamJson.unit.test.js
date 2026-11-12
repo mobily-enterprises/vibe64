@@ -3200,15 +3200,20 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(afterPause.goal.objective, currentGoal.goal.objective);
       assert.equal(afterPause.goal.createdAt, currentGoal.goal.createdAt);
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
-      const selfPausePid = (await trace()).findLast(row => row.args?.includes("--print")).pid;
-      const pauseExitDeadline = Date.now() + 3000;
-      for (;;) {
-        try { process.kill(selfPausePid, 0); }
-        catch (error) { if (error.code === "ESRCH") break; throw error; }
-        assert.ok(Date.now() < pauseExitDeadline, "Self-Pause drains after its native tool receipt");
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-      assert.throws(() => process.kill(selfPausePid, 0), { code: "ESRCH" });
+      // Claude's own Pause or Block stops its process after the tool receipt; its goal checker stands down first,
+      // beside that Pause or Block, so no "Goal cleared" lands above the person's next message.
+      const drainsAfterStandingDown = async message => {
+        const pid = (await trace()).findLast(row => row.args?.includes("--print")).pid;
+        const deadline = Date.now() + 3000;
+        for (;;) {
+          try { process.kill(pid, 0); }
+          catch (error) { if (error.code === "ESRCH") break; throw error; }
+          assert.ok(Date.now() < deadline, message);
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        assert.equal((await trace()).filter(row => row.frame?.type === "user").at(-1).frame.message.content, "/goal clear", message);
+      };
+      await drainsAfterStandingDown("Self-Pause stands Claude's goal checker down, then drains after its native tool receipt");
       const framesBeforeRestart = (await trace()).filter(row => row.frame?.type === "user").length;
       await service.close();
       service = createService();
@@ -3218,9 +3223,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(ordinary.delivered, true);
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "paused");
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
-      const nativeInputs = (await trace()).filter(row => row.frame?.type === "user").slice(-2);
-      assert.equal(nativeInputs[0].frame.message.content, "/goal clear");
-      assert.match(nativeInputs[1].frame.message.content, /An ordinary message while the goal stays paused/);
+      const nativeInputs = (await trace()).filter(row => row.frame?.type === "user").slice(framesBeforeRestart);
+      assert.equal(nativeInputs.length, 1, `no second goal clear lands above the person's message: ${JSON.stringify(nativeInputs)}`);
+      assert.match(nativeInputs[0].frame.message.content, /An ordinary message while the goal stays paused/);
       // Asked in chat to continue the goal it paused, Claude resumes it through
       // Main's Resume action: the goal continues once that turn ends, once.
       const resumedGoalCommand = `/goal ${currentGoal.goal.objective}`;
@@ -3255,7 +3260,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.ok(!chatResumedIntent.resumeRequested, JSON.stringify(chatResumedIntent));
       await new Promise(resolve => setTimeout(resolve, 200));
       assert.equal(await resumedGoalCommands(), commandsBeforeChatResume + 1, "the goal resumed in chat continues once");
-      assert.match(nativeInputs[1].frame.message.content, /goal is paused, not cleared[\s\S]*vibe64\.terminals\.main-goal\.resume/u,
+      assert.match(nativeInputs[0].frame.message.content,
+        /goal is paused, not cleared[\s\S]*assistant_action_execute with \{"actionId":"vibe64\.terminals\.main-goal\.resume","input":\{\}\}/u,
         "Claude, whose own goal checker was cleared, was told the goal is paused and how to resume it");
       // With nothing to resume, Claude's Resume is refused and sends nothing.
       // The turn that asked for the Resume has ended, so these are new messages.
@@ -3289,6 +3295,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(blocked.goal.reason, "The human must supply the missing approval code.");
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
         "A model-reported external blocker does not manufacture a human Pause");
+      await drainsAfterStandingDown("Self-Block stands Claude's goal checker down, then drains after its native tool receipt");
       const blockedFrames = (await trace()).filter(row => row.frame?.type === "user").length;
       await service.close();
       service = createService();
@@ -3298,9 +3305,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
       const blockedOrdinary = await goalFacade.send({ messageId: "service-blocked-ordinary", text: "Explain the blocker without resuming." });
       assert.equal(blockedOrdinary.delivered, true);
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked");
-      const blockedInputs = (await trace()).filter(row => row.frame?.type === "user").slice(-2);
-      assert.equal(blockedInputs[0].frame.message.content, "/goal clear");
-      assert.match(blockedInputs[1].frame.message.content, /Explain the blocker without resuming/);
+      const blockedInputs = (await trace()).filter(row => row.frame?.type === "user").slice(blockedFrames);
+      assert.equal(blockedInputs.length, 1, `no second goal clear lands above the person's message: ${JSON.stringify(blockedInputs)}`);
+      assert.match(blockedInputs[0].frame.message.content, /Explain the blocker without resuming[\s\S]*goal is blocked, not cleared/u);
       await service.updateAgentGoal("test", { ...options, ...blocked.goal, threadId: blocked.threadId, action: "resume" });
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "active");
       const resumedBlocked = await goalFacade.readGoal();
@@ -3321,6 +3328,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(goalToolCall.result.ok, true, JSON.stringify(goalToolCall));
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked",
         "The goal command retains fresh request authority even without a signed-in runtime actor or intervening user message");
+      await drainsAfterStandingDown("A Block during the goal's own turn stands Claude's goal checker down, then drains");
       // The owner saves a different main AI while this project is closed. Once
       // it opens again, nothing changes until the goal would continue: Resume
       // then cancels it through Cancel goal and tells the chat why.

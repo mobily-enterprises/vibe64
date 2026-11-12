@@ -5,10 +5,13 @@ This continues [Goals and model changes](coding-agent-goals.md) for Claude and C
 For a Claude goal, **Pause goal** stops the current work and keeps the goal.
 It takes effect at once and sends nothing to the AI, so it works even when the
 AI account is out of credit or at its usage limit, and no AI turn is spent
-acknowledging it. The next time Claude starts, for your next message, Vibe64
-first stands Claude's own goal checker down with Claude's local `/goal clear`
-command, which makes no AI request; **Cancel goal** clears the goal with the same
-local command. Only **Pause goal**, or Claude's own structured Pause action, makes
+acknowledging it. Vibe64 also stands Claude's own goal checker down with
+Claude's local `/goal clear` command, which makes no AI request: right away when
+Claude is idle or paused the goal itself, otherwise the next time Claude starts,
+for your next message. The chat then shows **Goal cleared:**, but Vibe64 keeps
+the goal, paused, and tells Claude so with each message; ask Claude to resume or
+continue it, or choose **Resume goal**. **Cancel goal** clears the goal with the
+same local command. Only **Pause goal**, or Claude's own structured Pause action, makes
 a Claude goal paused. When a turn ends any other way, for example after
 **Stop** or a server restart, the goal stays active and its chip says **Goal not
 running**, with no red light and no clock: **Pause goal** is offered, and your

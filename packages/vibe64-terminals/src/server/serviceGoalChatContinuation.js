@@ -78,9 +78,10 @@ function createServiceGoalChatContinuation({
    * Main Claude's Resume action, at the person's request in chat: the goal the
    * turn observed continues once that turn ends. The request is saved as the
    * goal's continuation intent, so a restart before then continues it too;
-   * Pause, Stop or Cancel meanwhile withdraw it.
+   * Pause, Stop or Cancel meanwhile withdraw it. Standalone Vibe64 has no
+   * signed-in person: its Resume, like its restart continuation, runs with no actor.
    * @param {string} sessionId
-   * @param {{ runtime: object, vibe64User: { username: string, role: string }, threadId: string, goal: Record<string, any> }} request
+   * @param {{ runtime: object, vibe64User: { username: string, role: string } | null, threadId: string, goal: Record<string, any> }} request
    */
   async function requestResume(sessionId, { runtime, vibe64User, threadId, goal }) {
     if (!RESUMABLE_GOAL_STATUSES.includes(goal?.status)) throw new Error("Only a paused, blocked or waiting goal can be resumed.");
@@ -92,7 +93,7 @@ function createServiceGoalChatContinuation({
       active: true,
       daemonId: goalRuntimeId,
       restartOf: null,
-      actor: { username: vibe64User.username, role: vibe64User.role },
+      actor: vibe64User ? { username: vibe64User.username, role: vibe64User.role } : null,
       pending: null,
       error: null,
       native: { threadId, createdAt: goal.createdAt, objective: goal.objective },

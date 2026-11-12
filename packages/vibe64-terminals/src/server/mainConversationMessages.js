@@ -218,13 +218,17 @@ function sessionNeedsOpeningPrompt(session = {}) {
 
 /**
  * What Claude reads with the person's message while its goal is paused or blocked: its own goal checker is then
- * stood down (`/goal clear`), so without this Claude takes the goal for gone.
+ * stood down (`/goal clear`), so without this Claude takes the goal for gone. It names Resume's exact calls, so a
+ * person's "continue" resumes the goal in one step.
  * @param {{ status: string, objective?: string }} goal the goal the conversation retains
  */
 function retainedGoalNotice(goal) {
-  return `\n\n[Vibe64: this chat's goal is ${goal.status}, not cleared, and Claude's own goal checker is off until it is resumed. ` +
-    `Objective: ${JSON.stringify(String(goal.objective || "").slice(0, 500))}. Only if the person asks to resume or continue the goal, ` +
-    "use the application action vibe64.terminals.main-goal.resume, then end your reply briefly: the goal continues once this reply ends.]";
+  const resume = "\"actionId\":\"vibe64.terminals.main-goal.resume\"";
+  return `\n\n[Vibe64: this chat's goal is ${goal.status}, not cleared. A "Goal cleared" line in this chat only means Vibe64 ` +
+    `switched Claude's own goal checker off while the goal is ${goal.status}; Vibe64 keeps the goal. ` +
+    `Objective: ${JSON.stringify(String(goal.objective || "").slice(0, 500))}. If the person asks to resume or continue the goal, ` +
+    `call the application tool assistant_action_contract with {${resume}}, then assistant_action_execute with {${resume},"input":{}}, ` +
+    "then end your reply briefly: the goal continues once this reply ends. Otherwise leave it as it is.]";
 }
 
 function codexContextRefreshPending(session = {}) {
