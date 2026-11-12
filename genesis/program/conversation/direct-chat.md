@@ -2986,6 +2986,14 @@ conversation in order, restores it after reconnection, and lets the person
 interrupt the current turn without deleting the session. Agent questions may
 be answered as free text or through suggested choices while the submitted
 reply remains ordinary conversation text.
+The composer offers answer fields for the newest questions the agent asked since
+the person's latest message: JSKIT's `latestAssistantQuestionsAwaitingUserReply`
+starts at the completed final reply and reads back over at most ten of the
+agent's replies and commentary, so a short closing line after the questions does
+not hide them, and nothing is offered while that reply is being written. A
+workflow turn that ends with such questions waits for the person's answer
+(`awaitingAnswer`), reading the same questions from the saved tail since the
+person's latest message, which holds every message the lookback can reach.
 Numbered question labels and their suggested choices use the shared inline
 Markdown renderer, preserving bold text, code, and links without interpreting
 raw HTML. Their file links use the same source-editor navigation as prose.

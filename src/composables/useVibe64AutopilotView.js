@@ -10,7 +10,7 @@ import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe6
 import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import { useAssistantQuestions } from "@jskit-ai/assistant-core/client/conversation-questions";
 import {
-  latestAssistantMessageAwaitingUserReply
+  latestAssistantQuestionsAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
 import {
   projectAppPath
@@ -236,7 +236,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   const questionState = useAssistantQuestions({
-    message: () => latestAssistantMessageAwaitingUserReply(props.conversationLog),
+    message: () => latestAssistantQuestionsAwaitingUserReply(props.conversationLog),
     extraChoice: NUMBERED_QUESTION_UNSURE_CHOICE
   });
   const {

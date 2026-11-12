@@ -428,9 +428,9 @@ test("Stop during the first implementation resumes at implementation with a fres
 
 // The chat composer shows answer controls for this reply; Auto must wait for that answer.
 const question = "The agreed required-field rule is done.\n\n[1] Shall I also fix the unrelated findings now?\nPossible answers:\n- Yes, fix them\n- Not now";
-function askPerson(f) {
+function askPerson(f, messages = [{ role: "assistant", text: question }]) {
   f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: f.state().followup?.messageId || request.messageId, text: "Execute the plan" },
-    messages: [{ role: "assistant", text: question }] }];
+    messages }];
 }
 
 for (const decision of ["continue", "handoff"]) test(`a final question waits for the person even when the agent reported ${decision}`, async t => {
@@ -440,6 +440,21 @@ for (const decision of ["continue", "handoff"]) test(`a final question waits for
   assert.equal(f.sends.length, 1, "no automatic turn may start before the person answers");
   assert.equal(f.state().status, "waiting"); assert.equal(f.state().stage, "implementation"); assert.equal(f.state().awaitingAnswer, true);
 });
+
+// The AI often asks, reports its outcome and closes with one short line; the
+// questions it wrote before that tool call are saved as commentary.
+for (const [role, decision] of [["commentary", "wait"], ["commentary", "continue"], ["assistant", "handoff"]]) {
+  test(`questions followed by a short closing message wait for the answer (questions as ${role}, agent reported ${decision})`, async t => {
+    const f = await fixture(t); await f.service.send("session-1", request, f.context);
+    await report(f, decision);
+    askPerson(f, [{ role: "user", text: "Execute the plan" }, { role, text: question }, { role: "thinking", text: "Outcome reported." },
+      { role: "assistant", text: "No files have changed. I'll continue once you've answered." }]);
+    await f.service.afterTurn("session-1", end(f.state()), f.context);
+    assert.equal(f.sends.length, 1, "no automatic turn may start before the person answers");
+    assert.equal(f.state().status, "waiting"); assert.equal(f.state().awaitingAnswer, true);
+    assert.equal(f.state().error, "Waiting for your answer. Reply in chat to continue.");
+  });
+}
 
 test("a final question without an outcome is never resumed from the saved request; the reply starts the next request", async t => {
   const f = await fixture(t); await f.service.send("session-1", request, f.context);

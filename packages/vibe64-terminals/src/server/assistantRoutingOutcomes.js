@@ -10,7 +10,7 @@ import {
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   assistantReplyAsksPerson,
-  latestAssistantMessageAwaitingUserReply
+  latestAssistantQuestionsAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { read, failure, activeMessage, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
 
@@ -160,9 +160,12 @@ function createAssistantRoutingOutcomes({
         await records.save(context, state);
         return;
       }
-      // A final reply asking the person waits for their answer, whatever outcome
-      // was reported. Their reply is a new request; nothing resumes this one.
-      if (!state.stopped && run.state === "completed" && assistantReplyAsksPerson(latestAssistantMessageAwaitingUserReply(
+      // Questions the composer offers answer controls for wait for the person's
+      // answer, whatever outcome was reported, also when the AI added a short
+      // message after them. The tail holds every message since the person's latest
+      // one, as far as the lookback can read. Their reply is a new request;
+      // nothing resumes this one.
+      if (!state.stopped && run.state === "completed" && assistantReplyAsksPerson(latestAssistantQuestionsAwaitingUserReply(
         await context.runtime.store.readConversationTail(sessionId, { userLimit: 1 })
       ))) {
         Object.assign(state, { status: "waiting", awaitingAnswer: true, error: "Waiting for your answer. Reply in chat to continue." });

@@ -35,9 +35,12 @@ The working agent reports one of four outcomes:
 - **Complete** is available only to Senior after verified review. Senior explicitly
   completes an involved plan before Auto archives it after the final explanation.
 
-A turn whose final reply asks you a question (numbered questions or **Possible
-answers** choices, the replies for which the composer shows answer controls)
-always waits for your answer, whatever outcome the agent reported. Auto never
+A turn that asks you a question (numbered questions or **Possible answers**
+choices, the replies for which the composer shows answer controls) always waits
+for your answer, whatever outcome the agent reported, including when the agent
+adds a short message after the questions, such as "I'll continue once you've
+answered." The composer and this wait read the same questions: the newest among
+the agent's last ten messages since your latest message. Auto never
 moves to Senior review, continues or completes past an open question. The notice
 says **Waiting for your answer. Reply in chat to continue.** and offers no stage
 **Continue** action; reopening the session or recovery after a restart sends

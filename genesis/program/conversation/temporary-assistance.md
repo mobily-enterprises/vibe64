@@ -873,8 +873,10 @@ review; settings remain editable for subsequent turns. Its observed goal reaches
 canonical reads and live updates; an omitted goal in a failed read cannot clear
 an earlier observation.
 Native completion first saves the final reply through the ordinary snapshot
-owner. Review then checks the saved reply for the composer's structured questions;
-an unanswered question retains the coding model and waits for the user's answer.
+owner. Review then checks the saved turn for the composer's structured questions,
+the newest among the AI's last ten messages since the user's latest one, so a
+short closing message after them does not hide them; an unanswered question
+retains the coding model and waits for the user's answer.
 Settings saves retain current access and catalogue validation. An unavailable
 native goal does not disable preference saves or clear its existing pin. Native
 settings updates require an observed goal and preserve its objective and progress.

@@ -2272,6 +2272,50 @@ describe("useVibe64AutopilotView direct chat", () => {
     ]);
   });
 
+  // The AI often asks, then adds one short line in the same turn. Questions it
+  // wrote before a tool call are saved as commentary.
+  const asked = "Before I build it:\n[1] Which page should hold the form?\n[2] Should the email field be required?";
+  const closing = "No files have changed. I'll build it once you've answered those two.";
+  function questionsThenClosingLog(role, closingMessage = { role: "assistant", text: closing }) {
+    const user = { role: "user", text: "Add a sign-up form." };
+    return { turns: [{ turnId: "000001", user, assistant: closingMessage, messages: [user, { role, text: asked }, closingMessage] }] };
+  }
+
+  for (const role of ["assistant", "commentary"]) {
+    it(`offers and sends the questions the AI followed with a short closing message (questions as ${role})`, async () => {
+      const sendAgentMessage = vi.fn(async () => true);
+      const view = await createView({ conversationLog: questionsThenClosingLog(role), sendAgentMessage });
+
+      expect(view.numberedQuestions.value.map((question) => question.label)).toEqual([
+        "Which page should hold the form?",
+        "Should the email field be required?"
+      ]);
+      expect(view.composerHint.value).toBe("Answer the assistant, then send one combined reply.");
+      view.questionAnswers.value.__ui_question_1 = "The sign-up page";
+      view.questionAnswers.value.__ui_question_2 = "Yes";
+      expect(view.composerCanSubmit.value).toBe(true);
+
+      await view.submitComposerMessage();
+
+      expect(sendAgentMessage.mock.calls[0][0].message).toBe("[1] The sign-up page\n[2] Yes");
+    });
+  }
+
+  it("lets the user dismiss questions followed by a closing message, and offers none while that message is being written", async () => {
+    const { props, view } = await createViewWithProps({
+      conversationLog: questionsThenClosingLog("commentary", { role: "assistant", text: "No files have", status: "inProgress" })
+    });
+    expect(view.numberedQuestions.value).toEqual([]);
+
+    props.conversationLog = questionsThenClosingLog("commentary");
+    await nextTick();
+    expect(view.numberedQuestions.value).toHaveLength(2);
+    view.composerDraft.value = "Let me explain instead.";
+    expect(view.dismissNumberedQuestions()).toBe(true);
+    expect(view.numberedQuestions.value).toEqual([]);
+    expect(view.composerCanSubmit.value).toBe(true);
+  });
+
   it("reconciles native Save without starting another agent request", async () => {
     const saveCommit = "a".repeat(40);
     const sendAgentMessage = vi.fn(async () => true);

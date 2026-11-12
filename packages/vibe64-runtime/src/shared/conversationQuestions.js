@@ -1,10 +1,10 @@
 import {
-  latestAssistantMessageAwaitingUserReply,
+  latestAssistantQuestionsAwaitingUserReply,
   parseAnswerChoicePrompt,
   parseNumberedQuestionPrompt
 } from "@jskit-ai/assistant-core/shared/conversation";
 
-export { latestAssistantMessageAwaitingUserReply };
+export { latestAssistantQuestionsAwaitingUserReply };
 
 /**
  * The same replies for which the chat composer offers answer controls.
