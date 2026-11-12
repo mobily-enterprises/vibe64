@@ -170,7 +170,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
         return { ...real, getSessionWithoutSource: async (id: string) => ({
           ...await real.getSessionWithoutSource(id), workspaceSetup: aiTaskWorld.workspaceSetup }) };
       };
-      aiTaskService = createAiTasksService({ logger: silentLogger,
+      aiTaskService = createAiTasksService({ logger: silentLogger, hostKinds: [],
         databaseTools: { readOverview: () => {
           aiTaskWorld.overviewReads += 1;
           return aiTaskWorld.overview();
