@@ -27,9 +27,13 @@
         </span>
         <div class="ai-task__heading">
           <h2 :id="titleId" ref="title" tabindex="-1">{{ projection.ended ? projection.outcome.heading : task.title }}</h2>
-          <p aria-live="polite" class="ai-task__status" data-vibe64-ai-task-status>
-            <template v-if="projection.ended">{{ task.title }}</template>
-            <LongTextInlineParts v-else :text="projection.status" />
+          <!-- A new status is read out; the step's ticking time beside it is not. -->
+          <p class="ai-task__status" data-vibe64-ai-task-status>
+            <span aria-live="polite">
+              <template v-if="projection.ended">{{ task.title }}</template>
+              <LongTextInlineParts v-else :text="projection.status" />
+            </span>
+            <span v-if="elapsed" data-vibe64-ai-task-elapsed> · {{ elapsed }}</span>
           </p>
         </div>
         <div v-if="!projection.ended" class="ai-task__commands">
@@ -99,7 +103,13 @@
             class="ai-task__panel"
             role="tabpanel"
           >
-            <Vibe64AiTaskProgress :commentary="commentary" :output="output" :projection="projection" :task="task">
+            <Vibe64AiTaskProgress
+              :commentary="commentary"
+              :line="progressLine"
+              :output="output"
+              :projection="projection"
+              :task="task"
+            >
               <template #check-output><slot name="check-output" /></template>
             </Vibe64AiTaskProgress>
           </section>
@@ -163,9 +173,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, useId, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { LongTextInlineParts } from "@jskit-ai/assistant-core/client/conversation";
+import { elapsedText } from "@local/vibe64-core/shared/elapsedText";
 import { AI_TASK_MESSAGES as WORDS } from "./aiTaskMessages.js";
 import { aiTaskFit } from "./aiTaskFit.js";
 import { aiTaskFooterActions } from "./aiTaskProjection.js";
@@ -186,6 +197,11 @@ const props = defineProps({
   output: {
     required: true,
     type: Boolean
+  },
+  // The last line the running check's step printed, as its host shows output; empty for none.
+  progressLine: {
+    default: "",
+    type: String
   }
 });
 
@@ -206,6 +222,18 @@ const detailsOpen = ref(false);
 const confirmingCancel = ref(false);
 const cancelling = computed(() => props.source.cancelRequested || task.value.phase === "cancelling");
 const tabs = [{ id: "progress", label: WORDS.views.progress }, { id: "chat", label: WORDS.views.chat }];
+// How long the running check's step has run, on this browser's clock: it ticks every second and reads nothing.
+const now = ref(Date.now());
+const stepSince = computed(() => Date.parse(projection.value.progress?.since || ""));
+const elapsed = computed(() => Number.isFinite(stepSince.value) ? elapsedText(now.value - stepSince.value) : "");
+let clock = 0;
+watch(stepSince, () => { now.value = Date.now(); });
+onMounted(() => {
+  clock = setInterval(() => {
+    if (Number.isFinite(stepSince.value)) now.value = Date.now();
+  }, 1_000);
+});
+onBeforeUnmount(() => clearInterval(clock));
 const { focusTitle, moveBetweenViews, reducedMotion, returnFocus, setTab } = useAiTaskFocus({
   title,
   views: tabs.map(tab => tab.id),

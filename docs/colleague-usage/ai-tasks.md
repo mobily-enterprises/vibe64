@@ -54,6 +54,13 @@ Two views sit under the problem, and only one shows at a time:
 
   Choose **Update output**, **Save output** or **Preparation output** to read what
   the run printed.
+
+  A fix whose own check runs several long steps names the step it is on in the
+  header's line, beside how long that step has run, counting up each second, such
+  as **Checking the build: Install dependencies · 2 min**. Under the steps, Progress then
+  shows the newest line that step printed. A step whose time keeps counting is
+  still working, however quiet it is; when the check ends, the line shows the
+  outcome as before.
 - **Chat** is the conversation with the AI. A dot on **Chat** means the AI is waiting
   for your answer.
 

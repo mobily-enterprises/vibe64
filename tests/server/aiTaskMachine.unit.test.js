@@ -218,6 +218,62 @@ test("AI task machine: a person's message while the AI works resets its tries an
   assert.equal(task.turnMessageId, "m-2");
 });
 
+const PROGRESS = Object.freeze({
+  step: "Publishing: Run database migrations",
+  since: "2026-11-04T09:58:00.000Z",
+  output: "Migrating\nMigrated 12 of 30 tables"
+});
+const progressed = (extra = {}) => event("check_progress", { id: "check-1", ...PROGRESS, ...extra });
+
+test("AI task machine: a running check reports its step, since when and what it printed, and nothing else moves", () => {
+  const from = taskIn("checking");
+  const { task, pending } = advanceAiTask(from, progressed());
+  assert.deepEqual(task.progress, PROGRESS);
+  assert.equal(task.phase, "checking");
+  assert.deepEqual(pending, from.pending, "the check it reports on keeps running");
+  assert.equal(task.revision, from.revision + 1, "its viewers hear of it");
+  assert.deepEqual(task.log, from.log, "a step is not an Activity entry");
+
+  // A step reported without a start starts now, and keeps that start while it prints.
+  const started = advanceAiTask(task, event("check_progress", { id: "check-1", step: "Publishing: Start", at: "2026-11-04T10:01:00.000Z" })).task;
+  assert.deepEqual(started.progress, { step: "Publishing: Start", since: "2026-11-04T10:01:00.000Z", output: "" });
+  const printed = advanceAiTask(started, event("check_progress", {
+    id: "check-1", step: "Publishing: Start", output: "Listening on 3000", at: "2026-11-04T10:01:30.000Z"
+  })).task;
+  assert.deepEqual(printed.progress, { step: "Publishing: Start", since: "2026-11-04T10:01:00.000Z", output: "Listening on 3000" });
+  const repeated = event("check_progress", { id: "check-1", step: "Publishing: Start", output: "Listening on 3000", at: "2026-11-04T10:01:40.000Z" });
+  assert.equal(advanceAiTask(printed, repeated).task, printed, "the same report again changes nothing");
+});
+
+test("AI task machine: progress belongs to the check running now; a wait, its answer, Cancel or a new run clears it", () => {
+  const reporting = advanceAiTask(taskIn("checking"), progressed()).task;
+  for (const [name, happened] of [
+    ["waiting", event("check_waiting", { id: "check-1", message: "Save waits." })],
+    ["passed", event("check_passed", { id: "check-1" })],
+    ["failed", checkFailure()],
+    ["unknown", event("check_unknown", { id: "check-1", message: "No answer." })],
+    ["cancel", event("cancel", { by: ANA, id: "stop-1" })],
+    ["archived", event("archived")]
+  ]) {
+    assert.equal(advanceAiTask(reporting, happened).task.progress, null, name);
+  }
+
+  // A waiting check that reports a step is running again: the wait and its choices go.
+  const waiting = advanceAiTask(reporting, event("check_waiting", {
+    id: "check-1", message: "Save waits.", mainChatSince: "2026-11-04T09:30:00.000Z"
+  })).task;
+  const resumed = advanceAiTask(waiting, progressed()).task;
+  assert.deepEqual({ waiting: resumed.waiting, message: resumed.message, mainChatSince: resumed.mainChatSince },
+    { waiting: false, message: "", mainChatSince: "" });
+  assert.deepEqual(resumed.progress, PROGRESS);
+
+  // Save now starts a new run of the check, which has reported nothing yet.
+  const now = advanceAiTask({ ...reporting, waiting: true, check: { ...reporting.check, whileAiWorks: { action: "Save now", note: "n" } } },
+    event("check_now", { id: "check-2", whileAiWorks: true })).task;
+  assert.equal(now.pending.id, "check-2");
+  assert.equal(now.progress, null);
+});
+
 test("AI task machine: Done and Not done are final", () => {
   for (const phase of ["done", "not_done"]) {
     const ended = taskIn(phase, { active: false });
@@ -236,7 +292,11 @@ test("AI task machine: an event that does not apply leaves the task as it is", (
     [taskIn("needs_you", { reason: "stopped" }), event("finish")],
     [taskIn("needs_you", { reason: "stopped" }, "person"), event("check_now", { id: "c" })],
     [taskIn("cancelling"), event("check_passed", { id: "another-check" })],
-    [taskIn("cancelling", { pending: { effect: "interrupt", id: "stop-1" } }), event("cancel", { id: "stop-2" })]
+    [taskIn("cancelling", { pending: { effect: "interrupt", id: "stop-1" } }), event("cancel", { id: "stop-2" })],
+    // Progress only ever describes the check running now.
+    [taskIn("checking"), progressed({ id: "another-check" })],
+    [taskIn("working"), progressed()],
+    [taskIn("cancelling", { pending: { effect: "check", id: "check-1", retryAi: true } }), progressed()]
   ];
   for (const [task, happened] of cases) assert.equal(advanceAiTask(task, happened).task, task, happened.type);
 });

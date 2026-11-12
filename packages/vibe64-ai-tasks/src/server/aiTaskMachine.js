@@ -62,6 +62,7 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
     message: "",
     waiting: false,
     mainChatSince: "",
+    progress: null,
     problem,
     input: taskInput,
     startedBy,
@@ -87,6 +88,8 @@ function createAiTask({ kind, problem, taskInput, startedBy, at, sendId }) {
 function moved(task, patch, event, logText) {
   const next = { ...task, ...patch, revision: task.revision + 1 };
   next.active = AI_TASK_ACTIVE_PHASES.includes(next.phase);
+  // A step describes the check running now: a wait, a new run of the check or any other phase ends it.
+  if (next.progress && (next.phase !== PHASES.CHECKING || next.waiting || next.pending !== task.pending)) next.progress = null;
   next.log = logText ? [...task.log, { at: event.at, text: logText }].slice(-LOG_LIMIT) : task.log;
   return next;
 }
@@ -180,6 +183,22 @@ function turnResult(task, event) {
   return needsYou(reported, REASONS.YOUR_TURN, event, "", "The AI finished its turn.");
 }
 
+/**
+ * The running check names the step it is on, since when and what that step last printed. A step reported without a
+ * start started now, or when the same step was first reported. A check that reports is running, so a wait it
+ * reported before is over. Viewers hear of it; the Activity log does not.
+ */
+function checkProgress(task, event) {
+  const same = task.progress?.step === event.step;
+  const progress = {
+    step: event.step,
+    since: event.since || (same ? task.progress.since : event.at),
+    output: event.output || ""
+  };
+  if (!task.waiting && same && progress.since === task.progress.since && progress.output === task.progress.output) return task;
+  return moved(task, { waiting: false, message: "", mainChatSince: "", progress }, event, "");
+}
+
 /** The task's own check failed: back to the AI when it can repair this, otherwise to the person. */
 function checkFailed(task, event) {
   const { message, diagnostic, retryKey, retryMessage, retryDisplay, hasDraft, sendId, facts } = event;
@@ -248,6 +267,8 @@ function fromChecking(task, event) {
         message: event.message,
         mainChatSince: event.mainChatSince || ""
       }, event, task.waiting ? "" : event.message);
+    case "check_progress":
+      return checkProgress(task, event);
     case "check_failed":
       return checkFailed(task, event);
     case "check_unknown":

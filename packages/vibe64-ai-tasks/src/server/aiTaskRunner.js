@@ -15,6 +15,9 @@ import { advanceAiTask } from "./aiTaskMachine.js";
 const RUNNING_TURN_STATUSES = Object.freeze(["starting", "inProgress"]);
 const STOPPED_TURN_STATUSES = Object.freeze(["interrupted", "cancelled"]);
 const WRITE_BUSY_CODE = "vibe64_agent_write_mode_busy";
+// A check's step report is saved with the task: its name and the end of its output are enough for the window.
+const PROGRESS_STEP_MAX_CHARACTERS = 200;
+const PROGRESS_OUTPUT_MAX_CHARACTERS = 2_000;
 // Failures a person can fix in AI setup, not in this chat.
 const UNAVAILABLE_FAILURE = /\b(401|403|unauthori[sz]ed|authentication|credentials?|api key|log(?:ged|ging)? ?in|sign(?:ed|ing)? ?in|quota|model)\b/iu;
 
@@ -50,6 +53,22 @@ function turnEvent(task, turn, restarted) {
     kind: kind === "continue" ? "question" : kind,
     message,
     report
+  };
+}
+
+/**
+ * A check's step report as the task saves it: a named step, when it started (empty: now) and the end of what it
+ * printed. Null for a report that names no step.
+ * @param {{ step?: unknown, since?: unknown, output?: unknown }} update
+ */
+function progressUpdate({ step, since, output } = {}) {
+  const name = String(step || "").trim().slice(0, PROGRESS_STEP_MAX_CHARACTERS);
+  if (!name) return null;
+  const started = Date.parse(String(since || ""));
+  return {
+    step: name,
+    since: Number.isFinite(started) ? new Date(started).toISOString() : "",
+    output: String(output || "").slice(-PROGRESS_OUTPUT_MAX_CHARACTERS)
   };
 }
 
@@ -156,6 +175,42 @@ function createAiTaskRunner({
     }, message);
   }
 
+  /**
+   * What a running check reports of its step, saved for the task's viewers: the latest report wins, one write at a
+   * time, and nothing is saved once `close` has been called, which waits for a write under way.
+   * @param {string} sessionId
+   * @param {string} taskId
+   * @param {string} id the running check's id
+   */
+  function checkProgress(sessionId, taskId, id) {
+    let latest = null;
+    let saving = null;
+    let ended = false;
+    async function save() {
+      while (latest && !ended) {
+        const update = latest;
+        latest = null;
+        await applyFound(sessionId, taskId, { type: "check_progress", id, ...update }).catch((error) => {
+          warn(sessionId, "check_progress_failed", error, "An AI task's check step could not be shown; the check goes on.");
+        });
+      }
+      saving = null;
+    }
+    return {
+      /** @type {import("./types.js").AiTaskCheckProgressReport} */
+      report(update) {
+        if (ended) return;
+        latest = progressUpdate(update);
+        if (latest && !saving) saving = save();
+      },
+      async close() {
+        ended = true;
+        latest = null;
+        await saving;
+      }
+    };
+  }
+
   function wakeLater(sessionId, delayMs) {
     if (closed || timers.has(sessionId)) return;
     const timer = setTimeout(() => {
@@ -203,17 +258,22 @@ function createAiTaskRunner({
     const runtime = await project.createRuntimeWithoutSource();
     const stopping = new AbortController();
     runningChecks.set(conversationId, stopping);
+    const progress = checkProgress(sessionId, conversationId, id);
     let result;
     try {
       // A Cancel saved after this task was read and before its stop was held stops it here.
       const latest = await runtime.store.readSessionConversation(sessionId, conversationId);
       if (latest?.task?.phase === AI_TASK_PHASES.CANCELLING) stopping.abort();
-      result = await kind.check.run({ runtime, sessionId, signal: stopping.signal, taskId: conversationId }, task);
+      result = await kind.check.run({
+        progress: progress.report, runtime, sessionId, signal: stopping.signal, taskId: conversationId
+      }, task);
     } catch (error) {
       warn(sessionId, "check_failed", error, "An AI task's check gave no answer.");
       result = { unknown: true, message: error?.message };
     } finally {
       if (runningChecks.get(conversationId) === stopping) runningChecks.delete(conversationId);
+      // The answer is saved after the last step, so a late step never outlives it.
+      await progress.close();
     }
     const current = await runtime.store.readSessionConversation(sessionId, conversationId);
     if (!current?.task) return;

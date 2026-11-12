@@ -1,7 +1,7 @@
 <template>
   <slot />
   <template v-if="host.task">
-    <Vibe64AiTaskWindow :commentary="commentary" :output="Boolean(checkOutput)" :source="host">
+    <Vibe64AiTaskWindow :commentary="commentary" :output="Boolean(checkOutput)" :progress-line="progressLine" :source="host">
       <template #check-output><pre class="ai-task-host__output">{{ checkOutput }}</pre></template>
       <template #chat="{ visible }">
         <Vibe64AiTaskChat
@@ -42,6 +42,7 @@ import { useAiTaskConversation } from "@/composables/useAiTaskConversation.js";
 import { VIBE64_AI_TASK_TRAY_KEY } from "@/lib/vibe64AssistantHost.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { aiTaskRequest } from "@/lib/vibe64AiTaskConversation.js";
+import { terminalLastMeaningfulLine } from "@/lib/codexOutput.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import Vibe64AiTaskChat from "./Vibe64AiTaskChat.vue";
 
@@ -110,6 +111,8 @@ const checkOutput = computed(() => {
     .filter(Boolean)
     .join("\n");
 });
+// The running check's step's last line, as a running step's output is summed up elsewhere on the page.
+const progressLine = computed(() => terminalLastMeaningfulLine(host.projection?.progress?.output || ""));
 </script>
 
 <style scoped>

@@ -46,6 +46,8 @@
  * @property {string} message
  * @property {boolean} waiting whether a check waits, for another change to the session or the main chat's AI
  * @property {string} mainChatSince while a check waits for the main chat's AI, when its turn started
+ * @property {AiTaskCheckProgress | null} [progress] the step a running check last reported; none while it waits, and
+ *   none on a task saved before checks reported steps
  * @property {AiTaskProblem} problem
  * @property {object} input
  * @property {object | null} startedBy
@@ -80,6 +82,21 @@
  * @property {boolean} [whileAiWorks] run a check waiting for the main chat's AI now
  * @property {string} [mainChatSince] when the main chat turn a check waits for started
  * @property {object} [facts] what a failed check learned, for the next try
+ * @property {string} [step] the step a running check is on, in its owner's words
+ * @property {string} [since] when that step started; empty: now, or when the same step was first reported
+ * @property {string} [output] what that step has printed so far, as its owner may show it
+ */
+
+/**
+ * The step a running check is on: its name, when it started and what it last printed. The window names the step,
+ * times it from `since` and shows the output's last line.
+ * @typedef {{ step: string, since: string, output: string }} AiTaskCheckProgress
+ */
+
+/**
+ * Tells the task's viewers which step its check is on, as often as it likes: the runner saves the latest report,
+ * one write at a time, and none after the check answers. It never throws and never waits.
+ * @typedef {(update: { step: string, since?: string, output?: string }) => void} AiTaskCheckProgressReport
  */
 
 /**
@@ -103,7 +120,8 @@
  *   unstoppable?: string,
  *   whileAiWorks?: AiTaskWhileAiWorks,
  *   run: (
- *     context: { runtime: object, sessionId: string, signal: AbortSignal, taskId: string },
+ *     context: { progress: AiTaskCheckProgressReport, runtime: object, sessionId: string, signal: AbortSignal,
+ *       taskId: string },
  *     task: AiTask
  *   ) => Promise<AiTaskCheckResult>,
  *   retry: { limit: number, display: string, message: (diagnostic: string) => string }

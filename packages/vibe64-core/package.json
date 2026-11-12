@@ -53,6 +53,7 @@
     "./server/sha256Hex": "./src/server/sha256Hex.js",
     "./shared/acceptEvery": "./src/shared/acceptEvery.js",
     "./shared/doNothing": "./src/shared/doNothing.js",
+    "./shared/elapsedText": "./src/shared/elapsedText.js",
     "./shared/actionFields": "./src/shared/actionFields.js",
     "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",
     "./server/workspaceTeam": "./src/server/workspaceTeam.js",

@@ -136,6 +136,28 @@ describe("a Save waiting for the main chat's AI", () => {
   });
 });
 
+describe("a check that says which step it is on", () => {
+  const progress = { step: "Publishing: Run database migrations", since: "2026-11-12T10:00:00.000Z", output: "Migrated 12 tables" };
+
+  it("names the step in the status line, and gives its start and output for the clock and the last line", () => {
+    expect(projected({ phase: "checking", checkRunning: true, progress })).toMatchObject({
+      status: "Publishing: Run database migrations",
+      progress: { since: progress.since, output: "Migrated 12 tables" },
+      tray: "Fixing Update…"
+    });
+  });
+
+  it.each([
+    ["has reported no step yet", { phase: "checking" }, CHECK.label],
+    ["waits", { phase: "checking", waiting: true, message: "Save waits for the main chat's AI to finish", progress },
+      "Save waits for the main chat's AI to finish"],
+    ["is being cancelled", { phase: "cancelling", checkRunning: true, progress }, "Cancelling…"],
+    ["has ended", { phase: "done", active: false, message: "Fixed and published.", progress }, "Done"]
+  ])("shows no step when the check %s", (_name, fields, status) => {
+    expect(projected(fields)).toMatchObject({ status, progress: null });
+  });
+});
+
 describe("the footer", () => {
   it.each([
     ["question", [ACTIONS.ANSWER], []],

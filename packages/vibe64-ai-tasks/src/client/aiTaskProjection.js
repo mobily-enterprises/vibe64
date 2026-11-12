@@ -106,11 +106,19 @@ function outcomeOf(task, viewerId) {
   return { heading: WORDS.outcome.notDone, happened: endedMessage(task, viewerId), report: "", next: WORDS.whatsNext() };
 }
 
+/**
+ * The step a running check last reported, while it runs.
+ * @param {AiTask} task
+ */
+function checkStep(task) {
+  return task.phase === PHASES.CHECKING && !task.waiting && task.progress?.step ? task.progress : null;
+}
+
 /** @param {AiTask} task */
 function runningStatus(task) {
   if (task.phase === PHASES.STARTING) return WORDS.status.starting;
   if (task.phase === PHASES.CANCELLING) return WORDS.status.cancelling;
-  if (task.phase === PHASES.CHECKING) return task.waiting ? task.message : task.check.label;
+  if (task.phase === PHASES.CHECKING) return task.waiting ? task.message : checkStep(task)?.step || task.check.label;
   return task.attempt > 1 ? WORDS.retrying(task.attempt, task.check.retryLimit) : WORDS.status.working;
 }
 
@@ -146,6 +154,7 @@ function projectAiTask(task, { viewerId }) {
     : [];
   const done = task.phase === PHASES.DONE;
   const running = !ended && !needs;
+  const step = checkStep(task);
   return {
     glyph: done ? "done" : ended ? "not-done" : needs ? needs.glyph || "attention" : "working",
     status: done ? WORDS.outcome.done : ended ? WORDS.outcome.notDone : needs ? needs.status || task.message : runningStatus(task),
@@ -163,7 +172,8 @@ function projectAiTask(task, { viewerId }) {
       ? [action(AI_TASK_ACTIONS.WAIT_FOR_AI, WORDS.actions.waitForAi), action(AI_TASK_ACTIONS.RUN_NOW, whileAiWorks.action, true)]
       : [],
     cancelQuestion: WORDS.cancelQuestion(task.noun),
-    outcome: ended ? outcomeOf(task, viewerId) : null
+    outcome: ended ? outcomeOf(task, viewerId) : null,
+    progress: step ? { since: step.since, output: step.output } : null
   };
 }
 

@@ -123,9 +123,19 @@ A host adds kinds of its own through the optional token `vibe64.ai-tasks.host-ki
 check, and whose ids must differ from public's and each other's. A host's check calls
 the host's own owners; one that must save the AI's repair before its own step runs
 `createAiTaskSave`, the Save that Save's own check runs, waiting for the main chat's
-AI in the same way. A kind's problem receives the person starting the task
-(`vibe64User`), so a kind whose work only some people may do refuses everyone else
-before a task opens. A host page that can show outside a session's AI task host
+AI in the same way. A check that runs several long steps says which one it is on
+through `context.progress({ step, since, output })`: the step's name, when it
+started (none: now, or when the same step was first reported) and what it has
+printed so far, as its owner already shows it. The runner keeps only the latest
+report, writes one at a time as a `check_progress` event, bounds the name and the
+output's tail, and saves nothing once the check has answered, so a late report
+never outlives the answer. The task keeps it as `progress`: a report clears a wait
+the check reported before, and a wait, a new run of the check, its answer or any
+other phase clears it, so it only ever describes the check running now; it is not
+an Activity entry. `createAiTaskSave`'s `step` option reports Save's step only once
+Save really saves, never while it waits for the main chat's AI. A kind's problem
+receives the person starting the task (`vibe64User`), so a kind whose work only
+some people may do refuses everyone else before a task opens. A host page that can show outside a session's AI task host
 injects `VIBE64_AI_TASKS_KEY` with the named default `NO_AI_TASKS`
 (`client/aiTaskKey.js`) and leaves out its AI task buttons there.
 Input is untrusted text: a check hands it
@@ -218,6 +228,13 @@ what happened and what the AI did are Markdown whose inline code the window rend
 as code through JSKIT's `LongTextInlineParts`, as the conversation does; the problem's
 tooltip keeps its raw text, and the title, the activity list, **Details** and the
 check's output stay literal.
+While a running check names its step, the status line is that step, followed by how
+long it has run (`@local/vibe64-core/shared/elapsedText`, such as `2 min`), timed from
+the step's `since` on the browser's clock, which ticks every second and reads
+nothing. Only the step itself is in the status line's live region, so a new step is
+announced and the ticking time is not. The host passes the step output's last line
+(`terminalLastMeaningfulLine`, as a running terminal step is summed up elsewhere),
+which Progress shows under the steps.
 
 Esc hides an active task and closes an ended one. Clicking outside does nothing. Focus
 goes to the title on open, never the composer, then to the outcome heading when the

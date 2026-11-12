@@ -427,6 +427,87 @@ test("a host's own kind runs like public's: only the person it allows starts it,
   }), /AI task kind save is defined twice\./u, "a host can't replace one of public's kinds");
 });
 
+/**
+ * A host's kind whose long check says what it is doing: Save names its step once it really saves, then the host's
+ * own step reports its name, start and output and runs until `hooks.finish` is resolved.
+ * @param {{ finish: PromiseWithResolvers<void>, late: ((update: object) => void) | null }} hooks
+ */
+function hostProgressKind(hooks) {
+  return ({ sessions, terminals }) => {
+    const saveForAiTask = createAiTaskSave({ sessions, terminals });
+    return {
+      ...hostStepKind([])({ sessions, terminals }),
+      id: "host-progress",
+      check: {
+        by: "vibe64",
+        label: "Saving and running the host step…",
+        output: "",
+        async run(context, task) {
+          const work = await sessions.inspectSessionWork(context.sessionId, {});
+          const saved = await saveForAiTask(context, task, work, { step: "Saving the fix" });
+          if (saved.passed !== true) return saved;
+          context.progress({ step: "Running the host step", since: "2026-11-12T10:00:00.000Z", output: "Migrating\nMigrated 12 tables" });
+          await hooks.finish.promise;
+          hooks.late = context.progress;
+          return { passed: true, message: "Saved, and the host step ran." };
+        },
+        retry: { limit: 3, display: "Continue fixing the host step.", message: diagnostic => diagnostic }
+      }
+    };
+  };
+}
+
+test("a long check shows the step it is on while it runs, Save's only once it saves, and nothing after it answers", async () => {
+  const hooks = { finish: Promise.withResolvers(), late: null };
+  await withFixture(async (f) => {
+    const running = f.boot();
+    const { task } = await f.start(running.aiTasks, OWNER, "host-progress");
+    await f.quiet(running.aiTasks);
+    const progressOf = async () => (await f.task(task.id)).progress;
+
+    // Save waits for the main chat's AI first: no step shows, only the wait.
+    f.server.mainTurn = { active: true, startedAt: "2026-11-12T09:50:00.000Z" };
+    await f.finishTurn(running);
+    const waiting = await f.task(task.id);
+    assert.equal(waiting.waiting, true);
+    assert.equal(waiting.progress, null, "a Save that waits never said it was saving");
+    assert.equal(f.saves.length, 0);
+
+    // Once the main chat's AI is done, Save names its step while it saves.
+    const save = Promise.withResolvers();
+    f.server.save = () => save.promise;
+    f.server.mainTurn = { active: false };
+    const finishing = running.aiTasks.onTurnSettled({ sessionId: SESSION, conversationId: "", failure: null })
+      .then(() => f.quiet(running.aiTasks));
+    await waitFor(async () => (await progressOf())?.step === "Saving the fix");
+    const saving = await f.task(task.id);
+    assert.equal(saving.waiting, false, "the check runs again, so its wait is over");
+    assert.equal(saving.message, "");
+    assert.ok(Number.isFinite(Date.parse(saving.progress.since)), "a step reported without a start starts now");
+    assert.equal(saving.progress.output, "");
+    assert.ok(f.published.some(({ payload }) => payload?.aiTask?.progress?.step === "Saving the fix"),
+      "its viewers hear of each step");
+
+    save.resolve({ ok: true });
+    await waitFor(async () => (await progressOf())?.step === "Running the host step");
+    assert.deepEqual(await progressOf(), {
+      step: "Running the host step", since: "2026-11-12T10:00:00.000Z", output: "Migrating\nMigrated 12 tables"
+    });
+    assert.equal((await running.aiTasks.read(SESSION, { taskId: task.id })).task.progress.step, "Running the host step",
+      "a browser reads the step too");
+
+    hooks.finish.resolve();
+    await finishing;
+    const done = await f.task(task.id);
+    assert.equal(done.phase, "done");
+    assert.equal(done.progress, null, "the answer ends the step");
+    hooks.late({ step: "Too late" });
+    await settle();
+    assert.deepEqual(await f.task(task.id), done, "a report after the check answered is never saved");
+    running.aiTasks.closeRunner();
+  }, { updateFailure: null, hostKinds: [hostProgressKind(hooks)] });
+});
+
 test("a completed preparation repair runs preparation on the server as a person's Prepare, and the task ends Done", () => withFixture(async (f) => {
   const running = f.boot();
   const { task } = await f.start(running.aiTasks, OWNER, "workspace-setup");

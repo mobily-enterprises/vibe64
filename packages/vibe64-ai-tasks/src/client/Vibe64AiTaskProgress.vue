@@ -13,6 +13,8 @@
       </li>
     </ol>
 
+    <p v-if="line" class="ai-task-progress__line" data-vibe64-ai-task-progress-line :title="line">{{ line }}</p>
+
     <p v-if="projection.note" class="ai-task-progress__note"><LongTextInlineParts :text="projection.note" /></p>
 
     <details v-if="$slots['check-output'] && output" class="ai-task-progress__output">
@@ -50,6 +52,11 @@ const props = defineProps({
   output: {
     required: true,
     type: Boolean
+  },
+  // The last line the running check's step printed.
+  line: {
+    default: "",
+    type: String
   },
   // What the AI has said about its work, beside what Vibe64 recorded.
   commentary: {
@@ -110,6 +117,16 @@ const activity = computed(() => [...props.task.log, ...props.commentary].sort((a
   color: rgba(var(--v-theme-on-surface), 0.7);
   font-size: 0.8125rem;
   font-weight: 400;
+  white-space: nowrap;
+}
+
+.ai-task-progress__line {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.8125rem;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

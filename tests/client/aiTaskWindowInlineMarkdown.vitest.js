@@ -36,7 +36,7 @@ function task(fields = {}) {
 }
 
 /** The window as a server would render it, for a task in the state its fields give. */
-async function render(fields) {
+async function render(fields, windowProps = {}) {
   const shown = task(fields);
   const noop = () => {};
   const source = {
@@ -46,7 +46,7 @@ async function render(fields) {
     returnFocusTarget: () => null
   };
   const app = createSSRApp(defineComponent({
-    render: () => h(Vibe64AiTaskWindow, { source, commentary: [], output: false })
+    render: () => h(Vibe64AiTaskWindow, { source, commentary: [], output: false, ...windowProps })
   }));
   app.use(createVuetify({ ssr: true }));
   return (await renderToString(app)).replace(/<!--[\s\S]*?-->/g, "");
@@ -111,5 +111,36 @@ describe("the AI task window shows a task's Markdown inline code as code", () =>
     expect(visibleText(happened)).toBe("Publish can start: ## Deployment is complete.");
     expectInlineCode(report, "- Runtimes: node", "## Deployment");
     expect(visibleText(report)).toBe("Added - Runtimes: node to ## Deployment.");
+  });
+});
+
+describe("the AI task window follows a check that says which step it is on", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("names the step with how long it has run, outside the live region, and shows its last line under the steps", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-12T10:02:30.000Z"));
+    const html = await render({
+      phase: "checking", checkRunning: true,
+      progress: { step: "Publishing: Run `database` migrations", since: "2026-11-12T10:00:00.000Z", output: "Migrated 12 tables" }
+    }, { progressLine: "Migrated 12 of 30 tables" });
+    const status = element(html, /<p([^>]*data-vibe64-ai-task-status[^>]*)>([\s\S]*?)<\/p>/);
+    expect(visibleText(status.inner).trim()).toBe("Publishing: Run database migrations · 2 min");
+    expectInlineCode(status.inner, "database");
+    // A clock that ticks every second is never read out: only a new step is announced.
+    const live = element(status.inner, /<span([^>]*aria-live="polite"[^>]*)>([\s\S]*?)<\/span><span[^>]*data-vibe64-ai-task-elapsed/);
+    expect(visibleText(live.inner)).toBe("Publishing: Run database migrations");
+    const line = element(html, /<p([^>]*data-vibe64-ai-task-progress-line[^>]*)>([\s\S]*?)<\/p>/);
+    expect(visibleText(line.inner)).toBe("Migrated 12 of 30 tables");
+  });
+
+  it("shows no time and no line for a check that has reported no step", async () => {
+    const html = await render({ phase: "checking", checkRunning: true }, { progressLine: "" });
+    const status = element(html, /<p([^>]*data-vibe64-ai-task-status[^>]*)>([\s\S]*?)<\/p>/);
+    expect(visibleText(status.inner).trim()).toBe("Checking Publish…");
+    expect(html).not.toContain("data-vibe64-ai-task-elapsed");
+    expect(html).not.toContain("data-vibe64-ai-task-progress-line");
   });
 });

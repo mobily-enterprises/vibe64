@@ -1819,6 +1819,9 @@ The indicator clears for each conversation when it is viewed; opening the menu
 alone does not clear it or any session-renewal reminder.
 While the AI task window is hidden, its tray chip shows when the task needs the
 person, and a Chat dot shows that the AI is waiting for an answer.
+While a task's check runs long steps, the window names the step it is on, how
+long that step has run and the newest line it printed, so a slow step reads as
+working rather than hung; how the check ends is unchanged.
 Internal helpers retain their deliberate execution restrictions.
 
 If Codex or OpenCode loses its server-side observation of a conversation, Vibe64

@@ -23,6 +23,8 @@
  * @property {string} diagnostic what the last failed check said, in its owner's words
  * @property {boolean} waiting
  * @property {string} mainChatSince while a check waits for the main chat's AI, when its turn started
+ * @property {{ step: string, since: string, output: string } | null} [progress] the step a running check last
+ *   reported: its name, when it started and what it last printed
  * @property {boolean} checkRunning
  * @property {{ key: string, summary: string, details: string }} problem
  * @property {string} conflictReview
@@ -72,6 +74,8 @@
  * @property {AiTaskAction[]} actions the footer, empty outside `needs_you`
  * @property {string} cancelQuestion what Cancel asks before it ends the task
  * @property {AiTaskOutcome | null} outcome
+ * @property {{ since: string, output: string } | null} progress while a running check names its step (the status):
+ *   when that step started, which the window times, and what it printed, whose last line its host may show
  */
 
 /**

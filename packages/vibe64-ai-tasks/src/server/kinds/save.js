@@ -76,12 +76,15 @@ function saveCheckResult(result) {
  */
 function createAiTaskSave({ sessions, terminals }) {
   /**
-   * @param {{ runtime: object, sessionId: string, taskId: string }} context
+   * @param {{ progress: import("../types.js").AiTaskCheckProgressReport, runtime: object, sessionId: string,
+   *   taskId: string }} context
    * @param {import("../types.js").AiTask} task
    * @param {{ destination?: object }} work what `sessions.inspectSessionWork` answered
+   * @param {{ step?: string }} [options] step: the name a longer check gives Save's step, reported once Save
+   *   really saves, never while it waits
    * @returns {Promise<AiTaskCheckResult>}
    */
-  return async function saveForAiTask({ runtime, sessionId, taskId }, task, work) {
+  return async function saveForAiTask({ progress, runtime, sessionId, taskId }, task, work, { step = "" } = {}) {
     if (!task.pending?.whileAiWorks) {
       // The chat's own working indicator reads this same turn; between the turns of a workflow such as Auto's
       // review the AI is still at work, and the wait then names when it began.
@@ -92,6 +95,7 @@ function createAiTaskSave({ sessions, terminals }) {
         return { waiting: true, message: MAIN_CHAT_WAITING_MESSAGE, mainChatSince: String(since) };
       }
     }
+    if (step) progress({ step });
     return saveCheckResult(await sessions.saveSessionWork(sessionId, {
       aiTaskId: taskId,
       destinationReview: work.destination,
