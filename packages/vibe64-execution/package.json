@@ -8,6 +8,7 @@
     ".": "./src/server/index.js",
     "./server": "./src/server/index.js",
     "./server/hostProfile": "./src/server/hostProfile.js",
+    "./server/hostSettings": "./src/host/hostSettings.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
     "./server/types": "./src/server/types.js"
   },
@@ -35,6 +36,10 @@
           {
             "subpath": "./server/hostProfile",
             "summary": "What the machine running Vibe64 provides: tool packs, shared caches, a privileged helper and shared group access."
+          },
+          {
+            "subpath": "./server/hostSettings",
+            "summary": "Where the privileged helper keeps the accounts, service units and sudo rules it makes, as the host's helper settings name them."
           },
           {
             "subpath": "./server/terminalSessions",

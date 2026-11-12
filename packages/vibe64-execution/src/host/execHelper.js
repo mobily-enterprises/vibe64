@@ -31,7 +31,12 @@ import {
   upgradePersonRegistry
 } from "./personRegistry.js";
 import { handleStagingAccessOperation, runStagingEnter, runStagingService, runStagingShell } from "./stagingLogin.js";
-import { handleDeploymentServiceOperation, handleManagedServiceOperation, runReleaseService } from "./serviceOperations.js";
+import {
+  handleDeploymentServiceOperation,
+  handleManagedServiceOperation,
+  relinkSystemdUnits,
+  runReleaseService
+} from "./serviceOperations.js";
 
 const ALLOWED_OPERATIONS = new Set([
   "account-auth-terminal",
@@ -109,6 +114,14 @@ async function main() {
       throw new Error("Usage: vibe64-exec-helper register-person <workspace> <username>");
     }
     registerPerson(process.argv[3], process.argv[4]);
+    return;
+  }
+  // At every start of a host whose helper units live outside systemd's own folder, before its services start.
+  if (process.argv[2] === "relink-units") {
+    if (process.argv.length !== 3) {
+      throw new Error("Usage: vibe64-exec-helper relink-units");
+    }
+    relinkSystemdUnits();
     return;
   }
   // Exits 0 for an account Vibe64 may act as, and 3 with the reason for one it

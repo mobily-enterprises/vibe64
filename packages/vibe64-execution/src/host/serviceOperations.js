@@ -3,6 +3,7 @@
 
 import {
   closeSync,
+  readdirSync,
   readFileSync,
   unlinkSync,
   writeFileSync
@@ -32,9 +33,11 @@ import {
   canonicalPath,
   openDirectoryBelow,
   openedPath,
+  openRootOwnedDirectory,
   readOwnedFile,
   relativePathParts
 } from "./hostFiles.js";
+import { helperSystemdUnitRoot, SYSTEMD_UNIT_ROOT } from "./hostSettings.js";
 import {
   assertSafeManagedServicePath,
   assertValidDeploymentUnitName,
@@ -73,8 +76,9 @@ function handleDeploymentServiceOperation(payload = {}) {
   const requiredUnits = [...new Set((Array.isArray(payload.requiredUnits) ? payload.requiredUnits : [])
     .map((requiredUnit) => assertValidManagedServiceUnitName(requiredUnit, owner)))];
   const loopbackPort = releaseServicePort(payload.loopbackPort);
-  assertReleaseServiceClaim({ loopbackPort, owner, unitName, user });
-  const unitPath = systemdUnitPath(unitName, owner);
+  const unitRoot = helperSystemdUnitRoot();
+  assertReleaseServiceClaim({ loopbackPort, owner, unitName, unitRoot, user });
+  const unitPath = systemdUnitPath(unitName, owner, unitRoot);
   const unit = deploymentServiceUnit({
     ...service,
     helperPath: path.resolve(process.argv[1]),
@@ -90,7 +94,8 @@ function handleDeploymentServiceOperation(payload = {}) {
     activation: "restart",
     unit,
     unitName,
-    unitPath
+    unitPath,
+    unitRoot
   });
 }
 
@@ -162,7 +167,8 @@ function handleManagedServiceOperation(payload = {}) {
   const pidFile = processModel === "forking"
     ? resolveAllowedManagedServicePath(payload.pidFile, owner)
     : "";
-  const unitPath = managedSystemdUnitPath(unitName, owner);
+  const unitRoot = helperSystemdUnitRoot();
+  const unitPath = managedSystemdUnitPath(unitName, owner, unitRoot);
   const unit = managedServiceUnit({
     owner,
     pidFile,
@@ -184,7 +190,8 @@ function handleManagedServiceOperation(payload = {}) {
     enable: false,
     unit,
     unitName,
-    unitPath
+    unitPath,
+    unitRoot
   });
 }
 
@@ -366,22 +373,31 @@ function processBelongsToSystemdUnit(pid = 0, unitName = "") {
     .some((line) => line.trim().endsWith(suffix));
 }
 
+// A unit goes to the helper's unit folder (hostSettings.js). systemd reads its own folder itself; a unit in any
+// other folder it knows only through a link in its runtime folder, made with the unit's boot target
+// (`enable --runtime`) or without (`link --runtime`), which lasts until the host restarts (relinkSystemdUnits).
 function installSystemdUnit({
   activation = "start",
   enable = true,
+  rootUid = 0,
+  run = runRootCommand,
+  runAllowFailure = runRootCommandAllowFailure,
   unit = "",
   unitName = "",
-  unitPath = ""
+  unitPath = "",
+  unitRoot = helperSystemdUnitRoot()
 } = {}) {
   if (activation !== "start" && activation !== "restart") {
     throw new Error("Vibe64 exec helper rejected an unsupported systemd activation.");
   }
+  const linked = unitRoot !== SYSTEMD_UNIT_ROOT;
+  if (linked) closeSync(openUnitRoot(unitRoot, rootUid));
   const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
   writeFileSync(temporaryUnitPath, unit, {
     mode: 0o644
   });
   try {
-    runRootCommand("mv", [
+    run("mv", [
       temporaryUnitPath,
       unitPath
     ]);
@@ -393,26 +409,33 @@ function installSystemdUnit({
     }
     throw error;
   }
-  runRootCommand("systemctl", [
+  if (linked) {
+    run("systemctl", [
+      enable ? "enable" : "link",
+      "--runtime",
+      unitPath
+    ]);
+  }
+  run("systemctl", [
     "daemon-reload"
   ]);
-  if (enable) {
-    runRootCommand("systemctl", [
+  if (enable && !linked) {
+    run("systemctl", [
       "enable",
       unitName
     ]);
   }
-  runRootCommandAllowFailure("systemctl", [
+  runAllowFailure("systemctl", [
     "reset-failed",
     unitName
   ]);
   try {
-    runRootCommand("systemctl", [
+    run("systemctl", [
       activation,
       unitName
     ]);
   } catch (error) {
-    runRootCommandAllowFailure("systemctl", [
+    runAllowFailure("systemctl", [
       "stop",
       unitName
     ]);
@@ -420,14 +443,26 @@ function installSystemdUnit({
   }
 }
 
-function removeDeploymentServiceUnit(unitName = "", owner = {}) {
+// A unit folder other than systemd's own must be root's alone: systemd runs what a unit there says as root.
+function openUnitRoot(unitRoot = "", rootUid = 0) {
+  try {
+    return openRootOwnedDirectory(unitRoot, rootUid);
+  } catch (error) {
+    throw new Error(`Vibe64 exec helper refused unit folder ${unitRoot}: it is not a folder only root can change` +
+      `${error.code ? ` (${error.code})` : ""}.`);
+  }
+}
+
+function removeDeploymentServiceUnit(unitName = "", owner = {}, unitRoot = helperSystemdUnitRoot()) {
   assertValidDeploymentUnitName(unitName, owner);
   runRootCommandAllowFailure("systemctl", [
     "stop",
     unitName
   ]);
+  // A unit outside systemd's own folder loses its runtime link with its boot target.
   runRootCommandAllowFailure("systemctl", [
     "disable",
+    ...(unitRoot === SYSTEMD_UNIT_ROOT ? [] : ["--runtime"]),
     unitName
   ]);
   runRootCommandAllowFailure("systemctl", [
@@ -435,7 +470,7 @@ function removeDeploymentServiceUnit(unitName = "", owner = {}) {
     unitName
   ]);
   try {
-    unlinkSync(systemdUnitPath(unitName, owner));
+    unlinkSync(systemdUnitPath(unitName, owner, unitRoot));
   } catch (error) {
     if (error?.code !== "ENOENT") {
       throw error;
@@ -444,6 +479,52 @@ function removeDeploymentServiceUnit(unitName = "", owner = {}) {
   runRootCommand("systemctl", [
     "daemon-reload"
   ]);
+}
+
+// systemd's runtime folder starts empty at every boot, so a host whose units live in another folder runs the
+// root-only `vibe64-exec-helper relink-units` before its services start. Each release and managed service unit
+// root wrote there is linked again as it was installed: a release unit with its boot target, and started, as a
+// boot starts one from systemd's own folder; a managed one without, for the release unit that Requires= it to
+// start. Other files stay as they are. A unit root did not write, or one others may change, stays unlinked and
+// is reported once every other unit is linked and started.
+function relinkSystemdUnits({
+  rootUid = 0,
+  runAllowFailure = runRootCommandAllowFailure,
+  unitRoot = helperSystemdUnitRoot()
+} = {}) {
+  if (unitRoot === SYSTEMD_UNIT_ROOT) return;
+  const problems = [];
+  const systemctl = (args, name) => {
+    const result = runAllowFailure("systemctl", args);
+    if (result.status === 0) return true;
+    problems.push(`${name}: ${String(result.stderr || result.stdout || `systemctl ${args[0]} failed.`).trim()}`);
+    return false;
+  };
+  const releaseUnits = [];
+  const directory = openUnitRoot(unitRoot, rootUid);
+  try {
+    for (const name of readdirSync(openedPath(directory)).sort()) {
+      const kind = /^vibe64-(release|managed)-[A-Za-z0-9_.@:-]+\.service$/u.exec(name)?.[1];
+      if (!kind) continue;
+      try {
+        readOwnedFile(directory, name, { maxBytes: 64 * 1024, othersMayWrite: false, uid: rootUid });
+      } catch (error) {
+        problems.push(`${name}: not a unit file root wrote (${error.code || error.message})`);
+        continue;
+      }
+      const release = kind === "release";
+      if (systemctl([release ? "enable" : "link", "--runtime", path.join(unitRoot, name)], name) && release) {
+        releaseUnits.push(name);
+      }
+    }
+  } finally {
+    closeSync(directory);
+  }
+  systemctl(["daemon-reload"], "daemon-reload");
+  for (const name of releaseUnits) systemctl(["start", "--no-block", name], name);
+  if (problems.length > 0) {
+    throw new Error(`Vibe64 exec helper could not relink every unit in ${unitRoot}:\n${problems.join("\n")}`);
+  }
 }
 
 // A release service loads its environment as its own user at every start, so
@@ -465,7 +546,9 @@ export {
   ensureManagedServiceProcessOwnership,
   handleDeploymentServiceOperation,
   handleManagedServiceOperation,
+  installSystemdUnit,
   printDeploymentServiceUnit,
+  relinkSystemdUnits,
   runReleaseService,
   stopManagedServiceUnit
 };

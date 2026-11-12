@@ -18,10 +18,9 @@ import {
   runRootCommand,
   runRootCommandAllowFailure
 } from "./hostAccounts.js";
-import { helperAccountDatabase } from "./hostSettings.js";
+import { helperAccountDatabase, helperSudoersRoot } from "./hostSettings.js";
 
 const STAGING_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "staging-ssh");
-const STAGING_SUDOERS_ROOT = "/etc/sudoers.d";
 const STAGING_LOGIN_SHELL = "/bin/sh";
 const ROOT_UID = 0;
 // Where root kept an account's key and sudo rule before production access was renamed staging access. Neither
@@ -34,8 +33,8 @@ function stagingKeysPath(username = "", keysRoot = STAGING_KEYS_ROOT) {
   return path.join(keysRoot, username);
 }
 
-// sudo reads no file in sudoers.d whose name has a dot, and an application's name has none.
-function stagingSudoersPath(username = "", sudoersRoot = STAGING_SUDOERS_ROOT) {
+// sudo reads no file in an included folder whose name has a dot, and an application's name has none.
+function stagingSudoersPath(username = "", sudoersRoot = helperSudoersRoot()) {
   return path.join(sudoersRoot, `vibe64-staging-${username}`);
 }
 
@@ -46,7 +45,7 @@ function stagingSudoersPath(username = "", sudoersRoot = STAGING_SUDOERS_ROOT) {
  */
 function preRenameStagingFiles(username = "", {
   preRenameKeysRoot = PRE_RENAME_KEYS_ROOT,
-  sudoersRoot = STAGING_SUDOERS_ROOT
+  sudoersRoot = helperSudoersRoot()
 } = {}) {
   return [
     path.join(preRenameKeysRoot, username),
@@ -137,7 +136,7 @@ function installStagingAccess(user, publicKey, helperPath, {
   preRenameKeysRoot = PRE_RENAME_KEYS_ROOT,
   rootUid = ROOT_UID,
   runRoot = runRootCommand,
-  sudoersRoot = STAGING_SUDOERS_ROOT
+  sudoersRoot = helperSudoersRoot()
 } = {}) {
   assertNoPreRenameStagingFiles(user.username, { preRenameKeysRoot, sudoersRoot });
   ensureStagingKeysRoot(keysRoot, rootUid);
@@ -181,7 +180,7 @@ function removeStagingAccess(user, username, {
   preRenameKeysRoot = PRE_RENAME_KEYS_ROOT,
   runRoot = runRootCommand,
   runRootAllowFailure = runRootCommandAllowFailure,
-  sudoersRoot = STAGING_SUDOERS_ROOT
+  sudoersRoot = helperSudoersRoot()
 } = {}) {
   assertNoPreRenameStagingFiles(username, { preRenameKeysRoot, sudoersRoot });
   const removedKey = removeIfPresent(stagingKeysPath(username, keysRoot));

@@ -46,8 +46,8 @@ const BLOCKED_ENV_NAMES = new Set([
 const SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 // The host's settings for this helper, in EnvironmentFile syntax and in a file only root can change: PATH, the
 // folders commands and services start with when their caller names none, VIBE64_APPLICATION_AREA_ROOT, the
-// folder application accounts have their areas below, and the account database and numbers the helper's accounts
-// get (hostSettings.js). A missing file names none of them.
+// folder application accounts have their areas below, the account database and numbers the helper's accounts get,
+// and where its service units and sudo rules go (hostSettings.js). A missing file names none of them.
 const HELPER_SETTINGS_FILE = path.join(HOST_SETTINGS_ROOT, "exec-helper.env");
 const HELPER_SETTINGS_LIMIT_BYTES = 16384;
 

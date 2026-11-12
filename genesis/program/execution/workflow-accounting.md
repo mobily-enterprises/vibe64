@@ -215,9 +215,9 @@ environment. Loader and shell startup injection variables are excluded.
 Allowed working directories and host service paths are checked after resolving
 symlinks. A link inside an allowed directory cannot grant access outside that root.
 
-The same settings say which account database the helper's accounts go to and
-how they are numbered (`hostSettings.js`); a host that names neither keeps the
-system's own account files and ranges, as before:
+The same settings say where the helper keeps what it makes outside its own
+folders and how its accounts are numbered (`hostSettings.js`); a host that
+names none keeps the system's own account files, ranges and folders, as before:
 
 - `VIBE64_ACCOUNT_DATABASE`, `files` (the default) or `extrausers`: the account
   database application accounts and group memberships are added to. With
@@ -236,9 +236,29 @@ system's own account files and ranges, as before:
   when its system's own accounts can change without seeing the helper's (an
   image-based system updated by replacing its image), so the two never share a
   number.
+- `VIBE64_SYSTEMD_UNIT_ROOT`: an absolute folder for release and managed
+  service units in place of systemd's own, which must be a folder only root can
+  change. Like systemd's own folder and the settings file, every account may
+  read it: a staging login finds its release unit as its application
+  account. systemd does not read it, so the helper links each unit it installs
+  into systemd's runtime folder, a release unit with its boot target
+  (`systemctl enable --runtime`), a managed one without (`systemctl link
+  --runtime`), and removing a release unit takes both away (`systemctl disable
+  --runtime`). Those links last until the host restarts: at every start, before
+  its services, the host runs the root-only `vibe64-exec-helper relink-units`,
+  which links every release and managed service unit root wrote there again as
+  it was installed and starts the release units, as a boot starts them from
+  systemd's own folder. A unit root did not write, or one others may change, it
+  leaves unlinked and reports. Every reader of the installed units (a release's
+  port claim, retiring an application, a staging login) reads the same folder.
+- `VIBE64_SUDOERS_ROOT`: an absolute folder for the staging sudo rules in
+  place of sudo's own, which the host's sudo configuration includes.
 
-An unknown database or a band that is not `FIRST-LAST` (first no greater than
-last, both below 65534) refuses the operation that needs it.
+An unknown database, a band that is not `FIRST-LAST` (first no greater than
+last, both below 65534) or a folder that is not an absolute path other than `/`
+refuses the operation that needs it. A host's own server reads the configured
+unit folder through `@local/vibe64-execution/server/hostSettings`
+(`helperSystemdUnitRoot`).
 
 The helper's `managed-service` operation serves the daemon's own long-running
 services below the workspace service root. `install-start` writes the unit and
@@ -347,7 +367,7 @@ While a host lets a project's AI sessions use its staging, the helper's
 gives the project's application account a way in for them: `grant` writes the
 project's one `ssh-ed25519` public key as a root-owned key file for the
 account in the helper's settings folder (loopback only, no forwarding), a
-`visudo`-checked sudoers rule of its own (`stagingSudoersPath`) that lets
+`visudo`-checked sudoers rule of its own (`stagingSudoersPath`, in the sudo rule folder its settings name) that lets
 the account run exactly `vibe64-exec-helper staging-service *`, and the
 login shell `/bin/sh`, which the account check accepts only while that key
 file exists. sshd starts even the forced command through that shell, and

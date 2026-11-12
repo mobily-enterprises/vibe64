@@ -1,9 +1,16 @@
-// Where the helper keeps the accounts it adds: the system's own account files, unless the host's helper settings
-// (exec-helper.env) name the extra users database, for a host whose system files cannot be written.
+// Where the helper keeps what it makes outside its own folders: the accounts it adds and how they are numbered,
+// the service units it installs and the staging sudo rules it writes. Each goes to the system's own place unless
+// the host's helper settings (exec-helper.env) name another, for a host whose system files are not where it keeps
+// them or cannot be written.
+
+import path from "node:path";
 
 import { helperSettings } from "./commandEnvironment.js";
 
 const ACCOUNT_DATABASES = Object.freeze(["files", "extrausers"]);
+// systemd's folder for the system's own units, and sudo's for added rules.
+const SYSTEMD_UNIT_ROOT = "/etc/systemd/system";
+const SUDOERS_ROOT = "/etc/sudoers.d";
 
 /**
  * The account database the helper adds accounts and group memberships to: the system's own files, or the extra users
@@ -42,7 +49,39 @@ function helperAccountNumberOptions(settings = helperSettings()) {
     "-K", `SYS_GID_MIN=${first}`, "-K", `SYS_GID_MAX=${last}`];
 }
 
+function settingsFolder(settings, name, fallback) {
+  const configured = String(settings[name] || "").trim();
+  if (!configured) return fallback;
+  if (!path.isAbsolute(configured) || path.resolve(configured) !== configured || configured === "/") {
+    throw new Error(`This host's Vibe64 exec helper settings name a folder (${name}) that is not an absolute ` +
+      "path other than /.");
+  }
+  return configured;
+}
+
+/**
+ * The folder the helper writes release and managed service units to: systemd's own, unless the host's helper
+ * settings name another (`VIBE64_SYSTEMD_UNIT_ROOT`). systemd does not look there, so the helper links each unit
+ * it installs into systemd's runtime folder, and `relink-units` links them all again after a restart.
+ * @param {Record<string, string>} [settings] the host's helper settings
+ */
+function helperSystemdUnitRoot(settings = helperSettings()) {
+  return settingsFolder(settings, "VIBE64_SYSTEMD_UNIT_ROOT", SYSTEMD_UNIT_ROOT);
+}
+
+/**
+ * The folder the helper writes staging sudo rules to: sudo's own, unless the host's helper settings name another
+ * (`VIBE64_SUDOERS_ROOT`), which the host's sudo configuration then includes.
+ * @param {Record<string, string>} [settings] the host's helper settings
+ */
+function helperSudoersRoot(settings = helperSettings()) {
+  return settingsFolder(settings, "VIBE64_SUDOERS_ROOT", SUDOERS_ROOT);
+}
+
 export {
   helperAccountDatabase,
-  helperAccountNumberOptions
+  helperAccountNumberOptions,
+  helperSudoersRoot,
+  helperSystemdUnitRoot,
+  SYSTEMD_UNIT_ROOT
 };

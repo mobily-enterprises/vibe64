@@ -863,6 +863,7 @@ test("only an application's registered account installs a release service", asyn
     source.indexOf("function inspectDeploymentServiceUnit("));
   assert.match(operation, /const user = registeredApplicationUser\(owner, payload\.applicationAccount\);/u);
   assert.match(operation, /applicationReleaseServiceFiles\(payload, user\.application, \{ daemonUid: owner\.uid, gid: user\.gid \}\)/u);
-  assert.match(operation, /assertReleaseServiceClaim\(\{ loopbackPort, owner, unitName, user \}\);/u);
+  // The claim reads the same unit folder the unit then goes to.
+  assert.match(operation, /assertReleaseServiceClaim\(\{ loopbackPort, owner, unitName, unitRoot, user \}\);/u);
   assert.doesNotMatch(source, /upgrade-release-units|resolveAllowedDeploymentServicePath/u);
 });

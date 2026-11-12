@@ -13,8 +13,7 @@ import {
   workspaceTempRoot
 } from "./hostAccounts.js";
 import { canonicalPath, relativePathParts } from "./hostFiles.js";
-
-const SYSTEMD_UNIT_ROOT = "/etc/systemd/system";
+import { helperSystemdUnitRoot } from "./hostSettings.js";
 
 // A person's or the daemon's execution runs as a member of the shared group;
 // an application's only as itself, inside its sandbox, where its area and its
@@ -205,12 +204,12 @@ function assertValidManagedServiceProcessModel(value = "") {
   return processModel;
 }
 
-function systemdUnitPath(unitName = "", owner = {}) {
-  return path.join(SYSTEMD_UNIT_ROOT, assertValidDeploymentUnitName(unitName, owner));
+function systemdUnitPath(unitName = "", owner = {}, unitRoot = helperSystemdUnitRoot()) {
+  return path.join(unitRoot, assertValidDeploymentUnitName(unitName, owner));
 }
 
-function managedSystemdUnitPath(unitName = "", owner = {}) {
-  return path.join(SYSTEMD_UNIT_ROOT, assertValidManagedServiceUnitName(unitName, owner));
+function managedSystemdUnitPath(unitName = "", owner = {}, unitRoot = helperSystemdUnitRoot()) {
+  return path.join(unitRoot, assertValidManagedServiceUnitName(unitName, owner));
 }
 
 function serviceAccountUnitLines(owner = {}) {
@@ -341,6 +340,5 @@ export {
   managedSystemdUnitPath,
   releaseServicePort,
   resolveAllowedManagedServicePath,
-  SYSTEMD_UNIT_ROOT,
   systemdUnitPath
 };

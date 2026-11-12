@@ -54,8 +54,8 @@ import {
   writeRegistration
 } from "./personRegistry.js";
 import { preRenameStagingProblem, removeStagingAccess, STAGING_LOGIN_SHELL, stagingAccessGranted } from "./stagingAccess.js";
-import { helperAccountDatabase, helperAccountNumberOptions } from "./hostSettings.js";
-import { APPLICATION_SANDBOX_ALLOWANCES, SYSTEMD_UNIT_ROOT } from "./systemdUnits.js";
+import { helperAccountDatabase, helperAccountNumberOptions, helperSystemdUnitRoot } from "./hostSettings.js";
+import { APPLICATION_SANDBOX_ALLOWANCES } from "./systemdUnits.js";
 
 const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
 const APPLICATION_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "applications");
@@ -439,7 +439,7 @@ function retireApplicationAccount(owner = {}, project = "", {
   registryUid = 0,
   resolveUser = tryResolveOsUser,
   running = (uid) => spawnSync("pgrep", ["-U", String(uid)]).status !== 1,
-  unitRoot = SYSTEMD_UNIT_ROOT,
+  unitRoot = helperSystemdUnitRoot(),
   unitUid = 0
 } = {}) {
   const identity = applicationIdentity(owner, project, { areaRoot });
@@ -618,7 +618,7 @@ function applicationReleaseServiceFiles(payload = {}, identity = {}, { daemonUid
 // mask, another owner's, one others may change or an oversized one) is
 // refused by name; another workspace's is that workspace's to sort out, claims
 // nothing and never stops this one.
-function installedReleaseUnits({ unitRoot = SYSTEMD_UNIT_ROOT, unitUid = 0, workspace = "" } = {}) {
+function installedReleaseUnits({ unitRoot = helperSystemdUnitRoot(), unitUid = 0, workspace = "" } = {}) {
   const own = `vibe64-release-${workspace}-`;
   const directory = openSync(unitRoot, DIRECTORY_NO_FOLLOW);
   try {
@@ -645,7 +645,7 @@ function installedReleaseUnits({ unitRoot = SYSTEMD_UNIT_ROOT, unitUid = 0, work
 // A release unit `user` may install: one named for its application's project
 // in the daemon's workspace that is new or already its own, on a port no other
 // release service unit claims. Root wrote every unit file it reads here.
-function assertReleaseServiceClaim({ loopbackPort = 0, owner = {}, unitName = "", unitRoot = SYSTEMD_UNIT_ROOT, unitUid = 0, user = {} } = {}) {
+function assertReleaseServiceClaim({ loopbackPort = 0, owner = {}, unitName = "", unitRoot = helperSystemdUnitRoot(), unitUid = 0, user = {} } = {}) {
   const workspace = workspaceFromDaemonUsername(safeUsername(owner.username));
   const project = String(user.application?.project || "").replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "");
   if (!project || !new RegExp(`^vibe64-release-${workspace}-${project}-[a-f0-9]{12}\\.service$`, "u").test(unitName)) {
