@@ -5879,7 +5879,7 @@ test("Develop hides teaching tools and Learn hides delegation but keeps watches;
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
     extensions: { assistant: { description: `Test ${id}.` }, vibe64: WORKSPACE_OPERATION } });
   const training = name => action(`vibe64.training.${name}`);
-  const mainGoal = ["pause", "block"].map(name => action(`vibe64.terminals.main-goal.${name}`, "command"));
+  const mainGoal = ["pause", "resume", "block"].map(name => action(`vibe64.terminals.main-goal.${name}`, "command"));
   const f = await fixture(t, [reply("Develop"), reply("Learn")], { extraActions: [training("lesson.read"), training("learning-mode.set"), ...mainGoal] });
   const learning = learnModeFixture(t);
   const tools = start => start.body.tools.map(tool => tool.function.name);
@@ -5900,7 +5900,7 @@ test("Develop hides teaching tools and Learn hides delegation but keeps watches;
   for (const shown of ["vibe64_colleague_watch_create", "vibe64_colleague_watch_source_create"]) assert.ok(learn.includes(shown), shown);
   for (const names of [develop, learn]) {
     assert.ok(names.includes("vibe64_training_learning_mode_set"), "the catalogue lists ordinary actions");
-    for (const hidden of ["vibe64_terminals_main_goal_pause", "vibe64_terminals_main_goal_block"]) assert.equal(names.includes(hidden), false, hidden);
+    for (const hidden of ["vibe64_terminals_main_goal_pause", "vibe64_terminals_main_goal_resume", "vibe64_terminals_main_goal_block"]) assert.equal(names.includes(hidden), false, hidden);
   }
 });
 

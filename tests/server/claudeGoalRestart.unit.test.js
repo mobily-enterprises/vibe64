@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -13,6 +13,7 @@ import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { defineVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { LIMIT_RESET_MARGIN_MS } from "../../packages/vibe64-terminals/src/server/serviceGoalLimitReset.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
@@ -22,6 +23,18 @@ import { createSessionsService as createSessionService, withMainChatOperations }
 configureStudioProjectContext({ env: process.env });
 
 const PROJECT_SLUG = "claude-goal-restart";
+
+/**
+ * Claude's own message when the AI account reaches its usage limit, which
+ * resets this long from when Claude meets it (negative: already reset).
+ * @param {number} resetsInMs
+ */
+const usageLimit = resetsInMs => ({ error: "rate_limit", apiError: "usage_limit_reached", resetsInMs,
+  text: "You've hit your session limit" });
+// Claude's own message when the AI account is out of credit.
+const OUT_OF_CREDIT = Object.freeze({ error: "billing_error", text: "Credit balance is too low" });
+// The goal continues about this long after the test's goal command meets the limit.
+const CONTINUES_IN_MS = 3_000;
 
 /**
  * One Main chat session served by the real terminals service, manager, Claude
@@ -69,9 +82,12 @@ async function goalHarness(t) {
   const tracePath = path.join(root, "claude-trace.jsonl");
   // While this file exists, the next Claude that starts exits at once, as one can on a loaded server.
   const failStartPath = path.join(root, "fail-next-start");
+  // While this file exists, the next goal command meets the AI account's limit it names: Claude's own
+  // API-error message ends the turn at the usage limit (with its reset time) or out of credit.
+  const limitPath = path.join(root, "next-goal-limit.json");
   await writeFile(command, `#!${process.execPath}
 const { createInterface } = require('node:readline');
-const { appendFileSync, existsSync, mkdirSync, rmSync } = require('node:fs');
+const { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
 const emit = value => process.stdout.write(JSON.stringify(value) + '\\n');
@@ -123,6 +139,18 @@ createInterface({ input: process.stdin }).on('line', line => {
       emit(answer);
       emit({ type: 'result', subtype: 'success', result: 'Progress report' });
     };
+    if (existsSync(${JSON.stringify(limitPath)})) {
+      const { text: limitText, resetsInMs, ...apiError } = JSON.parse(readFileSync(${JSON.stringify(limitPath)}, 'utf8'));
+      rmSync(${JSON.stringify(limitPath)});
+      const answer = { type: 'assistant', uuid: frame.uuid + '-limit', parentUuid: frame.uuid, timestamp: new Date().toISOString(),
+        isApiErrorMessage: true, ...apiError, ...(Number.isFinite(resetsInMs) ? { apiErrorParams: { rate_limit_info: {
+          status: 'rejected', rateLimitType: 'five_hour', resetsAt: Math.floor((Date.now() + resetsInMs) / 1000) } } } : {}),
+        message: { id: frame.uuid + '-limit', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: limitText }] } };
+      record(answer);
+      emit(answer);
+      emit({ type: 'result', subtype: 'success', is_error: true, result: limitText });
+      return;
+    }
     // Later in a long turn Claude compacts its context, as its history saves it:
     // the boundary, a summary timestamped before it, and the goal re-attached
     // with a sentinel that no /goal command follows.
@@ -217,8 +245,30 @@ createInterface({ input: process.stdin }).on('line', line => {
       service = createService();
       return service;
     },
-    /** A goal Main chat started, with Claude still working on it, or between turns once its turn finishes. */
-    async startRunningGoal(objective, { finishes = false } = {}) {
+    /** While no Claude runs: Claude meets the AI account's limit again, as its history saves it. */
+    async appendLimit({ text, resetsInMs, ...apiError }) {
+      // Main chat's history: the one whose goal turn met the limit.
+      const projects = path.join(root, "config", "projects");
+      const histories = [];
+      for (const directory of await readdir(projects)) {
+        for (const name of await readdir(path.join(projects, directory))) {
+          const file = path.join(projects, directory, name);
+          if (name.endsWith(".jsonl") && (await readFile(file, "utf8")).includes('"isApiErrorMessage":true')) histories.push(file);
+        }
+      }
+      assert.equal(histories.length, 1, JSON.stringify(histories));
+      await writeFile(histories[0], JSON.stringify({ type: "assistant", uuid: `limit-${Date.now()}`,
+        timestamp: new Date().toISOString(), isApiErrorMessage: true, ...apiError,
+        ...(Number.isFinite(resetsInMs) ? { apiErrorParams: { rate_limit_info: { status: "rejected", rateLimitType: "five_hour",
+          resetsAt: Math.floor((Date.now() + resetsInMs) / 1000) } } } : {}),
+        message: { role: "assistant", model: "<synthetic>", content: [{ type: "text", text }] } }) + "\n", { flag: "a" });
+    },
+    /**
+     * A goal Main chat started, with Claude still working on it, or between turns once its turn finishes, or
+     * with its turn ended at once by the AI account's limit (`limit`: the API error Claude saves).
+     */
+    async startRunningGoal(objective, { finishes = false, limit = null } = {}) {
+      if (limit) await writeFile(limitPath, JSON.stringify(limit));
       const sent = await service.sendAgentMessage("test", { message: "Work", messageId: "before-goal" }, options);
       assert.equal(sent.delivered, true, JSON.stringify(sent));
       await waitFor(async () => !await turnActive(), "the first message completes");
@@ -237,6 +287,12 @@ createInterface({ input: process.stdin }).on('line', line => {
       }, "the goal starts once the first turn's follow-up work ends");
       assert.equal(started.status, "accepted", JSON.stringify(started));
       await waitFor(async () => (await intent())?.pending === null, "the goal's attachment is reconciled");
+      if (limit) {
+        await waitFor(async () => !await turnActive(), "the goal's turn ends at the account's limit");
+        const limited = await service.readCanonicalAgentGoal("test", options);
+        assert.equal(limited.goal.status, "usageLimited", JSON.stringify(limited));
+        return limited;
+      }
       const read = await service.readCanonicalAgentGoal("test", options);
       assert.equal(read.goal.status, "active");
       if (finishes) await waitFor(async () => !await turnActive(), "the goal's turn ends with its report");
@@ -373,6 +429,87 @@ test("after Stop a restart leaves a Claude goal alone, and the person's next mes
     assert.equal(recovery.results.at(-1).resumed, true, JSON.stringify({ recovery, intent: await h.intent(), warnings: h.warnings }));
     assert.equal(await h.goalCommands(), commandsBefore + 1, "the goal continues with exactly one native command");
     await h.service.recoverActiveGoals({ retryDelaysMs: [] });
+    assert.equal(await h.goalCommands(), commandsBefore + 1, "it is never sent twice");
+  });
+});
+
+test("a Claude goal whose turn ended at its AI account's usage limit continues by itself, once, once the limit has reset", { timeout: 60_000 }, async t => {
+  const h = await goalHarness(t);
+  await h.inProject(async () => {
+    const limited = await h.startRunningGoal("Until the usage limit: every check succeeds",
+      { limit: usageLimit(CONTINUES_IN_MS - LIMIT_RESET_MARGIN_MS) });
+    const commandsBefore = await h.goalCommands();
+    // The goal says when it continues: shortly after the limit resets.
+    const waiting = await h.waitFor(async () => {
+      const read = await h.service.readCanonicalAgentGoal("test", h.options);
+      return read.goal?.resumesAt ? read : null;
+    }, "the waiting goal says when it continues");
+    assert.equal(waiting.goal.status, "usageLimited");
+    assert.equal(waiting.goal.resumesAt, limited.goal.resetsAt + LIMIT_RESET_MARGIN_MS / 1000);
+    assert.equal(await h.goalCommands(), commandsBefore, "nothing is sent into the limit");
+    await h.waitFor(async () => await h.goalCommands() === commandsBefore + 1, "the goal continues once the limit has reset");
+    await h.waitFor(() => h.turnActive(), "Claude works on the goal again");
+    const read = await h.service.readCanonicalAgentGoal("test", h.options);
+    assert.equal(read.goal.status, "active");
+    assert.equal(read.goal.resumesAt, undefined);
+    assert.equal(read.error, undefined);
+    assert.equal((await h.intent()).active, true, "a restart would continue it too");
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(await h.goalCommands(), commandsBefore + 1, "it is never sent twice");
+  });
+});
+
+test("a goal waiting at its usage limit that the person pauses stays paused when the limit resets", { timeout: 60_000 }, async t => {
+  const h = await goalHarness(t);
+  await h.inProject(async () => {
+    await h.startRunningGoal("Until the usage limit: every check succeeds", { limit: usageLimit(CONTINUES_IN_MS - LIMIT_RESET_MARGIN_MS) });
+    const waiting = await h.waitFor(async () => {
+      const read = await h.service.readCanonicalAgentGoal("test", h.options);
+      return read.goal?.resumesAt ? read : null;
+    }, "the waiting goal says when it continues");
+    const paused = await h.service.updateCanonicalAgentGoal("test", { ...h.options, action: "pause",
+      expectedSegmentId: waiting.target.segmentId, expectedGoalId: waiting.goal.id });
+    assert.equal(paused.status, "paused", JSON.stringify(paused));
+    const commandsBefore = await h.goalCommands();
+    await new Promise(resolve => setTimeout(resolve, Math.max(0, waiting.goal.resumesAt * 1000 - Date.now()) + 1_500));
+    assert.equal(await h.goalCommands(), commandsBefore, "a paused goal is not continued");
+    const read = await h.service.readCanonicalAgentGoal("test", h.options);
+    assert.equal(read.goal.status, "paused");
+    assert.equal(read.goal.resumesAt, undefined);
+  });
+});
+
+test("a goal waiting at its usage limit across restarts continues once the limit has reset, and out of credit waits for the person", { timeout: 60_000 }, async t => {
+  const h = await goalHarness(t);
+  await h.inProject(async () => {
+    const limited = await h.startRunningGoal("Until the usage limit: every check succeeds", { limit: usageLimit(60 * 60_000) });
+    const commandsBefore = await h.goalCommands();
+    // The limit resets in an hour: a restart sends nothing now, and says when the goal continues.
+    await h.restart();
+    const waiting = await h.service.recoverActiveGoals({ retryDelaysMs: [] });
+    const resumesAt = limited.goal.resetsAt + LIMIT_RESET_MARGIN_MS / 1000;
+    assert.equal(waiting.results.at(-1).waiting, true, JSON.stringify(waiting));
+    assert.equal(waiting.results.at(-1).resumesAt, resumesAt, JSON.stringify(waiting));
+    assert.equal((await h.service.readCanonicalAgentGoal("test", h.options)).goal.resumesAt, resumesAt);
+    assert.equal(await h.goalCommands(), commandsBefore, "a restart sends nothing into the limit");
+    // Out of credit, the goal waits for the person, after a restart too.
+    await h.restart();
+    await h.appendLimit(OUT_OF_CREDIT);
+    const credit = await h.service.recoverActiveGoals({ retryDelaysMs: [] });
+    assert.equal(credit.results.at(-1).waiting, true, JSON.stringify(credit));
+    assert.equal(credit.results.at(-1).resumesAt, undefined, JSON.stringify(credit));
+    const creditRead = await h.service.readCanonicalAgentGoal("test", h.options);
+    assert.equal(creditRead.goal.outOfCredit, true);
+    assert.equal(creditRead.goal.resumesAt, undefined);
+    // The limit reset while the server was stopped: the next server continues the goal at once, once.
+    await h.restart();
+    await h.appendLimit(usageLimit(-2 * LIMIT_RESET_MARGIN_MS));
+    await h.service.recoverActiveGoals({ retryDelaysMs: [] });
+    await h.waitFor(async () => await h.goalCommands() === commandsBefore + 1,
+      async () => `the goal continues: ${JSON.stringify({ intent: await h.intent(), warnings: h.warnings })}`);
+    await h.waitFor(() => h.turnActive(), "Claude works on the goal again");
+    assert.equal((await h.service.readCanonicalAgentGoal("test", h.options)).goal.status, "active");
+    await new Promise(resolve => setTimeout(resolve, 500));
     assert.equal(await h.goalCommands(), commandsBefore + 1, "it is never sent twice");
   });
 });

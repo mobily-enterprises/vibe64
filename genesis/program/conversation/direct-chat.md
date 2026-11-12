@@ -691,6 +691,29 @@ access, then derives the native goal identity on the server. It invokes the same
 native Pause and inactive-intent writer as the explicit control. The common
 runtime retains the application receipt after native cleanup. Colleague,
 temporary chats, Learning and child agents do not acquire this capability.
+Its counterpart `vibe64.terminals.main-goal.resume`, which Main Claude may use only
+when the person explicitly asks to resume or continue the goal, takes the same
+admitted-request checks and is refused (`vibe64_main_goal_nothing_to_resume`)
+unless the turn's thread holds a paused, blocked or `usageLimited` goal. Claude
+calls it mid-turn, while the canonical Resume steers `/goal` into a turn and
+waits for its attachment, so the action does not resume at once: it saves a new
+active continuation intent marked `resumeRequested`, with the person as actor and
+the observed native goal, and answers `resuming`. After that Main turn ends,
+`resumeGoalAfterTurn`
+([serviceGoalChatContinuation.js](../../../packages/vibe64-terminals/src/server/serviceGoalChatContinuation.js))
+claims the mark under the goal settings lock and runs the Resume goal control's
+own canonical Resume as that actor, once, on the current AI connection. Like a
+restart's continuation (`continuesIntentId` in `writeAgentGoal`), it waits up to
+a minute for the session write lock that the turn's other follow-up work (routing
+review, workspace setup) holds, and is withdrawn inside the lock unless its intent
+is still the active one; a restart before then continues the active intent through
+startup recovery. Pause, Stop or Cancel meanwhile deactivate the intent, so nothing
+resumes; a failure is recorded on the goal. Because a retained Pause or Block stands Claude's
+own checker down with `/goal clear`, the Claude message policy
+([mainConversationMessages.js](../../../packages/vibe64-terminals/src/server/mainConversationMessages.js))
+appends to each Main message, while the conversation retains such a goal, a
+notice naming its status and objective and the Resume action, so Claude does not
+read the goal as gone.
 Advertising these tools only decorates the assistant context. A session without
 a durable assistant selection receives no Main tools, so close, interrupt and
 renewal cleanup never fail on the missing selection; delivery still requires one.
@@ -1463,6 +1486,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/serviceMainConversationHost.js`
 - `packages/vibe64-terminals/src/server/serviceGoals.js`
 - `packages/vibe64-terminals/src/server/serviceGoalRecovery.js`
+- `packages/vibe64-terminals/src/server/serviceGoalLimitReset.js`
+- `packages/vibe64-terminals/src/server/serviceGoalChatContinuation.js`
 - `tests/server/claudeGoalRestart.unit.test.js`
 - `packages/vibe64-terminals/src/server/codexSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/openCodeSessionRegistration.js`
@@ -2532,10 +2557,12 @@ The goal indicator flashes red while active, uses the app's warning color while 
 elapsed active time when space permits. Only a running goal's chip shows a
 clock; a paused, blocked, usage-limited or budget-limited goal's chip names that
 state in a few words (for example **Goal paused**), and its details keep the
-elapsed time. A goal waiting at its AI account's limit reads **Goal paused:
-usage limit** or **Goal paused: no credit**; its details give the reset time
-when the engine reports one, what to do, and that it does not continue by
-itself.
+elapsed time. A goal waiting at its AI account's usage limit that the server
+will continue at the reset carries `resumesAt` (epoch seconds) in its goal read
+and reads **Goal waits: usage limit**, its details naming that time and that
+Resume only tries sooner. Without `resumesAt` it reads **Goal paused: usage
+limit**, out of credit **Goal paused: no credit**; its details give the reset
+time when the engine reports one and what to do.
 The application omits goal controls for
 assistants without that capability.
 The app theme overrides the shared control's hard-coded paused color because
@@ -4821,16 +4848,35 @@ reads active, with Pause available. Stop, or Cancel of a sending message, ends
 the continuation intent, so a restart after it continues nothing. The person's
 next delivered message continues the still-active native goal and enrolls the
 same intent again (`continueGoalIntentAfterMessage` in
-[serviceGoals.js](../../../packages/vibe64-terminals/src/server/serviceGoals.js)),
+[serviceGoalChatContinuation.js](../../../packages/vibe64-terminals/src/server/serviceGoalChatContinuation.js)),
 only when that goal is the intent's exact thread, creation time and objective,
 so a restart during or after that turn continues it once. Automatic workflow
 turns and duplicate deliveries enroll nothing. When Claude's own history ends the goal's
 turn with its usage-limit message, JSKIT reads the goal as `usageLimited` with
 that message's reset time, and its credit-balance message as `usageLimited` with
-`outOfCredit`; a later answer makes it active again. Startup recovery skips a
-`usageLimited` or `budgetLimited` goal for Claude and Codex alike, as it skips a
-blocked one: the continuation intent stays recorded, no turn is sent into the
-limit, and Resume after the reset is the person's choice (no timer resumes it).
+`outOfCredit`; a later answer makes it active again. Startup recovery sends no
+turn into a `usageLimited` or `budgetLimited` goal for Claude and Codex alike, as
+it skips a blocked one; the continuation intent stays recorded. A `usageLimited`
+goal (not out of credit) whose reset time is known continues by itself: the
+reset Claude's message names, else for Codex the latest reset among the plan
+usage windows with nothing remaining.
+[serviceGoalLimitReset.js](../../../packages/vibe64-terminals/src/server/serviceGoalLimitReset.js)
+schedules it after each Main turn (`continueGoalWhenLimitResets`) and accepted
+Set or Resume, and startup recovery in
+[serviceGoals.js](../../../packages/vibe64-terminals/src/server/serviceGoals.js)
+schedules it from the same saved transcript or plan usage, so a server killed
+without its shutdown hooks reschedules it on its next start, and a reset already
+past continues at once. It keeps one timer per session, in memory only, for the
+waiting intent, firing one minute after the
+reset (`LIMIT_RESET_MARGIN_MS`, against clock skew). At that time the goal is
+continued once through the canonical Resume with the intent's actor reauthorized,
+only while the same intent is active, not pending, still `usageLimited` and not
+out of credit, the session is open and no turn is running; Pause, Stop, Cancel or
+the person's Resume meanwhile leave it alone. When a continuation meets the same
+reset again, or fails (its error recorded on the intent), the next waits the
+startup retry spacing (30 seconds, 2 minutes, 10 minutes), after which the goal
+waits for the person. Goal reads carry `resumesAt` while that timer is pending.
+Out of credit, or with no known reset, Resume stays the person's choice.
 Cancel, and for Claude Pause, work while it waits. Before JSKIT's fix a usage-limited goal
 read paused whenever no turn was running, while the next deploy's recovery
 resumed it into about twenty turns.

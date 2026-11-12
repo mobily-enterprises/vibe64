@@ -22,7 +22,11 @@ import { ACTION_COLLEAGUE_ASSIGNMENT_CREATE, ACTION_COLLEAGUE_CONTEXT_READ } fro
 const LEARN_ONLY_ACTION = /^vibe64\.training\.(?!learning-mode\.(?:read|set)$)|^vibe64\.colleague\.navigation\.open-learning$/u;
 const DEVELOP_ONLY_ACTIONS = new Set([ACTION_COLLEAGUE_ASSIGNMENT_CREATE]);
 // Main's own goal controls act on the Main conversation running them; Colleague never has them.
-const MAIN_ONLY_ACTIONS = new Set(["vibe64.terminals.main-goal.pause", "vibe64.terminals.main-goal.block"]);
+const MAIN_ONLY_ACTIONS = new Set([
+  "vibe64.terminals.main-goal.pause",
+  "vibe64.terminals.main-goal.resume",
+  "vibe64.terminals.main-goal.block"
+]);
 
 function readToolArguments(value) {
   try {

@@ -235,11 +235,13 @@ const UNATTENDED_STARTS = Object.freeze([
       afterRoutedTurn: async () => {},
       afterTemporaryTurn: async () => {},
       cancelGoalIfMainAiChanged: async () => {},
+      continueGoalWhenLimitResets: async () => {},
       conversationTurns: { settled: async () => {} },
       finishInterruptedCloses: async () => {},
       logger: LOGGER,
       providerUsage: { observe() {} },
       publishSessionChanged: { agentTerminal: async () => {} },
+      resumeGoalAfterTurn: async () => false,
       state: { lifecycle: { closing: false }, trackShutdownWork: (promise) => { work.push(promise); } },
       workspacePreparation: hosted.workspacePreparation
     });

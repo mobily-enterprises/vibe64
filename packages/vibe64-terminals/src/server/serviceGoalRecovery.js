@@ -8,7 +8,8 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 
 // After a restart the AI can still be busy or slow to start, so a pass that
-// could not continue every goal runs again after each of these delays.
+// could not continue every goal runs again after each of these delays. A goal
+// continued at its usage limit's reset that cannot continue waits them too.
 const GOAL_RECOVERY_RETRY_DELAYS_MS = Object.freeze([30_000, 2 * 60_000, 10 * 60_000]);
 
 /**
@@ -128,5 +129,6 @@ function createServiceGoalRecovery({
 }
 
 export {
+  GOAL_RECOVERY_RETRY_DELAYS_MS,
   createServiceGoalRecovery
 };

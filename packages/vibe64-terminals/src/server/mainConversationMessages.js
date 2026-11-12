@@ -216,6 +216,17 @@ function sessionNeedsOpeningPrompt(session = {}) {
     !normalizeText(session.metadata?.renewal_handover_delivered_at);
 }
 
+/**
+ * What Claude reads with the person's message while its goal is paused or blocked: its own goal checker is then
+ * stood down (`/goal clear`), so without this Claude takes the goal for gone.
+ * @param {{ status: string, objective?: string }} goal the goal the conversation retains
+ */
+function retainedGoalNotice(goal) {
+  return `\n\n[Vibe64: this chat's goal is ${goal.status}, not cleared, and Claude's own goal checker is off until it is resumed. ` +
+    `Objective: ${JSON.stringify(String(goal.objective || "").slice(0, 500))}. Only if the person asks to resume or continue the goal, ` +
+    "use the application action vibe64.terminals.main-goal.resume, then end your reply briefly: the goal continues once this reply ends.]";
+}
+
 function codexContextRefreshPending(session = {}) {
   return normalizeText(session.metadata?.codex_context_refresh_pending) === "yes";
 }
@@ -274,6 +285,9 @@ function createClaudeConversationMessagePolicy({
       }))?.prompt || message;
       mark("genesis-rendered");
     }
+    const retainedGoal = entry.main && !renewal && !entry.profile && !ctx.assistantScope && !/^\/goal(?:\s|$)/u.test(message)
+      ? entry.pausedGoal || entry.blockedGoal : null;
+    if (retainedGoal) prompt += retainedGoalNotice(retainedGoal);
     if (!deliveryTiming) {
       onTiming({
         sessionId: ctx.sessionId,

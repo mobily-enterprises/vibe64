@@ -1,8 +1,10 @@
 import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 import {
   ACTION_PAUSE_MAIN_GOAL,
+  ACTION_RESUME_MAIN_GOAL,
   ACTION_BLOCK_MAIN_GOAL,
   mainGoalPauseTool,
+  mainGoalResumeTool,
   mainGoalBlockTool,
   planUsageTool,
   temporaryConversationTool,
@@ -180,7 +182,7 @@ function createTerminalActions({ terminals }) {
       input: sessionInputValidator,
       extensions: {
         assistant: {
-          description: "Read the exact session's Main chat goal: status (available, or unsupported when its AI has no goals), and goal with its objective and status (active, paused, blocked, complete, budgetLimited, or usageLimited: waiting at its AI account's usage limit until resetsAt in epoch seconds when present, or out of credit when outOfCredit is true; it continues only when the person chooses Resume goal), or goal null when there is none. Reading changes nothing. You cannot set, pause, resume or cancel a goal: tell the person which Goal control to use (Set goal, Pause goal, Resume goal or Cancel goal) and offer to draft an objective."
+          description: "Read the exact session's Main chat goal: status (available, or unsupported when its AI has no goals), and goal with its objective and status (active, paused, blocked, complete, budgetLimited, or usageLimited: waiting at its AI account's usage limit until resetsAt in epoch seconds when present, or out of credit when outOfCredit is true; with resumesAt in epoch seconds Vibe64 continues it by itself at that time, once the limit has reset, and Resume goal only tries sooner; out of credit, or without resumesAt, it continues only when the person chooses Resume goal), or goal null when there is none. Reading changes nothing. You cannot set, pause, resume or cancel a goal: tell the person which Goal control to use (Set goal, Pause goal, Resume goal or Cancel goal) and offer to draft an objective. The person can also ask the AI in Main chat to pause the goal, or to resume or continue a paused, blocked or waiting one: it does so through its own Pause and Resume actions, and a resumed goal continues once that reply ends."
         },
         vibe64: PROJECT_OPERATION
       },
@@ -200,6 +202,14 @@ function createTerminalActions({ terminals }) {
       channels: ["automation"],
       extensions: { assistant: mainGoalPauseTool, vibe64: PROJECT_OPERATION },
       execute: (input, context) => terminals.pauseMainGoal(input, context)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_RESUME_MAIN_GOAL,
+      input: emptyInputValidator,
+      channels: ["automation"],
+      extensions: { assistant: mainGoalResumeTool, vibe64: PROJECT_OPERATION },
+      execute: (input, context) => terminals.resumeMainGoal(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,

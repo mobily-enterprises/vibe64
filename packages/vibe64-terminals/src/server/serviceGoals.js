@@ -23,7 +23,9 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
-import { createServiceGoalRecovery } from "./serviceGoalRecovery.js";
+import { GOAL_RECOVERY_RETRY_DELAYS_MS, createServiceGoalRecovery } from "./serviceGoalRecovery.js";
+import { createServiceGoalLimitReset } from "./serviceGoalLimitReset.js";
+import { createServiceGoalChatContinuation } from "./serviceGoalChatContinuation.js";
 import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
 
 /** @typedef {import("./types.js").ServiceState} ServiceState */
@@ -163,39 +165,6 @@ function createServiceGoals({
     });
   }
 
-  /**
-   * Stop ends a goal's continuation until the person's next message, which
-   * continues the still-active native goal: that message enrolls the same
-   * goal's continuation again, so a restart during or after its turn continues
-   * the goal, once. A paused, finished, cancelled or different goal is left alone.
-   */
-  async function continueGoalIntentAfterMessage(sessionId, options = {}) {
-    try {
-      const context = await assistantContext.assistantSessionOptions(sessionId, options);
-      const intent = readGoalIntent(context.session);
-      if (!intent || intent.active || intent.pending || !intent.native) return false;
-      const native = await sessionAgent.readGoal(sessionId, context);
-      if (native?.status !== "available" || native.goal?.status !== "active" || native.threadId !== intent.native.threadId ||
-          native.goal.createdAt !== intent.native.createdAt || native.goal.objective !== intent.native.objective) return false;
-      let enrolled = false;
-      await changeGoalIntent(sessionId, context, latest => {
-        if (latest?.id !== intent.id || latest.active) return null;
-        enrolled = true;
-        return { ...latest, active: true, daemonId: goalRuntimeId, error: null };
-      });
-      return enrolled;
-    } catch (error) {
-      logOperationalEvent(logger, "warn", {
-        component: "vibe64.agent_goal",
-        event: "vibe64.agent_goal.message_continuation_failed",
-        sessionId,
-        code: error?.code,
-        error: error?.message
-      }, "A message continued the goal, but a restart may not continue it.");
-      return false;
-    }
-  }
-
   async function completeGoalIntent(sessionId, context, intent, result) {
     if (!intent || result?.ok === false || !result.goal) return;
     // Explicit Stop/Pause can run while native acknowledgement is outstanding.
@@ -320,9 +289,15 @@ function createServiceGoals({
         intent.native?.createdAt !== native.goal.createdAt || intent.native?.objective !== native.goal.objective) {
       throw new Error("The native goal changed after continuation was requested. Resume the intended goal explicitly.");
     }
-    // A blocked goal, or one waiting at a usage limit, out of credit or at its budget, gets no turn: the person resumes it.
+    // A blocked goal, one out of credit or at its budget, gets no turn: the person resumes it. One waiting at its
+    // usage limit gets none now either: it continues once the limit has reset, at once when it already has.
     if (native.goal.status === "blocked") return { sessionId, blocked: true, reason: native.goal.reason };
-    if (["usageLimited", "budgetLimited"].includes(native.goal.status)) return { sessionId, waiting: true, status: native.goal.status };
+    if (native.goal.status === "budgetLimited") return { sessionId, waiting: true, status: native.goal.status };
+    if (native.goal.status === "usageLimited") {
+      const continuesAt = await limitReset.scheduleGoal(sessionId, context, intent, native.goal);
+      const resumesAt = continuesAt === null ? {} : { resumesAt: Math.ceil(continuesAt / 1000) };
+      return { sessionId, waiting: true, status: native.goal.status, ...resumesAt };
+    }
     if (native.goal.status === "active") {
       const current = await sessionAgent.sessionState(sessionId, context);
       if (current?.ok !== false && current.turn?.active === true && current.thread?.id === native.threadId) {
@@ -344,10 +319,41 @@ function createServiceGoals({
     return { sessionId, resumed: true };
   }
 
+  // A goal waiting at its AI account's usage limit continues by itself once the limit has reset.
+  const limitReset = createServiceGoalLimitReset({
+    state,
+    logger,
+    project,
+    sessionAccess,
+    assistantContext,
+    sessionAgent,
+    publishAgentSessionChanged,
+    retryDelaysMs: GOAL_RECOVERY_RETRY_DELAYS_MS,
+    readGoalIntent,
+    changeGoalIntent,
+    readCanonicalAgentGoal,
+    writeAgentGoal
+  });
+  state.lifecycle.goalLimitReset = limitReset;
+  // The person's chat messages continue a goal: after Stop, and when they ask Main Claude to resume it.
+  const chatContinuation = createServiceGoalChatContinuation({
+    state,
+    logger,
+    sessionAccess,
+    assistantContext,
+    sessionAgent,
+    goalRuntimeId,
+    readGoalIntent,
+    changeGoalIntent,
+    readCanonicalAgentGoal,
+    writeAgentGoal
+  });
+
   async function applyAgentGoalReadResult(sessionId, context, result) {
     const pinned = assistantRoutingGoalFromMetadata(context.session.metadata);
     const recoveryError = readGoalIntent(context.session)?.error;
     if (recoveryError) result = { ...result, error: recoveryError };
+    if (result.goal) result = { ...result, goal: limitReset.withResumeTime(sessionId, context.session, result.goal) };
     if (result.status === "available" && (!result.goal || goalStatusIsComplete(result.goal.status))) {
       const intent = readGoalIntent(context.session);
       if (intent?.active && !intent.pending) await stopGoalIntent(sessionId, context, intent.id);
@@ -401,7 +407,7 @@ function createServiceGoals({
     });
     return {
       status: view.status,
-      goal: result ? { ...result, objective: view.goal.objective } : null,
+      goal: result ? { ...limitReset.withResumeTime(sessionId, context.session, result), objective: view.goal.objective } : null,
       target,
       ...(view.routing ? { routing: view.routing } : {}),
       ...(view.error ? { error: view.error } : {})
@@ -422,9 +428,13 @@ function createServiceGoals({
     return writeAgentGoal(sessionId, input, { canonical: true });
   }
 
-  /** The one goal write behind the two update methods; a goal restart also names its intent. */
+  /**
+   * The one goal write behind the two update methods. A goal restart names its intent; so does a Resume asked for in
+   * chat (continuesIntentId), which also waits for the turn's other follow-up work and is withdrawn when that intent is
+   * no longer active, but continues on the current AI connection as Resume goal does.
+   */
   async function writeAgentGoal(sessionId, input, options) {
-    const { canonical, restartIntentId = null } = options;
+    const { canonical, restartIntentId = null, continuesIntentId = restartIntentId } = options;
     if (input.action === "resume" && await cancelGoalIfMainAiChanged(sessionId, input.vibe64User || null)) {
       return { ok: false, code: "vibe64_goal_main_ai_changed", error: MAIN_AI_CHANGED_GOAL_NOTICE };
     }
@@ -433,7 +443,7 @@ function createServiceGoals({
       return sessionAccess.runMainAgentWrite(sessionId, input, async (context) => {
         requireCompletedConversationRewind(context.session);
         const previousIntent = readGoalIntent(context.session);
-        if (restartIntentId && (!previousIntent?.active || previousIntent.id !== restartIntentId || state.lifecycle.closing)) {
+        if (continuesIntentId && (!previousIntent?.active || previousIntent.id !== continuesIntentId || state.lifecycle.closing)) {
           throw new Error("Goal continuation was stopped before recovery.");
         }
         if (input.action === "set" && assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
@@ -564,6 +574,8 @@ function createServiceGoals({
               }
             }
             await completeGoalIntent(sessionId, context, intent, result);
+            // The command's turn can meet the usage limit, and end, before its goal is saved as accepted.
+            if (intent && result?.ok !== false) void state.trackShutdownWork(limitReset.continueWhenLimitResets(sessionId));
             return result;
           };
           dispatched = true;
@@ -585,7 +597,7 @@ function createServiceGoals({
         }
       }, {
         operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal",
-        ...(restartIntentId ? { waitMs: AGENT_WRITE_WAIT_MS } : {})
+        ...(continuesIntentId ? { waitMs: AGENT_WRITE_WAIT_MS } : {})
       });
     }
     const context = await assistantContext.assistantSessionOptions(sessionId, input);
@@ -692,12 +704,15 @@ function createServiceGoals({
     applyGoalSelection,
     cancelGoalIfMainAiChanged,
     continueGoalAfterAccountChange,
-    continueGoalIntentAfterMessage,
+    continueGoalIntentAfterMessage: chatContinuation.continueAfterMessage,
+    continueGoalWhenLimitResets: limitReset.continueWhenLimitResets,
     readAgentGoal,
     readCanonicalAgentGoal,
     readGoalIntent,
     recoverActiveGoals,
+    requestGoalResume: chatContinuation.requestResume,
     requestGoalStop,
+    resumeGoalAfterTurn: chatContinuation.resumeAfterTurn,
     stopGoalIntent,
     updateAgentGoal,
     updateCanonicalAgentGoal

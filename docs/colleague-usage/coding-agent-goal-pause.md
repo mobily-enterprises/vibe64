@@ -13,10 +13,14 @@ a Claude goal paused. When a turn ends any other way, for example after
 **Stop** or a server restart, the goal stays active and its chip says **Goal not
 running**, with no red light and no clock: **Pause goal** is offered, and your
 next message continues it. A server restart or deploy continues it too, except
-after **Stop** until your next message. At the account's usage limit, or out of credit, the chip shows **Goal
-paused: usage limit** or **Goal paused: no credit** instead; open **Goal** for
-the explanation, including when the limit resets. A server restart does not
-continue it, and **Pause goal**, **Resume goal** and **Cancel goal** are offered. A reply saying the work is paused does not
+after **Stop** until your next message. At the account's usage limit the chip
+shows **Goal waits: usage limit** instead: Vibe64 continues the goal by itself
+about a minute after the limit resets, also after a server restart or deploy;
+open **Goal** to see when. Out of credit, or when no reset time is known, it
+shows **Goal paused: no credit** or **Goal paused: usage limit** and waits for
+you: a server restart does not continue it. **Pause goal**, **Resume goal** and
+**Cancel goal** are offered while it waits; **Pause goal** also keeps it from
+continuing at the reset. A reply saying the work is paused does not
 change that; choose **Pause goal**.
 If Claude's native checker reports that the goal is impossible, or ends a turn
 after repeatedly preventing it from stopping, the goal shows **blocked**, with
@@ -29,7 +33,8 @@ Claude in Main can also report a concrete external blocker through the structure
 Block action. It retains a short reason and the objective, stops continuation,
 and shows **Goal · blocked** without repeatedly asking Claude to continue.
 Ordinary messages and reconnecting do not resume that goal. Supply the missing
-input or resolve the prerequisite, then choose **Goal** → **Resume goal**.
+input or resolve the prerequisite, then choose **Goal** → **Resume goal**, or ask
+Claude in chat to resume the goal.
 Running background agents or checks are work in progress, not an external blocker.
 This works directly after **Start goal** or **Resume goal**, without a separate
 chat message. Goal commands retain the same current-access checks as ordinary
@@ -43,8 +48,20 @@ After draining its work, Claude must invoke the application's structured Pause
 action. That uses the same goal control and records stopped continuation intent;
 a server restart must not resume it. An assistant reply saying “paused” alone is
 not confirmation: check that the goal chip shows **Goal paused**. If it does not,
-use **Pause goal**. Temporary chats, AI tasks, child agents and Colleague cannot invoke
-Main's self-pause or Block actions; Colleague can explain these steps.
+use **Pause goal**.
+
+To carry on, ask Claude in Main chat to resume or continue the goal (for
+example “Deployment is done, continue!”), or choose **Goal** → **Resume goal**.
+Claude invokes the application's structured Resume action, which works on a
+paused, blocked or waiting goal and is refused when there is nothing to resume.
+The goal continues as soon as that reply ends, through the same Resume as the
+**Resume goal** control, once, as you; until then the chip still shows the
+goal's previous state. A server restart or deploy before then continues it too.
+**Pause goal**, **Stop** or **Cancel goal** before the reply ends keep it from
+continuing. An assistant reply saying the goal continues is not confirmation:
+check that the chip shows the goal running, or choose **Resume goal**.
+Temporary chats, AI tasks, child agents and Colleague cannot invoke Main's
+self-pause, Resume or Block actions; Colleague can explain these steps.
 Closing, archiving or renewing a session never depends on these actions: an
 older session with no saved AI choice still closes and renews normally.
 When Claude invokes Pause or Block itself, its successful action response is
@@ -52,7 +69,9 @@ delivered before its process is stopped. No further application actions are
 accepted during that handoff. If Claude does not acknowledge the response within
 30 seconds, its process is stopped and the acknowledgement timeout is reported;
 the paused or blocked goal remains saved. **Pause goal** and **Stop** remain
-available during that wait. Use **Resume goal** when you want work to continue.
+available during that wait. A server restart or deploy does not resume a paused
+goal: choose **Resume goal**, or ask Claude in chat to continue it, when you
+want work to continue.
 You can choose **Set goal** and **Start goal** while Claude is working. The goal
 uses the same conversation's steering path, and **Goal** shows it after Claude
 acknowledges the command; until then the control shows **Starting…**. You do not need to stop the current work first.

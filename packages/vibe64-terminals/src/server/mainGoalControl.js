@@ -2,9 +2,9 @@ import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 /**
- * Main chat pauses or blocks its own goal through the goal control its
+ * Main chat pauses, resumes or blocks its own goal through the goal control its
  * admitted turn carries; any other caller is refused.
- * @param {"pause" | "block"} operation
+ * @param {"pause" | "resume" | "block"} operation
  * @param {object} input the validated goal control input
  * @param {object} context the action context of the request
  */

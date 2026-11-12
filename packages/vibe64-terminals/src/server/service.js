@@ -171,6 +171,8 @@ function createService({
     finishInterruptedCloses: (sessionId, engineId) => sessionConversations.finishInterruptedCloses(sessionId, engineId),
     afterRoutedTurn: (sessionId, payload, options) => assistantRouting.afterTurn(sessionId, payload, options),
     cancelGoalIfMainAiChanged: (sessionId, vibe64User, options) => goals.cancelGoalIfMainAiChanged(sessionId, vibe64User, options),
+    continueGoalWhenLimitResets: (sessionId) => goals.continueGoalWhenLimitResets(sessionId),
+    resumeGoalAfterTurn: (sessionId) => goals.resumeGoalAfterTurn(sessionId),
     logger,
     providerUsage,
     publishSessionChanged,
@@ -481,6 +483,15 @@ function createService({
   }
 
   /**
+   * Main chat resumes its own goal, at the person's request.
+   * @param {object} input
+   * @param {object} context
+   */
+  function resumeMainGoal(input, context) {
+    return requestMainGoalControl("resume", input, context);
+  }
+
+  /**
    * Main chat blocks its own goal.
    * @param {object} input
    * @param {object} context
@@ -596,6 +607,7 @@ function createService({
     resumeIntegrationContinuation: assistant.resumeIntegrationContinuation,
     sendAgentMessage: assistant.sendAgentMessage,
     pauseMainGoal,
+    resumeMainGoal,
     blockMainGoal,
     readAgentGoal: goals.readAgentGoal,
     readCanonicalAgentGoal: goals.readCanonicalAgentGoal,

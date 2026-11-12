@@ -58,6 +58,7 @@ function createServiceShutdown({
   async function close() {
     beginShutdown();
     state.lifecycle.closing = true;
+    if (state.lifecycle.goalLimitReset) state.lifecycle.goalLimitReset.close();
     await Promise.allSettled(state.shutdownWork);
     const [agentClose, outputTargetClose] = await Promise.allSettled([
       Promise.resolve().then(() => invalidateAgentRuntimes({

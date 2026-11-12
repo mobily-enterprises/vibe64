@@ -1,6 +1,9 @@
-import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL } from "./assistantContracts.js";
+import { ACTION_PAUSE_MAIN_GOAL, ACTION_RESUME_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL } from "./assistantContracts.js";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
+
+// The goal controls Main Claude may call on its own goal.
+const MAIN_GOAL_CONTROLS = Object.freeze([ACTION_PAUSE_MAIN_GOAL, ACTION_RESUME_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL]);
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
@@ -20,7 +23,7 @@ function createServiceAssistantContext({ sessionAccess, actions }) {
     /**
      * Main's application tools are Claude goal control only.
      */
-    isActionAvailable: ({ actionId, context }) => [ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL].includes(actionId) &&
+    isActionAvailable: ({ actionId, context }) => MAIN_GOAL_CONTROLS.includes(actionId) &&
       Boolean(!context.runtime?.learningScope && context.assistantSelection?.engineId === "claude" &&
         (context.browserAuthority || context.mainGoalControl) && !context.temporaryConversationId &&
         !context.assistantScope && !context.scopedConversationId)

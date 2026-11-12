@@ -22,13 +22,16 @@ const MAIN_TURN_IDLE_ENGINES = new Map([
 
 /**
  * An agent session's change publication and the work that follows a turn: the plan usage it reports, a temporary
- * chat's review, and after a Main turn the routing review, the goal's main AI check, the workspace setup and the
- * interrupted Closes its engine can now finish.
+ * chat's review, and after a Main turn the routing review, the goal's main AI check, the Resume the person asked for in
+ * that turn or else its continuation once a usage limit resets, the workspace setup and the interrupted Closes its
+ * engine can now finish.
  * @param {object} dependencies
  * @param {SessionConversations["afterTemporaryTurn"]} dependencies.afterTemporaryTurn
  * @param {SessionConversations["finishInterruptedCloses"]} dependencies.finishInterruptedCloses
  * @param {AssistantRouting["afterTurn"]} dependencies.afterRoutedTurn
  * @param {ServiceGoals["cancelGoalIfMainAiChanged"]} dependencies.cancelGoalIfMainAiChanged
+ * @param {ServiceGoals["continueGoalWhenLimitResets"]} dependencies.continueGoalWhenLimitResets
+ * @param {ServiceGoals["resumeGoalAfterTurn"]} dependencies.resumeGoalAfterTurn
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProviderUsage} dependencies.providerUsage
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
@@ -41,6 +44,8 @@ function createServiceTurnPublication({
   finishInterruptedCloses,
   afterRoutedTurn,
   cancelGoalIfMainAiChanged,
+  continueGoalWhenLimitResets,
+  resumeGoalAfterTurn,
   logger,
   providerUsage,
   publishSessionChanged,
@@ -63,7 +68,8 @@ function createServiceTurnPublication({
           code: error.code
         }, "Automatic review needs attention.");
       }),
-      // A goal's automatic continuation follows each of its turns.
+      // A goal's automatic continuation follows each of its turns: the person asked in that turn to resume it, or it
+      // ended at its AI account's usage limit and continues once the limit resets.
       cancelGoalIfMainAiChanged(sessionId, null, { activeOnly: true }).catch((error) => {
         logOperationalEvent(logger, "warn", {
           component: "vibe64.agent_goal",
@@ -71,6 +77,9 @@ function createServiceTurnPublication({
           sessionId,
           code: error.code
         }, "A goal on the previous main AI could not be cancelled.");
+      }).then(async cancelled => {
+        if (cancelled === true || await resumeGoalAfterTurn(sessionId)) return;
+        await continueGoalWhenLimitResets(sessionId);
       }),
       // A prepared session, or one whose preparation runs, needs nothing from the turn's end.
       workspacePreparation.ensureWorkspacePrepared(sessionId, {}, { waitMs: AGENT_WRITE_WAIT_MS }).catch((error) => {

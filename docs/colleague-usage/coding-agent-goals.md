@@ -119,11 +119,12 @@ after **Stop**, or after a server restart until its continuation starts) shows
 **Goal not running**; open **Goal** to see any error that stopped it, and your
 next message continues it. The others show **Goal paused**, **Goal blocked** or
 **Goal budget reached**. A goal waiting
-because its AI account reached its usage limit shows **Goal paused: usage
-limit**, and one whose account ran out of credit shows **Goal paused: no
-credit**. The chip keeps to those few words; open **Goal** for the explanation:
-when the limit resets (for example 05:00, with the day when it is not today, if
-the AI says when) and what to do next.
+because its AI account reached its usage limit shows **Goal waits: usage
+limit** when Vibe64 continues it by itself once the limit resets, or **Goal
+paused: usage limit** when no reset time is known; one whose account ran out of
+credit shows **Goal paused: no credit**. The chip keeps to those few words; open
+**Goal** for the explanation: when the goal continues (for example 05:01, with
+the day when it is not today) or when the limit resets, and what to do next.
 Open **Goal** to see its **Running time**: how long the AI has actually spent
 working on the goal. Codex reports its own; for Claude, Vibe64 adds up the time
 Claude worked on the goal from its conversation history. It counts only while
@@ -198,12 +199,23 @@ is not paused: it shows **Goal not running**, and a server restart or deploy
 continues it, including after Claude compacted its context during a long goal.
 After **Stop**, a restart does not continue it until you send your next
 message: that message continues the goal, and a restart during or after its
-turn continues it again, never twice. To keep it from continuing, choose **Goal** → **Pause goal**. A goal waiting at its AI account's usage limit
-or out of credit (Claude or Codex), or a Codex goal that reached its token
-budget, is not continued by a restart or deploy, and no AI turn is spent on it.
-It does not continue by itself either: once the limit resets, or after you top up
-or switch AI account, choose **Goal** → **Resume goal** (for Claude, your next
-message also continues it). **Pause goal** (Claude) and **Cancel goal** work
+turn continues it again, never twice. To keep it from continuing, choose **Goal** → **Pause goal**.
+
+A goal waiting at its AI account's usage limit (Claude or Codex) gets no AI turn
+while the limit holds. Vibe64 continues it by itself about a minute after the
+limit resets, once, as the person who set it, whether the reset comes while the
+server keeps running or after a restart or deploy (a goal whose limit already
+reset continues as the server starts). The reset time is the one Claude names,
+or for Codex the latest reset among the account's used-up plan allowances; open
+**Goal** to see when it continues. If that continuation meets the limit again or
+fails, Vibe64 tries again about 30 seconds, 2 minutes and 10 minutes later, then
+leaves the goal waiting for you. **Resume goal** tries sooner (for Claude, your
+next message also continues it), and **Pause goal**, **Cancel goal** and **Stop**
+keep it from continuing. When no reset time is known, a goal out of credit, or a
+Codex goal that reached its token budget, is not continued by a restart, a deploy
+or by itself, and no AI turn is spent on it: after the limit resets, or after you
+top up or switch AI account, choose **Goal** → **Resume goal** (for Claude, your
+next message also continues it). **Pause goal** (Claude) and **Cancel goal** work
 while it waits. Existing goals are not guessed from their
 old paused status: choose **Resume goal** once to enroll the intended goal.
 
@@ -224,14 +236,19 @@ A copied development workspace never inherits permission to run its parent's
 goals. Restart continuation applies to supported Main native goals; temporary, AI task,
 logical and scoped conversations do not expose native goal controls or receipts.
 Colleague can read a session's current goal (its objective and whether it is
-active, paused, blocked, waiting at a usage limit or out of credit, or complete)
-and explain these controls. It cannot set,
+active, paused, blocked, waiting at a usage limit or out of credit, or complete,
+and when a goal waiting at its usage limit continues by itself) and explain
+these controls. It cannot set,
 pause, resume or cancel a goal itself: it tells you which **Goal** control to
-use and can draft an objective for **Set goal**.
+use and can draft an objective for **Set goal**, or that you can ask Claude in
+Main chat to pause the goal or to resume or continue it.
 
 A paused Claude goal stays paused while you send ordinary messages in the same
 chat, including after reloading or restarting the application. The objective
-stays available in the goal control. Choose **Resume goal** to continue it;
-**Cancel goal** removes it. If Claude cannot confirm that its checker has been
+stays available in the goal control, and each message tells Claude the goal is
+paused rather than gone. Choose **Resume goal** to continue it, or ask Claude in
+chat to resume or continue it: Claude then uses its Resume action and the goal
+continues once that reply ends, as [Pause and resume a goal](coding-agent-goal-pause.md)
+explains; **Cancel goal** removes it. If Claude cannot confirm that its checker has been
 suspended, the next message is not sent and the error remains available for
 recovery. Do not treat that error as a delivered message.

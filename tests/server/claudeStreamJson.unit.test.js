@@ -25,6 +25,7 @@ import { assertPagesGuidance } from "../fixtures/pagesGuidanceRules.js";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { LIMIT_RESET_MARGIN_MS } from "../../packages/vibe64-terminals/src/server/serviceGoalLimitReset.js";
 import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
@@ -2529,8 +2530,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
     if (frame.request.subtype === 'interrupt') emit({ type: 'result', subtype: 'success', terminal_reason: 'aborted_streaming', result: '' });
     return;
   }
-  if (frame.type === 'control_response' && ['self-pause-contract', 'self-block-contract', 'self-block-goal-contract'].includes(frame.response.request_id)) {
-    const action = frame.response.request_id.startsWith('self-block') ? 'block' : 'pause';
+  if (frame.type === 'control_response' && ['self-pause-contract', 'self-resume-contract', 'self-resume-again-contract', 'self-block-contract', 'self-block-goal-contract'].includes(frame.response.request_id)) {
+    const action = frame.response.request_id.startsWith('self-block') ? 'block' : frame.response.request_id.startsWith('self-resume') ? 'resume' : 'pause';
     pauseTool('assistant_action_execute', frame.response.request_id.replace('-contract', '-execute'), { actionId: 'vibe64.terminals.main-goal.' + action, version: 1,
       input: action === 'block' ? { reason: 'The human must supply the missing approval code.' } : {} });
     return;
@@ -2540,6 +2541,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
       tool_use_id: frame.response.request_id, content: JSON.stringify(frame.response.response) }] } };
     record(receipt);
     emit(receipt);
+    // After Resume, Claude ends its reply; the goal continues in its own turn.
+    if (frame.response.request_id.startsWith('self-resume')) emit({ type: 'result', subtype: 'success', result: 'Resuming the goal.' });
     return;
   }
   if (frame.type !== 'user') return;
@@ -2561,9 +2564,10 @@ createInterface({ input: process.stdin }).on('line', async line => {
     return;
   }
   emit(frame);
-  if (text.includes('Pause through the admitted application tool.') || text.includes('Block through the admitted application tool.')) {
-    const action = text.includes('Block through') ? 'block' : 'pause';
-    pauseTool('assistant_action_contract', 'self-' + action + '-contract', { actionId: 'vibe64.terminals.main-goal.' + action, version: 1 });
+  if (/(Pause|Block|Resume|Resume again) through the admitted application tool/u.test(text)) {
+    const action = text.includes('Block through') ? 'block' : text.includes('Resume') ? 'resume' : 'pause';
+    const id = text.includes('Resume again') ? 'self-resume-again' : 'self-' + action;
+    pauseTool('assistant_action_contract', id + '-contract', { actionId: 'vibe64.terminals.main-goal.' + action, version: 1 });
     return;
   }
   emit({ type: 'stream_event', event: { type: 'message_start', message: { id: frame.uuid + '-reply' } } });
@@ -2952,12 +2956,14 @@ createInterface({ input: process.stdin }).on('line', async line => {
         "a native failed evaluation must not be resumed after restart either");
       // At the account's usage limit, or out of credit, Claude's own message
       // ends the turn. A restart then sends nothing into that limit: the goal
-      // waits, with the reset time, for the person's Resume.
+      // waits, with the reset time, and continues by itself once the limit has
+      // reset (resumesAt); out of credit it waits for the person's Resume.
+      const resetsAt = Math.floor(Date.now() / 1000) + 5 * 60 * 60;
       for (const [label, limit, waitingFields] of [
         ["usage limit", { error: "rate_limit", apiError: "usage_limit_reached",
-          apiErrorParams: { rate_limit_info: { status: "rejected", resetsAt: 1794286800, rateLimitType: "five_hour" } },
-          text: "You've hit your session limit · resets 5am (UTC)" }, { resetsAt: 1794286800 }],
-        ["out of credit", { error: "billing_error", text: "Credit balance is too low" }, { outOfCredit: true }]
+          apiErrorParams: { rate_limit_info: { status: "rejected", resetsAt, rateLimitType: "five_hour" } },
+          text: "You've hit your session limit · resets 5am (UTC)" }, { resetsAt, resumesAt: resetsAt + LIMIT_RESET_MARGIN_MS / 1000 }],
+        ["out of credit", { error: "billing_error", text: "Credit balance is too low" }, { outOfCredit: true, resumesAt: undefined }]
       ]) {
         const { text, ...apiError } = limit;
         await writeFile(historyFile.path, beforeLoopLimit + JSON.stringify({ type: "assistant",
@@ -3215,12 +3221,57 @@ createInterface({ input: process.stdin }).on('line', async line => {
       const nativeInputs = (await trace()).filter(row => row.frame?.type === "user").slice(-2);
       assert.equal(nativeInputs[0].frame.message.content, "/goal clear");
       assert.match(nativeInputs[1].frame.message.content, /An ordinary message while the goal stays paused/);
-      const beforeBlock = await service.readAgentGoal("test", options);
-      await service.updateAgentGoal("test", { ...options, ...beforeBlock.goal, action: "resume", threadId: beforeBlock.threadId });
+      // Asked in chat to continue the goal it paused, Claude resumes it through
+      // Main's Resume action: the goal continues once that turn ends, once.
+      const resumedGoalCommand = `/goal ${currentGoal.goal.objective}`;
+      const resumedGoalCommands = async () => (await trace()).filter(row => row.frame?.type === "user" &&
+        row.frame.message.content === resumedGoalCommand).length;
+      const finishedToolCall = async id => {
+        const deadline = Date.now() + 5000;
+        for (;;) {
+          const call = (await store.readConversationLog("test")).flatMap(turn => turn.metadata.applicationTools || [])
+            .find(row => row.id.endsWith(id));
+          if (call && call.status !== "running") return call;
+          assert.ok(Date.now() < deadline, JSON.stringify({ id, call, frames: (await trace()).slice(-4) }));
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      };
+      const commandsBeforeChatResume = await resumedGoalCommands();
+      const resumeReceipt = await goalFacade.send({ messageId: "service-self-resume", text: "Resume through the admitted application tool.", steer: true });
+      assert.equal(resumeReceipt.delivered, true);
+      const resumeCall = await finishedToolCall("self-resume-execute");
+      assert.equal(resumeCall.result.ok, true, JSON.stringify(resumeCall.result));
+      assert.equal(resumeCall.result.result.result.status, "resuming");
+      const chatResumeDeadline = Date.now() + 5000;
+      while ((await service.readAgentGoal("test", options)).goal.status !== "active") {
+        assert.ok(Date.now() < chatResumeDeadline, JSON.stringify({ deliveryDiagnostics: deliveryDiagnostics.slice(-3),
+          intent: (await store.readSession("test")).metadata.assistant_goal_intent, frames: (await trace()).slice(-3) }));
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      const chatResumed = await service.readAgentGoal("test", options);
+      assert.equal(chatResumed.goal.objective, currentGoal.goal.objective);
+      const chatResumedIntent = JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent);
+      assert.equal(chatResumedIntent.active, true, "a restart continues the goal resumed in chat");
+      assert.ok(!chatResumedIntent.resumeRequested, JSON.stringify(chatResumedIntent));
+      await new Promise(resolve => setTimeout(resolve, 200));
+      assert.equal(await resumedGoalCommands(), commandsBeforeChatResume + 1, "the goal resumed in chat continues once");
+      assert.match(nativeInputs[1].frame.message.content, /goal is paused, not cleared[\s\S]*vibe64\.terminals\.main-goal\.resume/u,
+        "Claude, whose own goal checker was cleared, was told the goal is paused and how to resume it");
+      // With nothing to resume, Claude's Resume is refused and sends nothing.
+      // The turn that asked for the Resume has ended, so these are new messages.
+      const againReceipt = await goalFacade.send({ messageId: "service-self-resume-again", text: "Resume again through the admitted application tool." });
+      assert.equal(againReceipt.delivered, true);
+      const againCall = await finishedToolCall("self-resume-again-execute");
+      assert.notEqual(againCall.result.ok, true, JSON.stringify(againCall.result));
+      assert.match(JSON.stringify(againCall.result), /vibe64_main_goal_nothing_to_resume|no paused, blocked or waiting goal to resume/u);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      assert.equal((await service.readAgentGoal("test", options)).goal.status, "active");
+      assert.equal(await resumedGoalCommands(), commandsBeforeChatResume + 1, "a refused Resume sends nothing");
+      // The goal resumed in chat is the active goal Claude reports a blocker on.
       await assert.rejects(actions.execute({ actionId: "vibe64.terminals.main-goal.block",
         input: { projectSlug: "claude-main-fixture", reason: "Missing approval code" },
         context: { channel: "automation", surface: "app" } }), { code: "vibe64_main_goal_control_required" });
-      const blockReceipt = await goalFacade.send({ messageId: "service-self-block", text: "Block through the admitted application tool.", steer: true });
+      const blockReceipt = await goalFacade.send({ messageId: "service-self-block", text: "Block through the admitted application tool." });
       assert.equal(blockReceipt.delivered, true);
       const blockDeadline = Date.now() + 5000;
       let blockCall;

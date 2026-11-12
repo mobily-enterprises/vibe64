@@ -15,6 +15,7 @@ import {
   prepareSessionDetachedConversationRun,
   prepareSessionConversationStorage
 } from "./mainConversationBinding.js";
+import { RESUMABLE_GOAL_STATUSES } from "./serviceGoalChatContinuation.js";
 import { inProjectContext } from "./workspaceSetupRules.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
@@ -195,6 +196,19 @@ function createServiceMainConversationHost({
               }
               return { status };
             }
+            // The person asked to resume or continue: a paused, blocked or waiting goal continues once this turn ends.
+            async function resumeGoal() {
+              const goalOptions = { runtime, vibe64User: grant.user };
+              const observed = await goals.readAgentGoal(id, goalOptions);
+              if (observed.threadId !== admitted.nativeThreadId || !RESUMABLE_GOAL_STATUSES.includes(observed.goal?.status)) {
+                throw new AppError(409, "This Main conversation has no paused, blocked or waiting goal to resume.", {
+                  code: "vibe64_main_goal_nothing_to_resume"
+                });
+              }
+              admitted.assertCurrent();
+              await goals.requestGoalResume(id, { ...goalOptions, threadId: observed.threadId, goal: observed.goal });
+              return { status: "resuming" };
+            }
             return {
               ...authority.requestContext,
               runtime,
@@ -202,6 +216,7 @@ function createServiceMainConversationHost({
               projectSlug: authority.projectSlug,
               mainGoalControl: {
                 pause: () => retainGoal("pause"),
+                resume: () => resumeGoal(),
                 block: ({ reason }) => retainGoal("block", reason)
               }
             };

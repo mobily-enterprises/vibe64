@@ -93,7 +93,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       "agent-terminal.control.key", "agent-terminal.control.snapshot", "agent-terminal.control.text", "agent-terminal.read",
       "agent-terminal.start", "global-terminal.close", "global-terminal.control.check-text", "global-terminal.control.key",
       "global-terminal.control.snapshot", "global-terminal.control.text", "global-terminal.read", "global-terminal.start",
-      "global-terminal.status", "main-goal.block", "main-goal.pause", "output-result.read",
+      "global-terminal.status", "main-goal.block", "main-goal.pause", "main-goal.resume", "output-result.read",
       "output-target.open", "output-target.start", "output-target.stop", "output-terminal.close",
       "output-terminal.read", "outputs.read", "preview-diagnostics.record", "preview-identity.select",
       "project-runtime.close", "project-runtime.open", "prompt-hints.cancel", "prompt-hints.generate",
