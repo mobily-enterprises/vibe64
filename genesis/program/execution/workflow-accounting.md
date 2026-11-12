@@ -231,11 +231,12 @@ names none keeps the system's own account files, ranges and folders, as before:
   people in without a password, so the helper creates no person there:
   `create-system-user` is refused before any account changes, while a person
   the host made is registered and re-enabled as anywhere else.
-- `VIBE64_SYSTEM_ID_BAND`, `FIRST-LAST`: the numbers the helper gives new
-  application accounts and their groups, as `useradd -K` keys. A host names it
-  when its system's own accounts can change without seeing the helper's (an
-  image-based system updated by replacing its image), so the two never share a
-  number.
+- `VIBE64_SYSTEM_ID_BAND` and `VIBE64_PERSON_ID_BAND`, each `FIRST-LAST`: the
+  numbers the helper gives new application accounts and their groups, and new
+  people and theirs, as `useradd -K` keys. A host names them when its system's
+  own accounts can change without seeing the helper's (an image-based system
+  updated by replacing its image), so the two never share a number; a host that
+  names neither numbers by the system's own ranges.
 - `VIBE64_SYSTEMD_UNIT_ROOT`: an absolute folder for release and managed
   service units in place of systemd's own, which must be a folder only root can
   change. Like systemd's own folder and the settings file, every account may

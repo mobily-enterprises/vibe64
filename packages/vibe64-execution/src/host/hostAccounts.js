@@ -130,9 +130,10 @@ function accountDatabaseOptions(database = "files") {
   return database === "extrausers" ? ["--extrausers"] : [];
 }
 
-// A person made here gets the password given. A host keeping its accounts in the extra users database signs people
-// in without one, so the helper makes no person there.
-function createSystemUser(username = "", password = "", database = "files") {
+// A person made here gets the password given, and a number as the host numbers the helper's new accounts
+// (numberOptions, hostSettings.js). A host keeping its accounts in the extra users database signs people in
+// without one, so the helper makes no person there.
+function createSystemUser(username = "", password = "", database = "files", numberOptions = []) {
   if (database === "extrausers") {
     throw new Error("This host keeps its accounts in the extra users database, where people sign in without a " +
       "password: the helper creates no person with one here.");
@@ -144,6 +145,7 @@ function createSystemUser(username = "", password = "", database = "files") {
     throw new Error("A valid initial password is required to create an OS user.");
   }
   runRootCommand("useradd", [
+    ...numberOptions,
     "--create-home",
     "--user-group",
     "--shell",

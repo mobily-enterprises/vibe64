@@ -27,26 +27,33 @@ function helperAccountDatabase(settings = helperSettings()) {
   return configured;
 }
 
+// The login.defs keys each band sets for useradd and groupadd: its first and last number for accounts and groups.
+const NUMBER_BANDS = Object.freeze([
+  ["VIBE64_SYSTEM_ID_BAND", ["SYS_UID_MIN", "SYS_UID_MAX", "SYS_GID_MIN", "SYS_GID_MAX"]],
+  ["VIBE64_PERSON_ID_BAND", ["UID_MIN", "UID_MAX", "GID_MIN", "GID_MAX"]]
+]);
+
 /**
- * How the helper numbers the system accounts and groups it adds, as useradd options: by the system's own range,
- * unless the host's helper settings name a band, `FIRST-LAST` (`VIBE64_SYSTEM_ID_BAND`). A host names one when its
- * system's own accounts can change without seeing the helper's (an image-based system updated by replacing its
- * image), so the two never share a number.
+ * How the helper numbers the accounts it adds, as useradd options: by the system's own ranges, unless the host's
+ * helper settings name bands, `FIRST-LAST`, for system accounts and groups (`VIBE64_SYSTEM_ID_BAND`) and for people
+ * (`VIBE64_PERSON_ID_BAND`). A host names them when its system's own accounts can change without seeing the
+ * helper's (an image-based system updated by replacing its image), so the two never share a number.
  * @param {Record<string, string>} [settings] the host's helper settings
  * @returns {string[]}
  */
 function helperAccountNumberOptions(settings = helperSettings()) {
-  const configured = String(settings.VIBE64_SYSTEM_ID_BAND || "").trim();
-  if (!configured) return [];
-  const match = /^([1-9][0-9]{0,4})-([1-9][0-9]{0,4})$/u.exec(configured);
-  const [first, last] = match ? [Number(match[1]), Number(match[2])] : [0, 0];
-  if (!match || first > last || last >= 65534) {
-    throw new Error("This host's Vibe64 exec helper settings name a band of account numbers (VIBE64_SYSTEM_ID_BAND) " +
-      "that is not FIRST-LAST with FIRST no greater than LAST and both below 65534.");
-  }
-  // login.defs' keys for useradd's system accounts and the group each gets.
-  return ["-K", `SYS_UID_MIN=${first}`, "-K", `SYS_UID_MAX=${last}`,
-    "-K", `SYS_GID_MIN=${first}`, "-K", `SYS_GID_MAX=${last}`];
+  return NUMBER_BANDS.flatMap(([name, [accountFirst, accountLast, groupFirst, groupLast]]) => {
+    const configured = String(settings[name] || "").trim();
+    if (!configured) return [];
+    const match = /^([1-9][0-9]{0,4})-([1-9][0-9]{0,4})$/u.exec(configured);
+    const [first, last] = match ? [Number(match[1]), Number(match[2])] : [0, 0];
+    if (!match || first > last || last >= 65534) {
+      throw new Error(`This host's Vibe64 exec helper settings name a band of account numbers (${name}) that is not ` +
+        "FIRST-LAST with FIRST no greater than LAST and both below 65534.");
+    }
+    return ["-K", `${accountFirst}=${first}`, "-K", `${accountLast}=${last}`,
+      "-K", `${groupFirst}=${first}`, "-K", `${groupLast}=${last}`];
+  });
 }
 
 function settingsFolder(settings, name, fallback) {

@@ -44,7 +44,7 @@ import {
   openRootOwnedDirectory,
   readOwnedFile
 } from "./hostFiles.js";
-import { helperAccountDatabase } from "./hostSettings.js";
+import { helperAccountDatabase, helperAccountNumberOptions } from "./hostSettings.js";
 
 const PERSON_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "people");
 const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
@@ -82,7 +82,7 @@ function handleUserManagementOperation(operation = "", payload = {}, username = 
   const workspace = personWorkspace(resolveOwnerUser());
   ensureGroup(VIBE64_GROUP);
   if (operation === "create-system-user") {
-    createSystemUser(username, String(payload.password || ""), helperAccountDatabase());
+    createSystemUser(username, String(payload.password || ""), helperAccountDatabase(), helperAccountNumberOptions());
     registerPerson(workspace, username);
     return;
   }

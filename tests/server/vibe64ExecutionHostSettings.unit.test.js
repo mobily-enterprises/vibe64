@@ -59,16 +59,24 @@ test("the host's helper settings name the account database and the unit and sudo
   assert.equal(exportedSystemdUnitRoot, helperSystemdUnitRoot);
 });
 
-test("the helper numbers new system accounts in the band the host's settings name; without one by the system's range", () => {
+test("the helper numbers new accounts in the bands the host's settings name; without them by the system's ranges", () => {
   assert.deepEqual(helperAccountNumberOptions({}), []);
   assert.deepEqual(helperAccountNumberOptions({ VIBE64_SYSTEM_ID_BAND: "400-899" }), [
     "-K", "SYS_UID_MIN=400", "-K", "SYS_UID_MAX=899", "-K", "SYS_GID_MIN=400", "-K", "SYS_GID_MAX=899"
   ]);
   assert.deepEqual(helperAccountNumberOptions({ VIBE64_SYSTEM_ID_BAND: "400-400" }),
     ["-K", "SYS_UID_MIN=400", "-K", "SYS_UID_MAX=400", "-K", "SYS_GID_MIN=400", "-K", "SYS_GID_MAX=400"]);
+  assert.deepEqual(helperAccountNumberOptions({ VIBE64_SYSTEM_ID_BAND: "400-899", VIBE64_PERSON_ID_BAND: "20000-29999" }), [
+    "-K", "SYS_UID_MIN=400", "-K", "SYS_UID_MAX=899", "-K", "SYS_GID_MIN=400", "-K", "SYS_GID_MAX=899",
+    "-K", "UID_MIN=20000", "-K", "UID_MAX=29999", "-K", "GID_MIN=20000", "-K", "GID_MAX=29999"
+  ]);
+  assert.deepEqual(helperAccountNumberOptions({ VIBE64_PERSON_ID_BAND: "20000-20000" }),
+    ["-K", "UID_MIN=20000", "-K", "UID_MAX=20000", "-K", "GID_MIN=20000", "-K", "GID_MAX=20000"]);
   for (const band of ["899-400", "0-899", "400", "400-", "-400-899", "400-65534", "04-899", "400-899x", "400–899"]) {
     assert.throws(() => helperAccountNumberOptions({ VIBE64_SYSTEM_ID_BAND: band }),
       /band of account numbers \(VIBE64_SYSTEM_ID_BAND\)/u, band);
+    assert.throws(() => helperAccountNumberOptions({ VIBE64_PERSON_ID_BAND: band }),
+      /band of account numbers \(VIBE64_PERSON_ID_BAND\)/u, band);
   }
 });
 
@@ -86,7 +94,7 @@ test("memberships go to the account database the host names, which gets no perso
   });
   const username = "v64hostsettingsprobe";
 
-  createSystemUser(username, "initial password", "files");
+  createSystemUser(username, "initial password", "files", ["-K", "UID_MIN=20000"]);
   addUserToGroup(username, "vibe64", "files");
   // Refused before any account command runs.
   assert.throws(() => createSystemUser(username, "initial password", "extrausers"),
@@ -94,7 +102,7 @@ test("memberships go to the account database the host names, which gets no perso
   addUserToGroup(username, "vibe64", "extrausers");
 
   assert.deepEqual((await readFile(log, "utf8")).trim().split("\n"), [
-    `useradd --create-home --user-group --shell /bin/bash ${username}`,
+    `useradd -K UID_MIN=20000 --create-home --user-group --shell /bin/bash ${username}`,
     "chpasswd",
     `usermod -a -G vibe64 ${username}`,
     // usermod has no --extrausers and its -a -G leaves such a group unchanged.
@@ -105,7 +113,8 @@ test("memberships go to the account database the host names, which gets no perso
 test("the helper's people, memberships, application accounts, unit readers and sudo rules all follow the host's settings", async () => {
   const source = await execHelperSource();
 
-  assert.match(source, /createSystemUser\(username, String\(payload\.password \|\| ""\), helperAccountDatabase\(\)\);/u);
+  assert.match(source,
+    /createSystemUser\(username, String\(payload\.password \|\| ""\), helperAccountDatabase\(\), helperAccountNumberOptions\(\)\);/u);
   assert.equal(source.match(/addToGroup = \(name\) => addUserToGroup\(name, VIBE64_GROUP, helperAccountDatabase\(\)\),/gu)?.length,
     2, "registering and re-enabling a person");
   assert.match(source,
