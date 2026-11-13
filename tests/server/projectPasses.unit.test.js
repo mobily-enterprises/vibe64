@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
-import { GENESIS_PASSES_ADAPTER, listGenesisPasses } from "../../packages/vibe64-genesis/src/server/passes.js";
+import { GENESIS_PASSES } from "../fixtures/genesisPasses.js";
 import {
   PASS_INTERVALS,
   PASS_SNOOZE_DAYS,
@@ -38,7 +38,7 @@ async function project(t, { lastRuns = {}, commits = () => 60 } = {}) {
     sessionContext: async (sessionId) => ({ runtime: { stateRoot }, session: { sessionId, metadata: {} } }),
     listPasses: async (options) => {
       listed.push(options);
-      return GENESIS_PASSES_ADAPTER.map((pass) => ({ ...pass, lastRun: lastRuns[pass.id] ?? null }));
+      return GENESIS_PASSES.map((pass) => ({ ...pass, lastRun: lastRuns[pass.id] ?? null }));
     },
     countCommits: async (_sourceRoot, since) => {
       counted.push(since);
@@ -54,12 +54,11 @@ async function project(t, { lastRuns = {}, commits = () => 60 } = {}) {
 }
 
 test("the Passes list is Genesis's passes, each with its last completed run from Genesis or none", async (t) => {
-  assert.ok((await listGenesisPasses()).every((pass) => pass.lastRun === null), "the adapter has no runs to report");
   const f = await project(t, { lastRuns: { "quality-pass": ago(3) }, commits: (since) => since ? 4 : 120 });
   const result = await f.read();
   assert.equal(result.ok, true);
   assert.deepEqual(result.passes.map(({ id, title, description, recommend }) => ({ id, title, description, recommend })),
-    GENESIS_PASSES_ADAPTER.map(({ id, title, description, recommend }) => ({ id, title, description, recommend })));
+    GENESIS_PASSES.map(({ id, title, description, recommend }) => ({ id, title, description, recommend })));
   assert.equal(result.byId["quality-pass"].lastRun, ago(3), "a pass that ran shows when");
   assert.equal(result.byId["quality-pass"].commitsSince, 4);
   assert.equal(result.byId.deslop.lastRun, null, "a pass that never ran shows none");
@@ -69,7 +68,7 @@ test("the Passes list is Genesis's passes, each with its last completed run from
 });
 
 test("the suggestion rule: a never-run or overdue pass, never-run first, then the most overdue for its interval", () => {
-  const pass = (id, state) => ({ ...GENESIS_PASSES_ADAPTER.find((entry) => entry.id === id),
+  const pass = (id, state) => ({ ...GENESIS_PASSES.find((entry) => entry.id === id),
     lastRun: null, commitsSince: 60, snoozedUntil: "", dismissed: false, ...state });
   // Genesis's periodic hint: Vibe64's interval for it is 21 days and 30 commits.
   assert.deepEqual(PASS_INTERVALS.periodic, { days: 21, commits: 30 });

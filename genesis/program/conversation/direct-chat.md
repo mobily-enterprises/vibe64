@@ -1577,7 +1577,6 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/lib/vibe64WelcomeName.js`
 - `vite.config.mjs`
 
-- `packages/vibe64-genesis/src/server/passes.js`
 - `packages/vibe64-terminals/src/server/projectPasses.js`
 - `src/composables/useVibe64Passes.js`
 - `src/components/studio/vibe64-session/Vibe64PassesMenu.vue`
@@ -4936,9 +4935,10 @@ scheduling while preserving the objective. Model prose does not change this stat
 The Passes button in Main chat's composer row lists the improvement passes
 Genesis offers for the session's source, each with its title, one-line
 description, recommendation hint and `lastRun`, Genesis's committed record of
-its last completed run in the project (`listGenesisPasses`; until Genesis lists
-its passes, a marked adapter in `packages/vibe64-genesis/src/server/passes.js`
-holds them, with no runs). Vibe64 reads that record only through Genesis's list;
+its last completed run in the project (`listGenesisPasses`, Genesis's
+`inspectPasses` for that source, contract `genesis.passes.v1`). A pass's own last
+step records its run with `genesis passes done <id>`; Vibe64 never writes that
+record and reads it only through Genesis's list;
 a malformed record fails the list (`PASS_RECORD_INVALID`), and the Passes list
 shows that error with Retry instead of an empty list.
 The session's `passes` read adds the commits on the session's source since each
@@ -4948,7 +4948,7 @@ pass's own `request` from Genesis's list (Genesis treats it as no request: the
 current task's changes for Deslop and the UI pass, the whole app for the others)
 with `genesisTask` set to the pass's id through the ordinary Main chat send, so it shows as the person's message, Stop ends it, and
 admission refuses it while a turn runs or a goal is unfinished. Admission
-accepts only a pass Genesis lists; any listed pass runs in its own Senior turn
+accepts only a pass Genesis lists for the session's source; any listed pass runs in its own Senior turn
 with Genesis's composed prompt for that task, Deslop and the UI pass included.
 
 Vibe64 picks each pass's interval from Genesis's `recommend.when` hint

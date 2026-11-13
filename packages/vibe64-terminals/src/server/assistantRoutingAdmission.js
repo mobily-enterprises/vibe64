@@ -1,4 +1,3 @@
-import { listGenesisPasses } from "@local/vibe64-genesis/server";
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
@@ -16,6 +15,7 @@ import {
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { failure, readCancelled, read, usesWorkPlan, STATE_KEY } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
@@ -27,13 +27,16 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /**
  * The pass a message starts, as a refusal names it: its Genesis title, and its purpose as the
- * suffix of the refusal's codes. A task Genesis does not list as a pass is refused before it is sent.
+ * suffix of the refusal's codes. A task Genesis does not list as a pass for the session's source is
+ * refused before it is sent.
  * @param {string} task
+ * @param {object} context
+ * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} listPasses
  * @returns {Promise<{ name: string, code: string } | null>}
  */
-async function explicitPass(task) {
+async function explicitPass(task, context, listPasses) {
   if (!task) return null;
-  const pass = (await listGenesisPasses()).find(({ id }) => id === task);
+  const pass = (await listPasses({ projectRoot: sessionSourcePath(context.session) })).find(({ id }) => id === task);
   if (!pass) {
     throw Object.assign(
       failure("That pass is not available in this project. Open Passes to choose one.", "vibe64_assistant_routing_pass_unknown"),
@@ -73,6 +76,7 @@ function createAssistantRoutingAdmission({
   dispatch,
   interrupt,
   writesWhileAssistantWorks,
+  listPasses,
   onTiming,
   logger
 }) {
@@ -150,7 +154,7 @@ function createAssistantRoutingAdmission({
     if (options.purpose && options.purpose !== "junior") throw new TypeError("Generated main-chat work must declare Junior.");
     // Each pass, Deslop and the UI pass among them, runs in its own Senior turn.
     const explicitTask = options.purpose ? "" : assistantExplicitTask(input);
-    const explicit = await explicitPass(explicitTask);
+    let explicit = null;
     let context;
     let state;
     let direct;
@@ -170,6 +174,7 @@ function createAssistantRoutingAdmission({
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.", "vibe64_assistant_routing_unavailable");
       context = current;
       key = records.keyFor(sessionId, context);
+      explicit = await explicitPass(explicitTask, context, listPasses);
       // Finish earlier cancels' cleanup first; it never blocks this admission.
       await cancellation.settle(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {
         component: "vibe64.assistant_routing",

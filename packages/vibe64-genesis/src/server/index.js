@@ -60,7 +60,6 @@ import {
   vibe64ResourceEstimatesInspection
 } from "./resourceEstimates.js";
 
-import { GENESIS_PASSES_ADAPTER, listGenesisPasses } from "./passes.js";
 import {
   VIBE64_INTEGRATION_SETUP_SECTION,
   parseVibe64IntegrationSetupLines,
@@ -98,6 +97,7 @@ const {
   inspectDerivedArtifacts,
   inspectEngineering,
   inspectEnvironment,
+  inspectPasses,
   inspectProject,
   inspectProjectFormat,
   inspectAgentIntegrations,
@@ -146,16 +146,20 @@ const VIBE64_HIDDEN_ONBOARDING_STACK_PIECES = Object.freeze([
 ]);
 const VIBE64_STACK_PACKAGES = Object.freeze(["genesis-stack"]);
 const GENESIS_PROMPT_FALLBACK_TASKS = Object.freeze({ BLUEPRINT_INVALID: "blueprint", BLUEPRINT_REQUIRED: "start" });
-// Genesis's own tasks, and the passes it offers (Deslop and the UI pass among them).
+// Genesis's own tasks, and the passes it offers (listGenesisPasses).
 const GENESIS_PROMPT_TASKS = new Set([
   "adopt",
   "blueprint",
+  "data-pass",
   "describe",
+  "deslop",
+  "identity-pass",
   "program",
+  "quality-pass",
   "review",
   "start",
-  "work",
-  ...GENESIS_PASSES_ADAPTER.map(({ id }) => id)
+  "ui-pass",
+  "work"
 ]);
 // Genesis on a person's path, such as an AI message, answers within this
 // deadline or the path goes on without it.
@@ -485,6 +489,33 @@ function inspectGenesisEngineering(options = {}) {
 
 function inspectGenesisCollaboration(options = {}) {
   return exactGenesisInspection(inspectCollaboration, GENESIS_CONTRACTS.collaboration, options);
+}
+
+/**
+ * One pass in Genesis's list (contract genesis.passes.v1). Genesis's entries also carry skill and
+ * stackGuidance, which its own prompt uses.
+ * @typedef {object} GenesisPass
+ * @property {string} id the Genesis prompt task the pass runs
+ * @property {string} title its name, as the person reads it
+ * @property {string} description one line on what it does
+ * @property {{ when: string, hint: string }} recommend when Genesis advises running it:
+ *   "after-change", "first-version" or "periodic", and a line saying so; Vibe64 decides when to
+ *   suggest it
+ * @property {string} request the pass's default request, never empty: Run sends it as the person's
+ *   message, and Genesis treats it as it treats no request
+ * @property {string | null} lastRun when the pass last completed in the project, from Genesis's
+ *   committed record (a UTC ISO time), or null when it never has
+ */
+
+/**
+ * The passes Genesis offers for a project, in Genesis's order, each with its last completed run
+ * there. This is Vibe64's one reader of Genesis's pass list and its record of runs; a malformed
+ * record fails it with Genesis's PASS_RECORD_INVALID, whose message names the file and the fix.
+ * @param {{ projectRoot: string }} options
+ * @returns {Promise<GenesisPass[]>}
+ */
+async function listGenesisPasses(options) {
+  return (await exactGenesisInspection(inspectPasses, GENESIS_CONTRACTS.passes, options)).passes;
 }
 
 async function inspectGenesisProjectFormat(options = {}) {

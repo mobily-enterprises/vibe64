@@ -18,6 +18,7 @@ import {
 import {
   routeApiEndpoint
 } from "./support/base-shell/http";
+import { GENESIS_PASSES } from "../fixtures/genesisPasses.js";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 import { touchTarget } from "./support/touch-target";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
@@ -525,18 +526,15 @@ test.describe("direct chat", () => {
           await mockDirectChat(page);
           const day = 24 * 60 * 60 * 1000;
           const ago = (days: number) => new Date(Date.now() - days * day).toISOString();
-          const passes = [
-            { id: "deslop", title: "Deslop", description: "Simplify the code and remove repetition without changing what the app does.",
-              recommend: { when: "after-change", hint: "after each saved change" }, request: "Deslop your own changes for the current task.", lastRun: ago(2), commitsSince: 6 },
-            { id: "ui-pass", title: "UI pass", description: "Bring every screen in line with the project's UI guidance, on phones and wide screens.",
-              recommend: { when: "after-change", hint: "after a change to the screens" }, request: "UI pass your own changes for the current task.", lastRun: ago(5), commitsSince: 11 },
-            { id: "identity-pass", title: "Visual identity", description: "Give the app a complete designed look: theme, artwork, logo and loading screen.",
-              recommend: { when: "first-version", hint: "once a first working version exists" }, request: "Give the whole app its visual identity.", lastRun: ago(40), commitsSince: 64 },
-            { id: "quality-pass", title: "Quality pass", description: "Check the app end to end and fix what a careful reviewer would flag.",
-              recommend: { when: "periodic", hint: "after a stretch of changes, about every few weeks of active work" }, request: "Quality pass the whole app.", lastRun: ago(25), commitsSince: 42 },
-            { id: "data-pass", title: "Data pass", description: "Keep each fact in one place and check that data takes its real paths.",
-              recommend: { when: "periodic", hint: "after a stretch of changes, about every few weeks of active work" }, request: "Data pass the whole app.", lastRun: null, commitsSince: 12 }
-          ].map((pass) => ({ ...pass, snoozedUntil: "", dismissed: false }));
+          // Genesis's own list, with when each pass last ran and the commits since.
+          const runs: Record<string, { lastRun: string | null, commitsSince: number }> = {
+            deslop: { lastRun: ago(2), commitsSince: 6 },
+            "ui-pass": { lastRun: ago(5), commitsSince: 11 },
+            "identity-pass": { lastRun: ago(40), commitsSince: 64 },
+            "quality-pass": { lastRun: ago(25), commitsSince: 42 },
+            "data-pass": { lastRun: null, commitsSince: 12 }
+          };
+          const passes = GENESIS_PASSES.map((pass) => ({ ...pass, ...runs[pass.id], snoozedUntil: "", dismissed: false }));
           // The server's rule picks the quality pass, the one pass due: overdue, with enough commits.
           let recommendation = "quality-pass";
           const changes: Record<string, unknown>[] = [];

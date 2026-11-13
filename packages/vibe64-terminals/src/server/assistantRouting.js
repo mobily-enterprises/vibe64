@@ -1,3 +1,4 @@
+import { listGenesisPasses } from "@local/vibe64-genesis/server";
 import { createAssistantRoutingState } from "./assistantRoutingState.js";
 import { createAssistantRoutingRecords } from "./assistantRoutingRecords.js";
 import { createAssistantRoutingDecisions } from "./assistantRoutingDecisions.js";
@@ -43,6 +44,8 @@ function followNoCompletedPlan() {
  *   Updates holding the agent-write lock while the AI works, which Stop and steers never wait for.
  * @param {(timing: object) => void} [dependencies.onTiming]
  * @param {(sessionId: string, details: object) => unknown} [dependencies.onPlanCompleted]
+ * @param {typeof listGenesisPasses} [dependencies.listPasses] The passes Genesis offers for a
+ *   project, which an explicit pass must be one of.
  */
 function createAssistantRouting({
   systemRoot,
@@ -58,7 +61,8 @@ function createAssistantRouting({
   logger,
   writesWhileAssistantWorks = NO_WRITES_WHILE_ASSISTANT_WORKS,
   onTiming = doNothing,
-  onPlanCompleted = followNoCompletedPlan
+  onPlanCompleted = followNoCompletedPlan,
+  listPasses = listGenesisPasses
 }) {
   const routingState = createAssistantRoutingState({ systemRoot, allowAuto });
   /**
@@ -122,6 +126,7 @@ function createAssistantRouting({
     dispatch,
     interrupt,
     writesWhileAssistantWorks,
+    listPasses,
     onTiming,
     logger
   });

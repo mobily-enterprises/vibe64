@@ -16,14 +16,14 @@ vi.mock("vuetify", async () => {
 });
 vi.mock("vuetify/components", () => ({ VBottomSheet: {}, VMenu: {} }));
 
-import { GENESIS_PASSES_ADAPTER } from "../../packages/vibe64-genesis/src/server/passes.js";
+import { GENESIS_PASSES } from "../fixtures/genesisPasses.js";
 import { useVibe64Passes } from "../../src/composables/useVibe64Passes.js";
 import Vibe64PassesMenu from "../../src/components/studio/vibe64-session/Vibe64PassesMenu.vue";
 import Vibe64PassSuggestion from "../../src/components/studio/vibe64-session/Vibe64PassSuggestion.vue";
 
 const DAY = 24 * 60 * 60 * 1000;
 // The server's read: the adapter's passes, with the project's last runs.
-const listed = (states = {}) => GENESIS_PASSES_ADAPTER.map((pass) => ({
+const listed = (states = {}) => GENESIS_PASSES.map((pass) => ({
   ...pass, lastRun: null, commitsSince: 12, snoozedUntil: "", dismissed: false, ...states[pass.id]
 }));
 let apps = [];
@@ -63,9 +63,9 @@ it("lists Genesis's passes from the session's read, each with its last run or Ne
   const { state } = passes();
   expect(mocks.resource.options.path.value).toBe("/api/sessions/session-1/passes");
   expect(state.passes.value.map(({ id, title, description }) => ({ id, title, description })))
-    .toEqual(GENESIS_PASSES_ADAPTER.map(({ id, title, description }) => ({ id, title, description })));
+    .toEqual(GENESIS_PASSES.map(({ id, title, description }) => ({ id, title, description })));
   const menu = mount(Vibe64PassesMenu, { passes: state });
-  expect(menu.list.map(({ title }) => title)).toEqual(GENESIS_PASSES_ADAPTER.map(({ title }) => title));
+  expect(menu.list.map(({ title }) => title)).toEqual(GENESIS_PASSES.map(({ title }) => title));
   const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(ran);
   expect(menu.lastRunLabel(menu.list.find(({ id }) => id === "quality-pass"))).toBe(`Last run: ${date} · 7 commits since`);
   expect(menu.lastRunLabel(menu.list.find(({ id }) => id === "deslop"))).toBe("Never run");

@@ -168,8 +168,8 @@ function createProjectPasses({
   }
 
   async function changeRecommendation(sessionId, input) {
-    const { runtime } = await sessionContext(sessionId);
-    if (!(await listPasses()).some(({ id }) => id === input.passId)) {
+    const { runtime, session } = await sessionContext(sessionId);
+    if (!(await listPasses({ projectRoot: sessionSourcePath(session) })).some(({ id }) => id === input.passId)) {
       throw vibe64Error("That pass is not available in this project.", "vibe64_project_pass_unknown");
     }
     const at = now();
