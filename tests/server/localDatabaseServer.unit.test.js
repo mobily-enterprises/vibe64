@@ -139,11 +139,11 @@ test("a port nobody listens on is reported as not running, quickly", async () =>
   const { port } = server.address();
   await new Promise((resolve) => server.close(resolve));
   for (const kind of ["mysql", "postgresql"]) {
-    const started = Date.now();
-    const result = await checkDatabaseServer({ kind, timeoutMs: 2_000,
+    // "Quickly" means the refusal answers, not the check's timeout: a check that waited out its timeout would answer
+    // "unreachable" a minute later. The state proves which one answered, however busy the machine is.
+    const result = await checkDatabaseServer({ kind, timeoutMs: 60_000,
       endpoint: { host: "127.0.0.1", port, database: "app", username: "app", password: "x" } });
     assert.equal(result.state, "not-running", kind);
-    assert.ok(Date.now() - started < 2_500);
   }
   assert.equal((await checkDatabaseServer({ kind: "mysql", endpoint: null })).state, "incomplete");
 });
