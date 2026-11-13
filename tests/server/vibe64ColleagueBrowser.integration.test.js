@@ -25,17 +25,18 @@ const subscribeEvent = "assistant.conversation.subscribe";
 const unsubscribeEvent = "assistant.conversation.unsubscribe";
 const conversationEvent = "assistant.conversation.event";
 
-function command(socket, event, input) {
-  return new Promise((resolve, reject) => socket.timeout(5000).emit(event, input,
-    (error, response) => error ? reject(error) : resolve(response)));
-}
+// Each step waits for its answer, its event or its connection, and the test's
+// own limit bounds them all. Each Colleague read checks the AI accounts'
+// sign-in, which runs the status commands of the AI CLIs installed on the
+// host: 0.4 s on a warm test host, 2 to 3 s right after npm ci, and on a busy
+// host with a cold disk cache past the 5 s that each step once had, so the
+// test failed with a TimeoutError while the answer was still on its way.
+const command = (socket, event, input) => socket.emitWithAck(event, input);
 
 async function connect(socket) {
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => finish(new Error("Colleague Socket.IO connection timed out.")), 5000);
     const connected = () => finish();
     function finish(error) {
-      clearTimeout(timer);
       socket.off("connect", connected);
       socket.off("connect_error", finish);
       if (error) reject(error);
@@ -50,8 +51,8 @@ async function connect(socket) {
 // Complements the original real-binding client and direct service assertions.
 // Actual installed package discovery must supply the sole AssistantFeature;
 // no provider registration, action, conversation or transport is substituted.
-// The server starts with the file, so the test's 30 s limit and its 5 s request bounds cover only the test's own
-// work: on a busy machine, loading the server's modules from a cold disk cache could use them up alone.
+// The server starts with the file, so the test's 30 s limit covers only the test's own work: on a busy machine,
+// loading the server's modules from a cold disk cache could use it up alone.
 const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
 const httpFetch = globalThis.fetch.bind(globalThis);
 const sockets = [];
@@ -90,10 +91,10 @@ after(async () => {
   }
 });
 
-test("the installed Public Colleague shares its canonical HTTP and private realtime boundary before AI setup", { timeout: 30000 }, async () => {
+test("the installed Public Colleague shares its canonical HTTP and private realtime boundary before AI setup", { timeout: 30000 }, async t => {
   async function request(url, options = {}) {
     const response = await httpFetch(`${origin}${url}`, {
-      method: options.method || "GET", signal: options.signal || AbortSignal.timeout(5000),
+      method: options.method || "GET", signal: options.signal || t.signal,
       headers: { ...options.headers, Origin: origin,
         ...(options.body === undefined ? {} : { "Content-Type": "application/json" }) },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) })
@@ -149,7 +150,7 @@ test("the installed Public Colleague shares its canonical HTTP and private realt
   assert.equal(denied.ok, false);
   assert.equal(denied.status, 403, JSON.stringify(denied));
 
-  const changed = once(socket, conversationEvent, { signal: AbortSignal.timeout(5000) });
+  const changed = once(socket, conversationEvent, { signal: t.signal });
   const stopped = await api.cancelConversation(id);
   assert.equal(stopped.ok, true);
   const [event] = await changed;
@@ -173,7 +174,7 @@ test("the installed Public Colleague shares its canonical HTTP and private realt
   assert.equal(reconnected.state.id, id);
   assert.notEqual(reconnected.streamEpoch, first.streamEpoch);
   assert.deepEqual(reconnected.state.conversationLog, []);
-  const nextChange = once(socket, conversationEvent, { signal: AbortSignal.timeout(5000) });
+  const nextChange = once(socket, conversationEvent, { signal: t.signal });
   await api.cancelConversation(id);
   const [nextEvent] = await nextChange;
   assert.equal(nextEvent.streamEpoch, reconnected.streamEpoch);
