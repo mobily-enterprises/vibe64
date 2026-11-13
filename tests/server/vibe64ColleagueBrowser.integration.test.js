@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after, before, mock } from "node:test";
 import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
@@ -50,42 +50,47 @@ async function connect(socket) {
 // Complements the original real-binding client and direct service assertions.
 // Actual installed package discovery must supply the sole AssistantFeature;
 // no provider registration, action, conversation or transport is substituted.
-test("the installed Public Colleague shares its canonical HTTP and private realtime boundary before AI setup", { timeout: 30000 }, async t => {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-colleague-browser-"));
-  const systemRoot = path.join(temporaryRoot, "state");
-  const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
+// The server starts with the file, so the test's 30 s limit and its 5 s request bounds cover only the test's own
+// work: on a busy machine, loading the server's modules from a cold disk cache could use them up alone.
+const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
+const httpFetch = globalThis.fetch.bind(globalThis);
+const sockets = [];
+let temporaryRoot;
+let systemRoot;
+let inference;
+let app;
+let origin;
+
+before(async () => {
+  temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-colleague-browser-"));
+  systemRoot = path.join(temporaryRoot, "state");
   process.env.VIBE64_RUNTIME_NAMESPACE = `colleague-browser-${process.pid}`;
-  const httpFetch = globalThis.fetch.bind(globalThis);
-  const inference = t.mock.method(globalThis, "fetch", () => {
+  inference = mock.method(globalThis, "fetch", () => {
     throw new Error("Reading and stopping an unconfigured Colleague must not invoke account or model requests.");
   });
-  const sockets = [];
-  let starting;
-  t.after(async () => {
-    for (const socket of sockets) socket.disconnect();
-    // A server still starting when the test timed out is waited for and closed too: left to finish on its own, it
-    // would listen after the teardown and hold the file open until the runner's limit.
-    const app = await starting?.catch(() => undefined);
-    try {
-      try { await app?.vibe64CapabilityRuntime?.shutdown(); }
-      finally { await app?.close(); }
-    } finally {
-      if (previousNamespace === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE;
-      else process.env.VIBE64_RUNTIME_NAMESPACE = previousNamespace;
-      await rm(temporaryRoot, { recursive: true, force: true });
-      assert.equal(inference.mock.callCount(), 0);
-    }
-  });
-
-  starting = createServer({
+  app = await createServer({
     managedSourceRoot: path.join(temporaryRoot, "managed"),
     projectsRoot: path.join(temporaryRoot, "projects"),
     systemRoot
   });
-  const app = await starting;
-  // A test that timed out while its server started stops here, before listening, and leaves it to the teardown.
-  if (t.signal.aborted) return;
-  const origin = await app.listen({ host: "127.0.0.1", port: 0 });
+  origin = await app.listen({ host: "127.0.0.1", port: 0 });
+});
+
+after(async () => {
+  for (const socket of sockets) socket.disconnect();
+  try {
+    try { await app?.vibe64CapabilityRuntime?.shutdown(); }
+    finally { await app?.close(); }
+  } finally {
+    inference?.mock.restore();
+    if (previousNamespace === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE;
+    else process.env.VIBE64_RUNTIME_NAMESPACE = previousNamespace;
+    if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true });
+    assert.equal(inference?.mock.callCount() ?? 0, 0);
+  }
+});
+
+test("the installed Public Colleague shares its canonical HTTP and private realtime boundary before AI setup", { timeout: 30000 }, async () => {
   async function request(url, options = {}) {
     const response = await httpFetch(`${origin}${url}`, {
       method: options.method || "GET", signal: options.signal || AbortSignal.timeout(5000),
