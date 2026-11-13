@@ -13,8 +13,11 @@ checkout on the person's laptop. The Git workflow depends on which:
   (see **Connected repositories**). Bring work into main with the session's
   **Save**, which saves each copy that has work straight to its repository's
   main before the session's own repository. Keep the session and its copies
-  current with **Update this session (rebase)**. Do not fetch, pull, reset or
-  rebase these checkouts yourself.
+  current with **Update this session (rebase)**: when status says the session is
+  behind, run `vibe64-helper session update` before building on the old code, at
+  a point where you can resolve a conflict (or leave it and tell the person);
+  Save still needs the person. Do not fetch, pull, reset or rebase these
+  checkouts yourself.
 - **On a laptop**: the main checkout is a read-only home base. A session-start
   fast-forward keeps it current, only when it has no local commits; never merge,
   reset or rebase it, and leave its local edits alone. Make each change in a

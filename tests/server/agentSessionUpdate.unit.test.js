@@ -178,7 +178,7 @@ test("a connected repository's conflict names that repository and its files, how
   assert.deepEqual(repaired.changedFiles, ["../connected/library/index.js"]);
 });
 
-test("session update says to wait for a refusal that clears by itself, and to ask the person when only they can decide", async (t) => {
+test("every other refusal or failure is failed, with Update's own message and one next step", async (t) => {
   const f = await scriptedUpdate(t, {
     results: [
       { ok: false, code: "vibe64_agent_write_mode_busy", error: "This session is being saved. Try again when Save finishes.", retryable: true },
@@ -197,14 +197,14 @@ test("session update says to wait for a refusal that clears by itself, and to as
     answers.push(JSON.parse(answer.stdout));
   }
 
-  assert.deepEqual(answers.map(({ status, next }) => [status, next]), [
-    ["wait", "Run vibe64-helper session update again once that finishes, usually in a moment."],
-    ["needs_person", "This session's history was rewritten, which only the person can agree to reconcile: tell them what it says; they can choose Fix it with AI on the Update notice."],
-    ["failed", "Fix the cause if it lies in this session's files, then run vibe64-helper session update again; otherwise tell the person what it says."],
-    ["failed", "Fix the cause if it lies in this session's files, then run vibe64-helper session update again; otherwise tell the person what it says."]
+  const next = "Read what it says. If something else is running, run vibe64-helper session update again in a moment. " +
+    "If the cause is in this session's files, fix it and run it again. Otherwise tell the person what it says.";
+  assert.deepEqual(answers.map(({ code, message, next: step, status }) => ({ code, message, next: step, status })), [
+    { code: "vibe64_agent_write_mode_busy", message: "This session is being saved. Try again when Save finishes.", next, status: "failed" },
+    { code: "vibe64_session_update_history_diverged", message: "This session's history was rewritten.", next, status: "failed" },
+    { code: "vibe64_session_update_ignored_file", message: "Update would overwrite the ignored file .env.", next, status: "failed" },
+    { code: "", message: "Update finished without saying what it moved.", next, status: "failed" }
   ]);
-  assert.equal(answers[0].message, "This session is being saved. Try again when Save finishes.");
-  assert.equal(answers[3].message, "Update finished without saying what it moved.");
   // A command that never reached Update reports its own failure.
   const unreached = await f.helper(["update"]);
   assert.deepEqual([unreached.code, unreached.stdout, unreached.stderr.trim()], [1, "", "The active Vibe64 session source is unavailable."]);

@@ -171,11 +171,14 @@ works must therefore get a short visible reply first (a direct question gets a
 direct answer) before the agent continues; an answer left only in thinking is
 not a reply. The
 contribution points agents to `vibe64-helper spec` for exact Vibe64-owned
-contracts instead of restating their grammar. It tells the agent to run
-`vibe64-helper session update` itself when its work needs the newer saved
-version or `repository.updateFirst` says the session is behind, rather than ask
-the person to press Update, then to re-read what changed and restart a Preview
-still running old code; Update never saves, so Save stays the person's
+contracts instead of restating their grammar. When `repository.updateFirst`
+says the session is behind, it tells the agent to run `vibe64-helper session
+update` before building on the old code, at a point where it can deal with a
+conflict, with a time limit of up to 30 minutes (when its tool stops the command
+earlier, Update carries on and status shows when it ends); to resolve clashing
+files first, or leave them and tell the person; then to re-read what changed and
+restart a Preview still running old code. Nothing updates automatically, and
+Update never saves, so Save stays the person's
 ([saving work](../source/save-work.md)). With the pages command it also
 tells every engine how to publish a page and when to offer one
 ([publishing pages](../pages/publishing.md)). Framework conventions, such as

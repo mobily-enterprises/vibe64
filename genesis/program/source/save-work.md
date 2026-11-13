@@ -469,8 +469,11 @@ are the update check made afterwards. `agentSessionUpdateAnswer`
 `preview.restart`, true when files changed and a Preview started before Update
 still runs), `conflict` (the repository, its folder, files, saved and base
 commits and review id, with the repair steps and the `--resolved` run, which
-passes `reviewedConflictId` as **Review resolved conflicts** does), `wait` (a
-refusal that clears by itself), `needs_person` (rewritten history) or `failed`.
+passes `reviewedConflictId` as **Review resolved conflicts** does) or `failed`
+for every other refusal or failure: Update's own message, whose code it keeps,
+with one next step (run it again in a moment when something else was running,
+fix a cause in this session's files, or tell the person), so the terminals keep
+no list of Update's codes.
 The command exits 0 only when Update finished and allows 30 minutes; it never
 Saves. Sources: `tests/server/agentSessionUpdate.unit.test.js` and
 `tests/server/agentSessionUpdate.integration.test.js`.

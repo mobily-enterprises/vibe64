@@ -1,28 +1,15 @@
 // What `vibe64-helper session update` answers. The command runs the session's own Update, the one its Update button
 // runs; this puts that Update's result as what the session's AI does next: which repositories and files moved and
-// whether Preview restarts, or which repository conflicts and how to finish it, or why it should wait or ask.
+// whether Preview restarts, or which repository conflicts and how to finish it, or what Update said when it failed.
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { shortCommit } from "./sessionConnectedCopies.js";
 
 const LISTED_FILE_LIMIT = 20;
 const OWN_REPOSITORY = "this session";
 const UPDATE_COMMAND = "vibe64-helper session update";
-
-// Refusals that clear by themselves: another change to the session or a preparation finishes, a file or commit
-// written while Update ran made it put everything back, or Vibe64 is starting.
-const WAIT_CODES = new Set([
-  "vibe64_agent_write_mode_busy",
-  "vibe64_ai_task_active",
-  "vibe64_session_update_head_moved",
-  "vibe64_session_update_unavailable",
-  "vibe64_session_update_worktree_changed",
-  "vibe64_workspace_setup_running"
-]);
-// Rewritten history is reconciled only with the person's agreement.
-const PERSON_CODES = new Set([
-  "vibe64_session_history_review_required",
-  "vibe64_session_update_history_diverged"
-]);
+// Update's own message says why; the AI needs no list of its codes to act on it.
+const FAILED_NEXT = `Read what it says. If something else is running, run ${UPDATE_COMMAND} again in a moment. ` +
+  "If the cause is in this session's files, fix it and run it again. Otherwise tell the person what it says.";
 
 const fileCount = count => `${count} ${count === 1 ? "file" : "files"}`;
 
@@ -107,43 +94,31 @@ function conflictSteps(conflict) {
 }
 
 /**
- * The answer to a refused or failed Update. A connected repository that failed still lets the others and this
- * session's own repository update, so what moved is reported with it.
+ * The answer to a refused or failed Update: a conflict, with what repairs it, or Update's own message. A connected
+ * repository that failed still lets the others and this session's own repository update, so what moved is
+ * reported with it.
  * @param {object} result the Update's `{ ok: false }` result
  * @param {{ previewStartedBefore: boolean, setupRunning: boolean }} after
  */
 function failedUpdateAnswer(result, after) {
-  const code = normalizeText(result.code);
   const details = result.details || {};
   const moved = movedBy(details.updated || {}, after.previewStartedBefore);
-  const movedFields = moved.repositories.length ? moved : {};
-  const meanwhile = moved.repositories.length ? `Meanwhile ${movedLines(moved)}` : "";
   const recovery = details.conflictRecovery;
-  if (recovery?.reviewId) {
-    const conflict = conflictFor(recovery, normalizeText(details.connectedRepository || recovery.connectedRepository));
-    return {
-      ok: false,
-      status: "conflict",
-      code,
-      message: [conflictLine(conflict), meanwhile].filter(Boolean).join(" "),
-      next: [conflictSteps(conflict), afterUpdateSteps(moved, after.setupRunning)].filter(Boolean).join(" "),
-      conflict,
-      ...movedFields
-    };
-  }
-  const status = WAIT_CODES.has(code) ? "wait" : PERSON_CODES.has(code) ? "needs_person" : "failed";
-  const next = status === "wait"
-    ? `Run ${UPDATE_COMMAND} again once that finishes, usually in a moment.`
-    : status === "needs_person"
-      ? "This session's history was rewritten, which only the person can agree to reconcile: tell them what it says; they can choose Fix it with AI on the Update notice."
-      : `Fix the cause if it lies in this session's files, then run ${UPDATE_COMMAND} again; otherwise tell the person what it says.`;
+  const conflict = recovery?.reviewId
+    ? conflictFor(recovery, normalizeText(details.connectedRepository || recovery.connectedRepository))
+    : null;
   return {
     ok: false,
-    status,
-    code,
-    message: [normalizeText(result.error) || "Update did not finish.", meanwhile].filter(Boolean).join(" "),
-    next: [next, afterUpdateSteps(moved, after.setupRunning)].filter(Boolean).join(" "),
-    ...movedFields
+    status: conflict ? "conflict" : "failed",
+    code: normalizeText(result.code),
+    message: [
+      conflict ? conflictLine(conflict) : normalizeText(result.error) || "Update did not finish.",
+      moved.repositories.length ? `Meanwhile ${movedLines(moved)}` : ""
+    ].filter(Boolean).join(" "),
+    next: [conflict ? conflictSteps(conflict) : FAILED_NEXT, afterUpdateSteps(moved, after.setupRunning)]
+      .filter(Boolean).join(" "),
+    ...(conflict ? { conflict } : {}),
+    ...(moved.repositories.length ? moved : {})
   };
 }
 

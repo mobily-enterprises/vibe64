@@ -154,10 +154,11 @@ desktop and mobile.
 
 ## The session's AI updates the session itself
 
-When the AI's work needs the project's newer saved version, or the session is
-behind it, the session's AI runs Update itself instead of asking you to choose
-**Update this session (rebase)**. It is the same Update, for this session and its
-[connected repositories](connected-repositories.md): it runs inside the AI's own
+When the session is behind its saved version, the session's AI runs Update
+itself before building on the old code, at a point where it can deal with a
+conflict, so you don't need to choose **Update this session (rebase)** for it.
+Nothing updates on its own: the AI decides when. It is the same Update, for this
+session and its [connected repositories](connected-repositories.md): it runs inside the AI's own
 turn without waiting for it to end, keeps the AI's unsaved work like any Update,
 and its notice in chat shows it as it shows yours. The AI runs it with
 `vibe64-helper session update`, which tells it what changed, so it re-reads
@@ -165,11 +166,16 @@ those files and restarts Preview itself when Preview still runs the code from
 before Update.
 
 When a repository conflicts, the command names that repository and its files,
-and leaves that repository unchanged. The AI repairs the files, keeping both
-versions' intended changes, then applies the repair with `vibe64-helper session
-update --resolved <review-id>`, as **Review resolved conflicts** does. When
-another Save or Update is running, it waits and tries again; rewritten history
-still needs you (**Fix it with AI** on the Update notice).
+and leaves that repository unchanged. The AI stops its other work and repairs
+the files first, keeping both versions' intended changes, then applies the
+repair with `vibe64-helper session update --resolved <review-id>`, as **Review
+resolved conflicts** does; if it can't repair them then, it leaves them and
+tells you. When
+Update stops for any other reason, the AI gets Update's own message: it tries
+again in a moment when something else was running, fixes a cause in the
+session's files and tries again, or otherwise tells you what Update said. An
+Update can take several minutes; if the AI's own tool stops waiting sooner,
+Update carries on and the AI checks the session's status until it ends.
 
 Update never saves, and the AI cannot Save for you: **Save** still needs your
 choice, because it publishes the session's work. The same applies on desktop and

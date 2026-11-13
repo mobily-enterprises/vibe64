@@ -95,8 +95,8 @@ again.
 
 The session's regular check for newer saved work also watches each copy's main,
 so the session asks for an Update when any of them moves. The session's AI runs
-this same Update itself when its work needs the newer versions, and repairs a
-copy's conflict the same way; see
+this same Update itself when the session is behind, before building on the old
+code, and repairs a copy's conflict the same way, or leaves it and tells you; see
 [The session's AI updates the session itself](github-work.md#the-sessions-ai-updates-the-session-itself).
 
 ## Save saves the copies first
