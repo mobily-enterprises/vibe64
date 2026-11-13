@@ -7404,45 +7404,55 @@ test("interactive detached turns retain their existing writable settings and res
   });
 });
 
-test("session shutdown interrupts and deletes an active helper thread before stopping its provider", async () => {
-  await withConversationController(async ({
-    calls,
-    captures,
-    controller,
-    simulateControllerCrash,
-    subscribers
-  }) => {
-    captures.interruptCompletesTurns = true;
-    const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationHelperProfile(),
-      outputSchema: sourceExplanationOutputSchema(),
-      prompt: "Keep this bounded turn active until shutdown."
+test("session shutdown interrupts and deletes an active helper thread before stopping its provider", async (t) => {
+  // The interrupt reports the turn completed before its answer, so the turn's
+  // watcher gives the answer a short grace (a timer) before it fails the turn
+  // as answerless. This answer arrives only after shutdown has finished. The
+  // test holds the clock, so the grace cannot run out while a busy host is
+  // still shutting down, which made the turn fail as answerless instead.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    await withConversationController(async ({
+      calls,
+      captures,
+      controller,
+      simulateControllerCrash,
+      subscribers
+    }) => {
+      captures.interruptCompletesTurns = true;
+      const pending = controller.runDetachedChatTurn("session-1", {
+        executionProfile: sourceExplanationHelperProfile(),
+        outputSchema: sourceExplanationOutputSchema(),
+        prompt: "Keep this bounded turn active until shutdown."
+      });
+      await waitForCapturedTurns(captures, 1);
+      await flushPromises();
+
+      await controller.closeAllForSession("session-1");
+      simulateControllerCrash();
+
+      const interruptIndex = calls.findIndex(([operation]) => operation === "interrupt");
+      const deleteIndex = calls.findIndex(([operation]) => operation === "delete");
+      const stopIndex = calls.findIndex(([operation]) => operation === "stopRuntime");
+      assert.ok(interruptIndex >= 0);
+      assert.ok(deleteIndex > interruptIndex);
+      assert.ok(stopIndex > deleteIndex);
+      assert.deepEqual(captures.interrupts, [{
+        threadId: "conversation-1",
+        turnId: "turn-1"
+      }]);
+      assert.equal(captures.stopRuntimes, 1);
+
+      completeDetachedTurn(subscribers, {
+        text: JSON.stringify({ answer: "Shutdown completed." })
+      });
+      const result = await pending;
+      assert.equal(result.ok, false);
+      assert.equal(result.code, "vibe64_codex_helper_thread_unavailable");
     });
-    await waitForCapturedTurns(captures, 1);
-    await flushPromises();
-
-    await controller.closeAllForSession("session-1");
-    simulateControllerCrash();
-
-    const interruptIndex = calls.findIndex(([operation]) => operation === "interrupt");
-    const deleteIndex = calls.findIndex(([operation]) => operation === "delete");
-    const stopIndex = calls.findIndex(([operation]) => operation === "stopRuntime");
-    assert.ok(interruptIndex >= 0);
-    assert.ok(deleteIndex > interruptIndex);
-    assert.ok(stopIndex > deleteIndex);
-    assert.deepEqual(captures.interrupts, [{
-      threadId: "conversation-1",
-      turnId: "turn-1"
-    }]);
-    assert.equal(captures.stopRuntimes, 1);
-
-    completeDetachedTurn(subscribers, {
-      text: JSON.stringify({ answer: "Shutdown completed." })
-    });
-    const result = await pending;
-    assert.equal(result.ok, false);
-    assert.equal(result.code, "vibe64_codex_helper_thread_unavailable");
-  });
+  } finally {
+    t.mock.timers.reset();
+  }
 });
 
 test("ordinary project dormancy close preserves interactive session process-exit proof", async () => {
