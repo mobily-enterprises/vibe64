@@ -36,6 +36,7 @@ import { createServiceTurnPublication } from "./serviceTurnPublication.js";
 import { createServiceCommandServices } from "./serviceCommandServices.js";
 import { createServiceAgentProviders } from "./serviceAgentProviders.js";
 import { sessionAssistantWorking } from "./serviceSessionRecords.js";
+import { createProjectPasses } from "./projectPasses.js";
 
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
@@ -158,6 +159,7 @@ function createService({
     project,
     publishSessionChanged
   });
+  const passes = createProjectPasses({ sessionContext: (sessionId) => sessionAccess.sessionContext(sessionId) });
   const workspacePreparation = createServiceWorkspacePreparation({
     sessionAccess,
     project,
@@ -617,6 +619,8 @@ function createService({
     updateCanonicalAgentGoal: goals.updateCanonicalAgentGoal,
     readAgentPlanUsage: assistant.readAgentPlanUsage,
     readSessionWorkPlan: agentConversations.readSessionWorkPlan,
+    readSessionPasses: passes.readSessionPasses,
+    changePassRecommendation: passes.changePassRecommendation,
     archiveSessionWorkPlan: agentConversations.archiveSessionWorkPlan,
     restoreSessionWorkPlan: agentConversations.restoreSessionWorkPlan,
     ensureAgentSession: assistant.ensureAgentSession,

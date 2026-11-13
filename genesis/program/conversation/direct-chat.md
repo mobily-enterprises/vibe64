@@ -1577,6 +1577,14 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/lib/vibe64WelcomeName.js`
 - `vite.config.mjs`
 
+- `packages/vibe64-genesis/src/server/passes.js`
+- `packages/vibe64-terminals/src/server/projectPasses.js`
+- `src/composables/useVibe64Passes.js`
+- `src/components/studio/vibe64-session/Vibe64PassesMenu.vue`
+- `src/components/studio/vibe64-session/Vibe64PassSuggestion.vue`
+- `tests/server/projectPasses.unit.test.js`
+- `tests/client/vibe64Passes.vitest.js`
+
 ## Public contract
 
 Session notifications carry the trusted request context's project slug, then
@@ -4922,3 +4930,37 @@ selection, actor, access and native activity checks still apply.
 Blocked Claude goals expose Pause as well as Resume in the shared Goal control.
 Explicit Pause uses the retained native goal owner and disables automatic
 scheduling while preserving the objective. Model prose does not change this state.
+
+## Passes
+
+The Passes button in Main chat's composer row lists the improvement passes
+Genesis offers for the session's source, each with its title, one-line
+description, recommendation hint and `lastRun`, Genesis's committed record of
+its last completed run in the project (`listGenesisPasses`; until Genesis lists
+its passes, a marked adapter in `packages/vibe64-genesis/src/server/passes.js`
+holds them, with no runs). Vibe64 reads that record only through Genesis's list;
+a malformed record fails the list (`PASS_RECORD_INVALID`), and the Passes list
+shows that error with Retry instead of an empty list.
+The session's `passes` read adds the commits on the session's source since each
+`lastRun` (`git rev-list --count`), and the list shows `Last run: <date>` or
+`Never run`. Run sends the
+pass's own `request` from Genesis's list (Genesis treats it as no request: the
+current task's changes for Deslop and the UI pass, the whole app for the others)
+with `genesisTask` set to the pass's id through the ordinary Main chat send, so it shows as the person's message, Stop ends it, and
+admission refuses it while a turn runs or a goal is unfinished. Admission
+accepts only a pass Genesis lists; any listed pass runs in its own Senior turn
+with Genesis's composed prompt for that task, Deslop and the UI pass included.
+
+Vibe64 picks each pass's interval from Genesis's `recommend.when` hint
+(`PASS_INTERVALS` in `projectPasses.js`: after-change 7 days and 20 commits,
+first-version 90 days and 30 commits, periodic, and any hint it does not know,
+21 days and 30 commits). A pass is due once its interval's days have passed since
+its `lastRun` and its commits since then reach the interval's commits; a pass
+that never ran needs only the commits, counted over the whole history. Of the passes
+due, one that never ran comes first, then the most overdue for its interval,
+with Genesis's order breaking ties; it is suggested above the composer while the
+chat is idle, has no draft and no goal. The project's `settings/pass-suggestions.json`
+holds only the suggestion's state: Later snoozes it for seven days, and Dismiss
+hides it until a `lastRun` later than the dismissal. Nothing runs a pass except
+Run. Team members, whose messages wait for approval, get neither the list nor
+suggestions.

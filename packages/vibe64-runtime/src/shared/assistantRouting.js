@@ -64,7 +64,7 @@ const ROUTING_REASONS = Object.freeze([
   "conversation", "planning", "implementation", "review"
 ]);
 // Main chat always runs on the owner's setup.
-const MAIN_CHAT_PURPOSES = Object.freeze(["custom", "senior", "junior", "auto", "review", "deslop", "ui_pass", "request_routing"]);
+const MAIN_CHAT_PURPOSES = Object.freeze(["custom", "senior", "junior", "auto", "review", "deslop", "ui_pass", "pass", "request_routing"]);
 const ASSISTANT_PURPOSE_ROLES = Object.freeze({
   custom: "custom",
   senior: "senior",
@@ -72,6 +72,7 @@ const ASSISTANT_PURPOSE_ROLES = Object.freeze({
   review: "senior",
   deslop: "senior",
   ui_pass: "senior",
+  pass: "senior",
   request_routing: "router",
   colleague: "colleague",
   fix: "fix",
@@ -98,7 +99,7 @@ const ASSISTANT_ROLE_PURPOSES = Object.freeze({
 
 function assistantModeLabel(mode) {
   return ASSISTANT_MODES.find(({ id }) => id === mode)?.label || (mode === "fix" ? ASSISTANT_FIX_MODE.label : "") ||
-    ({ review: "Senior review", deslop: "Senior Deslop", ui_pass: "Senior UI pass" })[mode] ||
+    ({ review: "Senior review", deslop: "Senior Deslop", ui_pass: "Senior UI pass", pass: "Senior pass" })[mode] ||
     ASSISTANT_ROUTING_ROLE_DEFINITIONS.find(({ id }) => id === mode)?.label || "";
 }
 
@@ -152,7 +153,7 @@ function assistantRoutingAutomation(value) {
 
 // "UI pass" alone, or with a scope after a colon, a dash, "on", "of" or "for".
 const UI_PASS_MESSAGE = /^\s*ui[\s-]?pass(?:(?:\s*[:\u2013\u2014-]\s*|\s+(?:on|of|for)\s+)([^?]+?))?\s*[.!]?\s*$/iu;
-const UI_PASS_CHANGES = /^(?:(?:the|this|my)\s+)?(?:(?:current|last)\s+)?(?:task(?:['\u2019]s)?\s+)?changes(?:\s+(?:the|this)\s+task\s+made)?$/iu;
+const UI_PASS_CHANGES = /^(?:(?:the|this|my|your(?:\s+own)?)\s+)?(?:(?:current|last)\s+)?(?:task(?:['\u2019]s)?\s+)?changes(?:\s+(?:the|this)\s+task\s+made|\s+for\s+the\s+current\s+task)?$/iu;
 const UI_PASS_APP = /^(?:the\s+)?(?:whole|entire|full)\s+app(?:lication)?$/iu;
 
 /**
@@ -176,16 +177,17 @@ function uiPassRequest(message, options = {}) {
   return `Run the UI pass on this section of the app: ${scope}.`;
 }
 
-// The Genesis tasks a person starts in their own Senior turn, and their purposes.
+// The purposes of the passes a person starts in their own Senior turn: Deslop and the UI pass have
+// their own, and every other pass is a "pass" (admission accepts only a pass Genesis lists).
 const ASSISTANT_TASK_PURPOSES = Object.freeze({ deslop: "deslop", "ui-pass": "ui_pass" });
-const assistantTaskPurpose = (task) => Object.hasOwn(ASSISTANT_TASK_PURPOSES, task || "") ? ASSISTANT_TASK_PURPOSES[task] : "";
+const assistantTaskPurpose = (task) => !task ? "" : Object.hasOwn(ASSISTANT_TASK_PURPOSES, task) ? ASSISTANT_TASK_PURPOSES[task] : "pass";
 
 /**
- * The Genesis task a message starts explicitly: the task its sender named,
+ * The pass a message starts explicitly: the Genesis task its sender named,
  * "Deslop" alone, or a UI pass message.
  */
 function assistantExplicitTask(input = {}) {
-  if (assistantTaskPurpose(input.genesisTask)) return input.genesisTask;
+  if (typeof input.genesisTask === "string" && input.genesisTask.trim()) return input.genesisTask.trim();
   if (/^\s*deslop[.!]?\s*$/iu.test(String(input.message || ""))) return "deslop";
   return uiPassRequest(input.message) ? "ui-pass" : "";
 }
@@ -430,6 +432,8 @@ function assistantModePrompt(mode, message, options = {}) {
       "Check the screens you changed in the managed browser, run focused checks, then report what changed and what was verified.",
       "Do not commit, push or deploy."
     ].join(" "),
+    // Any other pass Genesis offers: its composed prompt says what the pass does.
+    pass: "Perform the pass this request names directly, following the project's guidance for it. You may edit code for it; earlier Auto planning restrictions do not apply. Preserve unrelated work and staging. Do not implement features the pass does not call for, create an implementation plan, or delegate the pass to another model. Report discovered defects outside the pass separately without fixing them. Run focused checks, and check the screens you changed in the managed browser, then report what changed and what was verified. Do not commit, push or deploy.",
     review: [
       "Review the preceding coding work against the original request and accepted steering.",
       "Inspect actual files and relevant surrounding code. You may directly fix in-scope defects.",
@@ -474,14 +478,9 @@ function assistantModePrompt(mode, message, options = {}) {
   if (!planInstructions && intent !== "conversation") {
     planInstructions = "This direct request is independent of the current Auto plan unless the user explicitly refers to it. Senior may use vibe64-helper plan to manage it; Junior may update Progress and existing checklist ticks after reading both documents, never change scope or mark the plan completed.";
   }
-  if (intent !== "conversation" &&
-      intent !== "planning" &&
-      intent !== "deslop" &&
-      intent !== "ui_pass" &&
-      intent !== "review" &&
-      mode !== "review" &&
-      mode !== "deslop" &&
-      mode !== "ui_pass") {
+  // Reviews and passes are Senior's own turns, and conversation and planning implement nothing.
+  const seniorTurns = ["review", "deslop", "ui_pass", "pass"];
+  if (![...seniorTurns, "conversation", "planning"].includes(intent) && !seniorTurns.includes(mode)) {
     instruction += " When the requested feature is implemented, its required runtime resources are prepared and Preview is responding, promptly tell the user: Ready to try—give it a spin. Verification is still running. Do not claim full completion before verification, and do not wait for the user to test before continuing your checks. If Preview is unavailable, report that instead of inviting the user to try it.";
     instruction += browserReview
       ? " A separate Senior review owns in-depth browser testing and visual inspection. Do not run those checks in this implementation turn. Run relevant focused code tests and basic smoke checks: confirm server startup, relevant routes and API responses, and if needed make a brief managed-browser check that the changed page renders and its main control is present. Leave full end-to-end browser suites, multi-step user journeys and visual inspection to Senior; do not expand the smoke check into those checks. Prepare the app and report exact checks, remaining gaps and browser acceptance cases to Senior; browser verification pending is an expected handoff, not an implementation blocker. Tell the user that Senior will perform the remaining browser checks."

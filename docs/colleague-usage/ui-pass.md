@@ -26,6 +26,10 @@ Type one of these as the whole message in main chat and send it:
 only mentions the UI pass, such as “What does the UI pass change?”, is ordinary
 chat and starts nothing.
 
+**Run** beside **UI pass** in the chat's **Passes** list sends `UI pass your
+own changes for the current task.` for you; see
+[Run a pass on your app](passes.md).
+
 The UI pass runs in its own turn on your **Senior** model, whatever the chat
 mode, the way “Deslop” does; in **Custom** it uses the Custom model. It is not
 reviewed again afterwards and does not change or reopen the current plan.

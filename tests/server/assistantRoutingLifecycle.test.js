@@ -1230,6 +1230,46 @@ test("a UI pass is never steered into a running coder or an unfinished goal", as
   assert.equal(f.sends.length, 0);
 });
 
+test("Run in the Passes list sends Genesis's pass in its own Senior turn, as the person's message", async (t) => {
+  // Every Chat settings switch is on: a pass still runs alone, with no finishing turn after it.
+  const f = await fixture(t, { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true });
+  const message = "Quality pass the whole app.";
+  await f.service.send("session-1", { ...request, genesisTask: "quality-pass", message }, f.context);
+  assert.equal(f.helperCalls(), 0);
+  assert.equal(f.state().task, "quality-pass");
+  assert.equal(f.state().review, false);
+  assert.equal(f.sends[0].selection.modelId, "gpt-6-astra", "the configured Senior model, not the Junior chat's");
+  assert.equal(f.sends[0].input.genesisTask, "quality-pass");
+  assert.equal(f.sends[0].input.automaticGenesisTask, undefined, "the person asked for the pass");
+  assert.equal(f.sends[0].input.displayMessage, message);
+  assert.equal(f.sends[0].input.turnMetadata.assistantRouting.resolvedMode, "pass");
+  assert.match(f.sends[0].input.message, /^\[Vibe64 role: Senior\.[^]*\nPerform the pass this request names directly/u);
+  assert.ok(f.sends[0].input.message.endsWith(`\n\n${message}`), f.sends[0].input.message);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.notices.size, 0, "no finishing step starts after a pass");
+});
+
+test("a pass is refused politely while a turn or goal runs, and a task Genesis does not list as a pass is never sent", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const input = { ...request, genesisTask: "quality-pass", message: "Quality pass the whole app." };
+  f.agent.sessionState = async () => ({ turn: { active: true } });
+  await assert.rejects(f.service.send("session-1", input, f.context), {
+    code: "vibe64_assistant_routing_pass_turn_active", delivery: "not-sent",
+    message: "Quality pass uses the Senior model in its own turn. Finish or stop the current turn, then send Quality pass again."
+  });
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  f.agent.readGoal = async () => ({ goal: { status: "active" } });
+  await assert.rejects(f.service.send("session-1", input, f.context), { code: "vibe64_assistant_goal_pass_blocked", delivery: "not-sent" });
+  f.agent.readGoal = async () => ({ goal: null });
+  for (const genesisTask of ["review", "work", "no-such-pass"]) {
+    await assert.rejects(f.service.send("session-1", { ...input, genesisTask }, f.context), {
+      code: "vibe64_assistant_routing_pass_unknown", delivery: "not-sent"
+    }, genesisTask);
+  }
+  assert.equal(f.sends.length, 0);
+});
+
 test("a question about the UI pass is ordinary chat, not a UI pass", async (t) => {
   const f = await fixture(t, { mode: "senior", review: true });
   await f.service.send("session-1", { ...request, message: "What does the UI pass change?" }, f.context);

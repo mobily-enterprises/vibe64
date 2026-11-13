@@ -261,6 +261,12 @@ const workPlanRestoreInputValidator = validator({
   sessionId: sessionIdField,
   archiveId: { ...requiredText, minLength: 64, maxLength: 64 }
 });
+// A pass suggestion's Later (snooze) or Dismiss.
+const passRecommendationInputValidator = validator({
+  sessionId: sessionIdField,
+  passId: { ...requiredText, pattern: /^[a-z][a-z0-9-]{0,63}$/u },
+  action: { type: "string", enum: ["snooze", "dismiss"], required: true }
+});
 const outputStatusInputValidator = validator({
   sessionId: sessionIdField,
   editorOrigin: optionalText,
@@ -307,6 +313,7 @@ function terminalControlActionInputValidator(global, control) {
 }
 
 export {
+  passRecommendationInputValidator,
   previewDiagnosticInputValidator,
   previewDiagnosticActionInputValidator,
   workPlanReadInputValidator,

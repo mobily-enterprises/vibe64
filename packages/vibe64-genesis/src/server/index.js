@@ -60,6 +60,7 @@ import {
   vibe64ResourceEstimatesInspection
 } from "./resourceEstimates.js";
 
+import { GENESIS_PASSES_ADAPTER, listGenesisPasses } from "./passes.js";
 import {
   VIBE64_INTEGRATION_SETUP_SECTION,
   parseVibe64IntegrationSetupLines,
@@ -145,16 +146,16 @@ const VIBE64_HIDDEN_ONBOARDING_STACK_PIECES = Object.freeze([
 ]);
 const VIBE64_STACK_PACKAGES = Object.freeze(["genesis-stack"]);
 const GENESIS_PROMPT_FALLBACK_TASKS = Object.freeze({ BLUEPRINT_INVALID: "blueprint", BLUEPRINT_REQUIRED: "start" });
+// Genesis's own tasks, and the passes it offers (Deslop and the UI pass among them).
 const GENESIS_PROMPT_TASKS = new Set([
   "adopt",
   "blueprint",
   "describe",
-  "deslop",
   "program",
   "review",
   "start",
-  "ui-pass",
-  "work"
+  "work",
+  ...GENESIS_PASSES_ADAPTER.map(({ id }) => id)
 ]);
 // Genesis on a person's path, such as an AI message, answers within this
 // deadline or the path goes on without it.
@@ -670,6 +671,7 @@ export {
   inspectGenesisProject,
   inspectGenesisAgentIntegrations,
   inspectGenesisSkills,
+  listGenesisPasses,
   listGenesisTemplates,
   inspectGenesisStackComponents,
   inspectVibe64Deployment,

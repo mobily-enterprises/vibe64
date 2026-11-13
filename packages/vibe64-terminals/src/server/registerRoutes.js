@@ -33,6 +33,8 @@ import {
   ACTION_PREPARE_AGENT_SESSION,
   ACTION_READ_AGENT_GOAL,
   ACTION_READ_AGENT_PLAN_USAGE,
+  ACTION_READ_PASSES,
+  ACTION_CHANGE_PASS_RECOMMENDATION,
   ACTION_READ_AGENT_TERMINAL,
   ACTION_READ_AGENT_TERMINAL_CONTROL,
   ACTION_READ_GLOBAL_TERMINAL,
@@ -208,6 +210,17 @@ function registerRoutes(http, { fastify, localhostCheckBypassed, projectContext,
     actionId: ACTION_READ_AGENT_PLAN_USAGE,
     buildInput: sessionInput,
     summary: "Read the selected assistant account's remaining plan allowance."
+  });
+
+  routes.actionRoute("GET", "/sessions/:sessionId/passes", {
+    actionId: ACTION_READ_PASSES,
+    buildInput: sessionInput,
+    summary: "Read the passes Genesis offers, when each last ran in this project and the one suggested now."
+  });
+  routes.actionRoute("POST", "/sessions/:sessionId/passes/recommendation", {
+    actionId: ACTION_CHANGE_PASS_RECOMMENDATION,
+    buildInput: (request) => withoutVibe64User(bodyWithSessionId(request)),
+    summary: "Snooze a pass suggestion for a week, or dismiss it until the pass runs again."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/work-plan", {

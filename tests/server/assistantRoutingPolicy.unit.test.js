@@ -579,7 +579,7 @@ test("main chat always uses the owner setup; everyone else's helpers use their o
 
 test("team members never reach main chat models; their messages need the owner's approval", () => {
   const f = routingFixture();
-  for (const purpose of ["senior", "junior", "auto", "review", "deslop", "ui_pass", "request_routing"]) {
+  for (const purpose of ["senior", "junior", "auto", "review", "deslop", "ui_pass", "pass", "request_routing"]) {
     const member = f.resolve(purpose, { reviewEnabled: purpose === "auto" });
     assert.deepEqual([member.available, member.reasonCode, member.approvalRequired], [false, "vibe64_main_chat_approval_required", true], purpose);
     assert.equal(member.message, "Main chat runs on the owner's AI. Your messages wait for their approval.");
@@ -799,13 +799,18 @@ test("a UI pass message names its scope as the request Genesis's ui-pass task re
   assert.equal(uiPassRequest("the bookings pages", { explicit: true }), "Run the UI pass on this section of the app: the bookings pages.");
   assert.equal(uiPassRequest("UI pass the whole app", { explicit: true }), app);
   assert.equal(uiPassRequest("", { explicit: true }), changes);
+  // Run in the Passes list sends Genesis's own default request for the UI pass.
+  assert.equal(uiPassRequest("UI pass your own changes for the current task.", { explicit: true }), changes);
   assert.equal(assistantExplicitTask({ message: "the bookings pages", genesisTask: "ui-pass" }), "ui-pass");
   assert.equal(assistantExplicitTask({ message: " Deslop. " }), "deslop");
   assert.equal(assistantExplicitTask({ message: "Deslop commit abc123.", genesisTask: "deslop" }), "deslop");
-  assert.equal(assistantExplicitTask({ message: "Explain the UI pass", genesisTask: "work" }), "");
+  assert.equal(assistantExplicitTask({ message: "Explain the UI pass" }), "");
+  // Any pass the sender names, such as Run in the Passes list; admission accepts only one Genesis lists.
+  assert.equal(assistantExplicitTask({ message: "Quality pass: the whole app", genesisTask: "quality-pass" }), "quality-pass");
   assert.deepEqual(ASSISTANT_TASK_PURPOSES, { deslop: "deslop", "ui-pass": "ui_pass" });
   assert.equal(assistantTaskPurpose("ui-pass"), "ui_pass");
-  assert.equal(assistantTaskPurpose("toString"), "");
+  assert.equal(assistantTaskPurpose("quality-pass"), "pass");
+  assert.equal(assistantTaskPurpose(""), "");
   assert.equal(assistantTaskPurpose(undefined), "");
 });
 

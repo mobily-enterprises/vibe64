@@ -1,3 +1,4 @@
+import { listGenesisPasses } from "@local/vibe64-genesis/server";
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
@@ -6,7 +7,8 @@ import {
   assistantRoutingFromMetadata,
   assistantRoutingAutomation,
   assistantGoalIsActive,
-  assistantExplicitTask
+  assistantExplicitTask,
+  assistantTaskPurpose
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   assistantFinishingMessage,
@@ -23,11 +25,23 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 /** @typedef {ReturnType<typeof import("./assistantRoutingCancellation.js").createAssistantRoutingCancellation>} AssistantRoutingCancellation */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
-// What a refusal calls each explicit task, and the suffix of its codes.
-const EXPLICIT_TASKS = Object.freeze({
-  deslop: { name: "Deslop", code: "deslop" },
-  "ui-pass": { name: "UI pass", code: "ui_pass" }
-});
+/**
+ * The pass a message starts, as a refusal names it: its Genesis title, and its purpose as the
+ * suffix of the refusal's codes. A task Genesis does not list as a pass is refused before it is sent.
+ * @param {string} task
+ * @returns {Promise<{ name: string, code: string } | null>}
+ */
+async function explicitPass(task) {
+  if (!task) return null;
+  const pass = (await listGenesisPasses()).find(({ id }) => id === task);
+  if (!pass) {
+    throw Object.assign(
+      failure("That pass is not available in this project. Open Passes to choose one.", "vibe64_assistant_routing_pass_unknown"),
+      { delivery: "not-sent" }
+    );
+  }
+  return { name: pass.title, code: assistantTaskPurpose(task) };
+}
 
 /**
  * Sending: a message's admission into a new or resumed request, its routing and delivery, and the
@@ -134,9 +148,9 @@ function createAssistantRoutingAdmission({
 
   async function route(sessionId, input, options) {
     if (options.purpose && options.purpose !== "junior") throw new TypeError("Generated main-chat work must declare Junior.");
-    // Deslop and the UI pass each run in their own Senior turn.
+    // Each pass, Deslop and the UI pass among them, runs in its own Senior turn.
     const explicitTask = options.purpose ? "" : assistantExplicitTask(input);
-    const explicit = EXPLICIT_TASKS[explicitTask];
+    const explicit = await explicitPass(explicitTask);
     let context;
     let state;
     let direct;

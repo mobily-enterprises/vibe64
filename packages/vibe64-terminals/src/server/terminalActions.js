@@ -20,6 +20,7 @@ import {
   workPlanReadInputValidator,
   workPlanArchiveInputValidator,
   workPlanRestoreInputValidator,
+  passRecommendationInputValidator,
   outputStatusInputValidator,
   outputResultInputValidator,
   agentGoalInputValidator,
@@ -59,6 +60,8 @@ const ACTION_START_AGENT_TERMINAL = "vibe64.terminals.agent-terminal.start";
 const ACTION_READ_AGENT_GOAL = "vibe64.terminals.agent-goal.read";
 const ACTION_UPDATE_AGENT_GOAL = "vibe64.terminals.agent-goal.update";
 const ACTION_READ_AGENT_PLAN_USAGE = "vibe64.terminals.agent-plan-usage.read";
+const ACTION_READ_PASSES = "vibe64.terminals.passes.read";
+const ACTION_CHANGE_PASS_RECOMMENDATION = "vibe64.terminals.pass-recommendation.change";
 const ACTION_READ_WORK_PLAN = "vibe64.terminals.work-plan.read";
 const ACTION_ARCHIVE_WORK_PLAN = "vibe64.terminals.work-plan.archive";
 const ACTION_RESTORE_WORK_PLAN = "vibe64.terminals.work-plan.restore";
@@ -241,6 +244,20 @@ function createTerminalActions({ terminals }) {
       input: sessionInputValidator,
       extensions: { assistant: planUsageTool(), vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readAgentPlanUsage(input.sessionId, input)
+    }),
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: ACTION_READ_PASSES,
+      input: sessionInputValidator,
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => terminals.readSessionPasses(input.sessionId)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_CHANGE_PASS_RECOMMENDATION,
+      input: passRecommendationInputValidator,
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => terminals.changePassRecommendation(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
@@ -566,6 +583,8 @@ export {
   ACTION_READ_AGENT_ATTACHMENT,
   ACTION_READ_AGENT_GOAL,
   ACTION_READ_AGENT_PLAN_USAGE,
+  ACTION_READ_PASSES,
+  ACTION_CHANGE_PASS_RECOMMENDATION,
   ACTION_READ_AGENT_TERMINAL,
   ACTION_READ_AGENT_TERMINAL_CONTROL,
   ACTION_READ_CANONICAL_AGENT_GOAL,

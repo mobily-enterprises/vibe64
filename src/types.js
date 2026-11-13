@@ -14,6 +14,7 @@
 /** @typedef {ReturnType<typeof import("./composables/useVibe64OutputLaunch.js").useVibe64OutputLaunch>} Vibe64OutputLaunch */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64OutputStatus.js").useVibe64OutputStatus>} Vibe64OutputStatus */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64OutputTerminal.js").useVibe64OutputTerminal>} Vibe64OutputTerminal */
+/** @typedef {ReturnType<typeof import("./composables/useVibe64Passes.js").useVibe64Passes>} Vibe64Passes */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64PreviewAddress.js").useVibe64PreviewAddress>} Vibe64PreviewAddress */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64PreviewFrame.js").useVibe64PreviewFrame>} Vibe64PreviewFrame */
 /** @typedef {ReturnType<typeof import("./composables/useVibe64PreviewIdentity.js").useVibe64PreviewIdentity>} Vibe64PreviewIdentity */

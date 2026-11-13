@@ -76,6 +76,7 @@
           @view-plan="workPlanViewer?.showPlan('current')"
           @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
         />
+        <Vibe64PassSuggestion v-if="passSuggestionVisible" :passes="passes" :pass="passes.recommendation.value" />
         <Vibe64AutopilotPromptTextarea
           ref="composerInput"
           :key="composerKey"
@@ -190,6 +191,7 @@
                 </v-card>
               </v-menu>
               <Vibe64StarredMenu :bookmarks="fileBookmarks" :project-slug="projectSlug" @open-file="openSourceEditorFile" @open-page="showOpenedPage" />
+              <Vibe64PassesMenu v-if="passesAvailable" :passes="passes" :blocked-reason="passesBlockedReason" />
               <Vibe64AgentPlanUsage
                 :active="props.active && !props.sessionSelectionArchived"
                 :session="props.session"
@@ -255,7 +257,7 @@
 </template>
 
 <script setup>
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalIsActive, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, nextTick, ref, useId, watch } from "vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
@@ -264,6 +266,8 @@ import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import Vibe64StarredMenu from "@/components/studio/vibe64-session/Vibe64StarredMenu.vue";
+import Vibe64PassesMenu from "./Vibe64PassesMenu.vue";
+import Vibe64PassSuggestion from "./Vibe64PassSuggestion.vue";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import { AssistantQuestionInputs, AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
@@ -272,6 +276,7 @@ import Vibe64MainChatApprovals from "./Vibe64MainChatApprovals.vue";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { useVibe64MainChatPromptHints } from "@/composables/useVibe64MainChatPromptHints.js";
+import { useVibe64Passes } from "@/composables/useVibe64Passes.js";
 import {
   useVibe64SessionTypingPresence
 } from "@/composables/useVibe64SessionTypingPresence.js";
@@ -324,6 +329,23 @@ const {
   sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
 });
 const composerAccessHint = computed(() => assistantRestrictionMessage.value || composerHint.value);
+// Passes run on the owner's Main chat; a team member's messages wait for approval, so they get none.
+const passesAvailable = computed(() => props.active && !props.sessionSelectionArchived && !approvalMode.value);
+const passesBlockedReason = computed(() => {
+  if (agentActive.value || composerSending.value) return "A pass starts when the AI is idle. Wait for the current turn to finish, or stop it.";
+  return assistantGoalIsActive(readRefOrGetterValue(props.conversationRuntime?.goalState)?.goal)
+    ? "A pass can't start during a goal. Open Goal to resume or cancel it first." : "";
+});
+const passes = useVibe64Passes({
+  session: () => props.session,
+  sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath)),
+  enabled: passesAvailable,
+  idle: () => !agentActive.value,
+  send: (input) => props.sendAgentMessage(input)
+});
+// A pass is suggested only while the chat is idle and empty: no turn, goal or draft in the way.
+const passSuggestionVisible = computed(() => passesAvailable.value && conversationLogVisible.value && !passesBlockedReason.value &&
+  !composerDraft.value.trim() && Boolean(passes.recommendation.value));
 const composerAssistantLabel = computed(() => {
   if (testApproval.value?.state === "waiting") return "Waiting for memory approval";
   if (!thinkingVisible.value) return typingLabel.value;

@@ -143,9 +143,11 @@ const agentMessageFields = {
     },
     required: false
   },
+  // A pass to run in its own Senior turn: the Genesis task's id. Admission accepts only a pass
+  // Genesis lists.
   genesisTask: {
     type: "string",
-    enum: ["deslop", "ui-pass"],
+    pattern: /^[a-z][a-z0-9-]{0,63}$/u,
     noTrim: false,
     required: false
   },

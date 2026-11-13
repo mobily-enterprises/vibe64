@@ -113,6 +113,7 @@ GET /api/app/:slug/vibe64/sessions/:sessionId/main-chat-approvals public app - v
 GET /api/app/:slug/vibe64/sessions/:sessionId/output-results/:resultId public app - -
 GET /api/app/:slug/vibe64/sessions/:sessionId/output-runs/:terminalSessionId/terminal public app - vibe64.terminals.output-terminal.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/outputs public app - vibe64.terminals.outputs.read
+GET /api/app/:slug/vibe64/sessions/:sessionId/passes public app - vibe64.terminals.passes.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/renewal public app - vibe64.sessions.renewal.inspect
 GET /api/app/:slug/vibe64/sessions/:sessionId/source-editor/changes/stream public app - -
 GET /api/app/:slug/vibe64/sessions/:sessionId/source-editor/download public app - -
@@ -276,6 +277,7 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/main-chat-approvals/:approvalId/w
 POST /api/app/:slug/vibe64/sessions/:sessionId/output-runs public app - vibe64.terminals.output-target.start
 POST /api/app/:slug/vibe64/sessions/:sessionId/output-runs/:terminalSessionId/stop public app - vibe64.terminals.output-target.stop
 POST /api/app/:slug/vibe64/sessions/:sessionId/output-runs/open public app - vibe64.terminals.output-target.open
+POST /api/app/:slug/vibe64/sessions/:sessionId/passes/recommendation public app - vibe64.terminals.pass-recommendation.change
 POST /api/app/:slug/vibe64/sessions/:sessionId/presence public app 4096 vibe64.sessions.presence.update
 POST /api/app/:slug/vibe64/sessions/:sessionId/preview-diagnostics public app - vibe64.terminals.preview-diagnostics.record
 POST /api/app/:slug/vibe64/sessions/:sessionId/preview-identity public app - vibe64.terminals.preview-identity.select

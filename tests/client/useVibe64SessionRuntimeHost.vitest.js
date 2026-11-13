@@ -256,9 +256,15 @@ describe("Vibe64 direct session runtime host", () => {
     })).not.toThrow();
     expect(() => validateSchemaPayload(agentMessageInputValidator, {
       ...message,
-      genesisTask: "work"
+      genesisTask: "quality-pass"
     }, {
-      context: "unsupported Genesis message request contract"
+      context: "a pass from the Passes list"
+    })).not.toThrow();
+    expect(() => validateSchemaPayload(agentMessageInputValidator, {
+      ...message,
+      genesisTask: "../Quality"
+    }, {
+      context: "a Genesis task that is not a pass id"
     })).toThrow();
 
     expect(agentTurnControlPayloadFromContext({

@@ -1598,6 +1598,18 @@ app, and Genesis's ui-pass task receives that scope as its request. Every
 main-chat mode runs it after finished work, after any Deslop, only while
 Automatically UI pass changes is on, as it is for new chats.
 
+Passes improve the app one concern at a time. Main chat's Passes list
+shows each pass Genesis offers (Deslop, the UI pass, and others such as visual
+identity, quality and data) with when it last ran in the project, and Run sends
+the pass's own request from Genesis as the person's message, in its own Senior
+turn. Genesis records each
+pass's last completed run in the project. Now and then a gentle, dismissible
+suggestion offers a pass that never ran or is overdue: the interval Vibe64
+picks from Genesis's advice for it has passed, and the app has changed enough
+since. Later hides it
+for a week and Dismiss until the pass completes again; no pass ever starts by
+itself.
+
 People can choose how cautiously the AI engineers a project. The choice follows
 the project's source, always keeps ordinary work simple and targeted, and makes
 the AI ask before a real requirement forces materially greater complexity.

@@ -51,6 +51,8 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       ["GET", "/sessions/:sessionId/agent-goal", "agent-goal.read", "readAgentGoal", {}],
       ["POST", "/sessions/:sessionId/agent-goal", "agent-goal.update", "updateAgentGoal", { action: "resume", threadId: "thread-1", createdAt: 123.456, objective: " Preserve exact whitespace. " }],
       ["GET", "/sessions/:sessionId/agent-plan-usage", "agent-plan-usage.read", "readAgentPlanUsage", {}],
+      ["GET", "/sessions/:sessionId/passes", "passes.read", "readSessionPasses", {}],
+      ["POST", "/sessions/:sessionId/passes/recommendation", "pass-recommendation.change", "changePassRecommendation", { passId: "quality-pass", action: "snooze" }],
       ["GET", "/sessions/:sessionId/work-plan", "work-plan.read", "readSessionWorkPlan", { offset: 0, limit: 1000 }],
       ["POST", "/sessions/:sessionId/work-plan/archive", "work-plan.archive", "archiveSessionWorkPlan", { expectedRevision: "a".repeat(64), expectedProgressRevision: "" }],
       ["POST", "/sessions/:sessionId/work-plan/restore", "work-plan.restore", "restoreSessionWorkPlan", { archiveId: "b".repeat(64) }],
@@ -95,7 +97,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       "global-terminal.control.snapshot", "global-terminal.control.text", "global-terminal.read", "global-terminal.start",
       "global-terminal.status", "main-goal.block", "main-goal.pause", "main-goal.resume", "output-result.read",
       "output-target.open", "output-target.start", "output-target.stop", "output-terminal.close",
-      "output-terminal.read", "outputs.read", "preview-diagnostics.record", "preview-identity.select",
+      "output-terminal.read", "outputs.read", "pass-recommendation.change", "passes.read", "preview-diagnostics.record", "preview-identity.select",
       "project-runtime.close", "project-runtime.open", "prompt-hints.cancel", "prompt-hints.generate",
       "temporary-conversation.create", "temporary-conversation.delete", "temporary-conversation.list", "temporary-conversation.read",
       "temporary-conversation.stop", "temporary-conversation.turn.start", "temporary-conversation.update", "work-plan.archive",
@@ -166,7 +168,9 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       ["global-terminal.control.text", { terminalSessionId: "terminal-1" }],
       ["global-terminal.control.key", { terminalSessionId: "terminal-1", key: "rm -rf" }],
       ["global-terminal.control.text", { terminalSessionId: "terminal-1", text: "hi", trackGitActor: false }],
-      ["output-target.start", { sessionId: "session-1" }]
+      ["output-target.start", { sessionId: "session-1" }],
+      ["pass-recommendation.change", { sessionId: "session-1", passId: "quality-pass", action: "run" }],
+      ["pass-recommendation.change", { sessionId: "session-1", passId: "../quality", action: "snooze" }]
     ]) await assert.rejects(actions.execute({ actionId: `vibe64.terminals.${operation}`, input: { ...input, projectSlug: slug }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
     assert.equal(calls.length, count);
     assert.equal(currentProjectRequestContext(), null);
