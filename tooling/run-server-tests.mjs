@@ -9,6 +9,7 @@ import { testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 // Past the run's deadline, the runner has this long to report the files still
 // running before its whole process group is killed.
 const DEADLINE_GRACE_MS = 10_000;
+const REPORT_BLOCKING_STDOUT = `--import=${new URL("./test-report-blocking-stdout.mjs", import.meta.url).href}`;
 
 // npm run test:full: every server test file, as many at once as the machine's
 // test budget allows (JSKIT's testConcurrency()), with the time budgets of
@@ -19,7 +20,10 @@ const DEADLINE_GRACE_MS = 10_000;
 // suite's testMs as a hard deadline, after which Node fails it by name; its
 // file then ends as soon as its other tests have (--test-force-exit), even
 // when the hung test left a server, child or timer open; and the whole run
-// stops at the suite's wall-clock bound, wallMs.
+// stops at the suite's wall-clock bound, wallMs. That force exit would drop
+// the end of a file's report still waiting for the runner to read it, so each
+// file's process writes its report with blocking writes
+// (tooling/test-report-blocking-stdout.mjs).
 //
 // CI runs the suite in parallel jobs, one part each: with `shard` "I/N"
 // (npm run test:full -- --shard=I/N), Node's --test-shard runs every Nth
@@ -39,8 +43,13 @@ export function serverTestRun(env = process.env, budgets = loadTimeBudgets("serv
       "tests/server/*.test.js"
     ],
     deadlineMs: budgets.wallMs,
-    env: withHostPathGuard(env)
+    env: withBlockingReports(withHostPathGuard(env))
   };
+}
+
+function withBlockingReports(env) {
+  const current = String(env.NODE_OPTIONS || "");
+  return { ...env, NODE_OPTIONS: current.includes(REPORT_BLOCKING_STDOUT) ? current : `${current} ${REPORT_BLOCKING_STDOUT}`.trim() };
 }
 
 // The command line takes nothing, or one --shard=I/N with 1 <= I <= N;

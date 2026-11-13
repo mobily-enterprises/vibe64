@@ -226,7 +226,9 @@ overlap a test run already active for this checkout.
 - A hang fails fast instead of holding a run. In `npm run test:full`, each test
   has the server suite's `testMs` as a hard deadline and fails by name past
   it; its file then ends with its other tests, even when the hung test left a
-  server or timer open. The whole run stops at its wall-clock bound, and each
+  server or timer open, and its whole report still reaches the runner: a file
+  whose report ends before its summary fails the run instead of losing its
+  last tests silently. The whole run stops at its wall-clock bound, and each
   CI job has a `timeout-minutes` above the bounds of the suites it runs. A
   test that waits for a hold, a child or an event also stops waiting when the
   work it waits on has already ended.

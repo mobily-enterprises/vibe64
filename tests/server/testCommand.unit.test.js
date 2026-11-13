@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -65,14 +67,37 @@ test("test files run as many at once as the machine's test budget allows", () =>
   }
 });
 
-test("the full server suite loads the host path guard a single-file run loads", () => {
+test("the full server suite loads the host path guard a single-file run loads, and blocking report writes", () => {
   const guard = `--import=${new URL("../../tooling/test-host-path-guard.mjs", import.meta.url).href}`;
+  const blocking = `--import=${new URL("../../tooling/test-report-blocking-stdout.mjs", import.meta.url).href}`;
   const { args, env } = serverTestRun({ [BUDGET_VARIABLE]: "3", NODE_OPTIONS: "--no-warnings" });
-  assert.equal(env.NODE_OPTIONS, `--no-warnings ${guard}`);
+  assert.equal(env.NODE_OPTIONS, `--no-warnings ${guard} ${blocking}`);
   assert.ok(args.includes("--test-concurrency=3"));
   assert.equal(args.at(-1), "tests/server/*.test.js");
-  // A guard already in NODE_OPTIONS is not added twice.
-  assert.equal(serverTestRun({ NODE_OPTIONS: guard }).env.NODE_OPTIONS, guard);
+  // Preloads already in NODE_OPTIONS are not added twice.
+  assert.equal(serverTestRun({ NODE_OPTIONS: `${guard} ${blocking}` }).env.NODE_OPTIONS, `${guard} ${blocking}`);
+});
+
+test("a test file's process ended by --test-force-exit still delivers its whole report", { skip: process.platform === "win32" }, async (t) => {
+  // The process exits as --test-force-exit ends it, with process.exit(), right
+  // after writing a report larger than a pipe holds, while the runner is too
+  // busy to read it.
+  const size = 4 * 1024 * 1024;
+  const directory = await mkdtemp(path.join(os.tmpdir(), "v64-report-"));
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  const file = path.join(directory, "report.test.js");
+  await writeFile(file, `process.stdout.write(Buffer.alloc(${size}, 120));\nprocess.exit(0);\n`);
+  const delivered = async (env, readWhen) => {
+    const child = spawn(process.execPath, [file], { env: { ...env, NODE_TEST_CONTEXT: "child-v8" }, stdio: ["ignore", "pipe", "ignore"] });
+    await readWhen(child);
+    let bytes = 0;
+    for await (const chunk of child.stdout) bytes += chunk.length;
+    return bytes;
+  };
+  assert.ok(await delivered({ ...process.env, NODE_OPTIONS: "" }, (child) => once(child, "exit")) < size,
+    "without blocking writes, a process that exits before the runner reads loses its report's end");
+  // With them its last write waits for the runner, however late it reads.
+  assert.equal(await delivered(serverTestRun(process.env).env, () => delay(500)), size);
 });
 
 test("the full server suite gives every test a hard deadline and stops at its wall-clock bound", () => {

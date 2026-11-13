@@ -84,6 +84,33 @@ test("the Node test reporter reports test:full's slowest files and fails it when
   assert.equal(process.exitCode, 1);
 });
 
+test("the Node test reporter fails test:full when a file's report ends before its summary", async (t) => {
+  withExitCode(t);
+  const run = async (events) => {
+    const output = [];
+    for await (const chunk of testTimeBudgets(events)) output.push(chunk);
+    return output.join("");
+  };
+  async function* whole() {
+    yield { type: "test:pass", data: { file: "/repo/tests/server/whole.unit.test.js", nesting: 0 } };
+    // A test file that runs another project's tests: they report under their own file, which has no summary.
+    yield { type: "test:pass", data: { file: "/repo/examples/hello-node/test/server.test.js", nesting: 0 } };
+    yield { type: "test:summary", data: { file: "/repo/tests/server/whole.unit.test.js", duration_ms: 1 } };
+    yield { type: "test:summary", data: { file: undefined, duration_ms: 3 } };
+  }
+  assert.doesNotMatch(await run(whole()), /reports ended/u);
+  assert.notEqual(process.exitCode, 1);
+  async function* cut() {
+    yield* whole();
+    // This file's process reported a test, then nothing more.
+    yield { type: "test:pass", data: { file: "/repo/tests/server/cut.unit.test.js", nesting: 0 } };
+  }
+  const [, missing] = (await run(cut())).split("reports ended before their summaries");
+  assert.equal(process.exitCode, 1);
+  assert.match(missing, /\n {2}\/repo\/tests\/server\/cut\.unit\.test\.js\n/u);
+  assert.doesNotMatch(missing, /whole|hello-node/u);
+});
+
 test("the Playwright reporter reports the slowest spec files and fails the run when one is over its budget", () => {
   const output = collectedOutput();
   const reporter = new TimeBudgetReporter({ output });
