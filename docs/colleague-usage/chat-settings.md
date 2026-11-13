@@ -112,10 +112,12 @@ try** while its checks run, so you can try the change early. Only the last turn
 of the piece of work ends normally: the finishing turn, or, with review, Deslop
 and the UI pass all off, the turn that finished the work. A question the agent
 only answers ends normally too, without a note about saving, since nothing
-changed. Every turn of a piece of work also knows how that work is saved: with
-**Automatically save changes** on, the agent says it will be saved
-automatically and never asks you to choose **Save**; with it off, it leaves
-**Save** to you.
+changed. You see only the agent's final message, never its reasoning or the
+outcome it reports to Vibe64, so its whole reply, including any question for
+you, is in that message. Every turn of a piece of work also knows how that work
+is saved: with **Automatically save changes** on, the agent says, after its
+reply and never in its place, that the work will be saved automatically, and
+never asks you to choose **Save**; with it off, it leaves **Save** to you.
 
 ## What the chat shows
 

@@ -1955,7 +1955,10 @@ report: an Auto conversation reports none, and in Senior, Junior and Custom a
 message's first turn that changes no files or plan, with no decision waiting,
 simply replies; Vibe64 records that reply as finished and shows no Status message
 for it, and Senior's plan guidance mentions reporting through the workflow outcome
-only in Auto's turns that report one. Waiting for the person, Stop, a request that changed
+only in Auto's turns that report one. The person reads only the agent's final
+response, so a turn that reports an outcome is told to put its complete reply,
+including any question, there, with any automatic-save note after it, never in
+its place. Waiting for the person, Stop, a request that changed
 no files, or a direct turn that ends without reporting starts nothing; each
 finishing turn covers every change since the last one, so stopped, waiting or
 unreported work folds into the next. The order is review, Deslop, the UI pass in one turn,

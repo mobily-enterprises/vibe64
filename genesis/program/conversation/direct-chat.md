@@ -2253,8 +2253,10 @@ turn, which ends the piece of work, an implementation turn with every part off,
 Auto planning and requests that run no finishing step keep their normal ending.
 Save is not a turn, so it alone adds no such line. Then every workflow turn hears how the
 work is saved (`assistantSaveInstruction`), from the same `autoSave` switch the
-automatic save reads (`savesAutomatically`); a direct answer that reports
-nothing is told to say nothing about saving. Senior's plan guidance
+automatic save reads (`savesAutomatically`): with it on, the note that the work
+will be saved automatically comes after the complete reply and never replaces
+it. A direct answer that reports nothing is told to say nothing about saving.
+Senior's plan guidance
 (`workPlanInstructions`) says unfinished review reports continue through the
 workflow outcome command only in Auto's turns that report an outcome
 (`autoOutcome`: planning, implementation and review), never in Auto
@@ -2263,7 +2265,10 @@ conversation or direct chats.
 The admitted agent uses the existing authenticated session-helper socket's
 `plan read` and `plan outcome` operations. The read supplies exact request/turn/stage
 identity, including when there is no plan. Outcome accepts continue/handoff/wait/
-complete, a bounded concrete explanation and progress boolean. The owner checks
+complete, a bounded concrete explanation and progress boolean. The outcome
+instruction, Auto's and a direct chat's alike, says the outcome only informs
+Vibe64: the person sees the final response, never reasoning or tool calls, so
+the complete reply, including any question, goes there. The owner checks
 captured actor/access, active native turn and both involved plan revisions. Planning
 can continue or wait; in Auto only Senior review can complete. A direct chat's
 agent completes its own finishing turn, or implementation that changed no files

@@ -803,7 +803,7 @@ test("an explicit Deslop and generated Junior work run no finishing step", async
 // How a turn is told to end: a turn the chat's finishing turn follows says the
 // work continues after it, and the finishing turn, which ends it, ends normally.
 const CONTINUES = "When you report continue or handoff, this piece of work continues automatically after your turn: end your final reply with what you changed and what you verified, and don't use it to ask the person to try, publish or deploy the work or to offer next steps.";
-const SAVE_ON = "Vibe64 saves this work automatically once it is finished, after any finishing turn: say it will be saved automatically; never ask the person to press Save.";
+const SAVE_ON = "Vibe64 saves this work automatically once it is finished, after any finishing turn: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save.";
 const SAVE_OFF = "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
 const continues = f => f.sends.map(({ input }) => input.message.includes(CONTINUES));
 const withMode = (mode, switches) => ({ ...(mode === "custom" ? { override: customOverride } : {}), mode, ...switches });

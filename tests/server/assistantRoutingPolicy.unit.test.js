@@ -304,8 +304,19 @@ test("workflow instructions delegate outcomes to the admitted agent and retain r
   assert.match(assistantWorkflowInstructions({ mode: "senior", stage: "implementation", finishing: {} }), /so handoff finishes the work/);
 });
 
+test("every turn that reports an outcome is told the person sees only its final response, so the whole reply goes there", () => {
+  const reply = "The outcome only informs Vibe64: the person sees your final response, never your reasoning or tool calls, so put your complete reply, including any question, in your final response.";
+  const finishing = { review: true, deslop: true, uiPass: true };
+  for (const mode of ["auto", "senior", "junior", "custom"]) for (const state of [{ stage: "planning" }, { stage: "implementation" },
+    { stage: "implementation", followup: { messageId: "followup-1" } }, { stage: "review", followup: { messageId: "followup-2" } }]) {
+    const prompt = assistantWorkflowInstructions({ mode, workflow: true, finishing, ...state }, { autoSave: true });
+    assert.equal(prompt.split(reply).length - 1, 1, `${mode} ${JSON.stringify(state)}`);
+    assert.ok(prompt.indexOf(reply) > prompt.indexOf("report one outcome through vibe64-helper plan outcome"), "it follows the outcome it explains");
+  }
+});
+
 test("workflow instructions say what happens with saving, as the chat's Automatically save changes switch decides", () => {
-  const automatic = "Vibe64 saves this work automatically once it is finished, after any finishing turn: say it will be saved automatically; never ask the person to press Save.";
+  const automatic = "Vibe64 saves this work automatically once it is finished, after any finishing turn: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save.";
   const manual = "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
   for (const mode of ["auto", "senior", "junior", "custom"]) for (const stage of ["implementation", "review"]) {
     const state = { mode, stage, workflow: true, finishing: { review: true, deslop: true, uiPass: true } };
@@ -331,7 +342,7 @@ test("workflow instructions say what happens with saving, as the chat's Automati
 test("an implementation turn the chat's finishing turn follows says the work continues; the finishing turn and every other turn end normally", () => {
   const continues = "When you report continue or handoff, this piece of work continues automatically after your turn: end your final reply with what you changed and what you verified, and don't use it to ask the person to try, publish or deploy the work or to offer next steps.";
   const save = (autoSave) => autoSave
-    ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: say it will be saved automatically; never ask the person to press Save."
+    ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
     : "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
   const switches = [{ review: true, deslop: true, uiPass: true }, { review: true }, { deslop: true }, { uiPass: true }, { review: false, deslop: false, uiPass: false }];
   for (const mode of ["auto", "senior", "junior", "custom"]) for (const finishing of switches) for (const autoSave of [true, false]) {

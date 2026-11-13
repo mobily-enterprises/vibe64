@@ -56,7 +56,7 @@ function assistantContinuationInstruction(request) {
  */
 function assistantSaveInstruction(autoSave) {
   return autoSave
-    ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: say it will be saved automatically; never ask the person to press Save."
+    ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
     : "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
 }
 
