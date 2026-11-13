@@ -458,10 +458,10 @@ for (const outcome of ["cancelled", "provider failure", "account switch", "clean
       }, { onEvent(event) { if (event.type === "thread-retired") retired.push(event.threadId); } });
       const startup = await Promise.race([
         pending.then((result) => ({ result })),
-        waitForCapturedTurns(captures, 1).then(() => ({ started: true }))
+        waitForCapturedTurns(captures, 1, pending).then(() => ({ started: true }))
       ]);
       assert.equal(startup.started, true, JSON.stringify(startup.result));
-      await waitForHelperLedgerLifecycle(projectRuntimeRoot, CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE);
+      await waitForHelperLedgerLifecycle(projectRuntimeRoot, CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE, pending);
       if (outcome === "cleanup failure") captures.failDeletes = 100;
       if (outcome === "cleanup retry") {
         captures.failDeletes = 1;
@@ -613,7 +613,7 @@ test("helper work consumes the caller runtime and session without an implicit pr
         runtime,
         session: callerSession
       });
-      await waitForCapturedTurns(captures, 1);
+      await waitForCapturedTurns(captures, 1, pending);
       completeDetachedTurn(subscribers, {
         text: JSON.stringify({ answer: "Used the explicit session context." })
       });
@@ -771,7 +771,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
         { ok: true, explanation: events.findLast((event) => event.type === "source-explanation.finished")?.explanation }
       ));
       await Promise.race([
-        waitForCapturedTurns(captures, 1),
+        waitForCapturedTurns(captures, 1, pending),
         pending.then((result) => assert.fail(`Source explanation ended before starting a turn: ${JSON.stringify(result)}`))
       ]);
       completeDetachedTurn(subscribers, {
@@ -966,7 +966,7 @@ for (const startFails of [false, true]) {
           sessionId: session.sessionId,
           userMessageId: "msg_pending_b_user"
         }, stream);
-        await waitForCapturedTurns(captures, 2);
+        await waitForCapturedTurns(captures, 2, followup);
         await followupDispatch.entered;
         const started = events.find((event) => event.type === "source-explanation.followup.started");
         assert.equal(started?.assistantMessageId, "msg_pending_b_assistant", JSON.stringify(events));
@@ -1398,46 +1398,57 @@ function flushPromises() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-const FIXTURE_WAIT_TIMEOUT_MS = 3_000;
+// The waits below check once each turn of the event loop and last until what
+// they wait for happens: the test's own deadline (the server suite's testMs)
+// bounds them. A fixed window here failed tests on a busy test host while the
+// work was still on its way. Given the work that produces what they wait for,
+// they stop as soon as that work ends without it, and say how it ended.
+function workSettlement(work) {
+  const settlement = { settled: false, outcome: null };
+  if (work) {
+    void Promise.resolve(work).then(
+      (value) => Object.assign(settlement, { settled: true, outcome: { value } }),
+      (error) => Object.assign(settlement, { settled: true, outcome: { error: String(error?.stack || error) } })
+    );
+  }
+  return settlement;
+}
 
-async function waitForSessionValue(readValue, predicate, description) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < FIXTURE_WAIT_TIMEOUT_MS) {
+async function waitForSessionValue(readValue, predicate, description, work = null) {
+  const settlement = workSettlement(work);
+  for (;;) {
+    // Noted before the read, so a value the work wrote as it ended still counts.
+    const workEnded = settlement.settled;
     const value = await readValue();
     if (predicate(value)) {
       return value;
     }
-    await flushPromises();
-  }
-  const value = await readValue();
-  assert.fail(`Timed out waiting for ${description}: ${JSON.stringify(value)}`);
-}
-
-async function waitForCapturedTurns(captures, expectedCount) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < FIXTURE_WAIT_TIMEOUT_MS) {
-    if (captures.turns.length >= expectedCount) {
-      return;
+    if (workEnded) {
+      assert.fail(`The work ended before ${description}: ${JSON.stringify(settlement.outcome)}; last read ${JSON.stringify(value)}`);
     }
     await flushPromises();
   }
-  assert.fail(`Expected ${expectedCount} captured Codex turns; found ${captures.turns.length}.`);
 }
 
-async function waitForHelperLedgerLifecycle(projectRuntimeRoot, lifecycle) {
+async function waitForCapturedTurns(captures, expectedCount, work = null) {
+  const settlement = workSettlement(work);
+  while (captures.turns.length < expectedCount) {
+    if (settlement.settled) {
+      assert.fail(`Expected ${expectedCount} captured Codex turns; found ${captures.turns.length} when the work ended: ${JSON.stringify(settlement.outcome)}`);
+    }
+    await flushPromises();
+  }
+}
+
+async function waitForHelperLedgerLifecycle(projectRuntimeRoot, lifecycle, work = null) {
   const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < FIXTURE_WAIT_TIMEOUT_MS) {
-    const listed = await ledger.readAll();
-    if (listed.records.length === 1 && listed.records[0].lifecycle === lifecycle) {
-      return listed.records[0];
-    }
-    await flushPromises();
-  }
-  const listed = await ledger.readAll();
-  assert.fail(
-    `Expected one ${lifecycle} helper record; found ${JSON.stringify(listed)}.`
+  const listed = await waitForSessionValue(
+    () => ledger.readAll(),
+    (current) => current.records.length === 1 && current.records[0].lifecycle === lifecycle,
+    `one ${lifecycle} helper record`,
+    work
   );
+  return listed.records[0];
 }
 
 function sourceExplanationHelperProfile(overrides = {}) {
@@ -4113,25 +4124,21 @@ test("terminal service accepts steering after a receipt while the first provider
       messageId
     });
     let steering;
-    let timeout;
     try {
       await waitForSessionValue(
         () => store.readConversationLog(sessionId),
         (turns) => turns.some((turn) => turn.user?.messageId === messageId),
-        "the terminal service's durable provider receipt"
+        "the terminal service's durable provider receipt",
+        sending
       );
       assert.deepEqual(captures.turnReplies, []);
       steering = terminals.sendAgentMessage(sessionId, {
         message: "Keep the change focused.",
         messageId: "service-steering-after-receipt"
       });
-      const result = await Promise.race([
-        steering,
-        new Promise((resolve) => {
-          timeout = setTimeout(() => resolve(null), FIXTURE_WAIT_TIMEOUT_MS);
-        })
-      ]);
-      assert.notEqual(result, null, "Steering waited for the first accepted Send to release server admission.");
+      // The first Send's acknowledgement stays pending until the end, so
+      // steering settles without it, or the test's own deadline fails it.
+      const result = await steering;
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.equal(captures.steers.length, 1);
       assert.deepEqual(captures.turnReplies, []);
@@ -4142,7 +4149,6 @@ test("terminal service accepts steering after a receipt while the first provider
         1
       );
     } finally {
-      clearTimeout(timeout);
       accepted.resolve();
       await Promise.allSettled([sending, steering]);
     }
@@ -4185,12 +4191,12 @@ test("terminal service holds admission until its exact receipt is persisted", as
       message: "Persist this before accepting the next message.",
       messageId
     });
-    let timeout;
     try {
       await waitForSessionValue(
         () => store.readConversationLog(sessionId),
         (turns) => turns.some((turn) => turn.user?.text === "An unrelated message."),
-        "the unrelated receipt to finish processing"
+        "the unrelated receipt to finish processing",
+        sending
       );
       assert.equal((await store.runSessionExclusive(sessionId, "agent-write-mode", () => null)).acquired, false);
       assert.equal(receiptWriteEntered, false);
@@ -4209,23 +4215,18 @@ test("terminal service holds admission until its exact receipt is persisted", as
           }
         });
       }
-      await waitForSessionValue(() => receiptWriteEntered, Boolean, "the paused authored-message write");
+      await waitForSessionValue(() => receiptWriteEntered, Boolean, "the paused authored-message write", sending);
       assert.equal((await store.runSessionExclusive(sessionId, "agent-write-mode", () => null)).acquired, false);
       assert.equal(await store.conversationMessageIdExists(sessionId, messageId), false);
       persistReceipt.resolve();
-      const result = await Promise.race([
-        sending,
-        new Promise((resolve) => {
-          timeout = setTimeout(() => resolve(null), FIXTURE_WAIT_TIMEOUT_MS);
-        })
-      ]);
-      assert.notEqual(result, null, "The persisted receipt did not finish delivery.");
+      // The acknowledgement stays pending until the end, so the persisted
+      // receipt finishes delivery without it, or the test's deadline fails it.
+      const result = await sending;
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.equal(await store.conversationMessageIdExists(sessionId, messageId), true);
       assert.equal((await store.runSessionExclusive(sessionId, "agent-write-mode", () => null)).acquired, true);
       assert.deepEqual(captures.turnReplies, []);
     } finally {
-      clearTimeout(timeout);
       persistReceipt.resolve();
       acknowledgement.resolve();
       await sending;
@@ -4276,15 +4277,10 @@ for (const deliveryMode of ["opening", "steering"]) {
         const input = { message: "The accepted request.", messageId };
         const sending = terminals.sendAgentMessage(sessionId, input);
         const duplicate = terminals.sendAgentMessage(sessionId, input);
-        let timeout;
         try {
-          const results = await Promise.race([
-            Promise.all([sending, duplicate]),
-            new Promise((resolve) => {
-              timeout = setTimeout(() => resolve(null), FIXTURE_WAIT_TIMEOUT_MS);
-            })
-          ]);
-          assert.notEqual(results, null, "The exact receipt did not settle both requests.");
+          // The acknowledgement stays pending until later, so the exact receipt
+          // settles both requests without it, or the test's deadline fails it.
+          const results = await Promise.all([sending, duplicate]);
           assert.equal(results.every((result) => result.ok), true, JSON.stringify(results));
           assert.equal(captures.turns.length, 1);
           assert.equal(captures.steers.length, deliveryMode === "steering" ? 1 : 0);
@@ -4321,7 +4317,6 @@ for (const deliveryMode of ["opening", "steering"]) {
           assert.equal(captures.turns.length, 2);
           assert.equal(captures.renderPrompts.length, 1, "The accepted opening briefing was delivered again.");
         } finally {
-          clearTimeout(timeout);
           acknowledgement.resolve();
           await Promise.allSettled([sending, duplicate]);
         }
@@ -6119,7 +6114,7 @@ test("temporary Repair conversations do not depend on failed helper cleanup afte
     const pending = controller.runDetachedChatTurn("session-1", {
       executionProfile, outputSchema: sourceExplanationOutputSchema(), prompt: "Disposable helper."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Done." }) });
     const helper = await pending;
     captures.failDeletes = 1;
@@ -6986,9 +6981,9 @@ test("helper discovery, overlapping turns and cleanup inspect the environment wi
       prompt: "Explain this bounded excerpt."
     };
     const first = controller.runDetachedChatTurn(session.sessionId, input);
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, first);
     const second = controller.runDetachedChatTurn(session.sessionId, input);
-    await waitForCapturedTurns(captures, 2);
+    await waitForCapturedTurns(captures, 2, second);
     const namespace = codexTerminalNamespace(session.sessionId);
     assert.equal(freezeTerminalNamespaceAdmission(namespace, {
       owner: "session-renewal:overlapping-helpers"
@@ -7030,7 +7025,7 @@ test("helper detached turns apply the resolved Luna-low profile and strict tool 
       prompt,
       timeoutMs: 999_999
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
 
     assert.equal(captures.providerOptions.length, 1);
     assert.equal(captures.providerOptions[0].executionMode, "");
@@ -7128,7 +7123,7 @@ test("helper follow-ups resume only a controller-owned thread with the same prof
       outputSchema,
       prompt: "Create the first bounded explanation."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "First explanation." })
     });
@@ -7141,7 +7136,7 @@ test("helper follow-ups resume only a controller-owned thread with the same prof
       prompt: "Answer one follow-up about that explanation.",
       threadId: first.threadId
     });
-    await waitForCapturedTurns(captures, 2);
+    await waitForCapturedTurns(captures, 2, followUpPending);
 
     assert.equal(captures.threads.length, 1);
     assert.equal(captures.resumes.length, 1);
@@ -7200,7 +7195,7 @@ test("concurrent helper follow-ups admit exactly one turn for an owned thread", 
       outputSchema,
       prompt: "Create one reusable helper thread."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, initialPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Initial answer." })
     });
@@ -7215,7 +7210,7 @@ test("concurrent helper follow-ups admit exactly one turn for an owned thread", 
         threadId: initial.threadId
       })
     );
-    await waitForCapturedTurns(captures, 2);
+    await waitForCapturedTurns(captures, 2, Promise.all(followUps));
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Only one follow-up was admitted." }),
       turnId: "turn-2"
@@ -7241,7 +7236,7 @@ test("helper detached turns reject oversized raw output and retire the thread", 
       outputSchema: sourceExplanationOutputSchema(8),
       prompt: "Return one tiny explanation."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: "x".repeat(65)
     });
@@ -7294,7 +7289,7 @@ test("a delayed restore cannot revive helper ownership retired after its ledger 
       outputSchema: sourceExplanationOutputSchema(8),
       prompt: "Return one tiny explanation while ownership is restored."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
 
     pauseNextRead = true;
     const restoring = controller.executionProfileModelCatalog("session-1");
@@ -7340,7 +7335,7 @@ test("helper detached turn timeout is clamped to the resolved profile", {
         timeoutMs: 10_000
       });
       void pending.catch(() => null);
-      await waitForCapturedTurns(captures, 1);
+      await waitForCapturedTurns(captures, 1, pending);
 
       let settled = false;
       void pending.then(() => {
@@ -7366,7 +7361,7 @@ test("interactive detached turns retain their existing writable settings and res
     const pending = controller.runDetachedChatTurn("session-1", {
       prompt: "Discuss this source normally."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
 
     assert.equal(captures.threads.length, 1);
     assert.equal(captures.threads[0].sandbox, "danger-full-access");
@@ -7425,7 +7420,7 @@ test("session shutdown interrupts and deletes an active helper thread before sto
         outputSchema: sourceExplanationOutputSchema(),
         prompt: "Keep this bounded turn active until shutdown."
       });
-      await waitForCapturedTurns(captures, 1);
+      await waitForCapturedTurns(captures, 1, pending);
       await flushPromises();
 
       await controller.closeAllForSession("session-1");
@@ -7592,7 +7587,7 @@ test("auth turnover retires helper ownership when runtime removal wins the delet
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create a temporary thread before reconnecting."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
     const first = await pending;
     assert.equal(first.ok, true, JSON.stringify(first));
@@ -7622,7 +7617,7 @@ test("auth turnover retires helper ownership when runtime removal wins the delet
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Continue after reconnecting without restarting Vibe64."
     });
-    await waitForCapturedTurns(captures, 2);
+    await waitForCapturedTurns(captures, 2, next);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Recovered." }), turnId: "turn-2"
     });
@@ -7637,7 +7632,7 @@ test("auth turnover retries stale in-memory helper ownership after an earlier ru
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create ownership retained by an earlier failed cleanup."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
     assert.equal((await pending).ok, true);
     await rm(captures.runtimeInfo.runtimeDir, { recursive: true, force: true });
@@ -7659,7 +7654,7 @@ test("auth turnover defers shared helper cleanup after verified exit and retries
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Keep cleanup recoverable across logout."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
     const first = await pending;
     assert.equal(first.ok, true);
@@ -7700,7 +7695,7 @@ test("auth turnover still fails when deferred helper cleanup cannot be persisted
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Preserve ownership if cleanup cannot be recorded."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
     assert.equal((await pending).ok, true);
     const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
@@ -7738,7 +7733,7 @@ test("auth turnover preserves helper ownership when thread deletion and runtime 
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Retain cleanup evidence until removal is proven."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
     assert.equal((await pending).ok, true);
     captures.failDeletes = 100;
@@ -7766,7 +7761,7 @@ test("auth turnover retries ledger removal after the owned runtime has already s
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Preserve the ownership record when its removal fails."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
     assert.equal((await pending).ok, true);
     captures.failDeletes = 100;
@@ -9361,7 +9356,7 @@ test("renewal freeze cannot cross persisted helper runtime identity recovery", a
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist one helper thread before the cleanup race."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Persisted." })
     });
@@ -9414,7 +9409,7 @@ test("failed session cleanup retains helper ownership and retries during later h
       outputSchema,
       prompt: "Create one helper thread to clean up."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Ready for cleanup." })
     });
@@ -9459,7 +9454,7 @@ test("resume verification failure removes retired ownership and never revives th
       outputSchema,
       prompt: "Create a thread before its tool inventory changes."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Initial explanation." })
     });
@@ -9504,7 +9499,7 @@ test("resume verification cleanup failure keeps ownership until deletion is retr
       outputSchema,
       prompt: "Create a thread for retryable cleanup."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Initial explanation." })
     });
@@ -9623,7 +9618,7 @@ test("a completed result is not exposed when READY ownership cannot be persisted
         outputSchema: sourceExplanationOutputSchema(),
         prompt: "Do not expose this result without durable READY ownership."
       });
-      await waitForCapturedTurns(captures, 1);
+      await waitForCapturedTurns(captures, 1, pending);
       completeDetachedTurn(subscribers, {
         text: JSON.stringify({ answer: "Completed but not durably reusable." })
       });
@@ -9654,7 +9649,7 @@ test("project shutdown finds and deletes helper-only providers by project owners
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create a helper-only provider for project shutdown."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Project-owned explanation." })
     });
@@ -9679,7 +9674,7 @@ test("provider replacement retires helper ownership before closing the old conne
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create a thread before the provider environment changes."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Provider one." })
     });
@@ -9808,7 +9803,7 @@ test("a completed helper thread survives a controller crash and resumes only aft
       outputSchema,
       prompt: "Persist this helper thread before the controller crashes."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Persisted." })
     });
@@ -9837,7 +9832,7 @@ test("a completed helper thread survives a controller crash and resumes only aft
       prompt: "Resume the exact persisted helper thread.",
       threadId: first.threadId
     });
-    await waitForCapturedTurns(restarted, 1);
+    await waitForCapturedTurns(restarted, 1, followUpPending);
     assert.deepEqual(restarted.resumes.map(({ threadId }) => threadId), [first.threadId]);
     completeDetachedTurn(restartedSubscribers, {
       text: JSON.stringify({ answer: "Resumed after restart." })
@@ -9870,7 +9865,7 @@ test("a missing helper runtime retires stale ownership before provider identity 
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist this thread before its runtime disappears."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Persisted before runtime loss." })
     });
@@ -9897,7 +9892,7 @@ test("a missing helper runtime retires stale ownership before provider identity 
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Start fresh after the stale runtime disappeared."
     });
-    await waitForCapturedTurns(restarted, 1);
+    await waitForCapturedTurns(restarted, 1, freshPending);
     completeDetachedTurn(restartedSubscribers, {
       text: JSON.stringify({ answer: "Fresh provider ownership." })
     });
@@ -9930,7 +9925,7 @@ test("provider context drift retires a verified stale helper runtime", async () 
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist this thread before the provider context changes."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Persisted before context drift." })
     });
@@ -9951,7 +9946,7 @@ test("provider context drift retires a verified stale helper runtime", async () 
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Start fresh after verified stale-runtime retirement."
     });
-    await waitForCapturedTurns(restarted, 1);
+    await waitForCapturedTurns(restarted, 1, freshPending);
     completeDetachedTurn(restartedSubscribers, {
       text: JSON.stringify({ answer: "Fresh provider context." })
     });
@@ -9986,7 +9981,7 @@ test("startup inventory retires READY ownership missing after a helper runtime r
       outputSchema,
       prompt: "Persist this completed thread before its private runtime restarts."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Persisted before restart." })
     });
@@ -10036,7 +10031,7 @@ test("startup inventory retires READY ownership missing after a helper runtime r
       outputSchema,
       prompt: "Create a fresh thread immediately after stale ownership retirement."
     });
-    await waitForCapturedTurns(restarted, 1);
+    await waitForCapturedTurns(restarted, 1, freshPending);
     completeDetachedTurn(restartedSubscribers, {
       text: JSON.stringify({ answer: "Fresh thread created." })
     });
@@ -10069,10 +10064,11 @@ test("an active helper turn is interrupted and deleted during crash reconciliati
       prompt: "Remain active across the simulated crash."
     });
     void pending.catch(() => null);
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     const before = await waitForHelperLedgerLifecycle(
       projectRuntimeRoot,
-      CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE
+      CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE,
+      pending
     );
     assert.equal(before.turnId, "turn-1");
     simulateControllerCrash();
@@ -10187,7 +10183,7 @@ test("startup inventory cannot delete a new helper thread before ownership is du
     await flushPromises();
     assert.equal(captures.helperThreadInventories, 0);
     releaseStart();
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     const reconciled = await reconciliation;
     assert.equal(reconciled.ok, true, JSON.stringify(reconciled));
     assert.equal(captures.helperThreadInventories, 1);
@@ -10218,7 +10214,7 @@ test("startup inventory cannot retire a READY thread claimed by a concurrent fol
       outputSchema,
       prompt: "Create a completed thread before startup inventory begins."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, firstPending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Ready for a follow-up." })
     });
@@ -10240,7 +10236,7 @@ test("startup inventory cannot retire a READY thread claimed by a concurrent fol
       prompt: "Claim the READY thread while inventory is paused.",
       threadId: first.threadId
     });
-    await waitForCapturedTurns(captures, 2);
+    await waitForCapturedTurns(captures, 2, followUpPending);
     releaseInventory();
     const reconciled = await reconciliation;
     assert.equal(reconciled.ok, true, JSON.stringify(reconciled));
@@ -10272,7 +10268,7 @@ test("helper project lifecycle gate releases after a rejected thread start", asy
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "The next start must not deadlock."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, retried);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "The lifecycle gate was released." })
     });
@@ -10295,7 +10291,7 @@ test("an account switch blocks persisted helper ownership without deleting it", 
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist this thread under account A."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Owned by account A." })
     });
@@ -10357,7 +10353,7 @@ test("a same-account auth refresh can resume persisted helper ownership", async 
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist this thread before a token refresh."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Persisted." })
     });
@@ -10383,7 +10379,7 @@ test("a same-account auth refresh can resume persisted helper ownership", async 
       prompt: "Resume under the same account after token refresh.",
       threadId: first.threadId
     });
-    await waitForCapturedTurns(refreshed, 1);
+    await waitForCapturedTurns(refreshed, 1, followUpPending);
     assert.deepEqual(refreshed.resumes.map(({ threadId }) => threadId), [first.threadId]);
     completeDetachedTurn(refreshedSubscribers, {
       text: JSON.stringify({ answer: "Same account resumed." })
@@ -10408,7 +10404,7 @@ test("an archived session retires its persisted helper thread during reconciliat
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist before archiving."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Ready." })
     });
@@ -10443,7 +10439,7 @@ test("concurrent session closes coalesce helper deletion and clear durable owner
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist before concurrent close."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Ready." })
     });
@@ -10475,7 +10471,7 @@ test("an unconfirmed delete result preserves cleanup-required ownership for retr
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist before an unconfirmed delete."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Ready." })
     });
@@ -10512,7 +10508,7 @@ test("helper deletion requires the owned thread's exact semantic profile", async
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist before profile-bound deletion."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "Ready." })
     });
@@ -10612,7 +10608,7 @@ test("helper work rejects an account switch before exposing the result", async (
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Do not expose work after an account switch."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     captures.runtimeInfo.accountIdentitySignature = TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE;
     completeDetachedTurn(subscribers, {
       text: JSON.stringify({ answer: "This result belongs to the old account." })
@@ -10635,7 +10631,7 @@ for (const [outcome, deleteFailures] of [
       const pending = controller.runDetachedChatTurn("session-1", {
         executionProfile, outputSchema: sourceExplanationOutputSchema(), prompt: "Temporary work."
       });
-      await waitForCapturedTurns(captures, 1);
+      await waitForCapturedTurns(captures, 1, pending);
       completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Done." }) });
       const first = await pending;
       captures.failDeletes = 1;
@@ -10695,7 +10691,7 @@ test("helper admission retries same-account cleanup without a controller restart
     const pending = controller.runDetachedChatTurn("session-1", {
       executionProfile, outputSchema: sourceExplanationOutputSchema(), prompt: "Disposable helper."
     });
-    await waitForCapturedTurns(captures, 1);
+    await waitForCapturedTurns(captures, 1, pending);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Done." }) });
     const first = await pending;
     captures.failDeletes = 1;
@@ -10720,7 +10716,7 @@ for (const failureIndex of [0, 1]) {
           executionProfile: sourceExplanationHelperProfile(),
           outputSchema: sourceExplanationOutputSchema(), prompt: "Disposable helper."
         });
-        await waitForCapturedTurns(captures, index);
+        await waitForCapturedTurns(captures, index, pending);
         completeDetachedTurn(subscribers, {
           threadId: `conversation-${index}`, turnId: `turn-${index}`,
           text: JSON.stringify({ answer: "Done." })
@@ -13178,7 +13174,7 @@ test("ordinary detached resume preserves its target and falls back to start only
         }, { onEvent: event => events.push(event) });
         void pending.catch(() => null);
         await Promise.race([
-          waitForCapturedTurns(captures, 1),
+          waitForCapturedTurns(captures, 1, pending),
           pending.then(result => assert.fail(`Detached turn ended before native Send: ${JSON.stringify(result)}`))
         ]);
         completeDetachedTurn(subscribers, { text, threadId, turnId: "turn-1" });
@@ -13562,7 +13558,7 @@ test("Codex real provider restores the same-account Helper after an actual auth 
       const firstPending = controller.runDetachedChatTurn("session-1", {
         executionProfile: profile, outputSchema: sourceExplanationOutputSchema(), prompt: "Save this Helper under its selected account."
       });
-      await waitForCapturedTurns(captures, 1);
+      await waitForCapturedTurns(captures, 1, firstPending);
       completeDetachedTurn(new Set([notification => activeProvider.publishNotification(notification)]), {
         threadId, turnId: "turn-1", text: JSON.stringify({ answer: "Saved." })
       });
@@ -13582,7 +13578,7 @@ test("Codex real provider restores the same-account Helper after an actual auth 
         const followUp = restored.runDetachedChatTurn("session-1", {
           executionProfile: profile, outputSchema: sourceExplanationOutputSchema(), prompt: "Continue once after token refresh.", threadId
         });
-        await waitForCapturedTurns(refreshed, 1);
+        await waitForCapturedTurns(refreshed, 1, followUp);
         assert.equal(activeProvider.constructor, createCodexAppServerAgentProvider().constructor);
         const currentRuntime = await activeProvider.currentRuntimeInfo();
         assert.equal(currentRuntime.accountIdentitySignature, firstRuntime.accountIdentitySignature);
