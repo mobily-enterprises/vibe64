@@ -9,6 +9,7 @@ import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
 import { createCodexGitCommandService } from "./codexGitCommand.js";
 import { createOutputTargetTerminalController } from "./outputTargetTerminal.js";
+import { previewStartedBefore } from "./outputTargetLaunchStart.js";
 import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -140,6 +141,15 @@ function createServiceCommandServices({
       publish: true,
       retry: true
     }),
+    // The sessions feature fills it; while it is absent, as Vibe64 starts or stops, Update waits.
+    updateSessionWork: async (sessionId, input) => state.slots.sessionUpdate
+      ? state.slots.sessionUpdate(sessionId, input)
+      : {
+          ok: false,
+          code: "vibe64_session_update_unavailable",
+          error: "Update is unavailable while Vibe64 starts or stops."
+        },
+    previewStartedBefore,
     listProjectSessions: input => listProjectSessions(input, {
       project,
       authorize: authorizeProjectMessage,

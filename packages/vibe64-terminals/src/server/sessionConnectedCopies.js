@@ -660,5 +660,6 @@ export {
   recoverConnectedCopySaves,
   recoverConnectedCopyUpdate,
   saveConnectedCopies,
+  shortCommit,
   updateConnectedCopies
 };

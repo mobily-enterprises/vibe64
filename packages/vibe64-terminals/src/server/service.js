@@ -526,6 +526,8 @@ function createService({
     setSourceEditorProvider: hostSlots.setSourceEditorProvider,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setPlanCompleted: hostSlots.setPlanCompleted,
+    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
+    setSessionUpdate: hostSlots.setSessionUpdate,
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider: hostSlots.setDatabaseToolsProvider,
     // readable-check: allow setter-seam - cycle: vibe64.pages requires vibe64.terminals

@@ -56,12 +56,31 @@ function saveMainChatNote(result = {}) {
 }
 
 /**
- * The copy whose Update failed, as the Update's own failure: a conflict first,
- * so its review and repair run as the session's own conflict does.
- * @param {object[]} [connected] Update's results for the copies
+ * What an Update moved: this session's own repository (its saved commit, status
+ * and changed files) and each copy it updated. The answer's other fields are
+ * the update check made afterwards, whose `canonicalCommit` and `connected`
+ * replace the Update's own, so its callers read these here.
+ * @param {{ canonicalCommit?: string, connected?: object[], status?: string, updatedPathCount?: number, updatedPaths?: string[] }} result
  */
-function connectedUpdateFailure(connected = []) {
-  const failed = connected.filter(copy => copy.status === "failed");
+function updateMoves(result) {
+  return {
+    canonicalCommit: result.canonicalCommit,
+    connected: (result.connected || []).filter(entry => entry.status !== "failed"),
+    status: result.status,
+    updatedPathCount: result.updatedPathCount || 0,
+    updatedPaths: result.updatedPaths || []
+  };
+}
+
+/**
+ * The copy whose Update failed, as the Update's own failure: a conflict first,
+ * so its review and repair run as the session's own conflict does. `updated`
+ * keeps what the Update did move (this session's own repository and the other
+ * copies), so its caller still learns which files changed.
+ * @param {{ connected?: object[] }} result
+ */
+function connectedUpdateFailure(result) {
+  const failed = (result.connected || []).filter(copy => copy.status === "failed");
   const copy = failed.find(entry => entry.conflictRecovery) || failed[0];
   if (!copy) return null;
   return vibe64Error(copy.error, copy.code || "vibe64_connected_copy_update_failed", {
@@ -69,7 +88,8 @@ function connectedUpdateFailure(connected = []) {
       conflictPaths: copy.conflictPaths || [],
       conflictRecovery: copy.conflictRecovery || null,
       connectedRepository: copy.name,
-      undone: copy.undone !== false
+      undone: copy.undone !== false,
+      updated: updateMoves(result)
     },
     status: 409
   });
@@ -385,6 +405,9 @@ function createSessionWork({
    * its line says why; the others still update, and the Update then fails
    * with that copy's problem, a conflict being reviewed and repaired like the
    * session's own (`reviewedConflictId` resumes the copy its recovery names).
+   * An Update the session's AI runs itself (`requestedByAgent`) steers no
+   * running turn: the command that waits for its answer already says which
+   * files changed, and a steer could interrupt that very command.
    * @param {string} sessionId
    * @param {object} input
    */
@@ -462,12 +485,16 @@ function createSessionWork({
         });
         const note = updateMainChatNote(result);
         if (note) {
-          await terminals.noteMainChat(sessionId, { message: note, nextTurn: true }, {
+          await terminals.noteMainChat(sessionId, {
+            message: note,
+            nextTurn: true,
+            ...(input.requestedByAgent === true ? { steer: false } : {})
+          }, {
             runtime,
             vibe64User: input.vibe64User || null
           });
         }
-        const copyFailure = connectedUpdateFailure(result.connected);
+        const copyFailure = connectedUpdateFailure(result);
         if (copyFailure) throw copyFailure;
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
           event: {
@@ -497,7 +524,8 @@ function createSessionWork({
           ...result,
           ...updateCheck,
           ok: true,
-          operation: task
+          operation: task,
+          updated: updateMoves(result)
         };
       } catch (error) {
         if (!operationStarted) {

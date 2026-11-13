@@ -88,6 +88,9 @@ Git commands.
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionStatus.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
+- `packages/vibe64-terminals/src/server/agentSessionUpdate.js`
+- `packages/vibe64-terminals/src/server/serviceHostSlots.js`
+- `packages/vibe64-terminals/src/server/serviceCommandServices.js`
 - `packages/vibe64-terminals/src/server/sessionConnectedCopies.js`
 - `packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
@@ -442,6 +445,35 @@ note waits in the session metadata `main_chat_note`, joined after any note still
 waiting, and the main-chat dispatch puts it ahead of the next message sent there
 (not a slash command), clearing it once that message is delivered. The chat keeps
 showing what the person sent.
+
+The session's AI runs this same Update itself with `vibe64-helper session update
+[--resolved <review-id>] [--json]`, so it never has to ask the person to press
+Update. The command's route (`/agent-session-command/update`) calls the
+terminals' `sessionUpdate` host slot (`setSessionUpdate` in
+`serviceHostSlots.js`), which the sessions feature fills with its own
+`updateSessionWork` and clears on shutdown; while it is empty the command answers
+`vibe64_session_update_unavailable`. It runs for the person the AI works for (the
+routing request's `submittedBy`), so admission, the agent-write lock, connected
+copies, recovery, the Update task record and its notice are the button's. Update
+holds that lock only for its own write and admits itself while the assistant
+works, so the AI's own turn gets the answer while it still runs, with its unsaved
+work kept. With `requestedByAgent` the note never steers the running turn (the
+answer already lists the files, and a steer would interrupt the command waiting
+for it); it waits for the next main-chat message. What the Update moved
+(`updateMoves`: this session's own commit, status and files, and each copy it
+updated) is the answer's `updated`, and a copy's failure keeps it in
+`details.updated`, because the answer's own `canonicalCommit` and `connected`
+are the update check made afterwards. `agentSessionUpdateAnswer`
+(`agentSessionUpdate.js`) turns the result into `updated` or `already_current`
+(each repository with its saved commit, the changed files and
+`preview.restart`, true when files changed and a Preview started before Update
+still runs), `conflict` (the repository, its folder, files, saved and base
+commits and review id, with the repair steps and the `--resolved` run, which
+passes `reviewedConflictId` as **Review resolved conflicts** does), `wait` (a
+refusal that clears by itself), `needs_person` (rewritten history) or `failed`.
+The command exits 0 only when Update finished and allows 30 minutes; it never
+Saves. Sources: `tests/server/agentSessionUpdate.unit.test.js` and
+`tests/server/agentSessionUpdate.integration.test.js`.
 Naming resolves the actor's Quick helper (`commit_title`) before requesting
 its bounded tool-free profile. Its scoped conversation never changes the main
 chat's binding or history. Repository authorization and write admission still apply.

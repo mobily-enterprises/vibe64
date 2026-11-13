@@ -64,6 +64,7 @@ function createServiceState({ readClaudeAccountStatus }) {
       databaseToolsProvider: null,
       pagesProvider: null,
       planCompleted: null,
+      sessionUpdate: null,
       sourceEditorProvider: null
     }),
     shutdownWork,

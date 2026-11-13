@@ -657,5 +657,6 @@ function createOutputTargetLaunchStart({
 }
 
 export {
-  createOutputTargetLaunchStart
+  createOutputTargetLaunchStart,
+  previewStartedBefore
 };

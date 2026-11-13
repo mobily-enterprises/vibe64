@@ -233,9 +233,12 @@ function createService({
     inspectRepositoryVersionFileDiff: repositoryReads.inspectRepositoryVersionFileDiff,
     inspectRepositoryVersionFiles: repositoryReads.inspectRepositoryVersionFiles
   });
-  // The sessions feature's shutdown clears it.
+  // The sessions feature's shutdown clears them.
   // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
   terminals.setPlanCompleted(saveAfterCompletedPlan);
+  // `vibe64-helper session update` runs this same Update.
+  // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
+  terminals.setSessionUpdate(work.updateSessionWork);
   return service;
 }
 

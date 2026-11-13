@@ -407,6 +407,10 @@ test("Genesis accepts fully enabled main and temporary instructions with maximum
       assert.match(output, /Without --session, the pinned\/selected session receives it/u);
       assert.match(output, /first run `vibe64-helper session list-project <project>`/u);
       assert.match(output, /If exactly one other active session is listed, use it; ask only when several could be meant/u);
+      // Both chats update the session themselves, and only the person saves.
+      assert.match(output, /run `vibe64-helper session update` yourself instead of asking the person to press Update/u);
+      assert.match(output, /run `vibe64-helper preview restart --wait` when it says Preview still runs the old code/u);
+      assert.match(output, /run the `--resolved` command it prints\. Update never saves: Save still needs the person/u);
     }
   });
 });

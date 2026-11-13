@@ -19,6 +19,7 @@ const NEUTRAL_TERMINAL_OPERATIONS = Object.freeze({
   removeSessionCommandHelpers: async () => {},
   retireSessionWorkSave: async () => {},
   setPlanCompleted() {},
+  setSessionUpdate() {},
   waitForWorkspaceSetup: () => null,
   workspaceSetupIsRunning: () => false
 });

@@ -10,7 +10,12 @@ import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { readAgentSessionStatus } from "./agentSessionStatus.js";
-import { workspaceSetupState } from "@local/vibe64-runtime/server/workspaceSetupState";
+import { agentSessionUpdateAnswer } from "./agentSessionUpdate.js";
+import {
+  WORKSPACE_SETUP_METADATA_NAME,
+  workspaceSetupState,
+  workspaceSetupStateFromMetadata
+} from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
@@ -131,6 +136,11 @@ const commandServers = createSessionCommandServers({
       status: vibe64StatusCode,
       token: "controlToken"
     },
+    "/agent-session-command/update": {
+      handle: ({ commandService, input, sessionId }) => commandService.updateSession(sessionId, input),
+      status: vibe64StatusCode,
+      token: "controlToken"
+    },
     "/agent-session-command/plan": {
       handle: ({ commandService, input, sessionId }) => commandService.managePlan(sessionId, input),
       status: vibe64StatusCode,
@@ -176,6 +186,9 @@ const commandServers = createSessionCommandServers({
  * @param {(request: object) => Promise<object>} dependencies.readProjectPreview
  * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.reportWorkflowOutcome
  * @param {(sessionId: string) => Promise<object>} dependencies.retryWorkspaceSetup
+ * @param {(sessionId: string, input: object) => Promise<object>} dependencies.updateSessionWork the session's own Update
+ * @param {(sessionId: string, time: string) => boolean} dependencies.previewStartedBefore whether the session's
+ * Preview runs in a process started before `time`
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -189,6 +202,8 @@ function createAgentSessionCommandService({
   readProjectPreview,
   reportWorkflowOutcome,
   retryWorkspaceSetup,
+  updateSessionWork,
+  previewStartedBefore,
   logger,
   project,
   publishSessionChanged,
@@ -349,6 +364,36 @@ function createAgentSessionCommandService({
         next: state.status === "running"
           ? "Workspace setup is running. Read vibe64-helper session status --json until workspaceSetup.status is no longer running."
           : ""
+      };
+    });
+  }
+
+  /**
+   * Runs the session's own Update, the one its Update button runs, for the person whose request the AI is working
+   * on, and answers with what moved and what to do next. The AI runs it from inside its own turn: Update holds the
+   * session only while it changes files, keeps the AI's unsaved work, and steers no turn, since this answer already
+   * says which files changed. `reviewedConflictId` applies a repaired conflict, as Review resolved conflicts does.
+   * @param {string} sessionId
+   * @param {{ reviewedConflictId?: string }} input
+   */
+  async function updateSession(sessionId, input) {
+    return runInSessionProject(sessionId, async ({ binding, store }) => {
+      const startedAt = new Date().toISOString();
+      const reviewedConflictId = toText(input.reviewedConflictId);
+      const result = await updateSessionWork(sessionId, {
+        ...(reviewedConflictId ? { reviewedConflictId } : {}),
+        requestedByAgent: true,
+        vibe64User: await requestActor(store, sessionId, binding)
+      });
+      const setup = workspaceSetupStateFromMetadata({
+        [WORKSPACE_SETUP_METADATA_NAME]: await store.readMetadataValue(sessionId, WORKSPACE_SETUP_METADATA_NAME)
+      });
+      return {
+        sessionId,
+        ...agentSessionUpdateAnswer(result, {
+          previewStartedBefore: previewStartedBefore(sessionId, startedAt),
+          setupRunning: setup.status === "running"
+        })
       };
     });
   }
@@ -597,6 +642,7 @@ function createAgentSessionCommandService({
     projectPreview,
     sessionStatus,
     retrySetup,
+    updateSession,
     managePlan,
     run
   });

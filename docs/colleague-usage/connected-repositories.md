@@ -94,7 +94,10 @@ notice says the update can be retried: choose **Update this session (rebase)**
 again.
 
 The session's regular check for newer saved work also watches each copy's main,
-so the session asks for an Update when any of them moves.
+so the session asks for an Update when any of them moves. The session's AI runs
+this same Update itself when its work needs the newer versions, and repairs a
+copy's conflict the same way; see
+[The session's AI updates the session itself](github-work.md#the-sessions-ai-updates-the-session-itself).
 
 ## Save saves the copies first
 

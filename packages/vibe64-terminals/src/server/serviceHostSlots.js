@@ -2,7 +2,7 @@
 
 /**
  * What other owners fill after construction: the source editor, plan
- * completion and database tools providers, and the assistant runtime's functions.
+ * completion, session Update and database tools providers, and the assistant runtime's functions.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  */
@@ -59,6 +59,17 @@ function createServiceHostSlots({ state }) {
   }
 
   /**
+   * Fills or, at its owner's shutdown, clears the session's own Update, which `vibe64-helper session update` runs.
+   * @param {Function | null} handler
+   */
+  function setSessionUpdate(handler) {
+    if (handler !== null && typeof handler !== "function") {
+      throw new TypeError("The session Update handler must be a function or null.");
+    }
+    state.slots.sessionUpdate = handler;
+  }
+
+  /**
    * Fills or, at its owner's shutdown, clears the database tools provider.
    * @param {object | null} provider
    */
@@ -90,6 +101,8 @@ function createServiceHostSlots({ state }) {
     setPagesProvider,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setPlanCompleted,
+    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
+    setSessionUpdate,
     // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals
     setSourceEditorProvider
   });

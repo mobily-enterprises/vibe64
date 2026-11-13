@@ -171,7 +171,12 @@ works must therefore get a short visible reply first (a direct question gets a
 direct answer) before the agent continues; an answer left only in thinking is
 not a reply. The
 contribution points agents to `vibe64-helper spec` for exact Vibe64-owned
-contracts instead of restating their grammar. With the pages command it also
+contracts instead of restating their grammar. It tells the agent to run
+`vibe64-helper session update` itself when its work needs the newer saved
+version or `repository.updateFirst` says the session is behind, rather than ask
+the person to press Update, then to re-read what changed and restart a Preview
+still running old code; Update never saves, so Save stays the person's
+([saving work](../source/save-work.md)). With the pages command it also
 tells every engine how to publish a page and when to offer one
 ([publishing pages](../pages/publishing.md)). Framework conventions, such as
 JSKIT's test-database names, belong to the Stack piece that owns them; Vibe64

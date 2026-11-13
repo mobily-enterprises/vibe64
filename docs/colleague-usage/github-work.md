@@ -146,8 +146,34 @@ them (a turn that is working is told at once, otherwise the note leads your next
 message, and several waiting notes go together); after Save, a working turn is
 told its work was saved as it was when Save started and which files Save
 regenerated. A note sent to a working turn appears in the chat as Vibe64's, not
-as yours. Colleague can explain these notices; Save and Update themselves still
-need your instruction. These steps apply on desktop and mobile.
+as yours. An Update the session's AI ran itself (see below) does not interrupt
+its turn with that note, because its own command already told it; the note still
+leads your next message. Colleague can explain these notices; Save and Update
+themselves still need your instruction to Colleague. These steps apply on
+desktop and mobile.
+
+## The session's AI updates the session itself
+
+When the AI's work needs the project's newer saved version, or the session is
+behind it, the session's AI runs Update itself instead of asking you to choose
+**Update this session (rebase)**. It is the same Update, for this session and its
+[connected repositories](connected-repositories.md): it runs inside the AI's own
+turn without waiting for it to end, keeps the AI's unsaved work like any Update,
+and its notice in chat shows it as it shows yours. The AI runs it with
+`vibe64-helper session update`, which tells it what changed, so it re-reads
+those files and restarts Preview itself when Preview still runs the code from
+before Update.
+
+When a repository conflicts, the command names that repository and its files,
+and leaves that repository unchanged. The AI repairs the files, keeping both
+versions' intended changes, then applies the repair with `vibe64-helper session
+update --resolved <review-id>`, as **Review resolved conflicts** does. When
+another Save or Update is running, it waits and tries again; rewritten history
+still needs you (**Fix it with AI** on the Update notice).
+
+Update never saves, and the AI cannot Save for you: **Save** still needs your
+choice, because it publishes the session's work. The same applies on desktop and
+mobile.
 
 ## When the repository needs help
 
@@ -190,7 +216,8 @@ session status --json` (under `repository`), and Colleague reads it when it
 inspects the session's work, so both can explain the label instead of guessing.
 Explaining it authorizes nothing: **Fix it with AI**, **Review resolved
 conflicts** and **Show Update notice** need your interaction, and any repair the
-AI makes needs your request.
+AI makes needs your request, except the conflicts of an Update the AI ran itself,
+which it repairs as part of that work.
 
 ## Apply an Update after resolving conflicts
 

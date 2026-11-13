@@ -30,15 +30,16 @@ function messageWithMainChatNote(input, note) {
 
 /**
  * The terminals' `noteMainChat`: it tells the main chat's AI about a change Vibe64 made to the session's files. A
- * running turn is steered with the note; otherwise, when `nextTurn` is set, the note leads the next message sent to
- * the main chat. It never starts a turn, and a failure only logs: the change itself is already done.
+ * running turn is steered with the note, unless `steer` is false (a change the AI asked for and was told about);
+ * otherwise, when `nextTurn` is set, the note leads the next message sent to the main chat. It never starts a turn,
+ * and a failure only logs: the change itself is already done.
  * @param {{ assistantContext: object, logger: object, sendAgentMessage: Function, sessionAgent: object }} dependencies
  */
 function createMainChatNote({ assistantContext, logger, sendAgentMessage, sessionAgent }) {
-  return async function noteMainChat(sessionId, { message, nextTurn = false }, options = {}) {
+  return async function noteMainChat(sessionId, { message, nextTurn = false, steer = true }, options = {}) {
     try {
       const context = await assistantContext.assistantSessionOptions(sessionId, options);
-      if ((await sessionAgent.sessionState(sessionId, context))?.turn?.active) {
+      if (steer && (await sessionAgent.sessionState(sessionId, context))?.turn?.active) {
         // Generated work declares Junior, so a turn that ends meanwhile refuses the steer instead of starting one.
         // The chat shows the note as Vibe64's, not as the person's.
         const steered = await sendAgentMessage(sessionId, {

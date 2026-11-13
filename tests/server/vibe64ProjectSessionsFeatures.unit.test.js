@@ -221,6 +221,7 @@ test("project and sessions register routes and captured actions during setup", a
   const sessionRoutes = [];
   const configurationReads = [];
   const templateObservers = [];
+  let sessionUpdate = null;
   const sessionCatalogue = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const sessionOutputs = await Vibe64SessionsFeature.setup({
     actionCatalogue: {
@@ -250,6 +251,7 @@ test("project and sessions register routes and captured actions during setup", a
     terminals: {
       openBrowserConversation() { throw new Error("Feature setup must not open a native conversation."); },
       setPlanCompleted() {},
+      setSessionUpdate(handler) { sessionUpdate = handler; },
       waitForWorkspaceSetup: () => null,
       workspaceSetupIsRunning: () => false,
       async resumeIntegrationContinuation(_sessionId, _input, options) {
@@ -260,6 +262,7 @@ test("project and sessions register routes and captured actions during setup", a
   }, {});
 
   assert.equal(typeof sessionOutputs.sessions.createSession, "function");
+  assert.equal(sessionUpdate, sessionOutputs.sessions.updateSessionWork, "the session helper's update runs the sessions' own Update");
   assert.deepEqual(templateObservers.map((observer) => typeof observer), ["function"], "applying a starter prepares its session workspace");
   await assert.rejects(
     () => Vibe64SessionsFeature.setup({ renewalActorResolver: {} }, {}),
@@ -330,11 +333,12 @@ test("project and sessions register routes and captured actions during setup", a
     project: { setTemplateApplicationObserver(observer) { cleared.push(["templateApplicationObserver", observer]); } },
     terminals: {
       async invalidateAgentRuntimes(input) { invalidations.push(input); return { ok: true }; },
-      setPlanCompleted(handler) { cleared.push(["planCompleted", handler]); }
+      setPlanCompleted(handler) { cleared.push(["planCompleted", handler]); },
+      setSessionUpdate(handler) { cleared.push(["sessionUpdate", handler]); }
     }
   }, { outputs: sessionOutputs });
   assert.deepEqual(invalidations, [{ reason: "server-shutdown" }]);
-  assert.deepEqual(cleared, [["templateApplicationObserver", null], ["planCompleted", null]]);
+  assert.deepEqual(cleared, [["templateApplicationObserver", null], ["planCompleted", null], ["sessionUpdate", null]]);
 });
 
 test("sessions start standalone renewal recovery without blocking Feature boot", async () => {
