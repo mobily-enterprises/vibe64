@@ -1494,6 +1494,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/serviceGoalLimitReset.js`
 - `packages/vibe64-terminals/src/server/serviceGoalChatContinuation.js`
 - `tests/server/claudeGoalRestart.unit.test.js`
+- `tests/server/claudeGoalRestartControls.unit.test.js`
+- `tests/server/claudeGoalUsageLimit.unit.test.js`
 - `packages/vibe64-terminals/src/server/codexSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/openCodeSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/mainConversationBinding.js`
