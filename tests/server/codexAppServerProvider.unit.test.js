@@ -354,12 +354,13 @@ function assertInteractiveCodexAppServerArgs(args = [], tail = []) {
 }
 
 /**
- * Proves a stop left no member of the orphaned fixture group running. Once its leader has exited,
- * the fixture's child belongs to init (or the nearest subreaper), so after the stop kills it, it stays
- * in the group as a zombie until that reaper collects it, which can take over a second on a loaded
- * host. kill(-group, 0) still answers for a zombie, so only a live member shows that the stop failed.
+ * Proves a stop left no member of a process group running. A member the stop killed stays in the
+ * group as a zombie until its parent reaps it: this test process, on a later turn of its event loop,
+ * for a child it started itself; init (or the nearest subreaper) for a member whose parent had already
+ * exited, which can take over a second on a loaded host. kill(-group, 0) still answers for a zombie,
+ * so only a live member shows that the stop failed.
  */
-async function assertOrphanedProcessGroupStopped(processGroupId) {
+async function assertProcessGroupStopped(processGroupId) {
   assert.equal(
     await processGroupHasLiveMember(processGroupId),
     false,
@@ -1891,9 +1892,7 @@ test("renewal shutdown waits for a transient unmarked process-group member witho
       assert.equal(result.processExitVerified, true);
       assert.equal(result.runtimeDirPreserved, true);
       assert.ok(Date.now() - startedAt >= 100);
-      assert.throws(() => process.kill(-fixture.processGroupId, 0), {
-        code: "ESRCH"
-      });
+      await assertProcessGroupStopped(fixture.processGroupId);
     } finally {
       try {
         process.kill(-fixture.processGroupId, "SIGKILL");
@@ -1955,7 +1954,7 @@ test("renewal shutdown preserves exact process-exit proof across restart until f
       assert.equal(stopped.processExitVerified, true);
       assert.equal(stopped.runtimeDirPreserved, true);
       assert.equal(stopped.runtimeDirRemoved, false);
-      await assertOrphanedProcessGroupStopped(fixture.processGroupId);
+      await assertProcessGroupStopped(fixture.processGroupId);
       assert.equal(
         JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8")).pid,
         fixture.processGroupId
@@ -2030,7 +2029,7 @@ test("codex provider reuses and stops the detached process group after its leade
       assert.equal(result.pid, fixture.processGroupId);
       assert.equal(result.stopped, true);
       assert.equal(result.runtimeDirRemoved, true);
-      await assertOrphanedProcessGroupStopped(fixture.processGroupId);
+      await assertProcessGroupStopped(fixture.processGroupId);
     } finally {
       try {
         process.kill(-fixture.processGroupId, "SIGKILL");
@@ -2064,12 +2063,7 @@ test("codex provider stops detached command groups below its session runtime", a
 
       assert.equal(result.stopped, true);
       assert.equal(result.descendantProcessGroups.includes(fixture.commandPid), true);
-      assert.throws(
-        () => process.kill(-fixture.commandPid, 0),
-        {
-          code: "ESRCH"
-        }
-      );
+      await assertProcessGroupStopped(fixture.commandPid);
     } finally {
       for (const processGroupId of [fixture.commandPid, fixture.processGroupId]) {
         try {
@@ -2741,7 +2735,7 @@ test("codex helper provider retires a detached child when startup never becomes 
         assert.equal(error.cleanupRequired, false);
         return true;
       });
-      assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
+      await assertProcessGroupStopped(child.pid);
       for (const artifact of [
         codexAppServerHelperHomeDir(runtimeDir),
         codexAppServerHelperWorkspaceDir(runtimeDir),
@@ -2806,7 +2800,7 @@ test("codex helper provider retires a started child when metadata persistence fa
         assert.doesNotMatch(error.message, /metadata-secret/u);
         return true;
       });
-      assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
+      await assertProcessGroupStopped(child.pid);
       for (const artifact of [
         codexAppServerHelperHomeDir(runtimeDir),
         codexAppServerHelperWorkspaceDir(runtimeDir),
@@ -4186,7 +4180,7 @@ test("codex helper provider retires its runtime when in-memory account activatio
         assert.doesNotMatch(error.message, /secret-token/u);
         return true;
       });
-      assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
+      await assertProcessGroupStopped(child.pid);
       assert.equal(provider.runtime, null);
       assert.equal(provider.client, null);
       await assert.rejects(access(codexAppServerHelperHomeDir(runtimeDir)), { code: "ENOENT" });
