@@ -124,8 +124,11 @@ function vibe64RouteHandler({
         }
         throw error;
       }
+      // The handler answered itself, or has nothing to answer, which Fastify answers with an empty 200. Returning the
+      // reply instead held a request nothing answered until the client went away: the reply is a thenable that
+      // settles only once the response ends.
       if (response === undefined) {
-        return reply;
+        return undefined;
       }
 
       return reply.code(responseStatusCode(response, options)).send(response);

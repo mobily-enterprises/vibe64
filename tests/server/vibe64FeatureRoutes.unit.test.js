@@ -300,6 +300,30 @@ test("feature errors retain their JSON body while response hooks are asynchronou
   });
 });
 
+test("a Vibe64 route that answers nothing gets an empty 200, never a request held open", { timeout: 30_000 }, async (t) => {
+  const app = testRouteApp();
+  const routes = createActionRouteScope(vibe64RouteHttp(app.http), {
+    relativePath: "vibe64/quiet",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({ localhostCheckBypassed: true, projectScoped: false })
+  });
+  routes.serviceRoute("POST", "", {}, () => undefined);
+  const server = Fastify();
+  t.after(() => server.close());
+  for (const route of app.registeredRoutes) server.route({ method: route.method, url: route.path, handler: route.handler });
+  // Fastify's reply is a thenable that settles only once the response ends, so a wrapper that returned it for a
+  // handler that answered nothing held the request until the client went away.
+  let timer;
+  const held = new Promise((resolve) => {
+    timer = setTimeout(resolve, 2000, "held");
+  });
+  t.after(() => clearTimeout(timer));
+  const answer = await Promise.race([server.inject({ method: "POST", url: "/api/vibe64/quiet" }), held]);
+  assert.notEqual(answer, "held", "the request was held open");
+  assert.equal(answer.statusCode, 200);
+  assert.equal(answer.body, "");
+});
+
 test("a deleted practice project's page requests are a clean not-found with its code", async () => {
   const app = testRouteApp();
   let handled = 0;
