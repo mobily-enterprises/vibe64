@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, ref } from "vue";
+// Each test imports a fresh editor after resetModules. Loading it once with the file transforms its module graph here,
+// which takes seconds on a busy machine, instead of inside the first test's 5 s, whose body then outlived its timeout
+// and polled into the next test.
+import "../../src/composables/useVibe64SourceEditor.js";
 
 const mocks = vi.hoisted(() => ({
   beforeUnmount: [],
