@@ -2210,10 +2210,12 @@ an unresolved pending request. Active-turn steering bypasses classification.
 The original routing coordinator retains schema-five workflow state independently
 of delivery: working/waiting/complete plus planning/implementation/review. Router
 classifies only a new Auto request into conversation, planning, implementation or
-review with a Senior/Junior role. A Senior, Junior or Custom request from main
-chat is an implementation-stage workflow from admission, without Router; an
-explicit Deslop or UI pass, generated Junior work, an unfinished goal and
-temporary chats never are.
+review with a Senior/Junior role. A conversation request is no workflow: its
+turn gets no workflow instructions, routing records it complete when the turn
+completes (waiting otherwise), and an outcome it reports is refused. A Senior,
+Junior or Custom request from main chat is an implementation-stage workflow
+from admission, without Router; an explicit Deslop or UI pass, generated Junior
+work, an unfinished goal and temporary chats never are.
 
 Each workflow request captures its chat's `finishing` choices (review, Deslop,
 UI pass) and builds one finishing message from them (`assistantFinishingMessage`).
@@ -2227,8 +2229,13 @@ after its finishing turn, or that handoff, routing writes the save notice and
 calls the Sessions-owned completion handler after its lock, which runs the
 ordinary Save once, connected copies included, while `autoSave` is on, in any
 mode; routing writes its short result note to chat. A direct implementation
-turn that reports complete changed nothing; one that ends without reporting is
-an ordinary reply. Neither finishes anything. Each new request records the
+turn that reports complete changed only a plan; one that ends without reporting is
+an ordinary reply. Neither finishes anything. A direct request's first turn
+(`directWorkflowInstructions`, implementation without a follow-up) is told that
+an answer, or work that changed no files or plan with no decision waiting,
+reports no outcome and says nothing about saving: it skips the plan read and
+outcome calls, and routing records the ordinary reply complete with no Status
+message. Its follow-up and finishing turns always report. Each new request records the
 earlier requests no finishing turn covered (`assistantUnreviewedRequests`),
 so stopped, waiting and unreported work folds into the next finishing turn.
 Only Senior completes an involved plan; a Junior or Custom finishing turn
@@ -2244,9 +2251,14 @@ what was verified without asking the person to try, publish or deploy the work
 or offering next steps; the line never names the finishing turn. The finishing
 turn, which ends the piece of work, an implementation turn with every part off,
 Auto planning and requests that run no finishing step keep their normal ending.
-Save is not a turn, so it alone adds no such line. Then every turn hears how the
+Save is not a turn, so it alone adds no such line. Then every workflow turn hears how the
 work is saved (`assistantSaveInstruction`), from the same `autoSave` switch the
-automatic save reads (`savesAutomatically`).
+automatic save reads (`savesAutomatically`); a direct answer that reports
+nothing is told to say nothing about saving. Senior's plan guidance
+(`workPlanInstructions`) says unfinished review reports continue through the
+workflow outcome command only in Auto's turns that report an outcome
+(`autoOutcome`: planning, implementation and review), never in Auto
+conversation or direct chats.
 
 The admitted agent uses the existing authenticated session-helper socket's
 `plan read` and `plan outcome` operations. The read supplies exact request/turn/stage
@@ -2254,8 +2266,9 @@ identity, including when there is no plan. Outcome accepts continue/handoff/wait
 complete, a bounded concrete explanation and progress boolean. The owner checks
 captured actor/access, active native turn and both involved plan revisions. Planning
 can continue or wait; in Auto only Senior review can complete. A direct chat's
-agent completes its own finishing turn, or implementation that changed nothing
-and involves no plan. When Senior completes, an involved plan must first be
+agent completes its own finishing turn, or implementation that changed no files
+and involves no plan; the server still accepts that complete from a first turn
+that only answered, which then keeps its Status message. When Senior completes, an involved plan must first be
 explicitly completed through its existing lifecycle operation.
 
 After the exact native turn succeeds, continue retains role/stage; handoff moves

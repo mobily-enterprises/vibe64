@@ -543,21 +543,22 @@ function assistantWorkflowInstructions(state, { autoSave = false } = {}) {
 }
 
 /**
- * A Senior, Junior or Custom chat's agent reports the same outcomes as Auto's,
- * and does its own finishing turn once the work is finished.
+ * A Senior, Junior or Custom chat's agent reports Auto's outcomes, except that a request's first
+ * turn may answer without one, and does its own finishing turn once the work is finished.
  */
 function directWorkflowInstructions(state) {
-  const names = assistantFinishingParts(state)
-    .map(id => ASSISTANT_FINISHING_STEPS.find(step => step.id === id).name);
+  const names = assistantFinishingParts(state).map(id => ASSISTANT_FINISHING_STEPS.find(step => step.id === id).name);
+  const answers = state.stage === "implementation" && !state.followup;
   return [
     `Workflow stage: ${state.stage}. Only an explicit outcome finishes the work; an implementation turn that ends without one is a plain reply, and its changes wait for the next finishing turn.`,
+    ...(answers ? ["If you only answer this request, or finish it without changing any files or plan, and no decision waits on the person, report no outcome: skip the plan read and the outcome and simply reply, saying nothing about outcomes or saving. Vibe64 records that reply as finished. The rest of these instructions is for every other turn."] : []),
     "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId, workflow.stage and BOTH Plan and Progress. This read works even without a plan. Read all pages when a plan is involved.",
     "Before your final response, report one outcome through vibe64-helper plan outcome with JSON on stdin: {messageId, turnId, stage, decision, explanation, progress, expectedRevision, expectedProgressRevision}. Use the exact workflow identity from the read. decision is continue, handoff, wait, or complete; explanation names concrete evidence or the exact blocker; progress is true only for actual new work or verification. Supply paired revisions only for the plan involved in this task; leave unrelated plans unchanged.",
     "continue keeps this stage when authorised work remains. During implementation, handoff reports the requested work finished and changed files; " + (names.length
       ? `you then do this chat's automatic ${names.join(", ")} yourself in one more turn, once, over every change since the last one. During that turn, handoff returns to implementation for substantial necessary rework.`
       : "this chat's settings turn off the automatic review, Deslop and UI pass, so handoff finishes the work."),
     "wait retains this stage for a real blocker, a required user decision, or an explicit pause. A clarification or status question is not a stop: incorporate it and continue. An explicit Stop remains respected. A final reply that asks the person a numbered question always waits for their answer, whatever outcome you report.",
-    "During implementation, complete means you answered or finished without changing any files, so nothing needs a finishing turn; never use it after changing files or for a plan's work. In the finishing turn, complete comes only after every enabled part and its checks are finished. When a plan is involved and you are Senior, first explicitly complete it using the plan helper, then report complete with the returned revisions.",
+    (answers ? "During implementation, complete means you changed a plan without changing any files (a turn that changed neither reports nothing, as above), so nothing needs a finishing turn; " : "During implementation, complete means you answered or finished without changing any files, so nothing needs a finishing turn; ") + "never use it after changing files or for a plan's work. In the finishing turn, complete comes only after every enabled part and its checks are finished. When a plan is involved and you are Senior, first explicitly complete it using the plan helper, then report complete with the returned revisions.",
     "For incomplete implementation use continue, not handoff. Do not ask the person to request the next step."
   ].join("\n");
 }

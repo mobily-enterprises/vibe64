@@ -4,10 +4,12 @@ import { fixture, reportOutcome } from "../fixtures/assistantRouting.js";
 import { assistantRoutingOutcomeNotice, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 
 // An Auto request Router classes as conversation is not a workflow: its turn is
-// asked for no outcome and no save line, and Vibe64 records how it ended. Every
-// Senior, Junior or Custom turn, and an Auto request classed as implementation,
-// is a workflow turn that reads its identity and reports an outcome before its
-// final reply: two tool calls, each answered by one more model request.
+// asked for no outcome and no save line, and Vibe64 records how it ended. A
+// Senior, Junior or Custom request's first turn that only answers reports
+// nothing either. Every other Senior, Junior or Custom turn, and an Auto request
+// classed as implementation, is a workflow turn that reads its identity and
+// reports an outcome before its final reply: two tool calls, each answered by
+// one more model request.
 const OUTCOME_CALL = /report one outcome through vibe64-helper plan outcome/u;
 const SAVE_LINE = /Vibe64 saves this work automatically|the person saves finished work with the Save button/u;
 const ended = (state, result = "completed") => ({ payload: { agentRun: { active: false, state: result, providerTurnId: state.turnId } } });
@@ -22,6 +24,7 @@ async function conversation(t, { role = "junior", preferences = { mode: "auto", 
 
 // A Senior, Junior or Custom request's first turn that only answers reports nothing.
 const ANSWERS_REPORT_NOTHING = /If you only answer this request, or finish it without changing any files or plan, and no decision waits on the person, report no outcome/u;
+const AUTO_CONTINUE = "In Auto, report continue through the workflow outcome command.";
 
 /** The model requests and tool calls an answer costs, as its turn's instructions ask for them. */
 function turnCost(f) {
@@ -72,12 +75,12 @@ test("an Auto conversation turn is not carried into the next request's finishing
 
 const customOverride = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "openai",
   modelId: "gpt-6-astra", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
-for (const mode of ["senior", "junior", "custom"]) test(`a ${mode} chat's question is a workflow turn that reports an outcome and shows it as a Status message`, async t => {
+for (const mode of ["senior", "junior", "custom"]) test(`a ${mode} chat's question that reports complete anyway keeps today's path and shows its Status message`, async t => {
   const f = await fixture(t, { mode, review: true, autoSave: true, ...(mode === "custom" ? { override: customOverride } : {}) }, { readyPlan: false });
   await f.service.send("session-1", { messageId: "request-1", message: question, submissionKind: "send" }, f.context);
   const message = f.sends[0].input.message;
   assert.match(message, OUTCOME_CALL); assert.match(message, SAVE_LINE);
-  assert.deepEqual(turnCost(f), { routerRequests: 0, turns: 1, outcomeCalls: 2 });
+  assert.deepEqual(turnCost(f), { routerRequests: 0, turns: 1, outcomeCalls: 0 }, "an answer is asked for no outcome");
   await reportOutcome(f, "complete", { explanation: "Nothing in the app was changed, so there's nothing to save." });
   f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: "request-1", text: question },
     assistant: { text: "It checks the name." }, messages: [{ role: "assistant", text: "It checks the name." }] }];
@@ -118,6 +121,19 @@ function replied(f, text = "It checks the name.", messages = [{ role: "assistant
 }
 
 const statusMessages = f => [...f.notices.keys()].filter(id => id.startsWith(STATUS_PREFIX));
+
+/**
+ * A stub agent that answers the way its turn's instructions ask: when they let an
+ * answer report nothing it just replies; otherwise it reads its workflow identity
+ * and reports complete, two tool calls each answered by one more model request.
+ */
+async function answerAsInstructed(f) {
+  const exempt = ANSWERS_REPORT_NOTHING.test(f.sends.at(-1).input.message);
+  if (!exempt) await reportOutcome(f, "complete", { explanation: "Nothing in the app was changed, so there's nothing to save." });
+  replied(f);
+  await f.service.afterTurn("session-1", ended(f.state()), f.context);
+  return { toolCalls: exempt ? 0 : 2, modelRequests: exempt ? 1 : 3 };
+}
 
 for (const mode of DIRECT_MODES) test(`a ${mode} chat's answer that reports nothing ends complete with no Status message, no finishing step and no save`, async t => {
   const f = await direct(t, mode);
@@ -199,4 +215,42 @@ for (const mode of DIRECT_MODES) test(`a ${mode} chat's follow-up and finishing 
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
   const finishing = f.sends[2].input.message;
   assert.equal(f.state().stage, "review"); assert.match(finishing, OUTCOME_CALL); assert.doesNotMatch(finishing, ANSWERS_REPORT_NOTHING);
+});
+
+// The change: a request's first turn that only answers reports nothing.
+for (const mode of DIRECT_MODES) test(`a ${mode} chat's first turn lets an answer report nothing, so it costs no outcome tool calls and shows no Status message`, async t => {
+  const f = await direct(t, mode);
+  const message = f.sends[0].input.message;
+  const cost = await answerAsInstructed(f);
+  t.diagnostic(`${mode} answer: ${JSON.stringify({ ...cost, statusMessages: statusMessages(f).length + (assistantRoutingOutcomeNotice(f.state()) ? 1 : 0) })}`);
+  assert.match(message, ANSWERS_REPORT_NOTHING);
+  assert.match(message, OUTCOME_CALL, "work still reports its outcome");
+  assert.doesNotMatch(message, /complete means you answered/u, "an answer is no longer told to report complete");
+  assert.deepEqual(cost, { toolCalls: 0, modelRequests: 1 });
+  assert.equal(f.state().status, "complete"); assert.deepEqual(statusMessages(f), []);
+  assert.equal(assistantRoutingOutcomeNotice(f.state()), null);
+});
+
+// Senior's plan guidance says unfinished review reports continue only in Auto's
+// turns that report an outcome.
+for (const [label, setup, says] of [
+  ["an Auto conversation turn for Senior", f => { f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"conversation"}' }); }, false],
+  ["an Auto planning turn", f => { f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' }); }, true],
+  ["an Auto implementation turn by Senior", f => { f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"implementation"}' }); }, true],
+  ["a Senior chat's turn", f => { f.metadata.assistant_routing = JSON.stringify({ mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true }); }, false]
+]) test(`${label} ${says ? "says" : "does not say"} that unfinished review reports continue through the workflow outcome command`, async t => {
+  const f = await fixture(t, { mode: "auto", review: true, autoSave: true }, { readyPlan: false });
+  setup(f);
+  await f.service.send("session-1", { messageId: "request-1", message: question, submissionKind: "send" }, f.context);
+  assert.equal(f.sends[0].input.message.includes(AUTO_CONTINUE), says);
+  assert.match(f.sends[0].input.message, /You are Senior and own the plan's scope and lifecycle/u, "Senior's plan guidance is there");
+});
+
+test("Auto's Senior review says that unfinished review reports continue through the workflow outcome command", async t => {
+  const f = await fixture(t, { mode: "auto", review: true, autoSave: true }, { readyPlan: false });
+  await f.service.send("session-1", { messageId: "request-1", message: "Add the required-name check.", submissionKind: "send" }, f.context);
+  await reportOutcome(f, "handoff");
+  replied(f, "Added the check.");
+  await f.service.afterTurn("session-1", ended(f.state()), f.context);
+  assert.equal(f.state().stage, "review"); assert.ok(f.sends[1].input.message.includes(AUTO_CONTINUE));
 });

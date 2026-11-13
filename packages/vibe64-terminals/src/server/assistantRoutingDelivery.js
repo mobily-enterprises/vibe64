@@ -174,6 +174,8 @@ function createAssistantRoutingDelivery({
     }
     const taskPurpose = assistantTaskPurpose(state.task);
     const includePlanInstructions = !taskPurpose && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
+    // Auto's planning, implementation and review turns report a workflow outcome; its conversation turns do not.
+    const autoOutcome = state.mode === "auto" && (state.workflow || state.stage === "planning");
     // A UI pass's scope is the request its Genesis task receives, as a commit
     // range in the message is Deslop's.
     const request = state.task === "ui-pass" ? uiPassRequest(input.message, { explicit: true }) : input.message;
@@ -187,7 +189,7 @@ function createAssistantRoutingDelivery({
       browserReview: state.mode === "auto" && state.workflow && implementing && finishingParts.includes("review"),
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
-      planInstructions: includePlanInstructions ? workPlanInstructions(role) : ""
+      planInstructions: includePlanInstructions ? workPlanInstructions(role, { autoOutcome }) : ""
     });
     // A review renders Genesis's review task; a finishing turn without review
     // renders its first part's task, as an explicit Deslop renders deslop.
@@ -196,7 +198,7 @@ function createAssistantRoutingDelivery({
       const first = followup && finishingParts[0];
       genesisTask = ASSISTANT_FINISHING_STEPS.find(({ id }) => id === first)?.genesisTask || "review";
     }
-    if (state.workflow || state.mode === "auto" && state.stage === "planning") {
+    if (state.workflow || autoOutcome) {
       message += "\n\n" + assistantWorkflowInstructions(state, { autoSave: savesAutomatically(context.session.metadata) });
     }
     await prepareSelection(sessionId, selection, context);

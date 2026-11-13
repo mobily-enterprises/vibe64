@@ -70,8 +70,12 @@ then **Save** last.
 - **With a plan**: once, after the whole plan is carried out.
 - **Without a plan**: once, when the agent reports the work finished. The agent
   reports an outcome as Auto's does: **Continue**, **Wait**, **Handoff** (the
-  work is finished and changed files) or **Complete** (it only answered, or
-  changed nothing).
+  work is finished and changed files) or **Complete** (it changed only a plan,
+  not files). When your message only gets an answer, or work that changes no
+  files or plan, and no decision waits on you, the agent reports nothing and
+  simply replies: Vibe64 records that reply as finished, and no Status message
+  appears under **Workflow details**. Only a message's first turn ends this way;
+  the turns after **Continue** and the finishing turn always report.
 
 Nothing runs when:
 
@@ -107,8 +111,9 @@ publish the work, and it offers no next steps. It may still say **Ready to
 try** while its checks run, so you can try the change early. Only the last turn
 of the piece of work ends normally: the finishing turn, or, with review, Deslop
 and the UI pass all off, the turn that finished the work. A question the agent
-only answers ends normally too. Every turn also knows how the work is saved:
-with **Automatically save changes** on, the agent says it will be saved
+only answers ends normally too, without a note about saving, since nothing
+changed. Every turn of a piece of work also knows how that work is saved: with
+**Automatically save changes** on, the agent says it will be saved
 automatically and never asks you to choose **Save**; with it off, it leaves
 **Save** to you.
 

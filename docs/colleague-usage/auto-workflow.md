@@ -20,8 +20,11 @@ Auto uses three workflow states: **Working**, **Waiting** and **Complete**.
 The current stage is separate: **Planning**, **Implementation** or **Review**.
 Router chooses a role and one of conversation, planning, implementation or review
 only for a new Auto request. It does not decide what happens after each turn.
+A conversation request only gets an answer: its agent reports no outcome, Vibe64
+records the reply as finished when the turn ends, and no Status message appears.
 
-The working agent reports one of four outcomes:
+At planning, implementation and review, the working agent reports one of four
+outcomes:
 
 - **Continue** keeps its stage and role while authorised work or checks remain.
 - **Handoff** moves finished implementation to Senior's finishing turn: review and
@@ -157,7 +160,9 @@ open **View plan**, inspect the current document, and send your intended request
 in chat. No plan is silently reopened. These controls behave the same on desktop
 and mobile. Colleague can explain them or offer to send your explicit request
 through its existing chat action; an explanation alone starts no work.
-Senior, Junior and Custom report the same outcomes; their own agent does the
+Senior, Junior and Custom report the same outcomes, except that a message their
+agent only answers, changing nothing, reports none (see [Choose what runs after
+each piece of work](chat-settings.md#when-they-run)); their own agent does the
 finishing steps once the work is finished, with no Router. Junior cannot mark a
 plan completed.
 

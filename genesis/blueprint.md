@@ -1950,10 +1950,15 @@ and evidence. Successful turns and checked boxes never complete it automatically
 The finishing steps run once per piece of work, never per file or turn: with a
 plan, once the whole plan is executed; without one, once the working agent
 explicitly reports the work finished through the workflow outcome, which every
-main-chat mode now reports. Waiting for the person, Stop, a request that changed
+main-chat mode now reports. A message that only gets an answer costs no outcome
+report: an Auto conversation reports none, and in Senior, Junior and Custom a
+message's first turn that changes no files or plan, with no decision waiting,
+simply replies; Vibe64 records that reply as finished and shows no Status message
+for it, and Senior's plan guidance mentions reporting through the workflow outcome
+only in Auto's turns that report one. Waiting for the person, Stop, a request that changed
 no files, or a direct turn that ends without reporting starts nothing; each
-finishing turn covers every change since the last one, so stopped or waiting
-work folds into the next. The order is review, Deslop, the UI pass in one turn,
+finishing turn covers every change since the last one, so stopped, waiting or
+unreported work folds into the next. The order is review, Deslop, the UI pass in one turn,
 then Save last, and each automatically started step leaves a chat notice naming
 its Chat setting. The review renders Genesis's review prompt task. In Auto,
 Senior does the finishing turn by a fixed rule, without another Router call,
