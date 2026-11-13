@@ -37,13 +37,20 @@ async function waitFor(predicate, timeoutMs) {
   return predicate();
 }
 
+// This server's reapers: its children running the reaper. Test files run side
+// by side, and every one that starts a detached execution has its own.
 async function reaperProcesses() {
   if (process.platform !== "linux") return [];
   const found = [];
   for (const entry of await readdir("/proc")) {
     if (!/^\d+$/u.test(entry)) continue;
-    const commandLine = await readFile(`/proc/${entry}/cmdline`, "utf8").catch(() => "");
-    if (commandLine.split("\0").includes(reaperPath)) found.push(Number(entry));
+    const [commandLine, stat] = await Promise.all([
+      readFile(`/proc/${entry}/cmdline`, "utf8").catch(() => ""),
+      readFile(`/proc/${entry}/stat`, "utf8").catch(() => "")
+    ]);
+    // stat is "pid (name) state ppid ...", and the name may hold spaces.
+    const parent = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1]);
+    if (parent === process.pid && commandLine.split("\0").includes(reaperPath)) found.push(Number(entry));
   }
   return found;
 }
