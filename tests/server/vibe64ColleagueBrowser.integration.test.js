@@ -60,9 +60,12 @@ test("the installed Public Colleague shares its canonical HTTP and private realt
     throw new Error("Reading and stopping an unconfigured Colleague must not invoke account or model requests.");
   });
   const sockets = [];
-  let app;
+  let starting;
   t.after(async () => {
     for (const socket of sockets) socket.disconnect();
+    // A server still starting when the test timed out is waited for and closed too: left to finish on its own, it
+    // would listen after the teardown and hold the file open until the runner's limit.
+    const app = await starting?.catch(() => undefined);
     try {
       try { await app?.vibe64CapabilityRuntime?.shutdown(); }
       finally { await app?.close(); }
@@ -74,11 +77,14 @@ test("the installed Public Colleague shares its canonical HTTP and private realt
     }
   });
 
-  app = await createServer({
+  starting = createServer({
     managedSourceRoot: path.join(temporaryRoot, "managed"),
     projectsRoot: path.join(temporaryRoot, "projects"),
     systemRoot
   });
+  const app = await starting;
+  // A test that timed out while its server started stops here, before listening, and leaves it to the teardown.
+  if (t.signal.aborted) return;
   const origin = await app.listen({ host: "127.0.0.1", port: 0 });
   async function request(url, options = {}) {
     const response = await httpFetch(`${origin}${url}`, {
