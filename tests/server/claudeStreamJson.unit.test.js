@@ -2522,7 +2522,7 @@ const pauseTool = (name, id, input) => {
 };
 createInterface({ input: process.stdin }).on('line', async line => {
   const frame = JSON.parse(line);
-  trace({ frame });
+  trace({ frame, pid: process.pid });
   if (frame.type === 'control_request') {
     if (frame.request.subtype === 'initialize') emit({ type: 'system', subtype: 'init', capabilities: ['interrupt_send_now_v1'] });
     emit({ type: 'control_response', response: { subtype: 'success', request_id: frame.request_id,
@@ -3202,13 +3202,15 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
       // Claude's own Pause or Block stops its process after the tool receipt; its goal checker stands down first,
       // beside that Pause or Block, so no "Goal cleared" lands above the person's next message.
+      // The process to drain is the one that received the turn's last message (the Pause or Block, or the goal that
+      // blocks), not the newest one: Vibe64 starts other Claude processes beside it (an account read starts one that
+      // only initializes and exits). The stand-down takes as long as its interrupt and clear take, so the test's own
+      // time limit bounds the wait.
       const drainsAfterStandingDown = async message => {
-        const pid = (await trace()).findLast(row => row.args?.includes("--print")).pid;
-        const deadline = Date.now() + 3000;
+        const { pid } = (await trace()).findLast(row => row.frame?.type === "user");
         for (;;) {
           try { process.kill(pid, 0); }
           catch (error) { if (error.code === "ESRCH") break; throw error; }
-          assert.ok(Date.now() < deadline, message);
           await new Promise(resolve => setTimeout(resolve, 10));
         }
         assert.equal((await trace()).filter(row => row.frame?.type === "user").at(-1).frame.message.content, "/goal clear", message);
