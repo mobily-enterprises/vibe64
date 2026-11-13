@@ -13,11 +13,13 @@ Select the sparkles button (**Passes**) in the row under the main chat's
 message box. On a phone the list opens as a sheet from the bottom of the
 screen; on a wider screen it opens above the button.
 
-Each row shows the pass's name, one line on what it does, and when it last
-ran in this project, with the number of commits since then (**Last run: Nov
-10, 2026 · 12 commits since**), or **Never run**. Genesis keeps that date: it
-records a pass's run when the pass completes, in the project's own files, so
-it travels with the project and counts runs from any session.
+Each row shows the pass's name, one line on what it does, and when it was
+last completed in this project, with the number of commits since then (**Last
+completed: Nov 10, 2026 · 12 commits since**), or **Never completed**. Genesis
+keeps that date: it records it when the pass completes, in the project's own
+files, so it travels with the project and counts passes completed in any
+session. A pass that is running, or was stopped before it finished, still
+shows its last completed date, or **Never completed**.
 
 ## Run a pass
 
@@ -46,11 +48,11 @@ pass again.** Nothing starts; select **Run** again once the chat is free.
 ## Suggestions
 
 Now and then a short suggestion appears above the message box, such as
-**Your app has changed a lot since Quality pass last ran. Run it again? 42
-commits in 25 days.**, or **Data pass has never run on this app. Run it?
-64 commits so far.** It appears only while the chat is idle: no turn
-running, no goal, and nothing typed in the message box. One pass is
-suggested at a time.
+**Your app has changed a lot since Quality pass was last completed. Run it
+again? 42 commits in 25 days.**, or **Data pass has never been completed on
+this app. Run it? 64 commits so far.** It appears only while the chat is
+idle: no turn running, no goal, and nothing typed in the message box. One
+pass is suggested at a time.
 
 Each pass has an interval, from Genesis's advice on when to run it:
 
@@ -61,9 +63,10 @@ Each pass has an interval, from Genesis's advice on when to run it:
 | every few weeks of active work | Quality pass, Data pass | 21 days and 30 commits |
 
 A pass is suggested once both parts of its interval have passed since it
-last ran: the days, and that many commits. A pass that never ran is
-suggested once the app has that many commits in all. A pass that never ran
-comes first; otherwise the one most overdue for its interval is suggested.
+last completed: the days, and that many commits. A pass that was never
+completed is suggested once the app has that many commits in all. A pass that
+was never completed comes first; otherwise the one most overdue for its
+interval is suggested.
 
 - **Run** starts the pass, exactly as **Run** in the list does.
 - **Later** hides the suggestion for a week.

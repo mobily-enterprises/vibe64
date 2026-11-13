@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-// The chat's Passes list: each pass Genesis offers, when it last ran in this project, and Run.
+// The chat's Passes list: each pass Genesis offers, when it last completed in this project, and Run.
 import { computed, ref } from "vue";
 import { useDisplay } from "vuetify";
 import { VBottomSheet, VMenu } from "vuetify/components";
@@ -80,9 +80,9 @@ const list = computed(() => props.passes.passes.value);
 
 /** @param {import("@/composables/useVibe64Passes.js").Vibe64Pass} pass */
 function lastRunLabel(pass) {
-  if (!pass.lastRun) return "Never run";
+  if (!pass.lastRun) return "Never completed";
   const since = pass.commitsSince === null ? "" : ` · ${pass.commitsSince} ${pass.commitsSince === 1 ? "commit" : "commits"} since`;
-  return `Last run: ${runDate.format(new Date(pass.lastRun))}${since}`;
+  return `Last completed: ${runDate.format(new Date(pass.lastRun))}${since}`;
 }
 
 function onOpenChange(value) {

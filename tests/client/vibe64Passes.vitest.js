@@ -22,7 +22,7 @@ import Vibe64PassesMenu from "../../src/components/studio/vibe64-session/Vibe64P
 import Vibe64PassSuggestion from "../../src/components/studio/vibe64-session/Vibe64PassSuggestion.vue";
 
 const DAY = 24 * 60 * 60 * 1000;
-// The server's read: the adapter's passes, with the project's last runs.
+// The server's read: the adapter's passes, with when each last completed in the project.
 const listed = (states = {}) => GENESIS_PASSES.map((pass) => ({
   ...pass, lastRun: null, commitsSince: 12, snoozedUntil: "", dismissed: false, ...states[pass.id]
 }));
@@ -57,7 +57,7 @@ afterEach(() => {
   apps = [];
 });
 
-it("lists Genesis's passes from the session's read, each with its last run or Never run", () => {
+it("lists Genesis's passes from the session's read, each with when it last completed or Never completed", () => {
   const ran = new Date(Date.now() - 3 * DAY);
   mocks.resource.data.value.passes = listed({ "quality-pass": { lastRun: ran.toISOString(), commitsSince: 7 } });
   const { state } = passes();
@@ -67,8 +67,8 @@ it("lists Genesis's passes from the session's read, each with its last run or Ne
   const menu = mount(Vibe64PassesMenu, { passes: state });
   expect(menu.list.map(({ title }) => title)).toEqual(GENESIS_PASSES.map(({ title }) => title));
   const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(ran);
-  expect(menu.lastRunLabel(menu.list.find(({ id }) => id === "quality-pass"))).toBe(`Last run: ${date} · 7 commits since`);
-  expect(menu.lastRunLabel(menu.list.find(({ id }) => id === "deslop"))).toBe("Never run");
+  expect(menu.lastRunLabel(menu.list.find(({ id }) => id === "quality-pass"))).toBe(`Last completed: ${date} · 7 commits since`);
+  expect(menu.lastRunLabel(menu.list.find(({ id }) => id === "deslop"))).toBe("Never completed");
 });
 
 it("Run sends the pass's own request to Main chat as the person's message for Genesis's task, and closes the list", async () => {
@@ -102,7 +102,7 @@ it("suggests the pass the server's rule picked; Later and Dismiss change only th
   const { state, send } = passes();
   expect(state.recommendation.value.id).toBe("quality-pass");
   const suggestion = mount(Vibe64PassSuggestion, { passes: state, pass: state.recommendation.value });
-  expect(suggestion.headline).toBe("Your app has changed a lot since Quality pass last ran. Run it again?");
+  expect(suggestion.headline).toBe("Your app has changed a lot since Quality pass was last completed. Run it again?");
   expect(suggestion.detail).toBe("42 commits in 18 days.");
   await state.snooze(state.recommendation.value);
   expect(mocks.resource.save).toHaveBeenLastCalledWith({ passId: "quality-pass", action: "snooze" },
@@ -115,7 +115,7 @@ it("suggests the pass the server's rule picked; Later and Dismiss change only th
 
   const never = { ...state.passes.value.find(({ id }) => id === "identity-pass"), commitsSince: 60 };
   const first = mount(Vibe64PassSuggestion, { passes: state, pass: never });
-  expect(first.headline).toBe("Visual identity has never run on this app. Run it?");
+  expect(first.headline).toBe("Visual identity has never been completed on this app. Run it?");
   expect(first.detail).toBe("60 commits so far.");
 });
 

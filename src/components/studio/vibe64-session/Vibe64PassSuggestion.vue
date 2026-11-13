@@ -28,7 +28,7 @@
 
 <script setup>
 // The one pass suggested now, above the composer: Run starts it, Later hides it for a week and
-// Dismiss until it runs again. It only offers; the pass starts on Run alone.
+// Dismiss until it completes again. It only offers; the pass starts on Run alone.
 import { computed } from "vue";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -39,8 +39,8 @@ const props = defineProps({
 });
 const commits = computed(() => `${props.pass.commitsSince} ${props.pass.commitsSince === 1 ? "commit" : "commits"}`);
 const headline = computed(() => props.pass.lastRun
-  ? `Your app has changed a lot since ${props.pass.title} last ran. Run it again?`
-  : `${props.pass.title} has never run on this app. Run it?`);
+  ? `Your app has changed a lot since ${props.pass.title} was last completed. Run it again?`
+  : `${props.pass.title} has never been completed on this app. Run it?`);
 const detail = computed(() => {
   if (!props.pass.lastRun) return `${commits.value} so far.`;
   const days = Math.max(1, Math.floor((Date.now() - Date.parse(props.pass.lastRun)) / DAY_MS));

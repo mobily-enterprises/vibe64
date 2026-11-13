@@ -4944,8 +4944,8 @@ record and reads it only through Genesis's list;
 a malformed record fails the list (`PASS_RECORD_INVALID`), and the Passes list
 shows that error with Retry instead of an empty list.
 The session's `passes` read adds the commits on the session's source since each
-`lastRun` (`git rev-list --count`), and the list shows `Last run: <date>` or
-`Never run`. Run sends the
+`lastRun` (`git rev-list --count`), and the list shows `Last completed: <date>` or
+`Never completed`. Run sends the
 pass's own `request` from Genesis's list (Genesis treats it as no request: the
 current task's changes for Deslop and the UI pass, the whole app for the others)
 with `genesisTask` set to the pass's id through the ordinary Main chat send, so it shows as the person's message, Stop ends it, and
@@ -4958,8 +4958,8 @@ Vibe64 picks each pass's interval from Genesis's `recommend.when` hint
 first-version 90 days and 30 commits, periodic, and any hint it does not know,
 21 days and 30 commits). A pass is due once its interval's days have passed since
 its `lastRun` and its commits since then reach the interval's commits; a pass
-that never ran needs only the commits, counted over the whole history. Of the passes
-due, one that never ran comes first, then the most overdue for its interval,
+that never completed needs only the commits, counted over the whole history. Of the passes
+due, one that never completed comes first, then the most overdue for its interval,
 with Genesis's order breaking ties; it is suggested above the composer while the
 chat is idle, has no draft and no goal. The project's `settings/pass-suggestions.json`
 holds only the suggestion's state: Later snoozes it for seven days, and Dismiss

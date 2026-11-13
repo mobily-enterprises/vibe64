@@ -53,7 +53,7 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
     return { ...result, byId: Object.fromEntries(result.passes.map((pass) => [pass.id, pass])) };
   };
   const fresh = await read();
-  assert.deepEqual(fresh.passes.map(({ lastRun }) => lastRun), [null, null, null, null, null], "the list shows Never run for each");
+  assert.deepEqual(fresh.passes.map(({ lastRun }) => lastRun), [null, null, null, null, null], "the list shows Never completed for each");
   assert.equal(fresh.recommendation, "", "an app with one commit is too new for any suggestion");
 
   // A pass's own last step records its run in the project; the list shows when.

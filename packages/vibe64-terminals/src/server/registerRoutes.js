@@ -215,12 +215,12 @@ function registerRoutes(http, { fastify, localhostCheckBypassed, projectContext,
   routes.actionRoute("GET", "/sessions/:sessionId/passes", {
     actionId: ACTION_READ_PASSES,
     buildInput: sessionInput,
-    summary: "Read the passes Genesis offers, when each last ran in this project and the one suggested now."
+    summary: "Read the passes Genesis offers, when each was last completed in this project and the one suggested now."
   });
   routes.actionRoute("POST", "/sessions/:sessionId/passes/recommendation", {
     actionId: ACTION_CHANGE_PASS_RECOMMENDATION,
     buildInput: (request) => withoutVibe64User(bodyWithSessionId(request)),
-    summary: "Snooze a pass suggestion for a week, or dismiss it until the pass runs again."
+    summary: "Snooze a pass suggestion for a week, or dismiss it until the pass completes again."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/work-plan", {

@@ -526,7 +526,7 @@ test.describe("direct chat", () => {
           await mockDirectChat(page);
           const day = 24 * 60 * 60 * 1000;
           const ago = (days: number) => new Date(Date.now() - days * day).toISOString();
-          // Genesis's own list, with when each pass last ran and the commits since.
+          // Genesis's own list, with when each pass last completed and the commits since.
           const runs: Record<string, { lastRun: string | null, commitsSince: number }> = {
             deslop: { lastRun: ago(2), commitsSince: 6 },
             "ui-pass": { lastRun: ago(5), commitsSince: 11 },
@@ -545,7 +545,7 @@ test.describe("direct chat", () => {
             return fulfillJson(route, { ok: true, sessionId: SESSION_ID, passes, recommendation });
           });
           await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-          const suggestion = page.getByRole("status").filter({ hasText: "Your app has changed a lot since Quality pass last ran. Run it again?" });
+          const suggestion = page.getByRole("status").filter({ hasText: "Your app has changed a lot since Quality pass was last completed. Run it again?" });
           await expect(suggestion).toContainText("42 commits in 25 days.");
           const row = page.locator(".studio-autopilot__composer-actions:visible");
           expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -554,10 +554,10 @@ test.describe("direct chat", () => {
           await page.getByRole("button", { name: "Passes", exact: true }).click();
           const list = page.getByRole("dialog", { name: "Passes" });
           for (const pass of passes) await expect(list.getByRole("button", { name: `Run ${pass.title}`, exact: true })).toBeEnabled();
-          await expect(list).toContainText("Never run");
+          await expect(list).toContainText("Never completed");
           const date = await page.evaluate((iso) => new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso)),
             String(passes.find(({ id }) => id === "quality-pass")?.lastRun));
-          await expect(list).toContainText(`Last run: ${date} · 42 commits since`);
+          await expect(list).toContainText(`Last completed: ${date} · 42 commits since`);
           await expect(list).toBeInViewport();
           await page.screenshot({ path: testInfo.outputPath(`passes-list-${viewport.width}-${theme}.png`), animations: "disabled" });
           if (viewport.phone) {

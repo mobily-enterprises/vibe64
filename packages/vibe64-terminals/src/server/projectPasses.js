@@ -13,7 +13,7 @@ import { vibe64Result } from "./terminalShared.js";
 /** @typedef {Awaited<ReturnType<typeof listGenesisPasses>>[number]} GenesisPass */
 /**
  * What the project remembers about one pass's suggestion; every field is an ISO time. When a pass
- * last ran is Genesis's record, never this one.
+ * last completed is Genesis's record, never this one.
  * @typedef {{ snoozedUntil?: string, dismissedAt?: string }} ProjectPassRecord
  */
 
@@ -23,7 +23,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const PASS_SNOOZE_DAYS = 7;
 // Vibe64's interval for each of Genesis's recommendation hints: a pass is due once this many days
 // have passed since it last completed and the app has had this many commits since. A pass that
-// never ran is due once the app has this many commits in all.
+// never completed is due once the app has this many commits in all.
 const PASS_INTERVALS = Object.freeze({
   "after-change": Object.freeze({ days: 7, commits: 20 }),
   "first-version": Object.freeze({ days: 90, commits: 30 }),
@@ -81,9 +81,9 @@ async function updateProjectPassRecord(projectRuntimeRoot, passId, change) {
 /**
  * The suggestion rule, kept simple on purpose. A pass is due once its interval's days have passed
  * since its last completed run (Genesis's lastRun) and the app has had its interval's commits
- * since; a pass that never ran, once the app has that many commits in all. A snoozed pass waits
+ * since; a pass that never completed, once the app has that many commits in all. A snoozed pass waits
  * for its snooze to end, and a dismissed one until it completes again. Of the passes due, one that
- * never ran comes first, then the most overdue for its interval; a tie keeps Genesis's order.
+ * never completed comes first, then the most overdue for its interval; a tie keeps Genesis's order.
  * @param {Array<GenesisPass & { commitsSince: number | null, snoozedUntil: string, dismissed: boolean }>} passes
  * @param {number} [now]
  */
@@ -111,7 +111,7 @@ async function countSessionCommits(sourceRoot, since = "") {
 }
 
 /**
- * The chat's Passes list: the passes Genesis offers with when each last ran in this project, the
+ * The chat's Passes list: the passes Genesis offers with when each last completed in this project, the
  * commits since, and the one suggestion the rule picks; and the suggestion's Later and Dismiss.
  * Each answers as a route does: a refusal is a failure result, not a thrown error.
  * @param {object} dependencies
@@ -138,7 +138,7 @@ function createProjectPasses({
       listPasses({ projectRoot: sourceRoot }),
       readProjectPassRecords(runtime.stateRoot)
     ]);
-    // Passes that last ran at the same time share one count.
+    // Passes that last completed at the same time share one count.
     const counts = new Map();
     const commitsSince = (lastRun) => {
       if (!counts.has(lastRun)) counts.set(lastRun, countCommits(sourceRoot, lastRun));
@@ -159,7 +159,7 @@ function createProjectPasses({
   }
 
   /**
-   * Later snoozes a pass's suggestion for a week; Dismiss hides it until the pass runs again.
+   * Later snoozes a pass's suggestion for a week; Dismiss hides it until the pass completes again.
    * @param {string} sessionId
    * @param {{ passId: string, action: "snooze" | "dismiss" }} input
    */

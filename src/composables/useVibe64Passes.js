@@ -7,7 +7,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 /**
  * One pass as the chat lists it: Genesis's pass with its last completed run in this project (lastRun,
- * an ISO time, or null when it never ran) and the commits since.
+ * an ISO time, or null when it never completed) and the commits since.
  * @typedef {{ id: string, title: string, description: string, recommend: { when: string, hint: string }, request: string,
  *   lastRun: string | null, commitsSince: number | null, snoozedUntil: string, dismissed: boolean }} Vibe64Pass
  */
@@ -75,7 +75,7 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
 
   /**
    * @param {Vibe64Pass} pass
-   * @param {"snooze" | "dismiss"} action Later hides the suggestion for a week; Dismiss until the pass runs again.
+   * @param {"snooze" | "dismiss"} action Later hides the suggestion for a week; Dismiss until the pass completes again.
    */
   async function changeRecommendation(pass, action) {
     if (changing.value) return;
