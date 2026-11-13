@@ -1518,6 +1518,13 @@ test.describe("direct chat", () => {
       const navigation = workspace.getByRole("navigation", {
         name: "Main and temporary conversations"
       });
+      // Opening reads the saved chats before it starts Temporary 1, and a New
+      // clicked before that read ends becomes the first chat itself. This test
+      // keeps two chats, so it waits for Temporary 1 before asking for another.
+      await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toHaveAttribute(
+        "aria-current",
+        "page"
+      );
       await navigation.getByRole("button", { name: "New temporary AI task", exact: true }).click();
       await expect(navigation.getByRole("button", { name: "Temporary 2", exact: true })).toHaveAttribute(
         "aria-current",
