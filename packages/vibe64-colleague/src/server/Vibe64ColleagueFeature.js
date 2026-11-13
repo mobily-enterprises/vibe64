@@ -100,7 +100,10 @@ const Vibe64ColleagueFeature = defineFeature({
 // both owners exist.
 const Vibe64ColleagueFocusFeature = defineFeature({
   id: "vibe64.colleague.browser-focus",
+  // It runs the Colleague's actions, and declares none: so it requires the runtime's catalogue, which a feature's
+  // context gives only a feature that declares actions.
   requires: {
+    actions: "runtime.actions",
     colleague: "vibe64.colleague",
     logger: "runtime.logger",
     realtime: "runtime.realtime"
@@ -110,15 +113,15 @@ const Vibe64ColleagueFocusFeature = defineFeature({
   },
   /**
    * @param {object} capabilities
+   * @param {import("@jskit-ai/kernel/server/types").ActionCatalogue} capabilities.actions
    * @param {RuntimeLogger} capabilities.logger
    * @param {RuntimeRealtime} capabilities.realtime
-   * @param {FeatureSetupContext} context
    */
-  setup({ logger, realtime }, { actionCatalogue }) {
+  setup({ actions, logger, realtime }) {
     return {
       browserFocus: createColleagueBrowserFocus({
         realtime,
-        actions: actionCatalogue,
+        actions,
         logger
       })
     };

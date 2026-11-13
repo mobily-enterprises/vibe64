@@ -5805,7 +5805,7 @@ test("Colleague browser focus adapter owns its subscription independently of Col
     colleague: {},
     logger: silentLogger,
     realtime: { onConnection(listener) { assert.equal(typeof listener, "function"); attached += 1; return () => { released += 1; }; } },
-    actionCatalogue: { register() {} }
+    actions: { register() {} }
   }, {});
   assert.equal(attached, 1);
   assert.equal(Vibe64ColleagueFeature.requires.realtime, undefined);
