@@ -49,6 +49,7 @@ import {
   configureVibe64Host,
   installVibe64ManagedExecutionProvider,
   operatorCliCommand,
+  processGroupHasLiveMember,
   runVibe64Command,
   stableHash,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
@@ -350,6 +351,20 @@ function assertInteractiveCodexAppServerArgs(args = [], tail = []) {
     "features.daemon_auto_start=false",
     ...tail.slice(0, -3)
   ]);
+}
+
+/**
+ * Proves a stop left no member of the orphaned fixture group running. Once its leader has exited,
+ * the fixture's child belongs to init (or the nearest subreaper), so after the stop kills it, it stays
+ * in the group as a zombie until that reaper collects it, which can take over a second on a loaded
+ * host. kill(-group, 0) still answers for a zombie, so only a live member shows that the stop failed.
+ */
+async function assertOrphanedProcessGroupStopped(processGroupId) {
+  assert.equal(
+    await processGroupHasLiveMember(processGroupId),
+    false,
+    `process group ${processGroupId} still has a running member`
+  );
 }
 
 async function startOrphanedDetachedProcessGroup(directory) {
@@ -1940,9 +1955,7 @@ test("renewal shutdown preserves exact process-exit proof across restart until f
       assert.equal(stopped.processExitVerified, true);
       assert.equal(stopped.runtimeDirPreserved, true);
       assert.equal(stopped.runtimeDirRemoved, false);
-      assert.throws(() => process.kill(-fixture.processGroupId, 0), {
-        code: "ESRCH"
-      });
+      await assertOrphanedProcessGroupStopped(fixture.processGroupId);
       assert.equal(
         JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8")).pid,
         fixture.processGroupId
@@ -2017,12 +2030,7 @@ test("codex provider reuses and stops the detached process group after its leade
       assert.equal(result.pid, fixture.processGroupId);
       assert.equal(result.stopped, true);
       assert.equal(result.runtimeDirRemoved, true);
-      assert.throws(
-        () => process.kill(-fixture.processGroupId, 0),
-        {
-          code: "ESRCH"
-        }
-      );
+      await assertOrphanedProcessGroupStopped(fixture.processGroupId);
     } finally {
       try {
         process.kill(-fixture.processGroupId, "SIGKILL");
