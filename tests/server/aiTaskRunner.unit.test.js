@@ -485,7 +485,8 @@ test("a long check shows the step it is on while it runs, Save's only once it sa
     assert.equal(saving.message, "");
     assert.ok(Number.isFinite(Date.parse(saving.progress.since)), "a step reported without a start starts now");
     assert.equal(saving.progress.output, "");
-    assert.ok(f.published.some(({ payload }) => payload?.aiTask?.progress?.step === "Saving the fix"),
+    // The step is published once its write has finished, so a read can see it a moment before its viewers hear of it.
+    await waitFor(() => f.published.some(({ payload }) => payload?.aiTask?.progress?.step === "Saving the fix"),
       "its viewers hear of each step");
 
     save.resolve({ ok: true });
@@ -1349,10 +1350,10 @@ async function settle() {
   await new Promise(resolve => setTimeout(resolve, 50));
 }
 
-async function waitFor(condition) {
+async function waitFor(condition, message = "The condition never held.") {
   for (let i = 0; i < 400; i += 1) {
     if (await condition()) return;
     await new Promise(resolve => setTimeout(resolve, 10));
   }
-  assert.fail("The condition never held.");
+  assert.fail(message);
 }
