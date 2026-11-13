@@ -254,10 +254,12 @@ describe("useVibe64AutopilotView direct chat", () => {
   it("returns a cancelled Router request to the draft without losing new text or retrying its id", async () => {
     const delivery = deferredResult();
     const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn(() => delivery.promise) });
+    const layout = { attachmentId: "12345678-1234-4234-8234-123456789abc", fileName: "layout.png", size: 1024 };
     view.composerDraft.value = "  Original prompt.  ";
-    view.composerAttachments.value = [{ attachmentId: "image-1", name: "layout.png" }];
+    view.composerAttachments.value = [layout];
     const sending = view.submitComposerMessage();
     const messageId = props.sendAgentMessage.mock.calls[0][0].messageId;
+    expect(view.composerAttachments.value).toEqual([]);
     view.composerDraft.value = "New text.";
     props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "waiting", delivery: "failed", stopped: true, helper: null });
     await nextTick();
@@ -265,7 +267,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     delivery.reject(Object.assign(new Error("Routing cancelled."), { code: "vibe64_assistant_routing_cancelled" }));
     await expect(sending).resolves.toBe(false);
     expect(view.chatTurns.value).toEqual([]);
-    expect(view.composerAttachments.value[0].attachmentId).toBe("image-1");
+    expect(view.composerAttachments.value).toEqual([layout]);
     expect(props.sendAgentMessage).toHaveBeenCalledOnce();
     props.sendAgentMessage.mockResolvedValue(true);
     await expect(view.submitComposerMessage()).resolves.toBe(true);
@@ -1218,27 +1220,32 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerSubmitMode.value).toBe("steer");
   });
 
-  it("retains rejected steering attachments and retries the same request", async () => {
-    const sendAgentMessage = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    const onAttachmentsAccepted = vi.fn();
+  it("returns rejected steering attachments with its words and retries the same request", async () => {
+    const refusal = deferredResult();
+    const sendAgentMessage = vi.fn().mockImplementationOnce(() => refusal.promise).mockResolvedValueOnce(true);
     const view = await createView({ sendAgentMessage,
       session: { ...viewProps().session,
         agentSession: { turn: { active: true, id: "turn-1", state: "active" } } }
-    }, { onAttachmentsAccepted });
+    });
     const attachment = { attachmentId: "12345678-1234-4234-8234-123456789abc", fileName: "details.txt", size: 5 };
     view.composerDraft.value = "Do not lose this.";
     view.updateComposerAttachments([attachment]);
-    await expect(view.submitComposerMessage()).resolves.toBe(false);
+    const refused = view.submitComposerMessage();
+    expect(view.composerDraft.value).toBe("");
+    expect(view.composerAttachments.value).toEqual([]);
+    refusal.resolve(false);
+    await expect(refused).resolves.toBe(false);
     expect(view.composerDraft.value).toBe("Do not lose this.");
     expect(view.composerAttachments.value).toEqual([attachment]);
     expect(view.composerAttachmentsEnabled.value).toBe(true);
     expect(view.composerCanSubmit.value).toBe(true);
-    expect(onAttachmentsAccepted).not.toHaveBeenCalled();
     const original = sendAgentMessage.mock.calls[0][0];
     expect(original.attachmentIds).toEqual([attachment.attachmentId]);
-    await expect(view.submitComposerMessage()).resolves.toBe(true);
+    const retried = view.submitComposerMessage();
+    expect(view.composerAttachments.value).toEqual([]);
+    await expect(retried).resolves.toBe(true);
     expect(sendAgentMessage.mock.calls[1][0]).toEqual(original);
-    expect(onAttachmentsAccepted).toHaveBeenCalledExactlyOnceWith([attachment.attachmentId]);
+    expect(view.composerAttachments.value).toEqual([]);
   });
 
   it("queues further steering immediately and advances on the exact receipt", async () => {
@@ -1880,11 +1887,10 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value.at(-1)?.user?.text).toBe("Make the smallest safe change.");
   });
 
-  it.each([false, true])("sends shared attachment identities and acknowledges accepted uploads (steering: %s)", async steering => {
+  it.each([false, true])("sends shared attachment identities and takes them out of the composer (steering: %s)", async steering => {
     const sendAgentMessage = vi.fn(async () => true);
-    const onAttachmentsAccepted = vi.fn();
     const attachmentId = "12345678-1234-4234-8234-123456789abc";
-    const { view, props } = await createViewWithProps({ sendAgentMessage }, { onAttachmentsAccepted });
+    const { view, props } = await createViewWithProps({ sendAgentMessage });
     if (steering) {
       props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
       await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
@@ -1914,7 +1920,46 @@ describe("useVibe64AutopilotView direct chat", () => {
       size: 1024
     }]);
     expect(JSON.stringify(sendAgentMessage.mock.calls[0][0])).not.toContain("/tmp/");
-    expect(onAttachmentsAccepted).toHaveBeenCalledWith([attachmentId]);
+    expect(view.composerAttachments.value).toEqual([]);
+  });
+
+  // The words leave the composer at Send while Router chooses the recipient,
+  // which can take a while; the files must leave with them, or the composer's
+  // remove button could delete a file the pending message is about to use.
+  it("takes a sent message's attachments out of the composer while Router chooses its recipient", async () => {
+    const delivery = deferredResult();
+    const image = { attachmentId: "12345678-1234-4234-8234-123456789abc", fileName: "image.png", reference: "[Image #1]", size: 405197 };
+    const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn(() => delivery.promise) });
+    view.composerDraft.value = "Make the header match this [Image #1]";
+    view.updateComposerAttachments([image]);
+    const sending = view.submitComposerMessage();
+    const input = props.sendAgentMessage.mock.calls[0][0];
+    props.session.metadata.assistant_routing_request = JSON.stringify({
+      messageId: input.messageId, input, status: "working", delivery: "routing"
+    });
+    await nextTick();
+    expect(view.chatTurns.value[0].optimistic.status).toBe("pending");
+    expect(view.chatTurns.value[0].system.text).toBe("Choosing the recipient with Router…");
+    expect(view.composerDraft.value).toBe("");
+    expect(view.composerAttachments.value).toEqual([]);
+    delivery.resolve(true);
+    await expect(sending).resolves.toBe(true);
+    expect(view.composerAttachments.value).toEqual([]);
+  });
+
+  it("keeps a failed message's attachments with it, and Edit returns them with its words", async () => {
+    const image = { attachmentId: "12345678-1234-4234-8234-123456789abc", fileName: "image.png", reference: "[Image #1]", size: 405197 };
+    const view = await createView({ sendAgentMessage: vi.fn(async () => false) });
+    view.composerDraft.value = "Make the header match this [Image #1]";
+    view.updateComposerAttachments([image]);
+    await expect(view.submitComposerMessage()).resolves.toBe(false);
+    const failed = view.chatTurns.value.at(-1).optimistic;
+    expect(failed.status).toBe("failed");
+    expect(view.composerDraft.value).toBe("");
+    expect(view.composerAttachments.value).toEqual([]);
+    expect(await view.editOptimisticMessage(failed.id)).toBe(true);
+    expect(view.composerDraft.value).toBe("Make the header match this [Image #1]");
+    expect(view.composerAttachments.value).toEqual([image]);
   });
 
   it("connects preview capture and diagnostics actions to direct chat", async () => {

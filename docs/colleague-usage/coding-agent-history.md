@@ -13,6 +13,15 @@ the files and guidance to the active turn. On desktop and mobile the same
 **Send** for the next request. Failed delivery keeps the message and attachments
 for **Retry**; retrying an ended turn cannot silently start a new request.
 
+In Main chat the files leave the message box with your words as soon as you
+select **Send** or **Steer**. They show on the sent message, which says
+**Pending** while Vibe64 chooses its recipient, and the message box no longer
+lists them, so nothing there can remove a file that message uses. They come
+back to the message box only with the words: when a **Steer** is rejected, when
+you choose **Stop** while the recipient is chosen, or when you choose **Edit** on
+a failed message. A message that stays in the chat with **Retry** keeps its
+files, and **Cancel** discards both. This works the same on desktop and mobile.
+
 Images
 use the selected agent's image input; other files remain available to its file
 tools. Changing a native binding does not grant access to another conversation's

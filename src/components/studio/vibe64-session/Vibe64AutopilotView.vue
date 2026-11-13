@@ -156,8 +156,7 @@ const autopilotView = useVibe64AutopilotView(props, emit, {
   assistantCanUseFix: computed(() => assistantCanUsePurpose("fix")),
   assistantCanUseNative,
   assistantProgressLabel: openCodeProgressLabel,
-  mainChatApprovals,
-  onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments({ attachmentIds })
+  mainChatApprovals
 });
 const {
   agentActive, assistantDirectAllowed, assistantDraftAvailable, assistantFixAllowed, chatCollapsed,

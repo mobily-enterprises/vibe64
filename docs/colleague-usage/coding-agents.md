@@ -194,7 +194,7 @@ If a turn finishes successfully just before **Steer** arrives, Vibe64 sends that
 same message as a new request after confirming it was not delivered. You do not
 need to send it again. This applies to Codex and Claude on desktop and mobile.
 Stopped, cancelled, failed or unverified turns do not authorize this recovery.
-Other rejected **Steer** messages return to the composer; **Retry** retains the
+Other rejected **Steer** messages return to the composer with their attachments; **Retry** retains the
 request ID and any newer draft text. Use **Cancel** or **Edit** before changing
 the request. **Edit** puts the words before your draft, once: in Main chat, in
 temporary chats and in an AI task's Chat, a draft that already starts with them is left as it is. Colleague can explain the status; browser recovery controls require

@@ -30,7 +30,9 @@ transport, admission, stable request IDs, repair context and conversation lifeti
 Main chat continues to settle from its authoritative realtime receipt. Temporary
 chats and an AI task's chat overlay pending entries through `adapter.delivery` before saves, creation
 or turn-start requests finish. Retries preserve the original request and newer
-drafts/uploads. Only accepted attachments are cleared. Other JSKIT applications
+drafts/uploads. Main chat takes a message's attachments out of the composer when
+it is sent and returns them only with its words; temporary chats and an AI task's
+chat clear only accepted attachments. Other JSKIT applications
 can use the same controller and the element's default failure actions.
 
 User-facing temporary chats and an AI task's conversation use main chat's

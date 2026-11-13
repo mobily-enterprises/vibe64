@@ -45,7 +45,7 @@ is too full. Fix the cause and choose **Retry**; nothing was sent. The same
 applies when the chat refuses a new request before sending it, such as Deslop
 or a [UI pass](ui-pass.md) while a goal is open, or when another assistant operation in the session is
 still starting. **Cancel** removes it once the server confirms; **Edit** returns
-its text to the composer.
+its text and attachments to the composer.
 
 A send in a temporary chat or an AI task's Chat waits, as Main chat does, while another chat in the
 same session starts its assistant (a slow Claude start can take 15–20 seconds).

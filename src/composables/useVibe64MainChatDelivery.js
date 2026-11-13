@@ -20,6 +20,21 @@ const EXECUTION_SAFETY_ERROR_CODES = new Set([
   "vibe64_managed_execution_provider_unavailable"
 ]);
 
+// A sent message's files travel with it: they leave the composer with its
+// words, so nothing there can remove a file the message uses, and they come
+// back only with its words.
+function takeSentAttachments(draftAttachments, payload) {
+  const sent = payload.attachmentIds || [];
+  if (sent.length) draftAttachments.value = draftAttachments.value.filter(file => !sent.includes(file.attachmentId));
+}
+
+function returnSentAttachments(draftAttachments, payload) {
+  const kept = draftAttachments.value;
+  const returned = (payload?.displayAttachments || []).filter(file => file.attachmentId &&
+    !kept.some(saved => saved.attachmentId === file.attachmentId));
+  if (returned.length) draftAttachments.value = [...returned, ...kept];
+}
+
 function executionAttentionForError(error = null, message = "") {
   const code = normalizeText(error?.code);
   const category = EXECUTION_CAPACITY_ERROR_CODES.has(code)
@@ -57,7 +72,6 @@ function executionAttentionForError(error = null, message = "") {
  *   composerSubmissionKind: import("vue").Ref<string>,
  *   mainChatApprovals: import("@/types.js").Vibe64MainChatApprovals | null,
  *   messageDelivery: import("vue").Ref<Record<string, any> | null>,
- *   onAttachmentsAccepted: (attachmentIds: string[]) => void,
  *   projectSlug: import("vue").Ref<string>,
  *   questionState: Record<string, any>,
  *   reportActivity: ReturnType<typeof import("@/lib/vibe64PageActivity.js").usePageActivity>,
@@ -80,7 +94,6 @@ function useVibe64MainChatDelivery(props, emit, {
   composerSubmissionKind,
   mainChatApprovals,
   messageDelivery,
-  onAttachmentsAccepted,
   projectSlug,
   questionState,
   reportActivity,
@@ -97,6 +110,7 @@ function useVibe64MainChatDelivery(props, emit, {
     if (!message || cancelOwnsMessage(message) ||
         !unmatchedOptimisticMessages(props.conversationLog?.turns, [message]).length) return;
     composerDraft.value = draftWithRestoredMessage(message.payload.draftSnapshot || message.text, composerDraft.value);
+    returnSentAttachments(composerAttachments, message.payload);
     messageDelivery.value?.remove(messageId);
   }
 
@@ -125,22 +139,22 @@ function useVibe64MainChatDelivery(props, emit, {
     const sendingSessionId = sessionId.value;
     const sendingProjectSlug = projectSlug.value;
     const sendingActorKey = actorKey.value;
+    const runtime = props.conversationRuntime;
     composerSubmissionKind.value = submissionKind === "steer" ? "steer" : "send";
+    takeSentAttachments(runtime.draftAttachments, payload);
+    let accepted = false;
     try {
-      const response = await props.conversationRuntime[composer ? "submitDraft" : "send"]({
+      const response = await runtime[composer ? "submitDraft" : "send"]({
         ...payload,
         agentSettings: Object.hasOwn(payload, "agentSettings") ? payload.agentSettings : requestAgentSettings.value || null
       }, { messageId, submissionKind, ...(composer ? { questionText } : {}) });
+      accepted = vibe64RequestAccepted(response);
       if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug || actorKey.value !== sendingActorKey) {
         return false;
       }
-      const accepted = vibe64RequestAccepted(response);
       if (accepted) {
         conversationFollowLatestKey.value += 1;
         reportActivity("message-sent", { projectSlug: sendingProjectSlug, sessionId: sendingSessionId });
-      }
-      if (accepted && payload.attachmentIds?.length) {
-        onAttachmentsAccepted(payload.attachmentIds);
       }
       return accepted;
     } catch (error) {
@@ -161,6 +175,12 @@ function useVibe64MainChatDelivery(props, emit, {
       }
       return false;
     } finally {
+      // The chat keeps an undelivered message with Retry, Edit and Cancel, and
+      // its files stay with it. The words of a composer message the chat does
+      // not keep, or of the composer's own Retry, return there with theirs.
+      if (!accepted && (composer && !runtime.delivery.find(messageId) || runtime.draftRetry.value?.messageId === messageId)) {
+        returnSentAttachments(runtime.draftAttachments, payload);
+      }
       if (sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug && actorKey.value === sendingActorKey && !composerSending.value) {
         composerSubmissionKind.value = "";
       }
@@ -225,6 +245,7 @@ function useVibe64MainChatDelivery(props, emit, {
     }
     if (!await cancelOptimisticMessage(messageId)) return false;
     composerDraft.value = draftWithRestoredMessage(message.text, String(composerDraft.value || ""));
+    returnSentAttachments(composerAttachments, message.payload);
     return true;
   }
 

@@ -45,9 +45,6 @@ const NUMBERED_QUESTION_UNSURE_CHOICE = Object.freeze({
   value: NUMBERED_QUESTION_UNSURE_VALUE
 });
 
-// Without a composer to clear, accepted attachments need nothing more.
-function ignoreAcceptedAttachments() {}
-
 function agentConnectionThinkingLabel({
   active = false,
   status = "connected"
@@ -114,8 +111,7 @@ function composerSubmitTitleFor(mode, approvalOwnerSentence) {
  *   assistantCanUseFix?: import("vue").Ref<boolean> | null,
  *   assistantCanUseNative?: import("vue").Ref<boolean> | null,
  *   assistantProgressLabel?: import("vue").Ref<string> | null,
- *   mainChatApprovals?: import("@/types.js").Vibe64MainChatApprovals | null,
- *   onAttachmentsAccepted?: (attachmentIds: string[]) => void
+ *   mainChatApprovals?: import("@/types.js").Vibe64MainChatApprovals | null
  * }} [options] Without access readers every assistant action is allowed; without approvals the chat sends directly.
  */
 function useVibe64AutopilotView(props, emit, {
@@ -125,8 +121,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantCanUseFix = null,
   assistantCanUseNative = null,
   assistantProgressLabel = null,
-  mainChatApprovals = null,
-  onAttachmentsAccepted = ignoreAcceptedAttachments
+  mainChatApprovals = null
 } = {}) {
   const router = useRouter();
   const projectSlug = useVibe64ProjectSlug();
@@ -533,7 +528,6 @@ function useVibe64AutopilotView(props, emit, {
     composerSubmissionKind,
     mainChatApprovals,
     messageDelivery,
-    onAttachmentsAccepted,
     projectSlug,
     questionState,
     reportActivity,

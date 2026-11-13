@@ -850,8 +850,8 @@ offer explicit Retry/Edit/Cancel with their original message ID. This also
 preserves a failed request rejected before server admission. Blocked/full browser
 storage leaves the normal in-memory delivery controls usable. Uploads still in
 progress must finish before their attachment references can be retained.
-Stopping routing before delivery restores the local prompt to the composer,
-preserving newer draft text and uploaded attachments. Reload recovers the same
+Stopping routing before delivery restores the local prompt and its attachments
+to the composer, preserving newer draft text and uploads. Reload recovers the same
 cancelled draft without resending it; the next explicit Send gets a fresh ID.
 Transient chat subscription failures now keep the mounted shared transcript and
 show its compact error banner. Main projects the common runtime's existing
@@ -1260,7 +1260,11 @@ Saved composer attachments use the same visible queue as new uploads. The compos
 combines saved receipts with its pending upload queue, retains completed uploads
 when a saved view closes, and still cancels unfinished uploads. Restored files count
 against the normal attachment limit; additions and removals keep numbered text
-references consistent. A confirmed send clears only its accepted receipts.
+references consistent. Main chat's send takes its receipts out of the saved draft
+with its words, so no composer removal can delete a file a pending, failed or
+uncertain message uses; they return only where its words return (a refusal
+before the chat keeps the message, a rejected Steer, Stop during routing, Edit).
+Temporary chats and an AI task's chat clear only accepted receipts.
 
 
 The shared transcript package owns the original page/merge helpers, turn and
