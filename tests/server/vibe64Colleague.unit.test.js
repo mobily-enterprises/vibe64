@@ -723,9 +723,13 @@ test("Colleague keeps stable instructions and tool schemas out of ordinary turns
 
 const watchAction = (f, operation, input) => f.actions.execute({ actionId: `vibe64.colleague.${operation}`, input, context: f.context });
 const changed = (f, overrides = {}) => f.events.publish({ type: "entity.changed", source: "vibe64", entity: "session", entityId: "session-1", realtime: { payload: { projectSlug: "alpha" } }, ...overrides });
+// Watch state arrives through a debounced poll, its reads and saves and the
+// worker's start, which a busy test host slows past any fixed window: a 1 s
+// window here failed on one while the state was still on its way. The wait
+// checks every 10 ms until the state arrives; the test's own deadline (the
+// server suite's testMs) bounds it.
 async function until(predicate) {
-  for (let tries = 0; tries < 100; tries += 1) { if (await predicate()) return; await new Promise((resolve) => setTimeout(resolve, 10)); }
-  assert.fail("Expected asynchronous watch state did not arrive.");
+  while (!await predicate()) await new Promise((resolve) => setTimeout(resolve, 10));
 }
 
 const assignmentTool = (name, input) => JSON.stringify({ kind: "tool", text: "", toolName: `vibe64_colleague_${name.replaceAll(".", "_")}`, arguments: JSON.stringify(input) });
