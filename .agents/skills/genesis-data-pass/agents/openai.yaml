@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis data pass"
+  short_description: "Make queries, constraints, migrations and indexes hold up at real sizes"
+  default_prompt: "Use $genesis-data-pass to data pass the whole app."

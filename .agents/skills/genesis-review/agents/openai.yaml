@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis review"
+  short_description: "Review the work and its tests against what the app should do"
+  default_prompt: "Use $genesis-review to Review the whole app."

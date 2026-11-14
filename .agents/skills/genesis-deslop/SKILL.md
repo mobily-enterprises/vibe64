@@ -1,6 +1,6 @@
 ---
 name: genesis-deslop
-description: Deslop the agent's own task changes or explicitly selected commits through a behavior-preserving cleanup pass. Use when asked to Deslop, simplify current work, remove repeated helpers, clarify ownership, or align changed code with established project and technology patterns.
+description: Deslop the agent's own task changes, explicitly selected commits or the whole app through a behavior-preserving cleanup pass. Use when asked to Deslop, simplify current work, remove repeated helpers, clarify ownership, or align changed code with established project and technology patterns.
 ---
 
 # Genesis Deslop
@@ -46,11 +46,18 @@ continue with it directly. Do not generate another prompt.
 Otherwise, before resolving Git scope, run the Genesis
 `prompt --task deslop` operation once using the invocation rule above. For a
 bare `Deslop` request, pass no request argument. When the user names a count,
-commit, or range, pass that exact request as one safely quoted argument. Treat
+commit, or range, pass that exact request as one safely quoted argument. When
+the user asks for the Deslop pass or the whole app, pass Deslop's own pass
+request, `Deslop the whole app.`, exactly; Genesis then adds the pass's `PASS RUN`
+and `PASS RECORD` steps. Treat
 the printed prompt as the instructions for this same turn; do not dispatch it
 to another agent and do not generate it again. This step composes the selected
 Stack's technology-specific Deslop guidance and any project customization with
 the portable contract below.
+
+When the user asks for a deep run of this pass, pass its Deep request,
+`Deslop the whole app deeply.`, exactly;
+Genesis then adds the run's `DEEP RUN` section.
 
 ## Resolve the cleanup scope
 
@@ -58,6 +65,13 @@ Inspect `git status --short` and the staged and unstaged diffs before editing.
 A dirty worktree is allowed; a prior commit is not required. Preserve the
 existing index and unrelated work. Do not stage, stash, commit, or discard
 changes as a prerequisite or as part of cleanup.
+
+When the prompt has a `PASS RUN` section, the request is one of the pass's own
+runs (the whole app, the changes since its last completed run judged against
+the whole app, or a deep run) or a run over the changes since a base commit the
+request names, and its scope is the one that section states, whatever the
+defaults below say. A deep run's prompt also has a `DEEP RUN`
+section; follow it with "Deep run" below.
 
 Resolve the user's scope as follows:
 
@@ -73,6 +87,14 @@ Resolve the user's scope as follows:
   deslop; do not silently select the latest commit or somebody else's work.
 - An explicit commit, first-parent count, or range takes precedence over the
   default, regardless of who authored those changes.
+- The whole app, which Deslop's pass request `Deslop the whole app.` names, is
+  the project's own source: every file the project writes and maintains, in
+  every subsystem, whoever changed it and whenever. It never includes generated
+  output or build artifacts, vendored or copied third-party code, dependency
+  directories or lockfiles, retained migration history, or Genesis-derived
+  files under `.genesis/`. Ownership does not narrow this scope, but uncommitted
+  edits by the user or other agents stay as they are. Work through it one
+  subsystem at a time, using the Program's subsystem map.
 - “The last commit” means `HEAD` against its first parent.
 - “The last N commits” means the net surviving change from the first parent
   before those N commits through `HEAD`.
@@ -108,6 +130,14 @@ abstractions. Consolidate ownership where one clear module is enough. Do not
 optimize for tiny files or indirection; optimize for a small, obvious design
 that a junior programmer can follow.
 
+Before editing, list the behaviors of the code in scope with the test that
+covers each, as the engineering approach's refactor rule and the "Refactors
+keep behavior" section of
+`.agents/skills/genesis-project/references/sanity-checks.md` describe. After
+cleanup, walk the list again: every item must still hold and still have a test,
+and a test the cleanup changed must assert no less than before. A behavior no
+test covers is a follow-up finding, never permission to drop it.
+
 Cleanup is not a second implementation pass. The selected changes limit where
 cleanup may occur; sharing a file does not bring unrelated edits into scope or
 authorize different behavior in that file. Deslop may reorganize behavior
@@ -136,5 +166,29 @@ Leave the cleanup as ordinary uncommitted work for review and a later normal
 commit. Never amend or rewrite the selected commits. Run focused checks when
 useful. Final declared checks remain available through the Genesis `verify`
 operation. Summarize the resolved scope and any selected commit identities,
-what became simpler, files changed, checks actually run, and follow-up findings
-left unchanged.
+what became simpler, the behaviors checked before and after, files changed,
+checks actually run, and follow-up findings left unchanged.
+
+When the prompt ends with a `PASS RECORD` step, take it once the pass has
+finished: the Genesis `passes done deslop` operation records it in `genesis/passes.json`,
+an uncommitted change that lands in the pass's own commit. Genesis adds that
+step only to the pass's own runs, whose requests it writes itself, so a Deslop
+of your own changes, a section or commits is never recorded as the pass;
+neither is a pass that stopped early, was abandoned or still has failing
+checks.
+
+## Deep run
+
+When the prompt has a `DEEP RUN` section, follow it: it says how the checklist,
+evidence, chunks, commits and report work for every pass. This pass adds to the
+checklist:
+
+- each file read in full for code harder to follow than it needs to be, parts
+  grown too big to hold in mind at once, and logic that does one job in
+  different words, each tick naming the behaviours checked before and after;
+- the cross-subsystem item: helpers and logic duplicated across subsystems,
+  including one job written in different words, and a pattern one subsystem
+  follows that another ignores.
+
+Deslop's limits hold in a deep run: behaviour stays as it is, and a defect
+found stays a follow-up finding, left unchanged.

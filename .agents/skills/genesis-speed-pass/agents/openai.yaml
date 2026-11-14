@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis speed pass"
+  short_description: "Make tests, screens and requests fast, each wait measured before and after"
+  default_prompt: "Use $genesis-speed-pass to speed pass the whole app."

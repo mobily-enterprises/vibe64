@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis identity pass"
+  short_description: "Give the app a visual identity of its own"
+  default_prompt: "Use $genesis-identity-pass to give the whole app its visual identity."

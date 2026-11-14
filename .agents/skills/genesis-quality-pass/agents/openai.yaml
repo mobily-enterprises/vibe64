@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis quality pass"
+  short_description: "Make every state, edge case and refusal hold up in use"
+  default_prompt: "Use $genesis-quality-pass to quality pass the whole app."

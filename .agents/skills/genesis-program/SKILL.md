@@ -71,14 +71,14 @@ Program module.
 ## Task boundaries
 
 The caller determines whether this is initial description, complete Program
-refresh, focused post-change reconciliation, Blueprint-only work, or read-only
-review. Respect the caller's edit boundary. Report ambiguity rather than
+refresh, focused post-change reconciliation, Blueprint-only work, or review.
+Respect the caller's edit boundary. Report ambiguity rather than
 inventing intent.
 
 ## Subsystems
 
 Maintain `genesis/subsystems.md` alongside Program in description and refresh
-work. Blueprint-only work does not change the map; review remains read-only.
+work. Blueprint-only work and review do not change the map.
 The map is the authored association authority, but responsibilities and table
 references remain fallible explanations of application source and schema.
 

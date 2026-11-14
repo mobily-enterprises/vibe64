@@ -137,6 +137,24 @@ with the Genesis `index` operation.
 - Never invent unavailable external-resource values or pass literal
   environment-variable names as data. Report the missing resource and preserve
   useful work.
+- An application that must run untrusted code, such as commands a user or an
+  AI submits, declares the sandbox capability it needs through its hosting
+  platform's own mechanism; that capability takes effect only once the person
+  who owns the deployment approves it. Never loosen a platform's sandbox or
+  security settings, declare a runtime, permission or capability the platform
+  does not provide, or switch application features off to make a build or
+  deploy pass. Explain the failure and ask the person to decide.
+- When an application needs host-level preparation beyond its package
+  manager, such as system packages, devices or host permissions, put it in one
+  script per hosting environment, `scripts/hosting/<host>.sh`, selected by the
+  `HOSTING_SCRIPT` environment variable and run from the hosting platform's
+  preparation step. Only a step done differently on another host goes there;
+  everything the same everywhere stays in the shared install. A hosting script
+  uses only what the host offers and never works around its rules: what the
+  platform provides, the application declares instead of installing. A host
+  that lacks something makes the script fail loudly with a plain sentence,
+  never quietly switch features off. An application that needs no host-level
+  preparation has no hosting script; never add one to starters or templates.
 - Keep the implementation direct and cohesive. Apply any supplied Stack
   Post-change guidance before reporting completion; it is part of this
   implementation turn, not a request for another agent turn. Run focused checks
@@ -163,6 +181,21 @@ the host's contract. If they do not work (for example, tests run signed out
 despite a supplied login), report the host defect with evidence and stop; never
 compensate in the project by rewriting cookies or adding its own login or
 browser.
+
+Speed is verified like behavior, with the engineering approach's sanity
+checks. A change to a list, batch or write path ships with a test at realistic
+row counts and history that compares its query count at a few rows and at a
+realistic number. Read the run's preparation, suite and slowest-file timings
+with its counts; when one grows with the data, find the cause (a read per row,
+an access check sized by stored history, test preparation that replays
+migrations) before reporting completion. Search the changed reads, pickers and
+lookups included, for rows filtered, found, sliced or tested in code and for a
+capped read used as if complete; move each into the query, or state in the code
+why the store cannot express it. After a refactor, walk the behavior
+list made before it and report any item that no longer holds. Before reporting
+data access, tests, a refactor, a screen or a release done, read the matching
+section of [the sanity checks guide](references/sanity-checks.md) and apply its
+checks with the tools your Stack pieces name.
 
 An unconfigured result means the declared workspace or checks do not exist
 yet; it is not a failing check. Before reporting completion, compare the

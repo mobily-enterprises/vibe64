@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis UI pass"
+  short_description: "Make your task's UI, a section or the whole app exact"
+  default_prompt: "Use $genesis-ui-pass to UI pass your own changes for the current task."

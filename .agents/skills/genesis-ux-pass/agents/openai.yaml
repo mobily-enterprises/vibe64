@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis user experience pass"
+  short_description: "Make the main tasks short and clear, each walked before and after"
+  default_prompt: "Use $genesis-ux-pass to user experience pass the whole app."

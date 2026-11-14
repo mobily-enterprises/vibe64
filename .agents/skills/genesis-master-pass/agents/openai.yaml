@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis Master pass"
+  short_description: "Run every pass deeply, one after another, testing and committing after each"
+  default_prompt: "Use $genesis-master-pass to Master pass the whole app."

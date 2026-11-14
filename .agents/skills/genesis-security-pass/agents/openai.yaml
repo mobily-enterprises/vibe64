@@ -1,0 +1,4 @@
+interface:
+  display_name: "Genesis security pass"
+  short_description: "Make every way in refuse what it should, each fix proved by an attack"
+  default_prompt: "Use $genesis-security-pass to security pass the whole app."
