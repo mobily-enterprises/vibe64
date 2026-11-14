@@ -15,6 +15,11 @@ the same conversation after a reported finish if its completion update was misse
 If old live fragments remain, reload and inspect the saved reply before sending
 more work. These steps apply on desktop and mobile.
 
+A lost connection, a reconnect or a reload never stops the assistant in Main
+chat, a temporary chat or an AI task: while the connection is down, Main chat
+says **Connection lost. Reconnecting — this does not stop the assistant.**, and
+once it reconnects the running turn's progress and its answer appear as before.
+Only **Stop**, **Cancel**, closing that chat or a Vibe64 restart end a turn.
 A compact connection warning keeps loaded messages and drafts. Its **Reload
 chat** reconnects observation without resending or stopping work; the warning
 alone cannot establish whether the agent is running. Access denial clears cached

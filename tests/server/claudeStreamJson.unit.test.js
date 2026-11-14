@@ -1486,6 +1486,82 @@ test("Claude reads allowance through an already owned process and the model list
   assert.equal(native.stopped, false, "an account change stops no conversation's process");
 });
 
+// A turn that is still reasoning, then the rest of that reasoning and its answer.
+async function startReasoning(receive, id) {
+  await receive({ type: "stream_event", event: { type: "message_start", message: { id } } });
+  await receive({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "thinking" } } });
+  await receive({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { thinking: "First the schema," } } });
+}
+async function finishReasoning(receive, id) {
+  await receive({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { thinking: " then the routes." } } });
+  await receive({ type: "stream_event", event: { type: "content_block_stop", index: 0 } });
+  await receive({ type: "assistant", uuid: `${id}-thinking`, message: { id, content: [{ type: "thinking", thinking: "First the schema, then the routes." }] } });
+  await receive({ type: "assistant", uuid: `${id}-answer`, message: { id: `${id}-answer`, content: [{ type: "text", text: "Both are fine." }] } });
+  await receive({ type: "result", subtype: "success", result: "Both are fine." });
+}
+// Counts Stops that reach the process: only explicit Stop, Cancel, Close or a server shutdown may send one.
+function countInterrupts(native) {
+  const interrupt = native.client.interrupt;
+  const counted = { interrupts: 0 };
+  native.client.interrupt = async () => { counted.interrupts += 1; return interrupt(); };
+  return counted;
+}
+
+test("a dropped, reconnecting or reloaded browser never stops Main's reasoning Claude turn", async (t) => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "Think it through", messageId: "reasoning" });
+  const main = f.processes[0];
+  const counted = countInterrupts(main);
+  await startReasoning(main.options.onEvent, "reasoning-api");
+  // The page loses its connection, so its subscription ends. Reconnecting or reloading, it opens the
+  // conversation again and asks for everything it shows: the assistant check, the session, the
+  // conversation, its goal, the message's receipt and the plan allowance (read through this process).
+  const dropped = await f.open();
+  (await dropped.subscribe(() => {}))();
+  const page = await f.open();
+  const unsubscribe = await page.subscribe(() => {});
+  t.after(unsubscribe);
+  await f.provider.ensureSession(f.context);
+  assert.equal((await f.provider.sessionState(f.context)).turn.active, true);
+  await page.read();
+  await f.provider.readGoal(f.context);
+  await f.provider.inspectMessageAdmission(f.context, { messageId: "reasoning" });
+  await f.provider.readPlanUsage(f.context);
+  assert.equal(main.stopped, false, "a browser read stopped the reasoning turn's process");
+  assert.equal(counted.interrupts, 0, "a browser read interrupted the reasoning turn");
+  await finishReasoning(main.options.onEvent, "reasoning-api");
+  await page.wait();
+  assert.deepEqual((await f.provider.readConversation(f.context)).messages.map(({ role, text }) => [role, text]), [
+    ["thinking", "First the schema, then the routes."], ["assistant", "Both are fine."]
+  ]);
+  assert.equal(f.checkpoints.at(-1).status, "ready");
+  assert.equal(main.stopped, false);
+  assert.equal(counted.interrupts, 0);
+});
+
+test("a dropped, reconnecting or reloaded browser never stops a temporary chat's reasoning Claude turn", async (t) => {
+  const f = await fixture(t, { scopedConversations: true });
+  f.context.routingConversationId = "reasoning-temporary";
+  const { conversationId } = await f.provider.createConversation(f.context, { persistent: true });
+  const started = await f.provider.startConversationTurn(f.context, { conversationId, persistent: true,
+    message: "Think it through", messageId: "temporary-reasoning" });
+  const native = f.processes[0];
+  const counted = countInterrupts(native);
+  await startReasoning(native.options.onEvent, "temporary-reasoning-api");
+  // A reconnected or reloaded page reads the chat again and the plan allowance (through this process).
+  const live = await f.provider.readConversation(f.context, { conversationId, persistent: true });
+  assert.equal(live.status, "inProgress");
+  await f.provider.readPlanUsage(f.context);
+  assert.equal(native.stopped, false, "a browser read stopped the temporary chat's process");
+  assert.equal(counted.interrupts, 0, "a browser read interrupted the temporary chat's turn");
+  await finishReasoning(native.options.onEvent, "temporary-reasoning-api");
+  const finished = await f.provider.waitForConversationTurn(f.context, { conversationId, runId: started.runId, persistent: true });
+  assert.equal(finished.status, "completed", JSON.stringify(finished));
+  assert.equal(finished.text, "Both are fine.");
+  assert.equal(native.stopped, false);
+  assert.equal(counted.interrupts, 0);
+});
+
 test("Claude configured defaults do not start a model discovery process", async (t) => {
   const f = await fixture(t);
   const catalog = defineVibe64AssistantCapabilities(await f.provider.capabilities(f.context, { configuredOnly: "true" }));

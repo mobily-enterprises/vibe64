@@ -703,6 +703,8 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
   let nextNativeId = 0;
   const captured = { temporaryCreates: [] as Record<string, unknown>[], temporaryTurns: [] as Record<string, unknown>[],
     temporaryDeletes: 0, startedTurns: 0, outcome: (_turn: number) => "continue",
+    // Stops and deletions that reached a native conversation, whatever asked for them.
+    nativeStops: 0, nativeDeletes: 0,
     // Awaited before each native start; a throw is that start's failure.
     beforeNativeTurn: async (_turn: number): Promise<void> => {},
     // Awaited before a native stop, so a scenario can hold a Stop or Cancel in flight.
@@ -744,11 +746,16 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
       return { ok: true, runId, status: "inProgress" };
     },
     async stopConversation(_id, input) {
+      captured.nativeStops += 1;
       await captured.beforeNativeStop();
       native.get(input.conversationId).status = "interrupted";
       return { ok: true };
     },
-    async deleteConversation(_id, input) { native.delete(input.conversationId); return { ok: true }; }
+    async deleteConversation(_id, input) {
+      captured.nativeDeletes += 1;
+      native.delete(input.conversationId);
+      return { ok: true };
+    }
   };
   const routingStore = createAssistantRoutingStore({ systemRoot: root });
   const role = { ...resolveVibe64AssistantSelection(capabilities, { ...selection, catalogRevision: capabilities.revision }), selectionSource: "explicit" };

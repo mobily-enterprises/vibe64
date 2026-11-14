@@ -147,6 +147,12 @@ message is sent. A tab that lost its connection catches up when it reconnects.
 Every open tab shows the same progress: when the reply arrives, “AI is working…”
 clears in each tab, including tabs that did not send the message.
 
+A lost connection, a reconnect or a reload never stops the AI. Its turn keeps
+running on the server; when the tab reconnects or reloads, the chat shows that
+same turn still working, with what the AI wrote meanwhile, and then its answer.
+Only **Stop**, **Cancel**, closing the chat or a Vibe64 restart end a turn. This
+works the same on desktop and phone.
+
 Leaving the view does not stop work or close a chat, and it still saves the
 draft and settings you just changed. Use **Stop** to interrupt
 work while retaining the conversation, or **Close** (the X on the chat's tab) to

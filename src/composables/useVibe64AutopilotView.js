@@ -55,8 +55,10 @@ function agentConnectionThinkingLabel({
   if (status === "initializing") {
     return "Loading assistant…";
   }
+  // The server never stops a turn because a browser lost its connection: only Stop,
+  // Cancel, closing the chat or a server restart end one. Reconnecting shows it again.
   if (["disconnected", "reconnecting"].includes(status)) {
-    return "Connection lost — assistant status unknown.";
+    return "Connection lost. Reconnecting — this does not stop the assistant.";
   }
   return status === "reconciling"
     ? "Checking assistant status..."

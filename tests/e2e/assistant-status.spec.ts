@@ -461,12 +461,21 @@ test("offline then online restores steering without a reload", async ({ page, co
   await expect(steer(page)).toBeEnabled();
   await context.setOffline(true);
   server.disconnect();
-  await expect(page.getByText("Connection lost — assistant status unknown.", { exact: true }).first()).toBeVisible();
+  // A lost connection never stops the assistant, and the chat says so rather than calling its work unknown.
+  await expect(page.getByText("Connection lost. Reconnecting — this does not stop the assistant.", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Waiting for the connection to recover" })).toBeDisabled();
   await context.setOffline(false);
   await expect(steer(page)).toBeEnabled();
   await expect(composer(page)).toHaveValue("Survive going offline.");
+  // The same turn is still running and its progress keeps arriving, after the reconnect and after a reload.
+  server.progress("Still working after the reconnect.");
+  await expect(page.getByText("Still working after the reconnect.", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(steer(page)).toBeEnabled();
+  server.progress("Still working after the reload.");
+  await expect(page.getByText("Still working after the reload.", { exact: true })).toBeVisible();
   expect(server.state.messages).toHaveLength(0);
+  expect(server.state.interrupts).toBe(0);
 });
 
 for (const viewport of viewports) {
