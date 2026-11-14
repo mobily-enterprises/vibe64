@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { runServerTests, serverTestOptions, serverTestRun } from "../../tooling/run-server-tests.mjs";
-import { targetedTestArguments } from "../../tooling/run-targeted-tests.mjs";
+import { targetedTestArguments, withTestAppEnvironment } from "../../tooling/run-targeted-tests.mjs";
 import { loadTimeBudgets } from "../../tooling/test-time-budgets.mjs";
 import { BUDGET_VARIABLE, testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 
@@ -76,6 +76,18 @@ test("the full server suite loads the host path guard a single-file run loads, a
   assert.equal(args.at(-1), "tests/server/*.test.js");
   // Preloads already in NODE_OPTIONS are not added twice.
   assert.equal(serverTestRun({ NODE_OPTIONS: `${guard} ${blocking}` }).env.NODE_OPTIONS, `${guard} ${blocking}`);
+});
+
+test("every test run is APP_ENV=test, as jskit test runs it, and none runs where APP_ENV is staging or production", () => {
+  for (const shell of [{}, { APP_ENV: "" }, { APP_ENV: "development" }, { APP_ENV: "test" }]) {
+    assert.equal(serverTestRun(shell).env.APP_ENV, "test", JSON.stringify(shell));
+    assert.equal(withTestAppEnvironment(shell).APP_ENV, "test", JSON.stringify(shell));
+  }
+  for (const appEnv of ["staging", "production"]) {
+    const refusal = new RegExp(`^Error: Vibe64's tests run with APP_ENV=test, and APP_ENV is ${appEnv} here`, "u");
+    assert.throws(() => serverTestRun({ APP_ENV: appEnv }), refusal);
+    assert.throws(() => withTestAppEnvironment({ APP_ENV: appEnv }), refusal);
+  }
 });
 
 test("a test file's process ended by --test-force-exit still delivers its whole report", { skip: process.platform === "win32" }, async (t) => {

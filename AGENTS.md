@@ -257,7 +257,9 @@ overlap a test run already active for this checkout.
   file from the Ith (Node's `--test-shard`), so the N shards together run
   every file once.
 - Every test process, `npm run test:full` included, loads
-  `tooling/test-host-path-guard.mjs`.
+  `tooling/test-host-path-guard.mjs` and runs with `APP_ENV=test`, as
+  `jskit test` gives it, whatever the shell says; a shell whose `APP_ENV` is
+  `staging` or `production` runs no tests.
 - A test removes every temporary folder it creates by the time it ends, so a
   passing run leaves nothing in the temp directory. It keeps an evidence folder
   (screenshots, traces, logs) only when it fails, and prints where it is.

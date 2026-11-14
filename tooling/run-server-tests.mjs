@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-import { withHostPathGuard } from "./run-targeted-tests.mjs";
+import { withHostPathGuard, withTestAppEnvironment } from "./run-targeted-tests.mjs";
 import { loadTimeBudgets } from "./test-time-budgets.mjs";
 import { testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 
@@ -13,8 +13,9 @@ const REPORT_BLOCKING_STDOUT = `--import=${new URL("./test-report-blocking-stdou
 
 // npm run test:full: every server test file, as many at once as the machine's
 // test budget allows (JSKIT's testConcurrency()), with the time budgets of
-// tooling/test-time-budgets.json, each file under the host path guard that a
-// single-file run loads too. Node expands the file pattern itself.
+// tooling/test-time-budgets.json, each file under the host path guard and with
+// the APP_ENV=test that a single-file run gets too. Node expands the file
+// pattern itself.
 //
 // A hang fails the run quickly instead of holding it: each test has the
 // suite's testMs as a hard deadline, after which Node fails it by name; its
@@ -43,7 +44,7 @@ export function serverTestRun(env = process.env, budgets = loadTimeBudgets("serv
       "tests/server/*.test.js"
     ],
     deadlineMs: budgets.wallMs,
-    env: withBlockingReports(withHostPathGuard(env))
+    env: withBlockingReports(withHostPathGuard(withTestAppEnvironment(env)))
   };
 }
 
