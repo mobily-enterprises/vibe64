@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -598,10 +598,7 @@ test("signal shutdown kills a terminal child and forces exit while stop cleanup 
 
   const closing = handler("SIGTERM");
   try {
-    for (let attempt = 0; attempt < 80 && processIds.some(processIsAlive); attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-
+    await waitForProcessesToExit(processIds);
     assert.equal(processIds.every((pid) => !processIsAlive(pid)), true);
     assert.equal(events.includes("fastify"), true);
     assert.equal(events.some((event) => event.startsWith("exit:")), false);
@@ -669,8 +666,8 @@ test("signal shutdown stops runtime terminals before a stalled Fastify close", a
   }
 
   assert.equal(closeStarted, true);
-  for (let attempt = 0; attempt < 80 &&
-    (processIsAlive(childPid) || readTerminalSession(session.id, { namespace }).ok); attempt += 1) {
+  await waitForProcessesToExit([childPid]);
+  for (let attempt = 0; attempt < 80 && readTerminalSession(session.id, { namespace }).ok; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   assert.equal(processIsAlive(childPid), false);
@@ -711,14 +708,33 @@ function testLogger(events) {
   };
 }
 
+// A killed process its parent has not reaped yet is a zombie (state Z): it has exited all the same.
 function processIsAlive(pid) {
   try {
     process.kill(pid, 0);
-    return true;
   } catch (error) {
     if (error?.code === "ESRCH") {
       return false;
     }
     throw error;
+  }
+  if (process.platform !== "linux") {
+    return true;
+  }
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    return stat.slice(stat.lastIndexOf(")") + 1).trim()[0] !== "Z";
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+// A stopped process tree takes as long to exit as the machine's load makes it; the deadline only ends a hang.
+async function waitForProcessesToExit(pids, timeoutMs = 15_000) {
+  for (const deadline = Date.now() + timeoutMs; pids.some(processIsAlive) && Date.now() < deadline;) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
   }
 }
