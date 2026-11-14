@@ -69,7 +69,11 @@ with npm install --save-dev genesis-compiler@1.10.21, then commit the
 change.** The passes are still listed, without run buttons, and none is
 suggested. When the version runs passes but lacks one, only that pass says
 so (**This project's Genesis (genesis-compiler …) has no …**), followed by
-the same update. When the project's dependencies are not
+the same update. When the project's Genesis runs passes in a different way
+from the Genesis this Vibe64 runs, the list says **This project's Genesis
+(genesis-compiler …) runs passes differently from genesis-compiler 1.10.21.
+Update the older of the two.**; the older one may be the project's or this
+Vibe64's. When the project's dependencies are not
 installed, the list says **This project's Genesis (genesis-compiler) is not
 installed. Install the project's dependencies with npm install.**
 
