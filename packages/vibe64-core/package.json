@@ -35,6 +35,8 @@
     "./server/sessionUiSyncState": "./src/server/sessionUiSyncState.js",
     "./server/sourceEditorRealtimeEvents": "./src/server/sourceEditorRealtimeEvents.js",
     "./server/sessionSourcePath": "./src/server/sessionSourcePath.js",
+    "./server/sessionTimeline": "./src/server/sessionTimeline.js",
+    "./server/sessionTimelineCli": "./src/server/sessionTimelineCli.js",
     "./server/studioProjectContext": "./src/server/studioProjectContext.js",
     "./server/studioRoots": "./src/server/studioRoots.js",
     "./server/terminalWebSocketRoutes": "./src/server/terminalWebSocketRoutes.js",

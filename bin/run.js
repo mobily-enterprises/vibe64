@@ -369,6 +369,8 @@ async function runLauncher({
 if (isDirectCliExecution()) {
   const subcommands = {
     spec: () => import("../server/lib/agentSpecCli.js").then(({ runAgentSpecCli }) => runAgentSpecCli(process.argv.slice(3))),
+    timeline: () => import("@local/vibe64-core/server/sessionTimelineCli")
+      .then(({ runSessionTimelineCli }) => runSessionTimelineCli(process.argv.slice(3), { env: process.env })),
     training: () => import("@local/vibe64-training/server/cli").then(({ runTrainingCli }) => runTrainingCli(process.argv.slice(3)))
   };
   const problem = launcherProblem();
