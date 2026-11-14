@@ -192,8 +192,8 @@ Integrations and a status check after cancellation or consent.
 The package exports the shared integration setup input fields and bounded
 assistant projections for hosts that select a published application. A host can
 restrict available operations while reusing the same public command semantics;
-source/release selection, production Env and host permissions remain with that
-host. Production projections retain the actual release ID and environment,
+source/release selection, Staging Env and host permissions remain with that
+host. Staging projections retain the actual release ID and environment,
 require the reviewed release on subsequent calls, and preserve the human consent
 handoff. Saved Configure requests and advertising operations remain development
 controls. Published configuration is read-only here; changes go through a coding
@@ -359,7 +359,7 @@ opens the normal settings panel. Skip retains its ordinary explicit dismissal
 meaning and does not imply that tracking works.
 The chooser lists available services alphabetically and wraps provider names
 and descriptions. Search filters both available services and configured slots
-(by slot ID, display name or provider), including production configuration.
+(by slot ID, display name or provider), including Staging configuration.
 An empty search result has an explicit message; filtering never changes the
 selected configuration form or its draft.
 JSKIT owns configuration validation and provider field components. Vibe64 uses
@@ -540,7 +540,7 @@ Confidence Flags and Exp use separate assistant registrations and grants with
 four identity/refresh scope choices. They share OAuth infrastructure and use
 different MCP paths. The form preserves each connection's references and
 permissions independently; neither saving nor identity consent authorizes
-arbitrary tools. Production flag evaluation and warehouse setup are separate.
+arbitrary tools. Flag evaluation in a deployed application and warehouse setup are separate.
 
 Hex selects its standard, EU or HIPAA workspace endpoint and persists four
 identity/profile/email/refresh scope choices. Assistant ownership and client
@@ -1218,7 +1218,7 @@ core publisher; status restoration emits nothing. The event contains no provider
 result or credential metadata. The association never enters the application command protocol, and this operation
 does not deliver an assistant continuation. The Configure card supplies this association through the route. The shared
 Integrations model attaches it only to the matching development slot and session,
-never production. A returned decision reloads the conversation. Subsequent
+never staging. A returned decision reloads the conversation. Subsequent
 explicit account reconnection omits a decided request association.
 Connecting or checking an application integration, and dismissing its saved chat
 request, do not invoke AI and do not require access to the chat's personal model.
@@ -1240,20 +1240,21 @@ It does not select a deployment, read session state or prepare development Env.
 The calling application owns release selection and coordination for the entire call.
 `readApplicationIntegrations` supplies the same validated file snapshot to a
 release reader and the development form. An absent file yields an empty
-configuration; malformed or unsafe source is still rejected. A production deployment
+configuration; malformed or unsafe source is still rejected. A published deployment
 may expose that snapshot through its own project routes.
 
-A host-supplied production API path enables the shared panel's Development and
-Production selector. Production configuration is read-only and names its release;
+A host-supplied staging API path (`stagingIntegrationsApiPath`) enables the
+shared panel's Development and Staging selector. Staging configuration is
+read-only and names its release;
 the command body carries that release ID, including status after cancellation.
-Production operations require the host's owner flag and do not depend on a
+Staging operations require the host's owner flag and do not depend on a
 development session or its suspended source operations. The server independently
 authorizes them. Returning to Development restores its tab-memory draft. The
 chosen environment and slot are remembered per project; live connection state
 is reread. Release changes invalidate old command responses and dismiss dialogs.
 Every setup request requires its selected slot to exist in the current configuration;
 a release that removes that slot clears its displayed connection without probing it.
-Production Env links lead to the Production page with no development prefill; the panel
+Staging Env links lead to the Staging page with no development prefill; the panel
 explains that Env changes must be published to affect the running release.
 
 The Integrations panel checks saved shared-account configuration through this
@@ -1282,7 +1283,7 @@ configuration explains that connection belongs to the application's own screen.
 
 Focused service tests exercise the real Genesis inspector with a controlled
 command runner: exact source, argv, runtime and Env; unchanged configuration;
-production/personal-account rejection; missing integration/declaration; and source
+staging/personal-account rejection; missing integration/declaration; and source
 lock refusal, with no Env preparation for refused requests. A configuration change
 to personal ownership during Env preparation prevents command execution. Route tests prove that request-body executable, Env, source path,
 and session overrides are not forwarded. These are fixture checks, not proof of
@@ -1328,7 +1329,7 @@ Google Calendar pending consent restoration after reload, cancel/status recovery
 connected status and confirmed disconnection, plus Resend verification failure,
 retry and reconnect. Provider setup responses are controlled fixtures; the test
 uses the source service for configuration persistence. This does not prove
-application command implementation, live authorization or production execution.
+application command implementation, live authorization or staging execution.
 
 
 Callback setup consumes optional `dashboardContext.applicationPublicUrl` from the
@@ -1349,7 +1350,7 @@ the normal explicit command remains the only writer.
 and callback contract for JavaScript and Laravel applications. It describes the
 same inputs and outputs without installing PHP code in JSKIT or inferring a
 framework command. The examples require application implementation and do not
-claim production setup support.
+claim staging setup support.
 
 
 Configured OAuth client secrets and API-key/service-account references offer a
@@ -1357,8 +1358,8 @@ Set credential in Env link. It selects the exact referenced Env key and a blank
 masked secret field; users explicitly save through the existing development Env
 operation. Secret navigation never accepts a credential value from query input.
 Unsaved integration configuration must be saved before this handoff.
-Production setup guidance explicitly maps credential/callback Env steps to
-Open production Env and the published application's environment.
+Staging setup guidance explicitly maps credential/callback Env steps to
+Open Staging Env and the published application's environment.
 
 
 The editor remembers integration selection and catalogue search separately for
@@ -1485,8 +1486,8 @@ updates and possible reconnection. A focused form-state fixture covers these
 transitions, including a missing origin; it does not claim host URL selection
 or provider callback reachability.
 
-Production integration credential and callback links carry the same draft-prefill
-parameters as development links to the host's production Env page. Credentials
+Staging integration credential and callback links carry the same draft-prefill
+parameters as development links to the host's Staging Env page. Credentials
 carry only the key and secret flag; callback suggestions can include the public
 URL. Each Env page owns the explicit save operation.
 
@@ -1556,7 +1557,7 @@ key reference, six inline credential steps and the captured assistant permission
 categories. The rendered review covers failed credential verification, retry,
 disconnect and persistence of the environment and webhook policy after reload.
 These controls configure the app's merchant connection; they do not provision
-merchant accounts or certify production payment readiness.
+merchant accounts or certify live payment readiness.
 
 
 ### Payment declarations
@@ -1604,7 +1605,7 @@ the canonical static payments-core package exports and are included for every
 framework. They are data and instructions, not a requirement for Laravel to run
 JavaScript. The draft asks for customer-scoped provider history with separate
 authorization and preserves invoice/transaction distinctions. The action is disabled for dirty,
-busy or production state. `PaymentConfigurationPanel` emits `prepare`; the parent
+busy or staging state. `PaymentConfigurationPanel` emits `prepare`; the parent
 uses the existing `requestAssistantDraft` boundary and never sends automatically.
 Stripe setup instructions include failed-payment/action-required invoice events.
 
@@ -1758,7 +1759,7 @@ The Integrations catalog groups available services by editor-owned categories,
 with counts and collapsible groups. Search matches service names, descriptions
 and category titles, exposes matching groups and omits empty ones. Clearing search
 restores the person's expanded groups. Configured entries remain separate and
-searchable in Development and Production. Vendor icons are bundled locally and
+searchable in Development and Staging. Vendor icons are bundled locally and
 shared by available services, configured entries and the selected detail. Their
 sources are recorded alongside the assets; no third-party logo request is made
 while browsing. The generic AI integration represents several vendors and uses

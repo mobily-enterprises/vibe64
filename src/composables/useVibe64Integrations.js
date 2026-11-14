@@ -34,7 +34,7 @@ function useIntegrationCommand(method, options) {
 /**
  * The Integrations page's configuration draft, saving and each integration's application connection.
  * @param {import("vue").Ref<import("@/composables/useVibe64SessionToolPane.js").Vibe64DashboardContext & {
- *   integrationEnvironment: "development" | "production",
+ *   integrationEnvironment: "development" | "staging",
  *   integrationSetupRequest: object
  * }>} context
  * @param {import("vue").Ref<string>} selectedId
@@ -44,13 +44,13 @@ export function useVibe64Integrations(context, selectedId) {
   const baseline = ref("");
   const baseHash = ref(null);
   const releaseId = ref("");
-  const production = computed(() => context.value.integrationEnvironment === "production");
+  const staging = computed(() => context.value.integrationEnvironment === "staging");
   const fieldErrors = ref({});
   const error = ref("");
   const changedElsewhere = ref(false);
   const sessionId = computed(() => String(context.value.sessionId || ""));
-  const active = computed(() => context.value.active !== false && Boolean(production.value ? context.value.productionIntegrationsApiPath : sessionId.value));
-  const path = computed(() => production.value ? context.value.productionIntegrationsApiPath : vibe64SessionPath(
+  const active = computed(() => context.value.active !== false && Boolean(staging.value ? context.value.stagingIntegrationsApiPath : sessionId.value));
+  const path = computed(() => staging.value ? context.value.stagingIntegrationsApiPath : vibe64SessionPath(
     readRefOrGetterValue(context.value.sessionsApiPath), sessionId.value, "/integrations"
   ));
   const dirty = computed(() => Boolean(configuration.value && JSON.stringify(configuration.value) !== baseline.value));
@@ -97,7 +97,7 @@ export function useVibe64Integrations(context, selectedId) {
   watch([path, selectedId], () => { discoveryError.value = ""; });
   async function discoverN8n() {
     const selected = configuration.value?.integrations[selectedId.value];
-    if (!active.value || production.value || changedElsewhere.value || context.value.sourceOperationsSuspended ||
+    if (!active.value || staging.value || changedElsewhere.value || context.value.sourceOperationsSuspended ||
       command.isRunning || setupCommand.isRunning || discoveryCommand.isRunning || selected?.provider !== "n8n") return;
     const requestPath = path.value;
     const id = selectedId.value;
@@ -130,7 +130,7 @@ export function useVibe64Integrations(context, selectedId) {
   watch([path, selectedId], () => { registrationError.value = ""; registrationNeedsReview.value = false; });
   async function registerOAuthClient(callbackUrl) {
     const selected = configuration.value?.integrations[selectedId.value];
-    if (!active.value || production.value || changedElsewhere.value || context.value.sourceOperationsSuspended ||
+    if (!active.value || staging.value || changedElsewhere.value || context.value.sourceOperationsSuspended ||
       context.value.owner === false || registrationNeedsReview.value || command.isRunning || setupCommand.isRunning ||
       discoveryCommand.isRunning || registrationCommand.isRunning || !OAUTH_CLIENT_REGISTRATION_PROVIDERS.includes(selected?.provider)) return;
     const requestPath = path.value;
@@ -173,7 +173,7 @@ export function useVibe64Integrations(context, selectedId) {
   });
   const setupRequest = computed(() => {
     const request = context.value.integrationSetupRequest;
-    if (production.value || !request || request.sessionId !== sessionId.value || request.integrationId !== selectedId.value ||
+    if (staging.value || !request || request.sessionId !== sessionId.value || request.integrationId !== selectedId.value ||
         typeof request.turnId !== "string" || !/^\d{6,32}$/u.test(request.turnId) ||
         typeof request.requestId !== "string" || !/^[a-f0-9]{64}$/u.test(request.requestId)) return null;
     return { turnId: request.turnId, requestId: request.requestId, configurationHash: baseHash.value };
@@ -188,8 +188,8 @@ export function useVibe64Integrations(context, selectedId) {
   const paymentOperation = ref("");
   watch([connectionKey, dirty, active], () => { paymentResult.value = null; paymentError.value = ""; paymentOperation.value = ""; });
   async function runPaymentOperation({ operation, paymentEnvironment, reviewId, providerId, subjectId, collection, after }) {
-    if ((production.value && (!releaseId.value || context.value.owner !== true)) || context.value.owner === false || !active.value || dirty.value || changedElsewhere.value ||
-        setupCommand.isRunning || command.isRunning || (!production.value && context.value.sourceOperationsSuspended)) return;
+    if ((staging.value && (!releaseId.value || context.value.owner !== true)) || context.value.owner === false || !active.value || dirty.value || changedElsewhere.value ||
+        setupCommand.isRunning || command.isRunning || (!staging.value && context.value.sourceOperationsSuspended)) return;
     const binding = configuration.value?.extensions?.payments?.environments?.[paymentEnvironment];
     if (!binding || binding.integrationId !== selectedId.value) return;
     if (!["payments-preview", "payments-publish", "payments-readiness", "payments-recover", "payments-history"].includes(operation)) return;
@@ -204,7 +204,7 @@ export function useVibe64Integrations(context, selectedId) {
     paymentResult.value = null;
     try {
       const result = await setupCommand.run({ path: `${path.value}/${encodeURIComponent(selectedId.value)}/setup`,
-        body: { operation, paymentEnvironment, ...(operation === "payments-history" ? { subjectId, collection, after: after ?? null } : {}), ...(production.value ? { releaseId: releaseId.value } : {}), ...(["payments-publish", "payments-recover"].includes(operation) ? { reviewId } : {}), ...(operation === "payments-recover" ? { providerId } : {}) } });
+        body: { operation, paymentEnvironment, ...(operation === "payments-history" ? { subjectId, collection, after: after ?? null } : {}), ...(staging.value ? { releaseId: releaseId.value } : {}), ...(["payments-publish", "payments-recover"].includes(operation) ? { reviewId } : {}), ...(operation === "payments-recover" ? { providerId } : {}) } });
       if (!disposed && key === connectionKey.value && !dirty.value) paymentResult.value = result;
     } catch {
       if (!disposed && key === connectionKey.value) {
@@ -219,7 +219,7 @@ export function useVibe64Integrations(context, selectedId) {
   const adsError = ref("");
   watch([connectionKey, dirty, active], () => { adsResult.value = null; adsError.value = ""; });
   async function runAdsOperation({ operation, ads = {} }) {
-    if (production.value || context.value.owner === false || !active.value || dirty.value || changedElsewhere.value ||
+    if (staging.value || context.value.owner === false || !active.value || dirty.value || changedElsewhere.value ||
         setupCommand.isRunning || command.isRunning || context.value.sourceOperationsSuspended ||
         configuration.value?.integrations[selectedId.value]?.provider !== "google-ads") return;
     const key = connectionKey.value;
@@ -240,11 +240,11 @@ export function useVibe64Integrations(context, selectedId) {
   async function runSetup(operation = "status") {
     const selected = configuration.value?.integrations[selectedId.value];
     if (connectorDefinitions.some((provider) => provider.id === selected?.provider && integrationConfigurationOnly(provider, selected?.settings || {}))) return;
-    if ((production.value && (!releaseId.value || context.value.owner !== true)) || !active.value || !Object.hasOwn(configuration.value?.integrations || {}, selectedId.value) || dirty.value || changedElsewhere.value ||
-        setupCommand.isRunning || command.isRunning || (!production.value && context.value.sourceOperationsSuspended)) return;
+    if ((staging.value && (!releaseId.value || context.value.owner !== true)) || !active.value || !Object.hasOwn(configuration.value?.integrations || {}, selectedId.value) || dirty.value || changedElsewhere.value ||
+        setupCommand.isRunning || command.isRunning || (!staging.value && context.value.sourceOperationsSuspended)) return;
     const key = connectionKey.value;
     const endpoint = `${path.value}/${encodeURIComponent(selectedId.value)}/setup`;
-    const releaseSelection = production.value ? { releaseId: releaseId.value } : {};
+    const releaseSelection = staging.value ? { releaseId: releaseId.value } : {};
     connectionError.value = "";
     try {
       const result = await setupCommand.run({ path: endpoint, body: {
@@ -330,14 +330,14 @@ export function useVibe64Integrations(context, selectedId) {
     configuration.value = JSON.parse(JSON.stringify(payload.configuration));
     baseline.value = JSON.stringify(payload.configuration);
     baseHash.value = payload.baseHash;
-    releaseId.value = production.value ? payload.releaseId || "" : "";
+    releaseId.value = staging.value ? payload.releaseId || "" : "";
     changedElsewhere.value = false;
     error.value = "";
     fieldErrors.value = {};
   }
 
   watch(resource.data, (payload) => {
-    if (!payload?.configuration || disposed || (payload.environment === "production") !== production.value) return;
+    if (!payload?.configuration || disposed || (payload.environment === "staging") !== staging.value) return;
     if (dirty.value) {
       changedElsewhere.value = payload.baseHash !== baseHash.value;
     } else apply(payload);
@@ -347,14 +347,14 @@ export function useVibe64Integrations(context, selectedId) {
     event: VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
     enabled: active,
     onEvent: ({ payload }) => {
-      if (production.value || payload.sessionId !== sessionId.value || payload.path !== "integrations.json" ||
+      if (staging.value || payload.sessionId !== sessionId.value || payload.path !== "integrations.json" ||
           payload.originId === vibe64BrowserTabOriginId()) return;
       void resource.reload();
     }
   });
 
   async function save() {
-    if (production.value || !dirty.value || changedElsewhere.value || registrationCommand.isRunning || discoveryCommand.isRunning || command.isRunning || context.value.sourceOperationsSuspended) return;
+    if (staging.value || !dirty.value || changedElsewhere.value || registrationCommand.isRunning || discoveryCommand.isRunning || command.isRunning || context.value.sourceOperationsSuspended) return;
     const requestPath = path.value;
     error.value = "";
     fieldErrors.value = {};

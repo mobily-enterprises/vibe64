@@ -2342,7 +2342,7 @@ test("the local Colleague host refuses views it has no page for, and invalid com
   await assert.rejects(navigation.value({ projectSlug: "demo", pane: "database", databaseView: "data", databaseTable: "public.users" }),
     /exact session and Database Data view/u);
   await assert.rejects(navigation.value({ projectSlug: "demo", pane: "integrations", integrationEnvironment: "development" }),
-    /development session or the production environment/u);
+    /development session or the staging environment/u);
   await assert.rejects(navigation.value({ projectSlug: "demo", sessionId: "s1", pane: "files", planView: "current" }),
     /plan viewer requires/u);
   assert.deepEqual(pushed, []);

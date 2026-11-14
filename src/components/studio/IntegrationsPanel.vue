@@ -52,23 +52,23 @@ const { adsResult, adsError, runAdsOperation, paymentResult, paymentError, payme
   useVibe64Integrations(integrationContext, selectedId);
 const projectSlug = useVibe64ProjectSlug();
 function openPaymentEnv({ key, value, secret }) {
-  return router.push({ path: projectAppPath(projectSlug.value, production.value ? "/dashboard/deploy" : "/dashboard/env"),
+  return router.push({ path: projectAppPath(projectSlug.value, staging.value ? "/dashboard/deploy" : "/dashboard/env"),
     query: { prefillKey: key, ...(secret ? { prefillSecret: "true" } : {}), ...(value === undefined ? {} : { prefillValue: value }) } });
 }
-const { navigationKey, production, search } = useIntegrationsPanelNavigation({
+const { navigationKey, staging, search } = useIntegrationsPanelNavigation({
   dashboardContext: () => props.dashboardContext, environment, projectSlug, selectedId
 });
 const requestedIntegration = computed(() => {
   const id = typeof route.query.integration === "string" && route.query.integration.length <= 200 ? route.query.integration : "";
-  const target = route.query.integrationEnvironment === "production" ? "production" : "development";
-  if (target === "production" && !props.dashboardContext.productionIntegrationsApiPath) return null;
+  const target = route.query.integrationEnvironment === "staging" ? "staging" : "development";
+  if (target === "staging" && !props.dashboardContext.stagingIntegrationsApiPath) return null;
   if (target === "development" && route.query.integrationSession !== props.dashboardContext.sessionId) return null;
   return id || route.query.integrationEnvironment ? { id, environment: target } : null;
 });
 const integrationDetail = ref(null);
 const pendingReveal = ref(null);
 function selectIntegration(id, target = "development") {
-  if (target === "production" && !props.dashboardContext.productionIntegrationsApiPath) return;
+  if (target === "staging" && !props.dashboardContext.stagingIntegrationsApiPath) return;
   const alreadySelected = environment.value === target && selectedId.value === id;
   environment.value = target;
   if (!id) return;
@@ -179,7 +179,7 @@ async function copySetupValue(value, label = "Callback URL") {
     setupCopyMessage.value = "Could not copy. Select the value in its field and copy it manually.";
   }
 }
-const disabled = computed(() => registrationCommand.isRunning || discoveryCommand.isRunning || command.isRunning || setupCommand.isRunning || (!production.value && props.dashboardContext.sourceOperationsSuspended === true) || (production.value && props.dashboardContext.owner !== true) || changedElsewhere.value);
+const disabled = computed(() => registrationCommand.isRunning || discoveryCommand.isRunning || command.isRunning || setupCommand.isRunning || (!staging.value && props.dashboardContext.sourceOperationsSuspended === true) || (staging.value && props.dashboardContext.owner !== true) || changedElsewhere.value);
 const loadError = computed(() => resource.loadError.value || (resource.data.value?.ok === false ? resource.data.value.error : ""));
 /** @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof displayedIntegrations>} */
 const colleagueIntegrations = inject(VIBE64_COLLEAGUE_INTEGRATIONS_KEY);
@@ -203,14 +203,14 @@ onUnmounted(() => {
 });
 
 function add(provider) {
-  if (production.value) return;
+  if (staging.value) return;
   const added = withIntegrationAdded(configuration.value, provider);
   configuration.value = added.configuration;
   selectedId.value = added.id;
 }
 
 function remove() {
-  if (production.value) return;
+  if (staging.value) return;
   configuration.value = withIntegrationRemoved(configuration.value, selectedId.value);
   selectedId.value = "";
   removeOpen.value = false;
@@ -231,14 +231,14 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
       <div><h2 class="text-headline-small font-weight-bold ma-0">Integrations</h2></div>
       <v-btn variant="text" :disabled="command.isRunning" @click="dirty ? discardOpen = true : resource.reload()">Refresh</v-btn>
     </header>
-    <v-btn-toggle v-if="dashboardContext.productionIntegrationsApiPath" v-model="environment" mandatory aria-label="Integration environment">
-      <v-btn value="development">Development</v-btn><v-btn value="production">Production</v-btn>
+    <v-btn-toggle v-if="dashboardContext.stagingIntegrationsApiPath" v-model="environment" mandatory aria-label="Integration environment">
+      <v-btn value="development">Development</v-btn><v-btn value="staging">Staging</v-btn>
     </v-btn-toggle>
-    <v-alert v-if="production" type="info" variant="tonal">
+    <v-alert v-if="staging" type="info" variant="tonal">
       Published configuration{{ releaseId ? ` (${releaseId})` : '' }}. Make configuration changes in Development, then publish them.
-      <p v-if="!dashboardContext.owner">Only the workspace owner can manage production connections.</p>
+      <p v-if="!dashboardContext.owner">Only the workspace owner can manage staging connections.</p>
     </v-alert>
-    <p v-if="!production && !dashboardContext.sessionId">Open a session to configure its integrations.</p>
+    <p v-if="!staging && !dashboardContext.sessionId">Open a session to configure its integrations.</p>
     <Vibe64AsyncModuleState
       v-else-if="resource.isInitialLoading.value || loadError"
       label="Integrations" :loading="resource.isInitialLoading.value" :message="loadError || 'Loading integrations.'"
@@ -247,13 +247,13 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
     <template v-else-if="configuration">
       <v-alert v-if="changedElsewhere" type="warning" variant="tonal">This configuration changed outside this form. Your draft is preserved. Reload before saving.</v-alert>
       <v-alert v-if="error" role="alert" type="error" variant="tonal">{{ error }}</v-alert>
-      <v-alert v-if="!production && requestedIntegration?.id && configuration && !Object.hasOwn(configuration.integrations, requestedIntegration.id)" type="warning" variant="tonal">
+      <v-alert v-if="!staging && requestedIntegration?.id && configuration && !Object.hasOwn(configuration.integrations, requestedIntegration.id)" type="warning" variant="tonal">
         The requested integration {{ requestedIntegration.id }} is not configured in this session. Return to the conversation to finish its setup.
       </v-alert>
       <div class="integrations-panel__layout">
         <aside class="integrations-panel__catalogue" aria-label="Integrations catalogue">
           <v-text-field v-model="search" label="Search integrations" hide-details clearable @click:clear="search = ''" />
-          <h2 class="text-title-medium mt-6 mb-2">{{ production ? 'Configured in the published release' : 'Configured in this session' }}</h2>
+          <h2 class="text-title-medium mt-6 mb-2">{{ staging ? 'Configured in the published release' : 'Configured in this session' }}</h2>
           <v-list v-if="filteredEntries.length" aria-label="Configured integrations" bg-color="transparent">
             <v-list-item
               v-for="[id, entry] in filteredEntries" :key="id" :active="selectedId === id" min-height="48"
@@ -263,8 +263,8 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             </v-list-item>
           </v-list>
           <p v-else role="status" class="text-body-medium">{{ entries.length ? 'No configured integrations match your search.' : 'No integrations configured yet.' }}</p>
-          <h2 v-if="!production" class="text-title-medium mt-6 mb-2">Available services</h2>
-          <v-expansion-panels v-if="!production && providerGroups.length" v-model="visibleCategories" multiple variant="accordion" aria-label="Available services">
+          <h2 v-if="!staging" class="text-title-medium mt-6 mb-2">Available services</h2>
+          <v-expansion-panels v-if="!staging && providerGroups.length" v-model="visibleCategories" multiple variant="accordion" aria-label="Available services">
             <v-expansion-panel v-for="group in providerGroups" :key="group.id" :value="group.id">
               <v-expansion-panel-title min-height="56">
                 <span class="text-title-small">{{ group.title }}</span>
@@ -280,16 +280,16 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               </v-expansion-panel-text>
             </v-expansion-panel>
           </v-expansion-panels>
-          <p v-else-if="!production" role="status" class="text-body-medium">No services match your search.</p>
+          <p v-else-if="!staging" role="status" class="text-body-medium">No services match your search.</p>
         </aside>
         <main ref="integrationDetail" class="integrations-panel__detail">
           <template v-if="selected">
             <header class="integrations-panel__header mb-4">
               <div class="d-flex align-center"><IntegrationServiceLogo :provider="selected.provider" /><div><h2>{{ selected.displayName || selected.provider }}</h2><p>Application configuration</p></div></div>
-              <v-btn v-if="!production" variant="text" color="error" :disabled="disabled" @click="removeOpen = true">Remove</v-btn>
+              <v-btn v-if="!staging" variant="text" color="error" :disabled="disabled" @click="removeOpen = true">Remove</v-btn>
             </header>
             <section aria-label="Application connection" class="mb-6">
-              <h3 class="text-title-medium">{{ production ? 'Production connection' : 'Development connection' }}</h3>
+              <h3 class="text-title-medium">{{ staging ? 'Staging connection' : 'Development connection' }}</h3>
               <template v-if="configurationOnly">
                 <p role="status">{{ dirty ? 'Unsaved configuration' : 'Configured' }}</p>
                 <p>Your application uses these public settings. Saving does not install the integration or verify that your application can use it.</p>
@@ -351,7 +351,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <v-btn variant="text" :disabled="dirty || disabled" @click="runSetup('status')">{{ setupCommand.isRunning ? 'Checking…' : 'Check connection' }}</v-btn>
               </template>
               <template
-                v-if="!production && dashboardContext.requestAssistantDraft && dashboardContext.assistantDraftAvailable &&
+                v-if="!staging && dashboardContext.requestAssistantDraft && dashboardContext.assistantDraftAvailable &&
                   (configurationOnly || selected.accountMode === 'per-user' || (connection?.status === 'unconfigured' && !connection.setupIssue))"
               >
                 <v-btn
@@ -365,27 +365,27 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             </section>
             <IntegrationConfigurationFields
               v-if="provider" v-model="configuration" :integration-id="selectedId"
-              :provider="provider" :field-errors="fieldErrors" :disabled="production || disabled"
+              :provider="provider" :field-errors="fieldErrors" :disabled="staging || disabled"
             />
             <p v-else>This provider's configuration is preserved. Edit its configuration in Files.</p>
             <GoogleAdsSearchPanel
               v-if="provider?.id === 'google-ads' && selected.accountMode === 'shared'" :key="navigationKey + selectedId" v-model="configuration"
-              :integration-id="selectedId" :disabled="production || disabled" :application-public-url="dashboardContext.applicationPublicUrl"
+              :integration-id="selectedId" :disabled="staging || disabled" :application-public-url="dashboardContext.applicationPublicUrl"
               :result="adsResult" :error="adsError" :loading="setupCommand.isRunning"
-              :management-disabled="production || dirty || disabled || dashboardContext.owner === false"
-              :can-prepare="!production && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDraftAvailable && dashboardContext.owner !== false"
+              :management-disabled="staging || dirty || disabled || dashboardContext.owner === false"
+              :can-prepare="!staging && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDraftAvailable && dashboardContext.owner !== false"
               @manage="runAdsOperation" @prepare="dashboardContext.requestAssistantDraft(setupPrompt)"
             />
             <PaymentConfigurationPanel
               v-if="['stripe', 'paddle'].includes(provider?.id)" v-model="configuration"
-              :integration-id="selectedId" :disabled="production || disabled" :application-public-url="dashboardContext.applicationPublicUrl"
+              :integration-id="selectedId" :disabled="staging || disabled" :application-public-url="dashboardContext.applicationPublicUrl"
               @set-env="openPaymentEnv" :management="paymentResult" :management-error="paymentError" :management-loading="setupCommand.isRunning" :management-operation="paymentOperation"
-              :management-disabled="dirty || disabled || dashboardContext.owner === false || (production && !releaseId)"
-              :can-prepare="!production && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDraftAvailable && dashboardContext.owner !== false"
+              :management-disabled="dirty || disabled || dashboardContext.owner === false || (staging && !releaseId)"
+              :can-prepare="!staging && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDraftAvailable && dashboardContext.owner !== false"
               @prepare="dashboardContext.requestAssistantDraft(setupPrompt)"
               @manage="runPaymentOperation"
             />
-            <section v-if="provider?.id === 'n8n' && !production" aria-label="n8n OAuth discovery" class="mt-4">
+            <section v-if="provider?.id === 'n8n' && !staging" aria-label="n8n OAuth discovery" class="mt-4">
               <h3 class="text-title-medium">Connect with n8n OAuth</h3>
               <p>In n8n, open Settings → Instance-level MCP and enable access. Copy its full Server URL into the field above, then discover OAuth settings. This reads public metadata; it does not register a client or connect an account.</p>
               <v-btn variant="outlined" :disabled="disabled || !selected.settings?.serverUrl" :loading="discoveryCommand.isRunning" @click="discoverN8n">Discover OAuth settings</v-btn>
@@ -411,7 +411,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               </template>
             </section>
             <section
-              v-if="registersClientDirectly && selected?.authentication.method === 'oauth2' && !production && (!registration?.clientId || registration.clientId === 'MISSING')"
+              v-if="registersClientDirectly && selected?.authentication.method === 'oauth2' && !staging && (!registration?.clientId || registration.clientId === 'MISSING')"
               :aria-label="`${provider.name} client registration`" class="mt-4"
             >
               <p>Choose permissions above (and Region for Amplitude or workspace endpoint for Hex), then set the Suggested callback URL below. Registering creates a {{ provider.name }} OAuth client and saves its ID in configuration and its secret, callback and recovery ID in development Env. Existing Env values will not be replaced. Your application must implement the callback and setup command to complete consent.</p>
@@ -428,7 +428,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <v-btn variant="text" :disabled="disabled" @click="registrationNeedsReview = false">I checked {{ provider.name }} and Env — allow another attempt</v-btn>
               </template>
             </section>
-            <p v-if="production">Production Env is managed on the Production page. Publish to apply changes to the running release.</p>
+            <p v-if="staging">Staging Env is managed on the Staging page. Publish to apply changes to the running release.</p>
             <section v-for="credential in credentials" :key="credential.label" :aria-label="credential.label" class="mt-4">
               <h3 class="text-title-medium">{{ credential.label }}</h3>
               <p>Save the credential as {{ credential.key }} in {{ environment }} Env. Your application receives it through Env.</p>
@@ -437,11 +437,11 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               <div class="integrations-panel__credential-actions">
                 <v-btn
                   v-if="!credentialLinked(credential.key)" variant="text" :disabled="dirty || disabled" :to="{
-                    path: projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env'),
+                    path: projectAppPath(projectSlug, staging ? '/dashboard/deploy' : '/dashboard/env'),
                     query: { prefillKey: credential.key, prefillSecret: 'true' }
                   }"
                 >
-                  {{ production ? 'Open production Env' : 'Set credential in Env' }}
+                  {{ staging ? 'Open Staging Env' : 'Set credential in Env' }}
                 </v-btn>
                 <component
                   :is="savedValues.component" v-if="savedValues && !dirty" :key="`${environment}:${credential.key}`"
@@ -471,17 +471,17 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               <p v-if="setupCopyMessage" role="status">{{ setupCopyMessage }}</p>
               <v-btn
                 variant="text" :disabled="!callbackUrl" :to="{
-                  path: projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env'),
+                  path: projectAppPath(projectSlug, staging ? '/dashboard/deploy' : '/dashboard/env'),
                   query: { prefillKey: callbackKey, prefillValue: callbackUrl }
                 }"
               >
-                {{ production ? 'Open production Env' : 'Set callback in Env' }}
+                {{ staging ? 'Open Staging Env' : 'Set callback in Env' }}
               </v-btn>
             </section>
             <v-expansion-panels v-if="provider?.setup" class="mt-4" static>
               <v-expansion-panel :title="`Set up ${provider.name}`">
                 <v-expansion-panel-text>
-                  <p v-if="production">For the credential and callback Env steps below, use Open production Env. Save values in the published application's environment.</p>
+                  <p v-if="staging">For the credential and callback Env steps below, use Open Staging Env. Save values in the published application's environment.</p>
                   <ol class="integrations-panel__instructions">
                     <li v-for="step in integrationSetupSteps(provider, selected)" :key="step">{{ step }}</li>
                   </ol>
@@ -507,16 +507,16 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                     <p>Send the request once. Copy client_id from a successful response into Client ID, then save configuration. Store client_secret in the project's Env using {{ registration.clientSecretRef }}. Store the exact registered callback using {{ registration.callbackUrlRef }}. The fields here contain Env references, not the secret itself.</p>
                     <p>Keep the response private. Missing credentials, an error response or a different returned redirect URI is not a completed registration. A timeout may leave a client created: investigate before retrying. Copying this request does not send it or connect an account; user consent happens later.</p>
                   </section>
-                  <v-btn class="mt-3" :to="projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env')" variant="text">Open Env</v-btn>
+                  <v-btn class="mt-3" :to="projectAppPath(projectSlug, staging ? '/dashboard/deploy' : '/dashboard/env')" variant="text">Open Env</v-btn>
                   <v-btn :href="integrationSetupUrl(provider, selected)" target="_blank" rel="noopener" variant="text">Provider setup guide</v-btn>
                 </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>
           </template>
-          <template v-else><h2>{{ production ? 'Select a published integration' : 'Add a service' }}</h2><p>Choose a service or an existing configuration to get started.</p></template>
+          <template v-else><h2>{{ staging ? 'Select a published integration' : 'Add a service' }}</h2><p>Choose a service or an existing configuration to get started.</p></template>
         </main>
       </div>
-      <footer v-if="!production" class="integrations-panel__footer">
+      <footer v-if="!staging" class="integrations-panel__footer">
         <p>{{ dirty ? 'Unsaved configuration changes.' : 'Configuration matches integrations.json.' }} Account access is verified by your application when a user connects.</p>
         <div class="integrations-panel__actions">
           <v-btn variant="text" :disabled="!dirty || command.isRunning" @click="discardOpen = true">Discard</v-btn>

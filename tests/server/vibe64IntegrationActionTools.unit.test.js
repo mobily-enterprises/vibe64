@@ -192,7 +192,7 @@ test("setup tools preserve complete native payment reviews and advertising value
 test("setup tools reject invalid contracts or revoked authority before work and preserve uncertain failures", async () => {
   await withIntegrationTools(async ({ calls, execute, state }) => {
     const base = { integrationId: "mail", operation: "connect" };
-    for (const input of [{ operation: "run-shell" }, { environment: "production" }, { vibe64User: { role: "owner" } },
+    for (const input of [{ operation: "run-shell" }, { environment: "staging" }, { vibe64User: { role: "owner" } },
       { sourceRoot: "/other" }, { setupRequest: { turnId: "000001" } }, { paymentEnvironment: "production" },
       { reviewId: "invented" }, { ads: { actor: "owner" } }, { ads: { trackingConfirmed: "yes" } }]) {
       assert.equal((await execute("integrations.setup", { ...base, ...input })).ok, false);
