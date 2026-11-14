@@ -53,7 +53,7 @@ import {
   REGISTRATION_LIMIT_BYTES,
   writeRegistration
 } from "./personRegistry.js";
-import { PRODUCTION_LOGIN_SHELL, productionAccessGranted, removeProductionAccess } from "./productionAccess.js";
+import { preRenameStagingProblem, removeStagingAccess, STAGING_LOGIN_SHELL, stagingAccessGranted } from "./stagingAccess.js";
 import { helperAccountDatabase, helperAccountNumberOptions } from "./hostSettings.js";
 import { APPLICATION_SANDBOX_ALLOWANCES, SYSTEMD_UNIT_ROOT } from "./systemdUnits.js";
 
@@ -110,8 +110,8 @@ function applicationSandboxAllowances(value, settings = helperSettings()) {
 
 // Each published project runs as its own application account: a system
 // account with only its own group, no login (a login shell only while the
-// workspace owner lets the project's AI sessions use production, see
-// productionAccess.js) and no Vibe64 group. Root
+// workspace owner lets the project's AI sessions use staging, see
+// stagingAccess.js) and no Vibe64 group. Root
 // registers it for the daemon's workspace like the workspace's people, in a
 // registry of its own, so an operation as a person never acts as an
 // application nor the reverse. The helper derives the account and its area
@@ -139,7 +139,7 @@ function applicationWorkspace(owner = {}) {
 
 // The area below `areaRoot`: root's directories down to the project's, the
 // daemon's handover directory its application's group may read, the
-// application's own directory with its home, and its production databases.
+// application's own directory with its home, and its staging databases.
 // The daemon names the project by its folder below the workspace's projects,
 // a catalogue project's own or a learner's practice project's; its
 // application, area and units are named by the project's slug either way.
@@ -180,7 +180,8 @@ function hostApplicationFacts(username = "") {
     groupGid: group.status === 0 ? Number(String(group.stdout).split(":")[2]) : -1,
     groups,
     loginUids,
-    productionAccess: productionAccessGranted(username)
+    preRenameStaging: preRenameStagingProblem(username),
+    stagingAccess: stagingAccessGranted(username)
   };
 }
 
@@ -190,8 +191,10 @@ function applicationAccountProblem(user = {}, identity = {}, facts = {}) {
       user.uid >= facts.loginUids.min) {
     return `${user.username} is not a system account.`;
   }
+  // Files from before the rename to staging access are no access at all: root removes them first.
+  if (facts.preRenameStaging) return facts.preRenameStaging;
   const shellAllowed = user.shell === APPLICATION_SHELL ||
-    (user.shell === PRODUCTION_LOGIN_SHELL && facts.productionAccess === true);
+    (user.shell === STAGING_LOGIN_SHELL && facts.stagingAccess === true);
   if (user.home !== identity.home || !shellAllowed) {
     return `${user.username} does not have its application's home and no login.`;
   }
@@ -418,8 +421,8 @@ function applicationDatabaseEntries(identity = {}, { areaUid = 0 } = {}) {
 }
 
 // A retired project's application goes whole: its account, registration and
-// area. The editor gives a production database back before it retires the
-// application, so the database outlives the project as other production
+// area. The editor gives a staging database back before it retires the
+// application, so the database outlives the project as other staging
 // databases do; root never removes one, so it refuses while the application's
 // database directory holds anything. The account's uid and its place under the
 // workspace's limit are then free again. Nothing of it may still run: no
@@ -430,7 +433,7 @@ function retireApplicationAccount(owner = {}, project = "", {
   areaRoot = applicationAreaRoot(),
   areaUid = 0,
   deleteUser = (username) => runRootCommand("userdel", [...accountDatabaseOptions(helperAccountDatabase()), username]),
-  endProductionAccess = removeProductionAccess,
+  endStagingAccess = removeStagingAccess,
   facts = hostApplicationFacts,
   registryRoot = APPLICATION_REGISTRY_ROOT,
   registryUid = 0,
@@ -459,7 +462,7 @@ function retireApplicationAccount(owner = {}, project = "", {
   const held = applicationDatabaseEntries(identity, { areaUid });
   if (held.length > 0) {
     throw new Error(`The application's database directory still holds ${held.slice(0, 5).join(", ")}` +
-      `${held.length > 5 ? ` and ${held.length - 5} more` : ""}. Give its production database back to the editor before retiring the application.`);
+      `${held.length > 5 ? ` and ${held.length - 5} more` : ""}. Give its staging database back to the editor before retiring the application.`);
   }
   const unregister = () => {
     const directory = openRegistry(identity.workspace, registry);
@@ -471,14 +474,14 @@ function retireApplicationAccount(owner = {}, project = "", {
   };
   const unregistered = Boolean(registration && user);
   if (unregistered) unregister();
-  // Refused before anything else changes, so a refused retire leaves its AI sessions' production access as it was.
+  // Refused before anything else changes, so a refused retire leaves its AI sessions' staging access as it was.
   if (user && running(user.uid)) {
     if (unregistered) writeApplicationRegistration(identity, user, registry);
-    throw new Error("The application still runs: its release service, or a production login of its AI sessions. " +
-      "Stop its release service, and end its AI sessions' production access, before retiring it.");
+    throw new Error("The application still runs: its release service, or a staging login of its AI sessions. " +
+      "Stop its release service, and end its AI sessions' staging access, before retiring it.");
   }
-  // Its AI sessions' way into production goes with it.
-  if (user) endProductionAccess(user, identity.username);
+  // Its AI sessions' way into staging goes with it.
+  if (user) endStagingAccess(user, identity.username);
   let projectRoot = -1;
   try {
     projectRoot = openApplicationProjectRoot(identity, { areaUid, create: false });

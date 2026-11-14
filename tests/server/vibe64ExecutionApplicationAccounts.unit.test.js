@@ -81,7 +81,7 @@ async function applicationHost(t) {
       deleted.push(username);
       accounts.delete(username);
     },
-    endProductionAccess: (_user, username) => ended.push(username),
+    endStagingAccess: (_user, username) => ended.push(username),
     facts: (username) => ({ groupGid: GID, groups: [username], loginUids: LOGIN_UIDS }),
     grantDaemonSearch: (descriptor) => grants.push(descriptor),
     managedRoot,
@@ -144,13 +144,13 @@ test("each project of a workspace gets its own registered account and area", asy
   assert.equal(applicationIdentity({ username: daemonUser("test") }, "shop", host.options).username, account.username);
 });
 
-test("an application account has a login shell only while root holds its production key", async (t) => {
+test("an application account has a login shell only while root holds its staging key", async (t) => {
   const host = await applicationHost(t);
   const account = host.ensure("shop");
   const user = host.accounts.get(account.username);
-  const withAccess = (productionAccess) => ({
+  const withAccess = (stagingAccess) => ({
     ...host.options,
-    facts: (username) => ({ ...host.options.facts(username), productionAccess })
+    facts: (username) => ({ ...host.options.facts(username), stagingAccess })
   });
   user.shell = "/bin/sh";
   assert.throws(() => registeredApplicationUser(host.owner, account.username, withAccess(false)),
@@ -159,6 +159,13 @@ test("an application account has a login shell only while root holds its product
   user.shell = "/bin/bash";
   assert.throws(() => registeredApplicationUser(host.owner, account.username, withAccess(true)),
     /does not have its application's home and no login/u);
+  // Root's files from before the rename to staging access refuse the account and name the fix.
+  const preRename = `${account.username} still has its key file from before production access was renamed staging access.`;
+  user.shell = "/bin/sh";
+  assert.throws(() => registeredApplicationUser(host.owner, account.username, {
+    ...host.options,
+    facts: (username) => ({ ...host.options.facts(username), preRenameStaging: preRename, stagingAccess: false })
+  }), /v64a_[0-9a-f]{12} still has its key file from before production access was renamed staging access/u);
 });
 
 test("the daemon names only a project of its own workspace", async (t) => {
@@ -192,7 +199,7 @@ test("a new application account needs a real project of the workspace, and room 
   host.ensure("blog");
   await mkdir(path.join(projects, "news"));
   assert.throws(() => host.ensure("news", { applicationLimit: 2 }), /test already has 2, its limit/u);
-  // A retired application, its production database taken back, frees its place.
+  // A retired application, its staging database taken back, frees its place.
   host.retire("shop");
   host.ensure("news", { applicationLimit: 2 });
 });
@@ -325,23 +332,23 @@ test("retiring a project removes its application, its registration and its whole
   const account = host.ensure("shop");
   await writeFile(path.join(account.handoverRoot, "environment"), "A=1\n");
   await mkdir(path.join(account.appRoot, "releases", "r1", "workspace"), { recursive: true });
-  // The editor gives the production database back before it retires the
+  // The editor gives the staging database back before it retires the
   // application; root never removes a database left in its directory.
-  const left = path.join(account.databaseRoot, "v64_test_shop_production.sqlite");
+  const left = path.join(account.databaseRoot, "v64_test_shop_staging.sqlite");
   await writeFile(left, "data");
   assert.throws(() => host.retire("shop"),
-    /database directory still holds v64_test_shop_production\.sqlite\. Give its production database back/u);
+    /database directory still holds v64_test_shop_staging\.sqlite\. Give its staging database back/u);
   assert.equal(await readFile(left, "utf8"), "data");
   assert.equal(readApplicationRegistration("test", account.username, host.options).username, account.username);
   assert.deepEqual(host.deleted, []);
   await rm(left);
 
-  // A refused retire leaves its AI sessions' production access as it was.
+  // A refused retire leaves its AI sessions' staging access as it was.
   assert.throws(() => host.retire("shop", { running: () => true }),
-    /still runs: its release service, or a production login of its AI sessions/u);
+    /still runs: its release service, or a staging login of its AI sessions/u);
   assert.deepEqual(host.ended, []);
   assert.deepEqual(host.retire("shop"), { retired: true });
-  // Its AI sessions' way into production ends before it goes.
+  // Its AI sessions' way into staging ends before it goes.
   assert.deepEqual(host.ended, [account.username]);
   assert.deepEqual(await readdir(path.join(host.options.areaRoot, "test")), []);
   assert.equal(readApplicationRegistration("test", account.username, host.options), null);

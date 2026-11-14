@@ -18,8 +18,8 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/terminalSessionClosing.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessionRegistry.js`
 - `packages/vibe64-execution/src/host/managedWorkflows.js`
-- `packages/vibe64-execution/src/host/productionAccess.js`
-- `packages/vibe64-execution/src/host/productionLogin.js`
+- `packages/vibe64-execution/src/host/stagingAccess.js`
+- `packages/vibe64-execution/src/host/stagingLogin.js`
 - `packages/vibe64-execution/src/host/hostSettings.js`
 - `packages/vibe64-execution/src/host/executionReceipts.js`
 - `packages/vibe64-execution/src/host/executionState.js`
@@ -183,7 +183,7 @@ Cross-identity execution does not receive that directory; request and project
 configuration still cannot override this policy-owned setting.
 The resolver never takes `NODE_ENV` from the editor's environment or a caller's
 base env: a command's framework mode comes only from the project's Env, the
-launch's or caller's own env, its Production Env or its own command line, so a
+launch's or caller's own env, its Staging Env or its own command line, so a
 host may serve the editor itself in production mode.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
@@ -220,7 +220,7 @@ system's own account files and ranges, as before:
   `extrausers` (libnss-extrausers), for a host whose system's own account files
   cannot be written, `useradd`, `userdel` and, for group membership, `gpasswd`
   get `--extrausers`, since `usermod -a -G` leaves such a group unchanged. A
-  login shell (production access) changes through `usermod --prefix`, with a
+  login shell (staging access) changes through `usermod --prefix`, with a
   root-only folder in `/run` whose `etc` is the database (`changeLoginShell` in
   `hostAccounts.js`): plain `usermod` changes such an account too, but opens the
   system's own account files for writing, which fails there. Such a host signs
@@ -331,20 +331,20 @@ as it.
 It unregisters the account before it looks for its processes, so no new
 execution can start as it meanwhile, and registers it again when it refuses.
 It then removes the whole area, the account and its registration, so the
-account's uid and its place under the limit are free again. A production
-database outlives its project, as other production databases do: the editor
-gives it back into its own production database directory before it retires the
+account's uid and its place under the limit are free again. A staging
+database outlives its project, as other staging databases do: the editor
+gives it back into its own staging database directory before it retires the
 application, which leaves `database/` empty; a database still there (one the
 editor did not know of, or made under an earlier path) stops the retire and is
 kept.
 
-While a host lets a project's AI sessions use its production, the helper's
-`production-access` operation (`productionLogin.js`, `productionAccess.js`)
+While a host lets a project's AI sessions use its staging, the helper's
+`staging-access` operation (`stagingLogin.js`, `stagingAccess.js`)
 gives the project's application account a way in for them: `grant` writes the
 project's one `ssh-ed25519` public key as a root-owned key file for the
 account in the helper's settings folder (loopback only, no forwarding), a
-`visudo`-checked sudoers rule of its own (`productionSudoersPath`) that lets
-the account run exactly `vibe64-exec-helper production-service *`, and the
+`visudo`-checked sudoers rule of its own (`stagingSudoersPath`) that lets
+the account run exactly `vibe64-exec-helper staging-service *`, and the
 login shell `/bin/sh`, which the account check accepts only while that key
 file exists. sshd starts even the forced command through that shell, and
 `/bin/sh -c` reads no file of the account's, where bash started by sshd would
@@ -352,22 +352,22 @@ read the `~/.bashrc` the application can write. `revoke` removes all three,
 turns off lingering, ends the account's open logins (`loginctl
 terminate-user`) and removes the account's crontab and at jobs, which a login
 could leave to run later; `retire` refuses while anything of the account still
-runs (a production login included) and only then revokes. The host's SSH
+runs (a staging login included) and only then revokes. The host's SSH
 policy, not the helper, admits application accounts from loopback alone, with
-that key file and `vibe64-exec-helper production-shell` as their forced
+that key file and `vibe64-exec-helper staging-shell` as their forced
 command. That command runs as the account, finds the release unit root
 installed for it (the running one), and starts the client's command, bash
 (`--noprofile --norc`, and no `BASH_ENV` or `ENV` from the login's
 environment) or an SFTP server in that release's folder with its Env file, the
 unit's PATH and, for a release whose start script runs the command it is
-given, that script's runtimes and Serve defaults; it adds `production-logs`,
-`production-status`, `production-restart` and `production-enter`. `activity`
+given, that script's runtimes and Serve defaults; it adds `staging-logs`,
+`staging-status`, `staging-restart` and `staging-enter`. `activity`
 reads two records for the account, each its newest 500 entries, and says when
 older ones are left out: the host's own, root's logind entries for each of the
 account's login sessions (its start, and its end however it ended: logout, a
 dropped connection or revoke's `terminate-user`), which the account cannot
 write; and what each login reported itself, which the forced command logs as
-the account to the journal under `vibe64-production` (its command word for
+the account to the journal under `vibe64-staging` (its command word for
 word, the session id the client sent, its logind session, exit status and
 duration). The account could write those lines too, and sshd's PAM stack may
 set a login's environment from a file of the account's (Ubuntu's reads
@@ -375,7 +375,7 @@ set a login's environment from a file of the account's (Ubuntu's reads
 loads), so they are only what the login says. Such a login runs outside the release service's sandbox, as a
 person's own login would, so mounts the service makes in namespaces of its own
 (its private `/tmp`, a FUSE volume) are not there.
-`production-service`, through sudo, accepts only an application account with
+`staging-service`, through sudo, accepts only an application account with
 its key installed, and reads, restarts or enters only that account's own
 release unit. `enter` refuses a unit with no running main process, or one
 whose main process is not in the unit's own cgroup when root reads its
@@ -386,10 +386,21 @@ namespace runs, since an application with the FUSE or gVisor allowance may have
 made that namespace itself. A main process in a user namespace of the
 application's own is joined there too, as the ids the account has in it,
 because a FUSE volume mounted there admits only that namespace's processes.
-There the helper's `production-enter`, as the account, refuses unless it is in
+There the helper's `staging-enter`, as the account, refuses unless it is in
 the mount namespace root read, then reads the release's Env file and starts the
 command, or the shell, in the release's folder through its start script, as
 the login does.
+
+Staging access was called production access until 14 November 2026. The
+helper refuses the old names (`production-access`, `production-shell`,
+`production-service`, `production-enter`), naming the new one, so a caller or
+host policy still using one fails rather than meeting "unknown". Root's files
+under the old names (`production-ssh/<account>` in the helper's settings folder
+and `sudoers.d/vibe64-production-<account>`) are no access at all: while either
+remains, `grant`, `revoke` and the application account check refuse the account
+and name the fix (root removes them, revokes and grants again where the
+workspace owner allows it). Old login reports stay in the journal under
+`vibe64-production`; `activity` reads only `vibe64-staging`.
 
 A managed execution runs as an application only when the daemon asks for its
 registered account by name (`applicationAccount`), and only as a finite capture.
