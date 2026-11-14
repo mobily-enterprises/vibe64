@@ -223,11 +223,14 @@ test("composed server startup removes the private state of a project whose names
 
 test("Vibe64 gives its own features no SIDE_EFFECTS, which APP_ENV replaced, and leaves its own APP_ENV to the process", async (t) => {
   const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-side-effects-system-"));
-  const before = process.env.APP_ENV;
-  process.env.APP_ENV = "production";
+  // A production start, which JSKIT refuses without NODE_ENV=production.
+  const before = { APP_ENV: process.env.APP_ENV, NODE_ENV: process.env.NODE_ENV };
+  Object.assign(process.env, { APP_ENV: "production", NODE_ENV: "production" });
   t.after(() => {
-    if (before === undefined) delete process.env.APP_ENV;
-    else process.env.APP_ENV = before;
+    for (const [name, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   });
   let featureEnv = null;
   const app = await createServer({
