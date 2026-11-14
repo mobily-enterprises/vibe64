@@ -1,6 +1,7 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
+import { rememberAfterPlanBase } from "./afterPlanBase.js";
 import {
   assistantRoutingGoalFromMetadata,
   assistantRoutingRequestFromMetadata,
@@ -80,7 +81,11 @@ function createServiceAgentConversations({
             expectedRevision: input.expectedRevision,
             expectedProgressRevision: input.expectedProgressRevision
           }, "user");
-      if (restoring) result.notice = "The archived plan is now current and active. Ask in chat to continue its work.";
+      if (restoring) {
+        result.notice = "The archived plan is now current and active. Ask in chat to continue its work.";
+        // A plan becoming current marks where its after-plan passes start, unless a base is recorded.
+        await rememberAfterPlanBase(context.runtime.store, context.session, { onlyWhenUnset: true });
+      }
       await publishAgentSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice } });
       return { ok: true, sessionId, ...result };
     }, { operation: operation + "-work-plan" }));

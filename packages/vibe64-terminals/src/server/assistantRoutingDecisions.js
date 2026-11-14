@@ -12,9 +12,10 @@ import {
   ROUTING_REASONS,
   assistantRoutingPrompt,
   parseRoutingDecision,
-  assistantWorkflowRole,
-  assistantTaskPurpose
+  assistantAfterPlanPass,
+  assistantWorkflowRole
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { read, failure, recentVisibleMessages } from "./assistantRoutingRequests.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -182,8 +183,12 @@ function createAssistantRoutingDecisions({
 
   async function resolve(context, state, followup = false) {
     let purpose = state.mode;
-    if (followup) {
-      // A direct chat's agent finishes its own work on its own purpose.
+    const pass = assistantAfterPlanPass(state);
+    if (pass) {
+      // An after-plan pass runs on Senior with its own purpose, like a pass the person starts.
+      purpose = assistantTaskPurpose(pass.id);
+    } else if (followup) {
+      // A direct chat's agent continues its own work on its own purpose.
       purpose = state.stage === "review" && state.mode === "auto" ? "review" : assistantWorkflowRole(state);
     } else if (state.mode !== "custom" && assistantTaskPurpose(state.task)) {
       purpose = state.resolvedMode === "senior" ? assistantTaskPurpose(state.task) : state.resolvedMode;

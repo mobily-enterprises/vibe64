@@ -45,7 +45,7 @@ function followNoCompletedPlan() {
  * @param {(timing: object) => void} [dependencies.onTiming]
  * @param {(sessionId: string, details: object) => unknown} [dependencies.onPlanCompleted]
  * @param {typeof listGenesisPasses} [dependencies.listPasses] The passes Genesis offers for a
- *   project, which an explicit pass must be one of.
+ *   project, which an explicit pass must be one of and a completed plan's passes are run from.
  */
 function createAssistantRouting({
   systemRoot,
@@ -140,7 +140,8 @@ function createAssistantRouting({
     exclusive,
     exclusiveAfterWrites,
     publish,
-    onPlanCompleted
+    onPlanCompleted,
+    listPasses
   });
   const goals = createAssistantRoutingGoals({
     records,

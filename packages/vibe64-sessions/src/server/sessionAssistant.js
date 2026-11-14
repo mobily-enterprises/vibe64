@@ -80,7 +80,7 @@ function createSessionAssistant({
   /**
    * Main chat starts on the owner's setup (a team member's lesson: the team
    * setup), in Auto unless `mode` says otherwise. A renewal keeps the chat mode
-   * and its finishing steps, and a Custom chat its model; a chosen model that
+   * and its after-plan passes and save choice, and a Custom chat its model; a chosen model that
    * isn't main chat's own makes the chat Custom.
    */
   async function resolveSessionStart(input = {}, options = {}) {
@@ -104,8 +104,9 @@ function createSessionAssistant({
       explicitSelection = await resolveAssistantSelection(chosen || current, vibe64User);
     }
     const startMode = previous && previous.mode !== "fix" ? previous.mode : mode;
-    // A new chat's switches start on their defaults (review, Deslop, the UI
-    // pass and automatic save all on); a renewal keeps the chat's own.
+    // A new chat starts on the defaults (Review, Security, Data, Quality, UI
+    // pass and Deslop after a plan, none deeply, and automatic save on); a
+    // renewal keeps the chat's own.
     const preferences = assistantRoutingPreferences({
       ...assistantRoutingAutomation(previous),
       ...(explicitSelection ? { mode: "custom", override: explicitSelection } : { mode: startMode })
@@ -168,10 +169,10 @@ function createSessionAssistant({
   async function updateAssistantSelection(sessionId, input) {
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
-      // Main chat's mode, review and model are the owner's, with or without a
+      // Main chat's mode, after-plan passes, settings and model are the owner's, with or without a
       // goal, except in a team member's own lesson.
       if (!isAssistantRoutingOwner(vibe64User) && !currentRequestIsPracticeProject()) {
-        throw new AppError(403, "Main chat runs on the workspace owner's AI. Only the owner can change its chat mode, review or model.", {
+        throw new AppError(403, "Main chat runs on the workspace owner's AI. Only the owner can change its chat mode, passes after a plan, Chat settings or model.", {
           code: "vibe64_main_chat_settings_owner_only"
         });
       }
@@ -199,15 +200,15 @@ function createSessionAssistant({
             return nativeState;
           };
           const saved = assistantRoutingFromMetadata(session.metadata);
-          // A Custom chat's switch, with its model unchanged, saves only the
-          // switch: there is no model to check or work to cancel.
+          // A Custom chat's finishing choice, with its model unchanged, saves only
+          // that choice: there is no model to check or work to cancel.
           if (input.assistantRouting?.mode === "custom" && saved?.mode === "custom" &&
               sameVibe64AssistantSelection(input.assistantRouting.override, saved.override)) {
             const switched = assistantRoutingPreferences({ ...saved, ...input.assistantRouting, override: saved.override });
             await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(switched));
             return { assistantSelection: current, session: await runtime.getSessionWithoutSource(sessionId) };
           }
-          // An omitted review, Deslop, UI pass or automatic save choice keeps the chat's own.
+          // An omitted after-plan or automatic save choice keeps the chat's own.
           const automation = assistantRoutingAutomation(saved);
           if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
             preferences = assistantRoutingPreferences({
@@ -222,7 +223,7 @@ function createSessionAssistant({
             }
             const decision = await terminals.resolveAssistantPurpose({
               purpose: preferences.mode,
-              reviewEnabled: preferences.review,
+              reviewEnabled: preferences.mode === "auto",
               ...(preferences.override ? { override: { role: preferences.mode, selection: preferences.override } } : {})
             }, { vibe64User });
             if (!decision.available) throw new AppError(403, decision.message, { code: decision.reasonCode });
@@ -246,7 +247,7 @@ function createSessionAssistant({
           });
           const { turnActive, goalActive } = await readNativeState();
           const next = resolved;
-          // Custom keeps the chat's finishing steps, as every main-chat mode does.
+          // Custom keeps the chat's after-plan passes and save choice, as every main-chat mode does.
           const nextPreferences = preferences || {
             mode: "custom",
             ...assistantRoutingAutomation({ ...automation, ...input.assistantRouting, mode: "custom" }),

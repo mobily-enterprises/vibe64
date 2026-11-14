@@ -37,6 +37,8 @@ const ASSISTANT_CATALOG = {
   }]
 };
 const SESSION_ID = "direct-chat-session";
+// A chat's saved choices: the defaults' after-plan passes, none deeply, and save on.
+const AFTER_PLAN_DEFAULTS = { afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"], afterPlanDeep: [], autoSave: true };
 const SCROLL_TEST_COPY = "A deliberately detailed update keeps the conversation tall enough to exercise the real overflow container.";
 
 // The page's HTTP stays mocked; its chat uses the real conversation owner for
@@ -535,7 +537,8 @@ test.describe("direct chat", () => {
             "data-pass": { lastRun: null, commitsSince: 12 },
             "security-pass": { lastRun: ago(3), commitsSince: 9 },
             "ux-pass": { lastRun: null, commitsSince: 12 },
-            "speed-pass": { lastRun: null, commitsSince: 12 }
+            "speed-pass": { lastRun: null, commitsSince: 12 },
+            review: { lastRun: null, commitsSince: 12 }
           };
           // A pass that completed also offers the changes since the commit that recorded it, as Genesis writes that run.
           const sinceLast = (title: string, commitsSince: number) => ({
@@ -2434,8 +2437,8 @@ for (const width of [390, 1280]) {
     }];
     await mockDirectChat(page);
     const session = { ...directSession(), metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", deslop: true, review: true }),
-      assistant_routing_request: JSON.stringify({ schemaVersion: 5, messageId, input: { message },
+      assistant_routing: JSON.stringify({ mode: "auto", ...AFTER_PLAN_DEFAULTS }),
+      assistant_routing_request: JSON.stringify({ schemaVersion: 6, messageId, input: { message },
         mode: "auto", resolvedMode: "senior", status: "waiting", delivery: "accepted", stage: "review",
         workflow: true, followup: { messageId: "review-followup", message: "Continue review." } })
     } };
@@ -2483,11 +2486,14 @@ for (const width of [390, 820, 1280]) {
       const session = server.state.session;
       session.agentSession.turn.active = false;
       Object.assign(session, { assistantSelection: junior });
-      // An existing chat that saved the UI pass off.
-      session.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true, deslop: true, uiPass: false, autoSave: true });
+      // An existing chat whose after-plan passes are not the defaults.
+      const afterPlan = { afterPlan: ["review", "security-pass", "deslop"], afterPlanDeep: [] };
+      session.metadata.assistant_routing = JSON.stringify({ mode: "junior", ...afterPlan, autoSave: true });
       await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}`, route => fulfillJson(route, { ok: true, ...session }));
       await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/assistant-selection`, async route => {
-        session.metadata.assistant_routing = JSON.stringify(route.request().postDataJSON().assistantRouting);
+        // As the server does, a choice the request leaves out keeps the chat's own.
+        session.metadata.assistant_routing = JSON.stringify({ ...JSON.parse(session.metadata.assistant_routing),
+          ...route.request().postDataJSON().assistantRouting });
         await fulfillJson(route, { ok: true, ...session });
       });
       // Auto needs Senior, Junior and Router in the owner's setup.
@@ -2545,37 +2551,28 @@ for (const width of [390, 820, 1280]) {
       await expect(modes.getByRole("button", { name: /^Auto/ })).toContainText("Router: Codex (gpt-6-luna medium)");
       expect(mainReads).toBeGreaterThan(0);
       expect(configurationReads).toBe(0);
-      // The four Chat settings switches show in every main-chat mode.
-      const review = page.getByRole("checkbox", { name: "Automatically review changes", exact: true });
-      const deslop = page.getByRole("checkbox", { name: "Automatically deslop changes", exact: true });
-      const uiPass = page.getByRole("checkbox", { name: "Automatically UI pass changes", exact: true });
+      // Chat settings hold Automatically save changes in every main-chat mode; the passes after a plan are ticked in Passes.
       const autoSave = page.getByRole("checkbox", { name: "Automatically save changes", exact: true });
-      await expect(review).toBeChecked();
-      await expect(deslop).toBeChecked();
-      await expect(uiPass).not.toBeChecked();
       await expect(autoSave).toBeChecked();
-      await expect(page.getByText("Or tell the agent “Deslop” any time.", { exact: true })).toBeVisible();
-      await expect(page.getByText("Or tell the agent “UI pass” any time — add “: <section>” or “: the whole app”.", { exact: true })).toBeVisible();
+      for (const retired of ["Automatically review changes", "Automatically deslop changes", "Automatically UI pass changes"]) {
+        await expect(page.getByRole("checkbox", { name: retired, exact: true })).toHaveCount(0);
+      }
+      await expect(page.getByText(/the passes ticked in Passes \(After a plan\) run first/u)).toBeVisible();
       await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
       await modes.getByRole("button", { name: /^Auto/ }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Auto\./);
-      await expect(deslop).toBeChecked();
-      await expect(uiPass).not.toBeChecked();
-      await uiPass.click();
-      await expect(uiPass).toBeChecked();
-      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass on/);
-      await expect.poll(() => JSON.parse(session.metadata.assistant_routing)).toMatchObject({ mode: "auto", review: true, deslop: true, uiPass: true });
-      await page.screenshot({ path: info.outputPath(`ui-pass-${width}.png`), animations: "disabled" });
-      // Turning a switch off asks first; Cancel keeps it on.
-      await review.click();
-      const confirm = page.getByRole("dialog").filter({ hasText: "Turn off automatic review?" });
+      await expect(trigger).toHaveAttribute("aria-label", /Automatic save on$/);
+      // Changing the mode keeps the chat's after-plan passes as saved.
+      await expect.poll(() => JSON.parse(session.metadata.assistant_routing)).toEqual({ mode: "auto", ...afterPlan, autoSave: true });
+      // Turning save off asks first; Cancel keeps it on.
+      await autoSave.click();
+      const confirm = page.getByRole("dialog").filter({ hasText: "Turn off automatic save?" });
       await expect(confirm).toBeVisible();
       await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
-      await expect(review).toBeChecked();
+      await expect(autoSave).toBeChecked();
       await modes.getByRole("button", { name: /^Senior/ }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
-      await expect(review).toBeChecked();
-      await expect(uiPass).toBeChecked();
+      await expect(autoSave).toBeChecked();
       expect(JSON.parse(session.metadata.assistant_routing).mode).toBe("senior");
 
       routerChosen = false;
@@ -2610,10 +2607,10 @@ for (const width of [390, 820, 1280]) {
   });
 }
 
-// The UI pass end to end in the browser: its Chat settings switch, its off
-// warning and help line, its automatic start notice, an explicit UI pass's
-// reply, and the refusals main chat shows when a turn started or a goal is open.
-// What the server decides from these messages is tested in
+// The passes after a plan and the UI pass end to end in the browser: the Passes
+// After a plan and Deeply ticks, an after-plan pass's start notice, an explicit
+// UI pass's reply, and the refusals main chat shows when a turn started or a goal
+// is open. What the server decides from these messages is tested in
 // tests/server/assistantRoutingLifecycle.test.js and assistantWorkflow.test.js.
 // What the terminals' Send gives the conversation for a message routing refused
 // before admission (serviceAssistant's notSentDeliveryError): a definite rejection.
@@ -2636,7 +2633,8 @@ async function uiPassWorld(page: Page, { width, preferences }: { width: number; 
   await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/assistant-selection`, async route => {
     const saved = route.request().postDataJSON().assistantRouting;
     saves.push(saved);
-    session.metadata.assistant_routing = JSON.stringify(saved);
+    // As the server does, a choice the request leaves out keeps the chat's own.
+    session.metadata.assistant_routing = JSON.stringify({ ...JSON.parse(session.metadata.assistant_routing), ...saved });
     await fulfillJson(route, { ok: true, ...session });
   });
   const decision = (effectiveSelection: Record<string, unknown>) => ({ available: true, effectiveSelection });
@@ -2647,60 +2645,62 @@ async function uiPassWorld(page: Page, { width, preferences }: { width: number; 
   }));
   await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route =>
     fulfillJson(route, { ok: true, revision: 1, canConfigure: true, mainSelection: senior }));
+  // Genesis's list, none run yet; the Speed pass offers no deep run, so it has no Deeply tick.
+  const passes = GENESIS_PASSES.map((pass) => ({ ...pass, commitsSince: 3, snoozedUntil: "", dismissed: false,
+    ...(pass.id === "speed-pass" ? { sinceBase: { ...pass.sinceBase, deep: null } } : {}) }));
+  await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/passes`, route =>
+    fulfillJson(route, { ok: true, sessionId: session.sessionId, unavailable: null, passes, recommendation: "" }));
   return { server, session, senior, saves };
 }
 
 for (const width of [390, 1280]) {
-  test(`@ui-pass the Automatically UI pass changes switch asks before turning off and is saved for the chat at ${width}px`, async ({ page }, info) => {
+  test(`@after-plan Passes tick the passes that run after a plan: Review and Security always, the rest saved for the chat at ${width}px`, async ({ page }, info) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
-    // A new chat's choices: Auto, with every finishing step on.
-    const { server, saves } = await uiPassWorld(page, { width,
-      preferences: { mode: "auto", review: true, deslop: true, uiPass: true, autoSave: true } });
+    const { server, session, saves } = await uiPassWorld(page, { width, preferences: { mode: "auto", ...AFTER_PLAN_DEFAULTS } });
     try {
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
       await expect(page.getByLabel("Message AI assistant")).toBeVisible();
-      const trigger = page.getByRole("button", { name: /^Chat mode:/ });
-      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Auto\./);
-      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass on/);
-      await trigger.click();
-      const uiPass = page.getByRole("checkbox", { name: "Automatically UI pass changes", exact: true });
-      // On for new chats, with its chat command beside it.
-      await expect(uiPass).toBeChecked();
-      await expect(uiPass).toBeEnabled();
-      await expect(page.getByText("Or tell the agent “UI pass” any time — add “: <section>” or “: the whole app”.", { exact: true })).toBeVisible();
-
-      // Turning it off asks first, naming what is lost; Cancel keeps it on.
-      await uiPass.click();
-      const confirm = page.getByRole("dialog", { name: "Turn off Automatic UI pass?", exact: true });
-      await expect(confirm).toBeVisible();
-      await expect(confirm).toContainText("The automatic UI pass is a design review after each finished piece of work: it brings the screens the work changed in line with the project's UI guidance.");
-      await expect(confirm).toContainText("Without it, screens the work changes no longer get a design review.");
-      await expect(confirm).toContainText("You can still run one yourself by telling the agent “UI pass” in the chat.");
-      await expect(confirm).toContainText("Cancel keeps it on.");
+      await page.getByRole("button", { name: "Passes", exact: true }).click();
+      const list = page.getByRole("dialog", { name: "Passes" });
+      await expect(list).toContainText("After a plan: when a plan is completed, each ticked pass checks the plan's changes in its own turn");
+      const tick = (title: string) => list.getByRole("checkbox", { name: `${title}: After a plan`, exact: true });
+      const deeply = (title: string) => list.getByRole("checkbox", { name: `${title}: Deeply after a plan`, exact: true });
+      // The mandatory pair: ticked, disabled, and saying why.
+      for (const title of ["Review", "Security pass"]) {
+        await expect(tick(title)).toBeChecked();
+        await expect(tick(title)).toBeDisabled();
+      }
+      await expect(list.getByText("Always runs after a plan.", { exact: true })).toHaveCount(2);
+      // The defaults: Data, Quality, UI pass and Deslop on; User experience, Speed and Visual identity off; none deeply.
+      for (const title of ["Data pass", "Quality pass", "UI pass", "Deslop"]) await expect(tick(title)).toBeChecked();
+      for (const title of ["User experience pass", "Speed pass", "Visual identity"]) await expect(tick(title)).not.toBeChecked();
+      await expect(deeply("Data pass")).not.toBeChecked();
+      await expect(deeply("Data pass")).toBeEnabled();
+      await expect(deeply("Visual identity"), "Deeply needs After a plan").toBeDisabled();
+      await expect(deeply("Speed pass"), "no deep run, no Deeply").toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await page.screenshot({ path: info.outputPath(`ui-pass-off-warning-${width}.png`), animations: "disabled" });
-      await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
-      await expect(confirm).toBeHidden();
-      await expect(uiPass).toBeChecked();
-      expect(saves).toHaveLength(0);
+      await page.screenshot({ path: info.outputPath(`after-plan-${width}.png`), animations: "disabled" });
 
-      await uiPass.click();
-      await expect(confirm).toBeVisible();
-      await confirm.getByRole("button", { name: "Turn off Automatic UI pass", exact: true }).click();
-      await expect(confirm).toBeHidden();
-      await expect(uiPass).not.toBeChecked();
+      // Unticking the UI pass saves the chat's ticks, in Master pass order.
+      await tick("UI pass").click();
+      await expect(tick("UI pass")).not.toBeChecked();
       await expect.poll(() => saves.length).toBe(1);
-      expect(saves[0]).toEqual({ mode: "auto", review: true, deslop: true, uiPass: false, autoSave: true });
-      await expect(trigger).not.toHaveAttribute("aria-label", /Automatic UI pass on/);
-
-      // Turning it on again saves at once, keeping the chat's other choices.
-      await uiPass.click();
-      await expect(uiPass).toBeChecked();
+      expect(saves[0]).toEqual({ mode: "auto", afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "deslop"], afterPlanDeep: [] });
+      // Deeply on the Data pass, then ticking Visual identity, keeps both.
+      await deeply("Data pass").click();
       await expect.poll(() => saves.length).toBe(2);
-      expect(saves[1]).toEqual({ mode: "auto", review: true, deslop: true, uiPass: true, autoSave: true });
-      await expect(trigger).toHaveAttribute("aria-label", /Automatic UI pass on/);
-
+      expect(saves[1]).toMatchObject({ afterPlanDeep: ["data-pass"] });
+      await tick("Visual identity").click();
+      await expect.poll(() => saves.length).toBe(3);
+      expect(saves[2]).toEqual({ mode: "auto", afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "identity-pass", "deslop"],
+        afterPlanDeep: ["data-pass"] });
+      expect(JSON.parse(session.metadata.assistant_routing)).toEqual({ mode: "auto",
+        afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "identity-pass", "deslop"], afterPlanDeep: ["data-pass"], autoSave: true });
+      // Clicking a mandatory tick sends nothing.
+      await tick("Review").click({ force: true });
+      await expect(tick("Review")).toBeChecked();
+      expect(saves).toHaveLength(3);
       expect(errors).toEqual([]);
     } finally {
       await page.close();
@@ -2712,7 +2712,7 @@ for (const width of [390, 1280]) {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     const { server, senior } = await uiPassWorld(page, { width,
-      preferences: { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true } });
+      preferences: { mode: "junior", ...AFTER_PLAN_DEFAULTS } });
     try {
       // An explicit UI pass's turn, attributed to Senior's UI pass.
       server.state.conversationLog = [{
@@ -2727,12 +2727,12 @@ for (const width of [390, 1280]) {
       await expect(page.locator(".assistant-transcript__assistant-header")
         .getByText("Senior UI pass · Codex (gpt-6-astra xhigh)", { exact: true })).toBeVisible();
       await expect(chat.getByText("Aligned the bookings list spacing and checked it at 390 and 1280 px.", { exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: /^Chat mode:/ })).toHaveAttribute("aria-label", /Automatic UI pass on/);
+      await expect(page.getByRole("button", { name: /^Chat mode:/ })).toHaveAttribute("aria-label", /Automatic save on$/);
 
-      // The finishing turn's notice, published as routing writes it when the switch starts the step.
-      const notice = "UI pass started automatically (Chat settings: Automatically UI pass changes)";
+      // An after-plan UI pass's notice, published as routing writes it when a completed plan starts the pass.
+      const notice = "UI pass started automatically after the plan (Passes: After a plan)";
       server.sessionChanged("assistant-routing-changed", { conversationLogPatch: { type: "upsert-turn",
-        turn: { turnId: "000002", system: { role: "system", messageId: "assistant-finishing:uiPass:followup-1", text: notice } } } });
+        turn: { turnId: "000002", system: { role: "system", messageId: "assistant-after-plan:followup-1", text: notice } } } });
       await expect(page.locator(".assistant-transcript__system").filter({ hasText: notice })).toHaveCount(1);
 
       // Starting one is typing it: the words go to routing as typed, which picks the task and its scope.
@@ -2765,11 +2765,11 @@ for (const width of [390, 1280]) {
     }
   });
 
-  test(`@ui-pass a goal pauses the switch and routing refuses a UI pass until it ends at ${width}px`, async ({ page }) => {
+  test(`@ui-pass a goal pauses the settings and routing refuses a UI pass until it ends at ${width}px`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     const { server } = await uiPassWorld(page, { width,
-      preferences: { mode: "senior", review: true, deslop: true, uiPass: true, autoSave: true } });
+      preferences: { mode: "senior", ...AFTER_PLAN_DEFAULTS } });
     try {
       const goal = { id: "goal-bookings", status: "active", objective: "Finish the bookings pages", createdAt: "1970-01-01T00:00:20.000Z", timeUsedSeconds: 30 };
       server.state.goal = { status: "available", goal, target: { segmentId: "codex:thread-ui-pass-goal", capabilities: {
@@ -2781,14 +2781,20 @@ for (const width of [390, 1280]) {
       const composer = page.getByLabel("Message AI assistant");
       await expect(composer).toBeVisible();
       const trigger = page.getByRole("button", { name: /^Chat mode:/ });
-      // The saved choice stays on, but no finishing step runs during the goal.
-      await expect(trigger).not.toHaveAttribute("aria-label", /Automatic UI pass on/);
+      // The saved choices stay, but nothing runs automatically during the goal, and they can't change until it ends.
+      await expect(trigger).not.toHaveAttribute("aria-label", /Automatic save on/);
       await trigger.click();
-      const uiPass = page.getByRole("checkbox", { name: "Automatically UI pass changes", exact: true });
-      await expect(uiPass).toBeChecked();
-      await expect(uiPass).toBeDisabled();
+      const autoSave = page.getByRole("checkbox", { name: "Automatically save changes", exact: true });
+      await expect(autoSave).toBeChecked();
+      await expect(autoSave).toBeDisabled();
       await expect(page.getByText("Auto and Chat settings apply after the current goal finishes.", { exact: true })).toBeVisible();
       await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Passes", exact: true }).click();
+      const list = page.getByRole("dialog", { name: "Passes" });
+      await expect(list.getByText("After a plan can change once the current goal finishes.", { exact: true })).toBeVisible();
+      await expect(list.getByRole("checkbox", { name: "UI pass: After a plan", exact: true })).toBeChecked();
+      await expect(list.getByRole("checkbox", { name: "UI pass: After a plan", exact: true })).toBeDisabled();
+      await page.getByRole("button", { name: "Close passes", exact: true }).click();
 
       const refusal = "UI pass can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send UI pass again.";
       server.state.deliver = message => { throw notSentRefusal(refusal, "vibe64_assistant_goal_ui_pass_blocked", message.messageId); };
@@ -2822,13 +2828,13 @@ for (const width of [390, 820, 1280]) {
         draft: "Keep this unsent question", agentSettings: {} }]);
       await mockDirectChat(page);
       // A request the person cancelled before it was sent.
-      const routingRequest = { schemaVersion: 5, messageId: "old-request", mode: "senior", resolvedMode: "senior",
+      const routingRequest = { schemaVersion: 6, messageId: "old-request", mode: "senior", resolvedMode: "senior",
         status: "waiting", delivery: "failed", stopped: true, stage: null, workflow: false,
         input: { message: "Earlier request", displayMessage: "Earlier request" },
         error: "This Codex conversation is stored in a separate provider home. Renew the session to use the models chosen in Models." };
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
         ok: true, ...directSession(), metadata: {
-          assistant_routing: JSON.stringify({ mode: "senior", deslop: true }),
+          assistant_routing: JSON.stringify({ mode: "senior", ...AFTER_PLAN_DEFAULTS }),
           assistant_routing_request: JSON.stringify(routingRequest)
         }
       }));
@@ -3113,12 +3119,12 @@ test("@helper-hydration delayed history opens at the failed request and reports 
     server.state.conversationLog = Array.from({ length: 24 }, (_, index) => scrollTestTurn(index + 1));
     server.state.beforeConversationRead = () => historyReady;
     await mockDirectChat(page);
-    const request = { schemaVersion: 5, messageId: "failed-send", mode: "auto", status: "waiting", delivery: "failed",
+    const request = { schemaVersion: 6, messageId: "failed-send", mode: "auto", status: "waiting", delivery: "failed",
       stage: null, workflow: false, input: { message: "Keep this unsent request", displayMessage: "Keep this unsent request" },
       error: "The routing connection needs attention." };
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
       ok: true, ...directSession(), metadata: {
-        assistant_routing: JSON.stringify({ mode: "auto", deslop: true }),
+        assistant_routing: JSON.stringify({ mode: "auto", ...AFTER_PLAN_DEFAULTS }),
         assistant_routing_request: JSON.stringify(request)
       }
     }));
@@ -3161,7 +3167,7 @@ for (const width of [390, 820, 1280]) {
     });
     const saved = { ...catalog.engines[0].defaults, engineId: "codex", catalogRevision: catalog.engines[0].revision };
     const session = { ...directSession(), assistantSelection: saved, metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", deslop: true, review: false })
+      assistant_routing: JSON.stringify({ mode: "auto", ...AFTER_PLAN_DEFAULTS })
     } };
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     let patches = 0;
@@ -3180,7 +3186,7 @@ for (const width of [390, 820, 1280]) {
       patches++;
       if (patches === 1) return fulfillJson(route, { ok: false, error: "Connection changed. Please retry." });
       session.assistantSelection = route.request().postDataJSON().assistantSelection;
-      session.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, review: false, override: session.assistantSelection });
+      session.metadata.assistant_routing = JSON.stringify({ mode: "custom", ...AFTER_PLAN_DEFAULTS, override: session.assistantSelection });
       return fulfillJson(route, { ok: true, ...session });
     });
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);

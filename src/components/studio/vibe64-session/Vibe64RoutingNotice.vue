@@ -47,7 +47,7 @@ const canImplement = computed(() => props.mode === "auto" && props.request?.stag
   props.request.status === "waiting" && ["pending", "accepted"].includes(props.request.delivery) &&
   !props.request.helper && props.request.workPlan?.status === "active" && Boolean(props.request.workPlan.revision));
 const retryLabel = computed(() => props.request?.delivery === "uncertain" ? "Check delivery" : ({
-  planning: "Continue planning", implementation: "Continue implementation", review: "Continue review"
+  planning: "Continue planning", implementation: "Continue implementation", review: "Continue review", pass: "Continue the passes"
 }[props.request?.stage] || "Continue request"));
 const actionable = computed(() => {
   const request = props.request;

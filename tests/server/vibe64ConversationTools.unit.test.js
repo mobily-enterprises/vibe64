@@ -17,7 +17,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   };
   const terminals = {
     async updateTemporaryConversation(sessionId, input) { calls.push({ sessionId, input }); return { ok: true,
-      routingMetadata: { assistant_routing: JSON.stringify({ ...input.assistantRouting, review: false, deslop: false }),
+      routingMetadata: { assistant_routing: JSON.stringify({ ...input.assistantRouting, afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: false }),
         private: "private-native-binding" } }; },
     async readSessionWorkPlan() { return { ok: true, available: true, text: "  Full page 🙂\n", status: "ready", revision: "a".repeat(64),
       offset: 0, nextOffset: 14, totalCharacters: 16020, hasMore: true, path: "/private/plan.md", token: "secret" }; },
@@ -32,8 +32,8 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   };
   const sessions = {
     async updateAssistantSelection(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, sessionId, assistantSelection: { engineId: "codex", modelId: "previous-model" }, metadata: {
-      // The service saves complete preferences; a request without Deslop keeps its default.
-      assistant_routing: JSON.stringify({ deslop: true, ...input.assistantRouting }),
+      // The service saves complete preferences; a request that leaves a choice out keeps its default.
+      assistant_routing: JSON.stringify({ afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"], afterPlanDeep: [], autoSave: true, ...input.assistantRouting }),
       assistant_routing_request: JSON.stringify({ status: "completed", resolvedMode: "senior" })
     } }; },
     async inspectAssistantAccess() { return { ok: true, currentMode: "junior", canUse: true, purposes: {
@@ -163,30 +163,21 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(calls.length, before, "required message validation runs before the service");
   const stopped = await execute("vibe64.sessions.agent-turn.interrupt", { sessionId: "session-1" });
   assert.deepEqual(stopped.result, { ok: true, interrupted: true, routingCancelled: true });
-  const changed = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "junior", review: true } });
+  const changed = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "junior" } });
   assert.equal(changed.ok, true, JSON.stringify(changed));
   assert.equal(changed.result.chatMode, "junior");
   assert.equal(changed.result.routingMode, "senior", "saved preferences must remain separate from the previous request's mode");
-  // Every main-chat mode reports its own finishing steps.
-  assert.equal(changed.result.reviewEnabled, true, "a Junior chat reviews its own work");
-  assert.equal(changed.result.deslopEnabled, true);
-  assert.equal(changed.result.uiPassEnabled, true);
+  // Every main-chat mode reports its own passes after a plan and automatic save.
+  assert.deepEqual(changed.result.afterPlanPasses, ["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"]);
+  assert.deepEqual(changed.result.afterPlanDeepPasses, []);
   assert.equal(changed.result.autoSaveEnabled, true);
-  const auto = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", review: false } });
-  assert.equal(auto.result.reviewEnabled, false, "review is its own switch");
-  assert.equal(auto.result.deslopEnabled, true);
-  assert.equal(auto.result.uiPassEnabled, true, "the automatic UI pass is on unless it is turned off");
-  const deslop = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1",
-    assistantRouting: { mode: "senior", deslop: false, autoSave: false } });
-  assert.equal(deslop.ok, true, JSON.stringify(deslop));
-  assert.equal(calls.at(-1).input.assistantRouting.deslop, false);
-  assert.deepEqual([deslop.result.reviewEnabled, deslop.result.deslopEnabled, deslop.result.uiPassEnabled, deslop.result.autoSaveEnabled],
-    [true, false, true, false]);
-  const uiPass = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", uiPass: false } });
-  assert.equal(uiPass.ok, true, JSON.stringify(uiPass));
-  assert.equal(calls.at(-1).input.assistantRouting.uiPass, false);
-  assert.equal(uiPass.result.uiPassEnabled, false);
-  assert.equal(uiPass.result.deslopEnabled, true);
+  const ticked = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1",
+    assistantRouting: { mode: "senior", afterPlan: ["review", "security-pass", "speed-pass"], afterPlanDeep: ["speed-pass"], autoSave: false } });
+  assert.equal(ticked.ok, true, JSON.stringify(ticked));
+  assert.deepEqual(calls.at(-1).input.assistantRouting,
+    { mode: "senior", afterPlan: ["review", "security-pass", "speed-pass"], afterPlanDeep: ["speed-pass"], autoSave: false });
+  assert.deepEqual([ticked.result.afterPlanPasses, ticked.result.afterPlanDeepPasses, ticked.result.autoSaveEnabled],
+    [["review", "security-pass", "speed-pass"], ["speed-pass"], false]);
   assert.equal(changed.result.hasModelOverride, false);
   assert.equal(changed.result.modelId, "previous-model", "changing mode does not claim that the active model changed");
   const access = await execute("vibe64.sessions.assistant-access.inspect", { sessionId: "session-1" });
@@ -207,11 +198,11 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal((await execute("vibe64.terminals.work-plan.read", { sessionId: "session-1", limit: 16001 })).ok, false);
   assert.equal((await execute("vibe64.terminals.work-plan.read", {})).ok, false);
   const temporaryMode = await execute("vibe64.terminals.temporary-conversation.update", {
-    sessionId: "session-1", conversationId: "chat-1", assistantRouting: { mode: "junior", review: true }
+    sessionId: "session-1", conversationId: "chat-1", assistantRouting: { mode: "junior" }
   });
   assert.equal(temporaryMode.ok, true, JSON.stringify(temporaryMode));
   assert.equal(temporaryMode.result.chatMode, "junior");
-  assert.equal(temporaryMode.result.reviewEnabled, false, "the output reports stored preferences rather than echoing the request");
+  assert.equal(temporaryMode.result.autoSaveEnabled, false, "the output reports stored preferences rather than echoing the request");
   assert.equal(temporaryMode.result.hasModelOverride, false);
   assert.equal(JSON.stringify(temporaryMode).includes("private"), false);
   const count = calls.length;
@@ -236,7 +227,7 @@ test("session lifecycle tools preserve canonical execution, bounded results and 
       ["rename", "renameSession", { name: "Reviewed label" }, { sessionName: "Reviewed label" }],
       ["archive", "archiveSession", {}, { status: "archived" }],
       ["workspace-setup.retry", "retryWorkspaceSetup", {}, { workspaceSetup: { status: "running" } }],
-      ["assistant-selection.update", "updateAssistantSelection", { assistantRouting: { mode: "senior", review: false } }, {}]
+      ["assistant-selection.update", "updateAssistantSelection", { assistantRouting: { mode: "senior" } }, {}]
     ];
     const sessions = Object.fromEntries(cases.map(([, method, , result]) => [method, async (sessionId, input) => {
       calls.push({ sessionId, input });

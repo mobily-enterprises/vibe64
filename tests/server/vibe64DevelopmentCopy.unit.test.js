@@ -14,7 +14,7 @@ const { prepareCopiedClaudeConversationState } = claudeConversationStorageTestab
 const { prepareCopiedColleagueConversation } = conversationRecordTestables;
 
 test("offline workflow preparation preserves uncertain delivery while stopping scheduling and parent helpers", () => {
-  const request = { schemaVersion: 5, status: "working", delivery: "uncertain", attemptedMessageId: "pending",
+  const request = { schemaVersion: 6, status: "working", delivery: "uncertain", attemptedMessageId: "pending",
     input: { message: "Retain this request" }, helper: { executionId: "parent", conversationId: "native-helper" } };
   const goal = { status: "active", objective: "Retain the goal", selection: { modelId: "original" } };
   const metadata = { assistant_routing_request: JSON.stringify(request), assistant_routing_goal: JSON.stringify(goal),
@@ -31,7 +31,7 @@ test("offline workflow preparation preserves uncertain delivery while stopping s
   assert.deepEqual(JSON.parse(copy.assistant_routing_goal), { ...goal, status: "paused" });
   assert.equal(copy.assistant_goal_intent, "null", "a disposable copy cannot resume its parent’s active goal");
   assert.deepEqual(metadata, before);
-  assert.throws(() => prepareCopiedAssistantRouting({ assistant_routing_request: JSON.stringify({ ...request, schemaVersion: 4 }) }), /upgrade/u);
+  assert.throws(() => prepareCopiedAssistantRouting({ assistant_routing_request: JSON.stringify({ ...request, schemaVersion: 5 }) }), /upgrade/u);
 });
 
 test("offline scoped Claude preparation preserves native identity and never follows a parent alias", async () => {

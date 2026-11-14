@@ -347,7 +347,7 @@ describe("Temporary AI workspace accessibility", () => {
     const junior = { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "max" };
     // History from the conversation owner: the answering role and model are turn metadata.
     temporary.tasks.value = [{ id: "task-1", conversationId: "task-1", status: "completed", draft: "", agentSettings: {},
-      assistantSelection: senior, routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", deslop: true, review: false }) },
+      assistantSelection: senior, routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: false }) },
       delivery: createAssistantMessageDelivery(), adapter: { conversation: { turns: [{ turnId: "prior",
         user: { role: "user", messageId: "prior-question", text: "An earlier question" },
         assistant: { role: "assistant", messageId: "prior-answer", text: "An earlier answer" },

@@ -36,6 +36,8 @@ const ASSISTANT_SELECTION = Object.freeze({
   modelProviderId: "openai",
   variantId: "high"
 });
+// A successor's chat preferences as Vibe64 saves them.
+const SENIOR_ROUTING = Object.freeze({ mode: "senior", afterPlan: ["review", "security-pass", "deslop"], afterPlanDeep: [], autoSave: true });
 const HANDOVER = [
   "# Session handover",
   "## Objective",
@@ -1236,7 +1238,7 @@ function fixture({
       const requested = input.assistantSelection;
       calls.selectionRequests.push({ requested, ...options });
       const selected = requested && Object.keys(requested).length > 0 ? requested : successorAssistantSelection;
-      return { assistantSelection: selected, assistantRouting: { mode: "senior", review: false } };
+      return { assistantSelection: selected, assistantRouting: SENIOR_ROUTING };
     },
     setupRunner,
     terminals,
@@ -2151,7 +2153,7 @@ test("a confirmation replay resumes a durably approved workflow that was never s
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
       attempt: 1,
       replacementCeiling: 2
     }
@@ -3310,7 +3312,7 @@ test("restart resumes successor discard after predecessor restore and after stat
         status: SESSION_RENEWAL_STATUS.RUNNING,
         successor: {
           assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
           attempt,
           replacementCeiling: 2
         }
@@ -3801,7 +3803,7 @@ test("restart completes durable failure restoration before exposing FAILED", asy
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
       attempt: 1,
       sessionId: "renewal-restart-successor"
     }
@@ -3845,7 +3847,7 @@ test("restart never restores a predecessor quiesced by another renewal", async (
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
       attempt: 1,
       sessionId: "renewal-foreign-successor"
     }
@@ -4430,7 +4432,7 @@ test("automatic recovery resolves the persisted confirmer through the trusted ho
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4470,7 +4472,7 @@ test("automatic recovery prefers the last trusted collaborator who continued the
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4520,7 +4522,7 @@ test("active OLD_QUIESCING recovery never closes predecessor work that is not id
         status: SESSION_RENEWAL_STATUS.RUNNING,
         successor: {
           assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
           attempt: 1,
           replacementCeiling: 2
         }
@@ -4560,7 +4562,7 @@ test("unavailable automatic actor recovery pauses durably until an explicit retr
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4677,7 +4679,7 @@ test("collaborator continuation after boot recovery cannot race a newly active p
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "senior", review: false },
+          assistantRouting: SENIOR_ROUTING,
       attempt: 1,
       replacementCeiling: 2
     }
@@ -5250,7 +5252,7 @@ test("renewal retains the routed successor through backup creation and replaceme
   const completed = await eventually(() => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
     (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED);
   assert.equal(completed.successor.assistantSelection.engineId, "opencode");
-  assert.deepEqual(completed.successor.assistantRouting, { mode: "senior", review: false, deslop: true, uiPass: true, autoSave: true });
+  assert.deepEqual(completed.successor.assistantRouting, SENIOR_ROUTING);
   assert.deepEqual(JSON.parse(context.calls.createMetadata.assistant_routing), completed.successor.assistantRouting);
   assert.equal(context.calls.selectionRequests[0].requested, undefined);
   assert.equal(completed.successor.attempt, 2);

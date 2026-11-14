@@ -560,7 +560,7 @@ async function renewalHarness(targetRoot, {
       assert.equal(session.sessionId, PREDECESSOR_ID);
       assert.equal(session.metadata.assistant_selection, serializeVibe64AssistantSelection(ASSISTANT_SELECTION));
       assert.deepEqual(vibe64User, { id: "resource-proof-owner", name: "Resource proof owner" });
-      return { assistantSelection: ASSISTANT_SELECTION, assistantRouting: { mode: "senior", review: false } };
+      return { assistantSelection: ASSISTANT_SELECTION, assistantRouting: { mode: "senior", afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: true } };
     },
     setupRunner: {
       isRunning() {

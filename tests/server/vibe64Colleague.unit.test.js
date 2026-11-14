@@ -1533,7 +1533,7 @@ test("Main conversation observations keep implementation handoffs working and in
     ["waiting", "accepted", false, true, true],
     ["complete", "accepted", false, false, false]
   ]) {
-    route = { schemaVersion: 5, status, delivery, stage: "implementation",
+    route = { schemaVersion: 6, status, delivery, stage: "implementation",
       ...(status === "waiting" ? { outcome: { decision: "wait", explanation: "blocked" } } : {}) };
     const observed = await readWatchedConversation(actions, { sessionId: "session-1", projectSlug: "alpha" }, {});
     assert.equal(observed.working, working);

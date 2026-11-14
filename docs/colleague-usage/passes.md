@@ -2,12 +2,13 @@
 
 A pass is one kind of improvement the AI makes to your app in one go, such
 as **Deslop** (simpler code that does the same thing), the **UI pass**
-(screens in line with the project's UI guidance) and the other passes
-Genesis offers: **Visual identity**, **Quality pass**, **Data pass**,
-**Security pass**, **User experience pass** and **Speed pass**. Genesis writes
-what each pass does and the runs it offers; Vibe64 lists them, runs the one
-you choose and suggests one now and then. The **Master pass** runs several
-passes deeply, one after another.
+(screens in line with the project's UI guidance), **Review** (a test for each
+behavior the app should have) and the other passes Genesis offers: **Visual
+identity**, **Quality pass**, **Data pass**, **Security pass**, **User
+experience pass** and **Speed pass**. Genesis writes what each pass does and
+the runs it offers; Vibe64 lists them, runs the one you choose, runs the ones
+you tick after each completed plan and suggests one now and then. The
+**Master pass** runs several passes deeply, one after another.
 
 ## Open the Passes list
 
@@ -76,12 +77,13 @@ The **Master pass** is the last entry in the Passes list. It runs several
 passes deeply, one after another, so you can ask for all of them at once.
 
 Under it is a tick box for each pass it runs, all ticked when the list
-opens, in the order it runs them: **Security pass**, **Data pass**,
-**Quality pass**, **Speed pass**, **User experience pass**, **Visual
+opens, in the order it runs them: **Review**, **Security pass**, **Data
+pass**, **Quality pass**, **Speed pass**, **User experience pass**, **Visual
 identity**, **UI pass** and **Deslop**. Untick a pass to leave it out. The
-order stays the same whichever passes you tick: security comes first, so the
-others build on what it fixes, and Deslop last, so it tidies up after them.
-With nothing ticked, its buttons are unavailable.
+order stays the same whichever passes you tick: Review comes first, so every
+later pass starts from tested work, then security, so the others build on what
+it fixes, and Deslop last, so it tidies up after them. With nothing ticked, its
+buttons are unavailable.
 
 Its buttons are its runs, each with its size:
 
@@ -111,6 +113,75 @@ decide. It never pushes or publishes: save its work as usual.
 
 Each pass it runs is recorded as completed when it finishes, and so is the
 Master pass, once every ticked pass has finished.
+
+## Choose the passes that run after a plan
+
+Passes start on their own at one moment only: when a plan is completed. They
+never start when a turn ends, after a request without a plan or when you
+**Save**; then a pass runs only when you start it from this list, with the
+Master pass, or by typing it.
+
+Beside each pass's runs is an **After a plan** tick. Above the passes the list
+says **After a plan: when a plan is completed, each ticked pass checks the
+plan's changes in its own turn, in Master pass order, then Automatically save
+changes runs if it is on. Nothing runs after a request without a plan.**
+
+- **Review** and **Security pass** are always ticked and can't be unticked:
+  each says **Always runs after a plan.**
+- **Data pass**, **Quality pass**, **UI pass** and **Deslop** are ticked in a
+  new chat; **User experience pass**, **Speed pass** and **Visual identity** are
+  not.
+- A pass whose Genesis offers a deep run over a plan's changes also has a
+  **Deeply** tick, which you can tick once **After a plan** is ticked. A deep
+  run works through every changed file item by item: it takes much longer and
+  uses far more of your AI's allowance. None is ticked in a new chat.
+
+A tick saves at once, for this chat, and applies to the next completed plan. If
+Vibe64 refuses the change, the tick goes back and the list shows why. Before
+the chat has a **Chat mode**, the list says **Choose a Chat mode to change
+these; until then the ticked passes run after a plan.** During a goal the ticks
+are unavailable, and the list says **After a plan can change once the current
+goal finishes.** Lessons and Fix it with AI show no ticks: they run no pass
+after a plan.
+
+### What happens when a plan is completed
+
+When Senior completes a plan (see [Choose what happens once work is
+finished](chat-settings.md#when-work-is-finished)), the ticked passes run one
+after another, in the Master pass order: **Review**, **Security pass**, **Data
+pass**, **Quality pass**, **Speed pass**, **User experience pass**, **Visual
+identity**, **UI pass**, **Deslop**. Each runs in its own turn on your
+**Senior** model, with Genesis's request for the changes since the plan's work
+started, such as **Security pass: the changes since base commit abc1234…,
+judged against the whole app.**, or, ticked **Deeply**, **Security pass
+deeply: …**. Each judges those changes against the whole app. The commit they
+start from is where the plan's work started: the commit Vibe64 noted when the
+previous passes after a plan finished, or when a plan became current with none
+noted, otherwise where the session's work left the project's main history.
+
+After the last pass, the completed plan is archived and, with **Automatically
+save changes** on, **Save** runs. These runs never change a pass's **Last
+completed** date or its **Since last completed** run: only the runs you start
+from this list count.
+
+### What the chat shows after a plan
+
+Each pass adds a notice as it starts, such as **Security pass started
+automatically after the plan (Passes: After a plan)**, or **Data pass deeply
+started automatically after the plan (Passes: After a plan)**.
+
+- A ticked pass this project's Genesis can't run is skipped with its reason,
+  such as **User experience pass skipped after the plan:** followed by the
+  reason the Passes list gives for it.
+- When Vibe64 can't tell where the plan's work started, no pass runs: **The
+  passes didn't run after the plan: Vibe64 can't tell where this plan's work
+  started in the session's history. Run them from Passes.** The plan is then
+  archived and saved as usual. Vibe64 never runs a whole-app pass instead.
+- **Stop**, or a pass turn that fails, ends the passes: **The passes after the
+  plan stopped: Security pass was stopped, so Security pass, Data pass, Deslop
+  didn't finish and nothing was saved automatically. Run them from Passes.** The
+  completed plan stays as it is, and **Resume** doesn't restart them: start the
+  passes you still want from this list, then **Save**.
 
 ## When the project's Genesis is too old
 
@@ -148,7 +219,7 @@ Each pass has an interval, from Genesis's advice on when to run it:
 
 | Genesis suggests running it | Passes | Suggested again after |
 | --- | --- | --- |
-| after each change | Deslop, UI pass | 7 days and 20 commits |
+| after each change | Deslop, UI pass, Review | 7 days and 20 commits |
 | once a first working version exists | Visual identity | 90 days and 30 commits |
 | every few weeks of active work | Quality pass, Data pass, Security pass, User experience pass, Speed pass | 21 days and 30 commits |
 
@@ -164,19 +235,26 @@ interval is suggested.
 - **Later** hides the suggestion for a week.
 - **Dismiss** hides it until that pass runs and completes again.
 
-A suggestion only offers: no pass ever starts on its own.
+A suggestion only offers: it never starts a pass by itself.
 
 ## Who can run passes
 
-Passes run on the workspace owner's main chat, so the **Passes** button and
-suggestions appear for the owner only. A team member asks the owner, or
-sends **Deslop** or **UI pass** in the chat, which waits for the owner's
-approval like any other message.
+Passes run on the workspace owner's main chat, so the **Passes** button,
+its **After a plan** ticks and suggestions appear for the owner only. A team
+member asks the owner, or sends **Deslop** or **UI pass** in the chat, which
+waits for the owner's approval like any other message. A team member's
+request to change the passes after a plan is refused with **Main chat runs on
+the workspace owner's AI. Only the owner can change its chat mode, passes after
+a plan, Chat settings or model.**
 
 ## Ask Colleague
 
-Colleague can explain the passes, their runs (Deep included), the Master pass
-and how suggestions work. It
-can start **Deslop** or a **UI pass** on your own changes for you by sending
-that message to main chat (see [Run a UI pass](ui-pass.md)). For a pass's
-runs or the Master pass, select one in the Passes list yourself.
+Colleague can explain the passes, their runs (Deep included), the Master pass,
+the passes that run after a plan and how suggestions work, and tell you which
+passes are ticked **After a plan**. It can start **Deslop** or a **UI pass** on
+your own changes for you by sending that message to main chat (see [Run a UI
+pass](ui-pass.md)). For the owner it can tick or untick **After a plan** and
+**Deeply** through the chat mode action; it can't untick **Review** or
+**Security pass**, and it unticks a pass only when you ask, after saying what
+is lost. For a pass's runs or the Master pass, select one in the Passes list
+yourself.

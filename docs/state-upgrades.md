@@ -1942,3 +1942,53 @@ record without the field matches no step, so that session's next preparation
 runs every step as before, and records them from then on. Preflight reports
 that rule; apply records the boundary in the existing ledger, and retry is a
 no-op. No application files change, so this boundary needs no backup.
+
+## Passes after a completed plan (`20261114-after-plan-passes`)
+
+Passes now run automatically only when a plan is completed, never when a turn
+ends and never on Save. Each chat saves the passes ticked to run after a
+completed plan (Passes: After a plan) instead of the review, Deslop and UI pass
+switches, so `assistant_routing` saves `afterPlan` (the ticked pass ids, in
+Genesis's Master pass order), `afterPlanDeep` (those run deeply) and `autoSave`.
+The owner is Terminals' `afterPlanPassesUpgrade.js`, supplied by the candidate
+CLI; the script refuses to run without it.
+
+Through the stopped session store, the same inventory and verified backup
+publisher as `20261107-chat-finishing-steps`, it converts every active, closing
+and archived session's main chat preferences, each temporary chat's, and a
+pending renewal's successor:
+
+- Every main-chat mode: `review` (Review stays ticked; it is mandatory now) and
+  `security-pass` (also mandatory), `data-pass` and `quality-pass` ticked,
+  `ui-pass` ticked exactly when `uiPass` was on (absent read as on), `deslop`
+  ticked exactly when `deslop` was on; `speed-pass`, `ux-pass` and
+  `identity-pass` unticked; `afterPlanDeep` empty; `autoSave` kept (absent
+  read as on). The old `review` switch is dropped: Review can no longer be
+  turned off.
+- Temporary chats, Fix it with AI and lessons (a session with
+  `learning_session` metadata, main chat and a pending successor alike): only
+  the mandatory pair, which never runs there, and `autoSave` off.
+
+It also moves every saved routing request (`assistant_routing_request`, main
+chat's and each temporary chat's) from schema version 5 to 6: `finishing`,
+`reviewMessage` and `unreviewed` are dropped and `afterPlan` is null, so a
+request admitted before the upgrade never starts after-plan passes and nothing
+is replayed. An unfinished request whose finishing turn had not reached the AI
+(a direct chat's review stage, or Auto's prepared review follow-up that was
+never delivered) is stopped with the reason and its follow-up removed, so a
+Resume can never send the old finishing instructions; an uncertain or sending
+delivery keeps its follow-up for its receipt check.
+
+A chat mode that already lists `afterPlan`, and a request already at version 6,
+are current and left alone, so a retry changes nothing. An unreadable or
+unknown chat mode, one without the 20261107 `deslop` field, or a request at any
+other version stops the upgrade before anything is written. New writes always
+save `afterPlan`, so a saved chat mode without it missed this upgrade: reading
+it refuses with `vibe64_assistant_routing_upgrade_required` instead of reading
+it as the defaults, and a request at another version refuses with
+`vibe64_assistant_workflow_upgrade_required`. There is no lazy backfill. The
+session's `after_plan_base` metadata (the commit the next after-plan passes
+start from) is new and optional: without it, passes start from the merge base
+of the session's HEAD with the canonical commit it last saw, so no upgrade
+writes one. Focused evidence: `afterPlanPassesUpgrade.unit.test.js` and
+`stateUpgrades.unit.test.js`.

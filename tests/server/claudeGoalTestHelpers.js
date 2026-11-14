@@ -270,7 +270,7 @@ createInterface({ input: process.stdin }).on('line', line => {
       const routed = { ...defineVibe64AssistantSelection(selection), selectionSource: "explicit" };
       await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({
         owner: { senior: routed, junior: routed }, nonOwner: {} }, 0);
-      await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "senior", deslop: true }));
+      await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass", "deslop"] }));
       const empty = await service.readCanonicalAgentGoal("test", options);
       assert.equal(empty.goal, null);
       // The finished turn's follow-up work can still hold the write briefly.

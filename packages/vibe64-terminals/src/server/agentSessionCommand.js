@@ -71,8 +71,10 @@ import {
   waitForCommandResult
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
-import { assistantTaskPurpose, assistantWorkflowRole } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantWorkflowRole } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { commandLineFailure } from "./commandFailure.js";
+import { rememberAfterPlanBase } from "./afterPlanBase.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -399,21 +401,27 @@ function createAgentSessionCommandService({
   }
 
   async function managePlan(sessionId, input) {
-    return runInSessionProject(sessionId, async ({ store }) => {
+    return runInSessionProject(sessionId, async ({ store, descriptor }) => {
       const request = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
       if (input.operation === "outcome") {
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
       }
       let role = "";
+      // A pass, an after-plan one too, works like a task: it never manages the plan.
       if (request?.reason !== "conversation" &&
           !assistantTaskPurpose(request?.task) &&
+          request?.stage !== "pass" &&
           request?.status === "working" &&
           request.delivery === "accepted") {
-        // Senior's finishing turn reviews; a Junior or Custom chat's agent keeps its own role.
+        // Auto's Senior checks a plan in a review follow-up; a Junior or Custom chat's agent keeps its own role.
         role = request.stage === "review" && request.followup && assistantWorkflowRole(request) === "senior"
           ? "review" : request.resolvedMode;
       }
       const result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, input, role);
+      // A plan becoming current marks where its after-plan passes start, unless a base is recorded.
+      if (["new", "reopen"].includes(input.operation)) {
+        await rememberAfterPlanBase(store, { ...descriptor, sessionId }, { onlyWhenUnset: true });
+      }
       if (!["read", "history"].includes(input.operation)) {
         await publishSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice || "" } });
       }

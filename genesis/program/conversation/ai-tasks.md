@@ -313,7 +313,7 @@ and accepts only Fix it with AI or Custom; another mode is refused with
 model override, Auto mapping to Senior with review off, and a team member's starts on
 Fix it with AI; a Colleague start can name its chat mode instead. The window's Chat
 offers Fix it with AI and Choose model (`Vibe64ChatModeControls` with `required-mode`
-fix). Auto, plan approval and automatic review are unavailable, as in temporary chats.
+fix). Auto, plan approval and passes after a plan are unavailable, as in temporary chats.
 
 A Colleague task's start may ask for a copy of recent Main messages
 (`includeRecentChatContext`). The copy is captured exactly as for a new temporary

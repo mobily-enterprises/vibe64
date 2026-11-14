@@ -21,10 +21,6 @@ import {
   assistantRoutingPreferences,
   assistantRoutingAutomation,
   assistantRoutingFromMetadata,
-  uiPassRequest,
-  ASSISTANT_TASK_PURPOSES,
-  assistantTaskPurpose,
-  assistantExplicitTask,
   assistantRoutingSetupFor,
   assistantMainAiChanged,
   ASSISTANT_PURPOSE_ROLES,
@@ -35,6 +31,7 @@ import {
   assistantGoalIsActive,
   assistantWorkflowStateIsSupported,
   assistantWorkflowRole,
+  assistantAfterPlanPass,
   assistantWorkflowMessageIds,
   assistantRoutingStatusLabel,
   assistantRoutingRequestCanBeReplaced,
@@ -42,13 +39,21 @@ import {
   assistantWorkflowUpgradeChanges
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
+  ASSISTANT_TASK_PURPOSES,
+  assistantExplicitTask,
+  assistantTaskPurpose,
+  uiPassRequest
+} from "@local/vibe64-runtime/shared/assistantExplicitTask";
+import {
+  AFTER_PLAN_DEFAULT_PASSES,
+  AFTER_PLAN_MANDATORY_PASSES,
   ASSISTANT_FINISHING_DEFAULTS,
-  ASSISTANT_FINISHING_STEPS,
   ASSISTANT_NO_FINISHING,
-  assistantFinishingParts,
-  assistantFinishingNotice,
-  assistantFinishingMessage,
-  assistantUnreviewedRequests
+  afterPlanChoiceProblem,
+  afterPlanPassNotice,
+  assistantAutoSaveNotice,
+  assistantPlanCompletionFollows,
+  planCompletedDuringRequest
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   __testables as routingAssignmentsTestables,
@@ -272,7 +277,7 @@ test("Auto distinguishes plan execution and confirmations from planning while pr
   assert.match(context.message, /Use all recommendations/);
 });
 
-test("explicit closure by scope reduction keeps implementation review while draft edits and unrequested deferrals do not", () => {
+test("explicit closure by scope reduction is Senior's implementation, verified before the plan completes, while draft edits and unrequested deferrals are not", () => {
   const plan = { status: "active", revision: "scope", outline: "# Notifications\n- [x] In-app notifications\n- [ ] Real email delivery",
     progressRevision: "evidence", progressOutline: "In-app delivery tested. SMTP setup is missing." };
   const prompt = assistantRoutingPrompt({ message: "Finish without actual emails; keep email setup and delivery testing for before release.", plan });
@@ -286,85 +291,86 @@ test("explicit closure by scope reduction keeps implementation review while draf
   assert.match(coding, /record the exact deferred requirement and its agreed timing/);
   assert.match(coding, /before removing it from Plan's current acceptance scope/);
   assert.match(coding, /Preserve completed implementation evidence and do not perform deferred work/);
-  assert.match(coding, /Leave the plan active/);
+  // No finishing turn follows: Senior verifies the reduced scope itself before completing the plan.
+  assert.match(coding, /verify every agreed requirement, then complete the plan yourself with the plan helper; leave it active with the gaps in Progress while any remain/);
 
 });
 
-test("workflow instructions delegate outcomes to the admitted agent and retain review rework", () => {
+test("workflow instructions delegate outcomes to the admitted agent and retain rework of a plan", () => {
   const prompt = assistantWorkflowInstructions({ mode: "auto", stage: "review" });
   assert.match(prompt, /continue, handoff, wait, or complete/);
-  assert.match(prompt, /Senior review back to Junior/);
+  assert.match(prompt, /During Senior's check of a plan, handoff returns substantial necessary rework to Junior/);
   assert.match(prompt, /explicit Stop/iu);
-  assert.match(prompt, /application archives only after your final explanation/);
-  // A direct chat's agent finishes its own work, naming the parts its Chat settings turn on.
-  const direct = assistantWorkflowInstructions({ mode: "junior", stage: "implementation", finishing: { review: true, deslop: true, uiPass: true } });
+  assert.match(prompt, /Do not archive the plan: once your final explanation is delivered and your turn ends, Vibe64 runs the passes this chat ticks in Passes \(After a plan\)/);
+  assert.match(prompt, /Never start Deslop, a UI pass or another pass on your own/);
+  // A direct chat's agent ends its own work; only a plan Senior completes starts the passes after a plan.
+  const direct = assistantWorkflowInstructions({ mode: "junior", stage: "implementation" });
   assert.match(direct, /continue, handoff, wait, or complete/);
-  assert.match(direct, /automatic Review, Deslop, UI pass yourself in one more turn/);
-  assert.doesNotMatch(direct, /Senior review back to Junior/);
-  assert.match(assistantWorkflowInstructions({ mode: "senior", stage: "implementation", finishing: {} }), /so handoff finishes the work/);
+  assert.match(direct, /Junior and Custom never complete a plan/);
+  assert.match(direct, /A plan completed during this request starts the passes this chat ticks in Passes \(After a plan\)/);
+  assert.doesNotMatch(direct, /Senior review back to Junior|in one more turn|Automatic (Review|Deslop)/);
+  assert.match(assistantWorkflowInstructions({ mode: "senior", stage: "implementation" }), /handoff reports the requested work finished and changed files; the work then ends\./);
 });
 
 test("every turn that reports an outcome is told the person sees only its final response, so the whole reply goes there", () => {
   const reply = "The outcome only informs Vibe64: the person sees your final response, never your reasoning or tool calls, so put your complete reply, including any question, in your final response.";
-  const finishing = { review: true, deslop: true, uiPass: true };
   for (const mode of ["auto", "senior", "junior", "custom"]) for (const state of [{ stage: "planning" }, { stage: "implementation" },
     { stage: "implementation", followup: { messageId: "followup-1" } }, { stage: "review", followup: { messageId: "followup-2" } }]) {
-    const prompt = assistantWorkflowInstructions({ mode, workflow: true, finishing, ...state }, { autoSave: true });
+    const prompt = assistantWorkflowInstructions({ mode, workflow: true, ...state }, { autoSave: true });
     assert.equal(prompt.split(reply).length - 1, 1, `${mode} ${JSON.stringify(state)}`);
     assert.ok(prompt.indexOf(reply) > prompt.indexOf("report one outcome through vibe64-helper plan outcome"), "it follows the outcome it explains");
   }
 });
 
+const SAVE_ON = "Vibe64 saves this work automatically once it is finished, after any plan-completion turn and after-plan passes: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save.";
+const SAVE_OFF = "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
+
 test("workflow instructions say what happens with saving, as the chat's Automatically save changes switch decides", () => {
-  const automatic = "Vibe64 saves this work automatically once it is finished, after any finishing turn: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save.";
-  const manual = "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
   for (const mode of ["auto", "senior", "junior", "custom"]) for (const stage of ["implementation", "review"]) {
-    const state = { mode, stage, workflow: true, finishing: { review: true, deslop: true, uiPass: true } };
+    const state = { mode, stage, workflow: true };
     const on = assistantWorkflowInstructions(state, { autoSave: true });
-    assert.ok(on.endsWith(`\n${automatic}`), `${mode} ${stage}: ${on}`);
-    assert.ok(!on.includes(manual));
+    assert.ok(on.endsWith(`\n${SAVE_ON}`), `${mode} ${stage}: ${on}`);
+    assert.ok(!on.includes(SAVE_OFF));
     const off = assistantWorkflowInstructions(state, { autoSave: false });
-    assert.ok(off.endsWith(`\n${manual}`), `${mode} ${stage}: ${off}`);
-    assert.ok(!off.includes(automatic));
+    assert.ok(off.endsWith(`\n${SAVE_OFF}`), `${mode} ${stage}: ${off}`);
+    assert.ok(!off.includes(SAVE_ON));
   }
   // Auto's planning saves nothing, so it says nothing about saving.
   const planning = assistantWorkflowInstructions({ mode: "auto", stage: "planning", workflow: false }, { autoSave: true });
-  assert.ok(!planning.includes(automatic) && !planning.includes(manual));
+  assert.ok(!planning.includes(SAVE_ON) && !planning.includes(SAVE_OFF));
   // The instruction and the save itself read the same switch.
-  const metadata = (saved) => ({ assistant_routing: JSON.stringify({ mode: "senior", review: true, deslop: true, uiPass: true, ...saved }) });
+  const metadata = (saved) => ({ assistant_routing: JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass"], ...saved }) });
   assert.equal(savesAutomatically(metadata({ autoSave: true })), true);
   assert.equal(savesAutomatically(metadata({ autoSave: false })), false);
   assert.equal(savesAutomatically({}), false, "a chat with no saved preferences runs no workflow to save");
-  assert.equal(savesAutomatically({ assistant_routing: JSON.stringify({ mode: "senior", autoSave: true }) }), false,
+  assert.equal(savesAutomatically({ assistant_routing: JSON.stringify({ mode: "senior", deslop: true, autoSave: true }) }), false,
     "unreadable preferences save nothing");
 });
 
-test("an implementation turn the chat's finishing turn follows says the work continues; the finishing turn and every other turn end normally", () => {
+test("only Auto's Junior implementing a plan is told the work continues, since Senior's check of the plan follows; every other turn ends normally", () => {
   const continues = "When you report continue or handoff, this piece of work continues automatically after your turn: end your final reply with what you changed and what you verified, and don't use it to ask the person to try, publish or deploy the work or to offer next steps.";
-  const save = (autoSave) => autoSave
-    ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
-    : "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
-  const switches = [{ review: true, deslop: true, uiPass: true }, { review: true }, { deslop: true }, { uiPass: true }, { review: false, deslop: false, uiPass: false }];
-  for (const mode of ["auto", "senior", "junior", "custom"]) for (const finishing of switches) for (const autoSave of [true, false]) {
-    const label = `${mode} ${JSON.stringify(finishing)} save ${autoSave}`;
-    const follows = Object.values(finishing).some(Boolean);
-    const implementation = assistantWorkflowInstructions({ mode, stage: "implementation", workflow: true, finishing }, { autoSave });
-    assert.ok(implementation.endsWith(follows ? `\n${continues}\n${save(autoSave)}` : `\n${save(autoSave)}`), label);
-    assert.equal(implementation.split(continues).length - 1, follows ? 1 : 0, label);
-    // The finishing turn ends the piece of work.
-    const finishingTurn = assistantWorkflowInstructions({ mode, stage: "review", workflow: true, finishing }, { autoSave });
-    assert.ok(finishingTurn.endsWith(`\n${save(autoSave)}`) && !finishingTurn.includes(continues), label);
+  const save = (autoSave) => autoSave ? SAVE_ON : SAVE_OFF;
+  for (const mode of ["auto", "senior", "junior", "custom"]) for (const resolvedMode of ["junior", "senior"]) for (const planInvolved of [true, false]) {
+    for (const autoSave of [true, false]) {
+      const state = { mode, resolvedMode, planInvolved, workflow: true };
+      const label = `${mode} ${resolvedMode} plan ${planInvolved} save ${autoSave}`;
+      const follows = mode === "auto" && resolvedMode === "junior" && planInvolved;
+      assert.equal(assistantPlanCompletionFollows({ ...state, stage: "implementation" }), follows, label);
+      const implementation = assistantWorkflowInstructions({ ...state, stage: "implementation" }, { autoSave });
+      assert.ok(implementation.endsWith(follows ? `\n${continues}\n${save(autoSave)}` : `\n${save(autoSave)}`), label);
+      assert.equal(implementation.split(continues).length - 1, follows ? 1 : 0, label);
+      // Senior's check of the plan ends the piece of work, before the passes after a plan.
+      const check = assistantWorkflowInstructions({ ...state, stage: "review" }, { autoSave });
+      assert.ok(check.endsWith(`\n${save(autoSave)}`) && !check.includes(continues), label);
+    }
   }
-  // Auto's planning, and requests that run no finishing step (an explicit task,
-  // generated work, a goal, a temporary chat or a lesson), say nothing of it.
-  const all = { review: true, deslop: true, uiPass: true };
-  assert.ok(!assistantWorkflowInstructions({ mode: "auto", stage: "planning", workflow: false, finishing: all }, { autoSave: true }).includes(continues));
-  assert.ok(!assistantWorkflowInstructions({ mode: "senior", stage: "implementation", workflow: false, finishing: all }, { autoSave: true }).includes(continues));
-  assert.ok(!assistantWorkflowInstructions({ mode: "senior", stage: "implementation", workflow: true, finishing: null }, { autoSave: true }).includes(continues));
-  // It never names what follows, so the first pass stays as careful as ever.
+  // Auto's planning and requests outside a workflow (an explicit task, generated work, a goal, a temporary chat or a lesson) say nothing of it.
+  const plan = { resolvedMode: "junior", planInvolved: true };
+  assert.ok(!assistantWorkflowInstructions({ mode: "auto", stage: "planning", workflow: false, ...plan }, { autoSave: true }).includes(continues));
+  assert.ok(!assistantWorkflowInstructions({ mode: "auto", stage: "implementation", workflow: false, ...plan }, { autoSave: true }).includes(continues));
+  // It never names what follows, so the implementation stays as careful as ever.
   assert.doesNotMatch(continues, /review|deslop|ui pass|senior|save/iu);
 });
-
 test("task intent sets permissions independently of the selected role", () => {
   const text = "The original human text.";
   assert.match(assistantModePrompt("senior", text, { intent: "planning", planInstructions: "Auto planning instructions" }), /Do not change application files/);
@@ -720,48 +726,87 @@ test("old routing snapshots and chat preferences require the state upgrade", () 
   }
   assert.throws(() => assistantRoutingPreferences({ mode: "senior", workflowEngineId: "codex" }),
     (error) => error.code === "vibe64_assistant_routing_upgrade_required");
-  assert.deepEqual(assistantRoutingPreferences({ mode: "fix", review: true }),
-    { mode: "fix", review: false, deslop: false, uiPass: false, autoSave: false });
-  // A saved chat mode without its finishing choices missed 20261107-chat-finishing-steps; it is not read as the defaults.
-  for (const saved of [{ mode: "senior", review: true }, { mode: "auto" }, { mode: "fix", review: false }]) {
+  assert.deepEqual(assistantRoutingPreferences({ mode: "fix", afterPlan: ["review", "security-pass", "deslop"], autoSave: true }),
+    { mode: "fix", afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: false });
+  // A chat saved with the finishing switches, or with none, missed 20261114-after-plan-passes; it is not read as the defaults.
+  for (const saved of [{ mode: "senior", review: true, deslop: true, uiPass: true, autoSave: true }, { mode: "auto" },
+    { mode: "fix", review: false, deslop: false, uiPass: false, autoSave: false }]) {
     assert.throws(() => assistantRoutingFromMetadata({ assistant_routing: JSON.stringify(saved) }),
-      (error) => error.code === "vibe64_assistant_routing_upgrade_required", saved.mode);
+      (error) => error.code === "vibe64_assistant_routing_upgrade_required", JSON.stringify(saved));
   }
-  const current = { mode: "senior", review: false, deslop: true, uiPass: true, autoSave: false };
+  const current = { mode: "senior", afterPlan: ["review", "security-pass", "ux-pass"], afterPlanDeep: ["ux-pass"], autoSave: false };
   assert.deepEqual(assistantRoutingFromMetadata({ assistant_routing: JSON.stringify(current) }), current);
 });
 
-const defaultSteps = { review: true, deslop: true, uiPass: true, autoSave: true };
+const defaultSteps = { afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"], afterPlanDeep: [], autoSave: true };
 const customOverride = () => ({ override: { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
   modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: revision } });
 
-test("review, Deslop, the UI pass and automatic save default on, and each is saved on or off in every main-chat mode", () => {
+test("the passes after a plan and automatic save have their defaults, and each is saved in every main-chat mode", () => {
   assert.deepEqual(ASSISTANT_FINISHING_DEFAULTS, defaultSteps, "one constant holds the defaults");
+  assert.deepEqual(AFTER_PLAN_DEFAULT_PASSES, defaultSteps.afterPlan);
+  assert.deepEqual(AFTER_PLAN_MANDATORY_PASSES, ["review", "security-pass"]);
+  const fewest = { afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: false };
   for (const mode of ["auto", "senior", "junior"]) {
     assert.deepEqual(assistantRoutingPreferences({ mode }), { mode, ...defaultSteps }, mode);
-    assert.deepEqual(assistantRoutingPreferences({ mode, review: false, deslop: false, uiPass: false, autoSave: false }),
-      { mode, review: false, deslop: false, uiPass: false, autoSave: false }, mode);
+    assert.deepEqual(assistantRoutingPreferences({ mode, ...fewest }), { mode, ...fewest }, mode);
   }
-  const custom = assistantRoutingPreferences({ mode: "custom", uiPass: false, autoSave: false, ...customOverride() });
-  assert.deepEqual({ ...custom, override: undefined }, { mode: "custom", review: true, deslop: true, uiPass: false, autoSave: false, override: undefined },
-    "Custom carries the finishing steps too");
+  // Ticks save in Master pass order, each once.
+  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", afterPlan: ["deslop", "security-pass", "review", "speed-pass", "deslop"],
+    afterPlanDeep: ["deslop", "speed-pass"] }),
+  { mode: "auto", afterPlan: ["review", "security-pass", "speed-pass", "deslop"], afterPlanDeep: ["speed-pass", "deslop"], autoSave: true });
+  const custom = assistantRoutingPreferences({ mode: "custom", afterPlan: ["review", "security-pass", "ui-pass"], autoSave: false, ...customOverride() });
+  assert.deepEqual({ ...custom, override: undefined },
+    { mode: "custom", afterPlan: ["review", "security-pass", "ui-pass"], afterPlanDeep: [], autoSave: false, override: undefined },
+    "Custom carries the choices too");
   assert.deepEqual(assistantRoutingAutomation(null), defaultSteps);
-  assert.deepEqual(assistantRoutingAutomation({ mode: "fix", review: false }), defaultSteps, "leaving Fix it with AI starts with the defaults");
-  assert.deepEqual(ASSISTANT_NO_FINISHING, { review: false, deslop: false, uiPass: false, autoSave: false });
+  assert.deepEqual(assistantRoutingAutomation({ mode: "fix", ...fewest }), defaultSteps, "leaving Fix it with AI starts with the defaults");
+  assert.deepEqual(ASSISTANT_NO_FINISHING, { afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: false });
 });
 
-test("the finishing turn runs the switched-on parts in order, and only Senior's completes a plan", () => {
-  assert.deepEqual(assistantFinishingParts({ finishing: { review: true, deslop: true, uiPass: true } }), ["review", "deslop", "uiPass"]);
-  assert.deepEqual(assistantFinishingParts({ finishing: { review: false, deslop: false, uiPass: true } }), ["uiPass"]);
-  assert.deepEqual(assistantFinishingParts({ finishing: null }), []);
-  assert.deepEqual(assistantFinishingParts({ deslop: true }), ["review", "deslop"], "a request from before keeps Auto's mandatory review");
-  assert.equal(assistantFinishingMessage({ review: false, deslop: false, uiPass: false }), "");
-  assert.match(assistantFinishingMessage({ review: false, deslop: true, uiPass: false }), /^Automatic Deslop: Perform Deslop/u);
-  assert.match(assistantFinishingMessage({ review: true, deslop: true }, { plan: "progress" }), /record specific gaps .* Progress document and leave that plan active for Senior to complete/);
-  // Custom cannot write the plan, so it reports in its reply instead of asking for Progress.
-  const custom = assistantFinishingMessage({ review: true, deslop: true }, { plan: "report" });
-  assert.match(custom, /leave an involved plan and its Progress unchanged .* name its remaining gaps and verification evidence in your reply/);
-  assert.doesNotMatch(custom, /record specific gaps|Explicitly complete/);
+test("Review and Security pass always run after a plan; an unknown pass and Deeply on an unticked pass are refused", () => {
+  for (const [afterPlan, afterPlanDeep, message] of [
+    [["security-pass", "deslop"], [], "Review and Security pass always run after a plan; they can't be unticked."],
+    [["review", "data-pass"], [], "Review and Security pass always run after a plan; they can't be unticked."],
+    [["review", "security-pass", "lint-pass"], [], /^After a plan takes the passes review, security-pass, data-pass, quality-pass, speed-pass, ux-pass, identity-pass, ui-pass, deslop\.$/u],
+    [["review", "security-pass"], ["review", "lint-pass"], /^After a plan takes the passes/u],
+    ["review", [], /^After a plan takes the passes/u],
+    [["review", "security-pass"], ["deslop"], "Tick After a plan for a pass before ticking Deeply."]
+  ]) {
+    const problem = afterPlanChoiceProblem(afterPlan, afterPlanDeep);
+    if (typeof message === "string") assert.equal(problem, message);
+    else assert.match(problem, message);
+    for (const mode of ["auto", "senior", "junior"]) {
+      assert.throws(() => assistantRoutingPreferences({ mode, afterPlan, afterPlanDeep }),
+        (error) => error.code === "vibe64_assistant_after_plan_invalid" && error.message === problem, `${mode} ${JSON.stringify(afterPlan)}`);
+      // A saved choice without a list of passes is one the state upgrade has not converted yet.
+      const savedCode = Array.isArray(afterPlan) ? "vibe64_assistant_after_plan_invalid" : "vibe64_assistant_routing_upgrade_required";
+      assert.throws(() => assistantRoutingFromMetadata({ assistant_routing: JSON.stringify({ mode, afterPlan, afterPlanDeep, autoSave: true }) }),
+        (error) => error.code === savedCode, `saved ${mode}`);
+    }
+  }
+  assert.equal(afterPlanChoiceProblem(["review", "security-pass", "deslop"], ["review"]), "");
+  assert.throws(() => assistantRoutingPreferences({ mode: "senior", autoSave: "yes" }), { code: "vibe64_assistant_auto_save_invalid" });
+});
+
+test("a plan completed during a request starts the passes, once, and the notices name where they come from", () => {
+  const request = (planAtAdmission) => ({ workflow: true, afterPlan: { planAtAdmission } });
+  const completed = { status: "completed", revision: "r2" };
+  assert.equal(planCompletedDuringRequest(request({ status: "active", revision: "r1" }), completed), true, "an active plan completed");
+  assert.equal(planCompletedDuringRequest(request(null), completed), true, "a plan created and completed in one request");
+  assert.equal(planCompletedDuringRequest(request({ status: "completed", revision: "r1" }), completed), true, "a reopened plan completed again");
+  assert.equal(planCompletedDuringRequest(request({ status: "completed", revision: "r2" }), completed), false, "the plan was already completed");
+  assert.equal(planCompletedDuringRequest(request({ status: "active", revision: "r1" }), { status: "active", revision: "r1" }), false);
+  assert.equal(planCompletedDuringRequest(request({ status: "active", revision: "r1" }), null), false);
+  assert.equal(planCompletedDuringRequest({ workflow: true, afterPlan: null }, completed), false, "a request that runs no pass after a plan");
+  assert.deepEqual(afterPlanPassNotice("Security pass", "turn-1:security-pass"), { messageId: "assistant-after-plan:turn-1:security-pass",
+    text: "Security pass started automatically after the plan (Passes: After a plan)" });
+  assert.equal(afterPlanPassNotice("Data pass", "k", { deep: true }).text, "Data pass deeply started automatically after the plan (Passes: After a plan)");
+  assert.deepEqual(assistantAutoSaveNotice("turn-1"), { messageId: "assistant-finishing:autoSave:turn-1",
+    text: "Save started automatically (Chat settings: Automatically save changes)" });
+});
+
+test("a review returns rework to the implementation that owns it", () => {
   // A direct chat's review returns rework to its own implementation; only Auto's hands it back to Junior.
   assert.match(assistantModePrompt("senior", "Change the form", { intent: "review" }), /hand back to Junior/);
   const direct = assistantModePrompt("custom", "Change the form", { intent: "review", rework: "self" });
@@ -771,26 +816,7 @@ test("the finishing turn runs the switched-on parts in order, and only Senior's 
   const asked = assistantModePrompt("senior", "Change the form", { intent: "review", rework: "report" });
   assert.match(asked, /report what it needs instead of starting it in this review/);
   assert.doesNotMatch(asked, /workflow outcome command/);
-  assert.deepEqual(assistantFinishingNotice("deslop", "followup-1"), { messageId: "assistant-finishing:deslop:followup-1",
-    text: "Deslop started automatically (Chat settings: Automatically deslop changes)" });
-  assert.deepEqual(ASSISTANT_FINISHING_STEPS.map(({ setting }) => setting),
-    ["Automatically review changes", "Automatically deslop changes", "Automatically UI pass changes", "Automatically save changes"]);
 });
-
-test("each finishing turn covers every change since the last one", () => {
-  const request = (patch) => ({ messageId: "m1", input: { message: "Add it" }, workflow: true, turnId: "t1", ...patch });
-  assert.deepEqual(assistantUnreviewedRequests(null), []);
-  assert.deepEqual(assistantUnreviewedRequests(request({ status: "complete", stage: "review", unreviewed: [{ messageId: "m0" }] })), [],
-    "a finished review covered everything");
-  assert.deepEqual(assistantUnreviewedRequests(request({ status: "complete", stage: "implementation", outcome: { turnId: "t1", decision: "handoff" } })), []);
-  assert.deepEqual(assistantUnreviewedRequests(request({ status: "waiting", stopped: true, stage: "implementation" })),
-    [{ messageId: "m1", message: "Add it" }], "a stopped request folds into the next review");
-  assert.deepEqual(assistantUnreviewedRequests(request({ status: "complete", stage: "implementation", unreviewed: [{ messageId: "m0" }],
-    outcome: { turnId: "t1", decision: "complete" } })), [{ messageId: "m0" }], "an answer that changed nothing passes earlier work on");
-  assert.deepEqual(assistantUnreviewedRequests({ messageId: "q", workflow: false, status: "complete", unreviewed: [{ messageId: "m0" }] }),
-    [{ messageId: "m0" }], "an Auto conversation passes earlier work on");
-});
-
 test("a typed UI pass message names its scope as the request Genesis's ui-pass task receives", () => {
   const changes = "Run the UI pass on the changes the current task made.";
   const app = "Run the UI pass on the whole app.";
@@ -959,8 +985,12 @@ test("workflow state, role, sent messages and selection identity each have one o
   const followup = { messageId: "followup-1" };
   assert.equal(assistantWorkflowRole({ mode: "auto", stage: "review", followup, resolvedMode: "junior" }), "senior");
   assert.equal(assistantWorkflowRole({ mode: "auto", stage: "review", resolvedMode: "junior" }), "junior");
-  // A Junior chat's agent does its own finishing turn.
+  // A Junior chat's agent does its own turns; every pass after a plan runs on Senior, in any mode.
   assert.equal(assistantWorkflowRole({ mode: "junior", stage: "review", followup, resolvedMode: "junior" }), "junior");
+  for (const mode of ["auto", "junior", "custom"]) assert.equal(assistantWorkflowRole({ mode, stage: "pass", resolvedMode: "junior" }), "senior", mode);
+  const passChain = { index: 1, passes: [{ id: "review" }, { id: "security-pass" }] };
+  assert.deepEqual(assistantAfterPlanPass({ stage: "pass", passChain }), { id: "security-pass" });
+  assert.equal(assistantAfterPlanPass({ stage: "review", passChain }), null);
   assert.match(assistantRoutingStatusLabel({ mode: "auto", stage: "review", followup, resolvedMode: "junior", status: "working", delivery: "accepted", assignments }), /senior-model/u);
   assert.match(assistantRoutingStatusLabel({ mode: "junior", stage: "implementation", resolvedMode: "junior", status: "working", delivery: "accepted", assignments }),
     /^Junior · .*junior-model/u, "a direct chat's turn is named by its agent");
@@ -992,7 +1022,7 @@ test("a request the next message would replace holds nothing; one being routed, 
 });
 
 test("a restored automatic follow-up turn is recognised as the routed request's own", () => {
-  const request = { schemaVersion: 5, status: "working", delivery: "accepted", messageId: "message-1",
+  const request = { schemaVersion: 6, status: "working", delivery: "accepted", messageId: "message-1",
     followup: { messageId: "followup-1" }, submittedBy: { id: "owner", username: "owner", role: "owner" } };
   const metadata = { assistant_routing_request: JSON.stringify(request) };
   const upstream = (id) => `upstream:${id}`;
@@ -1004,6 +1034,9 @@ test("a restored automatic follow-up turn is recognised as the routed request's 
   // The retired v4 field is not a routed message.
   const legacy = { assistant_routing_request: JSON.stringify({ ...request, followup: undefined, reviewMessageId: "review-1" }) };
   assert.equal(assistantRoutingRequestForMessage(legacy, (messageId) => messageId === "review-1"), null);
-  assert.throws(() => assistantRoutingRequestForMessage({ assistant_routing_request: JSON.stringify({ ...request, schemaVersion: 4 }) }, () => true),
-    (error) => error.code === "vibe64_assistant_workflow_upgrade_required");
+  // A request saved before the after-plan upgrade (version 5) needs it, as does an older one.
+  for (const schemaVersion of [4, 5]) {
+    assert.throws(() => assistantRoutingRequestForMessage({ assistant_routing_request: JSON.stringify({ ...request, schemaVersion }) }, () => true),
+      (error) => error.code === "vibe64_assistant_workflow_upgrade_required", `version ${schemaVersion}`);
+  }
 });

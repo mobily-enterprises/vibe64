@@ -171,7 +171,7 @@ describe("useVibe64SessionRenewal", () => {
 
   it("a Custom chat renews on its own model; any other chat on main chat's", () => {
     const custom = { schema: "vibe64.assistant-selection.v1", ...ASSISTANT_SELECTION };
-    const steps = { review: true, deslop: false, uiPass: true, autoSave: false };
+    const steps = { afterPlan: ["review", "security-pass", "ui-pass"], afterPlanDeep: [], autoSave: false };
     const selectedSession = ref({ sessionId: "session-1", status: "active", metadata: {
       assistant_routing: JSON.stringify({ mode: "custom", ...steps, override: custom })
     } });

@@ -653,7 +653,7 @@ test("two browsers recover independently without sending either draft", async ({
 
 test("@collaborator-access fallback chat stays usable and personal turns cannot be steered", async ({ page }, info) => {
   server.state.session.agentSession.turn.active = false;
-  server.state.session.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: false });
+  server.state.session.metadata.assistant_routing = JSON.stringify({ mode: "junior", afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: true });
   const shared = { available: true, backupUsed: true, effectiveSelection: { engineId: "opencode", modelId: "glm-4.7" } };
   Object.assign(server.state.assistantAccess, {
     ownerOnly: true, canUse: true, nativeCanUse: false, canUseAny: true, steering: false, currentMode: "junior",

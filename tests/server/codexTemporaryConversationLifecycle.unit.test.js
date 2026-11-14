@@ -3710,11 +3710,11 @@ test("The main chat's AI counts as working while a turn runs or a request it has
   assert.equal(sessionAssistantWorking(session({ status: "working", delivery: "accepted" })), false, "a plain reply whose turn ended");
 });
 
-// A Custom request ("Build the form.") delivered as the running turn, with Deslop after it when `deslop` is set.
-async function sendCustomRequest({ controllerOptions, sessionId, store, terminals }, options, { deslop, messageId }) {
+// A Custom request ("Build the form.") delivered as the running turn.
+async function sendCustomRequest({ controllerOptions, sessionId, store, terminals }, options, { messageId }) {
   await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
   const selection = JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection);
-  await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "custom", deslop, review: false, override: selection }));
+  await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "custom", afterPlan: ["review", "security-pass", "deslop"], override: selection }));
   const sent = await terminals.sendAgentMessage(sessionId, { message: "Build the form.", messageId }, options);
   assert.equal(sent.delivered, true, JSON.stringify(sent));
 }
@@ -3756,7 +3756,7 @@ for (const work of ["Save", "Update"]) {
           return { status: "interrupted" };
         };
       };
-      await sendCustomRequest(harness, options, { deslop: false, messageId: "held-send" });
+      await sendCustomRequest(harness, options, { messageId: "held-send" });
       assert.equal((await routedRequest(store, sessionId)).delivery, "accepted");
       const write = await holdSessionWrite(terminals, sessionId, options, work);
       try {
@@ -3780,14 +3780,14 @@ for (const work of ["Save", "Update"]) {
   });
 }
 
-test("A Stop recorded as Save ends keeps the request stopped, so the finished turn's next workflow step never starts", async () => {
+test("A Stop recorded as Save ends keeps the request stopped, so the finished turn neither completes nor saves the work", async () => {
   await withAgentMessageController(async (harness) => {
     const { captures, runtime, sessionId, store, terminals } = harness;
     const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
-    await sendCustomRequest(harness, options, { deslop: true, messageId: "ending-send" });
+    await sendCustomRequest(harness, options, { messageId: "ending-send" });
     const request = await routedRequest(store, sessionId);
     assert.equal(request.workflow, true);
-    // The turn reports its implementation done, so its end would start the Deslop step.
+    // The turn reports its implementation done, so its end would complete the work and save it.
     request.outcome = { decision: "handoff", explanation: "The form is built.", progress: true, turnId: request.turnId,
       stage: request.stage, planRevision: null, progressRevision: null };
     await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify(request));
@@ -3819,7 +3819,7 @@ test("A Stop recorded as Save ends keeps the request stopped, so the finished tu
     assert.match((await write.working).message, /held the lock for this test only/u);
     const settled = await waitForSessionValue(() => routedRequest(store, sessionId),
       (state) => state.status !== "working" || captures.turns.length > 1, "the finished turn's routing to settle");
-    assert.equal(captures.turns.length, 1, "no Deslop turn starts after the Stop");
+    assert.equal(captures.turns.length, 1, "no turn starts after the Stop");
     assert.equal(settled.stopped, true);
     assert.equal(settled.status, "waiting");
     store.writeMetadataValue = writeMetadata;
@@ -3830,7 +3830,7 @@ test("A steer sent while another records its entry, both during Save, both join 
   await withAgentMessageController(async (harness) => {
     const { captures, runtime, sessionId, store, terminals } = harness;
     const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
-    await sendCustomRequest(harness, options, { deslop: true, messageId: "steered-send" });
+    await sendCustomRequest(harness, options, { messageId: "steered-send" });
     assert.equal((await routedRequest(store, sessionId)).workflow, true);
     const write = await holdSessionWrite(terminals, sessionId, options, "Save");
     const steer = (messageId) => terminals.sendAgentMessage(sessionId,
@@ -3878,7 +3878,7 @@ test("Cancelling a steer while Save holds the agent-write lock stops the turn it
         return { status: "interrupted" };
       };
     };
-    await sendCustomRequest(harness, options, { deslop: false, messageId: "cancel-send" });
+    await sendCustomRequest(harness, options, { messageId: "cancel-send" });
     const write = await holdSessionWrite(terminals, sessionId, options, "Save");
     const steering = Promise.withResolvers();
     const steered = Promise.withResolvers();
@@ -12538,7 +12538,7 @@ test("Main browser facade uses the original native owner and action authority wi
       assert.equal(captures.turns.length, 0);
       await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
       await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({
-        mode: "custom", deslop: true, review: false,
+        mode: "custom", afterPlan: ["review", "security-pass", "deslop"],
         override: JSON.parse(before.assistant_selection)
       }));
       const rejectedMessageId = "main-browser-oversized";
@@ -12633,13 +12633,13 @@ test("Main browser facade uses the original native owner and action authority wi
         // Join those exact gate promises before the single zero-wait selection.
         const completedWrites = await Promise.all(postTurnWrites.map(write => write.pending));
         assert.ok(completedWrites.every(write => write.acquired),
-          "Idle preparation and review must wait for the finishing turn's lock rather than lose their work.");
+          "Idle preparation and routing must wait for the ended turn's lock rather than lose their work.");
       } finally {
         store.runSessionExclusive = runSessionExclusive;
         captures.onSessionChanged = onSessionChanged;
       }
       const selected = await request("POST", "/selection", { selection: {
-        assistantRouting: { mode: "senior", review: false }
+        assistantRouting: { mode: "senior" }
       } });
       assert.equal(selected.statusCode, 200, selected.body);
       assert.equal(selected.json().ok, true, selected.body);
@@ -12820,7 +12820,7 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
     await createAssistantRoutingStore({ systemRoot: controllerOptions.env.VIBE64_SYSTEM_ROOT }).write({
       owner: { senior: selection, junior: selection }, nonOwner: {}
     }, 0);
-    await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior", deslop: true }));
+    await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass", "deslop"] }));
     registerVibe64ActionContext(actions, {
       projectContext: { currentPracticeProjectScope: () => null, projectsRoot: path.dirname(runtime.projectContextRoot), async readWorkspaceProject() {
         return { project: { projectRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot } };

@@ -103,7 +103,7 @@ describe("setups", () => {
       expect(html).toContain(role);
       expect(html).toContain(line);
     }
-    expect(html).toContain("Plans, reviews, Deslop and UI passes in main chat. Your most capable model.");
+    expect(html).toContain("Plans, reviews and passes in main chat. Your most capable model.");
     expect(html).toContain("Titles, commit messages, prompt hints and summaries.");
     expect(html).not.toContain("Team members");
   });

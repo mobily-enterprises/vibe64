@@ -510,3 +510,18 @@ test("renewal state rejects cross-session reads and tampered drafts", () => {
     { code: "vibe64_session_renewal_draft_integrity_failed" }
   );
 });
+
+test("a renewal's successor keeps the chat's passes after a plan; one saved with the finishing switches needs the state upgrade", () => {
+  const state = (assistantRouting) => ({
+    ...createSessionRenewalState({ at: AT, operationKey: "renewal:routing", renewalId: "renewal-routing", sessionId: "session-1" }),
+    successor: { assistantRouting }
+  });
+  const current = { mode: "junior", afterPlan: ["review", "security-pass", "speed-pass"], afterPlanDeep: ["speed-pass"], autoSave: false };
+  assert.deepEqual(normalizeSessionRenewalState(state(current), { expectedSessionId: "session-1" }).successor.assistantRouting, current);
+  for (const old of [{ mode: "junior", review: true, deslop: true, uiPass: false, autoSave: false }, { mode: "senior" }]) {
+    assert.throws(() => normalizeSessionRenewalState(state(old), { expectedSessionId: "session-1" }),
+      { code: "vibe64_assistant_routing_upgrade_required" }, JSON.stringify(old));
+  }
+  assert.throws(() => normalizeSessionRenewalState(state({ ...current, afterPlan: ["review", "speed-pass"] }), { expectedSessionId: "session-1" }),
+    { code: "vibe64_assistant_after_plan_invalid" });
+});

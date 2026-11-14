@@ -391,9 +391,10 @@ const assistantRoutingField = {
   required: false,
   schema: createSchema({
     mode: { type: "string", enum: ASSISTANT_MODES.map(({ id }) => id), required: true },
-    review: { type: "boolean", required: false },
-    deslop: { type: "boolean", required: false },
-    uiPass: { type: "boolean", required: false },
+    // The passes that run after a completed plan, and those run deeply; the
+    // routing preferences refuse an unknown pass, or one leaving Review or Security out.
+    afterPlan: { type: "array", items: { type: "string", maxLength: 64 }, maxItems: 16, required: false },
+    afterPlanDeep: { type: "array", items: { type: "string", maxLength: 64 }, maxItems: 16, required: false },
     autoSave: { type: "boolean", required: false },
     override: assistantSelectionField
   })

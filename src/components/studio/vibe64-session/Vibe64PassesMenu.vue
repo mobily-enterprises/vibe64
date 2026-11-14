@@ -30,6 +30,9 @@
       </v-card-item>
       <v-card-text class="vibe64-passes__body">
         <p v-if="blockedReason" class="text-body-small vibe64-passes__note" role="status">{{ blockedReason }}</p>
+        <p v-if="afterPlanShown" class="text-body-small vibe64-passes__note">{{ AFTER_PLAN_NOTE }}</p>
+        <p v-if="afterPlanShown && afterPlanStatus" class="text-body-small vibe64-passes__note" role="status">{{ afterPlanStatus }}</p>
+        <v-alert v-if="afterPlanError" class="mb-2" density="compact" type="error" variant="tonal">{{ afterPlanError }}</v-alert>
         <v-alert v-if="passes.unavailable.value" class="mb-2" density="compact" type="warning" variant="tonal">{{ passes.unavailable.value }}</v-alert>
         <v-alert v-if="passes.error.value" class="mb-2" density="compact" type="error" variant="tonal">{{ passes.error.value }}</v-alert>
         <v-alert v-if="passes.loadError.value && !list.length" density="compact" type="error" variant="tonal">
@@ -62,6 +65,30 @@
               </v-btn>
             </div>
             <p v-if="pass.runs.some(({ id }) => id === 'deep')" class="text-body-small vibe64-passes__muted">{{ DEEP_NOTE }}</p>
+            <div v-if="afterPlanShown && AFTER_PLAN_PASS_ORDER.includes(pass.id)" class="vibe64-passes__after-plan">
+              <v-checkbox
+                :aria-label="`${pass.title}: After a plan`"
+                class="vibe64-passes__tick"
+                density="compact"
+                :disabled="mandatory(pass.id) || !afterPlanChangeable"
+                hide-details
+                label="After a plan"
+                :model-value="afterPlan.includes(pass.id)"
+                @update:model-value="tickAfterPlan(pass.id, $event)"
+              />
+              <v-checkbox
+                v-if="pass.sinceBase?.deep"
+                :aria-label="`${pass.title}: Deeply after a plan`"
+                class="vibe64-passes__tick"
+                density="compact"
+                :disabled="!afterPlan.includes(pass.id) || !afterPlanChangeable"
+                hide-details
+                label="Deeply"
+                :model-value="afterPlanDeep.includes(pass.id)"
+                @update:model-value="tickDeep(pass.id, $event)"
+              />
+              <span v-if="mandatory(pass.id)" class="text-body-small vibe64-passes__muted">Always runs after a plan.</span>
+            </div>
           </li>
           <li v-if="master" class="vibe64-passes__row">
             <div class="vibe64-passes__text">
@@ -113,25 +140,114 @@
 // The chat's Passes list: each pass Genesis offers, when it last completed in this project, and a
 // button for each run Genesis offers for it, or why the project's Genesis cannot run it; then the
 // Master pass, with a tick box for each pass it runs, all ticked until the person unticks one.
+// Main chat's own list also holds its After a plan and Deeply ticks: the passes that run, each in
+// its own turn, once a plan is completed, saved with the chat's settings.
 import { computed, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { VBottomSheet, VMenu } from "vuetify/components";
+import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { AFTER_PLAN_MANDATORY_PASSES, AFTER_PLAN_PASS_ORDER, ASSISTANT_FINISHING_DEFAULTS, inAfterPlanOrder } from "@local/vibe64-runtime/shared/assistantFinishing";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { runKey } from "@/composables/useVibe64Passes.js";
+import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
+import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from "@/lib/vibe64SessionRequestConfig.js";
+import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 const runDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 // A deep run reads every file, and a Master pass runs pass after pass that way: say what that costs.
 const DEEP_NOTE = "Deep reads every file: it takes much longer and uses far more of your AI's allowance.";
 const MASTER_NOTE = "Runs each ticked pass deeply, one after another: it takes much longer and uses far more of your AI's allowance.";
+const AFTER_PLAN_NOTE = "After a plan: when a plan is completed, each ticked pass checks the plan's changes in its own turn, " +
+  "in Master pass order, then Automatically save changes runs if it is on. Nothing runs after a request without a plan.";
 
 const props = defineProps({
   passes: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Passes>} */ (Object), required: true },
   // Why Run is unavailable now, such as a running turn; empty while it can start.
-  blockedReason: { type: String, default: "" }
+  blockedReason: { type: String, default: "" },
+  // Main chat's session, whose After a plan ticks this list shows; none for any other chat.
+  session: { type: Object, default: null },
+  sessionsApiPath: { type: [String, Object, Function], default: "" },
+  // Why the After a plan ticks can't change now, such as an unfinished goal; empty while they can.
+  afterPlanReason: { type: String, default: "" }
 });
 const { xs: mobile } = useDisplay();
 const opened = ref(false);
 const list = computed(() => props.passes.passes.value);
 const master = computed(() => props.passes.master.value);
+
+// The chat's saved choice; a chat with no mode yet runs the defaults, and a lesson or Fix it with
+// AI runs no pass after a plan, so shows no tick.
+const preferences = computed(() => {
+  try {
+    return assistantRoutingFromMetadata(props.session?.metadata || {});
+  } catch {
+    return null;
+  }
+});
+const afterPlanShown = computed(() => Boolean(props.session) && props.session.purpose !== "learning" && preferences.value?.mode !== "fix");
+const afterPlan = ref(/** @type {string[]} */ ([]));
+const afterPlanDeep = ref(/** @type {string[]} */ ([]));
+const afterPlanSaving = ref(false);
+const afterPlanError = ref("");
+watch(preferences, (value) => {
+  afterPlan.value = [...(value?.afterPlan || ASSISTANT_FINISHING_DEFAULTS.afterPlan)];
+  afterPlanDeep.value = [...(value?.afterPlanDeep || ASSISTANT_FINISHING_DEFAULTS.afterPlanDeep)];
+}, { immediate: true });
+const afterPlanChangeable = computed(() => Boolean(preferences.value) && !props.afterPlanReason && !afterPlanSaving.value);
+const afterPlanStatus = computed(() => props.afterPlanReason ||
+  (preferences.value ? "" : "Choose a Chat mode to change these; until then the ticked passes run after a plan."));
+/** @param {string} id */
+const mandatory = (id) => AFTER_PLAN_MANDATORY_PASSES.includes(id);
+const afterPlanCommand = useCommand({
+  access: "never", apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.assistant-selection.update",
+  buildCommandOptions: () => ({
+    method: "PATCH",
+    path: vibe64SessionPath(readRefOrGetterValue(props.sessionsApiPath), props.session.sessionId, "/assistant-selection")
+  }),
+  // The chat's mode and model stay as saved; Automatically save changes is kept by the server.
+  buildRawPayload: () => vibe64RealtimeOriginPayload({ assistantRouting: {
+    mode: preferences.value.mode,
+    afterPlan: afterPlan.value,
+    afterPlanDeep: afterPlanDeep.value,
+    ...(preferences.value.override ? { override: preferences.value.override } : {})
+  } }),
+  onRunSuccess: (result) => { if (result?.ok === false) throw new Error(result.error || "After a plan could not be saved."); },
+  fallbackRunError: "After a plan could not be saved.", suppressSuccessMessage: true,
+  ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
+});
+
+/**
+ * Saves the ticks, in Master pass order; a failed save puts them back.
+ * @param {string[]} nextAfterPlan
+ * @param {string[]} nextDeep
+ */
+async function saveAfterPlan(nextAfterPlan, nextDeep) {
+  if (!afterPlanChangeable.value) return;
+  const previous = { afterPlan: afterPlan.value, afterPlanDeep: afterPlanDeep.value };
+  afterPlan.value = inAfterPlanOrder(nextAfterPlan);
+  afterPlanDeep.value = inAfterPlanOrder(nextDeep.filter((id) => afterPlan.value.includes(id)));
+  afterPlanSaving.value = true;
+  afterPlanError.value = "";
+  try {
+    await afterPlanCommand.run();
+  } catch (error) {
+    afterPlan.value = previous.afterPlan;
+    afterPlanDeep.value = previous.afterPlanDeep;
+    afterPlanError.value = error?.message || "After a plan could not be saved.";
+  } finally {
+    afterPlanSaving.value = false;
+  }
+}
+/** @param {string} id @param {boolean | null} ticked */
+function tickAfterPlan(id, ticked) {
+  if (mandatory(id)) return;
+  void saveAfterPlan(ticked ? [...afterPlan.value, id] : afterPlan.value.filter((other) => other !== id), afterPlanDeep.value);
+}
+/** @param {string} id @param {boolean | null} ticked */
+function tickDeep(id, ticked) {
+  void saveAfterPlan(afterPlan.value, ticked ? [...afterPlanDeep.value, id] : afterPlanDeep.value.filter((other) => other !== id));
+}
 // The passes the Master pass runs: all of them until the person unticks one, again whenever the list changes.
 const ticked = ref(/** @type {string[]} */ ([]));
 watch(() => master.value?.passes.join(",") || "", () => {
@@ -225,6 +341,13 @@ async function startMaster(masterRun) {
   margin-bottom: 0.125rem;
   padding: 0;
   width: 100%;
+}
+
+.vibe64-passes__after-plan {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
 }
 
 .vibe64-passes__tick {

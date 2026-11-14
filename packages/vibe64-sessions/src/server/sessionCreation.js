@@ -108,7 +108,7 @@ function createSessionCreation({
         vibe64User,
         ...(learningRuntime ? { mode: "junior" } : {})
       });
-      // A lesson runs no finishing steps: Deslop must never rewrite a
+      // A lesson runs no pass after a plan and never saves by itself: Deslop must never rewrite a
       // learner's code, and a lesson teaches Save.
       const assistantRouting = learningRuntime ? { ...startRouting, ...ASSISTANT_NO_FINISHING } : startRouting;
       const runtime = learningRuntime || await project.createRuntime(sessionRuntimeOptions(terminals));

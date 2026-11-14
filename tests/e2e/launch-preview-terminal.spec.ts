@@ -1637,7 +1637,7 @@ test("@temporary-model a temporary chat exposes the shared picker and retains Se
   await mockLaunchSession(page, { assistantCatalog: catalog });
   const record = { conversationId: "chat-model", state: "open", title: "Check the schema", status: "completed", messages: [],
     assistantSelection: previous, agentSettings: { model: previous.modelId, thinking: "high" },
-    routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", deslop: true, review: false }) },
+    routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: false }) },
     purposes: { senior: { available: true, effectiveSelection: previous } } };
   const selections: any[] = [];
   await page.route("**/temporary-conversations", (route) => fulfillJson(route, { ok: true, conversations: [record] }));
@@ -1646,7 +1646,7 @@ test("@temporary-model a temporary chat exposes the shared picker and retains Se
       const input = route.request().postDataJSON();
       if (input.assistantRouting) {
         selections.push(input.assistantRouting);
-        record.routingMetadata.assistant_routing = JSON.stringify({ ...input.assistantRouting, mode: "senior", review: false, deslop: false });
+        record.routingMetadata.assistant_routing = JSON.stringify({ ...input.assistantRouting, mode: "senior", afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: false });
         record.purposes.senior.effectiveSelection = input.assistantRouting.override;
       }
     }

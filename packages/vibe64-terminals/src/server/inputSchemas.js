@@ -79,7 +79,6 @@ const temporaryConversationRoutingField = {
   required: false,
   schema: createSchema({
     mode: { type: "string", enum: [...ASSISTANT_MODES.filter(({ id }) => id !== "auto").map(({ id }) => id), "fix"], required: true },
-    review: { type: "boolean", required: false },
     override: {
       type: "object",
       required: false,

@@ -27,16 +27,31 @@ At planning, implementation and review, the working agent reports one of four
 outcomes:
 
 - **Continue** keeps its stage and role while authorised work or checks remain.
-- **Handoff** moves finished implementation to Senior's finishing turn: review and
-  the other steps its [Chat settings](chat-settings.md) turn on. If Senior discovers
-  substantial necessary rework, Senior updates the technical plan and Progress
-  within the agreed outcome and hands that work back to Junior. Junior finishes
-  it, then Senior reviews again and performs any enabled Deslop and UI pass.
+- **Handoff** reports finished implementation. When Junior implemented the
+  current plan, Senior then checks the plan in a turn of its own: it reads every
+  page of Plan and Progress, verifies each requirement, fixes in-scope gaps and
+  completes the plan, or leaves it active with the gaps recorded in Progress. If
+  Senior discovers substantial necessary rework, Senior updates the technical
+  plan and Progress within the agreed outcome and hands that work back to Junior.
+  Junior finishes it, then Senior checks the plan again. Without a plan, or when
+  Senior implemented it, the work ends with that turn: no review, Deslop or UI
+  pass runs, and [Automatically save changes](chat-settings.md) saves it.
 - **Wait** retains the stage for a real blocker, your required decision or an
   explicit pause. A status question or clarification is incorporated into the
   ongoing work; it does not abandon review.
-- **Complete** is available only to Senior after verified review. Senior explicitly
-  completes an involved plan before Auto archives it after the final explanation.
+- **Complete** is available only to Senior. Senior explicitly completes an
+  involved plan after verifying it; once its final explanation is delivered, the
+  passes ticked under **After a plan** in
+  [Passes](passes.md#choose-the-passes-that-run-after-a-plan) run, each in its
+  own turn, then Auto archives the plan and saves the work.
+
+After implementation, Auto adds one turn only in one case: Junior implemented
+an involved plan and that plan is still active, so Senior checks and completes
+it. That check is not a pass, has no setting and runs no pass. Work done without
+a plan is no longer reviewed, deslopped or UI-passed automatically: it ends with
+its implementation, saved when Automatically save changes is on. Ask for those checks when you want
+them, from [Passes](passes.md), through the Master pass, or by typing the
+request in chat, such as **Deslop**, **UI pass** or "Review my changes".
 
 A turn that asks you a question (numbered questions or **Possible answers**
 choices, the replies for which the composer shows answer controls) always waits
@@ -44,11 +59,11 @@ for your answer, whatever outcome the agent reported, including when the agent
 adds a short message after the questions, such as "I'll continue once you've
 answered." The composer and this wait read the same questions: the newest among
 the agent's last ten messages since your latest message. Auto never
-moves to Senior review, continues or completes past an open question. The notice
+moves to Senior's check of the plan, continues or completes past an open question. The notice
 says **Waiting for your answer. Reply in chat to continue.** and offers no stage
 **Continue** action; reopening the session or recovery after a restart sends
 nothing. Your reply is a new request that Router routes as usual, so answering
-"Yes, fix them" starts implementation followed by the normal Senior review. At
+"Yes, fix them" starts implementation, which, for a plan, Senior then checks. At
 Planning with an active saved plan, **Implement plan** remains available.
 
 The agent's concrete explanation appears as an ordinary **Status** message in
@@ -67,14 +82,14 @@ Progress but cannot remove agreed requirements.
 Senior records the deferred requirement and its agreed timing under **Deferred
 work** in Progress before removing it from the current acceptance scope, keeping
 the completed implementation evidence. When every remaining item is checked and
-supported by evidence, Senior hands the revised implementation to separate Senior review
-and any enabled **Deslop** and **UI pass**. Missing resources for the explicitly deferred work
-do not block that review. Remaining implementation continues; a pause or missing
-evidence can still stop the handoff. Ordinary draft-plan edits do not trigger
-review just because all their items are checked.
+supported by evidence, Senior completes the revised plan, which starts the
+passes ticked under **After a plan**. Missing resources for the explicitly
+deferred work do not block that completion. Remaining implementation continues;
+a pause or missing evidence can still stop it. Ordinary draft-plan edits do not
+complete a plan just because all their items are checked.
 
 Deferral does not complete the excluded work or schedule it automatically. Its
-record stays with Progress, including after the reviewed plan moves to History.
+record stays with Progress, including after the completed plan moves to History.
 Use the document icon beside the usage percentage to open **Progress** in
 Current plan or History. Explicitly request the deferred work when ready. The same conversational steps apply on desktop and mobile. Colleague can
 explain this process and offer to send your explicit scope-change request through
@@ -100,27 +115,27 @@ explain the retained stage and blocker and offer to stop work or send your reque
 continuation through its existing actions. An explanation or offer alone does not
 authorise another turn. Colleague's watches treat Waiting as needing attention.
 
-In Auto, Senior always does the finishing steps after implementation, even when
-Senior implemented it or both roles use the same model: the review, Deslop and
-[UI pass](ui-pass.md) the chat's **Chat settings** switches turn on, in one
-Senior turn, then **Save**. The implementation turns before it end by saying
-what changed and what was checked, without asking you to try or publish the
-work, and only that last turn ends normally; see [How each turn
-ends](chat-settings.md#how-each-turn-ends). **Automatically review changes**,
-**Automatically deslop changes**, **Automatically UI pass changes** and
-**Automatically save changes** are all on for new chats. Each step a switch starts adds a notice
-such as **Review started automatically (Chat settings: Automatically review
-changes)**. Turning a switch off asks first and says what is lost; **Cancel**
-keeps it on. When review, Deslop and the UI pass are all off, a handoff after
-implementation finishes the work without a Senior turn and goes straight to
-**Save**. These switches work the same way in Senior, Junior and Custom, where
-the chat's own agent does them; see [Choose what runs after each piece of
-work](chat-settings.md) for the switches, their confirmations and Save's notes.
-Colleague can explain all four switches and, for the owner, change any of them
+In Auto, only Senior completes a plan, even when both roles use the same model.
+When Junior implemented it, Senior checks it in a turn of its own, which runs no
+pass. Junior's implementation turns before it end by saying what changed and
+what was checked, without asking you to try or publish the work; see [How each
+turn ends](chat-settings.md#how-each-turn-ends). Once the plan is completed, the
+passes ticked under **After a plan** in
+[Passes](passes.md#choose-the-passes-that-run-after-a-plan) run, each in its
+own Senior turn over the plan's changes, with a notice such as **Security pass
+started automatically after the plan (Passes: After a plan)**; then the plan is
+archived and **Automatically save changes** runs **Save**. **Review** and
+**Security pass** always run; **Data pass**, **Quality pass**, [UI
+pass](ui-pass.md) and **Deslop** are ticked for new chats. Work without a plan
+ends after its implementation, with no Senior turn, and goes straight to
+**Save**. Nothing runs when a turn ends. Senior, Junior and Custom work the
+same way, except that only a Senior chat completes a plan; see [Choose what
+happens once work is finished](chat-settings.md). Colleague can explain
+automatic save and the passes after a plan and, for the owner, change them
 through the chat mode action.
 
-Unfinished checks continue in Senior review; substantial necessary rework
-returns to Junior and comes back for another review. A changed product requirement
+Unfinished checks continue in Senior's check of the plan; substantial necessary
+rework returns to Junior and comes back to Senior. A changed product requirement
 needs your decision. Planning-only work waits for your request to implement it.
 
 Waiting workflow controls show only the available actions above the composer.
@@ -143,7 +158,7 @@ specific alternatives, not a generic “resume” command. **View plan** opens t
 existing Current plan dialog without sending anything. To revise the saved plan,
 send the requested changes through the composer. **Implement plan** sends
 a new human request authorizing implementation within the saved plan's scope;
-it starts Junior implementation, followed by the normal Senior review. Your
+it starts Junior implementation, followed by Senior's check of the plan. Your
 composer draft and attachments remain untouched. The button cannot reinterpret
 the original planning request or become another automatic planning continuation.
 
@@ -161,10 +176,10 @@ in chat. No plan is silently reopened. These controls behave the same on desktop
 and mobile. Colleague can explain them or offer to send your explicit request
 through its existing chat action; an explanation alone starts no work.
 Senior, Junior and Custom report the same outcomes, except that a message their
-agent only answers, changing nothing, reports none (see [Choose what runs after
-each piece of work](chat-settings.md#when-they-run)); their own agent does the
-finishing steps once the work is finished, with no Router. Junior cannot mark a
-plan completed.
+agent only answers, changing nothing, reports none (see [Choose what happens
+once work is finished](chat-settings.md#when-work-is-finished)); their work ends
+with their own agent's last turn, with no Router. Junior and Custom cannot mark
+a plan completed.
 
 Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.
@@ -173,7 +188,7 @@ explicitly mark it Completed after verifying the evidence.
 
 If an automatic handoff failed before its message was sent, you can type a new
 request and use the ordinary **Send** button (or speak a new request). Sending
-replaces that failed, unsent handoff; it does not mark its review completed.
+replaces that failed, unsent handoff; it does not complete that work.
 The previous coding history, plan and file changes remain. The stage-specific **Continue** action still
 continues the retained stage, and **Stop** cancels it without sending new work.
 A handoff with unconfirmed delivery still requires **Retry** first.

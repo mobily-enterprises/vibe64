@@ -7,8 +7,10 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import chatFinishingSteps from "../../packages/vibe64-core/src/server/stateUpgrades/20261107-chat-finishing-steps.js";
 import { __testables, upgradeChatFinishingSteps } from "../../packages/vibe64-terminals/src/server/chatFinishingStepsUpgrade.js";
+import { __testables as afterPlanTestables } from "../../packages/vibe64-terminals/src/server/afterPlanPassesUpgrade.js";
 
 const { chatFinishingStepsChanges } = __testables;
+const { afterPlanPassesChanges } = afterPlanTestables;
 
 const opus = { schema: "vibe64.assistant-selection.v1", engineId: "claude", agentId: "claude", modelProviderId: "anthropic",
   modelId: "opus", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource: "recommended" };
@@ -82,9 +84,9 @@ test("current values are left alone, so a retry changes nothing, and unreadable 
   assert.throws(() => chatFinishingStepsChanges({ metadata: { assistant_routing: JSON.stringify({ mode: "plan" }) } }), /unsupported/u);
 });
 
-test("every converted value reads back as the same choices at runtime", () => {
+test("every converted value, once 20261114-after-plan-passes follows, reads back as the same choices at runtime", () => {
   for (const saved of [{ mode: "auto", review: false, uiPass: true }, { mode: "senior" }, { mode: "junior", uiPass: true }, { mode: "fix" }]) {
-    const raw = JSON.stringify(main(saved));
+    const raw = afterPlanPassesChanges({ metadata: { assistant_routing: JSON.stringify(main(saved)) } }).metadata.assistant_routing;
     const read = assistantRoutingFromMetadata({ assistant_routing: raw });
     assert.deepEqual(JSON.parse(raw), read, saved.mode);
   }

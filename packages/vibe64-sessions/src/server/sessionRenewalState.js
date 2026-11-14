@@ -1,4 +1,4 @@
-import { assistantRoutingPreferences } from "@local/vibe64-runtime/shared/assistantRouting";
+import { savedAssistantRouting } from "@local/vibe64-runtime/shared/assistantRouting";
 import crypto from "node:crypto";
 import { BROWSER_KEY_PATTERN } from "./inputPatterns.js";
 
@@ -332,7 +332,7 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
   if (isPlainObject(value.successor)) {
     normalized.successor = {
       ...value.successor,
-      ...(value.successor.assistantRouting ? { assistantRouting: assistantRoutingPreferences(value.successor.assistantRouting) } : {}),
+      ...(value.successor.assistantRouting ? { assistantRouting: savedAssistantRouting(value.successor.assistantRouting) } : {}),
       ...(value.successor.assistantSelection
         ? {
             assistantSelection: defineVibe64AssistantSelection(

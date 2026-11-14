@@ -122,7 +122,7 @@ to gets one system notice per problem naming the file, Genesis's section line,
 the text found there and Genesis's message
 (`genesisProjectFileDiagnostic()`); the AI reads the same diagnostic in its
 Genesis session context and can repair the file. A task prompt Genesis cannot
-compose for the same reason, such as an automatic review, goes as the request
+compose for the same reason, such as a pass after a plan, goes as the request
 was written. Genesis's own Git, process and host-context failures, and other
 inspection errors, still propagate.
 An active main or temporary turn skips this preparation. Routine connection

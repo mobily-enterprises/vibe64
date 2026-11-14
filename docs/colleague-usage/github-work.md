@@ -47,10 +47,11 @@ fail once with a GitHub authentication error; retry it and it uses the new login
 
 In every main-chat mode, **Automatically save changes** (on by default under
 **Chat settings** in the chat mode menu) runs this same Save once a finished
-piece of work's review, Deslop and UI pass are done and that turn ends.
+piece of work's last turn ends: after a completed plan, once the passes ticked
+under **After a plan** in [Passes](passes.md) are done.
 Its progress, result and recovery are the ordinary Save's; when it cannot save,
 chat shows **Automatic save didn't run:** with the reason, and nothing changes.
-See [Choose what runs after each piece of work](chat-settings.md).
+See [Choose what happens once work is finished](chat-settings.md).
 
 Whenever Save or Update reports a problem, its activity panel offers **Fix it with
 AI**, which opens the [AI task window](ai-tasks.md) with the exact error. The AI

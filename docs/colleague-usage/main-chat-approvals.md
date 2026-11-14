@@ -139,13 +139,14 @@ lesson there is no queue: the message is sent to the lesson's team AI. Approving
 declining and withdrawing are human-only: Colleague cannot do them, so it should
 point the person to the buttons above.
 
-Main chat's **Chat mode** (Senior, Junior, Auto, Custom) and its four [Chat
-settings](chat-settings.md) switches (automatic review, Deslop, UI pass and
-save) are the owner's too. A team member's **Chat mode** menu doesn't list the
-modes, and its **Custom** model choice and the four switches are disabled. A
+Main chat's **Chat mode** (Senior, Junior, Auto, Custom), its **Automatically
+save changes** [Chat setting](chat-settings.md) and the passes it runs after a
+completed plan ([Passes](passes.md), **After a plan**) are the owner's too. A
+team member's **Chat mode** menu doesn't list the modes, its **Custom** model
+choice and the switch are disabled, and **Passes** isn't shown to them. A
 member's or their Colleague's request to change them is refused with "Only the
-owner can change its chat mode, review or model", with or without an active goal.
-In the member's own lesson they can change it.
+owner can change its chat mode, passes after a plan, Chat settings or model",
+with or without an active goal. In the member's own lesson they can change it.
 
 ## Errors
 

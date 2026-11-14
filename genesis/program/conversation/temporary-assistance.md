@@ -326,7 +326,7 @@ Existing temporary chats keep their own role and model choices after Main change
 or the view reloads. The compact role selector can change each chat independently.
 There is no workspace default or reset-to-default action. Background helpers keep
 their assigned roles. Direct roles use the conversation and user request; unrelated
-requests leave saved plans unchanged and do not trigger an automatic reviewer. An
+requests leave saved plans unchanged and do not start passes after a plan. An
 AI task's conversation follows its kind's routing instead
 ([AI tasks](ai-tasks.md)). Reply labels show the role first, followed by the
 orchestrator and model, as in main chat.

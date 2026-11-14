@@ -7,18 +7,15 @@ import {
   vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
 import {
+  assistantAfterPlanPass,
   assistantModeLabel,
   assistantModePrompt,
   assistantWorkflowInstructions,
   assistantGoalIsActive,
-  assistantWorkflowRole,
-  assistantTaskPurpose,
-  uiPassRequest
+  assistantWorkflowRole
 } from "@local/vibe64-runtime/shared/assistantRouting";
-import {
-  ASSISTANT_FINISHING_STEPS,
-  assistantFinishingParts
-} from "@local/vibe64-runtime/shared/assistantFinishing";
+import { assistantTaskPurpose, uiPassRequest } from "@local/vibe64-runtime/shared/assistantExplicitTask";
+import { assistantPlanCompletionFollows } from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   failure,
   activeMessage,
@@ -64,11 +61,14 @@ function createAssistantRoutingDelivery({
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
     const modelRole = assistantWorkflowRole(state);
-    const role = state.stage === "review" && modelRole === "senior" ? "review" : modelRole;
-    const implementing = state.stage === "implementation";
-    const followupLabel = state.stage === "review"
-      ? `${assistantModeLabel(modelRole)} review`
-      : state.stage === "planning" ? "Continue planning" : "Continue implementation";
+    // An after-plan pass is its own Senior turn on that pass's purpose, like a pass the person starts.
+    const pass = assistantAfterPlanPass(state);
+    const taskPurpose = assistantTaskPurpose(pass?.id || state.task);
+    let role = state.stage === "review" && modelRole === "senior" ? "review" : modelRole;
+    if (pass) role = taskPurpose;
+    let followupLabel = state.stage === "planning" ? "Continue planning" : "Continue implementation";
+    if (state.stage === "review") followupLabel = `${assistantModeLabel(modelRole)} review`;
+    if (pass) followupLabel = `${pass.title} after the plan`;
     const selection = state.assignments[modelRole];
     const input = activeMessage(state);
     const messageId = input.messageId || state.messageId;
@@ -162,7 +162,7 @@ function createAssistantRoutingDelivery({
       if ((plan?.revision || null) !== state.followup.planRevision ||
           JSON.stringify(messages) !== JSON.stringify(state.followup.messages) || usesWorkPlan(state) &&
             plan?.status !== "active" &&
-            !(state.stage === "review" && plan?.status === "completed")) {
+            !(["review", "pass"].includes(state.stage) && plan?.status === "completed")) {
         throw failure("The conversation or plan changed before continuation. Stop this handoff and send a new request.", "vibe64_assistant_routing_continuation_changed");
       }
     }
@@ -172,34 +172,29 @@ function createAssistantRoutingDelivery({
         throw failure("The active plan changed before execution started. Read it and send your execution request again.", "vibe64_assistant_routing_execution_plan_changed");
       }
     }
-    const taskPurpose = assistantTaskPurpose(state.task);
     const includePlanInstructions = !taskPurpose && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
     // Auto's planning, implementation and review turns report a workflow outcome; its conversation turns do not.
-    const autoOutcome = state.mode === "auto" && (state.workflow || state.stage === "planning");
+    const autoOutcome = !pass && state.mode === "auto" && (state.workflow || state.stage === "planning");
     // A typed UI pass message names its scope as the request its Genesis task
     // receives, as a commit range in the message is Deslop's. A run sent by
-    // name, as Run in Passes sends Genesis's own request, goes verbatim.
-    const request = state.task === "ui-pass" && !state.input.genesisTask ? uiPassRequest(input.message) : input.message;
-    const finishingParts = assistantFinishingParts(state);
-    // A finishing turn without review follows its first part's own instructions.
-    const firstPart = ASSISTANT_FINISHING_STEPS.find(({ id }) => id === finishingParts[0]);
-    const finishingIntent = followup && !finishingParts.includes("review") && assistantTaskPurpose(firstPart?.genesisTask);
+    // name, as Run in Passes sends Genesis's own request, goes verbatim, and so
+    // does an after-plan pass's request.
+    const request = !pass && state.task === "ui-pass" && !state.input.genesisTask ? uiPassRequest(input.message) : input.message;
     let message = assistantModePrompt(role, request, {
-      intent: taskPurpose || (state.stage === "review" ? finishingIntent || "review" : state.mode === "auto" ? state.reason : ""),
-      // Auto's implementer leaves browser checks to Senior's review.
-      browserReview: state.mode === "auto" && state.workflow && implementing && finishingParts.includes("review"),
+      intent: taskPurpose || (state.stage === "review" ? "review" : state.mode === "auto" ? state.reason : ""),
+      // Auto's Junior leaves browser checks to Senior's check of the plan it implemented.
+      browserReview: assistantPlanCompletionFollows(state),
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
       planInstructions: includePlanInstructions ? workPlanInstructions(role, { autoOutcome }) : ""
     });
-    // A review renders Genesis's review task; a finishing turn without review
-    // renders its first part's task, as an explicit Deslop renders deslop.
-    let genesisTask = taskPurpose ? state.task : "";
-    if (!genesisTask && state.stage === "review") {
-      const first = followup && finishingParts[0];
-      genesisTask = ASSISTANT_FINISHING_STEPS.find(({ id }) => id === first)?.genesisTask || "review";
-    }
-    if (state.workflow || autoOutcome) {
+    // A pass renders its own Genesis task, and a review Genesis's review task. Senior's
+    // check of a plan Junior implemented is not a pass: it renders no task of its own.
+    let genesisTask = taskPurpose ? pass?.id || state.task : "";
+    if (!genesisTask && state.stage === "review" && !(followup && state.mode === "auto" && state.planInvolved)) genesisTask = "review";
+    // An after-plan pass's request stays the message's last paragraph, where Genesis recognises
+    // it, so it reports no workflow outcome: its turn ending starts the next pass.
+    if (!pass && (state.workflow || autoOutcome)) {
       message += "\n\n" + assistantWorkflowInstructions(state, { autoSave: savesAutomatically(context.session.metadata) });
     }
     await prepareSelection(sessionId, selection, context);
@@ -222,9 +217,9 @@ function createAssistantRoutingDelivery({
       messageId,
       message,
       displayMessage,
-      // A finishing turn's task is Vibe64's choice, not the person's: without a
+      // An automatic turn's task is Vibe64's choice, not the person's: without a
       // Blueprint it goes as written instead of becoming the Blueprint's task.
-      ...(genesisTask ? { genesisTask, ...(!taskPurpose ? { automaticGenesisTask: true } : {}) } : {}),
+      ...(genesisTask ? { genesisTask, ...(!taskPurpose || pass ? { automaticGenesisTask: true } : {}) } : {}),
       turnMetadata: {
         ...(!followup ? state.input.turnMetadata : {}),
         assistantRouting: attribution(state, followup),
@@ -271,7 +266,9 @@ function createAssistantRoutingDelivery({
     const modelRole = assistantWorkflowRole(state);
     const destination = decisions.destinations(state.decision || {})[modelRole];
     let resolvedMode = state.resolvedMode;
-    if (state.stage === "review" && (state.mode === "auto" || modelRole === "senior")) resolvedMode = "review";
+    const pass = assistantAfterPlanPass(state);
+    if (pass) resolvedMode = assistantTaskPurpose(pass.id);
+    else if (state.stage === "review" && (state.mode === "auto" || modelRole === "senior")) resolvedMode = "review";
     else if (assistantTaskPurpose(state.task) && resolvedMode === "senior") resolvedMode = assistantTaskPurpose(state.task);
     return {
       requestedMode: state.mode,

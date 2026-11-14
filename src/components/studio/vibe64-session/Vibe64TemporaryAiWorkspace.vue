@@ -176,7 +176,7 @@
     <Vibe64SessionAssistantMenu
       v-model="customOpen" :target="customTarget" :session="modeSession"
       :can-configure="props.canConfigureRouting" :changes-disabled="props.repositoryBusy || activeTask?.status === 'closing'"
-      :save-selection="(selection) => temporary.updateRouting(activeTask.id, { mode: 'custom', review: false, override: selection })"
+      :save-selection="(selection) => temporary.updateRouting(activeTask.id, { mode: 'custom', override: selection })"
     />
     <v-dialog
       v-if="renamingTask"

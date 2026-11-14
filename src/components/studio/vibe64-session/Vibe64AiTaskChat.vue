@@ -121,7 +121,7 @@
       v-model="customOpen"
       :can-configure="canConfigureRouting"
       :changes-disabled="conversation.inputDisabled.value"
-      :save-selection="selection => conversation.updateRouting({ mode: 'custom', review: false, override: selection })"
+      :save-selection="selection => conversation.updateRouting({ mode: 'custom', override: selection })"
       :session="conversation.modeSession.value"
       :target="customTarget"
     />

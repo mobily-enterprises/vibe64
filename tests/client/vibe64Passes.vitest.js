@@ -1,7 +1,7 @@
 import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resource: null }));
+const mocks = vi.hoisted(() => ({ resource: null, saveSelection: null }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({ useEndpointResource: (options) => {
   mocks.resource.options = options;
   return mocks.resource;
@@ -15,6 +15,10 @@ vi.mock("vuetify", async () => {
   return { useDisplay: () => ({ xs: vueRef(false) }) };
 });
 vi.mock("vuetify/components", () => ({ VBottomSheet: {}, VMenu: {} }));
+// Main chat's settings route, which After a plan saves through.
+vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
+  useCommand: (options) => ({ run: () => mocks.saveSelection(options.buildCommandOptions(), options.buildRawPayload().assistantRouting) })
+}));
 
 import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "../fixtures/genesisPasses.js";
 import { masterRequest, runKey, useVibe64Passes } from "../../src/composables/useVibe64Passes.js";
@@ -51,6 +55,7 @@ beforeEach(() => {
     reload: vi.fn(async () => {}),
     save: vi.fn(async () => ({ ok: true }))
   };
+  mocks.saveSelection = vi.fn(async () => ({ ok: true }));
 });
 afterEach(() => {
   for (const app of apps) app.unmount();
@@ -181,7 +186,7 @@ it("the Master pass ticks every pass it runs, and Start sends Genesis's request 
   const menu = mount(Vibe64PassesMenu, { passes: state });
   expect(menu.master.title).toBe("Master pass");
   expect(menu.ticked).toEqual(GENESIS_MASTER_PASS.passes);
-  expect(GENESIS_MASTER_PASS.passes.map(menu.titleOf)).toEqual(["Security pass", "Data pass", "Quality pass", "Speed pass",
+  expect(GENESIS_MASTER_PASS.passes.map(menu.titleOf)).toEqual(["Review", "Security pass", "Data pass", "Quality pass", "Speed pass",
     "User experience pass", "Visual identity", "UI pass", "Deslop"]);
   const [whole] = menu.master.runs;
   expect(whole.label).toBe("Whole app (212 files, 18,450 lines)");
@@ -200,7 +205,7 @@ it("an unticked pass is not run: Start names only the ticked passes, in the Mast
   await menu.startMaster(menu.master.runs[0]);
   const [{ message }] = send.mock.calls.at(-1);
   expect(message).toBe("Master pass (Security pass, User experience pass, Deslop) the whole app.");
-  for (const left of ["Data pass", "Quality pass", "Speed pass", "Visual identity", "UI pass"]) expect(message).not.toContain(left);
+  for (const left of ["Review", "Data pass", "Quality pass", "Speed pass", "Visual identity", "UI pass"]) expect(message).not.toContain(left);
   // A run since the last completed Master pass names them the same way.
   const since = {
     id: "since-last",
@@ -227,4 +232,73 @@ it("a suggestion offers the pass's ordinary runs; its deep run stays in Passes b
   expect(suggestion.runs.map(({ id }) => id)).toEqual(["whole"]);
   const menu = mount(Vibe64PassesMenu, { passes: state });
   expect(menu.master, "a read without the Master pass shows none").toBe(null);
+});
+
+// Lets a save started by a tick finish.
+const settle = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+
+// Main chat's session, its saved chat mode carrying the passes it runs after a completed plan.
+const mainChat = (preferences = {}, session = {}) => ({ sessionId: "session-1", ...session, metadata: { assistant_routing: JSON.stringify({
+  mode: "auto", afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"], afterPlanDeep: [], autoSave: false, ...preferences
+}) } });
+
+it("Main chat's Passes tick the passes that run after a plan: Review and Security always, the rest saved through Chat settings in Master order", async () => {
+  const { state } = passes();
+  const menu = mount(Vibe64PassesMenu, { passes: state, session: mainChat(), sessionsApiPath: "/api/sessions" });
+  expect(menu.afterPlanShown).toBe(true);
+  expect(menu.afterPlanChangeable).toBe(true);
+  expect(menu.AFTER_PLAN_NOTE).toMatch(/^After a plan: when a plan is completed, each ticked pass checks the plan's changes in its own turn/u);
+  expect(menu.afterPlan).toEqual(["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"]);
+  // The mandatory pair is ticked and can't be unticked: its tick is disabled, and nothing is sent.
+  expect(["review", "security-pass"].filter(menu.mandatory)).toEqual(["review", "security-pass"]);
+  expect(menu.list.filter(({ id }) => menu.mandatory(id)).map(({ title }) => title)).toEqual(["Security pass", "Review"]);
+  menu.tickAfterPlan("review", false);
+  menu.tickAfterPlan("security-pass", false);
+  expect(mocks.saveSelection).not.toHaveBeenCalled();
+  // Ticking Speed saves the chat's mode with its ticks in Master pass order; its save choice stays the server's.
+  menu.tickAfterPlan("speed-pass", true);
+  await settle();
+  expect(mocks.saveSelection).toHaveBeenLastCalledWith({ method: "PATCH", path: "/api/sessions/session-1/assistant-selection" },
+    { mode: "auto", afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "speed-pass", "ui-pass", "deslop"], afterPlanDeep: [] });
+  expect(menu.afterPlan).toContain("speed-pass");
+  // A refused save puts the ticks back and says why.
+  mocks.saveSelection.mockRejectedValueOnce(new Error("Only the owner can change its chat mode, passes after a plan, Chat settings or model."));
+  await menu.saveAfterPlan(menu.afterPlan.filter((id) => id !== "deslop"), []);
+  expect(menu.afterPlan).toContain("deslop");
+  expect(menu.afterPlanError).toMatch(/^Only the owner can change/u);
+});
+
+it("Deeply is offered where Genesis has a deep run since a base, needs After a plan, and goes when After a plan is unticked", async () => {
+  mocks.resource.data.value.passes = listed({ review: { sinceBase: { request: "Review: the changes since base commit {base}, judged against the whole app.", deep: null } } });
+  const { state } = passes();
+  const menu = mount(Vibe64PassesMenu, { passes: state, session: mainChat({ mode: "custom", override: {
+    schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash",
+    variantId: "low", catalogRevision: `sha256:${"a".repeat(64)}` } }), sessionsApiPath: "/api/sessions" });
+  expect(menu.list.filter((pass) => pass.sinceBase?.deep).map(({ id }) => id)).not.toContain("review");
+  await menu.saveAfterPlan(menu.afterPlan, ["data-pass", "speed-pass"]);
+  const [, saved] = mocks.saveSelection.mock.calls.at(-1);
+  expect(saved.afterPlanDeep, "Deeply on an unticked pass is dropped").toEqual(["data-pass"]);
+  expect(saved.mode).toBe("custom");
+  expect(saved.override.modelId, "a Custom chat keeps its model").toBe("deepseek-flash");
+  menu.tickAfterPlan("data-pass", false);
+  await settle();
+  expect(mocks.saveSelection.mock.calls.at(-1)[1]).toMatchObject({ afterPlanDeep: [] });
+  expect(menu.afterPlan).not.toContain("data-pass");
+});
+
+it("After a plan shows only in Main chat outside lessons and Fix it with AI, and changes only once a chat mode is chosen and no goal runs", () => {
+  const { state } = passes();
+  expect(mount(Vibe64PassesMenu, { passes: state }).afterPlanShown, "no Main chat session").toBe(false);
+  expect(mount(Vibe64PassesMenu, { passes: state, session: mainChat({}, { purpose: "learning" }) }).afterPlanShown, "a lesson").toBe(false);
+  expect(mount(Vibe64PassesMenu, { passes: state, session: mainChat({ mode: "fix", afterPlan: ["review", "security-pass"] }) }).afterPlanShown,
+    "Fix it with AI").toBe(false);
+  const fresh = mount(Vibe64PassesMenu, { passes: state, session: { sessionId: "session-1", metadata: {} } });
+  expect(fresh.afterPlanShown).toBe(true);
+  expect(fresh.afterPlan, "a chat with no mode yet runs the defaults").toEqual(["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"]);
+  expect(fresh.afterPlanChangeable).toBe(false);
+  expect(fresh.afterPlanStatus).toBe("Choose a Chat mode to change these; until then the ticked passes run after a plan.");
+  const goal = mount(Vibe64PassesMenu, { passes: state, session: mainChat(), afterPlanReason: "After a plan can change once the current goal finishes." });
+  expect(goal.afterPlanChangeable).toBe(false);
+  goal.tickAfterPlan("speed-pass", true);
+  expect(mocks.saveSelection).not.toHaveBeenCalled();
 });

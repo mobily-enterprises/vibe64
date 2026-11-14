@@ -17,7 +17,7 @@ function facade() {
 
 test("the shared selection transport accepts both Main's and a temporary chat's routing", async () => {
   const body = selectBody(facade().conversationSelectionSchema);
-  for (const assistantRouting of [{ mode: "fix" }, { mode: "auto", review: true, autoSave: false }, { mode: "junior" }]) {
+  for (const assistantRouting of [{ mode: "fix" }, { mode: "auto", afterPlan: ["review", "security-pass"], afterPlanDeep: ["security-pass"], autoSave: false }, { mode: "junior" }]) {
     const { errors } = await body.create({ selection: { assistantRouting } });
     assert.deepEqual(errors, {}, JSON.stringify(assistantRouting));
   }

@@ -4,15 +4,9 @@ import {
   assistantRoutingRequestCanBeReplaced,
   assistantRoutingRequestIsUnresolved,
   assistantRoutingFromMetadata,
-  assistantRoutingAutomation,
-  assistantGoalIsActive,
-  assistantExplicitTask,
-  assistantTaskPurpose
+  assistantGoalIsActive
 } from "@local/vibe64-runtime/shared/assistantRouting";
-import {
-  assistantFinishingMessage,
-  assistantUnreviewedRequests
-} from "@local/vibe64-runtime/shared/assistantFinishing";
+import { assistantExplicitTask, assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { failure, readCancelled, read, usesWorkPlan, STATE_KEY } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
@@ -197,7 +191,7 @@ function createAssistantRoutingAdmission({
         );
       }
       const preferences = assistantRoutingFromMetadata(context.session.metadata) ||
-        (options.purpose || explicitTask ? { mode: options.purpose || "senior", review: false } : null);
+        (options.purpose || explicitTask ? { mode: options.purpose || "senior" } : null);
       if (!routingState.allowAuto && preferences?.mode === "auto") {
         throw failure("Auto is available in Main chat only. Choose Senior or Junior.", "vibe64_assistant_routing_auto_main_chat_only");
       }
@@ -214,6 +208,10 @@ function createAssistantRoutingAdmission({
           throw failure("There is no pending workflow to resume.", "vibe64_assistant_routing_nothing_to_resume");
         }
         if (state.awaitingAnswer) throw failure("Answer the question in chat. Your reply starts the next step.", "vibe64_assistant_routing_answer_required");
+        // Stop ends the after-plan passes; the person runs the rest from Passes.
+        if (state.stage === "pass" && state.stopped) {
+          throw failure("The after-plan passes were stopped. Run the rest from Passes.", "vibe64_assistant_routing_after_plan_stopped");
+        }
         if (state.delivery !== "uncertain") {
           if (state.delivery === "accepted" || state.followup && !Array.isArray(state.followup.messages)) {
             const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
@@ -356,7 +354,18 @@ function createAssistantRoutingAdmission({
         }
         const mode = pinnedGoal?.mode || options.purpose || preferences.mode;
         const hasPlanRevision = Boolean(input.planRevision);
-        const plan = mode === "auto" ? await readWorkPlan(context) : null;
+        // Main chat's own requests are workflows whose completed plan starts the
+        // chat's after-plan passes; an explicit task, generated work, a goal,
+        // temporary chats and lessons never are. Deslop must never rewrite a
+        // learner's code, and a lesson teaches Save.
+        const finishes = routingState.allowAuto && !context.runtime?.learningScope && mode !== "fix" && !explicitTask &&
+          !options.purpose && !assistantGoalIsActive(goal);
+        // The plan as this request found it: only a plan completed during the
+        // request starts the after-plan passes, never one already completed.
+        // Auto works from its plan; a direct chat only notes it, and an
+        // unreadable one is none there, as before passes ran after plans.
+        const plan = mode === "auto" ? await readWorkPlan(context)
+          : finishes ? await readWorkPlan(context).catch(() => null) : null;
         if (hasPlanRevision && mode !== "auto") throw failure("Choose Auto to implement its plan. Direct roles work from your message.", "vibe64_assistant_routing_plan_requires_auto");
         if (hasPlanRevision && (!plan || plan.status !== "active" || plan.revision !== input.planRevision)) {
           throw failure("The active plan changed. Read the current plan before sending your request.", "vibe64_assistant_routing_plan_changed");
@@ -364,17 +373,10 @@ function createAssistantRoutingAdmission({
         let resolvedMode = mode;
         if (explicitTask) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
-        // Main chat's own requests run the finishing steps; an explicit task,
-        // generated work, a goal, temporary chats and lessons never do. Deslop
-        // must never rewrite a learner's code, and a lesson teaches Save.
-        const finishes = routingState.allowAuto && !context.runtime?.learningScope && mode !== "fix" && !explicitTask &&
-          !options.purpose && !assistantGoalIsActive(goal);
         const review = mode === "auto" && finishes;
         // A Senior, Junior or Custom chat's request is its agent's work from the
         // start; Auto's becomes a workflow when Router classifies it.
         const direct = finishes && mode !== "auto";
-        const { autoSave: _autoSave, ...finishing } = finishes ? assistantRoutingAutomation(preferences) : {};
-        const previous = state;
         state = {
           messageId: input.messageId,
           input: {
@@ -393,10 +395,9 @@ function createAssistantRoutingAdmission({
           resolvedMode,
           ...(explicitTask ? { task: explicitTask } : {}),
           reason: explicitTask ? "review" : "",
-          finishing: finishes ? finishing : null,
-          unreviewed: assistantUnreviewedRequests(previous),
-          workPlan: plan,
-          schemaVersion: 5,
+          afterPlan: finishes ? { planAtAdmission: plan ? { status: plan.status, revision: plan.revision } : null } : null,
+          workPlan: mode === "auto" ? plan : null,
+          schemaVersion: 6,
           observedSelection: selection,
           configuration: pinnedGoal?.configuration || { revision: saved.revision, owner: saved.owner, nonOwner: saved.nonOwner },
           override: pinnedGoal ? pinnedGoal.override || (!pinnedGoal.configuration ? {
@@ -417,12 +418,7 @@ function createAssistantRoutingAdmission({
           planInvolved: hasPlanRevision,
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
-            .map((name) => [name, context.vibe64User[name]])) : null,
-          // In Auto Senior finishes; otherwise the chat's own agent. Only Senior
-          // completes a plan; Junior records its Progress, and Custom cannot write it.
-          reviewMessage: finishes ? assistantFinishingMessage(finishing, {
-            plan: ["auto", "senior"].includes(mode) ? "complete" : mode === "junior" ? "progress" : "report"
-          }) : ""
+            .map((name) => [name, context.vibe64User[name]])) : null
         };
         state.decision = await decisions.resolve(context, state);
         // The tool at admission; main chat's is the owner's Senior and Junior tool.

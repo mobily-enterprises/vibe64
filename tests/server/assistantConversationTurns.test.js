@@ -15,7 +15,7 @@ const SAVE_LINE = /Vibe64 saves this work automatically|the person saves finishe
 const ended = (state, result = "completed") => ({ payload: { agentRun: { active: false, state: result, providerTurnId: state.turnId } } });
 const question = "What does the form validate?";
 
-async function conversation(t, { role = "junior", preferences = { mode: "auto", review: true, autoSave: true } } = {}) {
+async function conversation(t, { role = "junior", preferences = { mode: "auto", autoSave: true } } = {}) {
   const f = await fixture(t, preferences, { readyPlan: false });
   f.router.respond = async () => ({ ok: true, text: JSON.stringify({ mode: role, reason: "conversation" }) });
   await f.service.send("session-1", { messageId: "request-1", message: question, submissionKind: "send" }, f.context);
@@ -61,14 +61,13 @@ for (const result of ["failed", "interrupted"]) test(`an Auto conversation turn 
   assert.equal(f.state().status, "waiting"); assert.equal(f.notices.size, 0); assert.equal(f.sends.length, 1);
 });
 
-test("an Auto conversation turn is not carried into the next request's finishing turn", async t => {
+test("an Auto conversation turn leaves the next request's work to run as its own", async t => {
   const f = await conversation(t);
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
   f.router.respond = async () => ({ ok: true, text: JSON.stringify({ mode: "junior", reason: "implementation" }) });
   await f.service.send("session-1", { messageId: "request-2", message: "Add the required-name check.", submissionKind: "send" }, f.context);
   const work = f.state();
   assert.equal(work.workflow, true); assert.equal(work.stage, "implementation");
-  assert.deepEqual(work.unreviewed, [], "the conversation is not listed as unreviewed work");
   assert.match(f.sends[1].input.message, OUTCOME_CALL, "the work request reports its outcome as before");
   assert.equal(f.helperCalls(), 2, "Router classifies each new request");
 });
@@ -76,7 +75,7 @@ test("an Auto conversation turn is not carried into the next request's finishing
 const customOverride = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "openai",
   modelId: "gpt-6-astra", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
 for (const mode of ["senior", "junior", "custom"]) test(`a ${mode} chat's question that reports complete anyway keeps today's path and shows its Status message`, async t => {
-  const f = await fixture(t, { mode, review: true, autoSave: true, ...(mode === "custom" ? { override: customOverride } : {}) }, { readyPlan: false });
+  const f = await fixture(t, { mode, autoSave: true, ...(mode === "custom" ? { override: customOverride } : {}) }, { readyPlan: false });
   await f.service.send("session-1", { messageId: "request-1", message: question, submissionKind: "send" }, f.context);
   const message = f.sends[0].input.message;
   assert.match(message, OUTCOME_CALL); assert.match(message, SAVE_LINE);
@@ -90,7 +89,7 @@ for (const mode of ["senior", "junior", "custom"]) test(`a ${mode} chat's questi
 });
 
 test("an Auto request Router classed as implementation reports an outcome, and Junior cannot report complete", async t => {
-  const f = await fixture(t, { mode: "auto", review: true, autoSave: true }, { readyPlan: false });
+  const f = await fixture(t, { mode: "auto", autoSave: true }, { readyPlan: false });
   await f.service.send("session-1", { messageId: "request-1", message: question, submissionKind: "send" }, f.context);
   assert.deepEqual(turnCost(f), { routerRequests: 1, turns: 1, outcomeCalls: 2 });
   await assert.rejects(reportOutcome(f, "complete"), { code: "vibe64_assistant_workflow_completion_senior_only" });
@@ -102,10 +101,10 @@ const DIRECT_MODES = ["senior", "junior", "custom"];
 const STATUS_PREFIX = "assistant-routing-outcome:";
 const askingQuestion = "The form checks the name.\n\n[1] Shall I also check the email?\nPossible answers:\n- Yes, check it\n- Not now";
 
-async function direct(t, mode, { message = question, switches = {} } = {}) {
+async function direct(t, mode, { message = question } = {}) {
   const saves = [];
-  const f = await fixture(t, { mode, review: true, deslop: true, uiPass: false, autoSave: true,
-    ...(mode === "custom" ? { override: customOverride } : {}), ...switches }, {
+  const f = await fixture(t, { mode, autoSave: true,
+    ...(mode === "custom" ? { override: customOverride } : {}) }, {
     readyPlan: false,
     onPlanCompleted: async () => { saves.push(saves.length); return "Saved automatically."; }
   });
@@ -135,32 +134,28 @@ async function answerAsInstructed(f) {
   return { toolCalls: exempt ? 0 : 2, modelRequests: exempt ? 1 : 3 };
 }
 
-for (const mode of DIRECT_MODES) test(`a ${mode} chat's answer that reports nothing ends complete with no Status message, no finishing step and no save`, async t => {
+for (const mode of DIRECT_MODES) test(`a ${mode} chat's answer that reports nothing ends complete with no Status message, no pass and no save`, async t => {
   const f = await direct(t, mode);
   replied(f);
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
   const state = f.state();
   assert.equal(state.status, "complete"); assert.equal(state.error, undefined); assert.equal(state.outcome, undefined);
   assert.deepEqual(statusMessages(f), []); assert.equal(assistantRoutingOutcomeNotice(state), null, "none is shown in chat");
-  assert.equal(f.notices.size, 0, "no finishing step starts"); assert.deepEqual(f.saves, []);
+  assert.equal(f.notices.size, 0, "no pass starts"); assert.deepEqual(f.saves, []);
   assert.equal(f.sends.length, 1); assert.equal(assistantRoutingStatusLabel(state), "Reply finished.");
 });
 
-for (const mode of DIRECT_MODES) test(`a ${mode} chat's unreported answer is covered by the next finishing turn, so its possible changes are reviewed and saved`, async t => {
+for (const mode of DIRECT_MODES) test(`a ${mode} chat's unreported answer ends its request; the next request's handoff ends that work and saves it once, with no review or pass turn`, async t => {
   const f = await direct(t, mode);
   replied(f);
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
+  assert.deepEqual(f.saves, [], "an answer saves nothing");
   await f.service.send("session-1", { messageId: "request-2", message: "Add the required-name check.", submissionKind: "send" }, f.context);
-  assert.deepEqual(f.state().unreviewed, [{ messageId: "request-1", message: question }]);
   await reportOutcome(f, "handoff");
   replied(f, "Added the check and its tests.");
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
-  assert.equal(f.state().stage, "review"); assert.equal(f.sends.length, 3);
-  assert.match(f.sends[2].input.message, /Earlier requests whose changes no automatic review has covered yet; cover their changes too: .*request-1/u);
-  await reportOutcome(f, "complete");
-  replied(f, "Reviewed and deslopped.");
-  await f.service.afterTurn("session-1", ended(f.state()), f.context);
-  assert.equal(f.state().status, "complete"); assert.deepEqual(f.saves, [0], "Save runs once, after the finishing turn");
+  assert.equal(f.state().status, "complete"); assert.equal(f.sends.length, 2, "no turn follows the handoff");
+  assert.deepEqual(f.saves, [0], "Save runs once, after the work's last turn");
 });
 
 for (const mode of DIRECT_MODES) for (const reported of ["", "wait", "continue"]) test(`a ${mode} chat's question to the person waits for the answer${reported ? `, with ${reported} reported` : ", with nothing reported"}`, async t => {
@@ -184,13 +179,13 @@ for (const mode of DIRECT_MODES) for (const result of ["failed", "interrupted"])
   assert.equal(state.delivery, "pending", "Continue implementation is offered"); assert.equal(f.sends.length, 1);
 });
 
-for (const mode of DIRECT_MODES) test(`a ${mode} chat's Stop leaves its answer waiting, and its changes fold into the next request`, async t => {
+for (const mode of DIRECT_MODES) test(`a ${mode} chat's Stop leaves its answer waiting, saved by nothing, and the next request replaces it`, async t => {
   const f = await direct(t, mode);
   await f.service.cancel("session-1", f.context);
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
   assert.equal(f.state().status, "waiting"); assert.equal(f.state().stopped, true); assert.deepEqual(f.saves, []);
   await f.service.send("session-1", { messageId: "request-2", message: "Add the required-name check.", submissionKind: "send" }, f.context);
-  assert.deepEqual(f.state().unreviewed.map(({ messageId }) => messageId), ["request-1"]);
+  assert.equal(f.state().messageId, "request-2"); assert.equal(f.state().stopped, undefined);
 });
 
 for (const mode of DIRECT_MODES) for (const result of ["completed", "interrupted"]) test(`a ${mode} chat's answer whose turn ${result} across a restart settles once, without resending`, async t => {
@@ -202,19 +197,18 @@ for (const mode of DIRECT_MODES) for (const result of ["completed", "interrupted
   assert.deepEqual(statusMessages(f), []); assert.equal(f.sends.length, 1);
 });
 
-for (const mode of DIRECT_MODES) test(`a ${mode} chat's follow-up and finishing turns keep reporting their outcomes`, async t => {
+for (const mode of DIRECT_MODES) test(`a ${mode} chat's follow-up turn keeps reporting its outcome, and its handoff ends the work`, async t => {
   const f = await direct(t, mode, { message: "Add the required-name check." });
   await reportOutcome(f, "continue");
   replied(f, "Added the check; its tests are next.");
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
   const continuing = f.sends[1].input.message;
   assert.match(continuing, OUTCOME_CALL); assert.doesNotMatch(continuing, ANSWERS_REPORT_NOTHING);
-  assert.match(continuing, /During implementation, complete means you answered or finished without changing any files/u, "a follow-up turn keeps today's wording");
+  assert.match(continuing, /complete means you answered or finished without changing any files/u, "a follow-up turn keeps today's wording");
   await reportOutcome(f, "handoff");
   replied(f, "Added the tests.");
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
-  const finishing = f.sends[2].input.message;
-  assert.equal(f.state().stage, "review"); assert.match(finishing, OUTCOME_CALL); assert.doesNotMatch(finishing, ANSWERS_REPORT_NOTHING);
+  assert.equal(f.state().status, "complete"); assert.equal(f.sends.length, 2); assert.deepEqual(f.saves, [0]);
 });
 
 // The change: a request's first turn that only answers reports nothing.
@@ -237,20 +231,21 @@ for (const [label, setup, says] of [
   ["an Auto conversation turn for Senior", f => { f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"conversation"}' }); }, false],
   ["an Auto planning turn", f => { f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' }); }, true],
   ["an Auto implementation turn by Senior", f => { f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"implementation"}' }); }, true],
-  ["a Senior chat's turn", f => { f.metadata.assistant_routing = JSON.stringify({ mode: "senior", review: true, deslop: true, uiPass: false, autoSave: true }); }, false]
+  ["a Senior chat's turn", f => { f.metadata.assistant_routing = JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: true }); }, false]
 ]) test(`${label} ${says ? "says" : "does not say"} that unfinished review reports continue through the workflow outcome command`, async t => {
-  const f = await fixture(t, { mode: "auto", review: true, autoSave: true }, { readyPlan: false });
+  const f = await fixture(t, { mode: "auto", autoSave: true }, { readyPlan: false });
   setup(f);
   await f.service.send("session-1", { messageId: "request-1", message: question, submissionKind: "send" }, f.context);
   assert.equal(f.sends[0].input.message.includes(AUTO_CONTINUE), says);
   assert.match(f.sends[0].input.message, /You are Senior and own the plan's scope and lifecycle/u, "Senior's plan guidance is there");
 });
 
-test("Auto's Senior review says that unfinished review reports continue through the workflow outcome command", async t => {
-  const f = await fixture(t, { mode: "auto", review: true, autoSave: true }, { readyPlan: false });
-  await f.service.send("session-1", { messageId: "request-1", message: "Add the required-name check.", submissionKind: "send" }, f.context);
-  await reportOutcome(f, "handoff");
+test("Auto's Senior check of a plan says that an unfinished check reports continue through the workflow outcome command", async t => {
+  const f = await fixture(t, { mode: "auto", autoSave: true });
+  await f.service.send("session-1", { messageId: "request-1", message: "Execute the plan", submissionKind: "send" }, f.context);
+  await reportOutcome(f, "handoff", { involved: true });
   replied(f, "Added the check.");
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
-  assert.equal(f.state().stage, "review"); assert.ok(f.sends[1].input.message.includes(AUTO_CONTINUE));
+  assert.equal(f.state().stage, "review"); assert.match(f.sends[1].input.message, /Plan completion:/u);
+  assert.ok(f.sends[1].input.message.includes(AUTO_CONTINUE));
 });

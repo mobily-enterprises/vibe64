@@ -12,11 +12,13 @@ import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerAgent";
 
-import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingPreferences } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
 import { createWritesWhileAssistantWorks } from "../../packages/vibe64-terminals/src/server/writesWhileAssistantWorks.js";
 
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
+// Every pass ticked After a plan, with automatic save: none of it runs after a turn that completes no plan.
+const EVERY_PASS = { afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "speed-pass", "ux-pass", "identity-pass", "ui-pass", "deslop"], autoSave: true };
 
 const completion = (turnId = "turn-1", state = "completed") => ({ payload: { agentRun: { active: false, state, providerTurnId: turnId } } });
 
@@ -90,7 +92,7 @@ test("working plan pages preserve full Unicode text and reject mixing revisions"
 for (const mode of ["senior", "junior"]) {
   for (const planState of ["absent", "active", "unreadable"]) {
     test(`direct ${mode} ignores a ${planState} working plan and never starts automatic review`, async (t) => {
-      const f = await fixture(t, { mode, review: true }, { readyPlan: false });
+      const f = await fixture(t, { mode }, { readyPlan: false });
       const file = workPlanPath(f.context);
       if (planState === "active") {
         await mkdir(path.dirname(file), { recursive: true });
@@ -127,7 +129,7 @@ for (const mode of ["senior", "junior"]) {
     });
   }
   test(`a stale Implement action cannot pull direct ${mode} into Auto's workflow`, async (t) => {
-    const f = await fixture(t, { mode, review: true });
+    const f = await fixture(t, { mode });
     await assert.rejects(f.service.send("session-1", { ...request, planRevision: (await readWorkPlan(f.context)).revision }, f.context), /Choose Auto to implement/);
     assert.equal(f.sends.length, 0);
     assert.equal(f.helperCalls(), 0);
@@ -136,7 +138,7 @@ for (const mode of ["senior", "junior"]) {
 
 for (const mode of ["senior", "junior"]) {
   test(`retrying direct ${mode} ignores a retained plan snapshot and review flag`, async t => {
-    const f = await fixture(t, { mode, review: true }, { readyPlan: false });
+    const f = await fixture(t, { mode }, { readyPlan: false });
     const file = workPlanPath(f.context);
     await mkdir(file, { recursive: true });
     await assert.rejects(f.service.send("session-1", request, { ...f.context,
@@ -196,7 +198,7 @@ test("new planning leaves a completed document intact until Senior explicitly re
 
 for (const mode of ["senior", "auto"]) {
   test(`${mode} plan creation receives the saved-plan contract without changing a plan on admission`, async (t) => {
-    const f = await fixture(t, { mode, review: false }, { readyPlan: false });
+    const f = await fixture(t, { mode }, { readyPlan: false });
     f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
     const message = "Make a plan to complete issue 53.";
     await f.service.send("session-1", { ...request, message }, f.context);
@@ -222,7 +224,7 @@ for (const mode of ["senior", "auto"]) {
 }
 
 test("generated Junior preserves chat preferences and reports its destination before inference without routing or review", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: true });
+  const f = await fixture(t, { mode: "senior" });
   const preferences = f.metadata.assistant_routing;
   const admitted = [];
   const options = { ...f.context, purpose: "junior", onPromptSending: async (destination) => {
@@ -293,11 +295,12 @@ for (const mode of ["senior", "junior"]) {
     assert.equal(f.sends[0].selection.modelId, mode === "senior" ? "gpt-6-astra" : "deepseek-flash");
     assert.equal(f.state().submittedBy.username, "owner");
     assert.equal(f.state().decision.seniorJuniorPair.senior.connectionIdentity, access.connectionIdentity);
-    await reportOutcome(f, mode === "junior" ? "handoff" : "wait");
+    // Junior's handoff of work on the active plan brings Senior's check of it, on the same account's pair.
+    await reportOutcome(f, mode === "junior" ? "handoff" : "wait", { involved: mode === "junior" });
     await f.service.afterTurn("session-1", completion(), f.context);
     if (mode === "junior") {
       assert.equal(f.sends[1].selection.modelId, "gpt-6-astra");
-      await reportOutcome(f, "wait");
+      await reportOutcome(f, "wait", { involved: true });
       await f.service.afterTurn("session-1", completion("turn-2"), f.context);
       assert.equal(f.state().stage, "review");
     }
@@ -370,7 +373,7 @@ test("a request the AI proved it never received is not sent, and Retry sends it 
 // Production incident: a message whose delivery could not be confirmed held
 // its chat, so every later message to it was refused.
 test("an unconfirmed request blocks only its own retry: a failing check stays uncertain, and Cancel frees the chat", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   f.failAdmission();
   await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
   f.failAdmission(false);
@@ -388,7 +391,7 @@ test("an unconfirmed request blocks only its own retry: a failing check stays un
 });
 
 test("a finished turn whose receipt check fails leaves its request waiting with a way out, never working", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   f.failAdmission();
   await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
   await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId });
@@ -406,7 +409,7 @@ test("a finished turn whose receipt check fails leaves its request waiting with 
 
 test("successful direct and automatic sends never publish uncertain delivery", async (t) => {
   for (const mode of ["senior", "junior", "auto"]) {
-    const f = await fixture(t, { mode, review: true });
+    const f = await fixture(t, { mode });
     await f.service.send("session-1", request, f.context);
     if (mode === "auto") await f.service.afterTurn("session-1", completion(), f.context);
     const states = f.events.map((event) => event.payload.assistantRoutingRequest);
@@ -419,7 +422,7 @@ test("successful direct and automatic sends never publish uncertain delivery", a
 });
 
 test("a late saved receipt clears interrupted delivery without dispatching again", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   f.failAdmission();
   await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
   await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId });
@@ -435,7 +438,7 @@ test("a late saved receipt clears interrupted delivery without dispatching again
 // Production incident: a restart during dispatch, after native admission saved
 // the message, left the request working with no turn to ever report its end.
 test("accepted work settles on reconciliation when its native turn is no longer running", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   f.failAdmission();
   await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
   await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId });
@@ -459,7 +462,7 @@ test("accepted work settles on reconciliation when its native turn is no longer 
 });
 
 test("a stopped request stays waiting when its late saved receipt confirms delivery", async t => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   f.failAdmission();
   await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
   await f.service.cancel("session-1", f.context, { waitForCleanup: true });
@@ -500,16 +503,16 @@ test("a Chat mode change never refuses steering: the message joins the running t
   // Production: switching Custom model while a turn was still running made the
   // next message fail with "The running turn still uses Senior". Steering must
   // keep the running turn's model instead of refusing.
-  const f = await fixture(t, { mode: "auto", review: false });
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, review: false, override: f.assignments.senior });
+  const f = await fixture(t, { mode: "auto" });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", afterPlan: ["review", "security-pass", "deslop"], override: f.assignments.senior });
   await f.service.send("session-1", { ...request, messageId: "custom-turn" }, f.context);
   assert.equal(f.state().mode, "custom");
   f.agent.sessionState = async () => ({ turn: { active: true, id: "turn-1" } });
   const { submissionKind: _kind, ...plain } = request;
-  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", deslop: true, review: false });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", afterPlan: ["review", "security-pass", "deslop"] });
   const steered = await f.service.send("session-1", { ...plain, messageId: "plan", message: "Create a plan" }, f.context);
   assert.equal(steered.delivered, true);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, review: false, override: f.assignments.junior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", afterPlan: ["review", "security-pass", "deslop"], override: f.assignments.junior });
   await f.service.send("session-1", { ...plain, messageId: "other-model" }, f.context);
   assert.equal(f.sends.length, 3);
   assert.equal(f.sends[2].input.message, plain.message, "steering is delivered verbatim");
@@ -517,7 +520,7 @@ test("a Chat mode change never refuses steering: the message joins the running t
   assert.equal(f.state().mode, "custom", "the running request keeps its mode");
   // Once the turn ends, the next message is routed by the new Chat mode.
   f.agent.sessionState = async () => ({ turn: { active: false } });
-  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", deslop: true, review: false });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", afterPlan: ["review", "security-pass", "deslop"] });
   await f.service.send("session-1", { ...plain, messageId: "next", message: "Create a plan" }, f.context);
   assert.equal(f.sends.length, 4);
   assert.equal(f.state().mode, "auto");
@@ -723,7 +726,7 @@ test("an orchestrator change during classification refuses delivery", async (t) 
 });
 
 test("goal preparation pins an explicit route only for the caller to commit after native acceptance", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: true });
+  const f = await fixture(t, { mode: "junior" });
   const prepared = await f.service.prepareGoal("session-1", { action: "set", objective: "Implement agreed validation" }, f.context);
   assert.equal(prepared.pinned.selection.modelId, "deepseek-flash");
   assert.equal(prepared.input.objective, "Implement agreed validation");
@@ -733,7 +736,7 @@ test("goal preparation pins an explicit route only for the caller to commit afte
 
 for (const status of ["active", "paused", "blocked", "budget_limited"]) {
   test(`a ${status} goal admits a new message and Resume after its account changes`, async (t) => {
-    const f = await fixture(t, { mode: "senior", review: false });
+    const f = await fixture(t, { mode: "senior" });
     const original = await f.service.prepareGoal("session-1", { action: "set", objective: "Finish validation" }, f.context);
     const pinned = JSON.parse(JSON.stringify({ ...original.pinned, status }));
     f.metadata.assistant_routing_goal = JSON.stringify(pinned);
@@ -756,7 +759,7 @@ for (const status of ["active", "paused", "blocked", "budget_limited"]) {
 }
 
 test("an account change cannot bypass a goal's model pin or current account access", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const original = await f.service.prepareGoal("session-1", { action: "set", objective: "Finish validation" }, f.context);
   const pinned = JSON.parse(JSON.stringify({ ...original.pinned, status: "blocked" }));
   f.metadata.assistant_routing_goal = JSON.stringify(pinned);
@@ -798,9 +801,9 @@ test("Auto uses a foreign Router and does not require Helper", async (t) => {
   assert.equal(f.state().helper, null);
 });
 
-for (const review of [false, true]) {
-  test(`an OpenCode main AI keeps its pair through completion and restart with review ${review}`, async (t) => {
-    const f = await fixture(t, { mode: "junior", review });
+for (const afterPlan of [["review", "security-pass"], ["review", "security-pass", "ui-pass", "deslop"]]) {
+  test(`an OpenCode main AI keeps its pair through completion and restart with ${afterPlan.length} passes after a plan`, async (t) => {
+    const f = await fixture(t, { mode: "junior", afterPlan });
     await f.configuration.write({ owner: { ...f.assignments, ...openCodePair(f) }, nonOwner: {} }, 1);
     const configuration = await f.configuration.read();
     await f.service.send("session-1", request, f.context);
@@ -809,7 +812,7 @@ for (const review of [false, true]) {
     await f.service.afterTurn("session-1", completion(), f.context);
     assert.equal(f.state().review, false, "direct Junior ignores Auto review preferences");
     assert.equal(f.sends.length, 1);
-    f.metadata.assistant_routing = JSON.stringify({ mode: "senior", deslop: true, review: false });
+    f.metadata.assistant_routing = JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass", "deslop"] });
     await f.restart().send("session-1", { ...request, messageId: "next-plan" }, f.context);
     assert.deepEqual([f.sends.at(-1).selection.engineId, f.sends.at(-1).selection.modelId], ["opencode", "gpt-6-astra"]);
     assert.equal(f.state().workflowEngineId, "opencode", "the main AI's tool runs the workflow");
@@ -817,10 +820,10 @@ for (const review of [false, true]) {
     assert.deepEqual(await f.configuration.read(), configuration);
   });
 
-  test(`a saved Code override survives restart with review ${review}`, async (t) => {
-    const f = await fixture(t, { mode: "junior", review });
+  test(`a saved Code override survives restart with ${afterPlan.length} passes after a plan`, async (t) => {
+    const f = await fixture(t, { mode: "junior", afterPlan });
     const override = { ...f.assignments.junior, variantId: "low", selectionSource: "explicit" };
-    const preferences = JSON.stringify({ mode: "junior", deslop: true, review, override });
+    const preferences = JSON.stringify({ mode: "junior", afterPlan, afterPlanDeep: [], autoSave: true, override });
     f.metadata.assistant_routing = preferences;
     await f.service.send("session-1", request, f.context);
     assert.deepEqual([f.sends[0].selection.engineId, f.sends[0].selection.modelId, f.sends[0].selection.variantId], ["codex", "deepseek-flash", "low"]);
@@ -837,15 +840,13 @@ test("a main AI without tool calls refuses Senior and Junior before delivery", a
   for (const provider of f.catalog.modelProviders) for (const model of provider.models) model.capabilities = { toolcall: false };
   const originalSelection = f.metadata.assistant_selection;
   for (const mode of ["senior", "junior"]) {
-    for (const review of [false, true]) {
-      f.metadata.assistant_routing = JSON.stringify({ mode, deslop: true, review });
-      await assert.rejects(f.service.send("session-1", request, f.context), {
-        code: "vibe64_assistant_capability_unavailable"
-      });
-      assert.equal(f.metadata.assistant_selection, originalSelection);
-      assert.equal(f.sends.length, 0);
-      assert.equal(f.helperCalls(), 0);
-    }
+    f.metadata.assistant_routing = JSON.stringify({ mode, afterPlan: ["review", "security-pass", "deslop"] });
+    await assert.rejects(f.service.send("session-1", request, f.context), {
+      code: "vibe64_assistant_capability_unavailable"
+    });
+    assert.equal(f.metadata.assistant_selection, originalSelection);
+    assert.equal(f.sends.length, 0);
+    assert.equal(f.helperCalls(), 0);
   }
 });
 
@@ -926,14 +927,14 @@ test("Stop during native helper startup stops the late turn before delivery", as
 });
 
 test("Helper cannot be selected for direct chat or sent as a chat mode", async (t) => {
-  const f = await fixture(t, { mode: "helper", review: false });
+  const f = await fixture(t, { mode: "helper" });
   await assert.rejects(f.service.send("session-1", request, f.context), /Choose Custom, Senior, Junior, or Auto/);
   assert.equal(f.sends.length, 0);
   assert.equal(f.helperCalls(), 0);
 });
 
 test("a goal switching tools requires ordinary Send before native goal admission", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   await f.configuration.write({ owner: { ...f.assignments, ...openCodePair(f) }, nonOwner: {} }, 1);
   await assert.rejects(f.service.prepareGoal("session-1", { action: "set", objective: "Implement agreed validation" }, f.context),
     { code: "vibe64_changeover_message_required" });
@@ -943,8 +944,8 @@ test("a goal switching tools requires ordinary Send before native goal admission
 
 for (const [role, refusal] of [["owner", null], ["member", "vibe64_main_chat_approval_required"]]) {
   test(`a migrated unsent ${role} request goes through fresh admission as its original actor`, async (t) => {
-    const f = await fixture(t, { mode: "junior", review: false });
-    const original = JSON.stringify({ schemaVersion: 5, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+    const f = await fixture(t, { mode: "junior" });
+    const original = JSON.stringify({ schemaVersion: 6, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
       messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
       assignments: { junior: f.assignments.junior }, settingsRevision: 1, submittedBy: { role, username: `original-${role}` } });
     f.metadata.assistant_routing_request = original;
@@ -964,7 +965,7 @@ for (const [role, refusal] of [["owner", null], ["member", "vibe64_main_chat_app
 for (const actorFields of [{}, { submittedBy: null }]) {
   test(`a migrated request with ${Object.hasOwn(actorFields, "submittedBy") ? "null" : "missing"} actor cannot borrow the signed-in retry user's identity`, async (t) => {
     const actors = [];
-    const f = await fixture(t, { mode: "junior", review: false }, {
+    const f = await fixture(t, { mode: "junior" }, {
       resolveAssistantUser: async (actor) => {
         actors.push(actor);
         if (!actor?.username) throw Object.assign(new Error("The submitting user is unavailable. Cancel and send a new request."), {
@@ -973,7 +974,7 @@ for (const actorFields of [{}, { submittedBy: null }]) {
         return actor;
       }
     });
-    const original = JSON.stringify({ schemaVersion: 5, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+    const original = JSON.stringify({ schemaVersion: 6, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
       messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
       assignments: { junior: f.assignments.junior }, settingsRevision: 1, ...actorFields });
     f.metadata.assistant_routing_request = original;
@@ -992,9 +993,9 @@ for (const actorFields of [{}, { submittedBy: null }]) {
 }
 
 test("standalone admission can retry a migrated request without a signed-in actor", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   f.context.vibe64User = null;
-  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 5, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 6, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
     messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
     assignments: { junior: f.assignments.junior }, settingsRevision: 1, submittedBy: null });
   await f.service.send("session-1", request, f.context);
@@ -1004,8 +1005,8 @@ test("standalone admission can retry a migrated request without a signed-in acto
 });
 
 test("a migrated uncertain request can inspect admission without authorizing fresh inference", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
-  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 5, delivery: "uncertain", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+  const f = await fixture(t, { mode: "junior" });
+  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 6, delivery: "uncertain", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
     messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
     assignments: { junior: f.assignments.junior }, attemptedMessageId: request.messageId, threadId: "retained-thread", settingsRevision: 1 });
   f.agent.resolveAssistantPurpose = async () => { throw new Error("No inference admission should run for receipt inspection"); };
@@ -1020,7 +1021,7 @@ test("a migrated uncertain request can inspect admission without authorizing fre
 });
 
 test("a legacy explicit goal retains its model when the current configured coder differs", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   f.metadata.assistant_routing_goal = JSON.stringify({ mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
     objective: "Implement validation", status: "active" });
   await f.configuration.write({ owner: { ...f.assignments, junior: f.assignments.senior }, nonOwner: {} }, 1);
@@ -1029,7 +1030,7 @@ test("a legacy explicit goal retains its model when the current configured coder
 });
 
 test("an uncertain request inspects its receipt while native work is still active", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   f.failAdmission();
   await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
   f.agent.sessionState = async () => ({ turn: { active: true, id: "turn-1" } });
@@ -1047,7 +1048,7 @@ test("malformed plan status is an actionable error, never inferred completion", 
 
 for (const mode of ["auto", "senior", "junior"]) {
   test(`explicit Deslop uses the configured Plan model directly from ${mode} without review`, async (t) => {
-    const f = await fixture(t, { mode, review: true });
+    const f = await fixture(t, { mode });
     const preferences = f.metadata.assistant_routing;
     await f.service.send("session-1", { ...request, message: "  DESLOP! " }, f.context);
     assert.equal(f.helperCalls(), 0);
@@ -1070,17 +1071,17 @@ for (const mode of ["auto", "senior", "junior"]) {
 }
 
 test("the Deslop button uses the configured planner despite a conversation's Junior override", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: true });
+  const f = await fixture(t, { mode: "junior" });
   const saved = await f.configuration.read();
   await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: true, override: f.assignments.junior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", afterPlan: ["review", "security-pass", "deslop"], override: f.assignments.junior });
   await f.service.send("session-1", { ...request, genesisTask: "deslop", message: "Deslop commit abc123." }, f.context);
   assert.equal(f.sends[0].selection.modelId, "gpt-6-sol", "Deslop follows the saved Plan assignment, not a hard-coded model");
   assert.equal(f.helperCalls(), 0);
 });
 
 test("Deslop refuses an unavailable or tool-less Senior model instead of falling back to Junior", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   f.connections.set("codex:openai", { available: false, current: null, history: [] });
   await assert.rejects(f.service.send("session-1", { ...request, message: "Deslop" }, f.context), /unavailable/);
   assert.equal(f.sends.length, 0);
@@ -1091,7 +1092,7 @@ test("Deslop refuses an unavailable or tool-less Senior model instead of falling
 });
 
 test("Deslop is never steered into a running coder or an unfinished goal", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   f.agent.sessionState = async () => ({ turn: { active: true } });
   await assert.rejects(f.service.send("session-1", { ...request, message: "Deslop", submissionKind: "steer" }, f.context), /own turn/);
   assert.equal(f.sends.length, 0);
@@ -1103,7 +1104,7 @@ test("Deslop is never steered into a running coder or an unfinished goal", async
 
 test("a new message refused before admission is a definite not-sent rejection that names the Goal controls", async (t) => {
   let busy = false;
-  const f = await fixture(t, { mode: "junior", review: false }, { beforeExclusive() {
+  const f = await fixture(t, { mode: "junior" }, { beforeExclusive() {
     if (busy) throw Object.assign(new Error("Another assistant operation is starting. Try again in a moment."),
       { code: "vibe64_agent_write_mode_busy", statusCode: 409, retryable: true });
   } });
@@ -1138,8 +1139,8 @@ for (const [message, scope] of [
 ]) {
   for (const mode of ["auto", "senior", "junior"]) {
     test(`"${message}" from ${mode} runs Genesis's ui-pass task on the configured Senior model with its scope as the request`, async (t) => {
-      // Every Chat settings switch is on: an explicit UI pass still runs alone, with no finishing turn after it.
-      const f = await fixture(t, { mode, review: true, deslop: true, uiPass: true, autoSave: true });
+      // Every pass is ticked After a plan: an explicit UI pass still runs alone, with no pass after it.
+      const f = await fixture(t, { mode, ...EVERY_PASS });
       const preferences = f.metadata.assistant_routing;
       await f.service.send("session-1", { ...request, message }, f.context);
       assert.equal(f.helperCalls(), 0);
@@ -1156,7 +1157,7 @@ for (const [message, scope] of [
       assert.equal(f.metadata.assistant_routing, preferences);
       await f.service.afterTurn("session-1", completion(), f.context);
       assert.equal(f.sends.length, 1);
-      assert.equal(f.notices.size, 0, "no finishing step starts after an explicit UI pass");
+      assert.equal(f.notices.size, 0, "no pass starts after an explicit UI pass");
       assert.equal(assistantRoutingStatusLabel(f.state()), "Reply finished.");
     });
   }
@@ -1165,7 +1166,7 @@ for (const [message, scope] of [
 test("a UI pass from Custom runs Genesis's ui-pass task on the Custom model", async (t) => {
   const f = await fixture(t, null);
   const selection = { ...f.assignments.senior, modelId: "gpt-6-sol", variantId: "low" };
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: selection, review: true, deslop: true, uiPass: true, autoSave: true });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: selection, ...EVERY_PASS });
   await f.service.send("session-1", { ...request, message: "UI pass: the bookings pages" }, f.context);
   assert.equal(f.helperCalls(), 0);
   assert.equal(f.state().task, "ui-pass");
@@ -1179,7 +1180,7 @@ test("a UI pass from Custom runs Genesis's ui-pass task on the Custom model", as
 });
 
 test("a UI pass refuses an unavailable or tool-less Senior model instead of falling back to Junior", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true });
+  const f = await fixture(t, { mode: "junior", ...EVERY_PASS });
   f.connections.set("codex:openai", { available: false, current: null, history: [] });
   await assert.rejects(f.service.send("session-1", { ...request, message: "UI pass" }, f.context), /unavailable/);
   assert.equal(f.sends.length, 0);
@@ -1202,10 +1203,10 @@ test("a UI pass with uncertain admission retains its task and checks the receipt
 });
 
 test("a UI pass sent as genesisTask goes to Genesis verbatim with the configured planner despite a Junior override", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: true });
+  const f = await fixture(t, { mode: "junior" });
   const saved = await f.configuration.read();
   await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: true, override: f.assignments.junior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", afterPlan: ["review", "security-pass", "deslop"], override: f.assignments.junior });
   // Run in Passes sends the run's request as Genesis wrote it; Genesis recognises only its own requests as the pass.
   for (const message of ["UI pass the whole app.", "UI pass: the changes since commit abc1234, judged against the whole app."]) {
     await f.service.send("session-1", { ...request, messageId: `ui-${f.sends.length}`, genesisTask: "ui-pass", message }, f.context);
@@ -1220,7 +1221,7 @@ test("a UI pass sent as genesisTask goes to Genesis verbatim with the configured
 });
 
 test("a UI pass is never steered into a running coder or an unfinished goal", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   f.agent.sessionState = async () => ({ turn: { active: true } });
   await assert.rejects(f.service.send("session-1", { ...request, message: "UI pass", submissionKind: "steer" }, f.context), {
     code: "vibe64_assistant_routing_ui_pass_turn_active",
@@ -1237,8 +1238,8 @@ test("a UI pass is never steered into a running coder or an unfinished goal", as
 });
 
 test("Run in the Passes list sends Genesis's pass in its own Senior turn, as the person's message", async (t) => {
-  // Every Chat settings switch is on: a pass still runs alone, with no finishing turn after it.
-  const f = await fixture(t, { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true });
+  // Every pass is ticked After a plan: a pass still runs alone, with no pass after it.
+  const f = await fixture(t, { mode: "junior", ...EVERY_PASS });
   const message = "Quality pass the whole app.";
   await f.service.send("session-1", { ...request, genesisTask: "quality-pass", message }, f.context);
   assert.equal(f.helperCalls(), 0);
@@ -1253,11 +1254,11 @@ test("Run in the Passes list sends Genesis's pass in its own Senior turn, as the
   assert.ok(f.sends[0].input.message.endsWith(`\n\n${message}`), f.sends[0].input.message);
   await f.service.afterTurn("session-1", completion(), f.context);
   assert.equal(f.sends.length, 1);
-  assert.equal(f.notices.size, 0, "no finishing step starts after a pass");
+  assert.equal(f.notices.size, 0, "no pass starts after a pass");
 });
 
 test("Start on the Master pass sends Genesis's request in its own Senior turn, or Genesis's reason when it cannot run", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true });
+  const f = await fixture(t, { mode: "junior", ...EVERY_PASS });
   const reason = "This project's Genesis (genesis-compiler 1.10.21) has no Master pass. Update it to 1.10.22 or later.";
   const master = f.genesis.master;
   f.genesis.master = { ...master, unavailable: reason, passes: [], runs: [] };
@@ -1275,7 +1276,7 @@ test("Start on the Master pass sends Genesis's request in its own Senior turn, o
 });
 
 test("a pass is refused politely while a turn or goal runs, and a task Genesis does not list as a pass is never sent", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const input = { ...request, genesisTask: "quality-pass", message: "Quality pass the whole app." };
   f.agent.sessionState = async () => ({ turn: { active: true } });
   await assert.rejects(f.service.send("session-1", input, f.context), {
@@ -1286,7 +1287,8 @@ test("a pass is refused politely while a turn or goal runs, and a task Genesis d
   f.agent.readGoal = async () => ({ goal: { status: "active" } });
   await assert.rejects(f.service.send("session-1", input, f.context), { code: "vibe64_assistant_goal_pass_blocked", delivery: "not-sent" });
   f.agent.readGoal = async () => ({ goal: null });
-  for (const genesisTask of ["review", "work", "no-such-pass"]) {
+  // Review is a pass now; program and work are Genesis tasks that are not.
+  for (const genesisTask of ["program", "work", "no-such-pass"]) {
     await assert.rejects(f.service.send("session-1", { ...input, genesisTask }, f.context), {
       code: "vibe64_assistant_routing_pass_unknown", delivery: "not-sent"
     }, genesisTask);
@@ -1295,7 +1297,7 @@ test("a pass is refused politely while a turn or goal runs, and a task Genesis d
 });
 
 test("a pass the project's own Genesis cannot run is refused by name with Genesis's reason; a typed Deslop still runs", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later.";
   f.genesis.unavailable = reason;
   f.genesis.passes = f.genesis.passes.map((pass) => ({ ...pass, unavailable: reason, runs: [] }));
@@ -1311,7 +1313,7 @@ test("a pass the project's own Genesis cannot run is refused by name with Genesi
 });
 
 test("a question about the UI pass is ordinary chat, not a UI pass", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: true });
+  const f = await fixture(t, { mode: "senior" });
   await f.service.send("session-1", { ...request, message: "What does the UI pass change?" }, f.context);
   assert.equal(f.state().task, undefined);
   assert.equal(f.sends[0].input.genesisTask, undefined);
@@ -1331,7 +1333,7 @@ test("Deslop with uncertain admission retains its task and checks the receipt wi
 });
 
 test("a finished turn identifies steering rejected before admission for same-message send recovery", async t => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   f.agent.sessionState = async () => ({ turn: { active: false, state: "completed" } });
   const input = { ...request, messageId: "finished-turn-steer", submissionKind: "steer" };
   const originalInput = structuredClone(input);
@@ -1351,7 +1353,7 @@ test("a finished turn identifies steering rejected before admission for same-mes
 });
 
 test("stopped or unverified inactive turns do not authorize automatic steering recovery", async t => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   for (const state of ["cancelled", "interrupted", "failed", undefined]) {
     f.agent.sessionState = async () => ({ turn: { active: false, state } });
     await assert.rejects(f.service.send("session-1", { ...request, submissionKind: "steer" }, f.context), {
@@ -1363,7 +1365,7 @@ test("stopped or unverified inactive turns do not authorize automatic steering r
 });
 
 test("Codex result projection preserves the completion reason for steering recovery", async t => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   const provider = createCodexSessionAgentProvider({ controller: {} });
   for (const runState of ["completed", "cancelled", "interrupted", "failed", "timed_out", ""]) {
     // Native Codex uses idle for every terminal state. Only runState proves
@@ -1387,7 +1389,7 @@ test("Codex result projection preserves the completion reason for steering recov
 });
 
 test("a member cannot steer or send to an active main chat turn", async (t) => {
-  const f = await fixture(t, { mode: "auto", review: true });
+  const f = await fixture(t, { mode: "auto" });
   f.agent.sessionState = async () => ({ turn: { active: true } });
   f.context.vibe64User = { role: "member", username: "collaborator" };
   for (const submissionKind of ["steer", undefined]) {
@@ -1406,7 +1408,7 @@ for (const message of ["Explain the current design.", "deslop", "UI pass"]) {
   test(`Custom keeps the exact selection without configured roles: ${message}`, async (t) => {
     const f = await fixture(t, null);
     const selection = { ...f.assignments.senior, modelId: "gpt-6-sol", variantId: "low" };
-    f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, override: selection });
+    f.metadata.assistant_routing = JSON.stringify({ mode: "custom", afterPlan: ["review", "security-pass", "deslop"], override: selection });
     await f.configuration.write({ owner: { senior: null, junior: null, router: null, quickHelper: null }, nonOwner: {} }, 1);
     const result = await f.service.send("session-1", { ...request, message }, f.context);
     assert.equal(result.delivered, true, JSON.stringify(result));
@@ -1422,7 +1424,7 @@ for (const message of ["Explain the current design.", "deslop", "UI pass"]) {
 
 test("a team member's main chat Custom model waits for the owner's approval", async (t) => {
   const f = await fixture(t, null);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, override: f.assignments.senior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", afterPlan: ["review", "security-pass", "deslop"], override: f.assignments.senior });
   await assert.rejects(f.service.send("session-1", request, { ...f.context, vibe64User: { role: "member", username: "member" } }),
     { code: "vibe64_main_chat_approval_required" });
   assert.equal(f.sends.length, 0);
@@ -1482,7 +1484,7 @@ test("Router gets only the last three visible messages, preserving their order a
 });
 
 test("a cancelled uncertain request permits new work on a changed assistant without replaying the old request", async t => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   f.failAdmission();
   await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission response/);
   const attempted = f.state().attemptedMessageId;
@@ -1495,7 +1497,7 @@ test("a cancelled uncertain request permits new work on a changed assistant with
   const next = { ...f.assignments.junior, modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high" };
   assert.notEqual(f.state().deliverySelection.modelProviderId, next.modelProviderId);
   f.metadata.assistant_selection = JSON.stringify(next);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, review: false, override: next });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", afterPlan: ["review", "security-pass", "deslop"], override: next });
   f.failAdmission(false);
   const result = await f.service.send("session-1", nextRequest, f.context);
   assert.equal(result.delivered, true);
@@ -1524,7 +1526,7 @@ test("selection cancellation waits for live routing and reports retained cleanup
 });
 
 test("new requests cannot replace unconfirmed or still-owned handoffs", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   await f.service.send("session-1", request, f.context);
   for (const blocked of [
     { delivery: "uncertain" }, { delivery: "sending" },
@@ -1540,7 +1542,7 @@ test("new requests cannot replace unconfirmed or still-owned handoffs", async (t
 });
 
 test("a paused goal retains its tool when the main AI moved to another one", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const configuration = await f.configuration.read();
   await f.configuration.write({ owner: { ...f.assignments, ...openCodePair(f) }, nonOwner: {} }, 1);
   const pinned = { mode: "senior", workflowEngineId: "codex", selection: f.assignments.senior,
@@ -1553,7 +1555,7 @@ test("a paused goal retains its tool when the main AI moved to another one", asy
 });
 
 test("a paused goal can inspect a rejected message after the main AI moved", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const configuration = await f.configuration.read();
   await f.configuration.write({ owner: { ...f.assignments, ...openCodePair(f) }, nonOwner: {} }, 1);
   const pinned = { mode: "senior", workflowEngineId: "codex", selection: f.assignments.senior,
@@ -1570,7 +1572,7 @@ test("a paused goal can inspect a rejected message after the main AI moved", asy
 });
 
 test("a paused goal is explicitly repinned to a direct mode without native goal or selection writes", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
     objective: "Finish validation", status: "paused", tokenBudget: 20000, tokensUsed: 5000 };
   f.metadata.assistant_routing_goal = JSON.stringify(pinned);
@@ -1598,7 +1600,7 @@ test("a paused goal is explicitly repinned to a direct mode without native goal 
 });
 
 test("a native paused goal without a routing pin can select Junior without native goal changes", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   const goal = { status: "paused", objective: "Finish validation", tokenBudget: 20000, tokensUsed: 5000 };
   const before = { ...f.metadata };
   f.metadata.assistant_routing_goal = JSON.stringify({ status: "active", objective: "Stale objective" });
@@ -1630,7 +1632,7 @@ test("a native paused goal without a routing pin can select Junior without nativ
 
 
 test("delivery inspection exposes the original failed-before-admission receipt without sending", async t => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   await assert.rejects(f.service.send("session-1", request, { ...f.context,
     onPromptSending: async () => { throw new Error("Initialize refused before query."); }
   }), /Initialize refused/);
@@ -1650,8 +1652,8 @@ test("delivery inspection exposes the original failed-before-admission receipt w
 });
 
 test("routing retains the original definite native validation rejection without dispatch", async t => {
-  const f = await fixture(t, { mode: "custom", review: false, override: null });
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", deslop: true, override: f.assignments.senior });
+  const f = await fixture(t, { mode: "custom", override: null });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", afterPlan: ["review", "security-pass", "deslop"], override: f.assignments.senior });
   f.rejectAdmission({ ok: false, delivered: false, code: "conversation_invalid_message",
     error: "Bounded text or attachment IDs and a stable messageId are required." });
   await assert.rejects(f.service.send("session-1", { ...request, message: "x".repeat(32_001) }, f.context), {
@@ -1667,7 +1669,7 @@ test("routing retains the original definite native validation rejection without 
 test("standalone failed delivery inspection rechecks original access without borrowing a signed-in actor", async t => {
   let hosted = false;
   const actors = [];
-  const f = await fixture(t, { mode: "junior", review: false }, {
+  const f = await fixture(t, { mode: "junior" }, {
     resolveAssistantUser: async actor => {
       actors.push(actor);
       if (hosted && !actor) throw Object.assign(new Error("The submitting user is unavailable."), {
@@ -1699,7 +1701,7 @@ test("standalone failed delivery inspection rechecks original access without bor
 });
 
 test("failed delivery inspection keeps unmatched, attempted, live and foreign-owner receipts unknown", async t => {
-  const f = await fixture(t, { mode: "junior", review: false });
+  const f = await fixture(t, { mode: "junior" });
   await assert.rejects(f.service.send("session-1", request, { ...f.context,
     onPromptSending: async () => { throw new Error("Rejected before query."); }
   }), /Rejected before query/);
@@ -1738,10 +1740,12 @@ test("failed delivery inspection keeps unmatched, attempted, live and foreign-ow
   assert.equal(f.helperCalls(), 0);
 });
 
+// A chat's saved Senior choice, as Chat settings and the goal controls pass it.
+const SENIOR_PREFERENCES = assistantRoutingPreferences({ mode: "senior" });
 
 for (const status of ["active", "paused"]) {
   test(`a ${status} goal applies next-turn settings without clearing progress or sending a message`, async t => {
-    const f = await fixture(t, { mode: "senior", review: false });
+    const f = await fixture(t, { mode: "senior" });
     const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
       objective: "Finish validation", status, tokenBudget: 20000, tokensUsed: 5000 };
     f.metadata.assistant_routing_goal = JSON.stringify(pinned);
@@ -1753,7 +1757,7 @@ for (const status of ["active", "paused"]) {
       return { ok: true };
     };
     assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-      { mode: "senior", review: false, deslop: true }, f.context), "next-turn");
+      SENIOR_PREFERENCES, f.context), "next-turn");
     assert.deepEqual(updates, [{ sessionId: "session-1", input: { threadId: "native-thread",
       model: f.assignments.senior.modelId, effort: f.assignments.senior.variantId }, selection: f.assignments.senior }]);
     const saved = JSON.parse(f.metadata.assistant_routing_goal);
@@ -1770,7 +1774,7 @@ for (const status of ["active", "paused"]) {
 }
 
 test("goal settings keep other tools and Auto deferred, and expose native failures without rewriting the pin", async t => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
     objective: "Finish validation", status: "active" };
   f.metadata.assistant_routing_goal = JSON.stringify(pinned);
@@ -1778,22 +1782,22 @@ test("goal settings keep other tools and Auto deferred, and expose native failur
   f.agent.readGoal = async () => ({ status: "available", threadId: "native-thread", goal: pinned });
   f.agent.updateSessionSettings = async () => assert.fail("A deferred selection must not reach the current native goal");
   assert.equal(await f.service.applyGoalSelection("session-1", { ...f.assignments.senior, engineId: "claude" },
-    { mode: "senior", deslop: true }, f.context), "after-goal");
+    SENIOR_PREFERENCES, f.context), "after-goal");
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "auto", deslop: true }, f.context), "after-goal");
+    { mode: "auto" }, f.context), "after-goal");
   assert.equal(f.metadata.assistant_routing_goal, original);
   f.agent.updateSessionSettings = async () => ({ ok: false, error: "Native settings failed", code: "settings_failed" });
   await assert.rejects(f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior", deslop: true }, f.context), { code: "settings_failed" });
+    SENIOR_PREFERENCES, f.context), { code: "settings_failed" });
   assert.equal(f.metadata.assistant_routing_goal, original);
   f.agent.readGoal = async () => ({ status: "unavailable", goal: null });
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior", deslop: true }, f.context), "unobserved");
+    SENIOR_PREFERENCES, f.context), "unobserved");
   assert.equal(f.metadata.assistant_routing_goal, original);
 });
 
 test("a concurrent goal pause survives a next-turn model update", async t => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
     objective: "Finish validation", status: "active" };
   f.metadata.assistant_routing_goal = JSON.stringify(pinned);
@@ -1803,7 +1807,7 @@ test("a concurrent goal pause survives a next-turn model update", async t => {
     return { ok: true };
   };
   await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior", deslop: true }, f.context);
+    SENIOR_PREFERENCES, f.context);
   const saved = JSON.parse(f.metadata.assistant_routing_goal);
   assert.equal(saved.status, "paused");
   assert.equal(saved.selection.modelId, f.assignments.senior.modelId);
@@ -1811,7 +1815,7 @@ test("a concurrent goal pause survives a next-turn model update", async t => {
 });
 
 test("a goal model update does not overwrite a concurrently replaced objective", async t => {
-  const f = await fixture(t, { mode: "senior", review: false });
+  const f = await fixture(t, { mode: "senior" });
   const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
     objective: "Finish validation", status: "active" };
   f.metadata.assistant_routing_goal = JSON.stringify(pinned);
@@ -1822,7 +1826,7 @@ test("a goal model update does not overwrite a concurrently replaced objective",
     return { ok: true };
   };
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior", deslop: true }, f.context), "after-goal");
+    SENIOR_PREFERENCES, f.context), "after-goal");
   assert.deepEqual(JSON.parse(f.metadata.assistant_routing_goal), replacement);
 });
 

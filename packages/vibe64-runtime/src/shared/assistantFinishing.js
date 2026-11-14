@@ -1,51 +1,110 @@
 /**
- * The finishing steps' defaults, the Chat settings switches that choose them,
- * and what each step's automatic start says. A new chat starts with all four
- * on; a saved chat keeps its own choices.
+ * How a chat's work finishes: the passes that run after a completed plan
+ * (Passes: After a plan), and Automatically save changes, which runs after
+ * them. A turn ending never starts a pass, and neither does Save: only a plan
+ * completed during a request does, or a person asking (Passes, the Master pass,
+ * or a typed request).
  */
-const ASSISTANT_FINISHING_DEFAULTS = Object.freeze({ review: true, deslop: true, uiPass: true, autoSave: true });
-const ASSISTANT_FINISHING_STEPS = Object.freeze([
-  { id: "review", name: "Review", setting: "Automatically review changes", genesisTask: "review" },
-  { id: "deslop", name: "Deslop", setting: "Automatically deslop changes", genesisTask: "deslop" },
-  { id: "uiPass", name: "UI pass", setting: "Automatically UI pass changes", genesisTask: "ui-pass" },
-  { id: "autoSave", name: "Save", setting: "Automatically save changes" }
-].map(Object.freeze));
-// Temporary chats and Fix it with AI run no finishing step.
-const ASSISTANT_NO_FINISHING = Object.freeze(Object.fromEntries(ASSISTANT_FINISHING_STEPS.map(({ id }) => [id, false])));
+
+// The order the after-plan passes run in, Genesis's Master pass order: Review
+// first, so every later pass starts from tested work, then Security, and Deslop
+// last, so it cleans up after the others.
+const AFTER_PLAN_PASS_ORDER = Object.freeze([
+  "review", "security-pass", "data-pass", "quality-pass", "speed-pass", "ux-pass", "identity-pass", "ui-pass", "deslop"
+]);
+// Always ticked: every completed plan is reviewed and security-checked.
+const AFTER_PLAN_MANDATORY_PASSES = Object.freeze(["review", "security-pass"]);
+// A new chat's ticks; Deeply starts off for every pass.
+const AFTER_PLAN_DEFAULT_PASSES = Object.freeze(["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"]);
+// The pass titles Genesis gives them, for messages written without its listing.
+const AFTER_PLAN_PASS_TITLES = Object.freeze({
+  review: "Review",
+  "security-pass": "Security pass",
+  "data-pass": "Data pass",
+  "quality-pass": "Quality pass",
+  "speed-pass": "Speed pass",
+  "ux-pass": "User experience pass",
+  "identity-pass": "Visual identity",
+  "ui-pass": "UI pass",
+  deslop: "Deslop"
+});
+const ASSISTANT_FINISHING_DEFAULTS = Object.freeze({
+  afterPlan: AFTER_PLAN_DEFAULT_PASSES,
+  afterPlanDeep: Object.freeze([]),
+  autoSave: true
+});
+// Temporary chats, Fix it with AI and lessons run no after-plan pass and never
+// save automatically; their saved choice keeps only the mandatory pair, which
+// never runs there.
+const ASSISTANT_NO_FINISHING = Object.freeze({
+  afterPlan: AFTER_PLAN_MANDATORY_PASSES,
+  afterPlanDeep: Object.freeze([]),
+  autoSave: false
+});
+const AUTO_SAVE_SETTING = "Automatically save changes";
 
 /**
- * The parts of a request's finishing turn, in order: review, Deslop, UI pass.
- * Save follows that turn. A request admitted before each chat chose its
- * finishing steps was Auto's, whose review was mandatory.
+ * Why a chat's after-plan choice cannot be saved, or "" when it can: every id
+ * is a pass, Review and Security are ticked, and Deeply is ticked only on a
+ * ticked pass.
+ * @param {unknown} afterPlan the ticked pass ids
+ * @param {unknown} afterPlanDeep the ids whose after-plan run is deep
  */
-function assistantFinishingParts(request) {
-  const finishing = request && Object.hasOwn(request, "finishing") ? request.finishing || {}
-    : { review: true, deslop: request?.deslop === true };
-  return ASSISTANT_FINISHING_STEPS.filter(({ id }) => id !== "autoSave" && finishing[id] === true).map(({ id }) => id);
+function afterPlanChoiceProblem(afterPlan, afterPlanDeep) {
+  const known = (list) => Array.isArray(list) && list.every((id) => AFTER_PLAN_PASS_ORDER.includes(id));
+  if (!known(afterPlan) || !known(afterPlanDeep)) {
+    return `After a plan takes the passes ${AFTER_PLAN_PASS_ORDER.join(", ")}.`;
+  }
+  if (!AFTER_PLAN_MANDATORY_PASSES.every((id) => afterPlan.includes(id))) {
+    return "Review and Security pass always run after a plan; they can't be unticked.";
+  }
+  if (afterPlanDeep.some((id) => !afterPlan.includes(id))) return "Tick After a plan for a pass before ticking Deeply.";
+  return "";
+}
+
+/** Pass ids in the after-plan order, each once. */
+const inAfterPlanOrder = (ids) => AFTER_PLAN_PASS_ORDER.filter((id) => ids.includes(id));
+
+/**
+ * The system notice a pass's automatic start after a completed plan writes.
+ * @param {string} title the pass's title, as Genesis lists it
+ * @param {string} key the follow-up it belongs to
+ * @param {{ deep?: boolean }} [options]
+ */
+function afterPlanPassNotice(title, key, options = {}) {
+  return {
+    messageId: `assistant-after-plan:${key}`,
+    text: `${title}${options.deep ? " deeply" : ""} started automatically after the plan (Passes: After a plan)`
+  };
+}
+
+/** The notice Save's automatic start writes. */
+function assistantAutoSaveNotice(key) {
+  return { messageId: `assistant-finishing:autoSave:${key}`, text: `Save started automatically (Chat settings: ${AUTO_SAVE_SETTING})` };
 }
 
 /**
- * The system notice a finishing step writes when the chat's setting starts it.
- * @param {string} step review, deslop, uiPass or autoSave
- * @param {string} key the follow-up or turn it belongs to
+ * Whether a turn other turns follow: Auto's Junior implementing an involved plan,
+ * which Senior verifies and completes in a turn of its own.
+ * @param {object} request the workflow request being delivered
  */
-function assistantFinishingNotice(step, key) {
-  const { name, setting } = ASSISTANT_FINISHING_STEPS.find(({ id }) => id === step);
-  return { messageId: `assistant-finishing:${step}:${key}`, text: `${name} started automatically (Chat settings: ${setting})` };
-}
+const assistantPlanCompletionFollows = (request) => request?.stage === "implementation" && request.mode === "auto" &&
+  request.planInvolved === true && request.resolvedMode === "junior";
 
 /**
- * What an implementation turn tells its agent when the chat's finishing turn
- * follows it automatically: the piece of work goes on after a continue or a
- * handoff, so its final reply reports instead of inviting the person to try or
- * publish unfinished work. It never names the finishing turn. The finishing turn
- * ends the piece of work, as does a turn no finishing turn follows, so both end
- * normally.
+ * What an implementation turn tells its agent when Senior's plan-completion turn
+ * follows it, or may: the piece of work goes on after a continue or a handoff,
+ * so its final reply reports instead of inviting the person to try or publish
+ * unfinished work. Auto's Junior working while the plan it found at admission is
+ * active may be executing it, which only its outcome reports, so it says so from
+ * its first turn. Every other workflow turn ends normally.
  * @param {object} request the workflow request being delivered
  * @returns {string} the line, or "" when this turn ends normally
  */
 function assistantContinuationInstruction(request) {
-  if (request.stage !== "implementation" || !assistantFinishingParts(request).length) return "";
+  const executingPlan = request?.stage === "implementation" && request.mode === "auto" &&
+    request.resolvedMode === "junior" && request.workPlan?.status === "active";
+  if (!assistantPlanCompletionFollows(request) && !executingPlan) return "";
   return "When you report continue or handoff, this piece of work continues automatically after your turn: end your final reply with what you changed and what you verified, and don't use it to ask the person to try, publish or deploy the work or to offer next steps.";
 }
 
@@ -56,7 +115,7 @@ function assistantContinuationInstruction(request) {
  */
 function assistantSaveInstruction(autoSave) {
   return autoSave
-    ? "Vibe64 saves this work automatically once it is finished, after any finishing turn: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
+    ? "Vibe64 saves this work automatically once it is finished, after any plan-completion turn and after-plan passes: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
     : "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
 }
 
@@ -72,71 +131,50 @@ function assistantWorkflowEnding(request, autoSave) {
 }
 
 /**
- * The finishing turn's instructions: the enabled parts in order, done by one
- * agent in one turn. Only Senior completes an involved plan.
- * @param {{ review?: boolean, deslop?: boolean, uiPass?: boolean }} finishing
- * @param {{ plan?: "complete" | "progress" | "report" }} [options] what the agent does
- *   with an involved plan: Senior (and Auto's Senior) completes it, Junior records its
- *   Progress, and Custom, which cannot write the plan, reports in its reply.
+ * Senior's turn after Auto's Junior implemented an involved plan: it verifies
+ * the plan and completes it, or leaves it active, or hands substantial rework
+ * back. It is not a pass and runs none.
  */
-function assistantFinishingMessage(finishing, options = {}) {
-  const { plan = "complete" } = options;
-  const parts = assistantFinishingParts({ finishing });
-  if (!parts.length) return "";
-  const { review, deslop, uiPass } = finishing;
-  const names = parts.map(id => id === "review" ? "review" : ASSISTANT_FINISHING_STEPS.find(step => step.id === id).name);
-  const heading = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
-  return [
-    `Automatic ${heading}:`,
-    ...(review ? [
-      "Check the preceding implementation against my request, accepted steering and any plan explicitly involved in that work. Inspect the implementation and evidence, fix in-scope issues, and run relevant checks. Read every page of BOTH Plan and Progress before reviewing, including the complete technical implementation plan; checklist marks do not establish completion. Leave unrelated plans unchanged. Do not ask for permission merely to review or complete verified work."
-    ] : []),
-    ...(deslop ? [review
-      ? "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance. Keep that cleanup behavior-preserving and preserve unrelated work and staging."
-      : "Perform Deslop on the preceding coding changes, following the project's Deslop guidance. Keep that cleanup behavior-preserving and preserve unrelated work and staging."
-    ] : []),
-    ...(uiPass ? [review || deslop
-      ? "Then run the UI pass on the screens those changes touched, following the project's UI pass guidance. Keep each screen's behavior and preserve unrelated work and staging."
-      : "Run the UI pass on the screens the preceding coding changes touched, following the project's UI pass guidance. Keep each screen's behavior and preserve unrelated work and staging."
-    ] : []),
-    ...(deslop || uiPass ? [
-      "Perform every part yourself in this turn; do not delegate cleanup or start a separate Deslop or UI pass turn. Run relevant checks after cleanup."
-    ] : []),
-    {
-      complete: `Only after ${review ? "review, any enabled Deslop and UI pass" : "every part"} and their checks are finished: Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Report findings, fixes, actual checks and anything unverified.`,
-      progress: "Only after every part and its checks are finished: record specific gaps and verification evidence in an involved plan's paired Progress document and leave that plan active for Senior to complete. Report findings, fixes, actual checks and anything unverified.",
-      report: "Only after every part and its checks are finished: leave an involved plan and its Progress unchanged and active for Senior to complete, and name its remaining gaps and verification evidence in your reply. Report findings, fixes, actual checks and anything unverified."
-    }[plan]
-  ].join(" ");
-}
+const ASSISTANT_PLAN_COMPLETION_MESSAGE = [
+  "Plan completion:",
+  "Read every page of BOTH Plan and Progress, including the complete technical implementation plan; checklist marks do not establish completion.",
+  "Verify each agreed requirement against the preceding implementation, my request, accepted steering and the recorded evidence. Inspect the implementation, fix in-scope gaps and run relevant checks. Leave unrelated plans unchanged.",
+  "Then explicitly complete the plan with the plan helper when every requirement is verified, and report complete with the returned revisions; otherwise leave Plan active, record the specific gaps and verification evidence in its paired Progress document, and report wait, or report handoff for substantial necessary rework.",
+  "This turn checks the plan only: run no Deslop, UI pass or other pass. Once the plan is completed, Vibe64 runs the passes this chat ticks in Passes (After a plan) as their own turns.",
+  "Do not ask for permission merely to verify or complete verified work. Report findings, fixes, actual checks and anything unverified."
+].join(" ");
+
+/** Senior's verification after a review an explicitly chosen Junior did, with no plan involved. */
+const ASSISTANT_SENIOR_VERIFICATION_MESSAGE = "Senior verification: Check the preceding review's findings and fixes against my request and accepted steering. Inspect the implementation and evidence, fix in-scope issues and run relevant checks. Report findings, fixes, actual checks and anything unverified.";
 
 /**
- * Earlier requests whose changes no finishing turn has covered yet, oldest
- * first and bounded: a stopped, waiting or unfinished request's changes fold
- * into the next finishing turn. Finished work (its finishing turn, or a
- * handoff with every part off) covered them all; work its agent reported
- * complete without changing files passes them on.
+ * A plan completed during this request starts the after-plan passes: a workflow
+ * request the chat runs them for, whose current plan is completed and is not
+ * the plan it found already completed when it was admitted.
+ * @param {object} request the saved routing request
+ * @param {{ status: string, revision: string } | null} plan the current plan
  */
-function assistantUnreviewedRequests(previous) {
-  if (!previous) return [];
-  const complete = previous.workflow && previous.status === "complete";
-  // Only an outcome reported for the request's own last turn counts.
-  const reported = previous.outcome && previous.outcome.turnId === previous.turnId ? previous.outcome.decision : "";
-  if (complete && (previous.stage === "review" || reported === "handoff")) return [];
-  const unchanged = complete && reported === "complete";
-  return [
-    ...(Array.isArray(previous.unreviewed) ? previous.unreviewed : []),
-    ...(previous.workflow && !unchanged ? [{ messageId: previous.messageId, message: String(previous.input?.message || "").slice(0, 500) }] : [])
-  ].slice(-10);
+function planCompletedDuringRequest(request, plan) {
+  const admitted = request?.afterPlan?.planAtAdmission;
+  return Boolean(request?.afterPlan) && plan?.status === "completed" &&
+    !(admitted?.status === "completed" && admitted.revision === plan.revision);
 }
 
 export {
+  AFTER_PLAN_DEFAULT_PASSES,
+  AFTER_PLAN_MANDATORY_PASSES,
+  AFTER_PLAN_PASS_ORDER,
+  AFTER_PLAN_PASS_TITLES,
   ASSISTANT_FINISHING_DEFAULTS,
-  ASSISTANT_FINISHING_STEPS,
   ASSISTANT_NO_FINISHING,
-  assistantFinishingMessage,
-  assistantFinishingNotice,
-  assistantFinishingParts,
-  assistantUnreviewedRequests,
-  assistantWorkflowEnding
+  ASSISTANT_PLAN_COMPLETION_MESSAGE,
+  ASSISTANT_SENIOR_VERIFICATION_MESSAGE,
+  AUTO_SAVE_SETTING,
+  afterPlanChoiceProblem,
+  afterPlanPassNotice,
+  assistantAutoSaveNotice,
+  assistantPlanCompletionFollows,
+  assistantWorkflowEnding,
+  inAfterPlanOrder,
+  planCompletedDuringRequest
 };

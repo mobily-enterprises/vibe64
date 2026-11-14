@@ -9,9 +9,12 @@ import { promisify } from "node:util";
 import {
   genesisPackageBinDirectory,
   initializeGenesisProject,
-  listGenesisPasses
+  listGenesisPasses,
+  renderGenesisPrompt
 } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createProjectPasses } from "../../packages/vibe64-terminals/src/server/projectPasses.js";
+import { AFTER_PLAN_PASS_ORDER } from "@local/vibe64-runtime/shared/assistantFinishing";
+import { assistantModePrompt } from "@local/vibe64-runtime/shared/assistantRouting";
 import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "../fixtures/genesisPasses.js";
 
 const run = promisify(execFile);
@@ -33,10 +36,11 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   const created = new Date(Date.now() - 2 * DAY).toISOString();
   await git(["commit", "-q", "-m", "A fresh Genesis project"], { GIT_AUTHOR_DATE: created, GIT_COMMITTER_DATE: created });
 
-  // Genesis lists all eight passes, none run, each with its whole-app and deep runs, and the Master pass; the fixture the
-  // other tests use is the same list, its sample size aside, since a run's size follows the project's own files.
-  const shape = ({ id, title, description, recommend, request, lastRun, unavailable, runs }) =>
-    ({ id, title, description, recommend, request, lastRun, unavailable, runs });
+  // Genesis lists all nine passes, none run, each with its whole-app and deep runs and its requests since a base commit,
+  // and the Master pass; the fixture the other tests use is the same list, its sample size aside, since a run's size
+  // follows the project's own files.
+  const shape = ({ id, title, description, recommend, request, lastRun, unavailable, runs, sinceBase }) =>
+    ({ id, title, description, recommend, request, lastRun, unavailable, runs, sinceBase });
   const masterShape = ({ id, title, description, request, lastRun, lastPasses, unavailable, passes, runs }) =>
     ({ id, title, description, request, lastRun, lastPasses, unavailable, passes, runs });
   const listed = await listGenesisPasses({ projectRoot: source });
@@ -47,6 +51,7 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   const resized = (runs) => runs.map((run) => run.files === undefined ? run : { ...run, label: run.label.replace(/\(.*\)$/u, `(${size})`), files, lines });
   assert.deepEqual(listed.passes.map(shape), GENESIS_PASSES.map((pass) => shape({ ...pass, runs: resized(pass.runs) })));
   assert.deepEqual(masterShape(listed.master), masterShape({ ...GENESIS_MASTER_PASS, runs: resized(GENESIS_MASTER_PASS.runs) }));
+  assert.deepEqual(AFTER_PLAN_PASS_ORDER, listed.master.passes, "passes after a plan run in Genesis's Master pass order");
 
   const clock = { now: Date.now() };
   const passes = createProjectPasses({
@@ -75,7 +80,7 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   assert.ok(Date.parse(lastRun) >= before);
   assert.ok(recorded.passes.every(({ id, lastRun: other }) => id === "quality-pass" || other === null));
   assert.deepEqual(recorded.byId["quality-pass"].runs.map(({ id }) => id), ["whole", "deep"], "an unsaved record has no commit to start from");
-  await git(["add", "genesis/passes.json"]);
+  await git(["add", "genesis"]);
   await git(["commit", "-q", "-m", "Quality pass"]);
   const recordCommit = (await git(["rev-parse", "HEAD"])).stdout.trim();
 
@@ -100,14 +105,48 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   });
   assert.ok(due.passes.filter(({ id }) => id !== "quality-pass").every(({ runs }) => runs.map(({ id }) => id).join() === "whole,deep"),
     "a pass never completed has only its whole-app and deep runs");
+
+  // Passes after a plan send only Genesis's requests since a base, framed as Vibe64 sends a pass's turn: Genesis
+  // scopes each to that base and never asks the AI to record it, so they leave every pass's last completed run, and
+  // the runs offered from it, as they were.
+  // Genesis keeps its pass record in genesis/passes.json, and the entries an older Genesis would refuse (Review, the
+  // Master pass) in genesis/passes-added.json.
+  // Genesis composes a prompt only for a described product; its own files never count in a run's size.
+  await writeFile(path.join(source, "genesis", "blueprint.md"), "# Blueprint\n\nA small app whose people keep a list of contacts.\n");
+  const ledgerFiles = () => Promise.all(["passes.json", "passes-added.json"]
+    .map((name) => readFile(path.join(source, "genesis", name), "utf8").catch(() => null)));
+  const ledger = await ledgerFiles();
+  for (const [id, deep] of [["quality-pass", false], ["quality-pass", true], ["deslop", false], ["review", true]]) {
+    const { sinceBase } = due.byId[id];
+    const request = (deep ? sinceBase.deep : sinceBase.request).replace("{base}", recordCommit);
+    const intent = id === "deslop" ? "deslop" : "pass";
+    const rendered = await renderGenesisPrompt({
+      environment: process.env,
+      action: { genesisTask: id },
+      input: { request: assistantModePrompt("senior", request, { intent }), automaticGenesisTask: true },
+      // Genesis refusing the request would send it as written: show its reason instead.
+      onGenesisUnavailable: (error) => { throw error; },
+      projectRoot: source
+    });
+    assert.equal(rendered.context.task, id);
+    assert.match(rendered.prompt, new RegExp(`run over the changes since commit ${recordCommit}, the base its request names`, "u"), `${id} ${deep}`);
+    assert.doesNotMatch(rendered.prompt, /PASS RECORD|passes done/u, `${id} ${deep}: never recorded as the pass's own run`);
+  }
+  const after = await read();
+  assert.deepEqual(await ledgerFiles(), ledger, "the pass record is unchanged");
+  for (const id of AFTER_PLAN_PASS_ORDER) {
+    assert.equal(after.byId[id].lastRun, due.byId[id].lastRun, id);
+    assert.deepEqual(after.byId[id].runs, due.byId[id].runs, `${id}: its runs, Since last completed among them, are unchanged`);
+    assert.deepEqual(after.byId[id].sinceBase, due.byId[id].sinceBase, id);
+  }
   // Passes that never ran come first, in Genesis's order; Later and Dismiss move on to the next.
   const order = [];
   let current = due.recommendation;
-  for (const action of ["snooze", "dismiss", "snooze", "dismiss", "snooze", "dismiss", "snooze", "dismiss"]) {
+  for (const action of ["snooze", "dismiss", "snooze", "dismiss", "snooze", "dismiss", "snooze", "dismiss", "snooze"]) {
     order.push(current);
     current = (await passes.changePassRecommendation("session-1", { passId: current, action })).recommendation;
   }
-  assert.deepEqual(order, ["deslop", "ui-pass", "identity-pass", "data-pass", "security-pass", "ux-pass", "speed-pass", "quality-pass"],
+  assert.deepEqual(order, ["deslop", "ui-pass", "identity-pass", "data-pass", "security-pass", "ux-pass", "speed-pass", "review", "quality-pass"],
     "never-run passes first, then the overdue one");
   assert.equal(current, "", "every pass is snoozed or dismissed");
   clock.now += 7 * DAY;
@@ -118,7 +157,7 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   // A Master pass records itself last, with the passes it ran; once committed, it offers the changes since it, sized
   // by the files they touch.
   await run(path.join(genesisPackageBinDirectory(), "genesis"), ["passes", "done", "master-pass", "deslop", "security-pass"], { cwd: source });
-  await git(["add", "genesis/passes.json"]);
+  await git(["add", "genesis"]);
   await git(["commit", "-q", "-m", "Master pass"]);
   await writeFile(path.join(source, "notes.txt"), "one\ntwo\n");
   await git(["add", "notes.txt"]);
@@ -173,6 +212,9 @@ test("a project pinned to a Genesis that cannot run passes lists them with Genes
   assert.equal(result.unavailable, reason);
   assert.deepEqual(result.passes.map(({ id }) => id), GENESIS_PASSES.map(({ id }) => id), "every pass is still listed");
   assert.ok(result.passes.every((pass) => pass.unavailable === reason && pass.runs.length === 0));
+  // So no after-plan pass runs there either, except Review, whose prompt needs nothing from that Genesis.
+  assert.deepEqual(Object.fromEntries(result.passes.map(({ id, sinceBase }) => [id, sinceBase])), Object.fromEntries(GENESIS_PASSES.map(({ id }) =>
+    [id, id === "review" ? { request: "Review: the changes since base commit {base}, judged against the whole app.", deep: null } : null])));
   assert.ok(result.passes.every(({ commitsSince }) => commitsSince >= 30), "every pass is due by its commits");
   assert.equal(result.recommendation, "", "but none is suggested, since none can run");
   assert.deepEqual([result.master.unavailable, result.master.passes, result.master.runs], [reason, [], []], "nor the Master pass");

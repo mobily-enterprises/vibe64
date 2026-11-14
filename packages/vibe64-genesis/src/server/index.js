@@ -630,7 +630,7 @@ async function renderGenesisPrompt({
       const fallbackTask = Object.hasOwn(GENESIS_PROMPT_FALLBACK_TASKS, String(error?.code))
         ? GENESIS_PROMPT_FALLBACK_TASKS[error.code]
         : "";
-      // A task Vibe64 chose itself, such as an automatic finishing turn's review,
+      // A task Vibe64 chose itself, such as a pass that runs after a completed plan,
       // never becomes the Blueprint's: its request goes as written.
       if (!fallbackTask || fallbackTask === requestedTask || input.automaticGenesisTask === true) throw error;
       return { result: await generate(fallbackTask), task: fallbackTask };

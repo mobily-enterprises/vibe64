@@ -61,25 +61,36 @@ Updates appear while the viewer is open.
 
 ## Automatic completion and archival
 
-After Auto's final Senior review and any enabled Deslop and UI pass finish successfully,
-Senior explicitly marks the involved plan Completed. Once the final explanation
-has been delivered and that review turn finishes, Vibe64 automatically moves
-that exact Plan and Progress pair into History. Chat shows **Completed plan
-archived** with **View plan history**, which opens this session's existing viewer.
-The plan icon remains available and opens History when there is no current plan.
-With **Automatically save changes** on (the default; see [Choose what runs after
-each piece of work](chat-settings.md)), Vibe64 then runs the ordinary **Save**
-once and notes the result in chat. In a Senior chat Senior completes the plan
-the same way after its own finishing turn; a Junior or Custom chat's finishing
-turn leaves the plan active for Senior to complete, and Save still runs.
+Only Senior marks a plan Completed, once it has verified every agreed
+requirement: in Auto, in the turn in which Senior checks the plan Junior
+implemented; in a Senior chat, or when Senior implemented it, in Senior's own
+work on it. A Junior or Custom
+chat leaves the plan active for Senior to complete, and its work is saved as
+usual. Once the final explanation has been delivered and that turn finishes, the
+passes ticked under **After a plan** in [Passes](passes.md#choose-the-passes-that-run-after-a-plan)
+run, each in its own turn over the plan's changes. After the last one, Vibe64
+moves that exact Plan and Progress pair into History. Chat shows **Completed
+plan archived** with **View plan history**, which opens this session's existing
+viewer. The plan icon remains available and opens History when there is no
+current plan. With **Automatically save changes** on (the default; see [Choose
+what happens once work is finished](chat-settings.md)), Vibe64 then runs the
+ordinary **Save** once and notes the result in chat. When a pass after the plan
+is stopped or fails, the completed plan stays current, unarchived, and nothing
+is saved automatically.
 
-Senior can update checklist ticks and Progress during review without preventing
-completion. The agreed plan wording must still match the reviewed scope, and
+Senior's check of a plan runs only when Junior implemented it in Auto and the
+plan is still active afterwards; it is not a pass, has no setting and runs no
+pass. Work done without a plan is no longer reviewed, deslopped or UI-passed
+automatically: ask for those from [Passes](passes.md), through the Master pass,
+or by typing the request in chat.
+
+Senior can update checklist ticks and Progress while checking the plan without preventing
+completion. The agreed plan wording must still match the checked scope, and
 completion uses the latest saved Plan and Progress together.
 
 A finished implementation or an agent's handoff explanation is not completion.
-Interrupted reviews, unfinished plans and unrelated requests do not archive a
-plan. A different plan created while reviewing is not archived by the old review.
+Interrupted checks, unfinished plans and unrelated requests do not archive a
+plan. A different plan created while Senior checks one is not archived by that check.
 If automatic archival cannot be confirmed, the notice explains the problem;
 inspect Current plan and History before retrying Archive. Older completed plans
 are not moved retroactively just by opening or restoring a session.

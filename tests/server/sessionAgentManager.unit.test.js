@@ -1907,7 +1907,7 @@ test("goal status and Stop target the retained goal selection without rebinding 
 
 test("purpose availability shares one response's facts and gives team members their own setup", async () => {
   const f = routingManagerFixture();
-  const purposes = await f.manager.inspectAssistantPurposes({ mode: "junior", review: true }, f.options);
+  const purposes = await f.manager.inspectAssistantPurposes({ mode: "junior" }, f.options);
   for (const purpose of ["senior", "junior", "review", "auto", "request_routing"]) {
     assert.deepEqual([purposes[purpose].available, purposes[purpose].approvalRequired], [false, true], purpose);
   }
@@ -1938,7 +1938,7 @@ test("purpose availability applies an explicit mode override without modifying o
 test("an owner on personal models has every purpose available; dispatch validates only that tool's catalogue", async () => {
   const f = routingManagerFixture();
   Object.assign(f.configuration.owner, { senior: f.senior, junior: f.senior, quickHelper: f.senior, router: f.senior });
-  const purposes = await f.manager.inspectAssistantPurposes({ mode: "auto", review: true }, f.owner);
+  const purposes = await f.manager.inspectAssistantPurposes({ mode: "auto" }, f.owner);
   for (const [purpose, decision] of Object.entries(purposes)) {
     if (purpose === "custom") { assert.equal(decision.available, false); continue; }
     assert.equal(decision.available, true, `${purpose}: ${decision.message}`);

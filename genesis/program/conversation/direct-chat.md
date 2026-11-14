@@ -119,13 +119,14 @@ pure function grants no account, model or execution authority.
 Per-request role instructions distinguish provisional readiness from verified
 completion. Once implemented resources are prepared and Preview responds, the
 implementer invites the person to try the feature while verification continues.
-Auto implementation runs focused code and basic startup, route and API smoke
-checks, optionally checking that the changed page renders with its main control.
-It hands full browser end-to-end journeys and visual verification to its separate
-Senior review. Without that automatic review (Auto with review off, or a direct
-chat, whose own agent reviews later), the selected agent owns those checks
-itself. The existing routing coordinator supplies this distinction only for
-Auto requests that will receive Senior review; interrupted or unavailable checks
+When Auto's Junior implements an involved plan, it runs focused code and basic
+startup, route and API smoke checks, optionally checking that the changed page
+renders with its main control, and hands full browser end-to-end journeys and
+visual verification to Senior's following check of the plan
+(`assistantPlanCompletionFollows`). Otherwise (work without a plan, Senior's own
+implementation, or a direct chat) the selected agent owns those checks itself.
+The existing routing coordinator supplies this distinction only for requests
+whose plan Senior will check; interrupted or unavailable checks
 remain explicitly unverified.
 
 The original session assistant-selection event refreshes the retained browser
@@ -1364,6 +1365,9 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantRoutingDelivery.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingCancellation.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js`
+- `packages/vibe64-terminals/src/server/afterPlanBase.js`
+- `packages/vibe64-terminals/src/server/afterPlanPassesUpgrade.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261114-after-plan-passes.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingGoals.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js`
@@ -1377,9 +1381,12 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/mainGoalControl.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/assistantPlanLifecycle.test.js`
+- `tests/server/assistantAfterPlanPasses.test.js`
+- `tests/server/afterPlanPassesUpgrade.unit.test.js`
 - `tests/client/vibe64WorkPlan.vitest.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
+- `packages/vibe64-runtime/src/shared/assistantExplicitTask.js`
 - `packages/vibe64-runtime/src/shared/assistantFinishing.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingAssignments.js`
 - `packages/vibe64-runtime/src/server/codexAppServerProcess.js`
@@ -1815,24 +1822,38 @@ messages and receipts remain terminal and intact as role/Helper conversion
 advances the format. Ordinary native requests without configuration remain
 invalid; no current record is silently marked legacy.
 
-Main chat saves Custom, Senior, Junior or Auto plus four finishing steps,
-`review`, `deslop`, `uiPass` and `autoSave`, as separate booleans in the
-existing conversation metadata, in every main-chat mode. The chat mode only
-chooses who works. `assistantFinishing.js`'s `ASSISTANT_FINISHING_DEFAULTS` holds their one default
-(all four on) and `ASSISTANT_FINISHING_STEPS`
-their Chat settings wording; `assistantRoutingAutomation` reads each saved
-choice or its default. Fix it with AI, temporary chats and lessons save all
-four off (`ASSISTANT_NO_FINISHING`) and run none; admission also never finishes
-a lesson's request (`runtime.learningScope`), because Deslop must never rewrite
-a learner's code and a lesson teaches Save. The menu shows a lesson no Chat
-settings. A mode change that omits a choice keeps
+Main chat saves Custom, Senior, Junior or Auto plus the passes it runs after a
+completed plan and its automatic save: `afterPlan` (the ticked pass ids),
+`afterPlanDeep` (those run deeply) and `autoSave`, in the existing conversation
+metadata, in every main-chat mode. The chat mode only chooses who works.
+`assistantFinishing.js` holds the pass order (`AFTER_PLAN_PASS_ORDER`, Genesis's
+Master pass order, which the Genesis passes integration test checks against
+Genesis's own listing), the mandatory pair (`AFTER_PLAN_MANDATORY_PASSES`: review
+and security-pass), `ASSISTANT_FINISHING_DEFAULTS` (review, security-pass,
+data-pass, quality-pass, ui-pass and deslop, none deep, save on) and
+`afterPlanChoiceProblem`, with which `assistantRoutingPreferences` refuses a
+choice that leaves Review or Security pass out, names an unknown pass or makes an
+unticked pass deep; `assistantRoutingAutomation` reads each saved choice or its
+default. Fix it with AI, temporary chats and lessons save the mandatory pair with
+save off (`ASSISTANT_NO_FINISHING`) and run no pass: admission records no
+after-plan trigger for them, nor for a lesson's request (`runtime.learningScope`),
+because Deslop must never rewrite a learner's code and a lesson teaches Save. The
+menu shows a lesson no Chat settings. A mode change that omits a choice keeps
 the chat's own, and choosing a Custom model keeps them too. The numbered
-`20261107-chat-finishing-steps` upgrade converted the earlier shape, where
-`review` meant Auto's optional Deslop. The chat-mode menu shows the four
-switches under Chat settings in every main-chat mode; turning any of them off
-opens one shared confirmation naming what is lost, and Cancel keeps it on. A
-line under Deslop's and the UI pass's switch names its chat command (“Deslop”,
-“UI pass” with an optional “: <section>” or “: the whole app”). A role resolves to a live, available
+`20261107-chat-finishing-steps` upgrade converted the earliest shape, and
+`20261114-after-plan-passes` replaced its review, Deslop and UI pass switches
+with the after-plan ticks in main chat, temporary chat and renewal copies
+(Review, Security, Data and Quality pass ticked, Deslop and the UI pass as their
+switches were, the rest unticked, none deep, save kept) and made persisted
+routing requests schema six with no after-plan trigger, stopping a retired
+finishing turn in flight with a note, behind a read-only preflight and backups
+(`afterPlanPassesUpgrade.js`; never a lazy repair). The chat-mode menu
+shows only Automatically save changes under Chat settings; turning it off opens
+a confirmation naming what is lost, and Cancel keeps it on. The Passes list
+(`Vibe64PassesMenu`) shows each pass's After a plan tick and, where Genesis offers
+`sinceBase.deep`, its Deeply tick, saved through the same assistant-selection
+route; Review and Security pass show ticked and disabled, and the ticks are
+unavailable during a goal or before the chat has a mode. A role resolves to a live, available
 selection through the owner's setup, independently of the last native engine;
 main chat runs in the Senior's tool.
 The mode menu consumes the session's access decisions, including their loading,
@@ -2061,8 +2082,8 @@ archives that other plan first. Reopening the current plan creates no duplicate.
 Completion is an
 explicit admitted Senior/review operation at exact Plan and Progress revisions. A nonempty scope is required; checkmarks are not a completion gate or proof. Senior must review actual evidence against every acceptance requirement. Ending a coding or
 review turn only ends execution and cannot promote a plan's status.
-After the exact admitted Senior finishing turn (in Auto or a Senior chat,
-including any enabled Deslop and UI pass) finishes successfully, Routing archives an explicitly completed, unchanged scope
+After the turn in which Senior completed the plan (in Auto or a Senior chat) ends
+successfully and the passes ticked to run after a plan have ended, Routing archives an explicitly completed, unchanged scope
 through this SAME revision-fenced plan owner. It compares the reviewed scope
 bytes with the current completed document before invoking archive; unrelated,
 replaced, active, stopped and failed scopes remain current. Progress is captured
@@ -2151,7 +2172,7 @@ and tool capability through the normal role resolver. Preferences stay unchanged
 A direct Deslop command cannot steer an active turn or change an unfinished goal.
 Other steering retains its current-turn semantics and is not reclassified.
 Combined implementation and cleanup remains an implementation request, receives
-the chat's finishing turn and uses its Chat settings; it is not rejected
+the chat's usual ending (passes only after a completed plan); it is not rejected
 as a special mixed routing state. Classifier output is a validated role/reason
 pair, never a model, executable command or generated rejection message.
 
@@ -2212,8 +2233,8 @@ accepted native turn is active. It cannot become an accidental steering request.
 after a server restart becomes visibly retryable. A new request cannot overtake
 an unresolved pending request. Active-turn steering bypasses classification.
 
-The original routing coordinator retains schema-five workflow state independently
-of delivery: working/waiting/complete plus planning/implementation/review. Router
+The original routing coordinator retains schema-six workflow state independently
+of delivery: working/waiting/complete plus planning/implementation/review/pass. Router
 classifies only a new Auto request into conversation, planning, implementation or
 review with a Senior/Junior role. A conversation request is no workflow: its
 turn gets no workflow instructions, routing records it complete when the turn
@@ -2222,41 +2243,77 @@ Junior or Custom request from main chat is an implementation-stage workflow
 from admission, without Router; an explicit Deslop or UI pass, generated Junior
 work, an unfinished goal and temporary chats never are.
 
-Each workflow request captures its chat's `finishing` choices (review, Deslop,
-UI pass) and builds one finishing message from them (`assistantFinishingMessage`).
-A handoff after implementation starts one finishing turn with the enabled parts
-in order; `assistantWorkflowRole` gives it to Senior in Auto and to the chat's
-own agent otherwise. That turn renders Genesis's `review` prompt task, or its
-first part's own task when review is off, and each part writes a system notice
-naming its Chat setting (`assistantFinishingNotice`) as the turn starts. With
-every part off the handoff completes the request. When a request completes
-after its finishing turn, or that handoff, routing writes the save notice and
-calls the Sessions-owned completion handler after its lock, which runs the
-ordinary Save once, connected copies included, while `autoSave` is on, in any
-mode; routing writes its short result note to chat. A direct implementation
-turn that reports complete changed only a plan; one that ends without reporting is
-an ordinary reply. Neither finishes anything. A direct request's first turn
-(`directWorkflowInstructions`, implementation without a follow-up) is told that
-an answer, or work that changed no files or plan with no decision waiting,
-reports no outcome and says nothing about saving: it skips the plan read and
-outcome calls, and routing records the ordinary reply complete with no Status
-message. Its follow-up and finishing turns always report. Each new request records the
-earlier requests no finishing turn covered (`assistantUnreviewedRequests`),
-so stopped, waiting and unreported work folds into the next finishing turn.
-Only Senior completes an involved plan; a Junior or Custom finishing turn
-completes the request and leaves the plan active.
+Each workflow request records, at admission, the plan current then
+(`afterPlan.planAtAdmission`); a request that runs no pass after a plan (an
+explicit pass or Genesis task, generated purposes, temporary chats, lessons, Fix
+it, an unfinished goal) records none. A handoff after implementation ends the
+work, unless Auto's Junior implemented an involved plan that is still active
+(`assistantPlanCompletionFollows`): then Senior gets one plan-completion turn
+(`ASSISTANT_PLAN_COMPLETION_MESSAGE`), which renders no Genesis task and runs no
+pass, and completes the plan, leaves it active with its gaps in Progress, or
+hands rework back to Junior. When a turn ends with the current plan completed
+and it is not the completed plan found at admission (`planCompletedDuringRequest`),
+through a reported complete or handoff, a direct chat's plain reply or an Auto
+answer in which Senior completed it, routing starts the after-plan passes
+(`startAfterPlanPasses`). It reads the chat's ticks once, lists the session
+source's passes through Genesis (`listPasses`) and resolves the base
+(`afterPlanBase`): the `after_plan_base` metadata commit while HEAD's history
+still holds it, else the merge base of HEAD with the session's canonical
+commit. A Save that reconciles, or an Update, rebases the session's work and
+leaves a recorded commit outside that history, where a diff from it would hold
+others' changes too; after a Save the canonical commit is the save commit. A
+direct chat's routing reads the plan only to tell whether one completed during
+the request, so an unreadable plan counts as none there, as it did before passes
+ran after plans; Auto still refuses one. The base is recorded (`rememberAfterPlanBase`) when a plan
+becomes current with none recorded (`new` or `reopen`, through the plan command
+or Vibe64's own plan writes) and when a chain finishes. Without a base, or when
+Genesis can't list the passes, a notice says so and the plan is archived and
+saved without passes; a whole-app run is never the fallback. Each ticked pass
+Genesis offers becomes a chain entry with its `sinceBase` request (its `deep`
+form when ticked Deeply and offered), the base filled in; one it lacks is
+skipped with a notice giving Genesis's `unavailable` reason. The chain lives in
+the persisted request (`stage: "pass"`, `passChain`). Each pass is its own Senior
+turn (`assistantAfterPlanPass`) with `genesisTask` set to the pass id and
+`automaticGenesisTask`, announced by a notice naming Passes: After a plan
+(`afterPlanPassNotice`); its request stays the message's last paragraph, so
+Genesis renders that base run and never its PASS RECORD step, and a pass's last
+completed run never moves. A pass turn reports no workflow outcome: its
+successful end starts the next; a stopped, failed or interrupted pass ends the
+chain (`stopAfterPlanPasses`) with a notice, saves nothing and keeps the
+completed plan current, and Resume refuses the stopped chain. After the last
+pass, routing archives the completed plan, records the base and, while
+`autoSave` is on, writes the save notice and calls the Sessions-owned completion
+handler after its lock, which runs the ordinary Save once, connected copies
+included; routing writes its short result note to chat. Work without a plan, or
+whose plan stays active, completes after its handoff and is saved the same way.
+A direct implementation turn that reports complete changed only a plan, unless
+Senior completed it; one that ends without reporting is an ordinary reply. A
+direct request's first turn (`directWorkflowInstructions`, implementation
+without a follow-up) is told that an answer, or work that changed no files or
+plan with no decision waiting, reports no outcome and says nothing about saving:
+it skips the plan read and outcome calls, and routing records the ordinary reply
+complete with no Status message. Its follow-up turns always report. Only Senior
+completes an involved plan; Junior and Custom never do, and their handoff
+completes the request with the plan active.
+
+Work without a plan is no longer reviewed, deslopped or UI-passed automatically:
+the finishing turn that once followed every request is gone, and the person
+asks for those checks from Passes, through the Master pass or by typing the
+request. The one automatic turn after implementation is Senior's
+plan-completion turn, and only when an involved plan is still active after
+Auto's Junior implemented it; it is not a pass, has no setting and runs no pass.
 
 Every workflow turn's instructions (`assistantWorkflowInstructions`, composed
 by routing delivery for Auto and direct chats alike) end with how the turn ends
-(`assistantWorkflowEnding`). An implementation turn whose request has a
-finishing part on (`assistantContinuationInstruction`, from
-`assistantFinishingParts`) is told that after a continue or handoff the piece
-of work continues automatically, so its final reply reports what changed and
-what was verified without asking the person to try, publish or deploy the work
-or offering next steps; the line never names the finishing turn. The finishing
-turn, which ends the piece of work, an implementation turn with every part off,
-Auto planning and requests that run no finishing step keep their normal ending.
-Save is not a turn, so it alone adds no such line. Then every workflow turn hears how the
+(`assistantWorkflowEnding`). Auto's Junior implementing an involved plan
+(`assistantContinuationInstruction`, from `assistantPlanCompletionFollows`), or
+implementing while the plan it found at admission is active, which only its
+outcome can say it involved, is
+told that after a continue or handoff the piece of work continues automatically,
+so its final reply reports what changed and what was verified without asking the
+person to try, publish or deploy the work or offering next steps. Every other
+turn keeps its normal ending, and an after-plan pass's message carries no
+workflow instructions at all. Save is not a turn, so it adds no such line. Then every workflow turn hears how the
 work is saved (`assistantSaveInstruction`), from the same `autoSave` switch the
 automatic save reads (`savesAutomatically`): with it on, the note that the work
 will be saved automatically comes after the complete reply and never replaces
@@ -2275,16 +2332,16 @@ instruction, Auto's and a direct chat's alike, says the outcome only informs
 Vibe64: the person sees the final response, never reasoning or tool calls, so
 the complete reply, including any question, goes there. The owner checks
 captured actor/access, active native turn and both involved plan revisions. Planning
-can continue or wait; in Auto only Senior review can complete. A direct chat's
-agent completes its own finishing turn, or implementation that changed no files
+can continue or wait; in Auto only Senior can complete. A direct chat's Senior
+completes an involved plan it verified, and its agent completes implementation that changed no files
 and involves no plan; the server still accepts that complete from a first turn
 that only answered, which then keeps its Status message. When Senior completes, an involved plan must first be
 explicitly completed through its existing lifecycle operation.
 
 After the exact native turn succeeds, continue retains role/stage; handoff moves
-implementation to Senior review or Senior's saved substantial in-scope rework to
-Junior; in a direct chat the same agent reworks and finishes again. Review,
-Deslop, the UI pass and save are separate choices. Real blockers wait; accepted steering invalidates an older outcome
+Junior's implementation of a plan to Senior's check of it, Senior's saved substantial in-scope rework back to
+Junior, and otherwise ends the work. The passes after a plan
+and save are separate choices. Real blockers wait; accepted steering invalidates an older outcome
 and retains the running role; once the steered turn reports again and succeeds, it
 advances, completes and saves as an unsteered turn would. Stop prevents late work. Failed/interrupted turns,
 missing outcomes, changed plans and missing final-explanation proof remain waiting.
@@ -2314,12 +2371,12 @@ consuming the composer draft, and supplies the existing planRevision contract.
 That explicit input chooses implementation deterministically (Junior unless the
 message explicitly addresses another role), instead of invoking Router. The
 normal coordinator rechecks the active plan revision before dispatch and retains
-admission, deduplication and mandatory Senior review. It replaces an unsent
+admission, deduplication and Senior's check of the plan. It replaces an unsent
 planning continuation, never bypasses uncertain delivery, and changes no saved
 state format. Merely continuing planning cannot approve implementation.
 
-Only after the exact Senior review's successful native completion and final assistant
-explanation does the owner archive its explicitly completed Plan/Progress pair.
+Only after the exact completing turn's successful native completion and final assistant
+explanation, and the passes after a plan, does the owner archive its explicitly completed Plan/Progress pair.
 Archival failure retains the completed current artifact and truthful manual recovery.
 An obsolete callback cannot archive a different plan. No checklist-based completion
 or history replay is introduced. The numbered `20261010-assistant-workflow` stopped-
@@ -2956,7 +3013,7 @@ records the original engine and native thread before delivery. An uncertain
 delivery requires admission inspection before any other action. An
 accepted record cannot be claimed again or rebound to another thread. These
 store operations do not themselves contact the assistant. The terminal service
-uses the ordinary routing coordinator for generated Junior work, with automatic review
+uses the ordinary routing coordinator for generated Junior work, with no pass after a plan
 off and unchanged chat preferences. It resolves the submitting actor's effective
 Junior destination, including ordinary history changeover.
 Its internal pre-send callback claims the domain receipt before native inference;
@@ -4964,7 +5021,8 @@ The Passes button in Main chat's composer row lists the improvement passes
 Genesis offers for the session's source, each with its title, one-line
 description, recommendation hint, `lastRun`, Genesis's committed record of
 its last completed run in the project, `runs`, the runs Genesis offers for it
-now, and `unavailable` (`listGenesisPasses`, Genesis's `inspectPasses` for that
+now, `sinceBase`, the request for the changes since a base commit and its deep
+form (null when the pass can't run), and `unavailable` (`listGenesisPasses`, Genesis's `inspectPasses` for that
 source, contract `genesis.passes.v1`). A pass's own last
 step records its run with `genesis passes done <id>`; Vibe64 never writes that
 record and reads it only through Genesis's list;
@@ -5016,5 +5074,9 @@ with Genesis's order breaking ties; it is suggested above the composer while the
 chat is idle, has no draft and no goal. The project's `settings/pass-suggestions.json`
 holds only the suggestion's state: Later snoozes it for seven days, and Dismiss
 hides it until a `lastRun` later than the dismissal. The suggestion offers the
-pass's runs as the list does. Nothing runs a pass except a run's button. Team members, whose messages wait for approval, get neither the list nor
+pass's runs as the list does and never starts one itself. Besides a run's
+button, only a completed plan starts passes: each pass's After a plan tick and,
+where it has `sinceBase.deep`, Deeply tick choose the after-plan chain described
+with the routing workflow, which sends only Genesis's `sinceBase` requests (the
+changes since a base commit), never a run Genesis records. Team members, whose messages wait for approval, get neither the list nor
 suggestions.

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { __testables, readWorkPlan, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
@@ -12,9 +14,11 @@ import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileR
 import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
 import { sessionAgentManagerDefaults } from "./sessionAgentManagerDefaults.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { ASSISTANT_FINISHING_DEFAULTS } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "./genesisPasses.js";
 
 const { workPlanPath } = __testables;
+const run = promisify(execFile);
 
 async function publishPlanFixture(context, text) {
   const root = path.dirname(workPlanPath(context));
@@ -45,11 +49,42 @@ ${body}
 `).join("\n");
 }
 
-async function fixture(t, preferences = { mode: "auto", review: true }, {
+// A managed session source, as Vibe64 clones one: a Git repository at
+// sessions/active/<id>/source with one commit, the canonical history the
+// session last saw. Returns its metadata and a way to commit work in it.
+async function managedSource(root, sessionId) {
+  const source = path.join(root, "sessions", "active", sessionId, "source");
+  await mkdir(source, { recursive: true });
+  const git = async (...args) => (await run("git", args, { cwd: source })).stdout.trim();
+  await git("init", "--quiet", "--initial-branch=main");
+  await git("config", "user.name", "Vibe64 Test");
+  await git("config", "user.email", "vibe64@example.test");
+  await writeFile(path.join(source, "form.js"), "export const form = {};\n");
+  await git("add", "-A");
+  await git("commit", "--quiet", "-m", "The canonical history");
+  const canonical = await git("rev-parse", "HEAD");
+  let changes = 0;
+  return {
+    source,
+    canonical,
+    metadata: { source_path: source, source_path_authority: "managed_session_source", source_kind: "session_clone", canonical_commit: canonical },
+    // One commit of the session's own work; returns its id.
+    async commit(message = "") {
+      changes += 1;
+      await writeFile(path.join(source, "form.js"), `export const form = { change: ${changes} };\n`);
+      await git("commit", "--quiet", "-am", message || `Change ${changes}`);
+      return git("rev-parse", "HEAD");
+    },
+    head: () => git("rev-parse", "HEAD")
+  };
+}
+
+async function fixture(t, preferences = { mode: "auto" }, {
   resolveAssistantUser = sessionAgentManagerDefaults.resolveAssistantUser,
   beforeExclusive,
   readyPlan = true,
-  onPlanCompleted
+  onPlanCompleted,
+  source: withSource = false
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-lifecycle-"));
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -69,10 +104,11 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
   assignments.router = { ...assignments.router, modelProviderId: "openai", modelId: "gpt-6-luna", selectionSource: "explicit" };
   const configuration = createAssistantRoutingStore({ systemRoot: root });
   await configuration.write({ owner: assignments, nonOwner: {} }, 0);
-  const metadata = { assistant_selection: JSON.stringify(assignments.senior),
-    // A saved chat mode carries all four finishing choices; unless a test says
-    // otherwise, its chat has Deslop on and the UI pass off.
-    ...(preferences ? { assistant_routing: JSON.stringify({ deslop: true, uiPass: false, ...preferences }) } : {}) };
+  const sourceRepository = withSource ? await managedSource(root, "session-1") : null;
+  const metadata = { assistant_selection: JSON.stringify(assignments.senior), ...sourceRepository?.metadata,
+    // A saved chat mode carries its after-plan passes and save choice; unless a
+    // test says otherwise, they are a new chat's defaults.
+    ...(preferences ? { assistant_routing: JSON.stringify({ ...ASSISTANT_FINISHING_DEFAULTS, ...preferences }) } : {}) };
   const receipts = new Map();
   const notices = new Map();
   const session = { sessionId: "session-1", metadata };
@@ -198,7 +234,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
     } };
   const service = createAssistantRouting(routingOptions);
   return { service, context, metadata, agent, router, sends, events, notices, catalog, catalogs, connections, assignments, configuration,
-    interrupts, discards, receipts, genesis,
+    interrupts, discards, receipts, genesis, source: sourceRepository,
     // Another operation (such as a sibling chat's slow startup) holds the agent-write lock until released.
     // The next native dispatch waits, inside the write lock, until released.
     holdDispatch() {

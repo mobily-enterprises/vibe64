@@ -191,7 +191,10 @@
                 </v-card>
               </v-menu>
               <Vibe64StarredMenu :bookmarks="fileBookmarks" :project-slug="projectSlug" @open-file="openSourceEditorFile" @open-page="showOpenedPage" />
-              <Vibe64PassesMenu v-if="passesAvailable" :passes="passes" :blocked-reason="passesBlockedReason" />
+              <Vibe64PassesMenu
+                v-if="passesAvailable" :passes="passes" :blocked-reason="passesBlockedReason"
+                :session="props.session" :sessions-api-path="props.sessionsApiPath" :after-plan-reason="afterPlanReason"
+              />
               <Vibe64AgentPlanUsage
                 :active="props.active && !props.sessionSelectionArchived"
                 :session="props.session"
@@ -335,6 +338,11 @@ const passesBlockedReason = computed(() => {
   if (agentActive.value || composerSending.value) return "A pass starts when the AI is idle. Wait for the current turn to finish, or stop it.";
   return assistantGoalIsActive(readRefOrGetterValue(props.conversationRuntime?.goalState)?.goal)
     ? "A pass can't start during a goal. Open Goal to resume or cancel it first." : "";
+});
+// Main chat's After a plan ticks are Chat settings: like its switches, they change once a goal finishes.
+const afterPlanReason = computed(() => {
+  const goal = readRefOrGetterValue(props.conversationRuntime?.goalState)?.goal;
+  return goal && !["completed", "complete"].includes(goal.status) ? "After a plan can change once the current goal finishes." : "";
 });
 const passes = useVibe64Passes({
   session: () => props.session,

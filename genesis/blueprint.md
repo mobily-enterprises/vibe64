@@ -638,15 +638,15 @@ effective model and thinking assignments and the selected role, including Router
 in Auto. It uses the conversation's saved assignments and current account access
 without loading provider model catalogues. Configuration and Send still validate
 the selected models against their catalogues. The chat mode only chooses who
-works. Below the modes, four Chat settings switches choose what runs once a
-piece of work is finished, in every main-chat mode: Automatically review changes,
-Automatically deslop changes, Automatically UI pass changes and Automatically
-save changes. All four start on, from one shared default, and each chat keeps
-its own choices. Turning any of them off asks first through one confirmation that
-names what is lost; Cancel keeps it on. Direct Senior, Junior and Custom
-conversations answer questions or implement requested changes without a
-temporary plan; their own agent does the finishing steps. These names describe
-the model roles, not limits on the kinds of work they can do.
+works. Below the modes, Chat settings keeps one switch, Automatically save
+changes, on for new chats, which runs Save once finished work ends, in every
+main-chat mode. Turning it off asks first through a confirmation that names what
+is lost; Cancel keeps it on. Passes run on their own only when a plan is
+completed: the Passes list's After a plan ticks choose them (see Passes below).
+Direct Senior, Junior and Custom conversations answer questions or implement
+requested changes without a temporary plan; their work ends with their own
+agent's last turn. These names describe the model roles, not limits on the kinds
+of work they can do.
 Unavailable modes explain why and are identified as disabled to screen readers.
 Recommendations rank connected, permitted models for every job in the order
 Claude, Codex/OpenAI, DeepSeek, GLM, then a custom endpoint. Within native providers, Senior favours
@@ -677,7 +677,7 @@ stopping a repair, the user can choose another orchestrator, model and thinking
 level for it while keeping its repair instructions and history. Automatic
 implementation tasks retain explicit Junior assignments. Bounded background tasks
 use Quick helper.
-Temporary chats and AI tasks never run Auto, working plans or any finishing step.
+Temporary chats and AI tasks never run Auto, working plans, passes after a plan or automatic save.
 Models is one screen with two setups: the owner's (Senior, Junior and Router
 for main chat, then the helpers Colleague, Fix it with AI, Explain & check and
 Quick helper) and the team members' (helpers only, Workspace-use models only).
@@ -709,9 +709,10 @@ or review and respects an explicit Senior or Junior choice. Senior handles plann
 and review; Junior implements unless the person explicitly chooses Senior.
 Routing progress appears with the message, without a duplicate banner above the
 composer.
-When a Senior finishing turn (in Auto or a Senior chat) succeeds, an explicitly completed
-plan and its Progress automatically move together to History after the final
-explanation. Chat links to that session's plan history. Unfinished, interrupted,
+When Senior (in Auto or a Senior chat) explicitly completes a plan, the passes the
+chat ticks to run after a plan run first, each in its own Senior turn; then the
+completed plan and its Progress automatically move together to History. Chat
+links to that session's plan history. Unfinished, interrupted,
 replaced and unrelated plans stay current; a new planning discussion does not
 silently replace them.
 Interrupted-review notices disappear; errors and recovery actions remain.
@@ -723,13 +724,17 @@ Steering stays with the currently working assistant.
 Auto retains three workflow states: Working, Waiting and Complete, with a separate
 Planning, Implementation or Review stage. The working agent explicitly reports
 Continue, Handoff, Wait or Complete. Continue keeps its stage and role. Handoff
-moves implementation to Senior review; substantial necessary review rework returns
-to Junior after Senior saves the technical plan and evidence within the agreed
-outcome. Junior finishes it, then Senior reviews and performs any enabled Deslop
-and UI pass again. Senior, Junior and Custom chats report the same outcomes, and
-their own agent does the finishing turn. Unfinished review checks stay with Senior. A changed product requirement
+after Junior implemented an involved plan gives Senior one turn to check the plan:
+it verifies every requirement, fixes in-scope gaps and completes the plan, leaves
+it active with the gaps in Progress, or returns substantial necessary rework to
+Junior after saving the technical plan and evidence within the agreed outcome;
+Junior finishes it, then Senior checks again. That check is not a pass and runs
+none. Any other handoff after implementation ends the work, saved when
+Automatically save changes is on, with no review, Deslop or UI pass turn. Senior,
+Junior and Custom chats report the same outcomes; their work ends with their own
+agent's last turn. Unfinished checks of a plan stay with Senior. A changed product requirement
 needs the person's decision. Planning alone does not authorise implementation.
-Only Senior completes verified review and explicitly completes an involved plan.
+Only Senior explicitly completes an involved plan; Junior and Custom never do.
 A native turn ending or a fully checked checklist does not complete the workflow.
 
 Explanations appear as Status messages in chat. Real blockers and explicit pauses
@@ -743,7 +748,7 @@ completed. Continuation rechecks the original submitting user's access and
 captured connection. Completed work remains available when access is removed.
 Direct Senior, Junior and Custom retain their direct behavior without automatic
 continuation or review. Goals require a concrete
-mode and model, with Auto and automatic review unavailable. In Auto, the goal
+mode and model, with Auto and passes after a plan unavailable. In Auto, the goal
 menu explains that a concrete
 mode must be selected before offering Start or Resume. Background helpers use
 their own Quick helper or Explain & check role.
@@ -759,7 +764,7 @@ model picker and toolbar. Goals created by the assistant follow the same rule;
 explicit model selection refreshes missing or stale routing without recreating
 the goal. The shared theme gives status and recovery panels contrasting text
 on a tinted blue surface. Connection, test approval, renewal and future notices
-inherit that foreground/background pair; disabled notice controls remain readable. Auto, automatic review and orchestrator changes remain unavailable
+inherit that foreground/background pair; disabled notice controls remain readable. Auto, passes after a plan and orchestrator changes remain unavailable
 for an unfinished goal. The Starred (pages and files), attachments and goal controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. Gaps close in narrow panes so
@@ -987,7 +992,7 @@ Standalone CLI conversations retain Genesis's generated hooks and plugin. Both
 kinds of conversation can share unchanged project hooks because delivery belongs
 to each native conversation. Explicit instruction changes apply before new work;
 compaction and reconnection preserve the current supplied instructions.
-Senior/Junior selection, Auto planning and coding, and automatic review/deslop
+Senior/Junior selection, Auto planning and coding, Senior's check of a plan and the passes after a plan
 remain Vibe64 turn orchestration; Genesis does not route those turns. For a new project, the opening conversation first establishes
 what the person wants to make, who it is for, and the first useful outcome, then
 asks before selecting any technology.
@@ -1050,7 +1055,7 @@ connection, the saved card shows Setup completed. That records the setup decisio
 later reconnecting or disconnecting the account does not rewrite the old request.
 After setup, continuation uses the owner's effective Junior model (a team
 member's continuation waits for the owner's approval), without changing their selected chat mode or adding
-automatic review. Uncertain delivery can be checked without sending twice.
+a pass. Uncertain delivery can be checked without sending twice.
 If configuration changes while an application connection command runs, its result
 is rejected and people are asked to reload and check the account before retrying.
 The command is not automatically repeated.
@@ -1594,23 +1599,22 @@ checks current safety and never creates a duplicate test.
 
 Deslop is a deliberate cleanup that preserves behavior. People can request it
 in chat for the current task's changes, including unsaved work, or explicitly
-select commits. Every main-chat mode runs it after finished work, after any
-review, while Automatically deslop changes is on. Saving work does not show a
-cleanup offer.
+select commits. It also runs after a completed plan while it is ticked to run
+after a plan, as it is for new chats. Saving work does not show a cleanup offer.
 
 The UI pass is Deslop's counterpart for screens: it brings them in line with the
 project's UI guidance while preserving their behavior. People request it in
 chat for the current task's changes, a named section of the app or the whole
-app, and Genesis's ui-pass task receives that scope as its request. Every
-main-chat mode runs it after finished work, after any Deslop, only while
-Automatically UI pass changes is on, as it is for new chats.
+app, and Genesis's ui-pass task receives that scope as its request. It also runs
+after a completed plan while it is ticked to run after a plan, as it is for new
+chats.
 
 Passes improve the app one concern at a time. Main chat's Passes list
-shows each pass Genesis offers (Deslop, the UI pass, and others such as visual
-identity, quality and data) with when it was last completed in the project and
-the runs Genesis offers for it: the whole app, the changes since its last
-completed run judged against the whole app, and the whole app deeply, item by
-item, shown with its size in files and lines and a note that it takes much
+shows each pass Genesis offers (Deslop, the UI pass, Review, and others such as
+visual identity, quality and data) with when it was last completed in the
+project and the runs Genesis offers for it: the whole app, the changes since its
+last completed run judged against the whole app, and the whole app deeply, item
+by item, shown with its size in files and lines and a note that it takes much
 longer and uses far more of the AI's allowance. Its last entry, the Master
 pass, runs the ticked passes (all, until the person unticks one) deeply, one
 after another in Genesis's order, with its own size and note, over the whole
@@ -1618,12 +1622,30 @@ app or, once one has completed, the changes since it. A run's button sends that 
 request from Genesis as the person's message, in its own Senior turn. Genesis
 records each pass's last completed run in the project, and only its own runs
 count. A project whose own Genesis is too old to run a pass sees why and the
-update that fixes it, instead of that pass's runs. Now and then a gentle, dismissible
+update that fixes it, instead of that pass's runs.
+
+Passes start by themselves at one moment only: when a plan is completed. Never
+when a turn ends, after a request without a plan or on Save; then a pass runs
+only when the person starts it. Beside each pass the owner ticks whether it runs
+After a plan and, where Genesis offers a deep run over a plan's changes, Deeply.
+Review and Security pass always run and cannot be unticked; new chats also tick
+Data pass, Quality pass, UI pass and Deslop, with none deep. Each chat keeps its
+own ticks, and the server refuses a choice that leaves Review or Security pass
+out, names an unknown pass or makes an unticked pass deep. When Senior completes
+a plan, the ticked passes run one after another in the Master pass order, each
+in its own Senior turn with Genesis's request for the changes since the commit
+where the plan's work started (the commit recorded when the previous passes
+after a plan ended, or when a plan became current with none recorded, otherwise
+where the session left its canonical history), each announced in chat. A pass
+the project's Genesis lacks is skipped with its reason; without a known start
+commit none runs and the chat says so, never falling back to whole-app runs.
+After the last pass the plan is archived and Automatically save changes runs
+Save. Stop or a failed pass ends them with a notice and saves nothing. These
+runs never count as a pass's completed run. Now and then a gentle, dismissible
 suggestion offers a pass that was never completed or is overdue: the interval Vibe64
 picks from Genesis's advice for it has passed, and the app has changed enough
-since. Later hides it
-for a week and Dismiss until the pass completes again; no pass ever starts by
-itself.
+since. Later hides it for a week and Dismiss until the pass completes again; a
+suggestion never starts a pass by itself.
 
 People can choose how cautiously the AI engineers a project. The choice follows
 the project's source, always keeps ordinary work simple and targeted, and makes
@@ -1761,7 +1783,7 @@ an already running turn still uses Stop for interruption.
 Goal controls are separate from plan allowance. Starting or resuming checks the
 goal's effective model access. Reading and stopping remain available after
 personal access is lost, using the saved goal's connection. An unavailable goal
-read never marks it complete or permits Auto or automatic review.
+read never marks it complete or permits Auto or passes after a plan.
 Automatic Codex goal turns retain managed command access after the assistant
 process restarts.
 Browser reconnects preserve healthy server-side work. When managed tool connections
@@ -1960,42 +1982,39 @@ checks completed work as it proceeds; Senior can uncheck unsupported claims and
 add missing acceptance checks within the agreed scope. Saved edits appear live
 in open viewers without resetting their scroll position.
 
-Only Senior explicitly marks a plan completed after reviewing its requirements
+Only Senior explicitly marks a plan completed after checking its requirements
 and evidence. Successful turns and checked boxes never complete it automatically.
-The finishing steps run once per piece of work, never per file or turn: with a
-plan, once the whole plan is executed; without one, once the working agent
-explicitly reports the work finished through the workflow outcome, which every
-main-chat mode now reports. A message that only gets an answer costs no outcome
-report: an Auto conversation reports none, and in Senior, Junior and Custom a
-message's first turn that changes no files or plan, with no decision waiting,
-simply replies; Vibe64 records that reply as finished and shows no Status message
-for it, and Senior's plan guidance mentions reporting through the workflow outcome
-only in Auto's turns that report one. The person reads only the agent's final
-response, so a turn that reports an outcome is told to put its complete reply,
-including any question, there, with any automatic-save note after it, never in
-its place. Waiting for the person, Stop, a request that changed
-no files, or a direct turn that ends without reporting starts nothing; each
-finishing turn covers every change since the last one, so stopped, waiting or
-unreported work folds into the next. The order is review, Deslop, the UI pass in one turn,
-then Save last, and each automatically started step leaves a chat notice naming
-its Chat setting. The review renders Genesis's review prompt task. In Auto,
-Senior does the finishing turn by a fixed rule, without another Router call,
-for implementation by either role and even when both use the same model; in
-Senior, Junior and Custom the chat's own agent does it, so Junior reviews its own
-work. Senior can fix scoped defects or save substantial necessary rework for
-implementation, then review again. Deslop is on by default; turning it off asks
-for confirmation (code quality suffers unless Deslop is run by hand, so it suits
-only quick throwaway projects). The automatic UI pass is on by default too. With
-review, Deslop and the UI pass all off, finished work goes straight to Save. The
-person's pause or cancellation takes precedence. Ordinary discussion and Stop
-never reopen, archive or complete a plan. Junior can update Progress and
-existing checklist ticks but cannot complete the plan; a Junior or Custom
-finishing turn leaves it active for Senior.
+A piece of work ends once: with a plan, when the plan is completed; without one,
+when the working agent explicitly reports the work finished through the workflow
+outcome, which every main-chat mode reports. A message that only gets an answer
+costs no outcome report: an Auto conversation reports none, and in Senior, Junior
+and Custom a message's first turn that changes no files or plan, with no decision
+waiting, simply replies; Vibe64 records that reply as finished and shows no
+Status message for it, and Senior's plan guidance mentions reporting through the
+workflow outcome only in Auto's turns that report one. The person reads only the
+agent's final response, so a turn that reports an outcome is told to put its
+complete reply, including any question, there, with any automatic-save note after
+it, never in its place. Work without a plan is no longer reviewed, deslopped or
+UI-passed automatically; the person asks for those from Passes, through the
+Master pass or by typing the request. It ends with the turn that finished it:
+no review, Deslop or UI pass turn follows, and Save runs when Automatically save
+changes is on. When Auto's Junior implemented an involved plan, Senior gets one
+turn, by a fixed rule and without another Router call, to read the whole plan
+and Progress, verify it, fix in-scope gaps and complete it, leave it active with
+the gaps in Progress, or save substantial necessary rework for Junior and check
+again afterwards; that turn is not a pass, has no setting and renders no pass. Senior implementing a plan
+completes it itself once verified; Junior and Custom chats never complete a plan
+and leave it active for Senior. A completed plan starts the passes ticked to run
+after a plan, then the plan is archived and Save runs last. Waiting for the
+person, Stop, a request that changed no files, or a direct turn that ends without
+reporting saves nothing. The person's pause or cancellation takes precedence.
+Ordinary discussion and Stop never reopen, archive or complete a plan. Junior can
+update Progress and existing checklist ticks but cannot complete the plan.
 
 Deslop defaults to the configured Senior model for behavior-preserving cleanup.
 Auto honors an explicit request for Junior cleanup. The command and saved-commit
-action go straight to Senior. In Auto, system-generated review and optional
-Deslop always use Senior. Direct cleanup does not schedule review or change the selected chat
+action go straight to Senior. In Auto, Senior's check of a plan and the passes
+after a plan always use Senior. Direct cleanup does not schedule a pass or change the selected chat
 mode. A requested UI pass is direct in the same way, on the configured Senior
 model, in its own turn. Ordinary answers and planning do not start implementation themselves.
 

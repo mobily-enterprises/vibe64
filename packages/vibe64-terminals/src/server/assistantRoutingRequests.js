@@ -33,7 +33,7 @@ function savesAutomatically(metadata) {
 }
 function parseRequest(value) {
   const request = value ? JSON.parse(value) : null;
-  if (request && request.schemaVersion !== 5) {
+  if (request && request.schemaVersion !== 6) {
     throw failure("Saved workflow needs the candidate stopped-service state upgrade.", "vibe64_assistant_workflow_upgrade_required");
   }
   if (request && !assistantWorkflowStateIsSupported(request)) {

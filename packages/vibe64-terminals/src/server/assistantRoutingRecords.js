@@ -4,12 +4,14 @@ import path from "node:path";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import {
+  assistantAfterPlanPass,
   assistantModeLabel,
   assistantRoutingGoalFromMetadata,
   assistantWorkflowMessageIds
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
-  assistantFinishingMessage
+  ASSISTANT_PLAN_COMPLETION_MESSAGE,
+  ASSISTANT_SENIOR_VERIFICATION_MESSAGE
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { STATE_KEY, failure, usesWorkPlan, recentVisibleMessages } from "./assistantRoutingRequests.js";
 
@@ -116,26 +118,29 @@ function createAssistantRoutingRecords({
     return createAssistantRoutingStore({ systemRoot: routingState.systemRoot }).read();
   }
 
+  /**
+   * The request's next automatic turn: an after-plan pass sends Genesis's request for the
+   * changes since the chain's base, word for word, so Genesis recognises it as that pass's run;
+   * every other stage continues the request's own work.
+   */
   async function prepareFollowup(context, state, stage) {
     state.stage = stage;
     const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
+    const pass = assistantAfterPlanPass(state);
     const reviewer = state.mode === "auto" ? "Senior" : assistantModeLabel(state.resolvedMode);
+    // Auto's Senior checks and completes a plan Junior implemented; without one it verifies a review.
+    const checksPlan = stage === "review" && state.mode === "auto" && state.planInvolved;
+    let displayMessage = stage === "planning" ? "Continue planning." : "Continue implementation.";
+    if (stage === "review") displayMessage = checksPlan ? "Senior checks and completes the plan." : `Continue ${reviewer} review.`;
     state.followup = {
       messageId: randomUUID(),
       planRevision: plan?.revision || null,
       messages: await recentVisibleMessages(context.runtime.store, context.session.sessionId, 5),
-      displayMessage: stage === "review"
-        ? `Continue ${reviewer} review.`
-        : stage === "planning" ? "Continue planning." : "Continue implementation.",
-      message: [stage === "review"
-        ? state.reviewMessage || assistantFinishingMessage({ review: true })
+      displayMessage: pass ? pass.request : displayMessage,
+      message: pass ? pass.request : [stage === "review"
+        ? checksPlan ? ASSISTANT_PLAN_COMPLETION_MESSAGE : ASSISTANT_SENIOR_VERIFICATION_MESSAGE
         : "Continue the authorised work from its current state; preserve completed work and do not reduce scope.",
       `Original request: ${state.input.message}`, `Accepted steering: ${JSON.stringify(state.steering || [])}`,
-      // Each finishing turn covers every change since the last one, so a
-      // stopped or unfinished earlier request's changes fold in here.
-      ...(stage === "review" && state.unreviewed?.length ? [
-        `Earlier requests whose changes no automatic review has covered yet; cover their changes too: ${JSON.stringify(state.unreviewed)}`
-      ] : []),
       `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`].join("\n\n")
     };
     state.delivery = "pending";

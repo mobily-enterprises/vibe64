@@ -30,7 +30,7 @@ async function fixture(t, { agentRuns = [], conversationLog = [] } = {}) {
   const startCommit = git("rev-parse", "HEAD").trim();
   const session = { sessionId, sessionRoot: path.join(root, "runtime/sessions", sessionId), agentRuns,
     metadata: { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: source,
-      assistant_routing: JSON.stringify({ mode: "senior", deslop: true }) } };
+      assistant_routing: JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass", "deslop"] }) } };
   const project = {
     async runInProjectContext(slug, operation) { assert.equal(slug, projectSlug); return operation(); },
     async createRuntime() { return { async getSession(id) { assert.equal(id, sessionId); return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },

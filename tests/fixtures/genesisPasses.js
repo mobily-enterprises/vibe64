@@ -1,8 +1,9 @@
 // Genesis's pass list (genesis.passes.v1) as genesis-compiler lists it for a project where no pass
 // has completed and whose own Genesis runs them all, for the server, client and browser tests that
 // stand in for Genesis: each pass offers the whole app, with the pass's own request, and the whole
-// app deeply, sized in the project's own files and lines; and the Master pass, which runs them deeply
-// in its order. genesisPasses.integration.test.js checks them against the installed Genesis, sizes aside.
+// app deeply, sized in the project's own files and lines, with its requests over the changes since a
+// base commit (sinceBase); and the Master pass, which runs them deeply in its order.
+// genesisPasses.integration.test.js checks them against the installed Genesis, sizes aside.
 const SIZE = Object.freeze({ files: 212, lines: 18450 });
 const sized = (label) => `${label} (212 files, 18,450 lines)`;
 const GENESIS_PASSES = Object.freeze([
@@ -61,6 +62,13 @@ const GENESIS_PASSES = Object.freeze([
     description: "Makes the app and its tests fast: tests prepared once and run in parallel, screens that load only what they need, and requests that do each piece of work once, each wait measured before and after with nothing weakened.",
     recommend: { when: "periodic", hint: "after a stretch of changes, about every few weeks of active work, and whenever tests, pages or saves feel slow" },
     request: "Speed pass the whole app."
+  },
+  {
+    id: "review",
+    title: "Review",
+    description: "Checks the work against what the app should do: a test that would fail without each behavior, nothing weakened or skipped, and gaps between intent, code and explanation, changing only tests.",
+    recommend: { when: "after-change", hint: "after each saved change" },
+    request: "Review the whole app."
   }
 ].map((pass) => Object.freeze({
   ...pass,
@@ -72,7 +80,12 @@ const GENESIS_PASSES = Object.freeze([
   runs: Object.freeze([
     Object.freeze({ id: "whole", label: "Whole app", request: pass.request }),
     Object.freeze({ id: "deep", label: sized("Deep"), request: pass.request.replace(/\.$/u, " deeply."), ...SIZE })
-  ])
+  ]),
+  // The runs over the changes since a base commit a host chooses ({base}), which Genesis never records.
+  sinceBase: Object.freeze({
+    request: `${pass.title}: the changes since base commit {base}, judged against the whole app.`,
+    deep: `${pass.title} deeply: the changes since base commit {base}, judged against the whole app.`
+  })
 })));
 
 const GENESIS_MASTER_PASS = Object.freeze({
@@ -84,7 +97,7 @@ const GENESIS_MASTER_PASS = Object.freeze({
   lastRun: null,
   lastPasses: null,
   unavailable: null,
-  passes: Object.freeze(["security-pass", "data-pass", "quality-pass", "speed-pass", "ux-pass", "identity-pass", "ui-pass", "deslop"]),
+  passes: Object.freeze(["review", "security-pass", "data-pass", "quality-pass", "speed-pass", "ux-pass", "identity-pass", "ui-pass", "deslop"]),
   runs: Object.freeze([Object.freeze({
     id: "whole",
     label: sized("Whole app"),

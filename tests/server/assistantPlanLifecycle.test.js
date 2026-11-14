@@ -167,9 +167,20 @@ test("concurrent updates cannot overwrite newer evidence and invalid plan writes
 
 test("the installed plan command uses the admitted role, emits live changes and ignores a forged role", async t => {
   const f = await fixture(t);
-  let request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "senior" };
+  let request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "senior" };
   const events = [];
-  const store = { ...f.context.runtime.store, readMetadataValue: async () => JSON.stringify(request),
+  // The session source, whose HEAD a plan becoming current records as where its after-plan passes start.
+  const source = path.join(f.root, "sessions", "active", f.context.session.sessionId, "source");
+  await mkdir(source, { recursive: true });
+  const git = async (...args) => (await promisify(execFile)("git", ["-C", source, "-c", "user.name=Vibe64 Test",
+    "-c", "user.email=vibe64@example.test", ...args])).stdout.trim();
+  await git("init", "--quiet");
+  const commit = async () => { await git("commit", "--quiet", "--allow-empty", "-m", "Session work"); return git("rev-parse", "HEAD"); };
+  const startHead = await commit();
+  const metadata = new Map();
+  const store = { ...f.context.runtime.store,
+    readMetadataValue: async (_id, name) => name === "assistant_routing_request" ? JSON.stringify(request) : metadata.get(name),
+    writeMetadataValue: async (_id, name, value) => { metadata.set(name, value); },
     readSessionSourceDescriptor: async () => ({ sessionId: f.context.session.sessionId,
       metadata: { source_kind: "session_clone", source_path: path.join(f.root, "sessions", "active", f.context.session.sessionId, "source"), source_path_authority: "managed_session_source" } }) };
   const service = createAgentSessionCommandService({ logger: silentLogger, project: {
@@ -185,29 +196,33 @@ test("the installed plan command uses the admitted role, emits live changes and 
     if (!["read", "history"].includes(operation) || Object.keys(input).length) child.stdin.end(JSON.stringify(input));
   });
   const first = await command("new", { text: openText });
+  assert.equal(metadata.get("after_plan_base"), startHead, "a new plan records where its after-plan passes start");
   assert.equal(first.status, "active");
-  request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "junior" };
+  request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "junior" };
   await assert.rejects(command("complete", { role: "senior", expectedRevision: first.revision }), /Only Senior/);
   const ticked = await command("progress-write", { text: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision });
   assert.equal(ticked.checked, 0);
   assert.equal(ticked.progressText, checkedText);
-  // A Junior chat's own finishing turn records Progress but leaves the plan active for Senior.
-  request = { schemaVersion: 5, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
+  // A Junior chat's own review (one upgraded in flight) records Progress but leaves the plan active for Senior.
+  request = { schemaVersion: 6, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
   await assert.rejects(command("complete", { expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision }), /Only Senior/);
-  const reviewed = await command("progress-write", { text: `${checkedText}Finishing turn: review found no gaps.\n`,
+  const reviewed = await command("progress-write", { text: `${checkedText}Review found no gaps.\n`,
     expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision });
   assert.equal((await command("read")).status, "active");
-  // Auto's finishing turn is Senior's, so it completes the plan.
-  request = { schemaVersion: 5, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "auto", resolvedMode: "junior" };
+  // In Auto, Senior's check of the plan completes it.
+  request = { schemaVersion: 6, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "auto", resolvedMode: "junior" };
   assert.equal((await command("complete", { expectedRevision: reviewed.revision, expectedProgressRevision: reviewed.progressRevision })).status, "completed");
-  request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "senior", reason: "conversation" };
+  request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "senior", reason: "conversation" };
   await assert.rejects(command("reopen", { expectedRevision: (await command("read")).revision }), /Only Senior/);
   assert.equal(events.filter(event => event.reason === "work-plan-changed").length, 4);
   assert.deepEqual((await command("history")).history, [], "read-only commands finish even with stdin open");
-  request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "senior" };
+  const laterHead = await commit();
+  metadata.delete("after_plan_base");
+  request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "senior" };
   const reopened = await command("reopen", { expectedRevision: (await command("read")).revision,
     expectedProgressRevision: (await command("read")).progressRevision });
-  request = { schemaVersion: 5, status: "working", delivery: "accepted", resolvedMode: "junior" };
+  assert.equal(metadata.get("after_plan_base"), laterHead, "a plan reopened with no base recorded records one");
+  request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "junior" };
   const expectedProgress = "# Progress\n" + "native helper evidence 🙂\n".repeat(1200);
   await command("progress-write", { text: expectedProgress, expectedRevision: reopened.revision, expectedProgressRevision: reopened.progressRevision });
   let page = await command("read"); const readRevision = page.revision; const progressRevision = page.progressRevision;
