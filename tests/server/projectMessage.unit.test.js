@@ -12,7 +12,7 @@ import { createAgentSessionCommandService, prepareAgentSessionCommand } from "..
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
-test("project messages use only the current selected Main session with fresh access and fire-and-forget delivery", async (t) => {
+test("project messages use only the current selected Main session with fresh access and fire-and-forget delivery", { timeout: 15_000 }, async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "project-message-history-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
@@ -45,11 +45,13 @@ test("project messages use only the current selected Main session with fresh acc
     publish: async (sessionId, patch) => { assert.equal(sessionId, "source"); published.push(patch); },
     reportFailure: (error, receipt) => failures.push({ error, receipt })
   };
-  let timer;
-  const result = await Promise.race([
-    sendProjectMessage(input, dependencies),
-    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Sender waited for native delivery")), 500); })
-  ]).finally(() => clearTimeout(timer));
+  // Native delivery stays pending until this test resolves it below, so the send resolving at all
+  // proves the sender does not wait for it; a sender that waited would hang until the test's timeout.
+  let deliverySettled = false;
+  delivery.promise.then(() => { deliverySettled = true; });
+  const result = await sendProjectMessage(input, dependencies);
+  assert.equal(sent.length, 1);
+  assert.equal(deliverySettled, false, "The send resolved while native delivery was still pending");
   assert.equal(result.accepted, true);
   assert.equal(result.delivered, undefined);
   assert.equal(result.sessionId, "selected-1");
