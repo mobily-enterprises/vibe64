@@ -10,7 +10,7 @@ you choose and suggests one now and then.
 
 ## Open the Passes list
 
-Select the sparkles button (**Passes**) in the row under the main chat's
+Select the checklist button (**Passes**) in the row under the main chat's
 message box. On a phone the list opens as a sheet from the bottom of the
 screen; on a wider screen it opens above the button.
 

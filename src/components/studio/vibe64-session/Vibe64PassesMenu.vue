@@ -14,7 +14,7 @@
         aria-haspopup="dialog"
         aria-label="Passes"
         class="vibe64-passes__trigger"
-        icon="$autoAwesome"
+        icon="$checklist"
         size="small"
         title="Passes: improve your app"
         variant="text"
