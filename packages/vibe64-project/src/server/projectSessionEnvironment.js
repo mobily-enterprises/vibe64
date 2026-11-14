@@ -8,6 +8,7 @@ import {
   localDatabaseServerDeclarations,
   managesProjectResources,
   resourceKindIsDatabase,
+  resourceRequiredInDevelopment,
   satisfiedAlternative
 } from "./resourceEnvironment.js";
 import { envScope } from "./projectEnvironment.js";
@@ -113,13 +114,15 @@ function createProjectSessionEnvironment({
         kind: resource.kind,
         // Only the values processes really get count: an exported shell
         // variable never reaches Workspace setup, so it cannot make this ready.
-        configured: Boolean(satisfiedAlternative(resource, resolved.projectEnvironment))
+        configured: Boolean(satisfiedAlternative(resource, resolved.projectEnvironment)),
+        // A bucket without settings leaves the application on its own default storage.
+        required: resourceRequiredInDevelopment(resource)
       }));
       return {
         ...(Object.hasOwn(resolved, "resourcePreparation") ? { resourcePreparation: resolved.resourcePreparation } : {}),
         status: resolved.environmentInspectionFailed ? "unavailable"
           : !resolved.resourcesPrepared ? "not-prepared"
-              : resources.some(({ configured }) => !configured) ? "missing-configuration"
+              : resources.some(({ configured, required }) => required && !configured) ? "missing-configuration"
                 : "ready",
         keys: Object.keys(resolved.projectEnvironment).sort(),
         resources,

@@ -16,6 +16,7 @@ import {
   managesProjectResources,
   normalizeResourceEnvironment,
   requiredAlternative,
+  resourceRequiredInDevelopment,
   resourceSemanticIsSecret
 } from "./resourceEnvironment.js";
 import { SAVED_ENV_VALUE_SOURCE, offersSavedValues, savedEnvValueRecords } from "./savedEnvValues.js";
@@ -31,7 +32,9 @@ function envScope(input = {}) {
 
 function stackResourceRecords(resources = [], environment = {}, defaults = {}) {
   const records = new Map();
-  for (const declaration of resources) {
+  // A bucket's settings are not asked for in development, which then uses the
+  // application's own default storage; a person may still add them.
+  for (const declaration of resources.filter(({ resource }) => resourceRequiredInDevelopment(resource))) {
     const alternative = requiredAlternative(declaration.resource, environment);
     for (const [semantic, key] of Object.entries(alternative?.bindings || {})) {
       // A Stack default already supplies this binding; its editable default

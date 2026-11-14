@@ -18,6 +18,30 @@ const RESOURCE_ENVIRONMENT_CONTRACT = "vibe64.resource-environment.v2";
 const PROJECT_RESOURCE_ENVIRONMENT_TOKEN = "vibe64.project.resource-environment";
 const DATABASE_TOOL_ENVIRONMENT_CONTRACT = "vibe64.database-tool-environment.v1";
 const DATABASE_RESOURCE_KINDS = new Set(["mysql", "postgresql", "sqlite"]);
+// Redis: what an application's servers share live updates and other short-lived
+// state through. A host may serve one.
+const REDIS_RESOURCE_KIND = "redis";
+// Object storage speaking the S3 API, in an account the person holds with a
+// provider of their own choosing. No host creates or supplies one: the person
+// enters its settings, and without them in development the application uses
+// its own default storage, usually its own disk.
+const BUCKET_RESOURCE_KIND = "bucket";
+// What a bucket's optional `driver` binding receives: the API every bucket speaks.
+const BUCKET_STORAGE_DRIVER = "s3";
+// The semantics a kind's preferred alternative binds: every required one, and
+// the optional ones it may add. Other alternatives stay the application's own.
+const RESOURCE_KIND_BINDINGS = Object.freeze({
+  [BUCKET_RESOURCE_KIND]: Object.freeze({
+    example: "`\"bucket\": \"STORAGE_BUCKET\"`",
+    optional: Object.freeze(["driver"]),
+    required: Object.freeze(["bucket", "region", "endpoint", "accessKeyId", "secretAccessKey"])
+  }),
+  [REDIS_RESOURCE_KIND]: Object.freeze({
+    example: "`\"url\": \"REDIS_URL\"`",
+    optional: Object.freeze([]),
+    required: Object.freeze(["url"])
+  })
+});
 const DATABASE_CONNECTION_SEMANTICS = new Set([
   "database",
   "host",
@@ -141,6 +165,30 @@ function validateVoiceResource(resource, bindings, values) {
   }
 }
 
+/**
+ * A redis or bucket resource's preferred alternative binds exactly the
+ * semantics its kind defines, and neither kind takes optional bindings; the
+ * refusal names each missing and each unknown semantic.
+ */
+function validateBindingKind(resource = {}, bindings = {}) {
+  const kind = RESOURCE_KIND_BINDINGS[resource.kind];
+  if (!kind) return;
+  const bound = Object.keys(objectRecord(bindings) || {});
+  const missing = kind.required.filter((semantic) => !bound.includes(semantic));
+  const unknown = bound.filter((semantic) => !kind.required.includes(semantic) && !kind.optional.includes(semantic));
+  const optionalBindings = Object.keys(objectRecord(resource.optionalBindings) || {});
+  if (missing.length === 0 && unknown.length === 0 && optionalBindings.length === 0) return;
+  const named = (semantics) => semantics.map((semantic) => `\`${semantic}\``).join(", ");
+  throw vibe64Error([
+    `The ${resource.kind} resource ${toText(resource.id) || "(unknown)"} binds`,
+    `${named(kind.required)}${kind.optional.length ? ` and may bind ${named(kind.optional)}` : ""}`,
+    `in its preferred alternative, for example ${kind.example}.`,
+    missing.length ? `It is missing ${named(missing)}.` : "",
+    unknown.length ? `It binds ${named(unknown)}, which a ${resource.kind} resource does not take.` : "",
+    optionalBindings.length ? `A ${resource.kind} resource takes no optionalBindings.` : ""
+  ].filter(Boolean).join(" "), `vibe64_${resource.kind}_resource_bindings_invalid`);
+}
+
 function preferredAlternative(resource = {}) {
   const alternatives = Array.isArray(resource.environmentAlternatives)
     ? resource.environmentAlternatives
@@ -153,7 +201,69 @@ function preferredAlternative(resource = {}) {
     );
   }
   validateVoiceResource(resource, preferred[0].bindings);
+  validateBindingKind(resource, preferred[0].bindings);
   return preferred[0];
+}
+
+/**
+ * Why declared resources refuse their bindings, as `{ code, message }`
+ * diagnostics, one per refused declaration; none when all are valid.
+ * @param {Array<{ component?: string, resource?: object }>} resources
+ */
+function resourceDeclarationDiagnostics(resources = []) {
+  const diagnostics = [];
+  for (const declaration of Array.isArray(resources) ? resources : []) {
+    try {
+      preferredAlternative(declaration?.resource || {});
+    } catch (error) {
+      diagnostics.push({ code: toText(error?.code) || "vibe64_resource_bindings_invalid", message: String(error?.message || error) });
+    }
+  }
+  return diagnostics;
+}
+
+/**
+ * Whether only the person supplies a resource of this kind, never a host: a
+ * bucket is theirs, so its values come only from the Env they enter.
+ */
+function resourceKindIsPersonSupplied(kind = "") {
+  return kind === BUCKET_RESOURCE_KIND;
+}
+
+/**
+ * Whether development needs a declared resource's values before the
+ * application runs. A bucket does not: without its settings the application
+ * uses its own default storage.
+ */
+function resourceRequiredInDevelopment(resource = {}) {
+  return !resourceKindIsPersonSupplied(resource?.kind);
+}
+
+/**
+ * Each declared bucket's Env names, from its preferred alternative: `driver`,
+ * the name that receives BUCKET_STORAGE_DRIVER when the bucket binds one ("" when
+ * not), and `settings`, the names the person enters, each with whether it may
+ * stay empty and whether it holds a secret.
+ * @param {Array<{ component?: string, resource?: object }>} resources
+ */
+function bucketDeclarations(resources = []) {
+  return (Array.isArray(resources) ? resources : [])
+    .filter((declaration) => declaration?.resource?.kind === BUCKET_RESOURCE_KIND)
+    .map(({ component, resource }) => {
+      const preferred = preferredAlternative(resource);
+      const allowEmpty = Array.isArray(preferred.allowEmpty) ? preferred.allowEmpty : [];
+      return {
+        component: toText(component),
+        driver: toText(preferred.bindings.driver),
+        id: toText(resource.id),
+        settings: RESOURCE_KIND_BINDINGS[BUCKET_RESOURCE_KIND].required.map((semantic) => ({
+          name: preferred.bindings[semantic],
+          optional: allowEmpty.includes(semantic),
+          secret: resourceSemanticIsSecret(semantic),
+          semantic
+        }))
+      };
+    });
 }
 
 function bindingValuePresent(environment = {}, semantic = "", name = "", allowEmpty = []) {
@@ -367,6 +477,12 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
         "vibe64_resource_environment_declaration_mismatch"
       );
     }
+    if (resourceKindIsPersonSupplied(descriptor.kind)) {
+      throw codedError(
+        `A host never supplies the ${descriptor.kind} resource ${toText(descriptor.id)}: its values are the person's own.`,
+        "vibe64_resource_environment_person_supplied"
+      );
+    }
     const values = normalizedSemanticValues(providedResource.values);
     const declaration = declarations.get(identity);
     const semantics = declaredSemantics(declaration.resource);
@@ -384,6 +500,11 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
   const sources = {};
   const managedDatabases = [];
   for (const [identity, declaration] of declarations) {
+    // The person's own Env supplies a bucket; the host has nothing to add.
+    if (resourceKindIsPersonSupplied(declaration.resource?.kind)) {
+      preferredAlternative(declaration.resource);
+      continue;
+    }
     const values = entries.get(identity);
     if (!values) {
       if (allowUnprepared && provided.prepared === false) {
@@ -604,18 +725,25 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
 const __testables = Object.freeze({ normalizeDatabaseToolEnvironment });
 
 export {
+  BUCKET_RESOURCE_KIND,
+  BUCKET_STORAGE_DRIVER,
   DATABASE_TOOL_ENVIRONMENT_CONTRACT,
   LOCAL_PROJECT_RESOURCES,
   PROJECT_RESOURCE_ENVIRONMENT_TOKEN,
+  REDIS_RESOURCE_KIND,
   RESOURCE_ENVIRONMENT_CONTRACT,
   applicationDatabaseToolEnvironment,
   assertResourceEnvironmentProvider,
   bindingValuePresent,
+  bucketDeclarations,
   localDatabaseServerDeclarations,
   managesProjectResources,
   normalizeResourceEnvironment,
   requiredAlternative,
+  resourceDeclarationDiagnostics,
   resourceKindIsDatabase,
+  resourceKindIsPersonSupplied,
+  resourceRequiredInDevelopment,
   resourceSemanticIsSecret,
   satisfiedAlternative,
   __testables

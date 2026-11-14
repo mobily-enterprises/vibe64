@@ -1,7 +1,7 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { readSessionUpdateFirst } from "@local/vibe64-core/shared";
 import { assertProjectDirectoryUsable } from "@local/vibe64-core/server/studioProjectContext";
-import { bindingValuePresent, requiredAlternative } from "./resourceEnvironment.js";
+import { bindingValuePresent, requiredAlternative, resourceRequiredInDevelopment } from "./resourceEnvironment.js";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
@@ -46,7 +46,9 @@ function createProjectOnboarding({
     if (inspection.state === "ready") {
       const resolved = await environment.resolvedProjectEnvironment(input, await environment.userEnvRecords());
       const missingKeys = new Set();
-      const resourcesToCheck = resolved.resourcesPrepared ? resolved.resources : [];
+      const resourcesToCheck = resolved.resourcesPrepared
+        ? resolved.resources.filter(({ resource }) => resourceRequiredInDevelopment(resource))
+        : [];
       for (const { resource } of resourcesToCheck) {
         const alternative = requiredAlternative(resource, resolved.effectiveEnvironment);
         for (const [semantic, name] of Object.entries(alternative?.bindings || {})) {

@@ -20,6 +20,22 @@ have a default keep their default row; only the values without one, for example
 `DB_PASSWORD`, appear as empty rows to fill, and the setup message lists them
 as missing.
 
+Two more resource kinds can appear in a Stack. A **Redis** resource (kind
+`redis`) is the address the app's servers share live updates through, such as
+`REALTIME_REDIS_URL`; on your own computer you run Redis yourself and enter its
+address in that row, just as for a database. A **bucket** (kind `bucket`) is
+object storage you hold with an S3-compatible provider. Development never asks
+for a bucket's settings: no rows appear for it, the setup message does not list
+them, and the app keeps its files in its own default storage, usually its own
+disk. To try your real bucket in development, add the same names yourself (for
+a JSKIT app `JSKIT_STORAGE_DRIVER` set to `s3`, plus `JSKIT_STORAGE_S3_BUCKET`,
+`JSKIT_STORAGE_S3_REGION`, `JSKIT_STORAGE_S3_ENDPOINT`,
+`JSKIT_STORAGE_S3_ACCESS_KEY_ID` and `JSKIT_STORAGE_S3_SECRET_ACCESS_KEY`, the
+last as **Secret**). A Stack whose Redis or bucket declaration names the wrong
+values is refused with a message naming each one; ask the coding agent to fix
+the Stack's Resources. Colleague can explain this and open Env; it never
+receives the values.
+
 **Download .env**, beside **Refresh** at the top of **Env**, saves every
 Development value, secrets included, as one plain file named
 `<project>-development.env`. It starts with comments naming the project, the

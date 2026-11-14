@@ -13,6 +13,7 @@ host provide managed system values separately.
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/resourceEnvironment.js`
+- `tests/server/redisBucketResources.unit.test.js`
 - `packages/vibe64-project/src/server/savedEnvValues.js`
 - Main: `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
@@ -232,3 +233,20 @@ presented as credentials the person must enter.
 A host that prepares the project's declared resources provides them as the
 optional `vibe64.project.resource-environment` capability; without it the
 project uses the person's own resources and reports their database servers.
+
+Two resource kinds besides the databases and voice have a fixed binding
+grammar, checked wherever a declaration's preferred alternative is read. A
+`redis` resource binds exactly `url`, the address a host's Redis (or the
+person's own) answers at. A `bucket` resource is S3-compatible object storage
+and binds `bucket`, `region`, `endpoint`, `accessKeyId` and `secretAccessKey`,
+and may bind `driver`, which receives `s3`; neither kind takes optional
+bindings. `resourceDeclarationDiagnostics` names each missing and each unknown
+semantic, so a host can refuse a declaration in the person's words before it
+provisions anything. A bucket is always the person's own: a host's answer for
+one is refused, the resource environment boundary leaves it to the person's
+Env, and `bucketDeclarations` gives a host the exact names to ask for, with
+which may stay empty and which are secret. Development never asks for a
+bucket's settings (`resourceRequiredInDevelopment`): Env lists no rows for
+them, onboarding and session status do not count them as missing, and without
+them the application uses its own default storage, usually its own disk. A
+person who wants a development bucket adds the same names to Development Env.
