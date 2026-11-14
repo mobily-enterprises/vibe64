@@ -217,7 +217,7 @@ Through an application's declared
 development setup command it can check connections, start requested connection
 or verification work, cancel pending consent and disconnect an app connection.
 The person completes browser consent in Integrations. Colleague can open the exact
-development integration, or a production integration when the host supplies that
+development integration, or a Staging integration when the host supplies that
 view without requiring a development session. It knows which slot and environment are actually shown,
 including whether the displayed configuration has unsaved changes. Missing slots
 or failed loads are reported instead of claiming the requested integration opened.
@@ -1077,10 +1077,10 @@ Disconnect removes the application's saved connection and pending consent.
 Its confirmation explains that provider permissions, configuration and Env
 credentials remain, and that provider-side revocation may affect other apps.
 Changing the selected account or session dismisses outstanding confirmations.
-When a host supplies production integration management, people can switch
-between Development and Production. Production shows the published configuration
+When a host supplies Staging integration management, people can switch
+between Development and Staging. Staging shows the published configuration
 read-only and labels its release; changes are made in Development and published.
-Development drafts survive the switch. The workspace owner can manage production
+Development drafts survive the switch. The workspace owner can manage Staging
 connections, and a changed release dismisses outstanding confirmations. The
 selected environment and connection are restored when returning to the page.
 A removed integration cannot trigger connection commands from a stale selection.

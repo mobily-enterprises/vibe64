@@ -35,7 +35,7 @@ A session with connected copies (above) uses them instead of these entries;
 remove any old `sessions/pinned/source` values from **Env → Development**.
 A copy's own tests and setup run with that repository's own commands.
 For laptop development, export these variables with ordinary local checkout
-paths before running the development command. Do not set them in Production.
+paths before running the development command. Do not set them in Staging Env.
 Keep each selected checkout prepared with its own normal dependency setup.
 Public's **Workspace setup** installs dependencies and rebuilds its native terminal
 dependency with the declared Node and C++ runtimes. If Preview reports a missing
