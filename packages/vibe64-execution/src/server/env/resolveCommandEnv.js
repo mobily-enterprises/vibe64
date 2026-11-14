@@ -63,7 +63,7 @@ const BASE_ENV_POLICY_NAMES = new Set([
 ]);
 
 // A framework mode belongs to the project: its Development Env, launch
-// settings, Production Env or the command's own `env NODE_ENV=...`. The
+// settings, Staging Env or the command's own `env NODE_ENV=...`. The
 // editor's own mode, such as a host that serves the editor with
 // NODE_ENV=production, never reaches what it runs, or npm would leave out
 // devDependencies and dev servers, tests and agents would act as production.

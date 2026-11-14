@@ -18,7 +18,7 @@
     "./server/previewDiagnosticFiles": "./src/server/previewDiagnosticFiles.js",
     "./server/openedFileWithin": "./src/server/openedFileWithin.js",
     "./server/projectExecutionEnv": "./src/server/projectExecutionEnv.js",
-    "./server/productionEnvironment": "./src/server/productionEnvironment.js",
+    "./server/stagingEnvironment": "./src/server/stagingEnvironment.js",
     "./server/savedEnvValueLinks": "./src/server/savedEnvValueLinks.js",
     "./server/nativeConversationBindings": "./src/server/nativeConversationRetirement.js",
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",

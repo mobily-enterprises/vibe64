@@ -13,7 +13,7 @@ import {
   createAgentEnvCommandService,
   prepareAgentEnvCommand
 } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
-import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
+import { NO_STAGING_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/stagingEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS } from "../../packages/vibe64-terminals/src/server/savedEnvValueLinks.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
@@ -83,7 +83,7 @@ function createProjectService({
   };
 }
 
-function createProductionProvider({
+function createStagingProvider({
   deployment = null,
   records = []
 } = {}) {
@@ -126,7 +126,7 @@ function createProductionProvider({
           key: input.key,
           owner: "user",
           requiredFor: [],
-          scope: "prod",
+          scope: "staging",
           secret: input.secret === true,
           source: "user_override",
           value: input.secret ? "********" : input.value,
@@ -184,13 +184,13 @@ test("agent Env status reports both scopes without exposing values", async () =>
       valuePresent: true
     }]
   });
-  const production = createProductionProvider({
+  const staging = createStagingProvider({
     records: [{
       editable: true,
       key: "API_TOKEN",
       owner: "user",
       requiredFor: ["deploy"],
-      scope: "prod",
+      scope: "staging",
       secret: true,
       source: "user_override",
       value: "********",
@@ -198,7 +198,7 @@ test("agent Env status reports both scopes without exposing values", async () =>
     }]
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: production,
+    stagingEnvironmentProvider: staging,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
@@ -212,12 +212,12 @@ test("agent Env status reports both scopes without exposing values", async () =>
 
   assert.equal(result.ok, true);
   assert.equal(payload.scopes.development.records[0].key, "PUBLIC_ORIGIN");
-  assert.equal(payload.scopes.production.records[0].key, "API_TOKEN");
-  assert.equal(payload.scopes.production.records[0].secret, true);
-  assert.equal(payload.scopes.production.records[0].state, "configured");
-  assert.equal(payload.scopes.production.records[0].stored, true);
+  assert.equal(payload.scopes.staging.records[0].key, "API_TOKEN");
+  assert.equal(payload.scopes.staging.records[0].secret, true);
+  assert.equal(payload.scopes.staging.records[0].state, "configured");
+  assert.equal(payload.scopes.staging.records[0].stored, true);
   assert.equal(Object.hasOwn(payload.scopes.development.records[0], "value"), false);
-  assert.equal(Object.hasOwn(payload.scopes.production.records[0], "value"), false);
+  assert.equal(Object.hasOwn(payload.scopes.staging.records[0], "value"), false);
   assert.doesNotMatch(result.stdout, /development\.example\.test/u);
   assert.doesNotMatch(result.stdout, /\*\*\*\*\*\*\*\*/u);
   assert.deepEqual(project.state.contexts, ["demo"]);
@@ -228,11 +228,11 @@ test("agent Env status reports both scopes without exposing values", async () =>
   assert.match(help.stdout, /pipe\nit to env set <scope> <KEY> --secret\. Never write it into the generated \.env/u);
 });
 
-test("agent Env persists and reports empty development and production values", async () => {
+test("agent Env persists and reports empty development and staging values", async () => {
   const project = createProjectService();
-  const production = createProductionProvider();
+  const staging = createStagingProvider();
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: production,
+    stagingEnvironmentProvider: staging,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
@@ -243,8 +243,8 @@ test("agent Env persists and reports empty development and production values", a
     sessionId: "empty-session",
     stdin: ""
   });
-  const productionResult = await command.run({
-    args: ["set", "production", "EMPTY_PLAIN", "--json"],
+  const stagingResult = await command.run({
+    args: ["set", "staging", "EMPTY_PLAIN", "--json"],
     sessionId: "empty-session",
     stdin: ""
   });
@@ -252,36 +252,36 @@ test("agent Env persists and reports empty development and production values", a
     args: ["status", "all", "--json"],
     sessionId: "empty-session"
   });
-  const removedProduction = await command.run({
-    args: ["remove", "production", "EMPTY_PLAIN", "--json"],
+  const removedStaging = await command.run({
+    args: ["remove", "staging", "EMPTY_PLAIN", "--json"],
     sessionId: "empty-session"
   });
   const developmentPayload = JSON.parse(development.stdout);
-  const productionPayload = JSON.parse(productionResult.stdout);
+  const stagingPayload = JSON.parse(stagingResult.stdout);
   const statusPayload = JSON.parse(status.stdout);
-  const removedProductionPayload = JSON.parse(removedProduction.stdout);
+  const removedStagingPayload = JSON.parse(removedStaging.stdout);
 
   assert.equal(development.ok, true);
   assert.equal(developmentPayload.created, true);
   assert.equal(developmentPayload.empty, true);
-  assert.equal(productionResult.ok, true);
-  assert.equal(productionPayload.created, true);
-  assert.equal(productionPayload.empty, true);
+  assert.equal(stagingResult.ok, true);
+  assert.equal(stagingPayload.created, true);
+  assert.equal(stagingPayload.empty, true);
   assert.deepEqual(project.state.saves[0].values, {
     EMPTY_SECRET: {
       secret: true,
       value: ""
     }
   });
-  assert.deepEqual(production.state.sets, [{
+  assert.deepEqual(staging.state.sets, [{
     actor: null,
     key: "EMPTY_PLAIN",
     projectSlug: "demo",
     secret: false,
     value: ""
   }]);
-  assert.equal(removedProductionPayload.changed, true);
-  assert.deepEqual(production.state.removes, [{
+  assert.equal(removedStagingPayload.changed, true);
+  assert.deepEqual(staging.state.removes, [{
     actor: null,
     key: "EMPTY_PLAIN",
     projectSlug: "demo"
@@ -299,8 +299,8 @@ test("agent Env persists and reports empty development and production values", a
     state: "empty",
     stored: true
   });
-  assert.equal(statusPayload.scopes.production.records[0].state, "empty");
-  assert.equal(statusPayload.scopes.production.records[0].stored, true);
+  assert.equal(statusPayload.scopes.staging.records[0].state, "empty");
+  assert.equal(statusPayload.scopes.staging.records[0].stored, true);
 });
 
 test("agent Env creates development values through the project service and never echoes them", async () => {
@@ -318,7 +318,7 @@ test("agent Env creates development values through the project service and never
     }]
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
   await command.bindSession("development-session");
@@ -348,9 +348,9 @@ test("agent Env creates development values through the project service and never
 
 test("agent Env drops one final line ending from stdin and keeps every other character", async () => {
   const project = createProjectService();
-  const production = createProductionProvider();
+  const staging = createStagingProvider();
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: production,
+    stagingEnvironmentProvider: staging,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
@@ -383,40 +383,40 @@ test("agent Env drops one final line ending from stdin and keeps every other cha
   assert.equal(JSON.parse(echoedEmpty.stdout).empty, true);
   assert.equal(project.state.saves.at(-1).values.ECHOED_EMPTY.value, "");
 
-  const productionResult = await setValue("production", "TOGETHER_API_KEY", "together-key\n");
-  assert.equal(JSON.parse(productionResult.stdout).empty, false);
-  assert.equal(production.state.sets.at(-1).value, "together-key");
-  assert.equal(production.state.sets.at(-1).secret, true);
-  await setValue("production", "PRODUCTION_DOUBLED", "pem\n\n");
-  assert.equal(production.state.sets.at(-1).value, "pem\n");
+  const stagingResult = await setValue("staging", "TOGETHER_API_KEY", "together-key\n");
+  assert.equal(JSON.parse(stagingResult.stdout).empty, false);
+  assert.equal(staging.state.sets.at(-1).value, "together-key");
+  assert.equal(staging.state.sets.at(-1).secret, true);
+  await setValue("staging", "STAGING_DOUBLED", "pem\n\n");
+  assert.equal(staging.state.sets.at(-1).value, "pem\n");
 });
 
-test("agent Env production writes use only the host production provider", async () => {
+test("agent Env staging writes use only the host staging provider", async () => {
   const project = createProjectService();
-  const production = createProductionProvider();
+  const staging = createStagingProvider();
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: production,
+    stagingEnvironmentProvider: staging,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
   // The person whose request prepared the agent reaches the host with each change.
   const actor = { role: "member", username: "teammate" };
-  await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("production-session"));
-  const secretValue = "private-production-value";
+  await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("staging-session"));
+  const secretValue = "private-staging-value";
 
   const result = await command.run({
-    args: ["set", "production", "DEPLOY_TOKEN", "--json"],
-    sessionId: "production-session",
+    args: ["set", "staging", "DEPLOY_TOKEN", "--json"],
+    sessionId: "staging-session",
     stdin: secretValue
   });
   const payload = JSON.parse(result.stdout);
 
-  assert.equal(payload.scope, "production");
+  assert.equal(payload.scope, "staging");
   assert.equal(payload.key, "DEPLOY_TOKEN");
   assert.equal(payload.created, true);
   assert.equal(payload.secret, true);
   assert.equal(Object.hasOwn(payload, "value"), false);
-  assert.deepEqual(production.state.sets, [{
+  assert.deepEqual(staging.state.sets, [{
     actor,
     key: "DEPLOY_TOKEN",
     projectSlug: "demo",
@@ -425,27 +425,27 @@ test("agent Env production writes use only the host production provider", async 
   }]);
   assert.deepEqual(project.state.saves, []);
   assert.deepEqual(project.state.contexts, ["demo"]);
-  assert.deepEqual(production.state.reads, [{ projectSlug: "demo" }]);
+  assert.deepEqual(staging.state.reads, [{ projectSlug: "demo" }]);
   assert.doesNotMatch(result.stdout, new RegExp(secretValue, "u"));
 
-  const removed = await command.run({ args: ["remove", "production", "DEPLOY_TOKEN"], sessionId: "production-session" });
+  const removed = await command.run({ args: ["remove", "staging", "DEPLOY_TOKEN"], sessionId: "staging-session" });
   assert.equal(removed.exitCode, 0);
-  assert.deepEqual(production.state.removes, [{ actor, key: "DEPLOY_TOKEN", projectSlug: "demo" }]);
+  assert.deepEqual(staging.state.removes, [{ actor, key: "DEPLOY_TOKEN", projectSlug: "demo" }]);
 
   // A host's refusal of that person reaches the agent as the host worded it.
-  production.setVariable = async () => ({ ok: false, code: "vibe64_owner_required", error: "Only the owner changes production values here." });
+  staging.setVariable = async () => ({ ok: false, code: "vibe64_owner_required", error: "Only the owner changes staging values here." });
   const refused = await command.run({
-    args: ["set", "production", "DEPLOY_TOKEN"],
-    sessionId: "production-session",
+    args: ["set", "staging", "DEPLOY_TOKEN"],
+    sessionId: "staging-session",
     stdin: secretValue
   });
   assert.equal(refused.exitCode, 1);
   assert.equal(refused.code, "vibe64_owner_required");
-  assert.equal(refused.stderr, "Only the owner changes production values here.\n");
+  assert.equal(refused.stderr, "Only the owner changes staging values here.\n");
   assert.doesNotMatch(`${refused.stdout || ""}${refused.stderr}`, new RegExp(secretValue, "u"));
 });
 
-test("agent Env refuses system-managed values and unavailable production writes", async () => {
+test("agent Env refuses system-managed values and unavailable staging writes", async () => {
   const project = createProjectService({
     records: [{
       editable: false,
@@ -460,7 +460,7 @@ test("agent Env refuses system-managed values and unavailable production writes"
     }]
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
   await command.bindSession("guard-session");
@@ -470,25 +470,33 @@ test("agent Env refuses system-managed values and unavailable production writes"
     sessionId: "guard-session",
     stdin: "attempted-override"
   });
-  const production = await command.run({
-    args: ["set", "production", "API_TOKEN"],
+  const staging = await command.run({
+    args: ["set", "staging", "API_TOKEN"],
     sessionId: "guard-session",
-    stdin: "attempted-production"
+    stdin: "attempted-staging"
   });
 
   assert.equal(managed.ok, false);
   assert.equal(managed.code, "vibe64_agent_env_command_managed_value");
   assert.doesNotMatch(managed.stderr, /attempted-override/u);
-  assert.equal(production.ok, false);
-  assert.equal(production.code, "vibe64_agent_env_command_production_unavailable");
-  assert.doesNotMatch(production.stderr, /attempted-production/u);
+  assert.equal(staging.ok, false);
+  assert.equal(staging.code, "vibe64_agent_env_command_staging_unavailable");
+  assert.doesNotMatch(staging.stderr, /attempted-staging/u);
+  // The scope words from before production was renamed staging are refused, naming staging.
+  for (const [args, word] of [[["set", "production", "API_TOKEN"], "production"], [["status", "prod"], "prod"],
+    [["get", "production", "API_TOKEN"], "production"]]) {
+    const renamed = await command.run({ args, sessionId: "guard-session", stdin: "attempted-renamed" });
+    assert.equal(renamed.exitCode, 2);
+    assert.equal(renamed.code, "vibe64_agent_env_command_usage");
+    assert.match(renamed.stderr, new RegExp(`^The ${word} scope was renamed staging: use env ${args[0]} staging\\.\\n`, "u"));
+  }
   assert.deepEqual(project.state.saves, []);
 });
 
 test("agent Env refuses a stale session binding after the project identity changes", async () => {
   const project = createProjectService();
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
   await command.bindSession("stale-session");
@@ -521,7 +529,7 @@ test("agent Env removes only stored user values", async () => {
     }]
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
   await command.bindSession("remove-session");
@@ -549,7 +557,7 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-env-command-"));
   const project = createProjectService();
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
   const sessionId = "wrapper-session";
@@ -638,7 +646,7 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
 test("agent Env preparation repairs one missing cached socket and fences its old generation", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-env-command-repair-"));
   const project = createProjectService();
-  const command = createAgentEnvCommandService({ logger: silentLogger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+  const command = createAgentEnvCommandService({ logger: silentLogger, stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project });
   const sessionId = "env-repair-session";
   try {
@@ -689,16 +697,16 @@ function hostedDeployment() {
       { label: "Vibe64 URL", url: "https://books.example.test" },
       { label: "custom domain", url: "https://books.example.com" }
     ],
-    blockers: ["Secret 'Stripe' is not set for production."],
+    blockers: ["Secret 'Stripe' is not set for staging."],
     environmentValues: { SESSION_SECRET: "host-secret-value" },
     error: "npm ERR! host-build-output",
     latestDeploy: { at: "2026-11-06T09:00:05.000Z", error: "host-failure-detail", status: "failed" },
-    notes: ["The project owner changes Production Env on the project's Deploy page."],
+    notes: ["The project owner changes Staging Env on the project's Deploy page."],
     records: [
       { generated: true, key: "SESSION_SECRET", requiredFor: [], secret: true, source: "user_override",
         sourceLabel: "generated by Vibe64", value: "host-secret-value", valuePresent: true },
       { key: "PUBLIC_ORIGIN", requiredFor: [], secret: false, source: "user_override",
-        sourceLabel: "Production Env value", value: "https://plain-host-value.example.test", valuePresent: true },
+        sourceLabel: "Staging Env value", value: "https://plain-host-value.example.test", valuePresent: true },
       { key: "STRIPE_KEY", requiredFor: ["server"], secret: true, source: "user_override", valuePresent: false }
     ],
     release: {
@@ -719,9 +727,9 @@ function hostedDeployment() {
 
 test("agent deployment status shows the bound project's deployment and never a value", async () => {
   const project = createProjectService();
-  const production = createProductionProvider({ deployment: hostedDeployment() });
+  const staging = createStagingProvider({ deployment: hostedDeployment() });
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: production,
+    stagingEnvironmentProvider: staging,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
@@ -733,7 +741,7 @@ test("agent deployment status shows the bound project's deployment and never a v
 
   assert.equal(human.ok, true);
   assert.equal(human.exitCode, 0);
-  assert.match(human.stdout, /^Production: published$/mu);
+  assert.match(human.stdout, /^Staging: published$/mu);
   assert.match(human.stdout, /^ {2}https:\/\/books\.example\.com \(custom domain\)$/mu);
   assert.match(human.stdout, /^Current release: 20261106_090000z-ab12cd34$/mu);
   assert.match(human.stdout, /^ {2}Commit: 0123456789abcdef0123456789abcdef01234567$/mu);
@@ -741,30 +749,30 @@ test("agent deployment status shows the bound project's deployment and never a v
   assert.match(human.stdout, /^ {2}Serve NODE_ENV: production \(the host's default for Node apps\)$/mu);
   assert.match(human.stdout, /^Latest publish: failed at 2026-11-06T09:00:05\.000Z$/mu);
   assert.match(human.stdout, /^ {2}SESSION_SECRET — generated, set, secret \(generated by Vibe64\)$/mu);
-  assert.match(human.stdout, /^ {2}PUBLIC_ORIGIN — set, plain \(Production Env value\)$/mu);
+  assert.match(human.stdout, /^ {2}PUBLIC_ORIGIN — set, plain \(Staging Env value\)$/mu);
   assert.match(human.stdout, /^ {2}STRIPE_KEY — not set, required for server, secret \(user_override\)$/mu);
-  assert.match(human.stdout, /^Missing before the next publish:\n {2}Secret 'Stripe' is not set for production\.$/mu);
+  assert.match(human.stdout, /^Missing before the next publish:\n {2}Secret 'Stripe' is not set for staging\.$/mu);
   assert.match(human.stdout, /Deploy page\.$/mu);
   for (const output of [human.stdout, json.stdout]) {
     for (const leaked of ["host-secret-value", "plain-host-value", "host-build-output", "host-failure-detail",
-      "production-value", "rm -rf"]) {
+      "staging-value", "rm -rf"]) {
       assert.equal(output.includes(leaked), false, `${leaked} never reaches the agent`);
     }
   }
   assert.deepEqual(Object.keys(payload).sort(),
     ["addresses", "aiAccess", "blockers", "latestDeploy", "notes", "ok", "records", "release", "state"]);
-  // A host that says nothing about it does not let the session use production itself.
+  // A host that says nothing about it does not let the session use staging itself.
   assert.deepEqual(payload.aiAccess, { enabled: false, reason: "" });
-  assert.match(human.stdout, /^AI access to production: off$/mu);
+  assert.match(human.stdout, /^AI access to staging: off$/mu);
   assert.deepEqual(payload.records.map((record) => Object.keys(record).sort())[0],
     ["configured", "generated", "key", "requiredFor", "secret", "source", "sourceLabel"]);
   assert.deepEqual(payload.release.steps.map((step) => step.role), ["prepare", "serve"]);
   // Only the session's bound project is asked for.
-  assert.deepEqual(production.state.deploymentReads,
+  assert.deepEqual(staging.state.deploymentReads,
     [{ actor: null, projectSlug: "demo" }, { actor: null, projectSlug: "demo" }]);
   assert.deepEqual(project.state.contexts, ["demo", "demo"]);
-  assert.deepEqual(production.state.sets, []);
-  assert.deepEqual(production.state.removes, []);
+  assert.deepEqual(staging.state.sets, []);
+  assert.deepEqual(staging.state.removes, []);
 
   const help = await command.run({ args: ["deployment", "--help"], sessionId: "deployment-session" });
   assert.match(help.stdout, /vibe64-helper deployment status \[--json\]/u);
@@ -776,7 +784,7 @@ test("agent deployment status shows the bound project's deployment and never a v
 
 test("agent deployment status says plainly when the installation does not publish projects", async () => {
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project: createProjectService()
   });
   await command.bindSession("local-session");
@@ -788,9 +796,9 @@ test("agent deployment status says plainly when the installation does not publis
 
 test("vibe64-helper deployment status reaches the session's Env command socket", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-deployment-command-"));
-  const production = createProductionProvider({ deployment: hostedDeployment() });
+  const staging = createStagingProvider({ deployment: hostedDeployment() });
   const command = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: production, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    stagingEnvironmentProvider: staging, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project: createProjectService()
   });
   const sessionId = "deployment-wrapper-session";
@@ -801,9 +809,9 @@ test("vibe64-helper deployment status reaches the session's Env command socket",
       env: { ...process.env, ...prepared.env }
     });
     assert.equal(executed.code, 0, executed.stderr);
-    assert.match(executed.stdout, /^Production: published$/mu);
+    assert.match(executed.stdout, /^Staging: published$/mu);
     assert.doesNotMatch(executed.stdout, /host-secret-value/u);
-    assert.deepEqual(production.state.deploymentReads, [{ actor: null, projectSlug: "demo" }]);
+    assert.deepEqual(staging.state.deploymentReads, [{ actor: null, projectSlug: "demo" }]);
   } finally {
     await command.closeAllForSession(sessionId);
     await rm(root, { force: true, recursive: true });

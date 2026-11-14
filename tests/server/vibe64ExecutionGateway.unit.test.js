@@ -708,7 +708,7 @@ test("commands never get the server's own NODE_ENV, and the project's own NODE_E
   assert.equal(await nodeEnv({ purpose: "deployment" }), "NODE_ENV:unset");
   assert.equal(await nodeEnv({ inheritProcessEnv: false, baseEnv: { NODE_ENV: "production" } }), "NODE_ENV:unset");
   // What the project sets: its Env (Stack defaults and Development Env), a
-  // launch's or terminal's own env, and its Production Env.
+  // launch's or terminal's own env, and its Staging Env.
   assert.equal(await nodeEnv({ envPolicy: "project", project: { runtimeConfigEnv: { NODE_ENV: "development" } } }), "NODE_ENV:development");
   assert.equal(await nodeEnv({ env: { NODE_ENV: "test" } }), "NODE_ENV:test");
   assert.equal(await nodeEnv({ envPolicy: "deployment", purpose: "deployment", project: { deploymentEnv: { NODE_ENV: "staging" } } }), "NODE_ENV:staging");
@@ -968,8 +968,8 @@ test("execution gateway env policies keep deployment commands away from session-
     project: {
       deploymentEnv: {
         DB_CLIENT: "mysql2",
-        DB_NAME: "production_db",
-        DB_PASSWORD: "production-secret"
+        DB_NAME: "staging_db",
+        DB_PASSWORD: "staging-secret"
       }
     },
     purpose: "deployment"
@@ -977,13 +977,13 @@ test("execution gateway env policies keep deployment commands away from session-
 
   assert.equal(result.ok, true, result.output);
   assert.deepEqual(JSON.parse(result.stdout), {
-    db: "production_db",
+    db: "staging_db",
     mysqlPassword: "",
-    password: "production-secret"
+    password: "staging-secret"
   });
 });
 
-test("execution gateway gives deployment commands production DB env, Git identity, shared cache, and GitHub transport", async () => {
+test("execution gateway gives deployment commands staging DB env, Git identity, shared cache, and GitHub transport", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
     env: NO_PERSON_GIT_CONFIG_ENV,
