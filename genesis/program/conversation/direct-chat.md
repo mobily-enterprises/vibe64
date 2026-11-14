@@ -4215,7 +4215,10 @@ these account-setup operations do not create a conversation runner.
   user's per-user runtime, covering catalogue services and standalone local use
   without granting general access outside managed project roots.
 - `runManagedExecutionPayload()` holds a managed service's controller lease and
-  terminates the detached service process group if that lease closes. Its
+  terminates the detached service process group if that lease closes: SIGTERM,
+  then SIGKILL after five seconds. It reports the stop only once that whole group
+  is gone, its exited members reaped too, giving up five seconds after SIGKILL
+  and leaving any remainder to the unit's own stop. Its
   receipt then records `controllerLeaseClosed`, and inspection reports it, so
   a stop made because the controller went away is not read as the service failing.
 - `vite.config.mjs` temporarily preserves xterm identifiers and syntax because

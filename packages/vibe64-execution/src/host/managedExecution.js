@@ -58,6 +58,10 @@ import {
 import { accountUnitLines } from "./systemdUnits.js";
 
 const CONTROLLER_LEASE_NAME = "resource-controller.sock";
+// A stopped service's process group gets SIGTERM, then SIGKILL after this grace,
+// and its runner waits this much longer for the group to go before giving up.
+const MANAGED_EXECUTION_STOP_GRACE_MS = 5000;
+const MANAGED_EXECUTION_KILL_WAIT_MS = 5000;
 
 function handleManagedExecutionOperation(payload = {}) {
   const owner = resolveOwnerUser();
@@ -287,12 +291,12 @@ async function runManagedExecutionPayload(payloadPath = "") {
   // As its unit's UMask= says: an application's files are its own alone.
   process.umask(payload.application === true ? 0o077 : 0o007);
   let child = null;
-  let terminationTimer = null;
+  let termination = null;
   let controllerLeaseClosed = false;
   const stopForControllerLoss = () => {
     controllerLeaseClosed = true;
-    if (child && terminationTimer === null) {
-      terminationTimer = terminateManagedExecutionChild(child);
+    if (child && termination === null) {
+      termination = terminateManagedExecutionChild(child);
     }
   };
   controllerLease?.once("close", stopForControllerLoss);
@@ -315,7 +319,7 @@ async function runManagedExecutionPayload(payloadPath = "") {
       child.stdin.end(Buffer.from(String(payload.inputBase64 || ""), "base64"));
     }
     if (controllerLeaseClosed) {
-      terminationTimer = terminateManagedExecutionChild(child);
+      termination = terminateManagedExecutionChild(child);
     }
     const outcome = await new Promise((resolve, reject) => {
       let exitObservedAt = "";
@@ -329,6 +333,10 @@ async function runManagedExecutionPayload(payloadPath = "") {
       });
       child.once("close", (status, signal) => resolve({ signal, status, exitObservedAt }));
     });
+    // A stopped service's whole tree is gone before its runner reports the stop.
+    if (termination !== null) {
+      await awaitManagedExecutionGroupExit(child, termination.startedAt);
+    }
     const status = typeof outcome.status === "number" ? outcome.status : 1;
     writeManagedExecutionResult(path.dirname(resolved), {
       ...managedRunnerCgroupMeasurements(),
@@ -348,8 +356,8 @@ async function runManagedExecutionPayload(payloadPath = "") {
     // SIGPIPE, exit as 128 + the signal's number.
     process.exitCode = childSignal ? 128 + (osConstants.signals[childSignal] || 0) : status;
   } finally {
-    if (terminationTimer !== null) {
-      clearTimeout(terminationTimer);
+    if (termination !== null) {
+      clearTimeout(termination.timer);
     }
     controllerLease?.off("close", stopForControllerLoss);
     controllerLease?.destroy();
@@ -411,10 +419,48 @@ function connectManagedExecutionController(leaseName = "") {
 }
 
 function terminateManagedExecutionChild(child = null) {
+  const startedAt = Date.now();
   signalManagedExecutionChild(child, "SIGTERM");
-  const timer = setTimeout(() => signalManagedExecutionChild(child, "SIGKILL"), 5000);
+  const timer = setTimeout(() => signalManagedExecutionChild(child, "SIGKILL"), MANAGED_EXECUTION_STOP_GRACE_MS);
   timer.unref();
-  return timer;
+  return { startedAt, timer };
+}
+
+/**
+ * Waits until the stopped child's process group is gone, its exited members reaped too, so the
+ * runner's own exit means the tree has stopped: the rest of SIGTERM's grace, then SIGKILL. A tree
+ * still there after SIGKILL's wait is left to the unit's own stop, which ends what is left.
+ * @param {import("node:child_process").ChildProcess} child
+ * @param {number} terminatedAt when SIGTERM was sent, in epoch milliseconds
+ */
+async function awaitManagedExecutionGroupExit(child, terminatedAt) {
+  let killed = false;
+  while (managedExecutionGroupExists(child)) {
+    const elapsed = Date.now() - terminatedAt;
+    if (elapsed >= MANAGED_EXECUTION_STOP_GRACE_MS + MANAGED_EXECUTION_KILL_WAIT_MS) {
+      process.stderr.write("Vibe64 managed service process tree did not stop after SIGKILL.\n");
+      return;
+    }
+    if (!killed && elapsed >= MANAGED_EXECUTION_STOP_GRACE_MS) {
+      signalManagedExecutionChild(child, "SIGKILL");
+      killed = true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+// A detached child leads its own process group, which lasts while any member, even an unreaped one, does.
+function managedExecutionGroupExists(child = null) {
+  const pid = Number(child?.pid);
+  if (!Number.isSafeInteger(pid) || pid <= 1) {
+    return false;
+  }
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
 }
 
 function signalManagedExecutionChild(child = null, signal = "SIGTERM") {

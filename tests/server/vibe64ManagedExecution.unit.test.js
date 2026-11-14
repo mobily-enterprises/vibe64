@@ -734,7 +734,12 @@ test("a managed service's controller lease is its daemon's runtime socket, never
   assert.throws(() => managedExecutionControllerLeaseName(lease, "finite", owner), /controller lease on a finite execution/u);
 });
 
-test("managed service runner stops its process tree when the owning controller disappears", async () => {
+// The runner reports the stop only once its whole tree is gone, so the grandchild is gone the moment
+// the runner closes: one takes a moment to exit on SIGTERM, and one ignores SIGTERM until SIGKILL.
+for (const [grandchildCase, onTerm] of [
+  ["a grandchild that takes a moment to exit", "process.on('SIGTERM', () => setTimeout(() => process.exit(0), 300));"],
+  ["a grandchild that ignores SIGTERM", "process.on('SIGTERM', () => {});"]
+]) test(`managed service runner stops its process tree, with ${grandchildCase}, when the owning controller disappears`, async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-managed-controller-lease-"));
   const leaseName = path.join(root, "resource-controller.sock");
   const sockets = new Set();
@@ -754,9 +759,14 @@ test("managed service runner stops its process tree when the owning controller d
     await writeFile(payloadPath, `${JSON.stringify({
       args: ["-e", [
         "const { spawn } = require('node:child_process');",
-        "const { writeFileSync } = require('node:fs');",
-        "const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });",
-        `writeFileSync(${JSON.stringify(pidPath)}, process.pid + ' ' + grandchild.pid);`,
+        // The grandchild names both processes, all at once, when its SIGTERM handler is in place.
+        `spawn(process.execPath, ['-e', ${JSON.stringify([
+          onTerm,
+          "const fs = require('node:fs');",
+          `fs.writeFileSync(${JSON.stringify(`${pidPath}.tmp`)}, process.ppid + ' ' + process.pid);`,
+          `fs.renameSync(${JSON.stringify(`${pidPath}.tmp`)}, ${JSON.stringify(pidPath)});`,
+          "setInterval(() => {}, 1000);"
+        ].join(" "))}], { stdio: 'ignore' });`,
         "setInterval(() => {}, 1000);"
       ].join("\n")],
       command: process.execPath,
@@ -778,7 +788,8 @@ test("managed service runner stops its process tree when the owning controller d
       stderr += String(chunk || "");
     });
 
-    for (let attempt = 0; attempt < 100; attempt += 1) {
+    // Two Node processes start in turn before the grandchild names them; the deadline only ends a hang.
+    for (const deadline = Date.now() + 15_000; Date.now() < deadline;) {
       try {
         managedPids = String(await readFile(pidPath, "utf8"))
           .trim()
