@@ -25,7 +25,7 @@ import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
-import { offersProductionEnvironment } from "./productionEnvironment.js";
+import { offersStagingEnvironment } from "./stagingEnvironment.js";
 import { deploymentStatusPayload, humanDeploymentStatus } from "./agentDeploymentStatus.js";
 import { offersSavedValueLinks } from "./savedEnvValueLinks.js";
 import {
@@ -37,13 +37,13 @@ import {
   assertRecordEditable,
   ENV_SCOPE_ALL,
   ENV_SCOPE_DEVELOPMENT,
-  ENV_SCOPE_PRODUCTION,
+  ENV_SCOPE_STAGING,
   humanStatus,
   mutationPayload,
   parseCommandArgs,
   recordForKey,
   scopeStatus,
-  unavailableProductionStatus,
+  unavailableStagingStatus,
   validateParsedCommand
 } from "./agentEnvCommandText.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -51,7 +51,7 @@ import { commandLineFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
+/** @typedef {import("./types.js").StagingEnvironmentProvider} StagingEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 
@@ -102,13 +102,13 @@ const commandServers = createSessionCommandServers({
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
- * @param {ProductionEnvironmentProvider} dependencies.productionEnvironmentProvider a host's production Env values
+ * @param {StagingEnvironmentProvider} dependencies.stagingEnvironmentProvider a host's staging Env values
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link
  */
 function createAgentEnvCommandService({
   logger,
   project,
-  productionEnvironmentProvider,
+  stagingEnvironmentProvider,
   savedEnvValueLinks
 }) {
   // The person whose request prepared this agent; a host's saved values
@@ -179,15 +179,15 @@ function createAgentEnvCommandService({
   // manage. Carry only that validated identity across the host's persistence
   // boundary instead of relying on ambient request context surviving it.
   // Changes also carry the person whose request prepared the agent, so the
-  // host applies that person's permission to change production values.
-  const productionEnvironment = Object.freeze({
+  // host applies that person's permission to change staging values.
+  const stagingEnvironment = Object.freeze({
     isUserValueRecord(record = null) {
-      return productionEnvironmentProvider.isUserValueRecord(record);
+      return stagingEnvironmentProvider.isUserValueRecord(record);
     },
     async readRecords({ projectSlug = "" } = {}) {
       const result = assertOperationResult(
-        await productionEnvironmentProvider.readRecords({ projectSlug }),
-        "Production Env could not be read."
+        await stagingEnvironmentProvider.readRecords({ projectSlug }),
+        "Staging Env could not be read."
       );
       return Array.isArray(result?.records) ? result.records : [];
     },
@@ -197,11 +197,11 @@ function createAgentEnvCommandService({
       projectSlug = ""
     } = {}) {
       assertOperationResult(
-        await productionEnvironmentProvider.removeVariable({ actor, key, projectSlug }),
-        `Production Env ${key} could not be removed.`
+        await stagingEnvironmentProvider.removeVariable({ actor, key, projectSlug }),
+        `Staging Env ${key} could not be removed.`
       );
     },
-    // readable-check: allow setter-seam - not a slot: setVariable saves one production Env variable
+    // readable-check: allow setter-seam - not a slot: setVariable saves one staging Env variable
     async setVariable({
       actor = null,
       key = "",
@@ -210,8 +210,8 @@ function createAgentEnvCommandService({
       value = ""
     } = {}) {
       assertOperationResult(
-        await productionEnvironmentProvider.setVariable({ actor, key, projectSlug, secret, value }),
-        `Production Env ${key} could not be saved.`
+        await stagingEnvironmentProvider.setVariable({ actor, key, projectSlug, secret, value }),
+        `Staging Env ${key} could not be saved.`
       );
     }
   });
@@ -220,18 +220,18 @@ function createAgentEnvCommandService({
     if (scope === ENV_SCOPE_DEVELOPMENT) {
       return developmentEnvironment;
     }
-    return offersProductionEnvironment(productionEnvironmentProvider) ? productionEnvironment : null;
+    return offersStagingEnvironment(stagingEnvironmentProvider) ? stagingEnvironment : null;
   }
 
   async function statusResult(parsed = {}, sessionId = "", projectSlug = "") {
     const scopes = parsed.scope === ENV_SCOPE_ALL
-      ? [ENV_SCOPE_DEVELOPMENT, ENV_SCOPE_PRODUCTION]
+      ? [ENV_SCOPE_DEVELOPMENT, ENV_SCOPE_STAGING]
       : [parsed.scope];
     const statuses = [];
     for (const scope of scopes) {
       const environment = environmentForScope(scope);
       if (!environment) {
-        statuses.push(unavailableProductionStatus());
+        statuses.push(unavailableStagingStatus());
         continue;
       }
       statuses.push(scopeStatus(
@@ -240,10 +240,10 @@ function createAgentEnvCommandService({
         environment.isUserValueRecord
       ));
     }
-    if (parsed.scope === ENV_SCOPE_PRODUCTION && statuses[0]?.available === false) {
+    if (parsed.scope === ENV_SCOPE_STAGING && statuses[0]?.available === false) {
       return commandLineFailure(
         statuses[0].reason,
-        "vibe64_agent_env_command_production_unavailable"
+        "vibe64_agent_env_command_staging_unavailable"
       );
     }
     const payload = {
@@ -265,7 +265,7 @@ function createAgentEnvCommandService({
     if (toText(parsed.positionals[1]) === "ssh-config") {
       return sshConfigResult(parsed, binding, sessionId);
     }
-    const result = await productionEnvironmentProvider.readDeployment({
+    const result = await stagingEnvironmentProvider.readDeployment({
       actor: binding.actor || null,
       projectSlug: toText(binding.projectSlug)
     });
@@ -287,10 +287,10 @@ function createAgentEnvCommandService({
     return commandLineFailure(toText(result?.error) || fallback, toText(result?.code) || fallbackCode);
   }
 
-  // The session's ssh wrapper asks for the configuration of `Host production` before each production login;
+  // The session's ssh wrapper asks for the configuration of `Host staging` before each staging login;
   // the host decides whether this session may log in and records the command line it is about to run.
   async function sshConfigResult(parsed = {}, binding = {}, sessionId = "") {
-    const result = await productionEnvironmentProvider.openProductionSsh({
+    const result = await stagingEnvironmentProvider.openStagingSsh({
       actor: binding.actor || null,
       command: (parsed.passthrough || []).join(" ").slice(0, 2000),
       projectSlug: toText(binding.projectSlug),
@@ -298,22 +298,22 @@ function createAgentEnvCommandService({
     });
     const configPath = toText(result?.configPath);
     if (result?.ok === false || !path.isAbsolute(configPath)) {
-      return hostRefusal(result, "Production could not be reached from this session.", "vibe64_agent_production_ssh_unavailable");
+      return hostRefusal(result, "Staging could not be reached from this session.", "vibe64_agent_staging_ssh_unavailable");
     }
     return { exitCode: 0, ok: true, stdout: `${configPath}\n` };
   }
 
-  // Production's values, secrets included, only where the host allows this session; the host records the read.
-  async function productionValuesResult(parsed = {}, binding = {}, sessionId = "") {
+  // Staging's values, secrets included, only where the host allows this session; the host records the read.
+  async function stagingValuesResult(parsed = {}, binding = {}, sessionId = "") {
     const key = parsed.command === "get" ? normalizeRuntimeConfigKey(parsed.key) : "";
-    const result = await productionEnvironmentProvider.readProductionValues({
+    const result = await stagingEnvironmentProvider.readStagingValues({
       actor: binding.actor || null,
       keys: key ? [key] : [],
       projectSlug: toText(binding.projectSlug),
       sessionId
     });
     if (result?.ok === false) {
-      return hostRefusal(result, "Production values could not be read.", "vibe64_agent_production_values_unavailable");
+      return hostRefusal(result, "Staging values could not be read.", "vibe64_agent_staging_values_unavailable");
     }
     const releaseId = toText(result?.releaseId);
     const variables = (Array.isArray(result?.variables) ? result.variables : [])
@@ -324,7 +324,7 @@ function createAgentEnvCommandService({
       const variable = variables[0];
       if (!variable) {
         const release = releaseId ? `The live release ${releaseId}` : "The live release";
-        return commandLineFailure(`${release} runs without ${key}.`, "vibe64_agent_production_value_missing");
+        return commandLineFailure(`${release} runs without ${key}.`, "vibe64_agent_staging_value_missing");
       }
       return {
         exitCode: 0,
@@ -338,7 +338,7 @@ function createAgentEnvCommandService({
       stdout: parsed.json
         ? `${JSON.stringify({ ok: true, releaseId, variables }, null, 2)}\n`
         : [
-            `# The Env release ${releaseId || "(unknown)"} runs with: production's secrets. Use them in commands; keep them out of source, messages and summaries.`,
+            `# The Env release ${releaseId || "(unknown)"} runs with: staging's secrets. Use them in commands; keep them out of source, messages and summaries.`,
             ...variables.map((variable) => `export ${variable.key}='${variable.value.replaceAll("'", "'\\''")}'`)
           ].join("\n") + "\n"
     };
@@ -349,8 +349,8 @@ function createAgentEnvCommandService({
     const environment = environmentForScope(parsed.scope);
     if (!environment) {
       return commandLineFailure(
-        unavailableProductionStatus().reason,
-        "vibe64_agent_env_command_production_unavailable"
+        unavailableStagingStatus().reason,
+        "vibe64_agent_env_command_staging_unavailable"
       );
     }
     const previousRecords = await environment.readRecords({ projectSlug, sessionId });
@@ -382,8 +382,8 @@ function createAgentEnvCommandService({
     const environment = environmentForScope(parsed.scope);
     if (!environment) {
       return commandLineFailure(
-        unavailableProductionStatus().reason,
-        "vibe64_agent_env_command_production_unavailable"
+        unavailableStagingStatus().reason,
+        "vibe64_agent_env_command_staging_unavailable"
       );
     }
     const previousRecords = await environment.readRecords({ projectSlug, sessionId });
@@ -454,7 +454,7 @@ function createAgentEnvCommandService({
         : await savedEnvValueLinks.unlink(request),
       `${key} could not be ${linking ? "linked" : "unlinked"}.`
     );
-    const label = parsed.scope === ENV_SCOPE_PRODUCTION ? "production" : "development";
+    const label = parsed.scope === ENV_SCOPE_STAGING ? "staging" : "development";
     const payload = { action: parsed.command, key, ok: true, scope: parsed.scope };
     return {
       ...payload,
@@ -476,7 +476,7 @@ function createAgentEnvCommandService({
       return deploymentResult(parsed, binding, toText(input.sessionId));
     }
     if (parsed.command === "get" || parsed.command === "export") {
-      return productionValuesResult(parsed, binding, toText(input.sessionId));
+      return stagingValuesResult(parsed, binding, toText(input.sessionId));
     }
     if (parsed.command === "saved") {
       return savedResult(parsed, toText(input.sessionId), binding);
@@ -540,46 +540,46 @@ function createAgentEnvCommandService({
   return Object.freeze({
     logger,
     bindSession,
-    // Whether the session's ssh, scp and sftp reach production through the host (prepareAgentEnvCommand).
-    offersProduction: offersProductionEnvironment(productionEnvironmentProvider),
+    // Whether the session's ssh, scp and sftp reach staging through the host (prepareAgentEnvCommand).
+    offersStaging: offersStagingEnvironment(stagingEnvironmentProvider),
     closeAllForSession,
     run
   });
 }
 
 // The session's ssh, scp and sftp, beside its other managed commands and before the system's on its PATH: a
-// command line whose destination is the host `production` (ssh production, scp file production:dir, rsync over
-// ssh, git) asks the Env command for the host's `Host production` configuration first, and runs with it, or stops
+// command line whose destination is the host `staging` (ssh staging, scp file staging:dir, rsync over
+// ssh, git) asks the Env command for the host's `Host staging` configuration first, and runs with it, or stops
 // with the host's reason; any other command line runs the system's own command unchanged. Only the destination
 // counts, read as OpenSSH reads its command line: options and their values are skipped, ssh and sftp take the
 // first operand (what follows it is ssh's remote command), and scp any operand naming a remote file.
-const PRODUCTION_SSH_COMMANDS = Object.freeze({
+const STAGING_SSH_COMMANDS = Object.freeze({
   scp: Object.freeze({
-    destinations: "production:*|*@production:*|scp://production|scp://production[:/]*|scp://*@production|scp://*@production[:/]*",
+    destinations: "staging:*|*@staging:*|scp://staging|scp://staging[:/]*|scp://*@staging|scp://*@staging[:/]*",
     firstOperandOnly: false,
     optionValues: "DFJMPScilXo",
     system: "/usr/bin/scp"
   }),
   sftp: Object.freeze({
-    destinations: "production|*@production|production:*|*@production:*|sftp://production|sftp://production[:/]*|sftp://*@production|sftp://*@production[:/]*",
+    destinations: "staging|*@staging|staging:*|*@staging:*|sftp://staging|sftp://staging[:/]*|sftp://*@staging|sftp://*@staging[:/]*",
     firstOperandOnly: true,
     optionValues: "BDFJPRSXbcilos",
     system: "/usr/bin/sftp"
   }),
   ssh: Object.freeze({
-    destinations: "production|*@production|ssh://production|ssh://production:*|ssh://*@production|ssh://*@production:*",
+    destinations: "staging|*@staging|ssh://staging|ssh://staging:*|ssh://*@staging|ssh://*@staging:*",
     firstOperandOnly: true,
     optionValues: "BDEFIJLOPQRSWbceilmopw",
     system: "/usr/bin/ssh"
   })
 });
 
-function productionSshWrapperSource(name = "", envCommandPath = "") {
-  const { destinations, firstOperandOnly, optionValues, system } = PRODUCTION_SSH_COMMANDS[name];
+function stagingSshWrapperSource(name = "", envCommandPath = "") {
+  const { destinations, firstOperandOnly, optionValues, system } = STAGING_SSH_COMMANDS[name];
   return [
     "#!/bin/sh",
-    `# Vibe64: ${name} reaches this project's production as \`production\` where the host allows this session.`,
-    "value=\"\" operands=\"\" production=\"\"",
+    `# Vibe64: ${name} reaches this project's staging as \`staging\` where the host allows this session.`,
+    "value=\"\" operands=\"\" staging=\"\"",
     "for argument in \"$@\"; do",
     "  if [ -n \"$value\" ]; then value=\"\"; continue; fi",
     "  if [ -z \"$operands\" ]; then",
@@ -597,10 +597,10 @@ function productionSshWrapperSource(name = "", envCommandPath = "") {
     "    esac",
     "  fi",
     "  operands=1",
-    `  case "$argument" in ${destinations}) production=1 ;; esac`,
+    `  case "$argument" in ${destinations}) staging=1 ;; esac`,
     ...(firstOperandOnly ? ["  break"] : []),
     "done",
-    "if [ -n \"$production\" ]; then",
+    "if [ -n \"$staging\" ]; then",
     `  config="$(${shellQuote(envCommandPath)} deployment ssh-config -- ${name} "$@")" || exit 255`,
     `  exec ${system} -F "$config" "$@"`,
     "fi",
@@ -635,11 +635,11 @@ async function prepareAgentEnvCommand({
       contractVersion: AGENT_ENV_COMMAND_CONTRACT_VERSION
     })
   );
-  if (commandService.offersProduction) {
-    for (const name of Object.keys(PRODUCTION_SSH_COMMANDS)) {
+  if (commandService.offersStaging) {
+    for (const name of Object.keys(STAGING_SSH_COMMANDS)) {
       await writeExecutableFileIfChanged(
         path.join(normalizedWrapperHostDir, name),
-        productionSshWrapperSource(name, commandWrapperHostPath(normalizedWrapperHostDir))
+        stagingSshWrapperSource(name, commandWrapperHostPath(normalizedWrapperHostDir))
       );
     }
   }
@@ -665,7 +665,7 @@ async function prepareAgentEnvCommand({
 
 const __testables = Object.freeze({
   AGENT_ENV_COMMAND_NAME,
-  productionSshWrapperSource,
+  stagingSshWrapperSource,
   VIBE64_AGENT_ENV_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_ENV_COMMAND_SESSION_ID_ENV
 });

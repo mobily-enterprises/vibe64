@@ -27,13 +27,14 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommandText.js`
 - `packages/vibe64-terminals/src/server/agentDeploymentStatus.js`
-- `packages/vibe64-terminals/src/server/productionEnvironment.js`
+- `packages/vibe64-terminals/src/server/stagingEnvironment.js`
 - `packages/vibe64-terminals/src/server/savedEnvValueLinks.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionStatus.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `packages/vibe64-core/src/server/envUserValues.js`
 - `packages/vibe64-core/src/server/runtimeConfig.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261114-staging-env-scope.js`
 - `src/composables/useRuntimeConfigDotenvDownload.js`
 - `packages/vibe64-core/src/server/atomicFile.js`
 - `tests/server/atomicFile.unit.test.js`
@@ -100,9 +101,11 @@ classification, value presence and missing status, never values or private sourc
 paths. Missing totals include records outside the first 100 entries; truncation,
 inspection warnings and unavailability prevent a claim of complete setup.
 Names longer than the presentation bound also mark the result incomplete.
-The returned source identifies the exact session inspected. The `prod` scope
+The returned source identifies the exact session inspected. The `staging` scope
 on this project action describes project-stored configuration, not a
-deployment's production environment. Colleague opens the ordinary Env view for
+deployment's Staging Env. Project-stored values were saved under `prod` until
+that scope was renamed; `20261114-staging-env-scope` moves them to `staging`,
+and runtime config refuses `prod`, naming `staging`. Colleague opens the ordinary Env view for
 secret entry or stored-value inspection. This metadata read neither prepares
 resources nor materializes files, and an empty or complete list does not prove
 application readiness.
@@ -177,40 +180,42 @@ available; Env values remain usable without one.
 
 Project agents receive the managed `vibe64-helper env` command. It reads configuration
 metadata without exposing values and delegates explicit development mutations
-to the project Env service. A host may provide a production Env provider as the
-optional `vibe64.terminals.production-environment` capability; public/local
-Vibe64 otherwise reports production as unavailable. A production `set` or
+to the project Env service. A host may provide a Staging Env provider as the
+optional `vibe64.terminals.staging-environment` capability; public/local
+Vibe64 otherwise reports staging as unavailable. The scope words `production`
+and `prod`, from before production was renamed staging, are refused with a
+usage error naming `staging`. A staging `set` or
 `remove` carries the bound session's `actor`, the person whose request prepared
 the agent (as saved-value links do), so the host applies that person's
 permission; a host refusal reaches the agent as the host words it. The same provider's
 `readDeployment()` answers `vibe64-helper deployment status`, which the helper
-dispatches to the Env command: the bound project's Production state (shown
+dispatches to the Env command: the bound project's Staging state (shown
 as published, publishing, failed, not published or offline), public
 addresses, current release (id, commit, publish time, recorded Deployment
-commands, the host's Serve defaults), production variable names with their
+commands, the host's Serve defaults), Staging Env variable names with their
 source and generated mark, and missing-value messages. The command copies only
 those named fields, so a value a host might return never reaches the agent;
 without a provider it says the installation does not publish projects. Its
-`aiAccess` field says whether the actor's session may use production itself,
-with the host's reason when not. The provider's `readProductionValues()`
-answers `vibe64-helper env get production <KEY>` and `env export production`
+`aiAccess` field says whether the actor's session may use staging itself,
+with the host's reason when not. The provider's `readStagingValues()`
+answers `vibe64-helper env get staging <KEY>` and `env export staging`
 with the values the live release runs with, secrets included, and its
-`openProductionSsh()` gives the path of an ssh configuration whose
-`Host production` logs in to the live release; both receive the actor, project
+`openStagingSsh()` gives the path of an ssh configuration whose
+`Host staging` logs in to the live release; both receive the actor, project
 and session, so the host decides, words any refusal and records the use. Where
 the provider is a host's, preparing the Env command also installs `ssh`, `scp`
 and `sftp` wrappers beside it: a command line whose destination is the host
-`production` (read as OpenSSH reads its arguments: options and their values
+`staging` (read as OpenSSH reads its arguments: options and their values
 skipped, ssh's and sftp's first operand, any scp operand naming a remote file)
 first asks `vibe64-helper deployment ssh-config` for that configuration
 (passing its command line for the host's record) and runs the system command
 with it, or stops with the host's reason; every other command line runs the
-system command unchanged. The root helper's `production-access` operation
+system command unchanged. The root helper's `staging-access` operation
 installs the project's public key as root's own file for the application
 account, with a narrow sudo rule and a login shell, removes them again and
-reads the login records; its `production-shell` is the host SSH policy's forced
+reads the login records; its `staging-shell` is the host SSH policy's forced
 command for those logins (the account, the live release's folder, its Env and
-start script's runtimes, no root) and `production-service` the one thing such a
+start script's runtimes, no root) and `staging-service` the one thing such a
 login may run through sudo: its own release service's output, state and
 restart. A host that keeps saved
 values provides the values linked into the Development Env as the optional

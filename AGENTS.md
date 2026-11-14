@@ -143,9 +143,15 @@ verification.
 
 ## Deployment Terminology
 
+- Vibe64 names three environments, and never confuses them: **Development**
+  (sessions, Preview and their development databases, with Development Env),
+  **Staging** (the application a host publishes from the workspace, its
+  releases and databases, with Staging Env) and **Production** (only a separate
+  production deploy a host offers, with its own Production Env). Nothing a host
+  publishes from the workspace is called production.
 - The Publish feature is product functionality that publishes the selected
-  user's project to its Production from its Vibe64-owned Deployment contract.
-  A person always reads Publish and Production, never Deploy; internal
+  user's project to its Staging from its Vibe64-owned Deployment contract.
+  A person always reads Publish and Staging, never Deploy; internal
   identifiers, routes and stored state may keep their deployment names.
   Genesis composes and returns that Stack section as opaque text; it does not
   define deployment.
@@ -153,7 +159,7 @@ verification.
   Vibe64 application itself may run as a managed application. Its schema is
   interpreted mechanically by `@local/vibe64-genesis`, not by Genesis.
 
-Keep these two scopes separate even though they share the word "deploy."
+Keep these scopes separate even though they share the word "deploy."
 
 ## Colleague Usage Documentation
 

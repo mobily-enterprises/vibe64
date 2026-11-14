@@ -27,7 +27,7 @@ const HELPER_FOLDER = "packages/vibe64-execution/src/host";
 const ALLOWED_FILES = new Set([
   ...readdirSync(path.join(REPO_ROOT, HELPER_FOLDER)).map((name) => `${HELPER_FOLDER}/${name}`),
   "tests/server/executionBoundarySecurity.unit.test.js",
-  "tests/server/vibe64ExecutionProductionAccess.unit.test.js",
+  "tests/server/vibe64ExecutionStagingAccess.unit.test.js",
   "tests/server/vibe64ManagedWorkflow.unit.test.js",
   "tooling/release/runtime-package.mjs"
 ]);

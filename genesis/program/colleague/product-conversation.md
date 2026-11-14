@@ -979,7 +979,7 @@ actionId plus nested input. A rejected malformed call is not evidence that an ad
 action is absent. JSKIT still validates and executes the unchanged request;
 Colleague adds no argument repair or alternative dispatch path.
 For Integrations, an optional exact integration ID requires the Integrations
-pane and either a development session or the production environment. The browser
+pane and either a development session or the staging environment. The browser
 selects that slot through the existing panel owner, even when the same URL is
 already open. Acknowledgement
 waits for the matching panel to load and contain the slot; missing slots, failed
@@ -1005,13 +1005,13 @@ project/session/environment and is cancelled by a different selection; inactive
 panels defer it. Missing slots do not scroll, and subsequent connection/status
 updates do not repeatedly move the page.
 
-Integration navigation also accepts an explicit development or production
+Integration navigation also accepts an explicit development or staging
 environment. Development requires the exact session; a host's published view
 needs only the project. The existing panel selection owner and URL carry the
 requested environment and optional slot through reload and Back/Forward. The
 host waits for the loaded environment and requested slot, including on an already
 open URL. Empty loaded configuration can acknowledge the environment alone.
-Production focus is independent of a development session; no configuration,
+Staging focus is independent of a development session; no configuration,
 credentials or consent URLs enter Colleague's focus.
 
 The existing app-page layout owner publishes its ready project and pane visibility

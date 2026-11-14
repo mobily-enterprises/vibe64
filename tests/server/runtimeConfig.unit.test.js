@@ -31,7 +31,7 @@ test("runtime config records normalize technology-neutral metadata", () => {
     key: "SERVICE_API_TOKEN",
     owner: RUNTIME_CONFIG_OWNERS.SYSTEM,
     requiredFor: [RUNTIME_CONFIG_PHASES.SERVER, RUNTIME_CONFIG_PHASES.PREVIEW, RUNTIME_CONFIG_PHASES.SERVER],
-    scope: RUNTIME_CONFIG_SCOPES.PROD,
+    scope: RUNTIME_CONFIG_SCOPES.STAGING,
     source: "genesis-stack",
     targets: [RUNTIME_CONFIG_TARGETS.SERVER, RUNTIME_CONFIG_TARGETS.COMMAND],
     value: 42
@@ -42,7 +42,7 @@ test("runtime config records normalize technology-neutral metadata", () => {
     key: "SERVICE_API_TOKEN",
     owner: RUNTIME_CONFIG_OWNERS.SYSTEM,
     requiredFor: [RUNTIME_CONFIG_PHASES.PREVIEW, RUNTIME_CONFIG_PHASES.SERVER],
-    scope: RUNTIME_CONFIG_SCOPES.PROD,
+    scope: RUNTIME_CONFIG_SCOPES.STAGING,
     secret: true,
     source: "genesis-stack",
     targets: [RUNTIME_CONFIG_TARGETS.COMMAND, RUNTIME_CONFIG_TARGETS.SERVER],
@@ -50,6 +50,15 @@ test("runtime config records normalize technology-neutral metadata", () => {
     valuePresent: true
   });
   assert.equal(Object.hasOwn(record, "materialize"), false);
+});
+
+test("runtime config refuses the prod scope, naming staging, which replaced it", () => {
+  assert.equal(RUNTIME_CONFIG_SCOPES.STAGING, "staging");
+  assert.equal(Object.values(RUNTIME_CONFIG_SCOPES).includes("prod"), false);
+  assert.throws(() => normalizeRuntimeConfigRecord({ key: "API_KEY", owner: RUNTIME_CONFIG_OWNERS.USER, scope: "prod", source: "user", value: "x" }), {
+    code: "vibe64_runtime_config_scope_invalid",
+    message: "Invalid runtime config scope: prod. It was renamed staging."
+  });
 });
 
 test("runtime config validates keys, owners, and reserved keys", () => {
@@ -140,11 +149,11 @@ test("runtime config scopes and targets filter values and missing records", () =
       value: ""
     },
     {
-      key: "PROD_ONLY",
+      key: "STAGING_ONLY",
       owner: RUNTIME_CONFIG_OWNERS.SYSTEM,
-      scope: RUNTIME_CONFIG_SCOPES.PROD,
+      scope: RUNTIME_CONFIG_SCOPES.STAGING,
       source: "system",
-      value: "prod"
+      value: "staging"
     }
   ];
   const serverConfig = resolveRuntimeConfig(records, {
@@ -161,9 +170,9 @@ test("runtime config scopes and targets filter values and missing records", () =
   assert.deepEqual(Object.keys(checksConfig.values).sort(), ["ALL_TARGETS", "CHECK_SECRET"]);
   assert.deepEqual(checksConfig.missing.map((record) => record.key), ["CHECK_SECRET"]);
   assert.deepEqual(runtimeConfigEnv(records, {
-    scope: RUNTIME_CONFIG_SCOPES.PROD
+    scope: RUNTIME_CONFIG_SCOPES.STAGING
   }), {
-    PROD_ONLY: "prod"
+    STAGING_ONLY: "staging"
   });
 });
 
@@ -190,7 +199,7 @@ test("runtime config treats withheld known secrets as present", () => {
       key: "PAYMENT_API_TOKEN",
       owner: RUNTIME_CONFIG_OWNERS.USER,
       requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
-      scope: RUNTIME_CONFIG_SCOPES.PROD,
+      scope: RUNTIME_CONFIG_SCOPES.STAGING,
       secret: true,
       source: "user",
       value: "",
@@ -198,7 +207,7 @@ test("runtime config treats withheld known secrets as present", () => {
     }
   ], {
     phase: RUNTIME_CONFIG_PHASES.SERVER,
-    scope: RUNTIME_CONFIG_SCOPES.PROD
+    scope: RUNTIME_CONFIG_SCOPES.STAGING
   });
 
   const tokenRecord = config.view.records.find((record) => record.key === "PAYMENT_API_TOKEN");
@@ -327,8 +336,8 @@ test("runtime config writes every record as one plain .env file in the Env panel
     "DATABASE_URL='postgres://app:p@ss#1@127.0.0.1:5432/app'",
     ""
   ].join("\n"));
-  assert.equal(runtimeConfigDotenvFile({ downloadedAt: 0, environment: "production", project: "empty" }),
-    "# Project: empty\n# Environment: production\n# Downloaded: 1970-01-01T00:00:00.000Z\n");
+  assert.equal(runtimeConfigDotenvFile({ downloadedAt: 0, environment: "staging", project: "empty" }),
+    "# Project: empty\n# Environment: staging\n# Downloaded: 1970-01-01T00:00:00.000Z\n");
   assert.throws(() => runtimeConfigDotenvFile({ records: [{ key: "NOT VALID", valuePresent: false }] }),
     { code: "vibe64_runtime_config_key_invalid" });
 });

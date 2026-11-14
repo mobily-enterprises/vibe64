@@ -126,7 +126,7 @@ For the initial recurring-plan policy:
 
 Use native application migrations, transactions and unique constraints. Test
 locking with the selected database; an in-memory fixture alone does not prove
-concurrent production behavior. Scope records by application, integration,
+concurrent behavior under real load. Scope records by application, integration,
 merchant, payment environment and billable subject. Keep event and grant/debit
 identities scoped too. Do not put this runtime state into the editor database.
 

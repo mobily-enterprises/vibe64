@@ -74,7 +74,7 @@ function sessionNavLabel(session = {}) {
  * @property {boolean} [assistantFixAllowed]
  * @property {string} [assistantFixRestrictionMessage]
  * @property {boolean} [owner] Host-supplied: whether the person owns the workspace.
- * @property {string} [productionIntegrationsApiPath] Host-supplied: the deployed release's integrations.
+ * @property {string} [stagingIntegrationsApiPath] Host-supplied: the deployed release's integrations.
  * @property {string} [applicationPublicUrl] Host-supplied: the deployed application's address.
  */
 

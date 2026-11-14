@@ -140,7 +140,7 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
       ...(pane === "preview" && preview?.projectSlug === projectSlug && preview.sessionId === sessionId
         ? { previewScreen: preview.screen } : {}),
       ...(pane === "integrations" && integration?.projectSlug === projectSlug &&
-        (integration.environment === "production" || integration.sessionId === sessionId) && integration.ready
+        (integration.environment === "staging" || integration.sessionId === sessionId) && integration.ready
         ? { integrationEnvironment: integration.environment, integrationDirty: integration.dirty,
           ...(integration.exists && integration.integrationId.length <= 200 ? { integrationId: integration.integrationId } : {}) } : {}),
       ...databaseFocus,
@@ -192,9 +192,9 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
     if (command.pane && !allPanes.has(command.pane)) throw new Error("This project view is unavailable.");
     const integrationSelection = Boolean(command.integrationId || command.integrationEnvironment);
     const integrationEnvironment = command.integrationEnvironment || "development";
-    if (integrationSelection && (command.pane !== "integrations" || !["development", "production"].includes(integrationEnvironment) ||
+    if (integrationSelection && (command.pane !== "integrations" || !["development", "staging"].includes(integrationEnvironment) ||
         (integrationEnvironment === "development" && !command.sessionId))) {
-      throw new Error("Choose Integrations and either a development session or the production environment.");
+      throw new Error("Choose Integrations and either a development session or the staging environment.");
     }
     if (command.databaseTable && (command.databaseView !== "data" || command.pane !== "database" || !command.sessionId)) {
       throw new Error("A table requires its exact session and Database Data view.");
@@ -223,7 +223,7 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
     const integration = computed(() => {
       const panel = colleagueIntegrations.value;
       return panel && route.path === path && panel.projectSlug === command.projectSlug &&
-        (integrationEnvironment === "production" || panel.sessionId === command.sessionId) ? panel : null;
+        (integrationEnvironment === "staging" || panel.sessionId === command.sessionId) ? panel : null;
     });
     const layout = computed(() => {
       const owner = colleagueLayout.value;

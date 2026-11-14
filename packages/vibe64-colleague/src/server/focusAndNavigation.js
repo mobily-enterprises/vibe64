@@ -86,8 +86,8 @@ function createColleagueFocusAndNavigation({ threads }) {
       return { ok: false, error: "Choose the exact session and Database pane before selecting a database view." };
     }
     if ((input.integrationId || input.integrationEnvironment) && (input.pane !== "integrations" ||
-        (input.integrationEnvironment !== "production" && !input.sessionId))) {
-      return { ok: false, error: "Choose Integrations and either a development session or the production environment." };
+        (input.integrationEnvironment !== "staging" && !input.sessionId))) {
+      return { ok: false, error: "Choose Integrations and either a development session or the staging environment." };
     }
     if (!input.sessionId && (input.conversationId || VIBE64_COLLEAGUE_SESSION_PANES.includes(input.pane))) {
       return { ok: false, error: "Choose the exact session before opening this conversation or session view." };

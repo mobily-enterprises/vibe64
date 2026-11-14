@@ -558,7 +558,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
   }
   if (!requireDatabaseTool && provided.databaseToolEnvironment != null) {
     throw codedError(
-      "Production resource provisioning must not return database-tool credentials.",
+      "Deployment resource provisioning must not return database-tool credentials.",
       "vibe64_database_tool_environment_forbidden"
     );
   }

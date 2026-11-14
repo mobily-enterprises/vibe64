@@ -408,7 +408,7 @@ test("integration setup accepts selections only; executable, Env and session rem
         operation: "connect", verificationInput: { account: "fixture" },
         vibe64User: { username: "forged-owner" },
         setupRequest: { turnId: "000001", requestId: "a".repeat(64), configurationHash: "b".repeat(64) },
-        sessionId: "other", integrationId: "other", environment: "production",
+        sessionId: "other", integrationId: "other", environment: "staging",
         command: "untrusted", env: { SECRET: "untrusted" }, sourceRoot: "/other"
       } }
     };

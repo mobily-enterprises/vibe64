@@ -378,12 +378,12 @@ it("leaving and remounting preserves a draft without writing configuration", asy
   expect(restored.changedElsewhere.value).toBe(false);
 });
 
-it("production isolates saved configuration and commands while restoring development drafts", async () => {
+it("staging isolates saved configuration and commands while restoring development drafts", async () => {
   const { context, selected, model } = fixture();
   model.configuration.value.extensions.name = "unsaved development";
-  context.value = { ...context.value, integrationEnvironment: "production", owner: true,
-    sourceOperationsSuspended: true, productionIntegrationsApiPath: "/projects/example/deployments/integrations" };
-  mocks.resource.data.value = { ...payload("published"), releaseId: "release-one", environment: "production" };
+  context.value = { ...context.value, integrationEnvironment: "staging", owner: true,
+    sourceOperationsSuspended: true, stagingIntegrationsApiPath: "/projects/example/deployments/integrations" };
+  mocks.resource.data.value = { ...payload("published"), releaseId: "release-one", environment: "staging" };
   await nextTick();
   expect(model.configuration.value.extensions.name).toBe("published");
   selected.value = "calendar";
@@ -393,7 +393,7 @@ it("production isolates saved configuration and commands while restoring develop
   expect(mocks.setup).toHaveBeenCalledWith({ path: "/projects/example/deployments/integrations/calendar/setup",
     body: { operation: "connect", releaseId: "release-one" } });
   mocks.save = vi.fn();
-  model.configuration.value.extensions.name = "attempted production edit";
+  model.configuration.value.extensions.name = "attempted staging edit";
   await model.save();
   expect(mocks.save).not.toHaveBeenCalled();
   // The form disables edits; reset this deliberate direct-state mutation.
@@ -405,11 +405,11 @@ it("production isolates saved configuration and commands while restoring develop
   expect(model.releaseId.value).toBe("");
 });
 
-it("production commands require an owner and ignore completions from a replaced release", async () => {
+it("staging commands require an owner and ignore completions from a replaced release", async () => {
   const { context, selected, model } = fixture();
-  context.value = { ...context.value, integrationEnvironment: "production", owner: false,
-    productionIntegrationsApiPath: "/projects/other/deployments/integrations" };
-  mocks.resource.data.value = { ...payload("published"), releaseId: "release-one", environment: "production" };
+  context.value = { ...context.value, integrationEnvironment: "staging", owner: false,
+    stagingIntegrationsApiPath: "/projects/other/deployments/integrations" };
+  mocks.resource.data.value = { ...payload("published"), releaseId: "release-one", environment: "staging" };
   selected.value = "calendar";
   await nextTick();
   mocks.setup.mockClear();
@@ -419,7 +419,7 @@ it("production commands require an owner and ignore completions from a replaced 
   let complete;
   mocks.setup.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
   const pending = model.runSetup("connect");
-  mocks.resource.data.value = { ...payload("published"), releaseId: "release-two", environment: "production" };
+  mocks.resource.data.value = { ...payload("published"), releaseId: "release-two", environment: "staging" };
   await nextTick();
   complete({ status: "connected", accountLabel: "old account" });
   await pending;
@@ -429,9 +429,9 @@ it("production commands require an owner and ignore completions from a replaced 
 
 it("a new release removing the selected integration stops setup requests", async () => {
   const { context, selected, model } = fixture();
-  context.value = { ...context.value, integrationEnvironment: "production", owner: true,
-    productionIntegrationsApiPath: "/projects/removed/deployments/integrations" };
-  mocks.resource.data.value = { ...payload("published"), releaseId: "one", environment: "production" };
+  context.value = { ...context.value, integrationEnvironment: "staging", owner: true,
+    stagingIntegrationsApiPath: "/projects/removed/deployments/integrations" };
+  mocks.resource.data.value = { ...payload("published"), releaseId: "one", environment: "staging" };
   selected.value = "calendar";
   await nextTick();
   await model.runSetup("status");
@@ -439,7 +439,7 @@ it("a new release removing the selected integration stops setup requests", async
   mocks.setup.mockClear();
   const removed = payload("next");
   delete removed.configuration.integrations.calendar;
-  mocks.resource.data.value = { ...removed, releaseId: "two", environment: "production" };
+  mocks.resource.data.value = { ...removed, releaseId: "two", environment: "staging" };
   await nextTick();
   await nextTick();
   await model.runSetup("status");
@@ -518,7 +518,7 @@ it.each([false, true])("resumes verified setup and preserves the connection when
   expect(context.value.refreshConversation).toHaveBeenCalledTimes(1);
 });
 
-it("does not attach another session's, slot's or production request to application commands", async () => {
+it("does not attach another session's, slot's or staging request to application commands", async () => {
   const { context, selected, model } = fixture();
   selected.value = "calendar";
   await nextTick();
@@ -533,10 +533,10 @@ it("does not attach another session's, slot's or production request to applicati
     await model.runSetup("connect");
     expect(mocks.setup).toHaveBeenLastCalledWith(expect.objectContaining({ body: { operation: "connect" } }));
   }
-  context.value = { ...context.value, integrationEnvironment: "production", owner: true,
-    productionIntegrationsApiPath: "/projects/example/deployments/integrations",
+  context.value = { ...context.value, integrationEnvironment: "staging", owner: true,
+    stagingIntegrationsApiPath: "/projects/example/deployments/integrations",
     integrationSetupRequest: { sessionId: "one", integrationId: "calendar", turnId: "000001", requestId: "b".repeat(64) } };
-  mocks.resource.data.value = { ...payload("published"), releaseId: "release-one", environment: "production" };
+  mocks.resource.data.value = { ...payload("published"), releaseId: "release-one", environment: "staging" };
   await nextTick();
   mocks.setup.mockClear();
   await model.runSetup("connect");
@@ -564,14 +564,14 @@ it("Analytics public configuration never starts a connection command", async () 
 });
 
 
-it("production payment reviews are owner-only and tied to the published release", async () => {
+it("staging payment reviews are owner-only and tied to the published release", async () => {
   const { context, selected, model } = fixture();
   const published = payload("payments");
   published.configuration.integrations.stripe = { provider: "stripe", accountMode: "shared", authentication: { method: "api-key", secretRef: "env:STRIPE_KEY" } };
   published.configuration.extensions.payments = { version: 1, environments: { live: { integrationId: "stripe", providerAccountId: "acct_fixture", webhookSecretRef: "env:WEBHOOK", returnUrlRef: "env:RETURN" } }, plans: {} };
-  context.value = { ...context.value, integrationEnvironment: "production", owner: false,
-    sourceOperationsSuspended: true, productionIntegrationsApiPath: "/projects/payments/deployments/integrations" };
-  mocks.resource.data.value = { ...published, releaseId: "one", environment: "production" };
+  context.value = { ...context.value, integrationEnvironment: "staging", owner: false,
+    sourceOperationsSuspended: true, stagingIntegrationsApiPath: "/projects/payments/deployments/integrations" };
+  mocks.resource.data.value = { ...published, releaseId: "one", environment: "staging" };
   selected.value = "stripe";
   await nextTick();
   mocks.setup.mockClear();
@@ -585,7 +585,7 @@ it("production payment reviews are owner-only and tied to the published release"
   let complete;
   mocks.setup.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
   const pending = model.runPaymentOperation({ operation: "payments-publish", paymentEnvironment: "live", reviewId: "review" });
-  mocks.resource.data.value = { ...published, releaseId: "two", environment: "production" };
+  mocks.resource.data.value = { ...published, releaseId: "two", environment: "staging" };
   await nextTick();
   complete({ status: "payments", review: { reviewId: "obsolete" } });
   await pending;

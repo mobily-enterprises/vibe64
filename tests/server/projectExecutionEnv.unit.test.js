@@ -252,7 +252,7 @@ test("resource configuration follows resolved application settings without secre
     assert.equal((await service.saveEnvUserValues({ environment: "dev", values: {
       PRIVATE_SETTING: { value: "private-two", secret: true }
     } })).ok, true);
-    assert.equal((await service.saveEnvUserValues({ environment: "prod", values: {
+    assert.equal((await service.saveEnvUserValues({ environment: "staging", values: {
       WORKERS: { value: "100", secret: false }
     } })).ok, true);
     assert.equal((await loadProjectExecutionEnvRecords(input)).resourceConfigurationFingerprint, overridden.resourceConfigurationFingerprint);

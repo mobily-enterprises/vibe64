@@ -220,9 +220,9 @@ the provider. Existing app-user identities must remain unchanged.
 ## Current editor boundary
 
 The implemented editor setup command uses the selected session and development
-Env. Production execution must use deployed code and production state and is not
+Env. Staging execution must use deployed code and staging state and is not
 yet implemented by this route. Do not interpret a development Connected result
-as proof that production is ready. Provider approval, real consent, deployed
+as proof that staging is ready. Provider approval, real consent, deployed
 callback reachability and exported-app behavior require their own evidence.
 
 
@@ -242,7 +242,7 @@ Payment management extends this same application command. It does not introduce
 an editor payment gateway. The app owns the provider client, credentials,
 merchant mapping and transactional publication state. The editor owns the
 request/response contract below and requires workspace-owner access for payment
-management. When a host supplies production integrations, the same controls read
+management. When a host supplies Staging integrations, the same controls read
 the deployed configuration without editing it and send the current `releaseId`
 to that host. The host resolves the active deployed workspace and its release
 Env under its publication lock, rejecting a stale release before execution. It
@@ -251,13 +251,13 @@ must not substitute the selected development session or caller-supplied paths.
 receives the same payment operation envelope in either environment.
 
 The payment environment (`sandbox`/`live`) is separate from the editor's
-development/production source selection. Selecting production does not silently
+development/staging source selection. Selecting staging does not silently
 select a live merchant, and a development workspace can explicitly target its
 configured live merchant. Account/environment confirmation and reviewed-write
 requirements apply in either source context. A changed release invalidates the
 editor's displayed review; publication revalidates the provider/configuration
 review in the application as well. Public source implements these controls;
-production browser acceptance is separate from development fixture evidence.
+staging browser acceptance is separate from development fixture evidence.
 
 Requests use `operation: "payments-preview"` or `"payments-publish"`, with
 `integrationId` and `paymentEnvironment`. Publication additionally requires a

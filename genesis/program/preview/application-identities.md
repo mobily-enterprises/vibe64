@@ -1,7 +1,8 @@
 # Preview application identities
 
 People can inspect an application as one of a small set of named application
-users without turning that convenience into a production sign-in mechanism.
+users without turning that convenience into a sign-in mechanism of the published
+application.
 
 ## Sources
 

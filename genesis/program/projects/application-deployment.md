@@ -25,24 +25,24 @@ Commands are exact argument arrays with no placeholder expansion; `{host}` and
 listen address in the `HOST` and `PORT` environment variables and probes the
 Ready when path there. A host may also give Serve, and only Serve, its
 runtime's conventional production setting such as `NODE_ENV=production`; a
-value the project sets on the Serve step or in its production environment wins.
+value the project sets on the Serve step or in the deployment's Env wins.
 No step inherits the editor's own `NODE_ENV`.
 
-`- Generated secrets:` names production secrets the application needs as a
+`- Generated secrets:` names secrets the application needs as a
 stable random value. The host stores one strong random value per name once,
-when its production environment has no entry with that name; it never replaces
+when the deployment's Env has no entry with that name; it never replaces
 a value someone set.
 
-`- Setup code:` names the one production secret the application asks for when
-its first account registers on an empty production database, so that only the
+`- Setup code:` names the one secret of the deployment the application asks for when
+its first account registers on the deployment's empty database, so that only the
 project owner can create that account. The host generates it like a generated
 secret, which is why a name may not be in both entries, and shows its value
 only to the project owner. It never prints the value or gives it to an
 assistant. A project declares it only when its application reads that variable.
 
 `- Sandbox allows:` names, from the closed set `fuse` and `gvisor`, what the
-application's own commands and release service may do beyond an ordinary
-production sandbox; the result lists them sorted, each at most once. `gvisor`
+application's own commands and release service may do beyond the ordinary
+sandbox of a deployed application; the result lists them sorted, each at most once. `gvisor`
 lets them start gVisor's rootless `runsc`; `fuse` lets them mount a FUSE file
 system inside a user and mount namespace of their own. A host grants each only
 where its owner permits it and refuses a deploy that needs one it does not grant;

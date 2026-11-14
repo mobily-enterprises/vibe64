@@ -4,7 +4,7 @@ import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/shared/contracts";
 // A host that keeps saved values (the vibe64.saved-env-values.v1 contract) may
 // let the person fill an Env variable from one. It provides { label, component }
 // under this key. Public mounts `component` with the props
-// { variable, environment: "development"|"production", secret, placement:
+// { variable, environment: "development"|"staging", secret, placement:
 // "env-row"|"env-add"|"integration-credential", projectSlug }, plus the hints
 // hasValue (the project already has its own value) and provider (the
 // integration's catalogue id) where known. Public reloads Env on its `changed`
@@ -19,7 +19,10 @@ export function recordIsSavedEnvValue(record = {}) {
 }
 
 export function savedEnvValueEnvironment(environmentLabel = "") {
-  return String(environmentLabel).toLowerCase() === "production" ? "production" : "development";
+  const label = String(environmentLabel).toLowerCase();
+  // The published application's Env was Production Env before it was renamed Staging Env.
+  if (label === "production") throw new Error("Saved values have no production environment: the published application's Env is Staging Env.");
+  return label === "staging" ? "staging" : "development";
 }
 
 /**

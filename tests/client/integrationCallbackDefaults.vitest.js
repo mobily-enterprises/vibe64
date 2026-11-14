@@ -37,12 +37,12 @@ import IntegrationsPanel from "@/components/studio/IntegrationsPanel.vue";
 import { runInShellContext } from "./helpers/shellContext.js";
 
 it("does not replay URL selection when unrelated dashboard context refreshes", async () => {
-  navigation.route.query = { integration: "calendar", integrationEnvironment: "production" };
+  navigation.route.query = { integration: "calendar", integrationEnvironment: "staging" };
   const scope = effectScope();
-  const props = reactive({ dashboardContext: { sessionId: "session-1", productionIntegrationsApiPath: "/production" } });
+  const props = reactive({ dashboardContext: { sessionId: "session-1", stagingIntegrationsApiPath: "/staging" } });
   const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
-    expect(form.environment.value).toBe("production");
+    expect(form.environment.value).toBe("staging");
     form.selectIntegration("calendar", "development");
     await nextTick();
     props.dashboardContext = { ...props.dashboardContext, applicationPublicUrl: "https://fixture.example" };
@@ -95,7 +95,7 @@ it("defers reveal while inactive and cancels it when the session, environment or
     for (const change of [
       () => { form.selectedId.value = "missing"; },
       () => { props.dashboardContext.sessionId = "session-2"; },
-      () => { form.environment.value = "production"; }
+      () => { form.environment.value = "staging"; }
     ]) {
       form.integrationDetail.value = null;
       form.selectIntegration("calendar");
@@ -209,42 +209,42 @@ it("prepares Canva metadata from current fields without publishing it or includi
 });
 
 
-it("hydrates production navigation without a development session and follows Back/Forward environment selection", async () => {
-  navigation.route.query = { integrationEnvironment: "production", integration: "calendar" };
+it("hydrates staging navigation without a development session and follows Back/Forward environment selection", async () => {
+  navigation.route.query = { integrationEnvironment: "staging", integration: "calendar" };
   const scope = effectScope();
-  const props = reactive({ dashboardContext: { sessionId: "", productionIntegrationsApiPath: "/production/integrations" } });
+  const props = reactive({ dashboardContext: { sessionId: "", stagingIntegrationsApiPath: "/staging/integrations" } });
   const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
-    expect(form.environment.value).toBe("production");
+    expect(form.environment.value).toBe("staging");
     expect(form.selectedId.value).toBe("calendar");
     props.dashboardContext.sessionId = "session-1";
     navigation.route.query = { integrationEnvironment: "development", integrationSession: "session-1", integration: "calendar" };
     await nextTick();
     expect(form.environment.value).toBe("development");
     expect(form.selectedId.value).toBe("calendar");
-    navigation.route.query = { integrationEnvironment: "production", integration: "calendar" };
+    navigation.route.query = { integrationEnvironment: "staging", integration: "calendar" };
     await nextTick();
-    expect(form.environment.value).toBe("production");
-    form.selectIntegration("calendar", "production");
+    expect(form.environment.value).toBe("staging");
+    form.selectIntegration("calendar", "staging");
     expect(form.refreshConnection).toHaveBeenCalledOnce();
     navigation.route.query = { integrationSession: "foreign", integration: "missing" };
     await nextTick();
-    expect(form.environment.value).toBe("production");
+    expect(form.environment.value).toBe("staging");
     expect(form.selectedId.value).toBe("calendar");
   } finally { scope.stop(); }
 });
 
-it("applies a production link when its host API becomes available after mount", async () => {
-  navigation.route.query = { integrationEnvironment: "production", integration: "calendar" };
+it("applies a staging link when its host API becomes available after mount", async () => {
+  navigation.route.query = { integrationEnvironment: "staging", integration: "calendar" };
   const scope = effectScope();
   const props = reactive({ dashboardContext: { sessionId: "" } });
   const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.environment.value).toBe("development");
     expect(form.selectedId.value).toBe("");
-    props.dashboardContext.productionIntegrationsApiPath = "/production/integrations";
+    props.dashboardContext.stagingIntegrationsApiPath = "/staging/integrations";
     await nextTick();
-    expect(form.environment.value).toBe("production");
+    expect(form.environment.value).toBe("staging");
     expect(form.selectedId.value).toBe("calendar");
   } finally { scope.stop(); }
 });

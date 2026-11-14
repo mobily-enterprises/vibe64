@@ -261,7 +261,7 @@ For example, project commands receive project config and database env:
 }
 ```
 
-Deployment commands use deployment-specific env, the project's production
+Deployment commands use deployment-specific env, the deployment's Env
 values exactly. The gateway adds no framework mode such as `NODE_ENV` and
 never passes on the editor's own (see Environment Ownership); a host may give
 the Serve step alone its runtime's conventional production setting, and a
@@ -364,7 +364,7 @@ A command starts from the editor's environment (`inheritProcessEnv`) or the
 caller's `baseEnv`, but never takes `NODE_ENV` from it: a framework mode
 belongs to the project. A command's `NODE_ENV` comes only from the project's
 Env (Stack defaults and Development Env), a launch's or terminal's own env,
-its Production Env for deployment commands, or its own command line
+its Staging Env for deployment commands, or its own command line
 (`env NODE_ENV=test npm test`). An editor a host serves with
 `NODE_ENV=production` therefore still installs devDependencies in Workspace
 setup, and its Previews, terminals, tests and agents run as the project

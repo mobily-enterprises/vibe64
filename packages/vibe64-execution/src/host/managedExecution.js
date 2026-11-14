@@ -115,7 +115,7 @@ function handleManagedExecutionOperation(payload = {}) {
   );
   const targetUser = managedExecutionTargetUser(payload, owner);
   // A published application's commands (its build, release file work and
-  // production database work) are finite and stay inside its own area.
+  // staging database work) are finite and stay inside its own area.
   const application = targetUser.application || null;
   if (application && mode !== "capture") {
     throw new Error("An application account runs only finite commands.");

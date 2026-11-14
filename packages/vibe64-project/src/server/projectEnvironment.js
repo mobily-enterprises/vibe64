@@ -366,7 +366,7 @@ function createProjectEnvironment({
     const { config } = await envConfig(input);
     return {
       content: runtimeConfigDotenvFile({
-        environment: config.scope === RUNTIME_CONFIG_SCOPES.PROD ? "production" : "development",
+        environment: config.scope === RUNTIME_CONFIG_SCOPES.STAGING ? "staging" : "development",
         isUserRecord: (record) => record.editable === true || record.source === SAVED_ENV_VALUE_SOURCE,
         project: selection.currentProjectSlug(),
         records: config.view.records,

@@ -197,9 +197,12 @@ test("execution helper source is the real host helper, not the package stub", as
   assert.match(source, /"github-workflow-command"/u);
   assert.match(source, /"health-status"/u);
   assert.match(source, /"vibe64-command"/u);
-  assert.match(source, /"production-access"/u);
-  assert.match(source, /process\.argv\[2\] === "production-shell" && process\.argv\.length === 3/u);
-  assert.match(source, /process\.argv\[2\] === "production-service"/u);
+  assert.match(source, /^  "staging-access",$/mu);
+  assert.match(source, /process\.argv\[2\] === "staging-shell" && process\.argv\.length === 3/u);
+  assert.match(source, /process\.argv\[2\] === "staging-service"/u);
+  // The old names are refused with the new one, before the allowlist could call them unknown.
+  assert.match(source, /"production-access": "staging-access"/u);
+  assert.match(source, /refuseRenamed\(operation\);\n  if \(!ALLOWED_OPERATIONS\.has\(operation\)\)/u);
   assert.doesNotMatch(source, /has not been installed from this source package/u);
 });
 

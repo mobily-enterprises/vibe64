@@ -57,14 +57,14 @@ agent which variable names contain its URL and credentials. Values need not be
 pasted into chat or copied into source. Presence in Env confirms configuration,
 not a successful login. Because the coding agent receives every Development
 value, use test credentials there (for example Stripe test or restricted keys);
-production credentials do not belong in Development Env.
+live credentials do not belong in Development Env.
 
 When the application needs a generated secret, such as an application key, the
 coding agent generates it with the framework's own command and stores it as a
 **Secret** Development value through `vibe64-helper env set`. It never writes the
 value into a generated `.env` file: Vibe64 rewrites that file from Env, so an
 edit there would be lost. The key then appears in **Env** with its value hidden.
-`vibe64-helper env set`, in Development and Production alike, stores what is
+`vibe64-helper env set`, in Development and Staging alike, stores what is
 piped to it without its one final line break, the one `echo` or a generator
 such as `openssl rand` prints, so `echo "$KEY" |` stores exactly the key. Every
 other character, spaces included, is kept; a value that must end with a line
@@ -81,37 +81,37 @@ the host's provenance label; on a phone each variable becomes a small card. A
 managed resource of the same name still wins.
 
 An application whose first account becomes its owner can name, in its Stack's
-`## Deployment`, the production variable holding the one-time code that first
+`## Deployment`, the Staging Env variable holding the one-time code that first
 registration needs (``- Setup code: `NAME` ``). A host that publishes projects
-generates that code and shows it to the project owner alone; the Production
+generates that code and shows it to the project owner alone; the Staging
 status lists the name, never the code, so the coding agent sends the person to
-the host's Production page for it.
+the host's Staging page for it.
 
 When the host publishes projects, `vibe64-helper deployment status` shows the
-coding agent the session project's Production: whether it is published, its
+coding agent the session project's Staging: whether it is published, its
 public addresses, the current release with its commit, publish time and recorded
-Deployment commands, its production variable names with their source, and what
-is missing before the next publish, and whether the session may use production
+Deployment commands, its Staging Env variable names with their source, and what
+is missing before the next publish, and whether the session may use staging
 itself. It never shows a value and changes nothing. Where the installation does
-not publish projects it says so. Changing a production value from a session is
+not publish projects it says so. Changing a Staging Env value from a session is
 the host's decision for the person whose session it is; when the host refuses,
 the agent reports the host's message instead of retrying.
 
 Where the host offers it and allows the session, the coding agent can also work
-on production itself, to find out what is wrong there:
+on staging itself, to find out what is wrong there:
 
-- `ssh production` logs in to the production host as the live release's own
+- `ssh staging` logs in to the staging host as the live release's own
   application account, in its folder, with the Env it runs with (its database
-  connection included). `scp`, `sftp` and `rsync` reach `production:<path>` the
-  same way. Inside, `production-logs [--lines <n>] [--since <time>]`,
-  `production-status` and `production-restart` read or restart the app's own
-  service, and `production-enter [command]` runs the command, or a shell, where
+  connection included). `scp`, `sftp` and `rsync` reach `staging:<path>` the
+  same way. Inside, `staging-logs [--lines <n>] [--since <time>]`,
+  `staging-status` and `staging-restart` read or restart the app's own
+  service, and `staging-enter [command]` runs the command, or a shell, where
   that running service runs: the files it sees, its own mounts included (its
   private `/tmp`, a FUSE volume it mounted), which the login itself does not
   see. It is not root and has no general sudo, since the host may also run
   Vibe64 and other projects.
-- `vibe64-helper env get production <KEY>` prints one value the live release
-  runs with, secrets included, and `vibe64-helper env export production` prints
+- `vibe64-helper env get staging <KEY>` prints one value the live release
+  runs with, secrets included, and `vibe64-helper env export staging` prints
   them all as shell `export` lines.
 
 The host records each value read and each login's start and end. Each login
@@ -119,9 +119,9 @@ also reports the commands it runs, word for word, so secrets belong in Env,
 never on a command line. Where the host does not allow the session, both say
 why and do nothing. The command's own help asks the agent to
 read first (logs, status, read-only commands), to back up before changing data
-or files and to say what will change, since production holds real people's
-data, and to keep production values out of source, messages and summaries.
-Local Vibe64 publishes nothing, so it has no production to reach.
+or files and to say what will change, since staging may hold real people's
+data, and to keep staging values out of source, messages and summaries.
+Local Vibe64 publishes nothing, so it has no staging to reach.
 
 Each managed shell command reads current Development Env, so the coding agent's
 next command receives added or changed values without restarting its conversation.
@@ -136,7 +136,7 @@ Env value (or its Stack default), a launch's own settings, or the command itself
 (`NODE_ENV=test npm test`). Vibe64 never passes on the mode it runs in itself, so
 Workspace setup installs development dependencies, and Preview, terminals,
 tests and agent commands run without `NODE_ENV` unless the project sets it. To
-run them in another mode, add `NODE_ENV` in Development Env; Production's mode
+run them in another mode, add `NODE_ENV` in Development Env; Staging's mode
 belongs on the Stack's Deployment Serve step. Colleague can explain this and open Env.
 
 `SIDE_EFFECTS` works the same way: Vibe64 never sets it in Preview, terminals,
@@ -145,7 +145,7 @@ application that follows the Stack's Deployment contract
 (`vibe64-helper spec deployment`) then simulates email, SMS, push
 notifications, payments and third-party webhooks, writes them to its log and
 shows a small "Test copy" banner. Only a host that publishes projects sets it,
-for Production; neither Env nor the project sets it. Colleague can explain
+for Staging; neither Env nor the project sets it. Colleague can explain
 this.
 
 For a long-running shell task, the coding agent can request its native tool's

@@ -267,7 +267,7 @@ function normalizeExecutionDescriptor(value = {}, options = {}) {
       Object.keys(resourceProfile).some((key) => !["key", "compatibilityKey", "environment"].includes(key)) ||
       !/^[a-z0-9][a-z0-9_-]{0,127}$/u.test(resourceProfile.key || "") ||
       !/^[a-f0-9]{64}$/u.test(resourceProfile.compatibilityKey || "") ||
-      !["development", "test", "production"].includes(resourceProfile.environment))) {
+      !["development", "test", "staging"].includes(resourceProfile.environment))) {
     throw commandRequestError("Invalid activity resource profile identity.", "vibe64_resource_profile_invalid");
   }
   return Object.freeze({

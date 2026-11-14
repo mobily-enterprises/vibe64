@@ -50,7 +50,7 @@ import { createProjectPasses } from "./projectPasses.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").ProjectRuntimeChangedPublisher} ProjectRuntimeChangedPublisher */
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
-/** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
+/** @typedef {import("./types.js").StagingEnvironmentProvider} StagingEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
 /** @typedef {import("./types.js").RunVibe64Command} RunVibe64Command */
 /** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
@@ -81,7 +81,7 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
- * @param {ProductionEnvironmentProvider} dependencies.productionEnvironmentProvider a host's production Env, or none
+ * @param {StagingEnvironmentProvider} dependencies.stagingEnvironmentProvider a host's staging Env, or none
  * @param {ProjectServices} dependencies.projectServices
  * @param {ProjectService} dependencies.project
  * @param {ProjectRuntimeChangedPublisher} dependencies.publishProjectRuntimeChanged
@@ -101,7 +101,7 @@ function createService({
   logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
   opencodeTerminalController = {},
-  productionEnvironmentProvider,
+  stagingEnvironmentProvider,
   projectServices,
   project,
   publishProjectRuntimeChanged,
@@ -186,7 +186,7 @@ function createService({
     env,
     inspectAssistantAccess: (sessionId, options) => assistant.inspectAssistantAccess(sessionId, options),
     logger,
-    productionEnvironmentProvider,
+    stagingEnvironmentProvider,
     project,
     projectServices,
     publishAgentSessionChanged,
