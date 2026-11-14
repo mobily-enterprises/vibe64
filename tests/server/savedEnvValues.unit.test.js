@@ -112,8 +112,8 @@ test("linked values become non-editable rows with the host's label, beat Stack d
     assert.equal(refused.code, "vibe64_env_value_linked");
     assert.equal(refused.error, "PAYMENTS_KEY is linked to a saved value. Unlink it before entering a value here.");
 
-    const production = await service.readEnv({ environment: "prod" });
-    assert.equal(production.env.records.some((candidate) => candidate.source === "vibe64-host:saved-value"), false,
+    const staging = await service.readEnv({ environment: "staging" });
+    assert.equal(staging.env.records.some((candidate) => candidate.source === "vibe64-host:saved-value"), false,
       "saved values reach Development only through this seam");
   });
 });

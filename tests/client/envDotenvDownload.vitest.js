@@ -61,7 +61,7 @@ describe("Env .env download", () => {
   it("keeps a refused download's error for the panel and saves nothing", async () => {
     const saved = stubBrowser();
     const download = useRuntimeConfigDotenvDownload({
-      fileName: "books-production.env",
+      fileName: "books-staging.env",
       async readContent() {
         throw new Error("Only the workspace owner can perform this operation.");
       }
