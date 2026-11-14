@@ -155,7 +155,7 @@ test("standalone database tools invert an explicitly satisfied URL binding", () 
   });
 });
 
-test("production mapping uses declared names and forbids database-tool credentials", () => {
+test("deployment mapping uses declared names and forbids database-tool credentials", () => {
   const resource = databaseResource({
     kind: "mysql",
     preferredBindings: {

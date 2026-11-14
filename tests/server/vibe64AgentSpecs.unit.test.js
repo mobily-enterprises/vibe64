@@ -140,13 +140,13 @@ test("the Deployment spec states the SIDE_EFFECTS contract and keeps Prepare and
 test("the Deployment spec gives a host's production mode to Serve only and lets the project's own value win", async () => {
   const deployment = (await cli(["deployment"])).stdout;
   assert.match(deployment, /A host may also give Serve, and only Serve, its runtime's conventional production setting/u);
-  assert.match(deployment, /a value the project sets itself, on the Serve step or in the production environment, wins/u);
+  assert.match(deployment, /a value the project sets itself, on the Serve step or in the deployment's Env, wins/u);
   assert.match(deployment, /declare it on the Serve step/u);
   assert.match(deployment, /skip the build tools/u);
   assert.match(deployment, /- Generated secrets: `NAME`\.\.\./u);
   assert.match(deployment, /never replaces a value someone set/u);
   assert.match(deployment, /- Setup code: `NAME`\n/u);
-  assert.match(deployment, /Setup code names the one production secret the application asks for when its first account registers/u);
+  assert.match(deployment, /Setup code names the one secret of the deployment the application asks for when its first account registers on the deployment's empty database/u);
   assert.match(deployment, /shows its value only to the project owner; it is never printed, logged or given to an assistant/u);
   assert.match(deployment, /- Sandbox allows: `fuse` `gvisor`\n/u);
   assert.match(deployment, /A host grants an allowance only where its owner permits it/u);
