@@ -71,9 +71,9 @@ logged and payments use the provider's sandbox; only `production` is real, and
 every other environment shows a banner naming it. Prepare and Build never need
 the database or another managed service, so a host may run them alone, without
 those credentials, to check a revision builds.
-Vibe64 itself acts for real: its server gives `SIDE_EFFECTS=live` only to the
-environment its own features receive, so the projects it runs, which inherit
-the process environment, stay test copies.
+Vibe64 itself sets no `SIDE_EFFECTS`: its own features read the `APP_ENV` of
+the process that starts it, which the execution gateway never passes on to a
+project's commands.
 
 Genesis does not know what Deployment means. Vibe64 does not infer scripts from
 the selected language or framework. The application or technology Stack owns
