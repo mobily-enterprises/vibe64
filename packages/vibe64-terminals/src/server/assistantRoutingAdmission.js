@@ -28,20 +28,25 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /**
  * The pass a message starts, as a refusal names it: its Genesis title, and its purpose as the
  * suffix of the refusal's codes. A task Genesis does not list as a pass for the session's source is
- * refused before it is sent.
+ * refused before it is sent, and so is a run sent by name (genesisTask, as Run in Passes sends it)
+ * of a pass the project's own Genesis cannot run, with Genesis's reason, which names the update.
+ * @param {{ genesisTask?: string }} input
  * @param {string} task
  * @param {object} context
  * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} listPasses
  * @returns {Promise<{ name: string, code: string } | null>}
  */
-async function explicitPass(task, context, listPasses) {
+async function explicitPass(input, task, context, listPasses) {
   if (!task) return null;
-  const pass = (await listPasses({ projectRoot: sessionSourcePath(context.session) })).find(({ id }) => id === task);
+  const pass = (await listPasses({ projectRoot: sessionSourcePath(context.session) })).passes.find(({ id }) => id === task);
   if (!pass) {
     throw Object.assign(
       failure("That pass is not available in this project. Open Passes to choose one.", "vibe64_assistant_routing_pass_unknown"),
       { delivery: "not-sent" }
     );
+  }
+  if (input.genesisTask && pass.unavailable) {
+    throw Object.assign(failure(pass.unavailable, "vibe64_assistant_routing_pass_unavailable"), { delivery: "not-sent" });
   }
   return { name: pass.title, code: assistantTaskPurpose(task) };
 }
@@ -174,7 +179,7 @@ function createAssistantRoutingAdmission({
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.", "vibe64_assistant_routing_unavailable");
       context = current;
       key = records.keyFor(sessionId, context);
-      explicit = await explicitPass(explicitTask, context, listPasses);
+      explicit = await explicitPass(input, explicitTask, context, listPasses);
       // Finish earlier cancels' cleanup first; it never blocks this admission.
       await cancellation.settle(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {
         component: "vibe64.assistant_routing",

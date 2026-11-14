@@ -17,7 +17,7 @@ vi.mock("vuetify", async () => {
 vi.mock("vuetify/components", () => ({ VBottomSheet: {}, VMenu: {} }));
 
 import { GENESIS_PASSES } from "../fixtures/genesisPasses.js";
-import { useVibe64Passes } from "../../src/composables/useVibe64Passes.js";
+import { runKey, useVibe64Passes } from "../../src/composables/useVibe64Passes.js";
 import Vibe64PassesMenu from "../../src/components/studio/vibe64-session/Vibe64PassesMenu.vue";
 import Vibe64PassSuggestion from "../../src/components/studio/vibe64-session/Vibe64PassSuggestion.vue";
 
@@ -69,18 +69,46 @@ it("lists Genesis's passes from the session's read, each with when it last compl
   const date = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(ran);
   expect(menu.lastRunLabel(menu.list.find(({ id }) => id === "quality-pass"))).toBe(`Last completed: ${date} · 7 commits since`);
   expect(menu.lastRunLabel(menu.list.find(({ id }) => id === "deslop"))).toBe("Never completed");
+  expect(state.unavailable.value, "a read without a reason runs passes").toBe("");
 });
 
-it("Run sends the pass's own request to Main chat as the person's message for Genesis's task, and closes the list", async () => {
-  const { state, send } = passes();
+it("each run Genesis offers sends its own request verbatim to Main chat as the person's message for Genesis's task", async () => {
+  const since = {
+    id: "since-last",
+    label: "Since last completed (abc1234, 42 commits)",
+    request: "Quality pass: the changes since commit abc1234, judged against the whole app."
+  };
+  const quality = GENESIS_PASSES.find(({ id }) => id === "quality-pass");
+  mocks.resource.data.value.passes = listed({ "quality-pass": { lastRun: new Date().toISOString(), runs: [...quality.runs, since] } });
+  const starting = [];
+  const send = vi.fn(async () => {
+    starting.push(state.starting.value);
+    return { ok: true };
+  });
+  const { state } = passes({ send });
   const menu = mount(Vibe64PassesMenu, { passes: state });
-  menu.opened = true;
-  await menu.start(state.passes.value.find(({ id }) => id === "quality-pass"));
-  expect(send).toHaveBeenCalledTimes(1);
-  expect(send).toHaveBeenCalledWith({ message: "Quality pass the whole app.", genesisTask: "quality-pass", submissionKind: "send" });
-  expect(menu.opened).toBe(false);
+  const pass = state.passes.value.find(({ id }) => id === "quality-pass");
+  for (const passRun of pass.runs) {
+    menu.opened = true;
+    await menu.start(pass, passRun);
+    expect(send).toHaveBeenLastCalledWith({ message: passRun.request, genesisTask: "quality-pass", submissionKind: "send" });
+    expect(menu.opened).toBe(false);
+  }
+  expect(send.mock.calls.map(([input]) => input.message)).toEqual(["Quality pass the whole app.", since.request]);
+  expect(starting).toEqual(["quality-pass:whole", "quality-pass:since-last"]);
+  expect(runKey(pass, since)).toBe("quality-pass:since-last");
+  expect(state.starting.value).toBe("");
   expect(state.error.value).toBe("");
   expect(mocks.resource.reload).toHaveBeenCalled();
+});
+
+it("a project whose own Genesis runs no pass reads Genesis's reason, and its passes offer no run", () => {
+  const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later.";
+  mocks.resource.data.value = { ok: true, unavailable: reason, recommendation: "",
+    passes: listed(Object.fromEntries(GENESIS_PASSES.map(({ id }) => [id, { unavailable: reason, runs: [] }]))) };
+  const { state } = passes();
+  expect(state.unavailable.value).toBe(reason);
+  expect(state.passes.value.map(({ runs }) => runs.length)).toEqual(GENESIS_PASSES.map(() => 0));
 });
 
 it("a refused Run keeps the list open with Main chat's reason", async () => {
@@ -90,7 +118,8 @@ it("a refused Run keeps the list open with Main chat's reason", async () => {
   const { state } = passes({ send });
   const menu = mount(Vibe64PassesMenu, { passes: state, blockedReason: "" });
   menu.opened = true;
-  await menu.start(state.passes.value.find(({ id }) => id === "quality-pass"));
+  const pass = state.passes.value.find(({ id }) => id === "quality-pass");
+  await menu.start(pass, pass.runs[0]);
   expect(menu.opened).toBe(true);
   expect(state.error.value).toMatch(/^Quality pass uses the Senior model in its own turn/u);
   expect(state.starting.value).toBe("");

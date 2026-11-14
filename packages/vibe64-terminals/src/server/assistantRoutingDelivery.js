@@ -176,9 +176,10 @@ function createAssistantRoutingDelivery({
     const includePlanInstructions = !taskPurpose && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
     // Auto's planning, implementation and review turns report a workflow outcome; its conversation turns do not.
     const autoOutcome = state.mode === "auto" && (state.workflow || state.stage === "planning");
-    // A UI pass's scope is the request its Genesis task receives, as a commit
-    // range in the message is Deslop's.
-    const request = state.task === "ui-pass" ? uiPassRequest(input.message, { explicit: true }) : input.message;
+    // A typed UI pass message names its scope as the request its Genesis task
+    // receives, as a commit range in the message is Deslop's. A run sent by
+    // name, as Run in Passes sends Genesis's own request, goes verbatim.
+    const request = state.task === "ui-pass" && !state.input.genesisTask ? uiPassRequest(input.message) : input.message;
     const finishingParts = assistantFinishingParts(state);
     // A finishing turn without review follows its first part's own instructions.
     const firstPart = ASSISTANT_FINISHING_STEPS.find(({ id }) => id === finishingParts[0]);

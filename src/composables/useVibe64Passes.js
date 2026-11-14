@@ -6,16 +6,30 @@ import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 /**
- * One pass as the chat lists it: Genesis's pass with its last completed run in this project (lastRun,
- * an ISO time, or null when it never completed) and the commits since.
- * @typedef {{ id: string, title: string, description: string, recommend: { when: string, hint: string }, request: string,
- *   lastRun: string | null, commitsSince: number | null, snoozedUntil: string, dismissed: boolean }} Vibe64Pass
+ * One run Genesis offers for a pass: its button's label and the request Run sends verbatim.
+ * @typedef {{ id: string, label: string, request: string }} Vibe64PassRun
  */
 
 /**
- * The chat's Passes: the passes Genesis offers, the one the server's rule suggests now, Run, and the
- * suggestion's Later and Dismiss. Run sends the pass to Main chat as the person's own message; nothing
- * here ever runs a pass by itself.
+ * One pass as the chat lists it: Genesis's pass with its last completed run in this project (lastRun,
+ * an ISO time, or null when it never completed), the commits since, the runs Genesis offers for it,
+ * and why the project's Genesis cannot run it (null when it can).
+ * @typedef {{ id: string, title: string, description: string, recommend: { when: string, hint: string }, request: string,
+ *   lastRun: string | null, commitsSince: number | null, unavailable: string | null, runs: Vibe64PassRun[],
+ *   snoozedUntil: string, dismissed: boolean }} Vibe64Pass
+ */
+
+/**
+ * The key starting holds while a run is being sent.
+ * @param {Vibe64Pass} pass
+ * @param {Vibe64PassRun} passRun
+ */
+const runKey = (pass, passRun) => `${pass.id}:${passRun.id}`;
+
+/**
+ * The chat's Passes: the passes Genesis offers with their runs, the one the server's rule suggests
+ * now, Run, and the suggestion's Later and Dismiss. Run sends one of a pass's runs to Main chat as the
+ * person's own message; nothing here ever runs a pass by itself.
  * @param {{
  *   session: import("vue").MaybeRefOrGetter<object | null>,
  *   sessionsApiPath: import("vue").MaybeRefOrGetter<string>,
@@ -46,22 +60,26 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   });
   /** @type {import("vue").ComputedRef<Vibe64Pass[]>} */
   const passes = computed(() => resource.data.value?.passes || []);
+  // Why the project's own Genesis runs no pass, naming the update; empty when it runs them.
+  const unavailable = computed(() => resource.data.value?.unavailable || "");
   const recommendation = computed(() => passes.value.find(({ id }) => id === resource.data.value?.recommendation) || null);
   const starting = ref("");
   const changing = ref("");
   const error = ref("");
 
   /**
-   * Starts a pass with its default request from Genesis, as if the person had sent it: it shows in
-   * the chat, Stop ends it, and Main chat refuses it while a turn or goal is running.
+   * Starts one of a pass's runs with the request Genesis wrote for it, as if the person had sent it:
+   * it shows in the chat, Stop ends it, and Main chat refuses it while a turn or goal is running.
+   * starting holds the run's key (runKey) while it is being sent.
    * @param {Vibe64Pass} pass
+   * @param {Vibe64PassRun} passRun
    */
-  async function run(pass) {
+  async function run(pass, passRun) {
     if (starting.value) return false;
-    starting.value = pass.id;
+    starting.value = runKey(pass, passRun);
     error.value = "";
     try {
-      const result = await send({ message: pass.request, genesisTask: pass.id, submissionKind: "send" });
+      const result = await send({ message: passRun.request, genesisTask: pass.id, submissionKind: "send" });
       if (result === false || result?.ok === false) throw new Error(result?.error || `${pass.title} did not start.`);
       return true;
     } catch (failure) {
@@ -94,6 +112,7 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
 
   return {
     passes,
+    unavailable,
     recommendation,
     loading: resource.isLoading,
     loadError: resource.loadError,
@@ -107,4 +126,4 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   };
 }
 
-export { useVibe64Passes };
+export { runKey, useVibe64Passes };

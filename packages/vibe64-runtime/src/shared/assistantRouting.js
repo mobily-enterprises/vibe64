@@ -157,21 +157,15 @@ const UI_PASS_CHANGES = /^(?:(?:the|this|my|your(?:\s+own)?)\s+)?(?:(?:current|l
 const UI_PASS_APP = /^(?:the\s+)?(?:whole|entire|full)\s+app(?:lication)?$/iu;
 
 /**
- * The request Genesis's ui-pass task receives for a UI pass message: the
+ * The request Genesis's ui-pass task receives for a typed UI pass message: the
  * changes the current task made (no scope), the whole app, or a named section.
- * Only a UI pass message counts unless `explicit` says the sender already
- * chose the UI pass; then the whole message, without a leading "UI pass", is
- * its scope.
  * @param {string} message
- * @param {{ explicit?: boolean }} [options]
  * @returns {string} the request, or "" for any other message
  */
-function uiPassRequest(message, options = {}) {
-  const text = String(message || "");
-  const match = UI_PASS_MESSAGE.exec(text);
-  if (!match && !options.explicit) return "";
-  const scope = (match ? match[1] || "" : text.replace(/^\s*ui[\s-]?pass\b[\s:\u2013\u2014-]*/iu, ""))
-    .trim().replace(/[.!]+$/u, "").trim();
+function uiPassRequest(message) {
+  const match = UI_PASS_MESSAGE.exec(String(message || ""));
+  if (!match) return "";
+  const scope = (match[1] || "").trim().replace(/[.!]+$/u, "").trim();
   if (!scope || UI_PASS_CHANGES.test(scope)) return "Run the UI pass on the changes the current task made.";
   if (UI_PASS_APP.test(scope)) return "Run the UI pass on the whole app.";
   return `Run the UI pass on this section of the app: ${scope}.`;

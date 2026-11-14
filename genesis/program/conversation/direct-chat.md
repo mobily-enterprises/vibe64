@@ -2163,9 +2163,10 @@ The UI pass is the same kind of task for screens, Genesis's `ui-pass` task.
 whole app”. Both tasks share Deslop's admission, Senior resolution, refusals
 (each with its own code) and `task` record; `assistantTaskPurpose` maps the
 task to its purpose (`deslop`, `ui_pass`), which is also the turn's resolved
-mode. Delivery sends the UI pass's scope sentence as the request Genesis
-renders, as Deslop's message carries its commit range. A question about the
-UI pass is ordinary chat.
+mode. Delivery sends a typed UI pass message's scope sentence as the request
+Genesis renders, as Deslop's message carries its commit range; a message sent
+with `genesisTask`, as Run in Passes sends a run, goes verbatim. A question
+about the UI pass is ordinary chat.
 
 Auto captures Router and the effective Senior–Junior pair, the actor, connection
 identities and configuration revision before invoking the existing tool-free
@@ -4958,19 +4959,32 @@ scheduling while preserving the objective. Model prose does not change this stat
 
 The Passes button in Main chat's composer row lists the improvement passes
 Genesis offers for the session's source, each with its title, one-line
-description, recommendation hint and `lastRun`, Genesis's committed record of
-its last completed run in the project (`listGenesisPasses`, Genesis's
-`inspectPasses` for that source, contract `genesis.passes.v1`). A pass's own last
+description, recommendation hint, `lastRun`, Genesis's committed record of
+its last completed run in the project, `runs`, the runs Genesis offers for it
+now, and `unavailable` (`listGenesisPasses`, Genesis's `inspectPasses` for that
+source, contract `genesis.passes.v1`). A pass's own last
 step records its run with `genesis passes done <id>`; Vibe64 never writes that
 record and reads it only through Genesis's list;
 a malformed record fails the list (`PASS_RECORD_INVALID`), and the Passes list
 shows that error with Retry instead of an empty list.
+Each run is Genesis's: an `id`, a `label` such as `Whole app` or `Since last
+completed (abc1234, 42 commits)`, and the `request` it sends. Genesis decides
+which runs a pass has, what each covers and that only those requests record the
+pass; the list shows one button per run, with Genesis's label, and nothing
+else. The project's own Genesis, the `genesis-compiler` its source declares,
+decides which passes it can run: when it cannot run one, that pass's
+`unavailable` names the update and its `runs` are empty, and the list's own
+`unavailable` says why when it runs none. The list shows that reason above the
+passes, or under a pass when only that pass is missing; such a pass is never
+suggested, and admission refuses a run of it sent with `genesisTask` with
+Genesis's reason (`vibe64_assistant_routing_pass_unavailable`). A typed bare
+Deslop or UI pass is Genesis's task over the agent's own changes and is not
+refused this way.
 The session's `passes` read adds the commits on the session's source since each
 `lastRun` (`git rev-list --count`), and the list shows `Last completed: <date>` or
-`Never completed`. Run sends the
-pass's own `request` from Genesis's list (Genesis treats it as no request: the
-current task's changes for Deslop and the UI pass, the whole app for the others)
-with `genesisTask` set to the pass's id through the ordinary Main chat send, so it shows as the person's message, Stop ends it, and
+`Never completed`. A run's button sends that run's
+`request` verbatim with `genesisTask` set to the pass's id through the ordinary
+Main chat send, so it shows as the person's message, Stop ends it, and
 admission refuses it while a turn runs or a goal is unfinished. Admission
 accepts only a pass Genesis lists for the session's source; any listed pass runs in its own Senior turn
 with Genesis's composed prompt for that task, Deslop and the UI pass included.
@@ -4985,6 +4999,6 @@ due, one that never completed comes first, then the most overdue for its interva
 with Genesis's order breaking ties; it is suggested above the composer while the
 chat is idle, has no draft and no goal. The project's `settings/pass-suggestions.json`
 holds only the suggestion's state: Later snoozes it for seven days, and Dismiss
-hides it until a `lastRun` later than the dismissal. Nothing runs a pass except
-Run. Team members, whose messages wait for approval, get neither the list nor
+hides it until a `lastRun` later than the dismissal. The suggestion offers the
+pass's runs as the list does. Nothing runs a pass except a run's button. Team members, whose messages wait for approval, get neither the list nor
 suggestions.

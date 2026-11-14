@@ -30,6 +30,7 @@
       </v-card-item>
       <v-card-text class="vibe64-passes__body">
         <p v-if="blockedReason" class="text-body-small vibe64-passes__note" role="status">{{ blockedReason }}</p>
+        <v-alert v-if="passes.unavailable.value" class="mb-2" density="compact" type="warning" variant="tonal">{{ passes.unavailable.value }}</v-alert>
         <v-alert v-if="passes.error.value" class="mb-2" density="compact" type="error" variant="tonal">{{ passes.error.value }}</v-alert>
         <v-alert v-if="passes.loadError.value && !list.length" density="compact" type="error" variant="tonal">
           {{ passes.loadError.value }}
@@ -42,18 +43,24 @@
               <div class="text-title-small">{{ pass.title }}</div>
               <div class="text-body-small vibe64-passes__muted">{{ pass.description }}</div>
               <div class="text-label-small vibe64-passes__muted">{{ lastRunLabel(pass) }}</div>
+              <div v-if="pass.unavailable && !passes.unavailable.value" class="text-body-small vibe64-passes__muted">{{ pass.unavailable }}</div>
             </div>
-            <v-btn
-              :aria-label="`Run ${pass.title}`"
-              color="primary"
-              :disabled="Boolean(blockedReason) || Boolean(passes.starting.value)"
-              :loading="passes.starting.value === pass.id"
-              size="small"
-              variant="tonal"
-              @click="start(pass)"
-            >
-              Run
-            </v-btn>
+            <div v-if="pass.runs.length" class="vibe64-passes__runs">
+              <v-btn
+                v-for="passRun in pass.runs"
+                :key="passRun.id"
+                :aria-label="`Run ${pass.title}: ${passRun.label}`"
+                class="vibe64-passes__run"
+                color="primary"
+                :disabled="Boolean(blockedReason) || Boolean(passes.starting.value)"
+                :loading="passes.starting.value === runKey(pass, passRun)"
+                size="small"
+                variant="tonal"
+                @click="start(pass, passRun)"
+              >
+                {{ passRun.label }}
+              </v-btn>
+            </div>
           </li>
         </ul>
       </v-card-text>
@@ -62,10 +69,12 @@
 </template>
 
 <script setup>
-// The chat's Passes list: each pass Genesis offers, when it last completed in this project, and Run.
+// The chat's Passes list: each pass Genesis offers, when it last completed in this project, and a
+// button for each run Genesis offers for it, or why the project's Genesis cannot run it.
 import { computed, ref } from "vue";
 import { useDisplay } from "vuetify";
 import { VBottomSheet, VMenu } from "vuetify/components";
+import { runKey } from "@/composables/useVibe64Passes.js";
 
 const runDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 
@@ -89,8 +98,8 @@ function onOpenChange(value) {
   if (value) void props.passes.reload();
 }
 
-async function start(pass) {
-  if (await props.passes.run(pass)) opened.value = false;
+async function start(pass, passRun) {
+  if (await props.passes.run(pass, passRun)) opened.value = false;
 }
 </script>
 
@@ -126,10 +135,10 @@ async function start(pass) {
 }
 
 .vibe64-passes__row {
-  align-items: center;
   border-top: 1px solid rgb(var(--v-theme-outline-variant));
   display: flex;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.5rem;
   padding: 0.625rem 0;
 }
 
@@ -139,10 +148,26 @@ async function start(pass) {
 
 .vibe64-passes__text {
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.125rem;
   min-width: 0;
+}
+
+.vibe64-passes__runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* A run's label is Genesis's, so a long one wraps instead of widening the list. */
+.vibe64-passes__run {
+  height: auto;
+  max-width: 100%;
+  min-height: var(--v-btn-height);
+}
+
+.vibe64-passes__run :deep(.v-btn__content) {
+  white-space: normal;
 }
 
 .vibe64-passes__muted {

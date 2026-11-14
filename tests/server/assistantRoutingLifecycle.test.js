@@ -1201,15 +1201,21 @@ test("a UI pass with uncertain admission retains its task and checks the receipt
   assert.equal(f.state().status, "working");
 });
 
-test("a UI pass sent as genesisTask takes the whole message as its scope and the configured planner despite a Junior override", async (t) => {
+test("a UI pass sent as genesisTask goes to Genesis verbatim with the configured planner despite a Junior override", async (t) => {
   const f = await fixture(t, { mode: "junior", review: true });
   const saved = await f.configuration.read();
   await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
   f.metadata.assistant_routing = JSON.stringify({ mode: "junior", deslop: true, review: true, override: f.assignments.junior });
-  await f.service.send("session-1", { ...request, genesisTask: "ui-pass", message: "the bookings pages" }, f.context);
-  assert.equal(f.sends[0].selection.modelId, "gpt-6-sol");
-  assert.equal(f.sends[0].input.genesisTask, "ui-pass");
-  assert.ok(f.sends[0].input.message.endsWith("Run the UI pass on this section of the app: the bookings pages."));
+  // Run in Passes sends the run's request as Genesis wrote it; Genesis recognises only its own requests as the pass.
+  for (const message of ["UI pass the whole app.", "UI pass: the changes since commit abc1234, judged against the whole app."]) {
+    await f.service.send("session-1", { ...request, messageId: `ui-${f.sends.length}`, genesisTask: "ui-pass", message }, f.context);
+    const sent = f.sends.at(-1);
+    assert.equal(sent.selection.modelId, "gpt-6-sol");
+    assert.equal(sent.input.genesisTask, "ui-pass");
+    assert.ok(sent.input.message.endsWith(`\n\n${message}`), sent.input.message);
+    await f.service.afterTurn("session-1", completion(`turn-${f.sends.length}`), f.context);
+  }
+  assert.equal(f.sends.length, 2);
   assert.equal(f.helperCalls(), 0);
 });
 
@@ -1268,6 +1274,22 @@ test("a pass is refused politely while a turn or goal runs, and a task Genesis d
     }, genesisTask);
   }
   assert.equal(f.sends.length, 0);
+});
+
+test("a pass the project's own Genesis cannot run is refused by name with Genesis's reason; a typed Deslop still runs", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later.";
+  f.genesis.unavailable = reason;
+  f.genesis.passes = f.genesis.passes.map((pass) => ({ ...pass, unavailable: reason, runs: [] }));
+  await assert.rejects(f.service.send("session-1", { ...request, genesisTask: "deslop", message: "Deslop the whole app." }, f.context), {
+    code: "vibe64_assistant_routing_pass_unavailable", delivery: "not-sent", message: reason
+  });
+  assert.equal(f.sends.length, 0);
+  // A typed Deslop is Genesis's deslop task over the agent's own changes, which every release runs.
+  await f.service.send("session-1", { ...request, message: "Deslop" }, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.sends[0].input.genesisTask, "deslop");
+  assert.ok(f.sends[0].input.message.endsWith("\n\nDeslop"), f.sends[0].input.message);
 });
 
 test("a question about the UI pass is ordinary chat, not a UI pass", async (t) => {

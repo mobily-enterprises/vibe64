@@ -10,7 +10,7 @@ import { runSourceCommand } from "@local/vibe64-runtime/server/sourceCommand";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { vibe64Result } from "./terminalShared.js";
 
-/** @typedef {Awaited<ReturnType<typeof listGenesisPasses>>[number]} GenesisPass */
+/** @typedef {Awaited<ReturnType<typeof listGenesisPasses>>["passes"][number]} GenesisPass */
 /**
  * What the project remembers about one pass's suggestion; every field is an ISO time. When a pass
  * last completed is Genesis's record, never this one.
@@ -82,15 +82,16 @@ async function updateProjectPassRecord(projectRuntimeRoot, passId, change) {
  * The suggestion rule, kept simple on purpose. A pass is due once its interval's days have passed
  * since its last completed run (Genesis's lastRun) and the app has had its interval's commits
  * since; a pass that never completed, once the app has that many commits in all. A snoozed pass waits
- * for its snooze to end, and a dismissed one until it completes again. Of the passes due, one that
- * never completed comes first, then the most overdue for its interval; a tie keeps Genesis's order.
+ * for its snooze to end, and a dismissed one until it completes again, and a pass the project's own
+ * Genesis cannot run is never due. Of the passes due, one that never completed comes first, then the
+ * most overdue for its interval; a tie keeps Genesis's order.
  * @param {Array<GenesisPass & { commitsSince: number | null, snoozedUntil: string, dismissed: boolean }>} passes
  * @param {number} [now]
  */
 function passRecommendation(passes, now = Date.now()) {
   const overdue = (pass) => pass.lastRun ? (now - Date.parse(pass.lastRun)) / DAY_MS / passInterval(pass).days : Infinity;
-  return passes.filter((pass) => pass.commitsSince !== null && !pass.dismissed && !(Date.parse(pass.snoozedUntil) > now) &&
-    pass.commitsSince >= passInterval(pass).commits && overdue(pass) >= 1)
+  return passes.filter((pass) => !pass.unavailable && pass.commitsSince !== null && !pass.dismissed &&
+    !(Date.parse(pass.snoozedUntil) > now) && pass.commitsSince >= passInterval(pass).commits && overdue(pass) >= 1)
     .reduce((chosen, pass) => !chosen || overdue(pass) > overdue(chosen) ? pass : chosen, null);
 }
 
@@ -112,7 +113,8 @@ async function countSessionCommits(sourceRoot, since = "") {
 
 /**
  * The chat's Passes list: the passes Genesis offers with when each last completed in this project, the
- * commits since, and the one suggestion the rule picks; and the suggestion's Later and Dismiss.
+ * runs Genesis offers for each, the commits since, why the project's Genesis runs none (when it
+ * cannot), and the one suggestion the rule picks; and the suggestion's Later and Dismiss.
  * Each answers as a route does: a refusal is a failure result, not a thrown error.
  * @param {object} dependencies
  * @param {(sessionId: string) => Promise<{ runtime: { stateRoot: string }, session: object }>} dependencies.sessionContext
@@ -134,7 +136,7 @@ function createProjectPasses({
   async function readPasses(sessionId) {
     const { runtime, session } = await sessionContext(sessionId);
     const sourceRoot = sessionSourcePath(session);
-    const [genesisPasses, records] = await Promise.all([
+    const [{ unavailable, passes: genesisPasses }, records] = await Promise.all([
       listPasses({ projectRoot: sourceRoot }),
       readProjectPassRecords(runtime.stateRoot)
     ]);
@@ -155,7 +157,7 @@ function createProjectPasses({
       };
     }));
     const recommended = passRecommendation(passes, now());
-    return { ok: true, sessionId, passes, recommendation: recommended ? recommended.id : "" };
+    return { ok: true, sessionId, unavailable, passes, recommendation: recommended ? recommended.id : "" };
   }
 
   /**
@@ -169,7 +171,7 @@ function createProjectPasses({
 
   async function changeRecommendation(sessionId, input) {
     const { runtime, session } = await sessionContext(sessionId);
-    if (!(await listPasses({ projectRoot: sessionSourcePath(session) })).some(({ id }) => id === input.passId)) {
+    if (!(await listPasses({ projectRoot: sessionSourcePath(session) })).passes.some(({ id }) => id === input.passId)) {
       throw vibe64Error("That pass is not available in this project.", "vibe64_project_pass_unknown");
     }
     const at = now();

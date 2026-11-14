@@ -27,9 +27,10 @@ async function temporaryDirectory(t, prefix) {
   return directory;
 }
 
-// A project whose Genesis list reports lastRuns[id] for each pass, and whose session source answers
-// every commit count with commits(since).
-async function project(t, { lastRuns = {}, commits = () => 60 } = {}) {
+// A project whose Genesis list reports lastRuns[id] for each pass and, when its own Genesis runs no
+// pass, unavailable as the reason, and whose session source answers every commit count with
+// commits(since).
+async function project(t, { lastRuns = {}, commits = () => 60, unavailable = null } = {}) {
   const stateRoot = await temporaryDirectory(t, "v64-passes-");
   const clock = { now: START };
   const counted = [];
@@ -38,7 +39,12 @@ async function project(t, { lastRuns = {}, commits = () => 60 } = {}) {
     sessionContext: async (sessionId) => ({ runtime: { stateRoot }, session: { sessionId, metadata: {} } }),
     listPasses: async (options) => {
       listed.push(options);
-      return GENESIS_PASSES.map((pass) => ({ ...pass, lastRun: lastRuns[pass.id] ?? null }));
+      return {
+        unavailable,
+        passes: GENESIS_PASSES.map((pass) => ({
+          ...pass, lastRun: lastRuns[pass.id] ?? null, ...(unavailable ? { unavailable, runs: [] } : {})
+        }))
+      };
     },
     countCommits: async (_sourceRoot, since) => {
       counted.push(since);
@@ -65,6 +71,17 @@ test("the Passes list is Genesis's passes, each with its last completed run from
   assert.equal(result.byId.deslop.commitsSince, 120, "a pass that never ran counts the whole history");
   assert.deepEqual(f.counted.sort(), ["", ago(3)], "passes that last ran at the same time share one count");
   assert.deepEqual(f.listed, [{ projectRoot: "" }], "Genesis lists the passes for the session's source");
+  assert.equal(result.unavailable, null, "the project's Genesis runs passes");
+  assert.deepEqual(result.byId.deslop.runs, GENESIS_PASSES[0].runs, "each pass carries the runs Genesis offers");
+});
+
+test("a project whose own Genesis runs no pass lists its passes with Genesis's reason and suggests none", async (t) => {
+  const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later.";
+  const f = await project(t, { unavailable: reason, commits: () => 500 });
+  const result = await f.read();
+  assert.equal(result.unavailable, reason);
+  assert.ok(result.passes.every((pass) => pass.unavailable === reason && pass.runs.length === 0));
+  assert.equal(result.recommendation, "", "every pass is due by its commits, but none can run");
 });
 
 test("the suggestion rule: a never-run or overdue pass, never-run first, then the most overdue for its interval", () => {
@@ -82,6 +99,8 @@ test("the suggestion rule: a never-run or overdue pass, never-run first, then th
   assert.equal(suggested({ dismissed: true }), "");
   assert.equal(suggested({ snoozedUntil: ago(-1) }), "");
   assert.equal(suggested({ snoozedUntil: ago(1) }), "quality-pass", "a snooze that ended no longer hides it");
+  assert.equal(suggested({ unavailable: "This project's Genesis has no Quality pass.", runs: [] }), "",
+    "a pass the project's Genesis cannot run is never suggested");
   assert.equal(passRecommendation([{ ...pass("data-pass"), recommend: { when: "someday", hint: "" }, lastRun: ago(21) }], START)?.id,
     "data-pass", "a hint Vibe64 does not know is periodic");
 
@@ -97,7 +116,7 @@ test("the suggestion rule: a never-run or overdue pass, never-run first, then th
 test("Later hides a suggestion for a week and Dismiss until the pass completes again", async (t) => {
   // Every other pass ran a day ago, and the app has not changed since.
   const f = await project(t, {
-    lastRuns: { "ui-pass": ago(1), "identity-pass": ago(1), "quality-pass": ago(1), "data-pass": ago(1) },
+    lastRuns: Object.fromEntries(GENESIS_PASSES.filter(({ id }) => id !== "deslop").map(({ id }) => [id, ago(1)])),
     commits: (since) => since ? 0 : 60
   });
   assert.equal((await f.read()).recommendation, "deslop", "the one pass that never ran");

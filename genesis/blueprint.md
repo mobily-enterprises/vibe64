@@ -1600,10 +1600,13 @@ Automatically UI pass changes is on, as it is for new chats.
 
 Passes improve the app one concern at a time. Main chat's Passes list
 shows each pass Genesis offers (Deslop, the UI pass, and others such as visual
-identity, quality and data) with when it was last completed in the project, and Run sends
-the pass's own request from Genesis as the person's message, in its own Senior
-turn. Genesis records each
-pass's last completed run in the project. Now and then a gentle, dismissible
+identity, quality and data) with when it was last completed in the project and
+the runs Genesis offers for it: the whole app, and the changes since its last
+completed run judged against the whole app. A run's button sends that run's
+request from Genesis as the person's message, in its own Senior turn. Genesis
+records each pass's last completed run in the project, and only its own runs
+count. A project whose own Genesis is too old to run a pass sees why and the
+update that fixes it, instead of that pass's runs. Now and then a gentle, dismissible
 suggestion offers a pass that was never completed or is overdue: the interval Vibe64
 picks from Genesis's advice for it has passed, and the app has changed enough
 since. Later hides it

@@ -520,7 +520,7 @@ test.describe("direct chat", () => {
     test.describe(`passes at ${viewport.width}px`, () => {
       test.use({ hasTouch: viewport.phone, isMobile: viewport.phone });
       for (const theme of ["light", "dark"] as const) {
-        hintTest(`@passes suggests a pass, lists them and runs one as the person's message, in ${theme}`, async ({ page, hintRealtime }, testInfo) => {
+        hintTest(`@passes suggests a pass, lists them with Genesis's runs and runs one as the person's message, in ${theme}`, async ({ page, hintRealtime }, testInfo) => {
           await page.setViewportSize({ width: viewport.width, height: 844 });
           await page.addInitScript((value) => window.localStorage.setItem("vibe64.appearance", JSON.stringify(value)), theme);
           await mockDirectChat(page);
@@ -532,28 +532,52 @@ test.describe("direct chat", () => {
             "ui-pass": { lastRun: ago(5), commitsSince: 11 },
             "identity-pass": { lastRun: ago(40), commitsSince: 64 },
             "quality-pass": { lastRun: ago(25), commitsSince: 42 },
-            "data-pass": { lastRun: null, commitsSince: 12 }
+            "data-pass": { lastRun: null, commitsSince: 12 },
+            "security-pass": { lastRun: ago(3), commitsSince: 9 },
+            "ux-pass": { lastRun: null, commitsSince: 12 },
+            "speed-pass": { lastRun: null, commitsSince: 12 }
           };
-          const passes = GENESIS_PASSES.map((pass) => ({ ...pass, ...runs[pass.id], snoozedUntil: "", dismissed: false }));
+          // A pass that completed also offers the changes since the commit that recorded it, as Genesis writes that run.
+          const sinceLast = (title: string, commitsSince: number) => ({
+            id: "since-last",
+            label: `Since last completed (abc1234, ${commitsSince} ${commitsSince === 1 ? "commit" : "commits"})`,
+            request: `${title}: the changes since commit abc1234, judged against the whole app.`
+          });
+          const passes = GENESIS_PASSES.map((pass) => ({
+            ...pass,
+            ...runs[pass.id],
+            runs: runs[pass.id].lastRun ? [...pass.runs, sinceLast(pass.title, runs[pass.id].commitsSince)] : pass.runs,
+            snoozedUntil: "",
+            dismissed: false
+          }));
           // The server's rule picks the quality pass, the one pass due: overdue, with enough commits.
           let recommendation = "quality-pass";
+          let listing: Record<string, unknown> = { unavailable: null, passes };
           const changes: Record<string, unknown>[] = [];
-          await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/passes`, (route) => fulfillJson(route, { ok: true, sessionId: SESSION_ID, passes, recommendation }));
+          await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/passes`, (route) => fulfillJson(route, { ok: true, sessionId: SESSION_ID, ...listing, recommendation }));
           await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/passes/recommendation`, (route) => {
             changes.push(requestBodyWithoutOrigin(route.request()));
             recommendation = "";
-            return fulfillJson(route, { ok: true, sessionId: SESSION_ID, passes, recommendation });
+            return fulfillJson(route, { ok: true, sessionId: SESSION_ID, ...listing, recommendation });
           });
           await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
           const suggestion = page.getByRole("status").filter({ hasText: "Your app has changed a lot since Quality pass was last completed. Run it again?" });
           await expect(suggestion).toContainText("42 commits in 25 days.");
+          for (const label of ["Whole app", "Since last completed (abc1234, 42 commits)"]) {
+            await expect(suggestion.getByRole("button", { name: `Run Quality pass: ${label}`, exact: true })).toHaveText(label);
+          }
           const row = page.locator(".studio-autopilot__composer-actions:visible");
           expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
           await page.screenshot({ path: testInfo.outputPath(`passes-suggestion-${viewport.width}-${theme}.png`), animations: "disabled" });
 
           await page.getByRole("button", { name: "Passes", exact: true }).click();
           const list = page.getByRole("dialog", { name: "Passes" });
-          for (const pass of passes) await expect(list.getByRole("button", { name: `Run ${pass.title}`, exact: true })).toBeEnabled();
+          for (const pass of passes) {
+            for (const passRun of pass.runs) {
+              await expect(list.getByRole("button", { name: `Run ${pass.title}: ${passRun.label}`, exact: true })).toBeEnabled();
+            }
+          }
+          await expect(list.getByRole("button", { name: /^Run Data pass: Since/u })).toHaveCount(0);
           await expect(list).toContainText("Never completed");
           const date = await page.evaluate((iso) => new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso)),
             String(passes.find(({ id }) => id === "quality-pass")?.lastRun));
@@ -573,11 +597,21 @@ test.describe("direct chat", () => {
           expect(hintRealtime.state.messages).toHaveLength(0);
 
           await page.getByRole("button", { name: "Passes", exact: true }).click();
-          await list.getByRole("button", { name: "Run Quality pass", exact: true }).click();
+          await list.getByRole("button", { name: "Run Quality pass: Since last completed (abc1234, 42 commits)", exact: true }).click();
           await expect.poll(() => hintRealtime.state.messages.length).toBe(1);
-          expect(hintRealtime.state.messages[0]).toEqual(expect.objectContaining({ message: "Quality pass the whole app.", genesisTask: "quality-pass" }));
+          const request = "Quality pass: the changes since commit abc1234, judged against the whole app.";
+          expect(hintRealtime.state.messages[0]).toEqual(expect.objectContaining({ message: request, genesisTask: "quality-pass" }));
           await expect(list).toHaveCount(0);
-          await expect(page.getByText("Quality pass the whole app.", { exact: true })).toBeVisible();
+          await expect(page.getByText(request, { exact: true })).toBeVisible();
+
+          // A project pinned to a Genesis that runs no pass: the list says why and names the update, and offers no run.
+          const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later with npm install --save-dev genesis-compiler@1.10.21, then commit the change.";
+          listing = { unavailable: reason, passes: passes.map((pass) => ({ ...pass, unavailable: reason, runs: [] })) };
+          await page.getByRole("button", { name: "Passes", exact: true }).click();
+          await expect(list.getByRole("alert")).toHaveText(reason);
+          await expect(list).toContainText("Data pass");
+          await expect(list.getByRole("button", { name: /^Run /u })).toHaveCount(0);
+          await page.screenshot({ path: testInfo.outputPath(`passes-unavailable-${viewport.width}-${theme}.png`), animations: "disabled" });
         });
       }
     });

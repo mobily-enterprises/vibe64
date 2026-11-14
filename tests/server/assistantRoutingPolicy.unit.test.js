@@ -791,7 +791,7 @@ test("each finishing turn covers every change since the last one", () => {
     [{ messageId: "m0" }], "an Auto conversation passes earlier work on");
 });
 
-test("a UI pass message names its scope as the request Genesis's ui-pass task receives", () => {
+test("a typed UI pass message names its scope as the request Genesis's ui-pass task receives", () => {
   const changes = "Run the UI pass on the changes the current task made.";
   const app = "Run the UI pass on the whole app.";
   for (const message of ["UI pass", "  ui pass! ", "UI-pass.", "UI pass: this task's changes", "UI pass: this task\u2019s changes", "UI pass on the changes"]) {
@@ -806,13 +806,10 @@ test("a UI pass message names its scope as the request Genesis's ui-pass task re
   for (const message of ["What does UI pass do?", "UI pass: what is it?", "UI passes are slow", "Make the UI pass review faster", "Deslop"]) {
     assert.equal(uiPassRequest(message), "", message);
   }
-  // A sender who chose the UI pass sends its scope as the whole message.
-  assert.equal(uiPassRequest("the bookings pages", { explicit: true }), "Run the UI pass on this section of the app: the bookings pages.");
-  assert.equal(uiPassRequest("UI pass the whole app", { explicit: true }), app);
-  assert.equal(uiPassRequest("", { explicit: true }), changes);
-  // Run in the Passes list sends Genesis's own default request for the UI pass.
-  assert.equal(uiPassRequest("UI pass your own changes for the current task.", { explicit: true }), changes);
+  // A sender who names the UI pass by genesisTask, as Run in Passes does, chose it whatever the message says;
+  // delivery sends that message verbatim.
   assert.equal(assistantExplicitTask({ message: "the bookings pages", genesisTask: "ui-pass" }), "ui-pass");
+  assert.equal(assistantExplicitTask({ message: "UI pass the whole app.", genesisTask: "ui-pass" }), "ui-pass");
   assert.equal(assistantExplicitTask({ message: " Deslop. " }), "deslop");
   assert.equal(assistantExplicitTask({ message: "Deslop commit abc123.", genesisTask: "deslop" }), "deslop");
   assert.equal(assistantExplicitTask({ message: "Explain the UI pass" }), "");

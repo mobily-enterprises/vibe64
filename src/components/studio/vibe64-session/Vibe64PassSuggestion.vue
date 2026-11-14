@@ -6,15 +6,19 @@
     <p v-if="passes.error.value" class="text-body-small vibe64-pass-suggestion__text" role="alert">{{ passes.error.value }}</p>
     <div class="vibe64-pass-suggestion__actions">
       <v-btn
+        v-for="passRun in pass.runs"
+        :key="passRun.id"
+        :aria-label="`Run ${pass.title}: ${passRun.label}`"
+        class="vibe64-pass-suggestion__run"
         color="primary"
         density="compact"
-        :disabled="Boolean(passes.changing.value)"
-        :loading="passes.starting.value === pass.id"
+        :disabled="Boolean(passes.changing.value) || Boolean(passes.starting.value)"
+        :loading="passes.starting.value === runKey(pass, passRun)"
         size="small"
         variant="flat"
-        @click="passes.run(pass)"
+        @click="passes.run(pass, passRun)"
       >
-        Run
+        {{ passRun.label }}
       </v-btn>
       <v-btn density="compact" :disabled="Boolean(passes.starting.value || passes.changing.value)" size="small" variant="text" @click="passes.snooze(pass)">
         Later
@@ -27,9 +31,10 @@
 </template>
 
 <script setup>
-// The one pass suggested now, above the composer: Run starts it, Later hides it for a week and
-// Dismiss until it completes again. It only offers; the pass starts on Run alone.
+// The one pass suggested now, above the composer: each of its runs starts it, Later hides it for a
+// week and Dismiss until it completes again. It only offers; the pass starts on a run alone.
 import { computed } from "vue";
+import { runKey } from "@/composables/useVibe64Passes.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -66,5 +71,16 @@ const detail = computed(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+/* A run's label is Genesis's, so a long one wraps instead of widening the chat; compact buttons are 8px shorter. */
+.vibe64-pass-suggestion__run {
+  height: auto;
+  max-width: 100%;
+  min-height: calc(var(--v-btn-height) - 8px);
+}
+
+.vibe64-pass-suggestion__run :deep(.v-btn__content) {
+  white-space: normal;
 }
 </style>

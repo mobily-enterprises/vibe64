@@ -88,6 +88,7 @@ const {
   GENESIS_CONTRACTS,
   HOST_CONTEXT_RESOLVER_DATA_ENV,
   HOST_CONTEXT_RESOLVER_ENV,
+  PROMPT_TASKS,
   addStack,
   applyTemplate,
   generatePrompt,
@@ -146,21 +147,9 @@ const VIBE64_HIDDEN_ONBOARDING_STACK_PIECES = Object.freeze([
 ]);
 const VIBE64_STACK_PACKAGES = Object.freeze(["genesis-stack"]);
 const GENESIS_PROMPT_FALLBACK_TASKS = Object.freeze({ BLUEPRINT_INVALID: "blueprint", BLUEPRINT_REQUIRED: "start" });
-// Genesis's own tasks, and the passes it offers (listGenesisPasses).
-const GENESIS_PROMPT_TASKS = new Set([
-  "adopt",
-  "blueprint",
-  "data-pass",
-  "describe",
-  "deslop",
-  "identity-pass",
-  "program",
-  "quality-pass",
-  "review",
-  "start",
-  "ui-pass",
-  "work"
-]);
+// Every prompt task Genesis renders, its passes' tasks among them, as Genesis lists them.
+if (!Array.isArray(PROMPT_TASKS)) throw new Error("This genesis-compiler lists no prompt tasks. Update it to the release Vibe64 declares.");
+const GENESIS_PROMPT_TASKS = new Set(PROMPT_TASKS);
 // Genesis on a person's path, such as an AI message, answers within this
 // deadline or the path goes on without it.
 const GENESIS_USER_PATH_TIMEOUT_MS = 15_000;
@@ -501,21 +490,27 @@ function inspectGenesisCollaboration(options = {}) {
  * @property {{ when: string, hint: string }} recommend when Genesis advises running it:
  *   "after-change", "first-version" or "periodic", and a line saying so; Vibe64 decides when to
  *   suggest it
- * @property {string} request the pass's default request, never empty: Run sends it as the person's
- *   message, and Genesis treats it as it treats no request
+ * @property {string} request the pass's own request, over the whole app
  * @property {string | null} lastRun when the pass last completed in the project, from Genesis's
  *   committed record (a UTC ISO time), or null when it never has
+ * @property {string | null} unavailable why the project's own Genesis cannot run the pass, naming
+ *   the update; null when it can
+ * @property {{ id: string, label: string, request: string }[]} runs the runs Genesis offers now
+ *   ("whole", "since-last"), none while the pass is unavailable: Run sends a run's request
+ *   verbatim, and Genesis records the pass only for these requests
  */
 
 /**
  * The passes Genesis offers for a project, in Genesis's order, each with its last completed run
- * there. This is Vibe64's one reader of Genesis's pass list and its record of runs; a malformed
- * record fails it with Genesis's PASS_RECORD_INVALID, whose message names the file and the fix.
+ * there and its runs, and why the project's own Genesis runs no pass (null when it runs them).
+ * This is Vibe64's one reader of Genesis's pass list and its record of runs; a malformed record
+ * fails it with Genesis's PASS_RECORD_INVALID, whose message names the file and the fix.
  * @param {{ projectRoot: string }} options
- * @returns {Promise<GenesisPass[]>}
+ * @returns {Promise<{ unavailable: string | null, passes: GenesisPass[] }>}
  */
 async function listGenesisPasses(options) {
-  return (await exactGenesisInspection(inspectPasses, GENESIS_CONTRACTS.passes, options)).passes;
+  const { unavailable, passes } = await exactGenesisInspection(inspectPasses, GENESIS_CONTRACTS.passes, options);
+  return { unavailable, passes };
 }
 
 async function inspectGenesisProjectFormat(options = {}) {
