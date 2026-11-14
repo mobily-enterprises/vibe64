@@ -1992,3 +1992,25 @@ start from) is new and optional: without it, passes start from the merge base
 of the session's HEAD with the canonical commit it last saw, so no upgrade
 writes one. Focused evidence: `afterPlanPassesUpgrade.unit.test.js` and
 `stateUpgrades.unit.test.js`.
+
+## Staging Env scope (`20261114-staging-env-scope`)
+
+The application a host publishes from the workspace is Staging, never
+production, so the project-stored Env scope for it is `staging`, not `prod`.
+Each project's Env values (`projects/<slug>/env/user-values.json`) keep their
+scopes under `environments`; the script moves `environments.prod` to
+`environments.staging` exactly as saved, with every other field and scope kept.
+Files without `prod` are not touched, so a retry changes nothing. A file holding
+both `prod` and `staging`, which no release wrote, or one that is not a JSON
+object with an `environments` object stops the upgrade before anything is
+written. It uses the verified backup publisher of
+`20261025-retired-project-bootstrap`, so each original is kept under
+`upgrades/backups/20261114-staging-env-scope/before/`.
+
+Runtime config now refuses the `prod` scope, naming `staging`, so Env values
+that missed this upgrade fail to read instead of being read as another scope;
+`vibe64-helper env` refuses `prod` and `production` in the same way. There is no
+lazy backfill. The exec helper's root-owned staging access files, and a host's
+own deployment records, belong to the host and are not part of this upgrade.
+Focused evidence: `stagingEnvScopeUpgrade.unit.test.js` and
+`stateUpgrades.unit.test.js`.

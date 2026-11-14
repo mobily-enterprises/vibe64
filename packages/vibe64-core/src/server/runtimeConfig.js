@@ -7,7 +7,7 @@ const RUNTIME_CONFIG_OWNERS = Object.freeze({
 });
 const RUNTIME_CONFIG_SCOPES = Object.freeze({
   DEV: "dev",
-  PROD: "prod"
+  STAGING: "staging"
 });
 const RUNTIME_CONFIG_PHASES = Object.freeze({
   CLIENT_BUILD: "client-build",
@@ -74,6 +74,13 @@ function normalizeRuntimeConfigOwner(owner = RUNTIME_CONFIG_OWNERS.USER) {
 
 function normalizeRuntimeConfigScope(scope = RUNTIME_CONFIG_SCOPES.DEV) {
   const normalizedScope = toText(scope || RUNTIME_CONFIG_SCOPES.DEV);
+  // The published application's scope was "prod" before production was renamed staging.
+  if (normalizedScope === "prod") {
+    throw runtimeConfigError(
+      `Invalid runtime config scope: prod. It was renamed ${RUNTIME_CONFIG_SCOPES.STAGING}.`,
+      "vibe64_runtime_config_scope_invalid"
+    );
+  }
   if (!RUNTIME_CONFIG_SCOPE_VALUES.has(normalizedScope)) {
     throw runtimeConfigError(
       `Invalid runtime config scope: ${normalizedScope || "(empty)"}`,
