@@ -724,6 +724,33 @@ test("commands never get the server's own NODE_ENV, and the project's own NODE_E
   }
 });
 
+test("everything a session runs gets APP_ENV=development, Preview NODE_ENV=development by default, and a deployment only its host's", async (t) => {
+  // A host that serves the editor itself as a production application.
+  const saved = process.env.APP_ENV;
+  process.env.APP_ENV = "production";
+  t.after(() => {
+    if (saved === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = saved;
+  });
+  const print = "process.stdout.write(JSON.stringify([process.env.APP_ENV ?? 'unset', process.env.NODE_ENV ?? 'unset']))";
+  async function modes(request) {
+    const result = await runVibe64Command({ command: process.execPath, args: ["-e", print], ...request });
+    assert.equal(result.ok, true, result.output);
+    return JSON.parse(result.stdout);
+  }
+  assert.deepEqual(await modes({}), ["development", "unset"]);
+  assert.deepEqual(await modes({ purpose: "assistant" }), ["development", "unset"]);
+  assert.deepEqual(await modes({ purpose: "preview", envPolicy: "preview" }), ["development", "development"]);
+  // The project's Env and a launch may change Preview's NODE_ENV, never APP_ENV.
+  assert.deepEqual(await modes({ purpose: "preview", envPolicy: "preview",
+    project: { runtimeConfigEnv: { APP_ENV: "production", NODE_ENV: "production" } } }), ["development", "production"]);
+  assert.deepEqual(await modes({ purpose: "preview", env: { APP_ENV: "staging", NODE_ENV: "test" } }), ["development", "test"]);
+  // A deployment gets only what its host's deployment Env says, never the editor's own.
+  assert.deepEqual(await modes({ envPolicy: "deployment", purpose: "deployment" }), ["unset", "unset"]);
+  assert.deepEqual(await modes({ envPolicy: "deployment", purpose: "deployment",
+    project: { deploymentEnv: { APP_ENV: "staging", NODE_ENV: "production" } } }), ["staging", "production"]);
+});
+
 test("PTY env factories see the execution id like every other gateway command", async () => {
   const namespace = `gateway-pty-execution-id-${Date.now()}`;
   const terminal = await runVibe64Command({

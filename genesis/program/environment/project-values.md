@@ -115,7 +115,10 @@ save action. Its input describes a patch keyed by variable name, with literal
 entries and omitted secret classifications are preserved; whitespace and empty
 strings remain exact. A removal request supplies the same intent as Env's
 confirmation and removes only the user override, possibly exposing a default.
-The shared service rejects host-owned or non-editable records before any values
+The shared service rejects host-owned or non-editable records, and `APP_ENV`
+(`vibe64_env_app_env_reserved`: everything a session runs gets
+`APP_ENV=development`, and a host gives each deployment its own; an old value
+can only be removed), before any values
 in that request are stored. Session source-work admission, reserved-key checks,
 normal file projection and project refresh events remain in their existing owners.
 Both read and save return metadata only to Colleague. Stored-secret reveal and

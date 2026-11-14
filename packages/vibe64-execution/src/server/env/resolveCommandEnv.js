@@ -67,7 +67,23 @@ const BASE_ENV_POLICY_NAMES = new Set([
 // editor's own mode, such as a host that serves the editor with
 // NODE_ENV=production, never reaches what it runs, or npm would leave out
 // devDependencies and dev servers, tests and agents would act as production.
-const EDITOR_ONLY_ENV_NAMES = new Set(["NODE_ENV"]);
+// Nor does the editor's own APP_ENV: Vibe64 itself is a production
+// application, while everything a session runs is Development.
+const EDITOR_ONLY_ENV_NAMES = new Set(["APP_ENV", "NODE_ENV"]);
+
+// Everything a session runs (its commands, terminals, agents and Preview) is
+// Development, whatever the project's own Env says, so nothing it starts acts
+// for real; only a host's deployment Env names Staging or Production.
+function sessionAppEnv(request = {}) {
+  const deployment = request.envPolicy === "deployment" || request.purpose === "deployment" || request.applicationAccount;
+  return deployment ? {} : { APP_ENV: "development" };
+}
+
+// Preview runs the application as a developer does. NODE_ENV only picks
+// optimised builds, so the project's own Env or launch may still change it.
+function previewNodeEnv(request = {}) {
+  return request.purpose === "preview" ? { NODE_ENV: "development" } : {};
+}
 
 function commandBaseEnv(baseEnv = {}) {
   return Object.fromEntries(Object.entries(baseEnv && typeof baseEnv === "object" && !Array.isArray(baseEnv)
@@ -143,12 +159,14 @@ function commandEnvWithoutGitIdentity({
     // Runtime sockets belong to the OS identity, not its configurable HOME.
     ...(processMatchesActor(actor) && path.isAbsolute(runtimeDir)
       ? { XDG_RUNTIME_DIR: runtimeDir } : {}),
+    ...previewNodeEnv(request),
     ...databaseEnv(...databaseEnvRecordsForPolicy(baseEnv, request)),
     ...commandProjectEnv(request),
     ...gitEnv({ actor, request }),
     ...callerEnv,
     ...credentialEnv({ actor, request }),
-    ...sharedEnv
+    ...sharedEnv,
+    ...sessionAppEnv(request)
   };
   const finalEnv = {
     ...env,

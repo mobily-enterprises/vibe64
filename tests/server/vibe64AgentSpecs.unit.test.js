@@ -135,6 +135,7 @@ test("the Deployment spec states the APP_ENV contract and keeps Prepare and Buil
   assert.match(deployment, /`development` and `test`: no email, SMS, push notification, webhook or connector write leaves the application/u);
   assert.match(deployment, /`staging`: email goes only to `STAGING_EMAIL_TO` and SMS only to `STAGING_SMS_TO`, and each is logged instead when its variable is unset/u);
   assert.match(deployment, /`production`: everything is real\./u);
+  assert.match(deployment, /Vibe64 runs a session's commands and Preview with `development`, and automated test runs use `test`\./u);
   assert.match(deployment, /Read it when the application runs, never at build time\./u);
   assert.doesNotMatch(deployment, /Test copy|SIDE_EFFECTS ===/u);
   assert.match(deployment, /Prepare and Build never need the database or another managed service/u);

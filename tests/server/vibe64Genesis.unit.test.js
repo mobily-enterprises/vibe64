@@ -382,6 +382,7 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
     assert.match(output, /vibe64-helper env set/u);
     assert.match(output, /to follow `APP_ENV` \(`vibe64-helper spec deployment`\): logged in `development` and `test`; in `staging`, email and SMS only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`/u);
     assert.match(output, /never decide it from `NODE_ENV`, which only picks optimised builds/u);
+    assert.match(output, /Vibe64 gives this session `development` and the host gives a deployment its own/u);
     assert.match(output, /vibe64-helper database refresh/u);
     assert.match(output, /which earlier work is confirmed complete/u);
     assert.match(output, /commandSubmitted=false/u);

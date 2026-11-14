@@ -184,7 +184,11 @@ configuration still cannot override this policy-owned setting.
 The resolver never takes `NODE_ENV` from the editor's environment or a caller's
 base env: a command's framework mode comes only from the project's Env, the
 launch's or caller's own env, its Staging Env or its own command line, so a
-host may serve the editor itself in production mode.
+host may serve the editor itself in production mode. Nor does it take the
+editor's `APP_ENV`: every command but a deployment's or an application
+account's gets `APP_ENV=development` over the project's Env and its own env,
+and a Preview command also starts with `NODE_ENV=development`, which the
+project's Env or launch may change.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
 account home. Relative directories are rejected before starting a process.

@@ -1636,6 +1636,19 @@ test("reserved Vibe64 Env names require an explicit Genesis Stack declaration", 
   });
 });
 
+test("APP_ENV is refused as an Env value in every scope, while an old one can still be removed", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = project(targetRoot);
+    for (const environment of ["dev", "staging"]) {
+      const response = await service.saveEnvUserValues({ environment, values: { APP_ENV: "production" } });
+      assert.equal(response.ok, false);
+      assert.equal(response.errors[0].code, "vibe64_env_app_env_reserved");
+      assert.match(response.errors[0].message, /Vibe64 runs everything a session starts with APP_ENV=development, and a host gives each deployment its own/u);
+    }
+    assert.equal((await service.saveEnvUserValues({ environment: "dev", values: { APP_ENV: { remove: true } } })).ok, true);
+  });
+});
+
 test("Genesis Stack resources define expected Env names without technology checks in Vibe64", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = project(targetRoot, {
