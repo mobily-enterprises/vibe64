@@ -83,5 +83,5 @@ test("the helper's people, memberships and application accounts all follow the h
   assert.match(source,
     /runRootCommand\("useradd", \[\.\.\.accountDatabaseOptions\(helperAccountDatabase\(\)\),\n\s*\.\.\.helperAccountNumberOptions\(\), "--system",/u);
   assert.match(source, /runRootCommand\("userdel", \[\.\.\.accountDatabaseOptions\(helperAccountDatabase\(\)\), username\]\)/u);
-  assert.equal(source.match(/accountDatabase = helperAccountDatabase\(\),/gu)?.length, 2, "granting and revoking production access");
+  assert.equal(source.match(/accountDatabase = helperAccountDatabase\(\),/gu)?.length, 2, "granting and revoking staging access");
 });

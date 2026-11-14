@@ -20,7 +20,7 @@ const RESERVED_HUMAN_USERNAMES = new Set([
 ]);
 const HOST_SETTINGS_ROOT = "/etc/vibe64";
 const APPLICATION_USERNAME_PREFIX = "v64a_";
-// An application account has no login, except while production access gives it one (productionAccess.js).
+// An application account has no login, except while staging access gives it one (stagingAccess.js).
 const APPLICATION_SHELL = "/usr/sbin/nologin";
 
 function safeUsername(value = "") {

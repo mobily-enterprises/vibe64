@@ -30,7 +30,7 @@ import {
   registerPerson,
   upgradePersonRegistry
 } from "./personRegistry.js";
-import { handleProductionAccessOperation, runProductionEnter, runProductionService, runProductionShell } from "./productionLogin.js";
+import { handleStagingAccessOperation, runStagingEnter, runStagingService, runStagingShell } from "./stagingLogin.js";
 import { handleDeploymentServiceOperation, handleManagedServiceOperation, runReleaseService } from "./serviceOperations.js";
 
 const ALLOWED_OPERATIONS = new Set([
@@ -48,10 +48,26 @@ const ALLOWED_OPERATIONS = new Set([
   "managed-execution",
   "managed-service",
   "opencode-app-server",
-  "production-access",
+  "staging-access",
   "vibe64-command",
   "workspace-cache-command"
 ]);
+
+// The names the helper answered to before production access was renamed staging access. Each is refused with
+// its new name, so a caller or a host's SSH or sudo policy still using one fails saying what to use instead.
+const RENAMED_TO_STAGING = Object.freeze({
+  "production-access": "staging-access",
+  "production-enter": "staging-enter",
+  "production-service": "staging-service",
+  "production-shell": "staging-shell"
+});
+
+function refuseRenamed(name = "") {
+  if (Object.hasOwn(RENAMED_TO_STAGING, name)) {
+    throw new Error(`Vibe64 exec helper has no ${name}: production access was renamed staging access, so use ` +
+      `${RENAMED_TO_STAGING[name]}.`);
+  }
+}
 
 async function main() {
   if (process.argv[2] === "run-managed") {
@@ -62,20 +78,21 @@ async function main() {
     runReleaseService(process.argv[3] || "", process.argv[4] || "");
     return;
   }
-  // sshd's forced command for an application account's production login, run
-  // as that account (productionLogin.js), the one thing that login may run
+  refuseRenamed(process.argv[2]);
+  // sshd's forced command for an application account's staging login, run
+  // as that account (stagingLogin.js), the one thing that login may run
   // through sudo: its own release service's output, state and restart, or
   // entering it, and what entering runs as that account inside the service.
-  if (process.argv[2] === "production-shell" && process.argv.length === 3) {
-    runProductionShell();
+  if (process.argv[2] === "staging-shell" && process.argv.length === 3) {
+    runStagingShell();
     return;
   }
-  if (process.argv[2] === "production-service") {
-    runProductionService(process.argv.slice(3));
+  if (process.argv[2] === "staging-service") {
+    runStagingService(process.argv.slice(3));
     return;
   }
-  if (process.argv[2] === "production-enter") {
-    runProductionEnter(process.argv.slice(3));
+  if (process.argv[2] === "staging-enter") {
+    runStagingEnter(process.argv.slice(3));
     return;
   }
   // Root-only: the daemon's sudo rule names only
@@ -114,6 +131,7 @@ async function main() {
     : readPayload();
   assertNormalizedPayload(payload);
   const operation = String(payload.operation || "").trim();
+  refuseRenamed(operation);
   if (!ALLOWED_OPERATIONS.has(operation)) {
     throw new Error("Vibe64 exec helper rejected an unknown operation.");
   }
@@ -136,8 +154,8 @@ async function main() {
     handleApplicationAccountOperation(payload);
     return;
   }
-  if (operation === "production-access") {
-    handleProductionAccessOperation(payload);
+  if (operation === "staging-access") {
+    handleStagingAccessOperation(payload);
     return;
   }
   const username = safeUsername(payload.username);
