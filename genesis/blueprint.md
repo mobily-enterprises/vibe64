@@ -67,6 +67,13 @@ to determine compatibility.
 Operators can investigate slow assistant delivery through content-free timings
 shared across these engines, distinguishing preparation, native acknowledgement,
 receipt storage and the first response.
+Each session also keeps a private, bounded timeline of what happened to it, read
+with `vibe64 timeline` on the machine that runs it: turns started, steered,
+ended, cancelled or stopped with who asked and why, conversations opened and
+closed, Claude Code processes started, stopped and exited, browser tabs
+connecting, disconnecting with their reason and reconnecting, server-side
+request failures and the server stopping. It holds ids, states, reasons and
+codes only, never message text, and nothing sends it off the machine.
 
 Learning does not belong to a project. A yellow learner plate with a black L,
 present on every signed-in page, opens the Learning environment above the

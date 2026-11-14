@@ -5,6 +5,9 @@ import test from "node:test";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { flushSessionTimeline } from "@local/vibe64-core/server/sessionTimeline";
+import { readSessionTimeline } from "@local/vibe64-core/server/sessionTimelineCli";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -1139,6 +1142,24 @@ test("Cancel during a turn stops it and ends Not done, and repeating Cancel is h
   assert.equal(saved.phase, "not_done");
   assert.equal(f.native.stops, 1);
   assert.equal(saved.endedBy.id, "owner");
+}));
+
+test("a task's start, each Cancel and its Close are in the session's timeline, with who asked", () => withFixture(async (f) => {
+  const running = f.boot();
+  // As the person's own requests run: in the project's request context.
+  const asked = (operation) => runWithProjectRequestContext({ projectRuntimeRoot: f.runtime.stateRoot, slug: "alpha", vibe64User: OWNER }, operation);
+  const { task } = await asked(() => f.start(running.aiTasks));
+  await f.quiet(running.aiTasks);
+  await asked(() => running.aiTasks.cancel(SESSION, { taskId: task.id, vibe64User: OWNER }));
+  await f.quiet(running.aiTasks);
+  await asked(() => running.aiTasks.close(SESSION, { taskId: task.id, vibe64User: OWNER }));
+  await flushSessionTimeline();
+  const events = await readSessionTimeline(f.runtime.stateRoot, SESSION, { kinds: new Set(["conversation", "turn"]) });
+  assert.deepEqual(events.map(({ kind, event, chat, conversation, by, operation }) => [kind, event, chat, conversation, by, operation]), [
+    ["conversation", "task-started", "ai-task", task.id, "owner", "update"],
+    ["turn", "cancel-requested", "ai-task", task.id, "owner", undefined],
+    ["conversation", "task-closed", "ai-task", task.id, "owner", undefined]
+  ]);
 }));
 
 test("crash in cancelling: the restart finishes cancelling", () => withFixture(async (f) => {

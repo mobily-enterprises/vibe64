@@ -8,6 +8,7 @@ import {
   sessionAgentProviderId
 } from "./sessionAgentRules.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { recordEngineSessionClosed } from "../sessionTurnTimeline.js";
 
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
@@ -86,6 +87,7 @@ function createSessionAgentLifecycle({
     };
     const operation = conversationOperations.providerOperation(provider, "closeSession");
     const result = agentOperationResult(provider, id, await operation.call(provider, context));
+    recordEngineSessionClosed(id, options, result);
     if (result.ok !== false) {
       sessionBindings.forgetBinding(id);
       for (const [terminalId, terminal] of state.terminalBindings) {

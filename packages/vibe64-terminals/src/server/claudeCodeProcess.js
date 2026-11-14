@@ -8,6 +8,7 @@ import {
   claudeFlagSettings as nativeClaudeFlagSettings,
   createClaudeCodeProcess as nativeCreateClaudeCodeProcess
 } from "@jskit-ai/assistant-core/server/claude-process";
+import { engineProcessTimeline } from "./sessionTurnTimeline.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -75,6 +76,8 @@ async function createClaudeCodeProcess({
     operationId: "claude-code",
     label: "Claude Code assistant"
   });
+  // A session's own Claude Code process is in its timeline; a tool-free helper's or account query's is not.
+  const timeline = engineProcessTimeline({ engine: "claude", sessionId: options.toolFree ? "" : execution?.sessionId });
   let starting = true;
   let native;
   let secrets = [];
@@ -122,12 +125,17 @@ async function createClaudeCodeProcess({
         async start(input) {
           secrets = Object.entries(input.env || {}).filter(([name]) => shouldRedactLogField(name))
             .map(([, value]) => String(value ?? "")).filter(value => value.length >= 4);
-          native = await host.start(input);
+          native = await host.start(input).catch((error) => {
+            timeline.startFailed(error);
+            throw error;
+          });
           executionId = native.id;
+          timeline.started(native);
           diagnostic("stream_ready");
           return native;
         },
         async stop(id, ...args) {
+          timeline.stopped(id, args[0]);
           if (starting && native?.id === id) {
             // The confirmed stop removes the process's temporary stderr file.
             // Reading diagnostics must never prevent that cleanup.

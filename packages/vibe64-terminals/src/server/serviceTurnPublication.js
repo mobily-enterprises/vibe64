@@ -2,6 +2,7 @@ import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequest
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
+import { recordSessionTurnChange } from "./sessionTurnTimeline.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
@@ -102,6 +103,7 @@ function createServiceTurnPublication({
         if (!state.lifecycle.closing) return publishSessionChanged.agentTerminal(sessionId, { reason: "agent-plan-usage" });
       });
     }
+    recordSessionTurnChange(sessionId, payload);
     await publishSessionChanged.agentTerminal(sessionId, payload);
     if (state.lifecycle.closing) return;
     if (payload.reason === "temporary-agent-turn-idle") {

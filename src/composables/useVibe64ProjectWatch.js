@@ -1,6 +1,7 @@
 import { onScopeDispose, watch } from "vue";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { vibe64BrowserTabOriginId } from "@/lib/vibe64BrowserTabOrigin.js";
 import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "@local/vibe64-sessions/shared/project-watch";
 
 // Session changes reach only the pages that watch them: a page watching its
@@ -34,7 +35,8 @@ function useVibe64ProjectWatch({ projectSlug, sessionId = null } = {}) {
     }
     watchedKey = key;
     if (next && socket.connected) {
-      socket.emit(PROJECT_WATCH, { watchId, ...next });
+      // A session's timeline (vibe64 timeline) names the tab that connects to it and disconnects.
+      socket.emit(PROJECT_WATCH, { watchId, ...next, ...(next.sessionId ? { originId: vibe64BrowserTabOriginId() } : {}) });
     }
   }
   const watchAfterReconnect = () => sync({ reconnected: true });

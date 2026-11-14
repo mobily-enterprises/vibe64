@@ -4,6 +4,7 @@ import { AI_TASK_PHASES, aiTaskEnded } from "../shared/aiTaskPhases.js";
 import { createAiTaskKinds } from "./aiTaskKinds.js";
 import { createAiTask } from "./aiTaskMachine.js";
 import { createAiTaskRunner } from "./aiTaskRunner.js";
+import { recordSessionTimelineEvent, timelineActor } from "@local/vibe64-core/server/sessionTimeline";
 
 /** @typedef {import("./types.js").AiTask} AiTask */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -43,6 +44,27 @@ function presentAiTask({ conversationId, task }) {
     startedBy: taskPerson(startedBy),
     endedBy: taskPerson(endedBy)
   };
+}
+
+/**
+ * A task's window in its session's timeline (`vibe64 timeline`): started, a
+ * cancel asked for, or closed, and by whom. Its turns are those of the
+ * temporary chat it runs in.
+ * @param {string} sessionId
+ * @param {"task-started" | "cancel-requested" | "task-closed"} event
+ * @param {string} taskId
+ * @param {object | null} vibe64User
+ * @param {{ operation?: string, projectRuntimeRoot?: string }} [details]
+ */
+function recordTaskTimeline(sessionId, event, taskId, vibe64User, { projectRuntimeRoot, ...fields } = {}) {
+  recordSessionTimelineEvent(sessionId, {
+    kind: event === "cancel-requested" ? "turn" : "conversation",
+    event,
+    chat: "ai-task",
+    conversation: taskId,
+    by: timelineActor(vibe64User),
+    ...fields
+  }, { projectRuntimeRoot });
 }
 
 /**
@@ -100,6 +122,7 @@ function createAiTasksService({
 
   async function closeEnded(sessionId, record, vibe64User) {
     await terminals.deleteTemporaryConversation(sessionId, { conversationId: record.conversationId });
+    recordTaskTimeline(sessionId, "task-closed", record.conversationId, vibe64User);
     runner.forget(record.conversationId);
     await publishSessionChanged(sessionId, {
       reason: "ai-task-changed",
@@ -154,6 +177,7 @@ function createAiTasksService({
       }
     });
     runner.remember(taskId);
+    recordTaskTimeline(sessionId, "task-started", taskId, vibe64User, { operation: kind.id, projectRuntimeRoot: runtime.stateRoot });
     const shown = presentAiTask({ conversationId: taskId, task });
     await publishSessionChanged(sessionId, { reason: "ai-task-changed", payload: { aiTask: shown } });
     void runner.wake(sessionId);
@@ -169,6 +193,7 @@ function createAiTasksService({
   }
 
   function cancel(sessionId, { taskId, vibe64User = null }) {
+    recordTaskTimeline(sessionId, "cancel-requested", taskId, vibe64User);
     return act(sessionId, taskId, { type: "cancel", id: randomUUID(), by: vibe64User });
   }
 

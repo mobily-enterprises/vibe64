@@ -18,6 +18,7 @@ import {
   verifiedExecutionProfileResolution
 } from "./sessionAgentRules.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { withSessionTurnTimeline } from "../sessionTurnTimeline.js";
 
 /** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
@@ -303,7 +304,7 @@ function createSessionAgentProviderCalls({
           providerInput.input.attachments = prepared.attachments;
         }
       }
-      const result = await operation(context, providerInput);
+      const result = await withSessionTurnTimeline(method, context, input, () => operation(context, providerInput));
       if (method === "startTerminal" && result?.ok !== false && toText(result?.id)) {
         // A reused PTY keeps its original connection until explicitly closed.
         if (!state.terminalBindings.has(result.id)) {

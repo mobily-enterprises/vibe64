@@ -1026,6 +1026,8 @@ Persisted-state upgrades use the existing numbered registry, preflight, backups 
 
 Owns the learning space (`learningSpace.js` with the Project context): practice projects live only in their learner's namespace `<root>/<learnerKey>/<practiceId>/<slug>`, apart from the catalogue, on both hosts, with their runtime roots in the shared `<systemRoot>/projects` inventory. It owns the practice slug and ID, the immutable schema-2 training marker, the one practice scope, the learning-space listing and the one admission rule: a person opens only their own practice project, and work without a person is admitted as the marker's learner. A catalogue entry with a retired training marker is skipped with a one-time warning and never fails the normal projects' listing. The host supplies only the space root; Training owns lessons, attempts and the Practice list.
 
+Owns the session timeline (`sessionTimeline.js`) and its reader, `vibe64 timeline` (`sessionTimelineCli.js`): one bounded, private JSON-lines file per session under `<projectRuntimeRoot>/timeline/`, holding event metadata only. Each package records its own events through it (Sessions the browser connections, Terminals the turns, conversations, engine processes and server stop, AI tasks their windows, and the route wrapper here the failed session requests); none reads it back.
+
 ### Source
 - Directory `packages/vibe64-core`
 

@@ -7,8 +7,15 @@
 /** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
 /**
  * What a project watch's realtime connection lends the watch action: whether
- * the watch is still current, and holds and rooms it releases on leaving.
- * @typedef {{ current: () => boolean, hold: (detach: () => void) => void, join: (room: string) => void }} WatchBinding
+ * the watch is still current, holds and rooms it releases on leaving, and the
+ * connection a session's timeline names.
+ * @typedef {{ current: () => boolean, hold: (detach: () => void) => void, join: (room: string) => void, connection?: WatchConnection }} WatchBinding
+ */
+/**
+ * One browser connection, for a session's timeline (sessionConnectionTimeline.js):
+ * its tab, why it ended ("" while it is open) and how many of its watches show
+ * each session.
+ * @typedef {{ tab: string, closedReason: () => string, sessionViews: Map<string, number> }} WatchConnection
  */
 /** @typedef {ReturnType<typeof import("./sessionWorkOperations.js").createSessionWorkOperations>} SessionWorkOperations */
 /** @typedef {ReturnType<typeof import("./sessionPresence.js").createSessionPresenceService>} SessionPresenceService */

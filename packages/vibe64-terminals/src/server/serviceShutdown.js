@@ -1,3 +1,5 @@
+import { flushSessionTimeline, recordSessionTimelineEventForActiveSessions } from "@local/vibe64-core/server/sessionTimeline";
+
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -46,6 +48,10 @@ function createServiceShutdown({
    * nothing, and an engine that cannot begin is reported by the stop.
    */
   function beginShutdown() {
+    if (!shutdownBegun) {
+      // Every session this server wrote a timeline line for says why its turns stop here.
+      recordSessionTimelineEventForActiveSessions({ kind: "server", event: "stopping", reason: "server-shutdown" });
+    }
     shutdownBegun ||= sessionAgent.beginShutdown();
     return shutdownBegun;
   }
@@ -88,6 +94,8 @@ function createServiceShutdown({
     } catch (error) {
       failures.push(error);
     }
+    // What the stop recorded reaches the session timelines before the server exits.
+    await flushSessionTimeline();
     if (failures.length > 0) {
       throw new AggregateError(failures, "Vibe64 terminal shutdown did not complete successfully.");
     }

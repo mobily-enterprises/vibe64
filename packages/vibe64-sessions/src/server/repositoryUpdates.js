@@ -1,6 +1,7 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64ProjectSessionsRoom, vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
+import { watchSessionConnection } from "./sessionConnectionTimeline.js";
 
 /** @typedef {import("./types.js").RepositoryUpdateProbe} RepositoryUpdateProbe */
 /** @typedef {import("./types.js").WatchBinding} WatchBinding */
@@ -32,6 +33,7 @@ function createRepositoryUpdates({ closeWatches, probe }) {
     const { sessionId = "" } = input;
     if (sessionId) {
       binding.join(vibe64SessionViewersRoom(slug, sessionId));
+      if (binding.connection) binding.hold(watchSessionConnection(sessionId, binding.connection));
     } else {
       binding.join(vibe64ProjectSessionsRoom(slug));
       binding.hold(probe.watch(slug));

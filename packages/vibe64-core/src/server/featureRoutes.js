@@ -8,10 +8,12 @@ import {
 } from "./serverResponses.js";
 import {
   VIBE64_PROJECT_ROUTE_BASE,
+  currentProjectRuntimeRoot,
   isProjectRequestError,
   runWithResolvedProjectRequestContext,
   projectRequestErrorStatusCode
 } from "./projectRequestContext.js";
+import { recordSessionTimelineEvent } from "./sessionTimeline.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 
@@ -101,12 +103,16 @@ function vibe64RouteHandler({
       }
 
       let response;
+      let projectRuntimeRoot = "";
       try {
         response = projectScoped
           ? await runWithResolvedProjectRequestContext({
             projectContext,
             request
-          }, () => handler(request, reply))
+          }, () => {
+            projectRuntimeRoot = currentProjectRuntimeRoot();
+            return handler(request, reply);
+          })
           : await handler(request, reply);
       } catch (error) {
         if (isProjectRequestError(error)) {
@@ -122,18 +128,37 @@ function vibe64RouteHandler({
             ]
           });
         }
+        recordFailedSessionRequest(request, projectRuntimeRoot, Number(error?.statusCode || error?.status) || 500, error?.code);
         throw error;
       }
       // The handler answered itself, or has nothing to answer, which Fastify answers with an empty 200. Returning the
       // reply instead held a request nothing answered until the client went away: the reply is a thenable that
       // settles only once the response ends.
       if (response === undefined) {
+        recordFailedSessionRequest(request, projectRuntimeRoot, reply.statusCode);
         return undefined;
       }
 
-      return reply.code(responseStatusCode(response, options)).send(response);
+      const status = responseStatusCode(response, options);
+      recordFailedSessionRequest(request, projectRuntimeRoot, status, response?.code || response?.errors?.[0]?.code);
+      return reply.code(status).send(response);
     };
   };
+}
+
+// A session route that failed on the server's side (5xx) goes in the
+// session's timeline (sessionTimeline.js) with its method, route, status and
+// error code; a refusal (4xx) is the person's request, not a failure.
+function recordFailedSessionRequest(request, projectRuntimeRoot, status, code = "") {
+  if (!projectRuntimeRoot || !(status >= 500)) return;
+  recordSessionTimelineEvent(request.params?.sessionId, {
+    kind: "request",
+    event: "failed",
+    method: request.method,
+    route: request.routeOptions?.url,
+    status,
+    code: typeof code === "string" ? code : ""
+  }, { projectRuntimeRoot });
 }
 
 function isProjectRoutePath(path = "") {

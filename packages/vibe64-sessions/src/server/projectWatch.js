@@ -1,11 +1,17 @@
 import { attachDirectRequestActionExecutor } from "@jskit-ai/kernel/server/http";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../shared/projectWatch.js";
+import { BROWSER_KEY_PATTERN } from "./inputPatterns.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
 
 const PROJECT_WATCH_ACTION = "vibe64.sessions.project.watch";
+
+// The browser tab a watch comes from, as the page names it, or "".
+function tabOf(input) {
+  return typeof input?.originId === "string" && BROWSER_KEY_PATTERN.test(input.originId) ? input.originId : "";
+}
 
 /**
  * A watch belongs to one authenticated browser connection. The action checks
@@ -22,6 +28,17 @@ function registerProjectWatch({ actions, realtime }) {
     // session; the socket leaves it with the last of them.
     const roomHolders = new Map();
     let closed = false;
+    // Why the connection ended, for the session timeline: this listener runs before the watches are released.
+    let disconnectReason = "";
+    const recordDisconnectReason = (reason) => {
+      disconnectReason = String(reason || "") || "connection closed";
+    };
+    socket.on("disconnect", recordDisconnectReason);
+    const connection = {
+      closedReason: () => disconnectReason || (closed ? "realtime service stopped" : ""),
+      // How many of this connection's watches show each session (sessionConnectionTimeline.js).
+      sessionViews: new Map()
+    };
     function joinRoom(room) {
       roomHolders.set(room, (roomHolders.get(room) || 0) + 1);
       socket.join(room);
@@ -66,7 +83,14 @@ function registerProjectWatch({ actions, realtime }) {
           channel: "api",
           surface: "app",
           input: { projectSlug: input.projectSlug, ...(input.sessionId ? { sessionId: input.sessionId } : {}) },
-          context: { watchBinding: { current, hold, join: (room) => hold(joinRoom(room)) } }
+          context: {
+            watchBinding: {
+              current,
+              hold,
+              join: (room) => hold(joinRoom(room)),
+              connection: { ...connection, tab: tabOf(input) }
+            }
+          }
         });
         if (current()) reply(result);
       } catch (error) {
@@ -90,6 +114,7 @@ function registerProjectWatch({ actions, realtime }) {
       closed = true;
       socket.off(PROJECT_WATCH, watch);
       socket.off(PROJECT_WATCH_RELEASE, leave);
+      socket.off("disconnect", recordDisconnectReason);
       for (const watchId of [...watches.keys()]) release(watchId);
     };
   });

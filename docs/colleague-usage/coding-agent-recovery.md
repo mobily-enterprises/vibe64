@@ -79,6 +79,9 @@ Server events named `vibe64.claude.startup` report startup stages and failures;
 They correlate conversation, turn and execution IDs without recording prompts,
 responses or task descriptions. Startup failure diagnostics retain bounded,
 redacted native stderr. Colleague does not have raw server-log access.
+The session's own [timeline](session-timeline.md) (`npx vibe64 timeline <session id>`)
+lists its turns, cancels and stops with their reasons, engine processes and
+browser connections in order, without message text.
 
 For interrupted renewal, an accepted prompt is not repeated automatically.
 Recovery requires a confirmed completed turn; partial text alone is insufficient.

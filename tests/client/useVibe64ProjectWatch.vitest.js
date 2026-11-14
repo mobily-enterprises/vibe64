@@ -36,11 +36,13 @@ describe("useVibe64ProjectWatch", () => {
     socket.listeners.get("connect")();
     sessionId.value = "s2";
     await nextTick();
-    const watchId = socket.emitted[0][1].watchId;
+    const { watchId, originId } = socket.emitted[0][1];
+    // The tab's own id, the same in every watch, names it in the session's timeline.
+    expect(originId).toMatch(/^tab:/u);
     expect(socket.emitted).toEqual([
-      ["watch", { watchId, projectSlug: "alpha", sessionId: "s1" }],
-      ["watch", { watchId, projectSlug: "alpha", sessionId: "s1" }],
-      ["watch", { watchId, projectSlug: "alpha", sessionId: "s2" }]
+      ["watch", { watchId, projectSlug: "alpha", sessionId: "s1", originId }],
+      ["watch", { watchId, projectSlug: "alpha", sessionId: "s1", originId }],
+      ["watch", { watchId, projectSlug: "alpha", sessionId: "s2", originId }]
     ]);
     scope.stop();
     expect(socket.emitted.at(-1)).toEqual(["release", { watchId }]);
