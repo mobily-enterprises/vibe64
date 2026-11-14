@@ -6,8 +6,9 @@ import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 /**
- * One run Genesis offers for a pass: its button's label and the request Run sends verbatim.
- * @typedef {{ id: string, label: string, request: string }} Vibe64PassRun
+ * One run Genesis offers for a pass: its button's label and the request Run sends verbatim; a
+ * deep run also carries the files and lines it reads, which its label shows.
+ * @typedef {{ id: string, label: string, request: string, files?: number, lines?: number }} Vibe64PassRun
  */
 
 /**
@@ -25,6 +26,23 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
  * @param {Vibe64PassRun} passRun
  */
 const runKey = (pass, passRun) => `${pass.id}:${passRun.id}`;
+
+/**
+ * The request a Master run sends for the ticked passes: the run's own request when every pass it
+ * offers is ticked; otherwise its selectedRequest, naming the ticked passes by title in the Master
+ * order. Empty when none is ticked.
+ * @param {{ passes: string[] }} master the Master pass Genesis lists
+ * @param {{ request: string, selectedRequest: string }} masterRun
+ * @param {string[]} ticked the ids of the ticked passes
+ * @param {Vibe64Pass[]} passes
+ */
+function masterRequest(master, masterRun, ticked, passes) {
+  const chosen = master.passes.filter((id) => ticked.includes(id));
+  if (!chosen.length) return "";
+  if (chosen.length === master.passes.length) return masterRun.request;
+  const titles = chosen.map((id) => passes.find((pass) => pass.id === id)?.title || id);
+  return masterRun.selectedRequest.replace("{passes}", titles.join(", "));
+}
 
 /**
  * The chat's Passes: the passes Genesis offers with their runs, the one the server's rule suggests
@@ -63,6 +81,8 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   // Why the project's own Genesis runs no pass, naming the update; empty when it runs them.
   const unavailable = computed(() => resource.data.value?.unavailable || "");
   const recommendation = computed(() => passes.value.find(({ id }) => id === resource.data.value?.recommendation) || null);
+  // The Master pass, which runs the passes in its own order deeply, one after another; null before the read.
+  const master = computed(() => resource.data.value?.master || null);
   const starting = ref("");
   const changing = ref("");
   const error = ref("");
@@ -92,6 +112,17 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   }
 
   /**
+   * Starts one of the Master pass's runs for the ticked passes, as run starts a pass's run.
+   * @param {{ id: string, request: string, selectedRequest: string }} masterRun
+   * @param {string[]} ticked the ids of the ticked passes
+   */
+  function runMaster(masterRun, ticked) {
+    const request = master.value ? masterRequest(master.value, masterRun, ticked, passes.value) : "";
+    if (!request) return Promise.resolve(false);
+    return run(master.value, { ...masterRun, request });
+  }
+
+  /**
    * @param {Vibe64Pass} pass
    * @param {"snooze" | "dismiss"} action Later hides the suggestion for a week; Dismiss until the pass completes again.
    */
@@ -114,16 +145,18 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
     passes,
     unavailable,
     recommendation,
+    master,
     loading: resource.isLoading,
     loadError: resource.loadError,
     starting,
     changing,
     error,
     run,
+    runMaster,
     snooze: (pass) => changeRecommendation(pass, "snooze"),
     dismiss: (pass) => changeRecommendation(pass, "dismiss"),
     reload: () => resource.reload()
   };
 }
 
-export { runKey, useVibe64Passes };
+export { masterRequest, runKey, useVibe64Passes };

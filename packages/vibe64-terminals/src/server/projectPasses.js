@@ -113,8 +113,9 @@ async function countSessionCommits(sourceRoot, since = "") {
 
 /**
  * The chat's Passes list: the passes Genesis offers with when each last completed in this project, the
- * runs Genesis offers for each, the commits since, why the project's Genesis runs none (when it
- * cannot), and the one suggestion the rule picks; and the suggestion's Later and Dismiss.
+ * runs Genesis offers for each, the commits since, the Master pass that runs them deeply in turn, why
+ * the project's Genesis runs none (when it cannot), and the one suggestion the rule picks; and the
+ * suggestion's Later and Dismiss.
  * Each answers as a route does: a refusal is a failure result, not a thrown error.
  * @param {object} dependencies
  * @param {(sessionId: string) => Promise<{ runtime: { stateRoot: string }, session: object }>} dependencies.sessionContext
@@ -136,7 +137,7 @@ function createProjectPasses({
   async function readPasses(sessionId) {
     const { runtime, session } = await sessionContext(sessionId);
     const sourceRoot = sessionSourcePath(session);
-    const [{ unavailable, passes: genesisPasses }, records] = await Promise.all([
+    const [{ unavailable, passes: genesisPasses, master }, records] = await Promise.all([
       listPasses({ projectRoot: sourceRoot }),
       readProjectPassRecords(runtime.stateRoot)
     ]);
@@ -157,7 +158,15 @@ function createProjectPasses({
       };
     }));
     const recommended = passRecommendation(passes, now());
-    return { ok: true, sessionId, unavailable, passes, recommendation: recommended ? recommended.id : "" };
+    // The Master pass is listed with its own commits since, and never suggested.
+    return {
+      ok: true,
+      sessionId,
+      unavailable,
+      passes,
+      master: { ...master, commitsSince: await commitsSince(master.lastRun || "") },
+      recommendation: recommended ? recommended.id : ""
+    };
   }
 
   /**

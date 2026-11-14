@@ -4983,6 +4983,19 @@ suggested, and admission refuses a run of it sent with `genesisTask` with
 Genesis's reason (`vibe64_assistant_routing_pass_unavailable`). A typed bare
 Deslop or UI pass is Genesis's task over the agent's own changes and is not
 refused this way.
+A `deep` run also carries `files` and `lines`, the project's own source it
+reads, which its label shows; the list adds one line under such a pass saying it
+takes much longer and uses far more of the AI's allowance, and a suggestion
+shows only the pass's other runs. The list's `master` is Genesis's Master pass,
+listed last with its own `lastRun` and commits since: a tick box for each id in
+its `passes`, in its order, all ticked whenever that list changes, and a button
+for each of its `runs`, sized like a deep run and with the same kind of note.
+Start sends the run's `request` when every pass is ticked, otherwise its
+`selectedRequest` with the ticked passes' titles in place of `{passes}`
+(`masterRequest` in `useVibe64Passes.js`), with `genesisTask` `master-pass`;
+with nothing ticked it sends nothing. Admission accepts `master-pass` as it
+accepts a listed pass, and refuses it with Genesis's reason while `master` is
+unavailable. The Master pass is never suggested.
 The session's `passes` read adds the commits on the session's source since each
 `lastRun` (`git rev-list --count`), and the list shows `Last completed: <date>` or
 `Never completed`. A run's button sends that run's

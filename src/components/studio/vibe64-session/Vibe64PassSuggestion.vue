@@ -6,7 +6,7 @@
     <p v-if="passes.error.value" class="text-body-small vibe64-pass-suggestion__text" role="alert">{{ passes.error.value }}</p>
     <div class="vibe64-pass-suggestion__actions">
       <v-btn
-        v-for="passRun in pass.runs"
+        v-for="passRun in runs"
         :key="passRun.id"
         :aria-label="`Run ${pass.title}: ${passRun.label}`"
         class="vibe64-pass-suggestion__run"
@@ -32,7 +32,8 @@
 
 <script setup>
 // The one pass suggested now, above the composer: each of its runs starts it, Later hides it for a
-// week and Dismiss until it completes again. It only offers; the pass starts on a run alone.
+// week and Dismiss until it completes again. It only offers; the pass starts on a run alone. Its deep
+// run stays in Passes, where its cost is shown beside it.
 import { computed } from "vue";
 import { runKey } from "@/composables/useVibe64Passes.js";
 
@@ -42,6 +43,7 @@ const props = defineProps({
   passes: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Passes>} */ (Object), required: true },
   pass: { type: /** @type {import("vue").PropType<import("@/composables/useVibe64Passes.js").Vibe64Pass>} */ (Object), required: true }
 });
+const runs = computed(() => props.pass.runs.filter(({ id }) => id !== "deep"));
 const commits = computed(() => `${props.pass.commitsSince} ${props.pass.commitsSince === 1 ? "commit" : "commits"}`);
 const headline = computed(() => props.pass.lastRun
   ? `Your app has changed a lot since ${props.pass.title} was last completed. Run it again?`

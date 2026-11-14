@@ -12,7 +12,7 @@ import {
   listGenesisPasses
 } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createProjectPasses } from "../../packages/vibe64-terminals/src/server/projectPasses.js";
-import { GENESIS_PASSES } from "../fixtures/genesisPasses.js";
+import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "../fixtures/genesisPasses.js";
 
 const run = promisify(execFile);
 const DAY = 24 * 60 * 60 * 1000;
@@ -33,12 +33,20 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   const created = new Date(Date.now() - 2 * DAY).toISOString();
   await git(["commit", "-q", "-m", "A fresh Genesis project"], { GIT_AUTHOR_DATE: created, GIT_COMMITTER_DATE: created });
 
-  // Genesis lists all eight passes, none run, each with its whole-app run; the fixture the other tests use is the same list.
+  // Genesis lists all eight passes, none run, each with its whole-app and deep runs, and the Master pass; the fixture the
+  // other tests use is the same list, its sample size aside, since a run's size follows the project's own files.
   const shape = ({ id, title, description, recommend, request, lastRun, unavailable, runs }) =>
     ({ id, title, description, recommend, request, lastRun, unavailable, runs });
+  const masterShape = ({ id, title, description, request, lastRun, lastPasses, unavailable, passes, runs }) =>
+    ({ id, title, description, request, lastRun, lastPasses, unavailable, passes, runs });
   const listed = await listGenesisPasses({ projectRoot: source });
   assert.equal(listed.unavailable, null, "the Genesis Vibe64 runs runs every pass");
-  assert.deepEqual(listed.passes.map(shape), GENESIS_PASSES.map(shape));
+  const { files, lines } = listed.passes[0].runs.find(({ id }) => id === "deep");
+  assert.ok(Number.isSafeInteger(files) && files > 0 && Number.isSafeInteger(lines) && lines > 0, "the fresh project's own source");
+  const size = `${files.toLocaleString("en-US")} files, ${lines.toLocaleString("en-US")} lines`;
+  const resized = (runs) => runs.map((run) => run.files === undefined ? run : { ...run, label: run.label.replace(/\(.*\)$/u, `(${size})`), files, lines });
+  assert.deepEqual(listed.passes.map(shape), GENESIS_PASSES.map((pass) => shape({ ...pass, runs: resized(pass.runs) })));
+  assert.deepEqual(masterShape(listed.master), masterShape({ ...GENESIS_MASTER_PASS, runs: resized(GENESIS_MASTER_PASS.runs) }));
 
   const clock = { now: Date.now() };
   const passes = createProjectPasses({
@@ -66,7 +74,7 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   assert.match(lastRun, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u);
   assert.ok(Date.parse(lastRun) >= before);
   assert.ok(recorded.passes.every(({ id, lastRun: other }) => id === "quality-pass" || other === null));
-  assert.deepEqual(recorded.byId["quality-pass"].runs.map(({ id }) => id), ["whole"], "an unsaved record has no commit to start from");
+  assert.deepEqual(recorded.byId["quality-pass"].runs.map(({ id }) => id), ["whole", "deep"], "an unsaved record has no commit to start from");
   await git(["add", "genesis/passes.json"]);
   await git(["commit", "-q", "-m", "Quality pass"]);
   const recordCommit = (await git(["rev-parse", "HEAD"])).stdout.trim();
@@ -90,7 +98,8 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
     commit: since.commit,
     commitsSince: 30
   });
-  assert.ok(due.passes.filter(({ id }) => id !== "quality-pass").every(({ runs }) => runs.length === 1), "a pass never completed has only its whole-app run");
+  assert.ok(due.passes.filter(({ id }) => id !== "quality-pass").every(({ runs }) => runs.map(({ id }) => id).join() === "whole,deep"),
+    "a pass never completed has only its whole-app and deep runs");
   // Passes that never ran come first, in Genesis's order; Later and Dismiss move on to the next.
   const order = [];
   let current = due.recommendation;
@@ -105,6 +114,28 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   const later = await read();
   assert.equal(later.recommendation, "deslop", "a snooze ends after a week");
   assert.equal(later.byId["ui-pass"].dismissed, true, "a dismissal lasts until the pass completes again");
+
+  // A Master pass records itself last, with the passes it ran; once committed, it offers the changes since it, sized
+  // by the files they touch.
+  await run(path.join(genesisPackageBinDirectory(), "genesis"), ["passes", "done", "master-pass", "deslop", "security-pass"], { cwd: source });
+  await git(["add", "genesis/passes.json"]);
+  await git(["commit", "-q", "-m", "Master pass"]);
+  await writeFile(path.join(source, "notes.txt"), "one\ntwo\n");
+  await git(["add", "notes.txt"]);
+  await git(["commit", "-q", "-m", "A change"]);
+  const mastered = await read();
+  assert.deepEqual(mastered.master.lastPasses, ["security-pass", "deslop"], "in the Master order");
+  const [, masterSince] = mastered.master.runs;
+  assert.deepEqual(masterSince, {
+    id: "since-last",
+    label: `Since last completed (${masterSince.commit}, 1 commit; 1 files, 2 lines)`,
+    request: `Master pass: the changes since commit ${masterSince.commit}, judged against the whole app.`,
+    commit: masterSince.commit,
+    commitsSince: 1,
+    selectedRequest: `Master pass ({passes}): the changes since commit ${masterSince.commit}, judged against the whole app.`,
+    files: 1,
+    lines: 2
+  });
 });
 
 test("a project pinned to a Genesis that cannot run passes lists them with Genesis's reason, offers no run and suggests none", async (t) => {
@@ -144,4 +175,5 @@ test("a project pinned to a Genesis that cannot run passes lists them with Genes
   assert.ok(result.passes.every((pass) => pass.unavailable === reason && pass.runs.length === 0));
   assert.ok(result.passes.every(({ commitsSince }) => commitsSince >= 30), "every pass is due by its commits");
   assert.equal(result.recommendation, "", "but none is suggested, since none can run");
+  assert.deepEqual([result.master.unavailable, result.master.passes, result.master.runs], [reason, [], []], "nor the Master pass");
 });

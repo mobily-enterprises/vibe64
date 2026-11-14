@@ -6,7 +6,8 @@ as **Deslop** (simpler code that does the same thing), the **UI pass**
 Genesis offers: **Visual identity**, **Quality pass**, **Data pass**,
 **Security pass**, **User experience pass** and **Speed pass**. Genesis writes
 what each pass does and the runs it offers; Vibe64 lists them, runs the one
-you choose and suggests one now and then.
+you choose and suggests one now and then. The **Master pass** runs several
+passes deeply, one after another.
 
 ## Open the Passes list
 
@@ -33,14 +34,24 @@ Under each pass is a button for each run Genesis offers for it:
   history. It starts from the changes since that commit, here 42 commits
   since `abc1234`, and judges them against the whole app, so what they
   duplicate, or should reuse, elsewhere in the app counts too.
+- **Deep (212 files, 18,450 lines)** runs the pass over the whole app item by
+  item: the AI first writes a checklist of every file of the project's own code
+  (here 212 files, 18,450 lines) and everything the pass adds, such as every
+  screen for the UI pass, then reads each one in full and ticks it only with
+  evidence you can check, such as a named test or a commit. Under the buttons
+  the list says **Deep reads every file: it takes much longer and uses far more
+  of your AI's allowance.** Its report opens with the count, such as **212 of
+  212 items ticked with evidence**.
 
 Select a run. The list closes and main chat sends that run's own request,
 which Genesis writes, as your message, which you see in the chat, such as
 **Deslop the whole app.** or **Quality pass: the changes since commit abc1234,
 judged against the whole app.** The pass runs in its own turn on your
 **Senior** model, as **Deslop** and **UI pass** do when you type them;
-**Stop** ends it like any other turn. It never commits, pushes or publishes:
-save its work as usual.
+**Stop** ends it like any other turn. A **Whole app** or **Since last
+completed** run never commits, pushes or publishes: save its work as usual. A
+**Deep** run commits its own work as it goes, in small commits that each say
+what changed and why, and never pushes or publishes: save its work as usual.
 
 Genesis records a pass as completed only after one of these runs finishes.
 Typing **Deslop** or **UI pass** yourself works on your own changes for the
@@ -59,6 +70,48 @@ moment, the list shows the reason, such as **Quality pass uses the Senior
 model in its own turn. Finish or stop the current turn, then send Quality
 pass again.** Nothing starts; select the run again once the chat is free.
 
+## Run the Master pass
+
+The **Master pass** is the last entry in the Passes list. It runs several
+passes deeply, one after another, so you can ask for all of them at once.
+
+Under it is a tick box for each pass it runs, all ticked when the list
+opens, in the order it runs them: **Security pass**, **Data pass**,
+**Quality pass**, **Speed pass**, **User experience pass**, **Visual
+identity**, **UI pass** and **Deslop**. Untick a pass to leave it out. The
+order stays the same whichever passes you tick: security comes first, so the
+others build on what it fixes, and Deslop last, so it tidies up after them.
+With nothing ticked, its buttons are unavailable.
+
+Its buttons are its runs, each with its size:
+
+- **Whole app (212 files, 18,450 lines)** runs each ticked pass as a Deep run
+  over the whole app.
+- **Since last completed (abc1234, 7 commits; 12 files, 960 lines)** appears
+  once a Master pass has completed and the commit that recorded it is still in
+  the project's history. Each ticked pass then works through the changes since
+  that commit deeply: every changed file, the code those changes use or
+  replace, and a check of the whole app for anything they repeat or leave
+  unused. The size counts the files those changes touch.
+
+Under the buttons the list says **Runs each ticked pass deeply, one after
+another: it takes much longer and uses far more of your AI's allowance.**
+
+Select a run. The list closes and main chat sends Genesis's request as your
+message: **Master pass the whole app.** with every pass ticked, or one naming
+the ticked passes, such as **Master pass (Security pass, Data pass, Deslop)
+the whole app.** It runs in its own turn on your **Senior** model, and
+**Stop** ends it like any other turn. The AI finishes each pass before the next
+starts: its work committed and the app's whole test suite passing. A pass that
+does not apply, such as the UI pass in an app without screens, is skipped with
+its reason. It keeps a ledger of where it is, so sending the same run again
+after a stop carries on from there. Its report covers every pass: its
+checklist count, what changed, its commits and anything it left for you to
+decide. It never pushes or publishes: save its work as usual.
+
+Each pass it runs is recorded as completed when it finishes, and so is the
+Master pass, once every ticked pass has finished.
+
 ## When the project's Genesis is too old
 
 A project runs passes with its own Genesis, the `genesis-compiler` version in
@@ -69,7 +122,9 @@ with npm install --save-dev genesis-compiler@1.10.21, then commit the
 change.** The passes are still listed, without run buttons, and none is
 suggested. When the version runs passes but lacks one, only that pass says
 so (**This project's Genesis (genesis-compiler …) has no …**), followed by
-the same update. When the project's Genesis runs passes in a different way
+the same update; a version from before the Master pass says so under it,
+such as **This project's Genesis (genesis-compiler 1.10.21) has no Master
+pass.** When the project's Genesis runs passes in a different way
 from the Genesis this Vibe64 runs, the list says **This project's Genesis
 (genesis-compiler …) runs passes differently from genesis-compiler 1.10.21.
 Update the older of the two.**; the older one may be the project's or this
@@ -104,7 +159,8 @@ was never completed comes first; otherwise the one most overdue for its
 interval is suggested.
 
 - Each run button, such as **Whole app**, starts the pass exactly as that
-  run does in the list.
+  run does in the list. A suggestion never offers the **Deep** run: open the
+  Passes list for it, where its cost is shown.
 - **Later** hides the suggestion for a week.
 - **Dismiss** hides it until that pass runs and completes again.
 
@@ -119,7 +175,8 @@ approval like any other message.
 
 ## Ask Colleague
 
-Colleague can explain the passes, their runs and how suggestions work. It
+Colleague can explain the passes, their runs (Deep included), the Master pass
+and how suggestions work. It
 can start **Deslop** or a **UI pass** on your own changes for you by sending
 that message to main chat (see [Run a UI pass](ui-pass.md)). For a pass's
-runs, select one in the Passes list yourself.
+runs or the Master pass, select one in the Passes list yourself.

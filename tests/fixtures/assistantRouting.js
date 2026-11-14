@@ -12,7 +12,7 @@ import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileR
 import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
 import { sessionAgentManagerDefaults } from "./sessionAgentManagerDefaults.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
-import { GENESIS_PASSES } from "./genesisPasses.js";
+import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "./genesisPasses.js";
 
 const { workPlanPath } = __testables;
 
@@ -178,7 +178,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
   let dispatchGate = null;
   const writes = createWritesWhileAssistantWorks();
   // Genesis's pass list for the session's source; a test may change it.
-  const genesis = { unavailable: null, passes: GENESIS_PASSES };
+  const genesis = { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
   const routingOptions = { systemRoot: root, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
     writesWhileAssistantWorks: writes,
     listPasses: async () => genesis,

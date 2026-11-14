@@ -1608,8 +1608,13 @@ Automatically UI pass changes is on, as it is for new chats.
 Passes improve the app one concern at a time. Main chat's Passes list
 shows each pass Genesis offers (Deslop, the UI pass, and others such as visual
 identity, quality and data) with when it was last completed in the project and
-the runs Genesis offers for it: the whole app, and the changes since its last
-completed run judged against the whole app. A run's button sends that run's
+the runs Genesis offers for it: the whole app, the changes since its last
+completed run judged against the whole app, and the whole app deeply, item by
+item, shown with its size in files and lines and a note that it takes much
+longer and uses far more of the AI's allowance. Its last entry, the Master
+pass, runs the ticked passes (all, until the person unticks one) deeply, one
+after another in Genesis's order, with its own size and note, over the whole
+app or, once one has completed, the changes since it. A run's button sends that run's
 request from Genesis as the person's message, in its own Senior turn. Genesis
 records each pass's last completed run in the project, and only its own runs
 count. A project whose own Genesis is too old to run a pass sees why and the

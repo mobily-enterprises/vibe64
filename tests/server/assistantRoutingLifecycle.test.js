@@ -1256,6 +1256,24 @@ test("Run in the Passes list sends Genesis's pass in its own Senior turn, as the
   assert.equal(f.notices.size, 0, "no finishing step starts after a pass");
 });
 
+test("Start on the Master pass sends Genesis's request in its own Senior turn, or Genesis's reason when it cannot run", async (t) => {
+  const f = await fixture(t, { mode: "junior", review: true, deslop: true, uiPass: true, autoSave: true });
+  const reason = "This project's Genesis (genesis-compiler 1.10.21) has no Master pass. Update it to 1.10.22 or later.";
+  const master = f.genesis.master;
+  f.genesis.master = { ...master, unavailable: reason, passes: [], runs: [] };
+  const message = "Master pass (Security pass, Deslop) the whole app.";
+  await assert.rejects(f.service.send("session-1", { ...request, genesisTask: "master-pass", message }, f.context), {
+    code: "vibe64_assistant_routing_pass_unavailable", delivery: "not-sent", message: reason
+  });
+  assert.equal(f.sends.length, 0);
+  f.genesis.master = master;
+  await f.service.send("session-1", { ...request, genesisTask: "master-pass", message }, f.context);
+  assert.equal(f.state().task, "master-pass");
+  assert.equal(f.sends[0].input.genesisTask, "master-pass");
+  assert.equal(f.sends[0].input.turnMetadata.assistantRouting.resolvedMode, "pass");
+  assert.ok(f.sends[0].input.message.endsWith(`\n\n${message}`), f.sends[0].input.message);
+});
+
 test("a pass is refused politely while a turn or goal runs, and a task Genesis does not list as a pass is never sent", async (t) => {
   const f = await fixture(t, { mode: "senior", review: false });
   const input = { ...request, genesisTask: "quality-pass", message: "Quality pass the whole app." };

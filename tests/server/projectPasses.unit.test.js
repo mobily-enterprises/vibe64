@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
-import { GENESIS_PASSES } from "../fixtures/genesisPasses.js";
+import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "../fixtures/genesisPasses.js";
 import {
   PASS_INTERVALS,
   PASS_SNOOZE_DAYS,
@@ -43,7 +43,8 @@ async function project(t, { lastRuns = {}, commits = () => 60, unavailable = nul
         unavailable,
         passes: GENESIS_PASSES.map((pass) => ({
           ...pass, lastRun: lastRuns[pass.id] ?? null, ...(unavailable ? { unavailable, runs: [] } : {})
-        }))
+        })),
+        master: { ...GENESIS_MASTER_PASS, ...(unavailable ? { unavailable, passes: [], runs: [] } : {}) }
       };
     },
     countCommits: async (_sourceRoot, since) => {
@@ -73,6 +74,8 @@ test("the Passes list is Genesis's passes, each with its last completed run from
   assert.deepEqual(f.listed, [{ projectRoot: "" }], "Genesis lists the passes for the session's source");
   assert.equal(result.unavailable, null, "the project's Genesis runs passes");
   assert.deepEqual(result.byId.deslop.runs, GENESIS_PASSES[0].runs, "each pass carries the runs Genesis offers");
+  assert.deepEqual(result.master, { ...GENESIS_MASTER_PASS, commitsSince: 120 },
+    "the Master pass, never completed, with the whole history's count, which it shares");
 });
 
 test("a project whose own Genesis runs no pass lists its passes with Genesis's reason and suggests none", async (t) => {

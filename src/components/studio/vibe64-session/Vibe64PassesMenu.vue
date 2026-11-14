@@ -61,6 +61,47 @@
                 {{ passRun.label }}
               </v-btn>
             </div>
+            <p v-if="pass.runs.some(({ id }) => id === 'deep')" class="text-body-small vibe64-passes__muted">{{ DEEP_NOTE }}</p>
+          </li>
+          <li v-if="master" class="vibe64-passes__row">
+            <div class="vibe64-passes__text">
+              <div class="text-title-small">{{ master.title }}</div>
+              <div class="text-body-small vibe64-passes__muted">{{ master.description }}</div>
+              <div class="text-label-small vibe64-passes__muted">{{ lastRunLabel(master) }}</div>
+              <div v-if="master.unavailable && !passes.unavailable.value" class="text-body-small vibe64-passes__muted">{{ master.unavailable }}</div>
+            </div>
+            <template v-if="master.runs.length">
+              <fieldset class="vibe64-passes__ticks">
+                <legend class="text-label-small vibe64-passes__muted">Passes to run, in this order</legend>
+                <v-checkbox
+                  v-for="id in master.passes"
+                  :key="id"
+                  v-model="ticked"
+                  class="vibe64-passes__tick"
+                  density="compact"
+                  hide-details
+                  :label="titleOf(id)"
+                  :value="id"
+                />
+              </fieldset>
+              <div class="vibe64-passes__runs">
+                <v-btn
+                  v-for="masterRun in master.runs"
+                  :key="masterRun.id"
+                  :aria-label="`Run ${master.title}: ${masterRun.label}`"
+                  class="vibe64-passes__run"
+                  color="primary"
+                  :disabled="Boolean(blockedReason) || Boolean(passes.starting.value) || !ticked.length"
+                  :loading="passes.starting.value === runKey(master, masterRun)"
+                  size="small"
+                  variant="tonal"
+                  @click="startMaster(masterRun)"
+                >
+                  {{ masterRun.label }}
+                </v-btn>
+              </div>
+              <p class="text-body-small vibe64-passes__muted">{{ MASTER_NOTE }}</p>
+            </template>
           </li>
         </ul>
       </v-card-text>
@@ -70,13 +111,17 @@
 
 <script setup>
 // The chat's Passes list: each pass Genesis offers, when it last completed in this project, and a
-// button for each run Genesis offers for it, or why the project's Genesis cannot run it.
-import { computed, ref } from "vue";
+// button for each run Genesis offers for it, or why the project's Genesis cannot run it; then the
+// Master pass, with a tick box for each pass it runs, all ticked until the person unticks one.
+import { computed, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { VBottomSheet, VMenu } from "vuetify/components";
 import { runKey } from "@/composables/useVibe64Passes.js";
 
 const runDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+// A deep run reads every file, and a Master pass runs pass after pass that way: say what that costs.
+const DEEP_NOTE = "Deep reads every file: it takes much longer and uses far more of your AI's allowance.";
+const MASTER_NOTE = "Runs each ticked pass deeply, one after another: it takes much longer and uses far more of your AI's allowance.";
 
 const props = defineProps({
   passes: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Passes>} */ (Object), required: true },
@@ -86,6 +131,15 @@ const props = defineProps({
 const { xs: mobile } = useDisplay();
 const opened = ref(false);
 const list = computed(() => props.passes.passes.value);
+const master = computed(() => props.passes.master.value);
+// The passes the Master pass runs: all of them until the person unticks one, again whenever the list changes.
+const ticked = ref(/** @type {string[]} */ ([]));
+watch(() => master.value?.passes.join(",") || "", () => {
+  ticked.value = [...(master.value?.passes || [])];
+}, { immediate: true });
+
+/** @param {string} id */
+const titleOf = (id) => list.value.find((pass) => pass.id === id)?.title || id;
 
 /** @param {import("@/composables/useVibe64Passes.js").Vibe64Pass} pass */
 function lastRunLabel(pass) {
@@ -100,6 +154,10 @@ function onOpenChange(value) {
 
 async function start(pass, passRun) {
   if (await props.passes.run(pass, passRun)) opened.value = false;
+}
+
+async function startMaster(masterRun) {
+  if (await props.passes.runMaster(masterRun, ticked.value)) opened.value = false;
 }
 </script>
 
@@ -151,6 +209,26 @@ async function start(pass, passRun) {
   flex-direction: column;
   gap: 0.125rem;
   min-width: 0;
+}
+
+.vibe64-passes__ticks {
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.vibe64-passes__ticks legend {
+  margin-bottom: 0.125rem;
+  padding: 0;
+  width: 100%;
+}
+
+.vibe64-passes__tick {
+  flex: 0 1 auto;
 }
 
 .vibe64-passes__runs {

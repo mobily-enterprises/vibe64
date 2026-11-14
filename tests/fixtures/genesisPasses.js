@@ -1,7 +1,10 @@
 // Genesis's pass list (genesis.passes.v1) as genesis-compiler lists it for a project where no pass
 // has completed and whose own Genesis runs them all, for the server, client and browser tests that
-// stand in for Genesis: each pass offers one run, the whole app, with the pass's own request.
-// genesisPasses.integration.test.js checks it against the installed Genesis.
+// stand in for Genesis: each pass offers the whole app, with the pass's own request, and the whole
+// app deeply, sized in the project's own files and lines; and the Master pass, which runs them deeply
+// in its order. genesisPasses.integration.test.js checks them against the installed Genesis, sizes aside.
+const SIZE = Object.freeze({ files: 212, lines: 18450 });
+const sized = (label) => `${label} (212 files, 18,450 lines)`;
 const GENESIS_PASSES = Object.freeze([
   {
     id: "deslop",
@@ -66,7 +69,29 @@ const GENESIS_PASSES = Object.freeze([
   stackGuidance: false,
   lastRun: null,
   unavailable: null,
-  runs: Object.freeze([Object.freeze({ id: "whole", label: "Whole app", request: pass.request })])
+  runs: Object.freeze([
+    Object.freeze({ id: "whole", label: "Whole app", request: pass.request }),
+    Object.freeze({ id: "deep", label: sized("Deep"), request: pass.request.replace(/\.$/u, " deeply."), ...SIZE })
+  ])
 })));
 
-export { GENESIS_PASSES };
+const GENESIS_MASTER_PASS = Object.freeze({
+  id: "master-pass",
+  title: "Master pass",
+  description: "Runs every pass deeply, one after another, or the passes you choose, committing and running the whole test suite after each.",
+  request: "Master pass the whole app.",
+  skill: "genesis-master-pass",
+  lastRun: null,
+  lastPasses: null,
+  unavailable: null,
+  passes: Object.freeze(["security-pass", "data-pass", "quality-pass", "speed-pass", "ux-pass", "identity-pass", "ui-pass", "deslop"]),
+  runs: Object.freeze([Object.freeze({
+    id: "whole",
+    label: sized("Whole app"),
+    request: "Master pass the whole app.",
+    selectedRequest: "Master pass ({passes}) the whole app.",
+    ...SIZE
+  })])
+});
+
+export { GENESIS_MASTER_PASS, GENESIS_PASSES };
