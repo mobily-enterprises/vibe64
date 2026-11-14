@@ -20,6 +20,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/host/managedWorkflows.js`
 - `packages/vibe64-execution/src/host/productionAccess.js`
 - `packages/vibe64-execution/src/host/productionLogin.js`
+- `packages/vibe64-execution/src/host/hostSettings.js`
 - `packages/vibe64-execution/src/host/executionReceipts.js`
 - `packages/vibe64-execution/src/host/executionState.js`
 - `packages/vibe64-execution/src/server/policy/cwdPolicy.js`
@@ -209,6 +210,31 @@ provider credentials and the private OpenCode home remain in their existing
 environment. Loader and shell startup injection variables are excluded.
 Allowed working directories and host service paths are checked after resolving
 symlinks. A link inside an allowed directory cannot grant access outside that root.
+
+The same settings say which account database the helper's accounts go to and
+how they are numbered (`hostSettings.js`); a host that names neither keeps the
+system's own account files and ranges, as before:
+
+- `VIBE64_ACCOUNT_DATABASE`, `files` (the default) or `extrausers`: the account
+  database application accounts and group memberships are added to. With
+  `extrausers` (libnss-extrausers), for a host whose system's own account files
+  cannot be written, `useradd`, `userdel` and, for group membership, `gpasswd`
+  get `--extrausers`, since `usermod -a -G` leaves such a group unchanged. A
+  login shell (production access) changes through `usermod --prefix`, with a
+  root-only folder in `/run` whose `etc` is the database (`changeLoginShell` in
+  `hostAccounts.js`): plain `usermod` changes such an account too, but opens the
+  system's own account files for writing, which fails there. Such a host signs
+  people in without a password, so the helper creates no person there:
+  `create-system-user` is refused before any account changes, while a person
+  the host made is registered and re-enabled as anywhere else.
+- `VIBE64_SYSTEM_ID_BAND`, `FIRST-LAST`: the numbers the helper gives new
+  application accounts and their groups, as `useradd -K` keys. A host names it
+  when its system's own accounts can change without seeing the helper's (an
+  image-based system updated by replacing its image), so the two never share a
+  number.
+
+An unknown database or a band that is not `FIRST-LAST` (first no greater than
+last, both below 65534) refuses the operation that needs it.
 
 The helper's `managed-service` operation serves the daemon's own long-running
 services below the workspace service root. `install-start` writes the unit and

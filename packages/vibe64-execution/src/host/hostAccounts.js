@@ -2,7 +2,7 @@
 // and the root commands that change accounts.
 
 import { spawnSync } from "node:child_process";
-import { closeSync } from "node:fs";
+import { closeSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -124,7 +124,19 @@ function ensureGroup(groupName = "") {
   return gid;
 }
 
-function createSystemUser(username = "", password = "") {
+// useradd, userdel and gpasswd write the account database the host's helper settings name
+// (hostSettings.js): the system's own files, or the extra users database, which only they reach.
+function accountDatabaseOptions(database = "files") {
+  return database === "extrausers" ? ["--extrausers"] : [];
+}
+
+// A person made here gets the password given. A host keeping its accounts in the extra users database signs people
+// in without one, so the helper makes no person there.
+function createSystemUser(username = "", password = "", database = "files") {
+  if (database === "extrausers") {
+    throw new Error("This host keeps its accounts in the extra users database, where people sign in without a " +
+      "password: the helper creates no person with one here.");
+  }
   if (tryResolveOsUser(username)) {
     throw new Error(`OS user already exists: ${username}`);
   }
@@ -147,13 +159,45 @@ function createSystemUser(username = "", password = "") {
   }
 }
 
-function addUserToGroup(username = "", groupName = "") {
+// usermod has no --extrausers, and its -a -G leaves a group in the extra users database unchanged.
+function addUserToGroup(username = "", groupName = "", database = "files") {
+  if (database === "extrausers") {
+    runRootCommand("gpasswd", ["--extrausers", "-a", username, groupName]);
+    return;
+  }
   runRootCommand("usermod", [
     "-a",
     "-G",
     groupName,
     username
   ]);
+}
+
+// The extra users database's own folder (libnss-extrausers).
+const EXTRAUSERS_ROOT = "/var/lib/extrausers";
+
+// usermod changes an account in the extra users database, but opens the system's own account files for writing as
+// it does, which fails where those files cannot be written. Given a prefix whose etc folder is that database, it
+// touches only the database: a folder root makes for the call in /run, where nobody else may write,
+// named for this process (the helper makes no temporary folders), after removing one an earlier run of the same
+// number left.
+function changeLoginShell(username = "", shell = "", database = "files", {
+  prefixParent = "/run",
+  run = runRootCommand
+} = {}) {
+  if (database !== "extrausers") {
+    run("usermod", ["--shell", shell, username]);
+    return;
+  }
+  const prefix = path.join(prefixParent, `vibe64-accounts-${process.pid}`);
+  rmSync(prefix, { force: true, recursive: true });
+  mkdirSync(prefix, { mode: 0o700 });
+  try {
+    symlinkSync(EXTRAUSERS_ROOT, path.join(prefix, "etc"));
+    run("usermod", ["--prefix", prefix, "--shell", shell, username]);
+  } finally {
+    rmSync(prefix, { force: true, recursive: true });
+  }
 }
 
 function runRootCommand(command = "", args = []) {
@@ -213,6 +257,7 @@ function workspaceTempRoot(ownerUsername = "") {
 }
 
 export {
+  accountDatabaseOptions,
   addUserToGroup,
   APPLICATION_SHELL,
   APPLICATION_USERNAME_PREFIX,
@@ -220,6 +265,7 @@ export {
   assertExpectedId,
   assertHumanUsername,
   assertUserInGroup,
+  changeLoginShell,
   createSystemUser,
   DAEMON_USERNAME_PREFIX,
   ensureGroup,

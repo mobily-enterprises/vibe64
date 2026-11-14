@@ -44,6 +44,7 @@ import {
   openRootOwnedDirectory,
   readOwnedFile
 } from "./hostFiles.js";
+import { helperAccountDatabase } from "./hostSettings.js";
 
 const PERSON_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "people");
 const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
@@ -81,7 +82,7 @@ function handleUserManagementOperation(operation = "", payload = {}, username = 
   const workspace = personWorkspace(resolveOwnerUser());
   ensureGroup(VIBE64_GROUP);
   if (operation === "create-system-user") {
-    createSystemUser(username, String(payload.password || ""));
+    createSystemUser(username, String(payload.password || ""), helperAccountDatabase());
     registerPerson(workspace, username);
     return;
   }
@@ -89,7 +90,7 @@ function handleUserManagementOperation(operation = "", payload = {}, username = 
 }
 
 function enablePerson(workspace = "", username = "", {
-  addToGroup = (name) => addUserToGroup(name, VIBE64_GROUP),
+  addToGroup = (name) => addUserToGroup(name, VIBE64_GROUP, helperAccountDatabase()),
   resolveUser = resolveOsUser,
   ...options
 } = {}) {
@@ -342,7 +343,7 @@ function assertActablePerson(owner = {}, targetUser = {}, options = {}) {
 // Root-side registration of one existing account. Refuses system and
 // administrator accounts; the person also joins the shared group.
 function registerPerson(workspace = "", username = "", {
-  addToGroup = (name) => addUserToGroup(name, VIBE64_GROUP),
+  addToGroup = (name) => addUserToGroup(name, VIBE64_GROUP, helperAccountDatabase()),
   facts = hostPersonFacts,
   resolveUser = resolveOsUser,
   ...registry

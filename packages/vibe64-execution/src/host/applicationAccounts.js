@@ -20,6 +20,7 @@ import path from "node:path";
 import process from "node:process";
 
 import {
+  accountDatabaseOptions,
   APPLICATION_SHELL,
   APPLICATION_USERNAME_PREFIX,
   DAEMON_USERNAME_PREFIX,
@@ -53,6 +54,7 @@ import {
   writeRegistration
 } from "./personRegistry.js";
 import { PRODUCTION_LOGIN_SHELL, productionAccessGranted, removeProductionAccess } from "./productionAccess.js";
+import { helperAccountDatabase, helperAccountNumberOptions } from "./hostSettings.js";
 import { APPLICATION_SANDBOX_ALLOWANCES, SYSTEMD_UNIT_ROOT } from "./systemdUnits.js";
 
 const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
@@ -346,8 +348,9 @@ function assertNewApplication(identity = {}, { applicationLimit, managedRoot, re
 function ensureApplicationAccount(owner = {}, project = "", {
   applicationLimit = APPLICATION_LIMIT_PER_WORKSPACE,
   areaRoot = applicationAreaRoot(),
-  createUser = (identity) => runRootCommand("useradd", ["--system", "--user-group", "--no-create-home",
-    "--home-dir", identity.home, "--shell", APPLICATION_SHELL, identity.username]),
+  createUser = (identity) => runRootCommand("useradd", [...accountDatabaseOptions(helperAccountDatabase()),
+    ...helperAccountNumberOptions(), "--system", "--user-group", "--no-create-home", "--home-dir", identity.home,
+    "--shell", APPLICATION_SHELL, identity.username]),
   facts = hostApplicationFacts,
   managedRoot = MANAGED_ROOT,
   registryRoot = APPLICATION_REGISTRY_ROOT,
@@ -426,7 +429,7 @@ function applicationDatabaseEntries(identity = {}, { areaUid = 0 } = {}) {
 function retireApplicationAccount(owner = {}, project = "", {
   areaRoot = applicationAreaRoot(),
   areaUid = 0,
-  deleteUser = (username) => runRootCommand("userdel", [username]),
+  deleteUser = (username) => runRootCommand("userdel", [...accountDatabaseOptions(helperAccountDatabase()), username]),
   endProductionAccess = removeProductionAccess,
   facts = hostApplicationFacts,
   registryRoot = APPLICATION_REGISTRY_ROOT,

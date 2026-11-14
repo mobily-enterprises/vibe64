@@ -11,7 +11,14 @@ import { lstatSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from "nod
 import path from "node:path";
 import process from "node:process";
 
-import { APPLICATION_SHELL, HOST_SETTINGS_ROOT, runRootCommand, runRootCommandAllowFailure } from "./hostAccounts.js";
+import {
+  APPLICATION_SHELL,
+  changeLoginShell,
+  HOST_SETTINGS_ROOT,
+  runRootCommand,
+  runRootCommandAllowFailure
+} from "./hostAccounts.js";
+import { helperAccountDatabase } from "./hostSettings.js";
 
 const PRODUCTION_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "production-ssh");
 const PRODUCTION_SUDOERS_ROOT = "/etc/sudoers.d";
@@ -81,7 +88,9 @@ function removeIfPresent(file = "") {
  * @param {string} helperPath this helper, which the sudo rule names
  */
 function installProductionAccess(user, publicKey, helperPath, {
+  accountDatabase = helperAccountDatabase(),
   keysRoot = PRODUCTION_KEYS_ROOT,
+  prefixParent,
   rootUid = ROOT_UID,
   runRoot = runRootCommand,
   sudoersRoot = PRODUCTION_SUDOERS_ROOT
@@ -98,7 +107,9 @@ function installProductionAccess(user, publicKey, helperPath, {
     0o440,
     (candidate) => runRoot("visudo", ["-cqf", candidate])
   );
-  if (user.shell !== PRODUCTION_LOGIN_SHELL) runRoot("usermod", ["--shell", PRODUCTION_LOGIN_SHELL, user.username]);
+  if (user.shell !== PRODUCTION_LOGIN_SHELL) {
+    changeLoginShell(user.username, PRODUCTION_LOGIN_SHELL, accountDatabase, { prefixParent, run: runRoot });
+  }
 }
 
 // The account's own at jobs, from root's list of every user's: the job number first, the user last.
@@ -119,7 +130,9 @@ function removeAtJobs(username = "", runRootAllowFailure = runRootCommandAllowFa
  * @param {string} username
  */
 function removeProductionAccess(user, username, {
+  accountDatabase = helperAccountDatabase(),
   keysRoot = PRODUCTION_KEYS_ROOT,
+  prefixParent,
   runRoot = runRootCommand,
   runRootAllowFailure = runRootCommandAllowFailure,
   sudoersRoot = PRODUCTION_SUDOERS_ROOT
@@ -127,7 +140,9 @@ function removeProductionAccess(user, username, {
   const removedKey = removeIfPresent(productionKeysPath(username, keysRoot));
   const removedRule = removeIfPresent(productionSudoersPath(username, sudoersRoot));
   if (!user) return removedKey || removedRule;
-  if (user.shell !== APPLICATION_SHELL) runRoot("usermod", ["--shell", APPLICATION_SHELL, username]);
+  if (user.shell !== APPLICATION_SHELL) {
+    changeLoginShell(username, APPLICATION_SHELL, accountDatabase, { prefixParent, run: runRoot });
+  }
   // Each of these reports a failure when there is nothing to end or remove.
   runRootAllowFailure("loginctl", ["disable-linger", username]);
   runRootAllowFailure("loginctl", ["terminate-user", username]);

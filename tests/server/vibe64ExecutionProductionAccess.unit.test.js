@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { readlinkSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -39,6 +40,7 @@ async function productionHost(t) {
   t.after(() => rm(root, { force: true, recursive: true }));
   const calls = [];
   const options = {
+    accountDatabase: "files",
     keysRoot: path.join(root, "etc", "vibe64", "production-ssh"),
     rootUid: UID,
     runRoot: (command, args) => {
@@ -134,6 +136,36 @@ test("revoking production access removes the key, the rule and the login shell, 
   host.calls.length = 0;
   assert.equal(removeProductionAccess(null, ACCOUNT, host.options), false);
   assert.deepEqual(host.calls, []);
+});
+
+test("on a host keeping accounts in the extra users database, the login shell changes there alone", async (t) => {
+  const host = await productionHost(t);
+  const prefixParent = path.join(host.root, "run");
+  await mkdir(prefixParent);
+  const prefixes = [];
+  const options = {
+    ...host.options,
+    accountDatabase: "extrausers",
+    prefixParent,
+    runRoot: (command, args) => {
+      host.calls.push([command, ...args]);
+      if (command === "usermod") prefixes.push({ etc: readlinkSync(path.join(args[1], "etc")), prefix: args[1] });
+      return "";
+    }
+  };
+  installProductionAccess({ shell: "/usr/sbin/nologin", username: ACCOUNT }, PUBLIC_KEY, HELPER, options);
+  removeProductionAccess({ shell: "/bin/sh", username: ACCOUNT }, ACCOUNT, options);
+
+  // usermod reads and writes the prefix's etc folder, which is the database's, so the system's own account files,
+  // which such a host cannot write, stay untouched; the prefix goes after each call.
+  const shells = host.calls.filter(([command]) => command === "usermod");
+  assert.deepEqual(shells.map((call) => [call[0], call[1], call[3], call[4], call[5]]), [
+    ["usermod", "--prefix", "--shell", "/bin/sh", ACCOUNT],
+    ["usermod", "--prefix", "--shell", "/usr/sbin/nologin", ACCOUNT]
+  ]);
+  assert.deepEqual(prefixes.map(({ etc }) => etc), ["/var/lib/extrausers", "/var/lib/extrausers"]);
+  for (const { prefix } of prefixes) assert.equal(path.dirname(prefix), prefixParent);
+  assert.deepEqual(await readdir(prefixParent), []);
 });
 
 function releaseUnitLines({ user = ACCOUNT, release = "20261111_080000z-ab12cd34", name = "vibe64-release-test-shop-0123456789ab.service" } = {}) {
