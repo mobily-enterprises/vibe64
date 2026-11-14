@@ -26,9 +26,12 @@ const SANDBOX_ALLOWS_PREFIX = "- Sandbox allows: ";
 // sandbox, from a closed set. A host grants only what its owner permits.
 const VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
 const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
-// The host owns SIDE_EFFECTS (live or simulate) and gives it to every step; the project never sets it.
-const SIDE_EFFECTS_NAME = "SIDE_EFFECTS";
-const SIDE_EFFECTS_OWNED_BY_HOST = "Deployment never sets SIDE_EFFECTS: the host gives it to every step, live only when the deployment's owner chose to act for real.";
+// The host gives every step APP_ENV, the environment it deploys to; no step, Generated secret or Setup code sets
+// it, nor SIDE_EFFECTS, which APP_ENV replaced.
+const HOST_OWNED_ENVIRONMENT = Object.freeze({
+  APP_ENV: "Deployment never sets APP_ENV: the host gives every step the environment it deploys to. Remove APP_ENV from Deployment.",
+  SIDE_EFFECTS: "SIDE_EFFECTS was replaced by APP_ENV, which the host gives every step. Remove SIDE_EFFECTS from Deployment."
+});
 const STEP_ROLE_ORDER = Object.freeze({
   prepare: 0,
   build: 1,
@@ -124,9 +127,8 @@ function deploymentStep(match, deploymentPath, line) {
       line
     );
   }
-  if (argv.some((value) => value.startsWith(`${SIDE_EFFECTS_NAME}=`))) {
-    invalid(deploymentPath, SIDE_EFFECTS_OWNED_BY_HOST, line);
-  }
+  const hostOwned = Object.keys(HOST_OWNED_ENVIRONMENT).find((name) => argv.some((value) => value.startsWith(`${name}=`)));
+  if (hostOwned) invalid(deploymentPath, HOST_OWNED_ENVIRONMENT[hostOwned], line);
   return {
     label: oneLineText(match[2], ERROR_CODE, deploymentPath, "Deployment step label", line),
     argv,
@@ -258,9 +260,9 @@ function parseVibe64DeploymentLines(lines, options = {}) {
     }
   }
   if (!result.readiness) invalid(deploymentPath, "Deployment needs one Ready when entry.");
-  if ([...result.generatedSecrets, result.setupCode].includes(SIDE_EFFECTS_NAME)) {
-    invalid(deploymentPath, SIDE_EFFECTS_OWNED_BY_HOST);
-  }
+  const hostOwned = Object.keys(HOST_OWNED_ENVIRONMENT)
+    .find((name) => [...result.generatedSecrets, result.setupCode].includes(name));
+  if (hostOwned) invalid(deploymentPath, HOST_OWNED_ENVIRONMENT[hostOwned]);
   if (result.generatedSecrets.includes(result.setupCode)) {
     invalid(deploymentPath, "Deployment Setup code is generated already; leave it out of Generated secrets.");
   }

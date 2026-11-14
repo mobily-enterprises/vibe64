@@ -384,18 +384,25 @@ test("Deployment rejects unsafe paths, shell strings, placeholders, missing proo
   }
 });
 
-test("Deployment leaves SIDE_EFFECTS to the host: no step, generated secret or setup code sets it", () => {
-  const owned = /never sets SIDE_EFFECTS: the host gives it to every step, live only when the deployment's owner chose to act for real/u;
-  for (const lines of [
-    deploymentLines({ steps: ["- Serve `Start`: `env` `SIDE_EFFECTS=live` `node` `server.js`"] }),
-    deploymentLines({ steps: ["- Migrate `Seed`: `env` `SIDE_EFFECTS=simulate` `npm` `run` `seed`", "- Serve `Start`: `npm` `start`"] }),
-    ["- Generated secrets: `SIDE_EFFECTS`", ...deploymentLines()],
-    ["- Setup code: `SIDE_EFFECTS`", ...deploymentLines()]
-  ]) {
-    assert.throws(() => parseVibe64DeploymentLines(lines), (error) => error?.code === "VIBE64_DEPLOYMENT_INVALID" && owned.test(error.message));
+test("Deployment leaves APP_ENV to the host and refuses SIDE_EFFECTS, which it replaced, in a step, generated secret or setup code", () => {
+  const refusals = {
+    APP_ENV: /Deployment never sets APP_ENV: the host gives every step the environment it deploys to\. Remove APP_ENV from Deployment\./u,
+    SIDE_EFFECTS: /SIDE_EFFECTS was replaced by APP_ENV, which the host gives every step\. Remove SIDE_EFFECTS from Deployment\./u
+  };
+  for (const [name, refusal] of Object.entries(refusals)) {
+    for (const lines of [
+      deploymentLines({ steps: [`- Serve \`Start\`: \`env\` \`${name}=live\` \`node\` \`server.js\``] }),
+      deploymentLines({ steps: [`- Migrate \`Seed\`: \`env\` \`${name}=staging\` \`npm\` \`run\` \`seed\``, "- Serve `Start`: `npm` `start`"] }),
+      [`- Generated secrets: \`${name}\``, ...deploymentLines()],
+      [`- Setup code: \`${name}\``, ...deploymentLines()]
+    ]) {
+      assert.throws(() => parseVibe64DeploymentLines(lines),
+        (error) => error?.code === "VIBE64_DEPLOYMENT_INVALID" && refusal.test(error.message), lines.join("\n"));
+    }
+    // Another variable that only contains the name is the project's own.
+    assert.equal(parseVibe64DeploymentLines(deploymentLines({ recreate: false,
+      steps: [`- Serve \`Start\`: \`env\` \`MY_${name}=live\` \`npm\` \`start\``] })).steps.length, 1);
   }
-  // Another variable that only contains the name is the project's own.
-  assert.equal(parseVibe64DeploymentLines(deploymentLines({ recreate: false, steps: ["- Serve `Start`: `env` `MY_SIDE_EFFECTS=live` `npm` `start`"] })).steps.length, 1);
 });
 
 test("all Vibe64 operation parsers reject the retired JSON representation", () => {

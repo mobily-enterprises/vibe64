@@ -58,16 +58,19 @@ sandbox allowance, is declared in the section, never installed or switched on
 by the script, and a host that lacks something makes it fail with one plain
 sentence.
 
-`SIDE_EFFECTS` belongs to the host. It gives every step `live` only when the
-deployment's owner chose to act for real, otherwise `simulate`, and an
-unset value means `simulate` too. The parser refuses a step argument that sets
-it (`SIDE_EFFECTS=...`) and a Generated secrets or Setup code entry naming it.
-The application follows it: unless it is exactly `live`, it is a test copy that
-simulates and logs email, SMS, push notifications, payments and third-party
-webhooks and shows a "Test copy" banner. The application reads it at run time,
-so a host can change it by restarting Serve without a new build. Prepare and
-Build never need the database or another managed service, so a host may run
-them alone, without those credentials, to check a revision builds.
+`APP_ENV` belongs to the host: it gives every step the environment it deploys
+to, `staging` or `production`. The parser refuses a step argument that sets it
+(`APP_ENV=...`) and a Generated secrets or Setup code entry naming it, and
+refuses `SIDE_EFFECTS`, which `APP_ENV` replaced, in the same places; each
+refusal names the fix. The Deployment guidance asks the application to follow
+`APP_ENV` at run time through one helper, never `NODE_ENV`, which only picks
+optimised builds: in `development` and `test`, email, SMS, push notifications,
+webhooks and connector writes are logged; in `staging`, email and SMS go only
+to `STAGING_EMAIL_TO` and `STAGING_SMS_TO` (logged when unset), the rest is
+logged and payments use the provider's sandbox; only `production` is real, and
+every other environment shows a banner naming it. Prepare and Build never need
+the database or another managed service, so a host may run them alone, without
+those credentials, to check a revision builds.
 Vibe64 itself acts for real: its server gives `SIDE_EFFECTS=live` only to the
 environment its own features receive, so the projects it runs, which inherit
 the process environment, stay test copies.
