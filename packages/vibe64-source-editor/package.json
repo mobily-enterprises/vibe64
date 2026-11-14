@@ -67,7 +67,7 @@
   },
   "dependencies": {
     "@jskit-ai/connectors-core": "0.2.37",
-    "@jskit-ai/connectors-catalog": "0.2.37",
+    "@jskit-ai/connectors-catalog": "0.2.38",
     "@jskit-ai/connector-google-calendar": "0.2.37",
     "@jskit-ai/kernel": "0.2.26",
     "@local/vibe64-core": "0.1.0",
