@@ -30,6 +30,9 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
   const project = path.join(root, "project");
   const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = `release-proof-${process.pid}`;
+  // The release runs as its start command runs it: production, unless the environment names one (a test run's).
+  const previousEnvironment = { APP_ENV: process.env.APP_ENV, NODE_ENV: process.env.NODE_ENV };
+  if (!String(process.env.APP_ENV || "").trim()) Object.assign(process.env, { APP_ENV: "production", NODE_ENV: "production" });
   let server;
   let cliProcess;
   let cliExit;
@@ -112,6 +115,10 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
     await server?.close();
     if (previousNamespace === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE;
     else process.env.VIBE64_RUNTIME_NAMESPACE = previousNamespace;
+    for (const [name, value] of Object.entries(previousEnvironment)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
     await rm(root, { recursive: true, force: true });
   }
 }

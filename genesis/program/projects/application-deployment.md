@@ -73,7 +73,11 @@ the database or another managed service, so a host may run them alone, without
 those credentials, to check a revision builds.
 Vibe64 itself sets no `SIDE_EFFECTS`: its own features read the `APP_ENV` of
 the process that starts it, which the execution gateway never passes on to a
-project's commands.
+project's commands. Its start command (`npx vibe64`, `npm start`, `npm run
+server`, all `bin/server.js`) gives an unset `APP_ENV` `production`, with
+`NODE_ENV=production`; `npm run dev` and `npm run dev:example` give it
+`development`. A value already set wins, so the commands of a Vibe64 session,
+which carry `APP_ENV=development`, stay in development.
 
 Genesis does not know what Deployment means. Vibe64 does not infer scripts from
 the selected language or framework. The application or technology Stack owns
