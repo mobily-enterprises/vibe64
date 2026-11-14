@@ -12,27 +12,27 @@ import { readLocalStorageJson, writeLocalStorageJson } from "@/lib/browserLocalS
  * }} options
  */
 function useIntegrationsPanelNavigation({ dashboardContext, environment, projectSlug, selectedId }) {
-  const production = computed(() => environment.value === "production");
-  watch([projectSlug, () => dashboardContext().productionIntegrationsApiPath], ([slug, apiPath]) => {
-    environment.value = apiPath && readLocalStorageJson(`vibe64:integrations:environment:${slug}`, "development") === "production"
-      ? "production" : "development";
+  const staging = computed(() => environment.value === "staging");
+  watch([projectSlug, () => dashboardContext().stagingIntegrationsApiPath], ([slug, apiPath]) => {
+    environment.value = apiPath && readLocalStorageJson(`vibe64:integrations:environment:${slug}`, "development") === "staging"
+      ? "staging" : "development";
   }, { immediate: true, flush: "sync" });
   watch(environment, (value) => {
     writeLocalStorageJson(`vibe64:integrations:environment:${projectSlug.value}`, value);
   });
   const search = ref("");
-  const navigationKey = computed(() => `vibe64:integrations:${encodeURIComponent(projectSlug.value)}:${production.value ? 'published' : encodeURIComponent(dashboardContext().sessionId || "")}:${environment.value}`);
+  const navigationKey = computed(() => `vibe64:integrations:${encodeURIComponent(projectSlug.value)}:${staging.value ? 'published' : encodeURIComponent(dashboardContext().sessionId || "")}:${environment.value}`);
   watch(navigationKey, (key) => {
     const saved = readLocalStorageJson(key, {});
     selectedId.value = typeof saved?.selectedId === "string" ? saved.selectedId : "";
     search.value = typeof saved?.search === "string" ? saved.search : "";
   }, { immediate: true, flush: "sync" });
   watch([selectedId, search], () => {
-    if (production.value || dashboardContext().sessionId) writeLocalStorageJson(navigationKey.value, {
+    if (staging.value || dashboardContext().sessionId) writeLocalStorageJson(navigationKey.value, {
       selectedId: selectedId.value, search: search.value
     });
   });
-  return { navigationKey, production, search };
+  return { navigationKey, staging, search };
 }
 
 export { useIntegrationsPanelNavigation };

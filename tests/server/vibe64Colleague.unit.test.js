@@ -2502,7 +2502,7 @@ test("integration navigation needs the exact session and pane and retains the pa
   for (const input of [
     { projectSlug: "alpha", integrationId: "mail", pane: "integrations" },
     { projectSlug: "alpha", integrationId: "mail", sessionId: "session-1", pane: "env" },
-    { projectSlug: "alpha", integrationEnvironment: "production", pane: "env" }
+    { projectSlug: "alpha", integrationEnvironment: "staging", pane: "env" }
   ]) {
     assert.equal((await execute(input)).ok, false);
     assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
@@ -2527,11 +2527,11 @@ test("integration navigation needs the exact session and pane and retains the pa
   await assert.rejects(execute(input), { statusCode: 403 });
 });
 
-test("production integration navigation works without a development session", async (t) => {
+test("staging integration navigation works without a development session", async (t) => {
   const f = await fixture(t, [], { watching: true });
   await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
   const context = { ...f.context, colleague: { clientId: "tab-a" } };
-  const input = { projectSlug: "alpha", pane: "integrations", integrationEnvironment: "production", integrationId: "mail" };
+  const input = { projectSlug: "alpha", pane: "integrations", integrationEnvironment: "staging", integrationId: "mail" };
   const pending = f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
   let state;
   for (let index = 0; index < 20; index += 1) {
@@ -2540,7 +2540,7 @@ test("production integration navigation works without a development session", as
     await new Promise(resolve => setImmediate(resolve));
   }
   assert.equal(state.navigation.sessionId, "");
-  assert.equal(state.navigation.integrationEnvironment, "production");
+  assert.equal(state.navigation.integrationEnvironment, "staging");
   const focus = { ...input, integrationDirty: false };
   await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: true, focus }, f.context);
   assert.deepEqual(await pending, { ok: true, focus });

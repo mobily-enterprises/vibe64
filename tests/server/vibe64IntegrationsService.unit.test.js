@@ -332,7 +332,7 @@ test("saved setup declaration executes through the service and real application 
   assert.equal(JSON.stringify(response).includes("fixture-private"), false);
 });
 
-test("setup refuses production, missing integrations and personal account connections before command execution", async (t) => {
+test("setup refuses staging, missing integrations and personal account connections before command execution", async (t) => {
   const { service, source, calls, environmentCalls } = await fixture(t, { setup: true });
   const config = configuration();
   config.integrations.calendar.accountMode = "per-user";

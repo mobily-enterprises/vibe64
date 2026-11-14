@@ -7,7 +7,7 @@ import { maxGuideCharacters } from "./usageKnowledge.js";
 
 const text = { type: "string", noTrim: false, maxLength: 256, required: false };
 const integrationId = { ...text, noTrim: true, minLength: 1, maxLength: 200 };
-const integrationEnvironment = { type: "string", required: false, enum: ["development", "production"] };
+const integrationEnvironment = { type: "string", required: false, enum: ["development", "staging"] };
 const databaseView = { type: "string", required: false, enum: ["overview", "erd", "data"] };
 const databaseTable = { ...text, noTrim: true, minLength: 1 };
 const planView = { type: "string", required: false, enum: ["default", "current", "history"] };

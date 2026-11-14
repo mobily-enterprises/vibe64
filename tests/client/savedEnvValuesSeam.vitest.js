@@ -56,7 +56,8 @@ it("recognises only non-editable host rows as linked saved values", () => {
   expect(recordIsSavedEnvValue({ source: SAVED_ENV_VALUE_SOURCE, editable: false })).toBe(true);
   expect(recordIsSavedEnvValue({ source: SAVED_ENV_VALUE_SOURCE, editable: true })).toBe(false);
   expect(recordIsSavedEnvValue({ source: "vibe64-host:managed-resource", editable: false })).toBe(false);
-  expect(savedEnvValueEnvironment("production")).toBe("production");
+  expect(savedEnvValueEnvironment("Staging")).toBe("staging");
+  expect(() => savedEnvValueEnvironment("Production")).toThrow("the published application's Env is Staging Env");
   expect(savedEnvValueEnvironment("development")).toBe("development");
   expect(savedEnvValueEnvironment("environment")).toBe("development");
 });
