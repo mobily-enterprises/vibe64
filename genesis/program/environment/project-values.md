@@ -44,6 +44,13 @@ host provide managed system values separately.
 
 ## Public contract
 
+Vibe64 names three environments: Development (sessions and Preview, with
+Development Env), Staging (what a host publishes from the workspace, with
+Staging Env) and Production (a host's separate production deploy, with
+Production Env). `APP_ENV` names the one an application runs in; the
+[Development Env guide](../../../docs/colleague-usage/development-env.md) holds
+the table of what each sends, logs and allows.
+
 The bound session helper's `session status --json` (`readAgentSessionStatus`) reports current environment
 names and resource configuration separately from host-confirmed preparation,
 plus the existing workspace preparation state, declared argv and known managed

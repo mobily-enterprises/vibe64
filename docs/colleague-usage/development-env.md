@@ -136,6 +136,21 @@ refused with the reason, and a value saved before can only be removed. A host
 that publishes projects gives Staging `APP_ENV=staging`, where email and SMS go
 only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`. Colleague can explain this.
 
+The three environments, as Colleague explains them:
+
+|  | Development | Staging | Production |
+|---|---|---|---|
+| What | sessions, Preview and a developer's own machine | what a host publishes from the workspace, to check it outside development | a separate production deploy that a host offers |
+| `APP_ENV` | `development` (`test` in automated test runs) | `staging` | `production` |
+| `NODE_ENV` | `development` in Preview | `production` | `production` |
+| Settings | Development Env | Staging Env | Production Env |
+| Databases | development | staging | production |
+| Email and SMS | logged, not sent | sent only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`; logged when unset | sent |
+| Push notifications, webhooks, connector writes | logged | logged | real |
+| Payments | the provider's sandbox | the provider's sandbox | live |
+| Banner on every page | "Development" | "Staging" | none |
+| Development shortcuts (development sign-in, relaxed cookies, test databases) | allowed | refused | refused |
+
 For a long-running shell task, the coding agent can request its native tool's
 background mode and timeout. Binding the command to the Vibe64 session preserves
 those settings; the coding tool still applies its own supported limits. This is
