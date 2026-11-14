@@ -70,8 +70,8 @@ applies that person's permissions. `list`, `link` and `unlink` may answer
 
 ## Development values
 
-`valuesForProject` supplies **Development** values only; Production delivery
-belongs to the host's own deployment environment.
+`valuesForProject` supplies **Development** values only; Staging delivery
+belongs to the host's own Staging Env.
 
 - Each value becomes a non-editable record: `owner: "system"`,
   `source: "vibe64-host:saved-value"`, its `secret` flag (default `true`) and
@@ -95,8 +95,8 @@ belongs to the host's own deployment environment.
 
 ```
 vibe64-helper env saved [--json]
-vibe64-helper env link <development|production> <KEY> <saved-id> <field-id> [--json]
-vibe64-helper env unlink <development|production> <KEY> [--json]
+vibe64-helper env link <development|staging> <KEY> <saved-id> <field-id> [--json]
+vibe64-helper env unlink <development|staging> <KEY> [--json]
 ```
 
 `saved` prints one line per entry (`id label — description (fields: apiKey*)`,
@@ -104,7 +104,7 @@ vibe64-helper env unlink <development|production> <KEY> [--json]
 "This workspace offers no saved values." and exits 0. `env status` shows a linked row
 as `KEY — linked — <provenance>`. `env set` and `env remove` on a linked
 variable fail with `vibe64_env_value_linked`. A host that delivers linked
-Production values gives those records the same source and a `label`, so the
+Staging values gives those records the same source and a `label`, so the
 helper and Env present them the same way.
 
 ## UI

@@ -2599,7 +2599,7 @@ comes from the existing command owner. The dispatcher replaces itself with
 the matching sibling executable, preserving stdin, argv, environment, cwd,
 exit status and signal handling; `deployment` is the Env executable asked for
 `deployment`, the read-only deployment status of the session's project and, where a host allows the session,
-how it reaches production itself (`ssh production`). Missing groups fail without searching PATH
+how it reaches staging itself (`ssh staging`). Missing groups fail without searching PATH
 for a substitute. Each underlying command retains its session binding and
 authorization. The individual executables stay installed for existing
 conversations and scripts; new session guidance uses the common entry point.
@@ -3054,7 +3054,7 @@ owner-held `artifact/service/environment` file and a working directory inside
 its sibling `workspace`. The execution's runner loads that file as the owner,
 never root or systemd on root's behalf; it keeps the host-selected identity and
 runtime paths. This is an execution
-capability, not a production Integrations screen or an active-release selector.
+capability, not a Staging Integrations screen or an active-release selector.
 The caller must still select and coordinate the active release.
 
 The managed Git/gh command boundary preserves stdout and stderr bytes, including

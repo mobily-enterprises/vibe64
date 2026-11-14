@@ -7,28 +7,30 @@ import { commandLineFailure } from "./commandFailure.js";
 import { deploymentUsageText } from "./agentDeploymentStatus.js";
 
 const ENV_SCOPE_DEVELOPMENT = "development";
-const ENV_SCOPE_PRODUCTION = "production";
+const ENV_SCOPE_STAGING = "staging";
 const ENV_SCOPE_ALL = "all";
+// The scope words env took before production was renamed staging: refused, naming the new word.
+const RENAMED_SCOPES = Object.freeze(["prod", "production"]);
 
 function usageText() {
   return [
     "Usage:",
-    "  vibe64-helper env status [development|production|all] [--json]",
-    "  <value on stdin> | vibe64-helper env set <development|production> <KEY> [--secret] [--json]",
-    "  vibe64-helper env remove <development|production> <KEY> [--json]",
+    "  vibe64-helper env status [development|staging|all] [--json]",
+    "  <value on stdin> | vibe64-helper env set <development|staging> <KEY> [--secret] [--json]",
+    "  vibe64-helper env remove <development|staging> <KEY> [--json]",
     "  vibe64-helper env saved [--json]",
-    "  vibe64-helper env link <development|production> <KEY> <saved-id> <field-id> [--json]",
-    "  vibe64-helper env unlink <development|production> <KEY> [--json]",
-    "  vibe64-helper env get production <KEY> [--json]",
-    "  vibe64-helper env export production [--json]",
-    "  vibe64-helper deployment status [--json]   this project's Production, names only (--help: ssh production)",
+    "  vibe64-helper env link <development|staging> <KEY> <saved-id> <field-id> [--json]",
+    "  vibe64-helper env unlink <development|staging> <KEY> [--json]",
+    "  vibe64-helper env get staging <KEY> [--json]",
+    "  vibe64-helper env export staging [--json]",
+    "  vibe64-helper deployment status [--json]   this project's Staging, names only (--help: ssh staging)",
     "",
     "Values are accepted only on stdin and are never printed by set, remove, status, saved, link or unlink.",
     "One final line ending on stdin (\\n or \\r\\n, which echo, openssl rand and heredocs add) is dropped, so",
     "`echo \"$VALUE\" |` and `printf '%s' \"$VALUE\" |` store the same value; every other character, whitespace included,",
     "is kept exactly. A value that really ends with a line break needs two. Empty stdin, or one line ending alone, stores",
     "an empty value.",
-    "Development and production are separate scopes; this command never copies values between them.",
+    "Development and staging are separate scopes; this command never copies values between them.",
     "--secret marks the value as a secret, which Env keeps hidden. A key that is already secret stays secret, and keys",
     "whose names look secret (KEY, SECRET, TOKEN, PASSWORD, ...) become secrets automatically.",
     "Generated secrets (for example an application key): produce the value with the framework's own generator and pipe",
@@ -36,10 +38,10 @@ function usageText() {
     "When the host offers saved values, env saved lists their names, descriptions and fields (* marks a secret), never",
     "their values. env link fills the variable the application already reads from one field of a saved value; a linked",
     "row is not editable, and env unlink returns it to an ordinary empty row.",
-    "env get production prints one value the live release runs with, secrets included, and env export production",
-    "prints them all as shell export lines (eval \"$(vibe64-helper env export production)\"), where the host allows",
-    "this session to use production; otherwise they say why. The host records each read. Use these values in",
-    "commands and keep them out of source, messages and summaries: they are production's secrets."
+    "env get staging prints one value the live release runs with, secrets included, and env export staging",
+    "prints them all as shell export lines (eval \"$(vibe64-helper env export staging)\"), where the host allows",
+    "this session to use staging; otherwise they say why. The host records each read. Use these values in",
+    "commands and keep them out of source, messages and summaries: they are staging's secrets."
   ].join("\n") + "\n";
 }
 
@@ -62,8 +64,8 @@ function normalizeScope(value = "", options = {}) {
   if (["dev", ENV_SCOPE_DEVELOPMENT].includes(normalized)) {
     return ENV_SCOPE_DEVELOPMENT;
   }
-  if (["prod", ENV_SCOPE_PRODUCTION].includes(normalized)) {
-    return ENV_SCOPE_PRODUCTION;
+  if (normalized === ENV_SCOPE_STAGING) {
+    return ENV_SCOPE_STAGING;
   }
   if (allowAll && (!normalized || normalized === ENV_SCOPE_ALL)) {
     return ENV_SCOPE_ALL;
@@ -94,6 +96,7 @@ function parseCommandArgs(args = []) {
     key: toText(positionals[2]),
     passthrough: separator < 0 ? null : all.slice(separator + 1),
     positionals,
+    renamedScope: RENAMED_SCOPES.includes(toText(positionals[1]).toLowerCase()),
     scope,
     secret: flags.includes("--secret"),
     unsupportedFlags
@@ -118,6 +121,9 @@ function validateParsedCommand(parsed = {}) {
       stdout: parsed.command === "deployment" ? deploymentUsageText() : usageText()
     };
   }
+  if (parsed.command !== "deployment" && parsed.renamedScope) {
+    return syntaxFailure(`The ${parsed.positionals[1]} scope was renamed staging: use env ${parsed.command} staging.`);
+  }
   if (parsed.command === "deployment") {
     const subcommand = toText(parsed.positionals[1]);
     const sshConfig = subcommand === "ssh-config" && !parsed.json;
@@ -135,16 +141,16 @@ function validateParsedCommand(parsed = {}) {
   }
   if (parsed.command === "get" || parsed.command === "export") {
     const keyCount = parsed.command === "get" ? 1 : 0;
-    if (parsed.scope !== ENV_SCOPE_PRODUCTION || parsed.positionals.length !== 2 + keyCount || parsed.secret) {
+    if (parsed.scope !== ENV_SCOPE_STAGING || parsed.positionals.length !== 2 + keyCount || parsed.secret) {
       return syntaxFailure(parsed.command === "get"
-        ? "get reads one production value: env get production <KEY>."
-        : "export reads production values: env export production.");
+        ? "get reads one staging value: env get staging <KEY>."
+        : "export reads staging values: env export staging.");
     }
     return null;
   }
   if (parsed.command === "status") {
     if (!parsed.scope || parsed.positionals.length > 2 || parsed.secret) {
-      return syntaxFailure("Status accepts only an optional development, production, or all scope.");
+      return syntaxFailure("Status accepts only an optional development, staging, or all scope.");
     }
     return null;
   }
@@ -157,8 +163,8 @@ function validateParsedCommand(parsed = {}) {
   if (!["set", "remove", "link", "unlink"].includes(parsed.command)) {
     return syntaxFailure(`Unknown Vibe64 Env command: ${parsed.command}`);
   }
-  if (![ENV_SCOPE_DEVELOPMENT, ENV_SCOPE_PRODUCTION].includes(parsed.scope)) {
-    return syntaxFailure(`${parsed.command} requires an explicit development or production scope.`);
+  if (![ENV_SCOPE_DEVELOPMENT, ENV_SCOPE_STAGING].includes(parsed.scope)) {
+    return syntaxFailure(`${parsed.command} requires an explicit development or staging scope.`);
   }
   if (parsed.command === "link") {
     if (!parsed.key || !parsed.entryId || !parsed.fieldId || parsed.positionals.length !== 5) {
@@ -228,19 +234,19 @@ function scopeStatus(scope, records, isUserValueRecord) {
   };
 }
 
-function unavailableProductionStatus() {
+function unavailableStagingStatus() {
   return {
     available: false,
-    reason: "Production Env is not available in this Vibe64 installation.",
+    reason: "Staging Env is not available in this Vibe64 installation.",
     records: [],
-    scope: ENV_SCOPE_PRODUCTION
+    scope: ENV_SCOPE_STAGING
   };
 }
 
 function humanStatus(statuses = []) {
   const lines = [];
   for (const status of statuses) {
-    const label = status.scope === ENV_SCOPE_PRODUCTION ? "Production Env" : "Development Env";
+    const label = status.scope === ENV_SCOPE_STAGING ? "Staging Env" : "Development Env";
     lines.push(`${label}:`);
     if (status.available !== true) {
       lines.push(`  unavailable — ${status.reason}`);
@@ -275,7 +281,7 @@ function mutationStdout({
   key = "",
   scope = ""
 } = {}) {
-  const label = scope === ENV_SCOPE_PRODUCTION ? "production" : "development";
+  const label = scope === ENV_SCOPE_STAGING ? "staging" : "development";
   if (action === "remove") {
     return changed
       ? `Removed ${label} Env ${key}.\nStored Env state remains outside Git.\n`
@@ -325,7 +331,7 @@ function assertRecordEditable(record = null, scope = "", key = "") {
       "vibe64_env_value_linked"
     );
   }
-  const label = scope === ENV_SCOPE_PRODUCTION ? "Production" : "Development";
+  const label = scope === ENV_SCOPE_STAGING ? "Staging" : "Development";
   throw vibe64Error(
     `${label} Env ${key} is managed by ${toText(record.source) || "Vibe64"} and cannot be changed as a user value.`,
     "vibe64_agent_env_command_managed_value"
@@ -337,12 +343,12 @@ export {
   assertRecordEditable,
   ENV_SCOPE_ALL,
   ENV_SCOPE_DEVELOPMENT,
-  ENV_SCOPE_PRODUCTION,
+  ENV_SCOPE_STAGING,
   humanStatus,
   mutationPayload,
   parseCommandArgs,
   recordForKey,
   scopeStatus,
-  unavailableProductionStatus,
+  unavailableStagingStatus,
   validateParsedCommand
 };

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createAgentEnvCommandService } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
-import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
+import { NO_STAGING_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/stagingEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS, assertSavedEnvValueLinks } from "../../packages/vibe64-terminals/src/server/savedEnvValueLinks.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
@@ -35,8 +35,8 @@ function testVault() {
     },
     async link(input) {
       calls.push(["link", input]);
-      return input.environment === "production"
-        ? { ok: false, code: "vibe64_owner_required", error: "Only the owner can link keys in Production." }
+      return input.environment === "staging"
+        ? { ok: false, code: "vibe64_owner_required", error: "Only the owner can link keys in Staging." }
         : { ok: true };
     },
     async unlink(input) { calls.push(["unlink", input]); return { ok: true }; }
@@ -44,7 +44,7 @@ function testVault() {
 }
 
 async function boundCommand(records = [], actor = { username: "teammate", role: "member" }, savedEnvValueLinks = NO_SAVED_ENV_VALUE_LINKS) {
-  const command = createAgentEnvCommandService({ logger: silentLogger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
+  const command = createAgentEnvCommandService({ logger: silentLogger, stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT,
     project: project(records), savedEnvValueLinks });
   await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("saved-session"));
   return command;
@@ -89,9 +89,9 @@ test("link and unlink go to the host with the bound person; its refusal is repor
   assert.equal(linked.stdout, "Linked development Env PAYMENTS_KEY to saved_1 (apiKey).\nThe value was not printed.\n");
   assert.deepEqual(vault.calls.at(-1), ["link", { actor: { username: "teammate", role: "member" }, projectSlug: "demo",
     sessionId: "saved-session", environment: "development", key: "PAYMENTS_KEY", entryId: "saved_1", fieldId: "apiKey" }]);
-  const refused = await run(command, ["link", "production", "PAYMENTS_KEY", "saved_1", "apiKey"]);
+  const refused = await run(command, ["link", "staging", "PAYMENTS_KEY", "saved_1", "apiKey"]);
   assert.equal(refused.ok, false);
-  assert.equal(refused.stderr, "Only the owner can link keys in Production.\n");
+  assert.equal(refused.stderr, "Only the owner can link keys in Staging.\n");
   const unlinked = await run(command, ["unlink", "development", "PAYMENTS_KEY"]);
   assert.equal(unlinked.stdout, "Unlinked development Env PAYMENTS_KEY; it is now an ordinary empty row.\n");
   assert.equal((await run(command, ["link", "development", "PAYMENTS_KEY"])).code, "vibe64_agent_env_command_usage");

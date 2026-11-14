@@ -16,27 +16,27 @@
 /** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
 /** @typedef {ReturnType<typeof import("./agentPagesCommand.js").createAgentPagesCommandService>} AgentPagesCommandService */
 /**
- * A host's production Env for the agent Env command (vibe64.terminals.production-environment).
- * @typedef {object} ProductionEnvironmentProvider
+ * A host's staging Env for the agent Env command (vibe64.terminals.staging-environment).
+ * @typedef {object} StagingEnvironmentProvider
  * @property {(record: object | null) => boolean} isUserValueRecord
  * @property {(input: { projectSlug: string }) => Promise<object>} readRecords
  * @property {(input: { actor: object | null, projectSlug: string }) => Promise<object>} readDeployment the
  *   project's deployment for its coding assistant, never a value: { ok, deployment: { state, addresses, release,
  *   latestDeploy, records, blockers, notes, aiAccess: { enabled, reason } } } (agentDeploymentStatus.js), where
- *   aiAccess says whether the actor's session may use production itself
- * @property {(input: ProductionAccess & { keys: string[] }) => Promise<object>} readProductionValues the Env the
+ *   aiAccess says whether the actor's session may use staging itself
+ * @property {(input: StagingAccess & { keys: string[] }) => Promise<object>} readStagingValues the Env the
  *   live release runs with, secrets included, when the host allows the session: { ok, releaseId, variables:
  *   [{ key, value }] }, only the named keys when keys is not empty; otherwise { ok: false, code, error }
- * @property {(input: ProductionAccess & { command: string }) => Promise<object>} openProductionSsh the ssh
- *   configuration file whose `Host production` logs in to the live release, when the host allows the session:
+ * @property {(input: StagingAccess & { command: string }) => Promise<object>} openStagingSsh the ssh
+ *   configuration file whose `Host staging` logs in to the live release, when the host allows the session:
  *   { ok, configPath }; command is the ssh, scp or sftp command line, for the host's record
  * @property {(input: { actor: object | null, key: string, projectSlug: string }) => Promise<object>} removeVariable
  * @property {(input: { actor: object | null, key: string, projectSlug: string, secret: boolean, value: string }) => Promise<object>} setVariable
  */
 /**
- * Who asks a host for its production: the person whose request prepared the session's agent, the project the
+ * Who asks a host for its staging: the person whose request prepared the session's agent, the project the
  * session is bound to, and the session.
- * @typedef {{ actor: object | null, projectSlug: string, sessionId: string }} ProductionAccess
+ * @typedef {{ actor: object | null, projectSlug: string, sessionId: string }} StagingAccess
  */
 /**
  * A host's saved values the agent Env command lists, links and unlinks

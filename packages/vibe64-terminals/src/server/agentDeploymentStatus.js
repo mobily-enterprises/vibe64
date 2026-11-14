@@ -5,8 +5,8 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const DEPLOYMENT_UNAVAILABLE_REASON = "This Vibe64 installation does not publish projects.";
 const DEPLOYMENT_STATES = new Set(["deployed", "deploying", "failed", "not-deployed", "offline"]);
-// The words a person reads for each state: the feature is Publish, the place it runs Production.
-const PRODUCTION_STATE_WORDS = Object.freeze({
+// The words a person reads for each state: the feature is Publish, the place it runs Staging.
+const STAGING_STATE_WORDS = Object.freeze({
   deployed: "published",
   deploying: "publishing",
   failed: "failed",
@@ -19,35 +19,35 @@ function deploymentUsageText() {
   return [
     "Usage:",
     "  vibe64-helper deployment status [--json]",
-    "  ssh production [command]          scp, sftp and rsync reach production:<path> the same way",
+    "  ssh staging [command]             scp, sftp and rsync reach staging:<path> the same way",
     "",
-    "deployment status shows this session project's Production: whether it is published, its public addresses,",
-    "the current release (id, commit, when it was published and its recorded commands), its Production Env variable",
-    "names with their source, anything missing before the next publish, and whether this session may use production",
+    "deployment status shows this session project's Staging: whether it is published, its public addresses,",
+    "the current release (id, commit, when it was published and its recorded commands), its Staging Env variable",
+    "names with their source, anything missing before the next publish, and whether this session may use staging",
     "itself. It never shows a value and changes nothing.",
     "",
-    "Using production itself, where the host offers it and allows this session:",
-    "- ssh production logs in to the production host as the live release's own application account, in its",
+    "Using staging itself, where the host offers it and allows this session:",
+    "- ssh staging logs in to the staging host as the live release's own application account, in its",
     "  folder, with the Env it runs with, its database connection included: its files, data folders, database",
     "  client (mariadb or mysql, psql, sqlite3) and its own scripts work there as the app's do. It is not root",
     "  and has no general sudo, since the same host may run Vibe64 and other projects. Inside it,",
-    "  production-logs [--lines <n>] [--since <time>], production-status and production-restart read or restart",
-    "  the app's own service, and production-enter [command] runs the command, or a shell, where that running",
+    "  staging-logs [--lines <n>] [--since <time>], staging-status and staging-restart read or restart",
+    "  the app's own service, and staging-enter [command] runs the command, or a shell, where that running",
     "  service runs: the files it sees, its own mounts included (its private /tmp, a FUSE volume it mounted),",
     "  which the login itself does not see.",
-    "- vibe64-helper env get production <KEY> prints one value the live release runs with, secrets included, and",
-    "  vibe64-helper env export production prints them all as export lines.",
+    "- vibe64-helper env get staging <KEY> prints one value the live release runs with, secrets included, and",
+    "  vibe64-helper env export staging prints them all as export lines.",
     "The host records each login and Env read, and each login's commands word for word. Where it does not",
     "allow this session, both say why and do nothing; deployment status says so too.",
     "",
-    "Working on production, when possible:",
-    "- Read before you change anything: logs, status and read-only commands first. Production holds real",
+    "Working on staging, when possible:",
+    "- Read before you change anything: logs, status and read-only commands first. Staging may hold real",
     "  people's data, and a mistake there reaches them at once.",
     "- Before changing data or files, take a backup (a database dump or a copy, kept in the app's home on the",
-    "  production host rather than in this session's source, where real people's data could reach Git) and say",
+    "  staging host rather than in this session's source, where real people's data could reach Git) and say",
     "  what will change and why, so the person can follow it and undo it.",
-    "- Treat production values as secrets: use them in commands, and keep them out of source, messages and",
-    "  summaries. Inside ssh production the release's Env is already loaded, so name a value ($DB_PASSWORD)",
+    "- Treat staging values as secrets: use them in commands, and keep them out of source, messages and",
+    "  summaries. Inside ssh staging the release's Env is already loaded, so name a value ($DB_PASSWORD)",
     "  instead of writing it into a command line, which the host records word for word."
   ].join("\n") + "\n";
 }
@@ -89,7 +89,7 @@ function deploymentRelease(release = null) {
   };
 }
 
-// Whether this session may use production itself (ssh production, production Env values) and, if not, the
+// Whether this session may use staging itself (ssh staging, staging Env values) and, if not, the
 // host's reason.
 function deploymentAiAccess(access = null) {
   return {
@@ -134,7 +134,7 @@ function recordLine(record) {
 }
 
 function humanDeploymentStatus(payload) {
-  const lines = [`Production: ${PRODUCTION_STATE_WORDS[payload.state] || payload.state}`];
+  const lines = [`Staging: ${STAGING_STATE_WORDS[payload.state] || payload.state}`];
   if (payload.addresses.length > 0) {
     lines.push("Addresses:", ...payload.addresses.map((address) => (
       `  ${address.url}${address.label ? ` (${address.label})` : ""}`
@@ -157,17 +157,17 @@ function humanDeploymentStatus(payload) {
   }
   if (payload.aiAccess.enabled) {
     lines.push(
-      "AI access to production: on for this session (ssh production; vibe64-helper env get|export production)",
-      "  It holds real people's data: when possible read first, back up what you will change and say what will",
-      "  change. vibe64-helper deployment --help lists what works there (production-logs, production-enter, ...)."
+      "AI access to staging: on for this session (ssh staging; vibe64-helper env get|export staging)",
+      "  It may hold real people's data: when possible read first, back up what you will change and say what will",
+      "  change. vibe64-helper deployment --help lists what works there (staging-logs, staging-enter, ...)."
     );
   } else {
-    lines.push(`AI access to production: off${payload.aiAccess.reason ? ` — ${payload.aiAccess.reason}` : ""}`);
+    lines.push(`AI access to staging: off${payload.aiAccess.reason ? ` — ${payload.aiAccess.reason}` : ""}`);
   }
   if (payload.latestDeploy) {
     lines.push(`Latest publish: ${payload.latestDeploy.status}${payload.latestDeploy.at ? ` at ${payload.latestDeploy.at}` : ""}`);
   }
-  lines.push("Production Env (names only; values are never shown):");
+  lines.push("Staging Env (names only; values are never shown):");
   lines.push(...(payload.records.length > 0 ? payload.records.map(recordLine) : ["  no variables"]));
   if (payload.blockers.length > 0) {
     lines.push("Missing before the next publish:", ...payload.blockers.map((blocker) => `  ${blocker}`));

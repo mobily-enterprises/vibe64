@@ -327,7 +327,7 @@ application users or changes their roles or data.
 
 Any internal endpoint used by that executable must remain disabled unless both
 the enable flag and per-run secret are present. This is a development-preview
-control, not a production sign-in API.
+control, not a sign-in API of a published application.
 
 ## Host runtime naming
 

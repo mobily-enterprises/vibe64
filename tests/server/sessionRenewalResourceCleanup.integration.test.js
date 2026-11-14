@@ -33,7 +33,7 @@ import {
   createAgentEnvCommandService,
   prepareAgentEnvCommand
 } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
-import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
+import { NO_STAGING_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/stagingEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS } from "../../packages/vibe64-terminals/src/server/savedEnvValueLinks.js";
 import {
   createAgentPreviewCommandService,
@@ -220,7 +220,7 @@ async function createLiveResourceSet({
   const sessionId = session.sessionId;
   const wrapperRoot = path.join(path.dirname(targetRoot), "cmd", sessionId);
   const envCommands = createAgentEnvCommandService({ logger: silentLogger,
-    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project: commandProject
   });
   const previewCommands = createAgentPreviewCommandService({ logger: silentLogger, publishSessionChanged: async () => null,

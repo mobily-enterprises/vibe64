@@ -111,7 +111,7 @@ async function updatableSession(t) {
     env: {},
     inspectAssistantAccess: async () => ({}),
     logger: silentLogger,
-    productionEnvironmentProvider: {},
+    stagingEnvironmentProvider: {},
     project: sessionCommandProject(f.session, f.store),
     projectServices: { assertOpen() {}, ensure: async () => ({}) },
     publishAgentSessionChanged: async () => {},

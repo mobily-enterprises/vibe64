@@ -17,7 +17,7 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
 /** @typedef {import("./types.js").PublishAgentSessionChanged} PublishAgentSessionChanged */
-/** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
+/** @typedef {import("./types.js").StagingEnvironmentProvider} StagingEnvironmentProvider */
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {import("./types.js").RunVibe64Command} RunVibe64Command */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
@@ -34,7 +34,7 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {RuntimeEnv} dependencies.env
  * @param {ServiceAssistant["inspectAssistantAccess"]} dependencies.inspectAssistantAccess
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProductionEnvironmentProvider} dependencies.productionEnvironmentProvider
+ * @param {StagingEnvironmentProvider} dependencies.stagingEnvironmentProvider
  * @param {ProjectService} dependencies.project
  * @param {ProjectServices} dependencies.projectServices
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
@@ -51,7 +51,7 @@ function createServiceCommandServices({
   env,
   inspectAssistantAccess,
   logger,
-  productionEnvironmentProvider,
+  stagingEnvironmentProvider,
   project,
   projectServices,
   publishAgentSessionChanged,
@@ -91,7 +91,7 @@ function createServiceCommandServices({
   });
   const agentEnvCommand = createAgentEnvCommandService({
     logger,
-    productionEnvironmentProvider,
+    stagingEnvironmentProvider,
     project,
     savedEnvValueLinks
   });
