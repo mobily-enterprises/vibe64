@@ -351,10 +351,13 @@ for (const failure of ["http-503", "connection-reset", "invalid-json"]) {
       await recovery.promise;
       json(response, { ok: true, ...server.state.session.agentSession });
     });
-    await openChat(page);
+    // The warning shows only until the retry a second later; the paused page clock holds that retry,
+    // so a busy machine cannot let the warning come and go before it is seen.
+    await openChatOnPageClock(page, { paused: true });
     await composer(page).fill("Keep my draft.");
     await expect(warning(page)).toBeVisible();
     recovery.resolve();
+    await page.clock.resume();
     await expect(steer(page)).toBeEnabled();
     await expect(composer(page)).toHaveValue("Keep my draft.");
     expect(server.state.checkCount).toBe(2);
