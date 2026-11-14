@@ -399,7 +399,7 @@ test("a fresh managed starter remains readable before database preparation and e
     }];
     const status = await service.projectEnvironmentStatus({ sessionId });
     assert.equal(status.status, "not-prepared", "Derived credentials do not establish resource preparation.");
-    assert.deepEqual(status.resources, [{ id: "database", kind: "mysql", configured: true }]);
+    assert.deepEqual(status.resources, [{ id: "database", kind: "mysql", configured: true, required: true }]);
     assert.equal(JSON.stringify(status).includes("unprepared-secret"), false);
     assert.equal(JSON.stringify(status).includes("derived_writer"), false);
     await assert.rejects(service.sessionDatabaseEnvironment({ sessionId }), {

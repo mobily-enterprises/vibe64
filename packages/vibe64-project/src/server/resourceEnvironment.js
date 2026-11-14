@@ -236,7 +236,7 @@ function resourceKindIsPersonSupplied(kind = "") {
  * uses its own default storage.
  */
 function resourceRequiredInDevelopment(resource = {}) {
-  return !resourceKindIsPersonSupplied(resource?.kind);
+  return !resourceKindIsPersonSupplied(resource.kind);
 }
 
 /**
