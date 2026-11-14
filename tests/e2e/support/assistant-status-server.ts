@@ -514,6 +514,8 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === `${sessionRoute}/ai-tasks`) result = { ok: true, tasks: [], viewerId: String(owner.uid) };
       else if (route === `${sessionRoute}/work`) result = { ok: true, unsaved: false, operation: null, updateOperation: null };
       else if (route === `${sessionRoute}/work-plan`) result = { ok: true, sessionId: session.sessionId, available: false, current: null, history: [] };
+      // The Main chat reads the passes Genesis offers; this project's Genesis offers none.
+      else if (route === `${sessionRoute}/passes`) result = { ok: true, sessionId: session.sessionId, unavailable: null, passes: [], recommendation: "" };
       else if (route === `${sessionRoute}/renewal`) result = { ok: true, renewal: null, viewerScope: "status-test-owner" };
       else if (route === `${sessionRoute}/agent-goal`) result = { ok: true, status: "unsupported" };
       else if (route === `${sessionRoute}/main-chat-approvals`) result = { ok: true, sessionId: session.sessionId, owner: true, practice: false,
