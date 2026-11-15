@@ -394,6 +394,15 @@ function createProjectEnvironment({
           "vibe64_env_app_env_reserved"
         );
       }
+      // Nor SIDE_EFFECTS, which APP_ENV replaced: JSKIT 0.2.84 and later refuse to start with it. An old one can
+      // still be removed.
+      if (normalizedKey === "SIDE_EFFECTS" && values[key]?.remove !== true) {
+        const envName = config.scope === RUNTIME_CONFIG_SCOPES.STAGING ? "Staging Env" : "Development Env";
+        throw vibe64Error(
+          `SIDE_EFFECTS was replaced by APP_ENV; remove it from ${envName}.`,
+          "vibe64_env_side_effects_replaced"
+        );
+      }
       if (record?.source === SAVED_ENV_VALUE_SOURCE) {
         throw vibe64Error(
           `${normalizedKey} is linked to a saved value. Unlink it before entering a value here.`,

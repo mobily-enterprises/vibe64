@@ -1649,6 +1649,19 @@ test("APP_ENV is refused as an Env value in every scope, while an old one can st
   });
 });
 
+test("SIDE_EFFECTS, which APP_ENV replaced, is refused as an Env value naming its Env, while an old one can still be removed", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = project(targetRoot);
+    for (const [environment, envName] of [["dev", "Development Env"], ["staging", "Staging Env"]]) {
+      const response = await service.saveEnvUserValues({ environment, values: { SIDE_EFFECTS: "live" } });
+      assert.equal(response.ok, false);
+      assert.equal(response.errors[0].code, "vibe64_env_side_effects_replaced");
+      assert.equal(response.errors[0].message, `SIDE_EFFECTS was replaced by APP_ENV; remove it from ${envName}.`);
+    }
+    assert.equal((await service.saveEnvUserValues({ environment: "dev", values: { SIDE_EFFECTS: { remove: true } } })).ok, true);
+  });
+});
+
 test("Genesis Stack resources define expected Env names without technology checks in Vibe64", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = project(targetRoot, {

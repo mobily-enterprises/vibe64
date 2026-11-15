@@ -149,7 +149,13 @@ application that follows the Stack's Deployment contract
 webhook or connector write from there, writes each to its log, uses its
 payment provider's sandbox and shows a banner naming the environment. A test
 command sets `APP_ENV=test` itself. Env cannot hold `APP_ENV`: saving it is
-refused with the reason, and a value saved before can only be removed. A host
+refused with the reason, and a value saved before can only be removed. Nor can
+it hold `SIDE_EFFECTS`, which `APP_ENV` replaced: an application on JSKIT
+0.2.84 or later refuses to start while it is set, so Preview would not start.
+Saving it is refused with "SIDE_EFFECTS was replaced by APP_ENV; remove it from
+Development Env.", and a value saved before can only be removed: choose
+**Remove** on its row, or ask the coding agent to run `vibe64-helper env remove
+development SIDE_EFFECTS`. A host
 that publishes projects gives Staging `APP_ENV=staging`, where email and SMS go
 only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`. Colleague can explain this.
 
