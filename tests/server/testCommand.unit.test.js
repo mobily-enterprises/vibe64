@@ -172,7 +172,22 @@ test("a server run past its deadline is stopped with every process it started", 
   assert.match(messages.join("\n"), /ran past its \d+ min wall-clock bound/u);
   const childPid = Number(await readFile(pidFile, "utf8"));
   assert.ok(childPid > 1);
-  const childGone = async () => {
+  // The child outlived the runner, so its new parent reaps it: PID 1 or a subreaper, neither of them this run, and on
+  // a loaded host that can take longer than this test waits. Until then kill(pid, 0) still answers, so on Linux a
+  // child that is a zombie, exiting, or has SIGKILL pending counts as stopped too.
+  const killedOnLinux = async () => {
+    try {
+      const stat = await readFile(`/proc/${childPid}/stat`, "utf8");
+      const [state, , , , , , flags] = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+      const PF_EXITING = 0x4;
+      if (state === "Z" || (Number(flags) & PF_EXITING) !== 0) return true;
+      const pending = (await readFile(`/proc/${childPid}/status`, "utf8")).matchAll(/^(?:SigPnd|ShdPnd):\s*([0-9a-f]+)$/gmu);
+      return [...pending].some(([, mask]) => (BigInt(`0x${mask}`) & (1n << 8n)) !== 0n);
+    } catch {
+      return false;
+    }
+  };
+  const childStopped = async () => {
     for (let attempt = 0; attempt < 50; attempt += 1) {
       try {
         process.kill(childPid, 0);
@@ -180,11 +195,12 @@ test("a server run past its deadline is stopped with every process it started", 
         if (error.code === "ESRCH") return true;
         throw error;
       }
+      if (await killedOnLinux()) return true;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     return false;
   };
-  assert.equal(await childGone(), true);
+  assert.equal(await childStopped(), true);
 });
 
 test("the full suites run under the machine's test budget", async () => {
