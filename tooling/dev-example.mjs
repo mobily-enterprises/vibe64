@@ -68,6 +68,8 @@ async function main() {
   process.env.VIBE64_RUNTIME_NAMESPACE = "__local__";
   const { resolveRuntimeEnv } = await import("../server/lib/runtimeEnv.js");
   resolveRuntimeEnv();
+  // A development editor, unless its environment already names one (a session's, a test run's).
+  process.env.APP_ENV = String(process.env.APP_ENV || "").trim() || "development";
   const workspaceStudioHost = process.env.VIBE64_WORKSPACE && process.env.VIBE64_PUBLIC_USER_DOMAIN
     ? `${process.env.VIBE64_WORKSPACE}.${process.env.VIBE64_PUBLIC_USER_DOMAIN}` : "";
   // An optional local speech service is a shared host tool, like the Claude command.

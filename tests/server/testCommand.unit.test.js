@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { runServerTests, serverTestOptions, serverTestRun } from "../../tooling/run-server-tests.mjs";
-import { targetedTestArguments } from "../../tooling/run-targeted-tests.mjs";
+import { targetedTestArguments, withTestAppEnvironment } from "../../tooling/run-targeted-tests.mjs";
 import { loadTimeBudgets } from "../../tooling/test-time-budgets.mjs";
 import { BUDGET_VARIABLE, testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
 
@@ -76,6 +76,18 @@ test("the full server suite loads the host path guard a single-file run loads, a
   assert.equal(args.at(-1), "tests/server/*.test.js");
   // Preloads already in NODE_OPTIONS are not added twice.
   assert.equal(serverTestRun({ NODE_OPTIONS: `${guard} ${blocking}` }).env.NODE_OPTIONS, `${guard} ${blocking}`);
+});
+
+test("every test run is APP_ENV=test, as jskit test runs it, and none runs where APP_ENV is staging or production", () => {
+  for (const shell of [{}, { APP_ENV: "" }, { APP_ENV: "development" }, { APP_ENV: "test" }]) {
+    assert.equal(serverTestRun(shell).env.APP_ENV, "test", JSON.stringify(shell));
+    assert.equal(withTestAppEnvironment(shell).APP_ENV, "test", JSON.stringify(shell));
+  }
+  for (const appEnv of ["staging", "production"]) {
+    const refusal = new RegExp(`^Error: Vibe64's tests run with APP_ENV=test, and APP_ENV is ${appEnv} here`, "u");
+    assert.throws(() => serverTestRun({ APP_ENV: appEnv }), refusal);
+    assert.throws(() => withTestAppEnvironment({ APP_ENV: appEnv }), refusal);
+  }
 });
 
 test("a test file's process ended by --test-force-exit still delivers its whole report", { skip: process.platform === "win32" }, async (t) => {
@@ -160,7 +172,22 @@ test("a server run past its deadline is stopped with every process it started", 
   assert.match(messages.join("\n"), /ran past its \d+ min wall-clock bound/u);
   const childPid = Number(await readFile(pidFile, "utf8"));
   assert.ok(childPid > 1);
-  const childGone = async () => {
+  // The child outlived the runner, so its new parent reaps it: PID 1 or a subreaper, neither of them this run, and on
+  // a loaded host that can take longer than this test waits. Until then kill(pid, 0) still answers, so on Linux a
+  // child that is a zombie, exiting, or has SIGKILL pending counts as stopped too.
+  const killedOnLinux = async () => {
+    try {
+      const stat = await readFile(`/proc/${childPid}/stat`, "utf8");
+      const [state, , , , , , flags] = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+      const PF_EXITING = 0x4;
+      if (state === "Z" || (Number(flags) & PF_EXITING) !== 0) return true;
+      const pending = (await readFile(`/proc/${childPid}/status`, "utf8")).matchAll(/^(?:SigPnd|ShdPnd):\s*([0-9a-f]+)$/gmu);
+      return [...pending].some(([, mask]) => (BigInt(`0x${mask}`) & (1n << 8n)) !== 0n);
+    } catch {
+      return false;
+    }
+  };
+  const childStopped = async () => {
     for (let attempt = 0; attempt < 50; attempt += 1) {
       try {
         process.kill(childPid, 0);
@@ -168,11 +195,12 @@ test("a server run past its deadline is stopped with every process it started", 
         if (error.code === "ESRCH") return true;
         throw error;
       }
+      if (await killedOnLinux()) return true;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     return false;
   };
-  assert.equal(await childGone(), true);
+  assert.equal(await childStopped(), true);
 });
 
 test("the full suites run under the machine's test budget", async () => {

@@ -17,6 +17,7 @@ import {
   startupBrowserPath
 } from "../../server.js";
 import {
+  applyLocalCliAppEnvironment,
   applyLocalCliRuntimeNamespace,
   isDirectServerExecution,
   parseStartupArgs,
@@ -195,6 +196,19 @@ test("server CLI supplies a reserved local runtime namespace only when env is mi
     env: configuredEnv
   }), "owner-a");
   assert.equal(configuredEnv[VIBE64_RUNTIME_NAMESPACE_ENV], "owner-a");
+});
+
+test("server CLI runs Vibe64 as production unless its environment already names one", () => {
+  for (const missingEnv of [{}, { APP_ENV: " ", NODE_ENV: "development" }]) {
+    assert.equal(applyLocalCliAppEnvironment({ env: missingEnv }), "production");
+    assert.deepEqual([missingEnv.APP_ENV, missingEnv.NODE_ENV], ["production", "production"]);
+  }
+  // A Vibe64 session's command, or the server behind `npm run dev`, keeps the environment it was given.
+  for (const given of [{ APP_ENV: "development" }, { APP_ENV: "development", NODE_ENV: "production" }, { APP_ENV: "staging", NODE_ENV: "production" }]) {
+    const env = { ...given };
+    assert.equal(applyLocalCliAppEnvironment({ env }), given.APP_ENV);
+    assert.deepEqual(env, given);
+  }
 });
 
 test("server accepts an explicit runtime profile from a composed product", () => {

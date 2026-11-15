@@ -386,6 +386,14 @@ function createProjectEnvironment({
     for (const key of Object.keys(values)) {
       const normalizedKey = normalizeRuntimeConfigKey(key);
       const record = currentRecords.get(normalizedKey);
+      // A value saved before Vibe64 set APP_ENV itself can still be removed.
+      if (normalizedKey === "APP_ENV" && values[key]?.remove !== true) {
+        throw vibe64Error(
+          "APP_ENV is not an Env value: Vibe64 runs everything a session starts with APP_ENV=development, " +
+            "and a host gives each deployment its own.",
+          "vibe64_env_app_env_reserved"
+        );
+      }
       if (record?.source === SAVED_ENV_VALUE_SOURCE) {
         throw vibe64Error(
           `${normalizedKey} is linked to a saved value. Unlink it before entering a value here.`,

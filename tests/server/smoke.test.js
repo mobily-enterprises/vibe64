@@ -221,9 +221,17 @@ test("composed server startup removes the private state of a project whose names
   }
 });
 
-test("Vibe64's own features act for real, while the process environment its projects inherit leaves SIDE_EFFECTS alone", async () => {
+test("Vibe64 gives its own features no SIDE_EFFECTS, which APP_ENV replaced, and leaves its own APP_ENV to the process", async (t) => {
   const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-side-effects-system-"));
-  const before = process.env.SIDE_EFFECTS;
+  // A production start, which JSKIT refuses without NODE_ENV=production.
+  const before = { APP_ENV: process.env.APP_ENV, NODE_ENV: process.env.NODE_ENV };
+  Object.assign(process.env, { APP_ENV: "production", NODE_ENV: "production" });
+  t.after(() => {
+    for (const [name, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
   let featureEnv = null;
   const app = await createServer({
     runtimeProfile: Object.freeze({
@@ -241,8 +249,9 @@ test("Vibe64's own features act for real, while the process environment its proj
     }
   });
   try {
-    assert.equal(featureEnv.SIDE_EFFECTS, "live");
-    assert.equal(process.env.SIDE_EFFECTS, before);
+    assert.equal(Object.hasOwn(featureEnv, "SIDE_EFFECTS"), false);
+    assert.equal(featureEnv.APP_ENV, "production");
+    assert.equal(process.env.APP_ENV, "production");
   } finally {
     await app.close();
     await rm(systemRoot, { force: true, recursive: true });

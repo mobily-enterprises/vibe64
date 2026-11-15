@@ -25,7 +25,7 @@ const CHECKED = Object.freeze({ localhostCheckBypassed: false });
 test("localhost check bypass is enabled by the explicit CLI flag", () => {
   assert.equal(isLocalhostCheckBypassEnabled({
     argv: ["node", "server.js", LOCALHOST_CHECK_BYPASS_FLAG],
-    env: {}
+    env: { APP_ENV: "development" }
   }), true);
 });
 
@@ -75,6 +75,7 @@ test("localhost check bypass is enabled by the explicit environment variable", (
   assert.equal(isLocalhostCheckBypassEnabled({
     argv: [],
     env: {
+      APP_ENV: "development",
       [LOCALHOST_CHECK_BYPASS_ENV]: "true"
     }
   }), true);
@@ -82,7 +83,7 @@ test("localhost check bypass is enabled by the explicit environment variable", (
 
 test("localhost check bypass refuses a host that shares or provisions its machine", (t) => {
   t.after(() => configureVibe64Host(null));
-  const env = { [LOCALHOST_CHECK_BYPASS_ENV]: "1" };
+  const env = { APP_ENV: "development", [LOCALHOST_CHECK_BYPASS_ENV]: "1" };
   for (const profile of [{ sharedGroupAccess: true }, { execHelperPath: "/usr/local/libexec/vibe64-exec" }]) {
     configureVibe64Host(profile);
     assert.throws(() => isLocalhostCheckBypassEnabled({ argv: [], env }), { code: LOCALHOST_CHECK_BYPASS_REFUSED });
@@ -92,15 +93,20 @@ test("localhost check bypass refuses a host that shares or provisions its machin
   assert.equal(isLocalhostCheckBypassEnabled({ argv: [], env }), true, "a developer's own computer keeps it");
 });
 
-test("localhost check bypass is a development-only setting that a production start refuses", () => {
+test("localhost check bypass is a development-only setting that a staging or production start refuses", () => {
   for (const enabled of [{ argv: [LOCALHOST_CHECK_BYPASS_FLAG], env: {} }, { argv: [], env: { [LOCALHOST_CHECK_BYPASS_ENV]: "1" } }]) {
-    assert.throws(() => isLocalhostCheckBypassEnabled({ ...enabled, env: { ...enabled.env, NODE_ENV: "Production" } }), {
-      code: LOCALHOST_CHECK_BYPASS_REFUSED,
-      message: `The localhost check bypass is only for local development on this computer, and NODE_ENV is production. Remove ${LOCALHOST_CHECK_BYPASS_FLAG} and ${LOCALHOST_CHECK_BYPASS_ENV} to start.`
-    });
-    assert.equal(isLocalhostCheckBypassEnabled({ ...enabled, env: { ...enabled.env, NODE_ENV: "development" } }), true);
+    for (const environment of ["staging", "production"]) {
+      assert.throws(() => isLocalhostCheckBypassEnabled({ ...enabled, env: { ...enabled.env, APP_ENV: environment, NODE_ENV: "production" } }), {
+        code: LOCALHOST_CHECK_BYPASS_REFUSED,
+        message: `The localhost check bypass is only for local development on this computer, and APP_ENV is ${environment}. Remove ${LOCALHOST_CHECK_BYPASS_FLAG} and ${LOCALHOST_CHECK_BYPASS_ENV} to start.`
+      }, environment);
+    }
+    for (const environment of ["development", "test"]) {
+      assert.equal(isLocalhostCheckBypassEnabled({ ...enabled, env: { ...enabled.env, APP_ENV: environment, NODE_ENV: "production" } }), true, environment);
+    }
+    assert.throws(() => isLocalhostCheckBypassEnabled(enabled), /^Error: APP_ENV is not set\./u, "a bypass with no environment names the fix");
   }
-  assert.equal(isLocalhostCheckBypassEnabled({ argv: [], env: { NODE_ENV: "production" } }), false, "a production start without the bypass starts");
+  assert.equal(isLocalhostCheckBypassEnabled({ argv: [], env: { APP_ENV: "production", NODE_ENV: "production" } }), false, "a production start without the bypass starts");
 });
 
 test("localhost check bypass refuses a listener beyond loopback or a server that is not a local editor", () => {

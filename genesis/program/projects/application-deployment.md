@@ -26,7 +26,7 @@ listen address in the `HOST` and `PORT` environment variables and probes the
 Ready when path there. A host may also give Serve, and only Serve, its
 runtime's conventional production setting such as `NODE_ENV=production`; a
 value the project sets on the Serve step or in the deployment's Env wins.
-No step inherits the editor's own `NODE_ENV`.
+No step inherits the editor's own `NODE_ENV` or `APP_ENV`.
 
 `- Generated secrets:` names secrets the application needs as a
 stable random value. The host stores one strong random value per name once,
@@ -58,19 +58,26 @@ sandbox allowance, is declared in the section, never installed or switched on
 by the script, and a host that lacks something makes it fail with one plain
 sentence.
 
-`SIDE_EFFECTS` belongs to the host. It gives every step `live` only when the
-deployment's owner chose to act for real, otherwise `simulate`, and an
-unset value means `simulate` too. The parser refuses a step argument that sets
-it (`SIDE_EFFECTS=...`) and a Generated secrets or Setup code entry naming it.
-The application follows it: unless it is exactly `live`, it is a test copy that
-simulates and logs email, SMS, push notifications, payments and third-party
-webhooks and shows a "Test copy" banner. The application reads it at run time,
-so a host can change it by restarting Serve without a new build. Prepare and
-Build never need the database or another managed service, so a host may run
-them alone, without those credentials, to check a revision builds.
-Vibe64 itself acts for real: its server gives `SIDE_EFFECTS=live` only to the
-environment its own features receive, so the projects it runs, which inherit
-the process environment, stay test copies.
+`APP_ENV` belongs to the host: it gives every step the environment it deploys
+to, `staging` or `production`. The parser refuses a step argument that sets it
+(`APP_ENV=...`) and a Generated secrets or Setup code entry naming it, and
+refuses `SIDE_EFFECTS`, which `APP_ENV` replaced, in the same places; each
+refusal names the fix. The Deployment guidance asks the application to follow
+`APP_ENV` at run time through one helper, never `NODE_ENV`, which only picks
+optimised builds: in `development` and `test`, email, SMS, push notifications,
+webhooks and connector writes are logged; in `staging`, email and SMS go only
+to `STAGING_EMAIL_TO` and `STAGING_SMS_TO` (logged when unset), the rest is
+logged and payments use the provider's sandbox; only `production` is real, and
+every other environment shows a banner naming it. Prepare and Build never need
+the database or another managed service, so a host may run them alone, without
+those credentials, to check a revision builds.
+Vibe64 itself sets no `SIDE_EFFECTS`: its own features read the `APP_ENV` of
+the process that starts it, which the execution gateway never passes on to a
+project's commands. Its start command (`npx vibe64`, `npm start`, `npm run
+server`, all `bin/server.js`) gives an unset `APP_ENV` `production`, with
+`NODE_ENV=production`; `npm run dev` and `npm run dev:example` give it
+`development`. A value already set wins, so the commands of a Vibe64 session,
+which carry `APP_ENV=development`, stay in development.
 
 Genesis does not know what Deployment means. Vibe64 does not infer scripts from
 the selected language or framework. The application or technology Stack owns

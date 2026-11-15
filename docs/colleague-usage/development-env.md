@@ -134,19 +134,38 @@ steps; configured names alone do not prove either has completed.
 A framework mode such as `NODE_ENV` comes only from the project: a Development
 Env value (or its Stack default), a launch's own settings, or the command itself
 (`NODE_ENV=test npm test`). Vibe64 never passes on the mode it runs in itself, so
-Workspace setup installs development dependencies, and Preview, terminals,
-tests and agent commands run without `NODE_ENV` unless the project sets it. To
-run them in another mode, add `NODE_ENV` in Development Env; Staging's mode
-belongs on the Stack's Deployment Serve step. Colleague can explain this and open Env.
+Workspace setup installs development dependencies, and terminals, tests and
+agent commands run without `NODE_ENV` unless the project sets it. Preview starts
+with `NODE_ENV=development`, which a Development Env value or the launch's own
+settings may change. Staging's mode belongs on the Stack's Deployment Serve
+step. Colleague can explain this and open Env.
 
-`SIDE_EFFECTS` works the same way: Vibe64 never sets it in Preview, terminals,
-tests or agent commands, so an application run there is a test copy. An
+`APP_ENV` says where the application runs, and Vibe64 sets it: everything a
+session runs (Preview, terminals, tests and agent commands) gets
+`APP_ENV=development`, whatever the project's own Env or launch says. An
 application that follows the Stack's Deployment contract
-(`vibe64-helper spec deployment`) then simulates email, SMS, push
-notifications, payments and third-party webhooks, writes them to its log and
-shows a small "Test copy" banner. Only a host that publishes projects sets it,
-for Staging; neither Env nor the project sets it. Colleague can explain
-this.
+(`vibe64-helper spec deployment`) then sends no email, SMS, push notification,
+webhook or connector write from there, writes each to its log, uses its
+payment provider's sandbox and shows a banner naming the environment. A test
+command sets `APP_ENV=test` itself. Env cannot hold `APP_ENV`: saving it is
+refused with the reason, and a value saved before can only be removed. A host
+that publishes projects gives Staging `APP_ENV=staging`, where email and SMS go
+only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`. Colleague can explain this.
+
+The three environments, as Colleague explains them:
+
+|  | Development | Staging | Production |
+|---|---|---|---|
+| What | sessions, Preview and a developer's own machine | what a host publishes from the workspace, to check it outside development | a separate production deploy that a host offers |
+| `APP_ENV` | `development` (`test` in automated test runs) | `staging` | `production` |
+| `NODE_ENV` | `development` in Preview | `production` | `production` |
+| Settings | Development Env | Staging Env | Production Env |
+| Databases | development | staging | production |
+| Email and SMS | logged, not sent | sent only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`; logged when unset | sent |
+| Push notifications, webhooks, connector writes | logged | logged | real |
+| Payments | the provider's sandbox | the provider's sandbox | live |
+| Banner on every page | "Development" | "Staging" | none |
+| Development shortcuts (development sign-in, relaxed cookies, test databases) | allowed | refused | refused |
 
 For a long-running shell task, the coding agent can request its native tool's
 background mode and timeout. Binding the command to the Vibe64 session preserves

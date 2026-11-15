@@ -371,6 +371,16 @@ setup, and its Previews, terminals, tests and agents run as the project
 configures them. `resolveCommandEnv` drops it, so the Codex app-server and its
 threads, which are built with it, follow the same rule.
 
+`APP_ENV` says where the application runs, and the gateway owns it. It never
+takes the editor's own either, since the editor is itself a production
+application, and gives every command that is not a deployment's (no
+`envPolicy: "deployment"`, `purpose: "deployment"` or application account)
+`APP_ENV=development`, last, over the project's Env and the caller's own env:
+everything a session runs is Development. A deployment command gets only what
+its host's deployment Env says. A Preview command (`purpose: "preview"`) also
+starts with `NODE_ENV=development`, which the project's Env or launch may still
+change. Development Env refuses to save `APP_ENV`.
+
 Gateway-owned process identity env looks like:
 
 ```js

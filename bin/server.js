@@ -23,6 +23,7 @@ import {
 import {
   VIBE64_RUNTIME_MODE_LOCAL
 } from "../server/lib/runtimeProfile.js";
+import { loadEnvFile } from "../server/lib/envFile.js";
 
 const SERVER_ENTRYPOINT = fileURLToPath(import.meta.url);
 const DEFAULT_LOCAL_EDITOR_BROWSER_PORT = 3001;
@@ -182,6 +183,26 @@ function applyLocalCliRuntimeNamespace({
   return VIBE64_LOCAL_RUNTIME_NAMESPACE;
 }
 
+/**
+ * Vibe64 started by this command (npx vibe64, npm start, npm run server) runs as
+ * production, with NODE_ENV=production as JSKIT requires there, unless its
+ * environment or the app root's .env already names one: a Vibe64 session gives
+ * every command APP_ENV=development, and the server behind `npm run dev` is
+ * started with it.
+ * Returns the APP_ENV it runs with.
+ */
+function applyLocalCliAppEnvironment({
+  env = process.env
+} = {}) {
+  const configured = String(env.APP_ENV || "").trim();
+  if (configured) {
+    return configured;
+  }
+  env.APP_ENV = "production";
+  env.NODE_ENV = "production";
+  return env.APP_ENV;
+}
+
 // Earlier macOS versions kept data in the Linux state folder. Moving it is the
 // person's decision, so startup only says how and changes nothing.
 function macosDataMoveMessage({
@@ -235,6 +256,9 @@ async function main() {
     targetRoot
   } = parseStartupArgs();
   applyLocalCliRuntimeNamespace();
+  // The app root's .env may name the environment too, so it loads first.
+  loadEnvFile();
+  applyLocalCliAppEnvironment();
   await prepareLocalSystemRoot();
   const app = await startServer(serverStartOptions({
     openOnStart,
@@ -265,6 +289,7 @@ if (isDirectServerExecution()) {
 }
 
 export {
+  applyLocalCliAppEnvironment,
   applyLocalCliRuntimeNamespace,
   isDirectServerExecution,
   macosDataMoveMessage,

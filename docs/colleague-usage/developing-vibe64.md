@@ -58,7 +58,13 @@ and release lockfile remain unchanged. The example project's source and state
 remain in the original development location, outside that disposable app.
 
 `npm run dev` serves the editor from Vite and sends its API to a server started
-on port 3000 (`PORT=3000 npm start`). That server lets in only requests that
+on port 3000 (`APP_ENV=development PORT=3000 npm start`). `npm start`, like
+`npx vibe64`, runs Vibe64 as production (`APP_ENV=production` and
+`NODE_ENV=production`) unless `APP_ENV` is already set, and production sends
+Vibe64's own email for real; a Vibe64 session already gives its commands
+`APP_ENV=development`. `npm run dev` and `npm run dev:example` run as
+development unless `APP_ENV` is already set. That server lets in only requests
+that
 carry the access key it prints after **Vibe64 is running at** (see
 [Running Vibe64 on your computer](running-vibe64-on-your-computer.md)). Either
 open the Vite address once with that `?vibe64-access=…` added, for example
@@ -74,9 +80,9 @@ editor however the request is addressed. It stops at start with "The localhost
 check bypass is only for local development on this computer" when Vite or the
 server would listen beyond loopback (for example `--host 0.0.0.0`), when the
 server is not a local editor, on a host that shares or provisions its
-machine, or when `NODE_ENV` is `production`, since the bypass is for
-development only. Remove the flag and variable, or listen on `127.0.0.1`, to
-start.
+machine, or when `APP_ENV` is `staging` or `production`, since the bypass is
+for development only. Remove the flag and variable, or listen on `127.0.0.1`,
+to start.
 
 To run two local examples at once, give each a different `--state-dir` and
 `--port`. Each state directory supplies its own runtime namespace, so starting

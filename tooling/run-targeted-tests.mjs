@@ -14,6 +14,20 @@ export function withHostPathGuard(env = process.env) {
   return { ...env, NODE_OPTIONS: current.includes(option) ? current : `${current} ${option}`.trim() };
 }
 
+// Tests run as APP_ENV=test, as `jskit test` runs them, whatever the shell says (a Vibe64 session's commands carry
+// development): no test sends real email or acts as a deployed server, and JSKIT starts no server without APP_ENV. A
+// shell whose APP_ENV is staging or production is a deployed server's, where no test runs.
+export function withTestAppEnvironment(env = process.env) {
+  const appEnv = String(env.APP_ENV ?? "").trim();
+  if (["staging", "production"].includes(appEnv)) {
+    throw new Error(
+      `Vibe64's tests run with APP_ENV=test, and APP_ENV is ${appEnv} here: tests never run on a staging or `
+      + "production server. Run them where APP_ENV is unset, development or test."
+    );
+  }
+  return { ...env, APP_ENV: "test" };
+}
+
 export function targetedTestArguments(cliArguments) {
   const positionalArguments = cliArguments.filter((argument) => !argument.startsWith("-"));
   const [target] = positionalArguments;
@@ -45,7 +59,7 @@ async function run() {
     throw new Error(`Targeted test path is not a file: ${target}`);
   }
 
-  const env = withHostPathGuard();
+  const env = withTestAppEnvironment(withHostPathGuard());
   if (sourceDevelopmentSelected()) {
     process.exitCode = await runSourceDevelopment({
       publicRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),

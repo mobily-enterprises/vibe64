@@ -23,11 +23,13 @@ if (sourceDevelopmentSelected()) {
   const require = createRequire(import.meta.url);
   const viteBin = path.join(path.dirname(require.resolve("vite/package.json")), "bin", "vite.js");
   const rawArgs = process.argv.slice(2);
-  const bypassLocalhostCheck = isLocalhostCheckBypassEnabled({ argv: rawArgs, env: process.env });
-  const viteArgs = stripLocalhostCheckBypassArgs(rawArgs);
   const env = {
-    ...process.env
+    ...process.env,
+    // A development launch, unless its environment already names one (a session's, a test run's).
+    APP_ENV: String(process.env.APP_ENV || "").trim() || "development"
   };
+  const bypassLocalhostCheck = isLocalhostCheckBypassEnabled({ argv: rawArgs, env });
+  const viteArgs = stripLocalhostCheckBypassArgs(rawArgs);
 
   if (bypassLocalhostCheck) {
     assertLocalhostCheckBypassAllowed({ host: launchHostArg(viteArgs) });

@@ -143,12 +143,26 @@ verification.
 
 ## Deployment Terminology
 
-- Vibe64 names three environments, and never confuses them: **Development**
-  (sessions, Preview and their development databases, with Development Env),
-  **Staging** (the application a host publishes from the workspace, its
-  releases and databases, with Staging Env) and **Production** (only a separate
-  production deploy a host offers, with its own Production Env). Nothing a host
-  publishes from the workspace is called production.
+- Vibe64 names three environments, and never confuses them. Nothing a host
+  publishes from the workspace is called production. `APP_ENV` is the one
+  switch: every decision about where an application runs reads it, and
+  `NODE_ENV` only picks optimised builds and library modes. Vibe64 gives
+  everything a session runs `APP_ENV=development`; a host gives each
+  deployment its own, which neither Env nor a Deployment step can set.
+
+|  | Development | Staging | Production |
+|---|---|---|---|
+| What | sessions, Preview and a developer's own machine | what a host publishes from the workspace, to check it outside development | a separate production deploy that a host offers |
+| `APP_ENV` | `development` (`test` in automated test runs) | `staging` | `production` |
+| `NODE_ENV` | `development` in Preview | `production` | `production` |
+| Settings | Development Env | Staging Env | Production Env |
+| Databases | development | staging | production |
+| Email and SMS | logged, not sent | sent only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`; logged when unset | sent |
+| Push notifications, webhooks, connector writes | logged | logged | real |
+| Payments | the provider's sandbox | the provider's sandbox | live |
+| Banner on every page | "Development" | "Staging" | none |
+| Development shortcuts (development sign-in, relaxed cookies, test databases) | allowed | refused | refused |
+
 - The Publish feature is product functionality that publishes the selected
   user's project to its Staging from its Vibe64-owned Deployment contract.
   A person always reads Publish and Staging, never Deploy; internal
@@ -243,7 +257,9 @@ overlap a test run already active for this checkout.
   file from the Ith (Node's `--test-shard`), so the N shards together run
   every file once.
 - Every test process, `npm run test:full` included, loads
-  `tooling/test-host-path-guard.mjs`.
+  `tooling/test-host-path-guard.mjs` and runs with `APP_ENV=test`, as
+  `jskit test` gives it, whatever the shell says; a shell whose `APP_ENV` is
+  `staging` or `production` runs no tests.
 - A test removes every temporary folder it creates by the time it ends, so a
   passing run leaves nothing in the temp directory. It keeps an evidence folder
   (screenshots, traces, logs) only when it fails, and prints where it is.
