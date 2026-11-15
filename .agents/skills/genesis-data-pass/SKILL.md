@@ -86,10 +86,10 @@ Read the engineering approach's rules on query counts and realistic tests, and
 these sections of the sanity checks guide
 (`.agents/skills/genesis-project/references/sanity-checks.md`): "Never do
 these", "Data: one owner per table", "Data: one source for each fact", "Data:
-loading a dataset", "Data: each read asks for the rows it uses", "Data: saves,
-batches and background work" and "Inputs and access". They describe what good
-looks like; this pass applies them across the whole scope and fixes what they
-find.
+loading a dataset", "Data: each read asks for the rows it uses", "Data: batches
+and background work", "Data: two changes at once" and "Inputs and access". They
+describe what good looks like; this pass applies them across the whole scope
+and fixes what they find.
 
 Then list, for the scope: each table, collection or store with its one owner
 (`genesis/subsystems.md` records data ownership), who reads and writes it, its

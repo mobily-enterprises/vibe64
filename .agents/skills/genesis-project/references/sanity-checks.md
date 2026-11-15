@@ -173,34 +173,74 @@ one matching, and see it found.
 
 **Outer limit:** a capped read narrowed in code is broken at any size.
 
-## Data: saves, batches and background work
+## Data: batches and background work
 
 **Good:** a batch writes each table in a few statements inside the owner's
 transaction, not one full create per row. Work nobody waits for runs as a
 scheduled or queued job in bounded chunks: it loops over units of work (a
 tenant, a user), one transaction each, never one around the whole run and
-never one per row. A read request takes no lock and writes nothing. Every path
-takes its locks in one order, parents before children, so two transactions
-never wait on each other. Two writers on the same records never produce a
-server error.
+never one per row. A read request takes no lock and writes nothing.
 
 **Check:** count a batch's statements at 10 items and at 500. Look for due work
 run inside whichever request comes first, and one long transaction around it.
 Find any lock or write a read path takes for one-time setup: read first, lock
-only on the rare unset path. Compare the order in which each path locks rows.
-Run two writers on the same records; a retried transaction must be safe to
-repeat, so HTTP calls, email and uploads go before or after it, or into an
-outbox row written inside it.
+only on the rare unset path.
 
 **Examples:**
 - An import created each row through the full single-record create path, with
   its lookups and read-back, one row at a time.
 - Overdue work ran inside the first user request after a quiet period, so that
   request's time depended on how long nobody had used the app.
-- Concurrent saves surfaced database deadlocks as 500s.
 
 **Outer limit:** thousands of queries or tens of seconds for one action, or a
 request whose time depends on how long since anyone used the app.
+
+## Data: two changes at once
+
+**Good:** each write uses the lightest tool that keeps the stored data right.
+Most need nothing beyond the transaction they already run in:
+- An ordinary edit (a form saving a record, a name or a description, settings,
+  a saved game) is a plain write, and the last save wins: when two people edit
+  the same thing at the same moment, one change replaces the other. That is
+  usually acceptable, and it needs no lock and no concurrency test. Where
+  people would care, the save can carry the version it read and refuse when
+  the record has moved on, saying that someone else changed it and to reload.
+- A change allowed only while a value still holds (open to booked, a reward
+  claimed once) is a conditional update, a compare-and-set: of two writers one
+  wins and the other gets a clear refusal, with no lock.
+- A value that must be unique gets a unique index or constraint, and an
+  insert that loses that race is retried where the tools offer it, or refused
+  clearly.
+- An explicit lock is for a race that would silently leave wrong data that
+  matters: stock or quantities, money or balances, sequential document
+  numbers, a capacity limit (two bookings of the last place), or a
+  check-then-act on a shared resource (is the drier empty? then load it).
+
+A lock makes other writers wait, can deadlock and needs a test with two
+writers, so it usually pays only where you can name the wrong data a race
+would leave. Whatever the tool, a lost race never becomes a server error: the
+loser gets a refusal it can act on, or its work runs again. Take locks in one
+order on every path, parents before children, so two transactions never wait
+on each other. Work that may run again must be safe to repeat, so HTTP calls,
+email and uploads go before or after the transaction, or into an outbox row
+written inside it.
+
+**Check:** for each write path, name its tool and why: for a lock, the wrong
+data a race would leave; for a plain write, why the last save winning is
+acceptable. Run two writers at once on each path that locks, writes
+conditionally or relies on a unique key, and see one win and the other refused
+or run again, never a server error and never both applied. Compare the order in
+which each path locks rows. An ordinary edit needs neither a lock nor a
+two-writer test.
+
+**Examples:**
+- Concurrent saves surfaced database deadlocks as 500s.
+- A business app locked the rows of every save, names and settings included,
+  and spent hours on lock order, deadlocks and two-writer tests for edits
+  where the last save winning was fine.
+
+**Outer limit:** a lost race that ends in a server error, or that leaves stock,
+money, numbering or a capacity limit silently wrong.
 
 ## Work that repeats or lingers
 
@@ -440,8 +480,9 @@ hundreds of requests on a first screen.
 
 **Good:** the same state twice gives the same result. Each fact has one
 resolver. Each status names what clears it, and each gate has a case that must
-fail it. Writes are conditional on the version read. A delete removes what it
-created elsewhere. Readiness is checked directly.
+fail it. A step that moves a status writes only while the status it read
+still holds, so of two at once one wins and the other is refused. A delete
+removes what it created elsewhere. Readiness is checked directly.
 
 **Check:** find every place that resolves the same fact. Check that what a
 delete created outside its table is gone. When a rule's result breaks another
