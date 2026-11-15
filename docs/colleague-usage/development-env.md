@@ -22,8 +22,9 @@ as missing.
 
 Two more resource kinds can appear in a Stack. A **Redis** resource (kind
 `redis`) is the address the app's servers share live updates through, such as
-`REALTIME_REDIS_URL`; on your own computer you run Redis yourself and enter its
-address in that row, just as for a database. A **bucket** (kind `bucket`) is
+`REALTIME_REDIS_URL`; on your own computer you run a Redis-compatible server
+yourself, such as Valkey, and enter its address in that row, just as for a
+database. A **bucket** (kind `bucket`) is
 object storage you hold with an S3-compatible provider. Development never asks
 for a bucket's settings: no rows appear for it, the setup message does not list
 them, and the app keeps its files in its own default storage, usually its own

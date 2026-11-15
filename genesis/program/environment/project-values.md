@@ -251,8 +251,8 @@ project uses the person's own resources and reports their database servers.
 
 Two resource kinds besides the databases and voice have a fixed binding
 grammar, checked wherever a declaration's preferred alternative is read. A
-`redis` resource binds exactly `url`, the address a host's Redis (or the
-person's own) answers at. A `bucket` resource is S3-compatible object storage
+`redis` resource binds exactly `url`, the address a Redis-compatible server
+(Valkey, for example), a host's or the person's own, answers at. A `bucket` resource is S3-compatible object storage
 and binds `bucket`, `region`, `endpoint`, `accessKeyId` and `secretAccessKey`,
 and may bind `driver`, which receives `s3`; neither kind takes optional
 bindings. `resourceDeclarationDiagnostics` names each missing and each unknown
