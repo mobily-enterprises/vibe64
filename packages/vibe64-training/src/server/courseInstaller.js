@@ -169,7 +169,7 @@ function createTrainingCourseInstaller({
     const result = await runCommand({
       actor: "daemon",
       allowedRoots: [root],
-      args: ["-C", root, "-c", "core.hooksPath=/dev/null", "-c", "init.defaultBranch=main", ...args],
+      args: ["-C", root, "-c", "core.hooksPath=/dev/null", ...args],
       command: "git",
       cwd: root,
       envPolicy: "project",
@@ -193,7 +193,7 @@ function createTrainingCourseInstaller({
   async function readAvailableUncached() {
     return withScratch("catalogue", async root => {
       try {
-        await git(root, ["init", "-q"]);
+        await git(root, ["init", "-q", "--initial-branch=main"]);
         await git(root, ["fetch", "-q", "--depth=1", "--no-tags", remoteUrl(catalogueRepository), "HEAD"]);
       } catch (cause) {
         throw causedFailure(
@@ -414,7 +414,7 @@ function createTrainingCourseInstaller({
         if (present) continue;
         await withScratch("topic", async sourceRoot => {
           try {
-            await git(sourceRoot, ["init", "-q"]);
+            await git(sourceRoot, ["init", "-q", "--initial-branch=main"]);
             await git(
               sourceRoot,
               ["fetch", "-q", "--depth=1", "--no-tags", remoteUrl(topic.repository), topic.commit],

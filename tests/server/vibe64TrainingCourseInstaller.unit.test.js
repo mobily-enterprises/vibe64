@@ -166,6 +166,14 @@ test("installing a listed course verifies its exact topic pin, enables it once a
   assert.equal(f.commands.filter(args => args.includes("fetch")).length, fetches + 1, "only the catalogue is reread");
 });
 
+test("each scratch repository the installer makes starts on main, whatever the host's Git names a new branch", async (t) => {
+  const f = await fixture(t);
+  await f.make().installCourse({ courseId: "first-course", release: "0.1.0" });
+  const inits = f.commands.filter(args => args.includes("init"));
+  assert.equal(inits.length, 2, "the catalogue's and the topic's");
+  for (const args of inits) assert.deepEqual(args.slice(args.indexOf("init")), ["init", "-q", "--initial-branch=main"]);
+});
+
 test("installing refuses a disabled release for everyone; a removed release reinstalls from its verified snapshot", async (t) => {
   const f = await fixture(t);
   await f.make().installCourse({ courseId: "first-course", release: "0.1.0" });

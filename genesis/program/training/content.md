@@ -286,7 +286,9 @@ shallow-fetches it into `<systemRoot>/training-sources/catalogue-<uuid>`,
 validates `domains.json`, `topics.json` (optional per-topic `domainId`) and each
 `courses/<id>/course.json`/`course.lock.json` strictly, and caches for 60 seconds.
 Installing rereads it, fetches each missing locked topic at its exact commit into
-a `topic-<uuid>` scratch directory, and delegates to the original
+a `topic-<uuid>` scratch directory (each scratch repository starts on `main`,
+`git init --initial-branch=main`, whatever the host's Git names a new
+branch), and delegates to the original
 `installTopic` (clean-commit, canonical-source and byte proof, staging, per-pin
 lock) and `enableCourse` (catalogue lock, expected revision; one retry on
 conflict). Older releases of the course are then removed through
