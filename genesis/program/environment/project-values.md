@@ -259,10 +259,14 @@ and binds `bucket`, `region`, `endpoint`, `accessKeyId` and `secretAccessKey`,
 and may bind `driver`, which receives `s3`; neither kind takes optional
 bindings. `resourceDeclarationDiagnostics` names each missing and each unknown
 semantic, so a host can refuse a declaration in the person's words before it
-provisions anything. A bucket is always the person's own: a host's answer for
-one is refused, the resource environment boundary leaves it to the person's
-Env, and `bucketDeclarations` gives a host the exact names to ask for, with
-which may stay empty and which are secret. Development never asks for a
+provisions anything, and `preferredAlternative` gives a host a declaration's
+one preferred alternative, its bindings checked the same way, so a host that
+makes a resource for a separate deployment of its own sets exactly the names
+the application reads. In development and in a workspace's own release a
+bucket is always the person's own: a host's answer for one is refused, the
+resource environment boundary leaves it to the person's Env, and
+`bucketDeclarations` gives a host the exact names to ask for, with which may
+stay empty and which are secret. Development never asks for a
 bucket's settings (`resourceRequiredInDevelopment`): Env lists no rows for
 them, onboarding and session status do not count them as missing, and without
 them the application uses its own default storage, usually its own disk. A

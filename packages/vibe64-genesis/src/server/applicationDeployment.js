@@ -22,6 +22,11 @@ const RESTORE_PATHS_PREFIX = "- Recreate on restore: ";
 const GENERATED_SECRETS_PREFIX = "- Generated secrets: ";
 const SETUP_CODE_PREFIX = "- Setup code: ";
 const SANDBOX_ALLOWS_PREFIX = "- Sandbox allows: ";
+// How many identical copies of the application a host may run at once behind
+// one address: one unless the application says it shares nothing between
+// requests that lives in one copy (files it writes, sign-ins kept in memory).
+const INSTANCES_PREFIX = "- Instances: up to ";
+const INSTANCES_MAX = 100;
 // What an application's own commands and service may do beyond an ordinary
 // sandbox, from a closed set. A host grants only what its owner permits.
 const VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
@@ -47,6 +52,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   `${GENERATED_SECRETS_PREFIX}\`NAME\`...`,
   `${SETUP_CODE_PREFIX}\`NAME\``,
   `${SANDBOX_ALLOWS_PREFIX}${VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES.map((name) => `\`${name}\``).join(" ")}`,
+  `${INSTANCES_PREFIX}\`count\``,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
 ]);
@@ -118,6 +124,21 @@ function sandboxAllowances(source, deploymentPath, line) {
   return [...values].sort();
 }
 
+function instancesMax(source, deploymentPath, line) {
+  const [count] = backtickedArguments(
+    source.slice(INSTANCES_PREFIX.length),
+    ERROR_CODE,
+    deploymentPath,
+    "Deployment Instances",
+    line,
+    { count: 1 }
+  );
+  if (!/^[1-9][0-9]{0,2}$/u.test(count) || Number(count) > INSTANCES_MAX) {
+    invalid(deploymentPath, `Deployment Instances is a whole number from 1 to ${INSTANCES_MAX}, such as \`4\`.`, line);
+  }
+  return Number(count);
+}
+
 function deploymentStep(match, deploymentPath, line) {
   const argv = processArguments(match[3], ERROR_CODE, deploymentPath, "Deployment command", line);
   if (argv.some((value) => /\{(?:host|port)\}/u.test(value))) {
@@ -145,6 +166,7 @@ function emptyDeployment() {
     generatedSecrets: [],
     setupCode: "",
     sandboxAllowances: [],
+    instances: { max: 1 },
     readiness: null,
     steps: []
   };
@@ -225,6 +247,12 @@ function parseVibe64DeploymentLines(lines, options = {}) {
       result.sandboxAllowances = sandboxAllowances(source, deploymentPath, line);
       continue;
     }
+    if (source.startsWith(INSTANCES_PREFIX)) {
+      if (seen.has("instances")) invalid(deploymentPath, "Duplicate Deployment Instances.", line);
+      seen.add("instances");
+      result.instances = { max: instancesMax(source, deploymentPath, line) };
+      continue;
+    }
     if (source.startsWith("- Ready when: ")) {
       if (seen.has("readiness")) invalid(deploymentPath, "Duplicate Deployment Ready when.", line);
       seen.add("readiness");
@@ -294,6 +322,7 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
     generatedSecrets: parsed.generatedSecrets,
     setupCode: parsed.setupCode,
     sandboxAllowances: parsed.sandboxAllowances,
+    instances: parsed.instances,
     readiness: parsed.readiness,
     steps: parsed.steps
   };

@@ -289,6 +289,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     generatedSecrets: [],
     setupCode: "",
     sandboxAllowances: [],
+    instances: { max: 1 },
     readiness: {
       kind: "http",
       method: "GET",
@@ -310,6 +311,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     generatedSecrets: [],
     setupCode: "",
     sandboxAllowances: [],
+    instances: { max: 1 },
     readiness: null,
     steps: []
   });
@@ -337,6 +339,21 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
   });
   assert.deepEqual(parseVibe64DeploymentLines(["- Sandbox allows: `gvisor`", ...deploymentLines()]).sandboxAllowances,
     ["gvisor"]);
+  // How many identical copies a host may run behind one address: one unless
+  // the application says more, never guessed from its source.
+  assert.deepEqual(parseVibe64DeploymentLines(["- Instances: up to `4`", ...deploymentLines()]), {
+    ...parseVibe64DeploymentLines(deploymentLines()),
+    instances: { max: 4 }
+  });
+  for (const lines of [
+    ["- Instances: up to `0`", ...deploymentLines()],
+    ["- Instances: up to `101`", ...deploymentLines()],
+    ["- Instances: up to `four`", ...deploymentLines()],
+    ["- Instances: up to `2` `3`", ...deploymentLines()],
+    ["- Instances: up to `2`", "- Instances: up to `3`", ...deploymentLines()]
+  ]) {
+    assert.throws(() => parseVibe64DeploymentLines(lines), (error) => error?.code === "VIBE64_DEPLOYMENT_INVALID", lines[0]);
+  }
 });
 
 test("Deployment rejects unsafe paths, shell strings, placeholders, missing proof, and phase reordering", () => {

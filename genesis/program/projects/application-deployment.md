@@ -17,7 +17,8 @@ named `Deployment`, validates it under the Vibe64-owned
 declared resources. The source is strict Markdown; its normalized result
 contains exact argument arrays, working directory, runtime requirements,
 release-recreation paths, generated secret names, the setup code name, sandbox
-allowances, and success condition. Invalid, absent, and competing
+allowances, how many instances a host may run, and success condition.
+Invalid, absent, and competing
 declarations remain explicit states.
 
 Commands are exact argument arrays with no placeholder expansion; `{host}` and
@@ -48,6 +49,14 @@ system inside a user and mount namespace of their own. A host grants each only
 where its owner permits it and refuses a deploy that needs one it does not grant;
 [Workflow accounting](../execution/workflow-accounting.md) says exactly what
 each adds to the sandbox.
+
+`- Instances: up to` names, in backticks, how many identical copies of the
+application a host may run at once behind one address, from 1 to 100; the
+result is `instances: { max }`, 1 without the entry. An application declares
+more only when no copy keeps anything a later request needs (files on its own
+disk, sign-ins in memory or files, a job that must run once): such state
+belongs in a declared resource. A host that runs one copy, such as a
+workspace's own release service, ignores it; a host never guesses it.
 
 The Deployment guidance for assistants also says where host-level preparation
 beyond the package manager goes: one script per hosting environment,
