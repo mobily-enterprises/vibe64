@@ -22,10 +22,9 @@ const DATABASE_RESOURCE_KINDS = new Set(["mysql", "postgresql", "sqlite"]);
 // state through. A host may serve one.
 const REDIS_RESOURCE_KIND = "redis";
 // Object storage speaking the S3 API, in an account the person holds with a
-// provider of their own choosing. No host supplies one to development or to a
-// workspace's own release: the person enters its settings, and without them in
-// development the application uses its own default storage, usually its own
-// disk. A host may make one for a separate deployment it runs and bind it.
+// provider of their own choosing. For development and a workspace's own release
+// the person enters its settings (development without them uses the app's own
+// default storage); a host may make one for a separate deployment it runs.
 const BUCKET_RESOURCE_KIND = "bucket";
 // What a bucket's optional `driver` binding receives: the API every bucket speaks.
 const BUCKET_STORAGE_DRIVER = "s3";
@@ -190,16 +189,9 @@ function validateBindingKind(resource = {}, bindings = {}) {
   ].filter(Boolean).join(" "), `vibe64_${resource.kind}_resource_bindings_invalid`);
 }
 
-/**
- * A declared resource's one preferred alternative, `{ bindings, allowEmpty? }`,
- * its bindings checked against the semantics its kind defines; refused when it
- * has none, several, or bindings its kind does not take.
- * @param {object} resource
- */
+/** A declared resource's one preferred alternative, its bindings checked for its kind. */
 function preferredAlternative(resource = {}) {
-  const alternatives = Array.isArray(resource.environmentAlternatives)
-    ? resource.environmentAlternatives
-    : [];
+  const alternatives = Array.isArray(resource.environmentAlternatives) ? resource.environmentAlternatives : [];
   const preferred = alternatives.filter((alternative) => alternative?.preferred === true);
   if (preferred.length !== 1 || !objectRecord(preferred[0].bindings)) {
     throw vibe64Error(
