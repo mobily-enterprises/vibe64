@@ -58,7 +58,8 @@ export async function quietWorld(page: Page, server: StatusServer) {
 }
 
 async function repositoryWorld(page: Page, server: StatusServer, failure: Record<string, any>, kind: "update" | "save" | "workspace-setup" | "") {
-  const world = { updated: false, operationEvents: [] as { at: string; message: string }[] };
+  // `accessHeld`: the session's AI access answers once that promise settles, so a scenario can hold it loading.
+  const world = { updated: false, operationEvents: [] as { at: string; message: string }[], accessHeld: null as Promise<void> | null };
   const update = kind === "update";
   const save = kind === "save";
   if (update || save) {
@@ -84,6 +85,7 @@ async function repositoryWorld(page: Page, server: StatusServer, failure: Record
     const method = request.method();
     if (/\/(?:temporary-conversations|ai-tasks)(?:[/?]|$)/u.test(url.pathname)) return route.fallback();
     if (method === "GET" && url.pathname.endsWith("/assistant-access")) {
+      await world.accessHeld;
       await fulfillJson(route, { ok: true, available: true, canUse: true, purposes: { senior: { available: true }, fix: { available: true } } });
       return;
     }
@@ -132,6 +134,8 @@ export async function openFix(page: Page, server: StatusServer, arrive: () => Pr
   const showChat = page.getByRole("button", { name: "Show chat", exact: true });
   await expect(button.or(showChat).first()).toBeVisible();
   if (!await button.isVisible()) await showChat.click();
+  // Fix it with AI starts once the session's AI access has loaded; until then its button is disabled.
+  await expect(button).toBeEnabled();
   await button.click();
   await expect(taskWindow(page)).toBeVisible();
   return taskIdOf(page);

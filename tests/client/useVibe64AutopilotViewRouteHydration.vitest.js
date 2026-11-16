@@ -317,6 +317,28 @@ describe("useVibe64AutopilotView route hydration", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
+  it("asks for the project side once, not again when AI access settles on the tool already shown", async () => {
+    route.path = "/app/project/chat-test/dashboard/repository";
+    const props = viewProps();
+    const emit = vi.fn();
+    const assistantAccessLoading = ref(true);
+    const assistantCanUseAi = ref(false);
+    const { useVibe64AutopilotView } = await import(
+      "../../src/composables/useVibe64AutopilotView.js"
+    );
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), emit,
+      { assistantAccessLoading, assistantCanUseAi })));
+    const attention = () => emit.mock.calls.filter(([name]) => name === "project-attention").length;
+    expect(view.rightPaneTab.value).toBe("repository");
+    expect(attention()).toBe(1);
+    // On a phone that showed the project side; a chat the person opens since stays open.
+    assistantAccessLoading.value = false;
+    assistantCanUseAi.value = true;
+    await nextTick();
+    expect(view.rightPaneTab.value).toBe("repository");
+    expect(attention()).toBe(1);
+  });
+
   it("opens a directly routed source tool when the selected source arrives", async () => {
     const props = viewProps();
     const selectedSession = props.session;

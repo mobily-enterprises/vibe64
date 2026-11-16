@@ -26,7 +26,11 @@ conversation, application preview, files and engineering tools.
 Given the currently selected project/session, its admitted services and current
 viewer access, the workspace presents the conversation and selected project tool.
 Switching tools retains their mounted content while hiding inactive views and
-suspending their automatic reads. Session changes use the existing session owners
+suspending their automatic reads. A tool opened at its dashboard address asks for
+the project side (on a phone, in place of the chat) when it becomes the pane; AI
+access or the session's source settling later re-checks it, falling back to Env
+when it is no longer available, without asking again, so a chat the person opened
+stays open. Session changes use the existing session owners
 and do not adopt another conversation's native identity or source authority.
 
 Architecture, Changes, Files, Database and the GitHub panels use one shared

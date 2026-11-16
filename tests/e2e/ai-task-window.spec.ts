@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { directChatSessionId, directChatSessionPayload } from "./support/base-shell-data";
+import { DASHBOARD_PATH, directChatSessionId, directChatSessionPayload } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
 import { assistantStatusServer } from "./support/assistant-status-server";
 import {
@@ -100,6 +100,28 @@ for (const viewport of VIEWPORTS) {
   test.describe(`at ${size}`, () => {
     test.use({ hasTouch: viewport.touch, viewport: { width: viewport.width, height: viewport.height } });
     const shared = serverFixture();
+
+    test("waits for AI access saying so, and access arriving leaves a chat the person opened open", async ({ page }) => {
+      const world = await aiTaskWorld(page, shared.server);
+      let releaseAccess = () => {};
+      world.accessHeld = new Promise<void>((resolve) => { releaseAccess = resolve; });
+      await page.goto(`${shared.server.url}${DASHBOARD_PATH}/repository`);
+      const button = page.locator("[data-vibe64-ai-task-button]").filter({ visible: true }).first();
+      const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+      await expect(button).toBeDisabled();
+      await expect(button).toHaveAttribute("title", "Checking AI access…");
+      // A phone shows the project side at this address; the person opens the chat while access still loads.
+      const phone = await showChat.isVisible();
+      if (phone) {
+        await showChat.click();
+        await expect(button).toHaveAttribute("title", "Checking AI access…");
+      }
+      releaseAccess();
+      await expect(button).toBeEnabled();
+      if (phone) await expect(showChat).toBeHidden();
+      await button.click();
+      await expect(taskWindow(page)).toBeVisible();
+    });
 
     test("opens from the notice, keeps the problem in both views and fits the screen", async ({ page }) => {
       await aiTaskWorld(page, shared.server);

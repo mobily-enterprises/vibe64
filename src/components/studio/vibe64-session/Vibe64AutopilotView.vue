@@ -198,7 +198,9 @@ const sessionPullRequestTarget = computed(() => sessionPullRequest.value?.number
   query: { pr: String(sessionPullRequest.value.number) }
 } : undefined);
 const githubProject = computed(() => githubProjectAvailable(props.projectContext));
-const assistantFixRestrictionMessage = computed(() => assistantPurposes.value.fix?.message || "Fix it with AI is unavailable. Review Models.");
+// Until the session's AI access has loaded, Fix it with AI is not known to be unavailable.
+const assistantFixRestrictionMessage = computed(() => assistantAccessLoading.value ? "Checking AI access…"
+  : assistantPurposes.value.fix?.message || "Fix it with AI is unavailable. Review Models.");
 const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
   assistantDirectAllowed: assistantDirectAllowed.value,

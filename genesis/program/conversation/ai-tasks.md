@@ -248,8 +248,9 @@ window is hidden raises a toast with **See result**, and a person whose window s
 else closes hears how the task ended. Each Fix it with AI entry checks the viewer's
 effective Fix it with AI access, independently of Main's mode or personal connection.
 Without it the button stays visible but disabled, and its title gives the role's
-reason or says Fix it with AI is unavailable; a task of its kind that is already open
-can always be looked at.
+reason or says Fix it with AI is unavailable; while the session's AI access is still
+loading it is disabled too, titled **Checking AI access…**. A task of its kind that is
+already open can always be looked at.
 
 `Vibe64AiTaskHost`, mounted once per session view, holds the window, the tray and
 the task's conversation. Chat (`Vibe64AiTaskChat`) presents that conversation through

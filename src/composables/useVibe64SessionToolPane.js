@@ -167,7 +167,9 @@ function useVibe64SessionToolPane(props, emit, {
     return suffix ? projectAppPath(projectSlug.value, suffix) : "";
   }
 
-  function selectSessionTool(toolId = "", { navigate = true } = {}) {
+  // `attention: false` keeps the person's view: the tool is already the pane, so a
+  // phone showing the chat they opened is not sent back to the project side.
+  function selectSessionTool(toolId = "", { navigate = true, attention = true } = {}) {
     if (!DIRECT_SESSION_TOOL_IDS.has(toolId)) {
       return false;
     }
@@ -185,7 +187,7 @@ function useVibe64SessionToolPane(props, emit, {
         void router.push(targetPath);
       }
     }
-    emit("project-attention");
+    if (attention) emit("project-attention");
     return true;
   }
 
@@ -299,7 +301,10 @@ function useVibe64SessionToolPane(props, emit, {
       return;
     }
     if (routeSessionToolId.value) {
-      if (selectSessionTool(routeSessionToolId.value, { navigate: false })) {
+      // AI access or the session's source settling re-checks the address's tool;
+      // only a tool becoming the pane asks for the project side.
+      const attention = rightPaneTab.value !== routeSessionToolId.value;
+      if (selectSessionTool(routeSessionToolId.value, { navigate: false, attention })) {
         return;
       }
       const fallbackPath = projectAppPath(projectSlug.value, "/dashboard/env");
