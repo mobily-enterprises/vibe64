@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import { helperSystemdUnitRoot as exportedSystemdUnitRoot } from "@local/vibe64-execution/server/hostSettings";
 import { helperSettings } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
-import { addUserToGroup, createSystemUser } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
+import { addUserToGroup, createSystemUser, hostSettingsRoot } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import {
   helperAccountDatabase,
   helperAccountNumberOptions,
@@ -57,6 +57,72 @@ test("the host's helper settings name the account database and the unit and sudo
   }
   // A host's own server reads the unit folder through the package.
   assert.equal(exportedSystemdUnitRoot, helperSystemdUnitRoot);
+});
+
+test("the helper's settings folder is /etc/vibe64 unless VIBE64_HOST_SETTINGS_ROOT names another absolute, normalized path", () => {
+  assert.equal(hostSettingsRoot({}), "/etc/vibe64");
+  assert.equal(hostSettingsRoot({ VIBE64_HOST_SETTINGS_ROOT: "" }), "/etc/vibe64");
+  assert.equal(hostSettingsRoot({ VIBE64_HOST_SETTINGS_ROOT: "/srv/host/vibe64" }), "/srv/host/vibe64");
+  for (const folder of ["vibe64", "./vibe64", "/", "/srv/../vibe64", "/srv//vibe64", "/srv/vibe64/", "/srv/./vibe64", " /srv/vibe64"]) {
+    assert.throws(() => hostSettingsRoot({ VIBE64_HOST_SETTINGS_ROOT: folder }),
+      /refused its settings folder VIBE64_HOST_SETTINGS_ROOT=.*: it is not an absolute, normalized path other than \//u, folder);
+  }
+});
+
+// What the helper's modules make of the variable as they load, in a process of their own: the folder, the settings
+// file and people's sudo commands read from it, and the application sandbox that hides it.
+function loadedSettingsFolder(value) {
+  const env = { ...process.env };
+  delete env.VIBE64_HOST_SETTINGS_ROOT;
+  if (value !== undefined) env.VIBE64_HOST_SETTINGS_ROOT = value;
+  const modules = Object.fromEntries(["hostAccounts", "commandEnvironment", "personRegistry", "systemdUnits"]
+    .map((name) => [name, new URL(`../../packages/vibe64-execution/src/host/${name}.js`, import.meta.url).href]));
+  const script = `
+    const modules = ${JSON.stringify(modules)};
+    const { HOST_SETTINGS_ROOT } = await import(modules.hostAccounts);
+    const { helperSettings } = await import(modules.commandEnvironment);
+    const { personSudoCommands } = await import(modules.personRegistry);
+    const { applicationSandboxLines } = await import(modules.systemdUnits);
+    const uid = process.getuid();
+    process.stdout.write(JSON.stringify({
+      root: HOST_SETTINGS_ROOT,
+      settings: HOST_SETTINGS_ROOT === "/etc/vibe64" ? null : helperSettings(undefined, uid),
+      sudoCommands: HOST_SETTINGS_ROOT === "/etc/vibe64" ? null : personSudoCommands(undefined, uid),
+      hidden: applicationSandboxLines({ appRoot: "/area/app", databaseRoot: "/area/database" })
+        .filter((line) => line.startsWith("InaccessiblePaths="))
+    }));
+  `;
+  return spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", env });
+}
+
+test("every path the helper keeps in its settings folder derives from the folder it read as it loaded", async (t) => {
+  const folder = await temporaryFolder(t, "v64-host-settings-root-");
+  await chmod(folder, 0o755);
+  await writeFile(path.join(folder, "exec-helper.env"), "VIBE64_ACCOUNT_DATABASE=extrausers\n", { mode: 0o644 });
+  await writeFile(path.join(folder, "person-sudo-commands"), "/usr/bin/true\n", { mode: 0o644 });
+
+  const moved = loadedSettingsFolder(folder);
+  assert.equal(moved.status, 0, moved.stderr);
+  assert.deepEqual(JSON.parse(moved.stdout), {
+    hidden: [`InaccessiblePaths=${folder}`],
+    root: folder,
+    settings: { VIBE64_ACCOUNT_DATABASE: "extrausers" },
+    sudoCommands: ["/usr/bin/true"]
+  });
+  const unset = loadedSettingsFolder(undefined);
+  assert.equal(unset.status, 0, unset.stderr);
+  assert.deepEqual(JSON.parse(unset.stdout), {
+    hidden: ["InaccessiblePaths=/etc/vibe64"], root: "/etc/vibe64", settings: null, sudoCommands: null
+  });
+  // A folder that is not an absolute, normalized path stops the helper before it does anything.
+  const refused = loadedSettingsFolder(`${folder}/`);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /refused its settings folder VIBE64_HOST_SETTINGS_ROOT=/u);
+  assert.equal(refused.stdout, "");
+
+  // No other module names the default folder: each takes its paths from the one it was read into.
+  const source = await execHelperSource();
+  assert.equal(source.match(/"\/etc\/vibe64[/"]/gu)?.length, 1);
 });
 
 test("the helper numbers new accounts in the bands the host's settings name; without them by the system's ranges", () => {

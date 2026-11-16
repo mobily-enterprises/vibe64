@@ -52,7 +52,7 @@ const REGISTRATION_LIMIT_BYTES = 4096;
 const PERSON_REFUSED_EXIT_CODE = 3;
 // The host's own narrow sudo commands for its people, one per line exactly as
 // `sudo -l` prints them, in a file only root can change.
-const PERSON_SUDO_COMMANDS_FILE = "/etc/vibe64/person-sudo-commands";
+const PERSON_SUDO_COMMANDS_FILE = path.join(HOST_SETTINGS_ROOT, "person-sudo-commands");
 // Members of these groups administer the host or can become root without sudo:
 // through the group's own files or devices (disk, kmem, root, shadow, staff's
 // /usr/local), a container or VM daemon (docker, incus, libvirt, lxd), or the

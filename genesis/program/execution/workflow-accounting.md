@@ -215,6 +215,18 @@ environment. Loader and shell startup injection variables are excluded.
 Allowed working directories and host service paths are checked after resolving
 symlinks. A link inside an allowed directory cannot grant access outside that root.
 
+The helper's settings folder holds `exec-helper.env`, its people's sudo
+commands (`person-sudo-commands`), the people and applications it registered
+and the staging keys; every one of those paths derives from it, and the
+application sandbox hides it. It is the system's own Vibe64 settings folder
+unless `VIBE64_HOST_SETTINGS_ROOT`, read once as the helper loads
+(`hostSettingsRoot` in `hostAccounts.js`), names another, which must be an
+absolute, normalized path other than `/`; anything else stops the helper
+before it acts. An environment variable is safe here because the helper acts
+as root only through sudo, whose `env_reset` drops its caller's variables: a
+host that keeps the folder elsewhere makes its sudo target a root-owned
+launcher, in a folder only root can change, that sets the variable itself.
+
 The same settings say where the helper keeps what it makes outside its own
 folders and how its accounts are numbered (`hostSettings.js`); a host that
 names none keeps the system's own account files, ranges and folders, as before:

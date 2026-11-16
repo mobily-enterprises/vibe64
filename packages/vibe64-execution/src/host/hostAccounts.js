@@ -18,7 +18,33 @@ const MANAGED_ROOT = "/var/lib/vibe64";
 const RESERVED_HUMAN_USERNAMES = new Set([
   "root"
 ]);
-const HOST_SETTINGS_ROOT = "/etc/vibe64";
+const DEFAULT_HOST_SETTINGS_ROOT = "/etc/vibe64";
+
+/**
+ * The folder of the host's settings for this helper, which every path the helper keeps there derives from: its
+ * settings file (exec-helper.env), its people's sudo commands, the people and applications it registered and the
+ * staging keys. It is /etc/vibe64 unless VIBE64_HOST_SETTINGS_ROOT names another, an absolute, normalized path
+ * other than /; anything else is refused.
+ *
+ * An environment variable is safe here because the helper acts as root only through sudo, whose env_reset drops
+ * every variable its caller sets, so no caller chooses the folder. A host that keeps the folder elsewhere (one whose
+ * /etc cannot be written) makes its sudo target a root-owned launcher, in a folder only root can change, that sets
+ * the variable itself. Where the helper runs as an account of its own (a staging login), naming another folder
+ * gains it nothing: the helper reads only files root owns there and acts only as that account.
+ * @param {Record<string, string | undefined>} [env]
+ */
+function hostSettingsRoot(env = process.env) {
+  const configured = String(env.VIBE64_HOST_SETTINGS_ROOT ?? "");
+  if (!configured) return DEFAULT_HOST_SETTINGS_ROOT;
+  if (!path.isAbsolute(configured) || path.resolve(configured) !== configured || configured === "/") {
+    throw new Error(`Vibe64 exec helper refused its settings folder VIBE64_HOST_SETTINGS_ROOT=${JSON.stringify(configured)}: ` +
+      "it is not an absolute, normalized path other than /.");
+  }
+  return configured;
+}
+
+// Read once, as the helper loads.
+const HOST_SETTINGS_ROOT = hostSettingsRoot();
 const APPLICATION_USERNAME_PREFIX = "v64a_";
 // An application account has no login, except while staging access gives it one (stagingAccess.js).
 const APPLICATION_SHELL = "/usr/sbin/nologin";
@@ -272,6 +298,7 @@ export {
   DAEMON_USERNAME_PREFIX,
   ensureGroup,
   HOST_SETTINGS_ROOT,
+  hostSettingsRoot,
   MANAGED_ROOT,
   MANAGED_USERNAME_PATTERN,
   MEMBERSHIP_DIRECTORY,
