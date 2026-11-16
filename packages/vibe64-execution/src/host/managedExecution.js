@@ -49,6 +49,7 @@ import {
   writeManagedExecutionState
 } from "./executionState.js";
 import { ensureGroup, resolveOwnerUser, VIBE64_GROUP } from "./hostAccounts.js";
+import { helperCommand } from "./hostSettings.js";
 import {
   configureManagedExecutionWorkSlice,
   managedWorkflowIdentity,
@@ -221,7 +222,7 @@ function handleManagedExecutionOperation(payload = {}) {
   // The runner reads its command as the target user, with no privilege to lend.
   const runnerPayloadPath = path.join(receiptRoot, "command.json");
 
-  const helperPath = path.resolve(process.argv[1]);
+  const helperPath = helperCommand();
   const systemdArgs = [
     "--quiet",
     `--unit=${unitName}`,

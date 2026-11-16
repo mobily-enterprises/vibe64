@@ -30,6 +30,7 @@ import {
   safeUsername,
   tryResolveOsUser
 } from "./hostAccounts.js";
+import { helperCommand } from "./hostSettings.js";
 import { installStagingAccess, removeStagingAccess, stagingAccessGranted } from "./stagingAccess.js";
 import { deploymentServiceJournalWindow, printDeploymentServiceUnit } from "./serviceOperations.js";
 
@@ -77,7 +78,7 @@ function handleStagingAccessOperation(payload = {}) {
     if (!STAGING_PUBLIC_KEY_PATTERN.test(publicKey)) {
       throw new Error("Vibe64 exec helper accepts one ssh-ed25519 public key for staging access.");
     }
-    installStagingAccess(registeredApplicationUser(owner, identity.username), publicKey, path.resolve(process.argv[1]));
+    installStagingAccess(registeredApplicationUser(owner, identity.username), publicKey, helperCommand());
     writeJson({ account: identity.username });
     return;
   }
@@ -216,7 +217,7 @@ function recordStagingLogin(event = {}) {
  * runtimes and PATH, plus staging-logs, staging-status, staging-restart and staging-enter, and
  * reports the login's command, session and end; logind records the login itself.
  */
-function runStagingShell({ env = process.env, helperPath = path.resolve(process.argv[1]) } = {}) {
+function runStagingShell({ env = process.env, helperPath = helperCommand() } = {}) {
   const username = os.userInfo().username;
   if (!APPLICATION_USERNAME_PATTERN.test(username)) {
     throw new Error("Only an application account's staging login starts here.");
@@ -423,7 +424,7 @@ function enterStagingService(unit = {}, user = {}, command = [], {
   const mountNamespace = link(`/proc/${pid}/ns/mnt`);
   const userNamespace = serviceUserNamespace(pid, user, { link, read });
   if (!inService()) throw changed;
-  const entered = stagingEnterCommand({ command, env, helperPath: path.resolve(process.argv[1]), mountNamespace, pid,
+  const entered = stagingEnterCommand({ command, env, helperPath: helperCommand(), mountNamespace, pid,
     unit, user, userNamespace });
   execve(entered.file, entered.args, entered.env);
 }

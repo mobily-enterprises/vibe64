@@ -225,7 +225,9 @@ absolute, normalized path other than `/`; anything else stops the helper
 before it acts. An environment variable is safe here because the helper acts
 as root only through sudo, whose `env_reset` drops its caller's variables: a
 host that keeps the folder elsewhere makes its sudo target a root-owned
-launcher, in a folder only root can change, that sets the variable itself.
+launcher, in a folder only root can change, that sets the variable itself, and
+names that launcher in its settings (`VIBE64_EXEC_HELPER_COMMAND`, below), so
+the helper's later runs read the same folder.
 
 The same settings say where the helper keeps what it makes outside its own
 folders and how its accounts are numbered (`hostSettings.js`); a host that
@@ -266,10 +268,20 @@ names none keeps the system's own account files, ranges and folders, as before:
   port claim, retiring an application, a staging login) reads the same folder.
 - `VIBE64_SUDOERS_ROOT`: an absolute folder for the staging sudo rules in
   place of sudo's own, which the host's sudo configuration includes.
+- `VIBE64_EXEC_HELPER_COMMAND`: the command that starts the helper, when the
+  host starts it through a launcher rather than by the file it runs from
+  (`helperCommand` in `hostSettings.js`). The helper's later runs start it
+  so: the staging sudo rule and the staging shell's commands, `staging-enter`,
+  a release unit's `ExecStart`, a managed run, and the command the refusal of
+  an unregistered person tells an administrator to run. Without it they name
+  the file the helper runs from, as before. It is written into a sudo rule, a
+  unit and a shell function as it is, so it must be an absolute, normalized
+  path of letters, digits and `. _ + -` alone.
 
 An unknown database, a band that is not `FIRST-LAST` (first no greater than
-last, both below 65534) or a folder that is not an absolute path other than `/`
-refuses the operation that needs it. A host's own server reads the configured
+last, both below 65534), a folder that is not an absolute path other than `/`
+or a helper command that is not such a path refuses the operation that needs
+it. A host's own server reads the configured
 unit folder through `@local/vibe64-execution/server/hostSettings`
 (`helperSystemdUnitRoot`).
 
@@ -381,7 +393,8 @@ gives the project's application account a way in for them: `grant` writes the
 project's one `ssh-ed25519` public key as a root-owned key file for the
 account in the helper's settings folder (loopback only, no forwarding), a
 `visudo`-checked sudoers rule of its own (`stagingSudoersPath`, in the sudo rule folder its settings name) that lets
-the account run exactly `vibe64-exec-helper staging-service *`, and the
+the account run exactly `vibe64-exec-helper staging-service *` (by the command
+its settings name), and the
 login shell `/bin/sh`, which the account check accepts only while that key
 file exists. sshd starts even the forced command through that shell, and
 `/bin/sh -c` reads no file of the account's, where bash started by sshd would

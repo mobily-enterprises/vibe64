@@ -44,7 +44,7 @@ import {
   openRootOwnedDirectory,
   readOwnedFile
 } from "./hostFiles.js";
-import { helperAccountDatabase, helperAccountNumberOptions } from "./hostSettings.js";
+import { helperAccountDatabase, helperAccountNumberOptions, helperCommand } from "./hostSettings.js";
 
 const PERSON_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "people");
 const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
@@ -321,7 +321,7 @@ function assertRegisteredPerson(workspace = "", targetUser = {}, {
   const registration = readPersonRegistration(workspace, targetUser.username, registry);
   if (registration?.uid !== targetUser.uid) {
     throw personRefusal(`OS user ${targetUser.username} is not registered as a Vibe64 person of workspace ${workspace}. ` +
-      `A server administrator registers an existing account with: sudo ${path.resolve(process.argv[1])} ` +
+      `A server administrator registers an existing account with: sudo ${helperCommand()} ` +
       `register-person ${workspace} ${targetUser.username}`);
   }
   const hostFacts = facts(targetUser.username);

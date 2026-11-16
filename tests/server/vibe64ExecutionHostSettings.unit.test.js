@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmod, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { renameSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -13,6 +13,7 @@ import { addUserToGroup, createSystemUser, hostSettingsRoot } from "../../packag
 import {
   helperAccountDatabase,
   helperAccountNumberOptions,
+  helperCommand,
   helperSudoersRoot,
   helperSystemdUnitRoot
 } from "../../packages/vibe64-execution/src/host/hostSettings.js";
@@ -123,6 +124,68 @@ test("every path the helper keeps in its settings folder derives from the folder
   // No other module names the default folder: each takes its paths from the one it was read into.
   const source = await execHelperSource();
   assert.equal(source.match(/"\/etc\/vibe64[/"]/gu)?.length, 1);
+});
+
+test("later runs start the helper by the command the host's settings name, else by the file it runs from", () => {
+  assert.equal(helperCommand({}, "/usr/lib/vibe64/../vibe64/vibe64-exec-helper"), "/usr/lib/vibe64/vibe64-exec-helper");
+  assert.equal(helperCommand({ VIBE64_EXEC_HELPER_COMMAND: " " }, "/usr/lib/vibe64/vibe64-exec-helper"),
+    "/usr/lib/vibe64/vibe64-exec-helper");
+  assert.equal(helperCommand({ VIBE64_EXEC_HELPER_COMMAND: "/srv/host/helpers/vibe64-exec-helper" },
+    "/srv/host/helpers/exec-helper.mjs"), "/srv/host/helpers/vibe64-exec-helper");
+  // A sudo rule, a unit's ExecStart and a shell function each name it, so it is one plain path.
+  for (const command of ["vibe64-exec-helper", "./vibe64-exec-helper", "/", "/srv/../helper", "/srv//helper",
+    "/srv/helper/", "/srv/./helper", "/srv/exec helper", "/srv/helper execute", "/srv/a,b", "/srv/a:b", "/srv/a=b",
+    "/srv/$HOME", "/srv/a\"b", "/srv/a\\b", "/srv/a*", "/srv/a;b", "/srv/a`b`", "/srv/a\nb"]) {
+    assert.throws(() => helperCommand({ VIBE64_EXEC_HELPER_COMMAND: command }, "/usr/lib/vibe64/vibe64-exec-helper"),
+      /helper command \(VIBE64_EXEC_HELPER_COMMAND\) that is not an absolute, normalized path/u, JSON.stringify(command));
+  }
+});
+
+// A host that keeps the settings folder elsewhere starts the helper through a launcher that names the folder. The
+// helper's later runs go through that launcher too, once the settings it reads there name it; started by the file
+// the helper runs from, they would read the system's own folder.
+test("a helper started through a launcher names that launcher for its later runs when its settings say so", async (t) => {
+  const folder = await temporaryFolder(t, "v64-helper-command-");
+  const settingsRoot = path.join(folder, "settings");
+  await mkdir(settingsRoot);
+  await chmod(settingsRoot, 0o755);
+  const bundle = path.join(folder, "exec-helper.mjs");
+  const launcher = path.join(folder, "vibe64-exec-helper");
+  const modules = Object.fromEntries(["commandEnvironment", "hostSettings"]
+    .map((name) => [name, new URL(`../../packages/vibe64-execution/src/host/${name}.js`, import.meta.url).href]));
+  await writeFile(bundle, `
+    const { helperSettings } = await import(${JSON.stringify(modules.commandEnvironment)});
+    const { helperCommand } = await import(${JSON.stringify(modules.hostSettings)});
+    process.stdout.write(helperCommand(helperSettings(undefined, process.getuid())));
+  `, { mode: 0o644 });
+  await writeFile(launcher, `#!/bin/sh\nVIBE64_HOST_SETTINGS_ROOT=${settingsRoot}\nexport VIBE64_HOST_SETTINGS_ROOT\n` +
+    `exec "${process.execPath}" "${bundle}" "$@"\n`, { mode: 0o755 });
+  const command = () => {
+    const ran = spawnSync(launcher, [], { encoding: "utf8" });
+    assert.equal(ran.status, 0, ran.stderr);
+    return ran.stdout;
+  };
+
+  assert.equal(command(), bundle, "a host whose settings name no command, as before");
+  await writeFile(path.join(settingsRoot, "exec-helper.env"), `VIBE64_EXEC_HELPER_COMMAND=${launcher}\n`, { mode: 0o644 });
+  assert.equal(command(), launcher);
+});
+
+test("every later run of the helper starts it by the command the host's settings name", async () => {
+  const source = await execHelperSource();
+  // The file the helper runs from is read twice: as that command's default, and by the usage recorder, which loads
+  // from beside it.
+  assert.equal(source.match(/process\.argv\[1\]/gu)?.length, 2);
+  for (const [later, pattern] of [
+    ["the staging sudo rule", /installStagingAccess\(registeredApplicationUser\(owner, identity\.username\), publicKey, helperCommand\(\)\);/u],
+    ["the staging shell's commands", /function runStagingShell\(\{ env = process\.env, helperPath = helperCommand\(\) \} = \{\}\)/u],
+    ["staging-enter", /stagingEnterCommand\(\{ command, env, helperPath: helperCommand\(\), mountNamespace/u],
+    ["a release unit's ExecStart", /helperPath: helperCommand\(\),\n\s*loopbackPort,/u],
+    ["a managed run", /const helperPath = helperCommand\(\);\n\s*const systemdArgs = \[/u],
+    ["registering a person, as the refusal says", /registers an existing account with: sudo \$\{helperCommand\(\)\} `/u]
+  ]) {
+    assert.match(source, pattern, later);
+  }
 });
 
 test("the helper numbers new accounts in the bands the host's settings name; without them by the system's ranges", () => {

@@ -127,7 +127,7 @@ function removeIfPresent(file = "") {
  * adds the forced command that starts every login in the live release.
  * @param {{ username: string, shell: string }} user the registered application account
  * @param {string} publicKey one `ssh-ed25519 <key>` line
- * @param {string} helperPath this helper, which the sudo rule names
+ * @param {string} helperPath the command that starts this helper (helperCommand), which the sudo rule names
  */
 function installStagingAccess(user, publicKey, helperPath, {
   accountDatabase = helperAccountDatabase(),

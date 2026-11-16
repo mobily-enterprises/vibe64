@@ -39,7 +39,7 @@
           },
           {
             "subpath": "./server/hostSettings",
-            "summary": "Where the privileged helper keeps the accounts, service units and sudo rules it makes, as the host's helper settings name them."
+            "summary": "Where the privileged helper keeps the accounts, service units and sudo rules it makes, and the command its later runs start it with, as the host's helper settings name them."
           },
           {
             "subpath": "./server/terminalSessions",

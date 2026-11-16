@@ -1,9 +1,10 @@
 // Where the helper keeps what it makes outside its own folders: the accounts it adds and how they are numbered,
 // the service units it installs and the staging sudo rules it writes. Each goes to the system's own place unless
 // the host's helper settings (exec-helper.env) name another, for a host whose system files are not where it keeps
-// them or cannot be written.
+// them or cannot be written. The same settings may name the command its later runs start it with.
 
 import path from "node:path";
+import process from "node:process";
 
 import { helperSettings } from "./commandEnvironment.js";
 
@@ -11,6 +12,9 @@ const ACCOUNT_DATABASES = Object.freeze(["files", "extrausers"]);
 // systemd's folder for the system's own units, and sudo's for added rules.
 const SYSTEMD_UNIT_ROOT = "/etc/systemd/system";
 const SUDOERS_ROOT = "/etc/sudoers.d";
+// A command a sudo rule, a unit's ExecStart and a shell function each name as it is: an absolute path whose parts
+// hold no character any of them would read as more than a name.
+const COMMAND_PATH_PATTERN = /^(?:\/[A-Za-z0-9._+-]+)+$/u;
 
 /**
  * The account database the helper adds accounts and group memberships to: the system's own files, or the extra users
@@ -85,9 +89,29 @@ function helperSudoersRoot(settings = helperSettings()) {
   return settingsFolder(settings, "VIBE64_SUDOERS_ROOT", SUDOERS_ROOT);
 }
 
+/**
+ * How the helper's later runs start it: the staging sudo rule and the staging shell's commands, staging-enter,
+ * release units' ExecStart and managed runs. It is the file the helper runs from, unless the host's helper settings
+ * name the command the host starts it with (`VIBE64_EXEC_HELPER_COMMAND`): a host that starts it through a
+ * launcher, which names the settings folder (`VIBE64_HOST_SETTINGS_ROOT`), names that launcher, so a later run
+ * reads the same folder.
+ * @param {Record<string, string>} [settings] the host's helper settings
+ * @param {string} [running] the file the helper runs from
+ */
+function helperCommand(settings = helperSettings(), running = process.argv[1]) {
+  const configured = String(settings.VIBE64_EXEC_HELPER_COMMAND || "").trim();
+  if (!configured) return path.resolve(running);
+  if (!COMMAND_PATH_PATTERN.test(configured) || path.resolve(configured) !== configured) {
+    throw new Error("This host's Vibe64 exec helper settings name a helper command (VIBE64_EXEC_HELPER_COMMAND) that " +
+      "is not an absolute, normalized path of letters, digits and . _ + - alone.");
+  }
+  return configured;
+}
+
 export {
   helperAccountDatabase,
   helperAccountNumberOptions,
+  helperCommand,
   helperSudoersRoot,
   helperSystemdUnitRoot,
   SYSTEMD_UNIT_ROOT

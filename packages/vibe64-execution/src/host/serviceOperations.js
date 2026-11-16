@@ -37,7 +37,7 @@ import {
   readOwnedFile,
   relativePathParts
 } from "./hostFiles.js";
-import { helperSystemdUnitRoot, SYSTEMD_UNIT_ROOT } from "./hostSettings.js";
+import { helperCommand, helperSystemdUnitRoot, SYSTEMD_UNIT_ROOT } from "./hostSettings.js";
 import {
   assertSafeManagedServicePath,
   assertValidDeploymentUnitName,
@@ -81,7 +81,7 @@ function handleDeploymentServiceOperation(payload = {}) {
   const unitPath = systemdUnitPath(unitName, owner, unitRoot);
   const unit = deploymentServiceUnit({
     ...service,
-    helperPath: path.resolve(process.argv[1]),
+    helperPath: helperCommand(),
     loopbackPort,
     owner,
     requiredUnits,
