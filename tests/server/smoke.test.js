@@ -123,6 +123,56 @@ test("runtime env files load into the one runtime env, with the server's own set
     });
   }
 });
+/**
+ * The address and protocol a request reaches a server created with `trustedProxies` as TRUSTED_PROXIES (unset when
+ * undefined), for each of `requests`.
+ * @param {string | undefined} trustedProxies
+ * @param {Array<{ remoteAddress: string, headers?: Record<string, string> }>} requests
+ */
+async function clientsSeen(trustedProxies, requests) {
+  const previous = process.env.TRUSTED_PROXIES;
+  if (trustedProxies === undefined) delete process.env.TRUSTED_PROXIES;
+  else process.env.TRUSTED_PROXIES = trustedProxies;
+  try {
+    const app = await createServer();
+    app.get("/__test/client-address", (request) => ({ ip: request.ip, protocol: request.protocol }));
+    try {
+      const seen = [];
+      for (const { remoteAddress, headers = {} } of requests) {
+        seen.push((await app.inject({ method: "GET", url: "/__test/client-address", remoteAddress, headers })).json());
+      }
+      return seen;
+    } finally {
+      await app.close();
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TRUSTED_PROXIES;
+    else process.env.TRUSTED_PROXIES = previous;
+  }
+}
+
+test("the editor believes X-Forwarded-For and -Proto only from the proxies TRUSTED_PROXIES names", async () => {
+  // A host's edge ends TLS and sends the visitor's address; a visitor's own header changes nothing.
+  const edge = "203.0.113.40";
+  assert.deepEqual(await clientsSeen(`loopback,${edge}`, [
+    { remoteAddress: edge, headers: { "x-forwarded-for": "198.51.100.7", "x-forwarded-proto": "https" } },
+    { remoteAddress: edge, headers: { "x-forwarded-for": "127.0.0.1, 198.51.100.7", "x-forwarded-proto": "https" } },
+    { remoteAddress: "198.51.100.9", headers: { "x-forwarded-for": "127.0.0.1", "x-forwarded-proto": "https" } }
+  ]), [
+    { ip: "198.51.100.7", protocol: "https" },
+    { ip: "198.51.100.7", protocol: "https" },
+    { ip: "198.51.100.9", protocol: "http" }
+  ]);
+  // Unset, only a proxy on the machine itself is believed (JSKIT's default).
+  assert.deepEqual(await clientsSeen(undefined, [
+    { remoteAddress: edge, headers: { "x-forwarded-for": "198.51.100.7" } },
+    { remoteAddress: "127.0.0.1", headers: { "x-forwarded-for": "198.51.100.7" } }
+  ]), [
+    { ip: edge, protocol: "http" },
+    { ip: "198.51.100.7", protocol: "http" }
+  ]);
+});
+
 test("GET /api/health returns built-in health response", async () => {
   const app = await createServer();
   const response = await app.inject({

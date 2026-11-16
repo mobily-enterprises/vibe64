@@ -14,6 +14,7 @@ import {
   resolveRuntimeProfileFromSurface
 } from "@jskit-ai/kernel/server/platform";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
+import { resolveTrustedProxies } from "@jskit-ai/kernel/server/http";
 import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
   resolveStudioAppRoot,
@@ -318,6 +319,9 @@ async function createServer(options = {}) {
   }
   const app = Fastify({
     logger: loggerOptions.logger,
+    // The proxies whose X-Forwarded-For and -Proto the editor believes (JSKIT's TRUSTED_PROXIES; only loopback when
+    // unset), so request.ip, and every limit counted by it, is the visitor behind a host's edge, never the edge.
+    trustProxy: resolveTrustedProxies(runtimeEnv),
     // Conversation selectors carry project, session and saved chat identities.
     routerOptions: { maxParamLength: 1024 },
     ajv: {
