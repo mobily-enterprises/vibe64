@@ -134,6 +134,10 @@ process.exit(1);
     assert.match(await page.text(), /@vite\/client/u);
     const aiAccounts = await fetch(`${origin}/api/vibe64/accounts/ai-connections`);
     assert.equal(aiAccounts.status, 200, logs);
+    // The host's own proxy names its visitor; the backend still has this proxy as its loopback client.
+    const behindHostProxy = await fetch(`${origin}/api/vibe64/accounts/ai-connections`,
+      { headers: { "x-forwarded-for": "203.0.113.7" } });
+    assert.equal(behindHostProxy.status, 200, logs);
     const aiState = await aiAccounts.json();
     assert.equal(aiState.ok, true);
     assert.deepEqual(aiState.connections, [], "Vibe64 includes no AI connection of its own");

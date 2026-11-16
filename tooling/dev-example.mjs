@@ -112,10 +112,17 @@ async function main() {
     const apiOrigin = await app.listen({ host: "127.0.0.1", port: 0 });
     process.env.VITE_API_PROXY_TARGET = apiOrigin;
     // API authorization remains loopback. Only output routing uses the host's
-    // configured Studio hostname; it must not become the backend Origin.
+    // configured Studio hostname; it must not become the backend Origin. The
+    // backend believes a loopback proxy's X-Forwarded-For, so the visitor the
+    // host's own proxy names is not passed on: this proxy is the client.
+    const dropClientChain = (proxyRequest) => proxyRequest.removeHeader("x-forwarded-for");
     const proxy = { target: apiOrigin, changeOrigin: true, ws: true,
       headers: { origin: apiOrigin, "x-forwarded-host": workspaceStudioHost || new URL(apiOrigin).host,
         "x-forwarded-proto": new URL(apiOrigin).protocol.slice(0, -1) },
+      configure: (proxyServer) => {
+        proxyServer.on("proxyReq", dropClientChain);
+        proxyServer.on("proxyReqWs", dropClientChain);
+      },
       rewriteWsOrigin: true };
     const { createServer: createViteServer } = await import("vite");
     vite = await createViteServer({

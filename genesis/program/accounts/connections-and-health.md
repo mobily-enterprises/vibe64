@@ -200,7 +200,9 @@ use their separate upload API. The server (`server.js`) believes forwarded
 headers (X-Forwarded-For, -Proto, -Host) only from the proxies JSKIT's
 `TRUSTED_PROXIES` names, loopback when unset, so a visitor's own header never
 makes a request look local or HTTPS; a host whose edge ends TLS names that
-edge's addresses there.
+edge's addresses there. The local Studio check compares the Host header its
+connection carries, as the Origin match does: a trusted proxy's
+X-Forwarded-Host only routes output, such as a Preview's public address.
 
 Colleague exposes the canonical Models (`model-routing`) read, preview and save
 actions without project selection. Their assistant results contain each setup's

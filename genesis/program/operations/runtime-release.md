@@ -113,8 +113,10 @@ The default working copy, isolated state and session source live in ignored
 example working-copy path, `--state-dir` selects its runtime directory, and
 `--host`/`--port` select the loopback frontend listener. The backend gets its own
 OS-assigned port. Vite proxies API and realtime traffic to that backend.
-The proxy keeps Origin and protocol local for backend authorization. Its forwarded
-host retains the configured Studio hostname for proxied output routing.
+The proxy keeps Origin and protocol local for backend authorization, and passes
+on no X-Forwarded-For, so the backend, which believes a loopback proxy's, has the
+proxy as its client. Its forwarded host retains the configured Studio hostname
+for proxied output routing.
 Proxied Preview routing and socket placement are retained from the host, with a
 per-example routing namespace. The execution gateway preserves the trusted absolute `XDG_RUNTIME_DIR` for
 children retaining the same OS identity, so the existing Preview resolver uses

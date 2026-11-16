@@ -59,6 +59,16 @@ test("loopback command-line websocket clients may omit Origin but local foreign 
     headers: { ...request.headers, origin: "http://127.0.0.1:3000" } }, CHECKED), false);
 });
 
+test("the local check reads the Host its connection carries, never a proxy's forwarded host", () => {
+  // Behind a trusted proxy request.hostname is X-Forwarded-Host, which only routes output.
+  const routed = { ip: "127.0.0.1", hostname: "example.users.example.test",
+    headers: { host: "127.0.0.1:3000", origin: "http://127.0.0.1:3000", "x-forwarded-host": "example.users.example.test" } };
+  assert.equal(isLocalStudioRequest(routed, CHECKED), true);
+  const rebound = { ip: "127.0.0.1", hostname: "127.0.0.1",
+    headers: { host: "rebound.example.test:3000", origin: "http://127.0.0.1:3000", "x-forwarded-host": "127.0.0.1" } };
+  assert.equal(isLocalStudioRequest(rebound, CHECKED), false);
+});
+
 test("loopback guard does not treat a DNS hostname with a 127 prefix as an IP address", () => {
   for (const address of ["127.0.0.1", "127.23.45.67", "::1", "::ffff:127.0.0.1", "[::1]:3000"]) {
     assert.equal(isLoopbackAddress(address), true, address);

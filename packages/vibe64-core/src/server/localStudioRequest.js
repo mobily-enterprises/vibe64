@@ -86,8 +86,9 @@ function isTrustedStudioWebSocketRequest(request, check) {
 
 /**
  * Whether a request is this computer's Studio: a signed-in person's, or one
- * whose address, host and origin are all loopback, unless the server was
- * started with the localhost check bypassed.
+ * whose address (the client behind any trusted proxy), Host header and origin
+ * are all loopback, unless the server was started with the localhost check
+ * bypassed.
  * @param {object} request
  * @param {LocalStudioRequestCheck} check
  */
@@ -99,7 +100,10 @@ function isLocalStudioRequest(request, { localhostCheckBypassed }) {
     return true;
   }
   const remoteAddress = request.ip || request.socket?.remoteAddress || request.raw?.socket?.remoteAddress || "";
-  const host = request.hostname || request.headers?.host || "";
+  // The Host this connection carries, as originMatchesRequest compares it. Behind a trusted proxy Fastify's
+  // request.hostname is X-Forwarded-Host instead: here only output routing (a Preview's public address), and
+  // a header that a proxy passing on its client's own would let that client choose.
+  const host = request.headers?.host || "";
   const originHost = hostFromOrigin(request.headers?.origin);
   return isLoopbackAddress(remoteAddress) && isLoopbackAddress(host) && isLoopbackAddress(originHost);
 }
