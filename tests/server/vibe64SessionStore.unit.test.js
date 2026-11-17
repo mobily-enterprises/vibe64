@@ -460,6 +460,23 @@ test("session locks retire an owner whose process is demonstrably absent", {
   });
 });
 
+// Session files are written through a file handle opened in their folder (so
+// the same descriptor can be synced to disk); write(originalWrite, contents,
+// options) stands in for that handle's writeFile for files in metadataRoot.
+function mockMetadataFileWrites(t, metadataRoot, write) {
+  const originalOpen = fs.open;
+  const mock = t.mock.method(fs, "open", async (file, ...rest) => {
+    const handle = await originalOpen(file, ...rest);
+    if (path.dirname(String(file)) === metadataRoot) {
+      const originalWrite = handle.writeFile.bind(handle);
+      handle.writeFile = (contents, options) => write(originalWrite, contents, options);
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  return mock;
+}
+
 for (const writeMethod of ["writeMetadataValue", "writeMetadataValueForRenewal"]) {
   test(`${writeMethod} keeps the complete previous selection readable until replacement`, async (t) => {
     await withTemporaryRoot(async (targetRoot) => {
@@ -468,17 +485,13 @@ for (const writeMethod of ["writeMetadataValue", "writeMetadataValueForRenewal"]
       const next = JSON.stringify({ engineId: "claude", modelId: "deepseek-flash" });
       await store.createSession({ sessionId: "switching", metadata: { assistant_selection: previous } });
       const metadataRoot = store.paths("switching").metadataRoot;
-      const originalWrite = fs.writeFile;
       let observed;
-      const write = t.mock.method(fs, "writeFile", async (file, contents, options) => {
-        if (path.dirname(file) === metadataRoot) {
-          // Pause at the real truncate/write boundary while an ordinary reader runs.
-          await originalWrite(file, "", options);
-          observed = await store.readMetadata("switching");
-        }
-        return originalWrite(file, contents, options);
+      const write = mockMetadataFileWrites(t, metadataRoot, async (originalWrite, contents, options) => {
+        // Pause at the real truncate/write boundary while an ordinary reader runs.
+        await originalWrite("", options);
+        observed = await store.readMetadata("switching");
+        return originalWrite(contents, options);
       });
-      syncBuiltinESMExports();
       try {
         await store[writeMethod]("switching", "assistant_selection", next);
         assert.deepEqual(observed, { assistant_selection: previous });
@@ -523,15 +536,10 @@ test("failed metadata replacement preserves the saved value and removes the inco
     const store = createStore(targetRoot);
     await store.createSession({ sessionId: "switching", metadata: { assistant_selection: "previous" } });
     const metadataRoot = store.paths("switching").metadataRoot;
-    const originalWrite = fs.writeFile;
-    const write = t.mock.method(fs, "writeFile", async (file, contents, options) => {
-      if (path.dirname(file) === metadataRoot) {
-        await originalWrite(file, "partial", options);
-        throw Object.assign(new Error("Simulated storage failure"), { code: "ENOSPC" });
-      }
-      return originalWrite(file, contents, options);
+    const write = mockMetadataFileWrites(t, metadataRoot, async (originalWrite, contents, options) => {
+      await originalWrite("partial", options);
+      throw Object.assign(new Error("Simulated storage failure"), { code: "ENOSPC" });
     });
-    syncBuiltinESMExports();
     try {
       await assert.rejects(store.writeMetadataValue("switching", "assistant_selection", "next"), { code: "ENOSPC" });
       assert.equal(await store.readMetadataValue("switching", "assistant_selection"), "previous");
