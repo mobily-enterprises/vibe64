@@ -289,6 +289,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     generatedSecrets: [],
     setupCode: "",
     sandboxAllowances: [],
+    packages: [],
     instances: { max: 1 },
     readiness: {
       kind: "http",
@@ -311,6 +312,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     generatedSecrets: [],
     setupCode: "",
     sandboxAllowances: [],
+    packages: [],
     instances: { max: 1 },
     readiness: null,
     steps: []
@@ -339,6 +341,18 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
   });
   assert.deepEqual(parseVibe64DeploymentLines(["- Sandbox allows: `gvisor`", ...deploymentLines()]).sandboxAllowances,
     ["gvisor"]);
+  // The system packages the application needs beyond its runtimes, by their nixpkgs names (an attribute, or one of
+  // its outputs after ^), in the order the line names them.
+  assert.deepEqual(parseVibe64DeploymentLines([
+    "- Packages: `git` `gnutar` `python313Packages.pip` `gcc-unwrapped^lib` `hunspellDicts.en_GB-ise`",
+    ...deploymentLines()
+  ]), {
+    ...parseVibe64DeploymentLines(deploymentLines()),
+    packages: ["git", "gnutar", "python313Packages.pip", "gcc-unwrapped^lib", "hunspellDicts.en_GB-ise"]
+  });
+  const many = Array.from({ length: 200 }, (_, at) => `package${at}`);
+  assert.deepEqual(parseVibe64DeploymentLines([`- Packages: ${many.map((name) => `\`${name}\``).join(" ")}`,
+    ...deploymentLines()]).packages, many);
   // How many identical copies a host may run behind one address: one unless
   // the application says more, never guessed from its source.
   assert.deepEqual(parseVibe64DeploymentLines(["- Instances: up to `4`", ...deploymentLines()]), {
@@ -391,6 +405,15 @@ test("Deployment rejects unsafe paths, shell strings, placeholders, missing proo
     ["- Sandbox allows: gvisor", ...deploymentLines()],
     ["- Sandbox allows: `GVISOR`", ...deploymentLines()],
     ["- Sandbox allows: ", ...deploymentLines()],
+    ["- Packages: `git` `git`", ...deploymentLines()],
+    ["- Packages: `git`", "- Packages: `jq`", ...deploymentLines()],
+    ["- Packages: git", ...deploymentLines()],
+    ["- Packages: ", ...deploymentLines()],
+    ["- Packages: `git; rm`", ...deploymentLines()],
+    ["- Packages: `../git`", ...deploymentLines()],
+    ["- Packages: `gcc^lib^dev`", ...deploymentLines()],
+    ["- Packages: `gcc^`", ...deploymentLines()],
+    [`- Packages: ${Array.from({ length: 201 }, (_, at) => `\`package${at}\``).join(" ")}`, ...deploymentLines()],
     deploymentLines({ steps: ["- Serve `Start`: `php` `artisan` `serve` `--port={port}`"] })
   ];
   for (const lines of invalid) {

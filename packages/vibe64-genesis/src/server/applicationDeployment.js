@@ -22,6 +22,12 @@ const RESTORE_PATHS_PREFIX = "- Recreate on restore: ";
 const GENERATED_SECRETS_PREFIX = "- Generated secrets: ";
 const SETUP_CODE_PREFIX = "- Setup code: ";
 const SANDBOX_ALLOWS_PREFIX = "- Sandbox allows: ";
+// The system packages the application's steps and service need beyond its runtimes, by the names of the package
+// collection (nixpkgs) a host that builds the application's machine installs them from: an attribute such as `git` or
+// `python313Packages.pip`, or one output of it after `^`, such as `gcc-unwrapped^lib`.
+const PACKAGES_PREFIX = "- Packages: ";
+const PACKAGES_MAX = 200;
+const PACKAGE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.+-]{0,127}(?:\^[A-Za-z_][A-Za-z0-9_-]{0,31})?$/u;
 // How many identical copies of the application a host may run at once behind
 // one address: one unless the application says it shares nothing between
 // requests that lives in one copy (files it writes, sign-ins kept in memory).
@@ -52,6 +58,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   `${GENERATED_SECRETS_PREFIX}\`NAME\`...`,
   `${SETUP_CODE_PREFIX}\`NAME\``,
   `${SANDBOX_ALLOWS_PREFIX}${VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES.map((name) => `\`${name}\``).join(" ")}`,
+  `${PACKAGES_PREFIX}\`package\`...`,
   `${INSTANCES_PREFIX}\`count\``,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
@@ -124,6 +131,29 @@ function sandboxAllowances(source, deploymentPath, line) {
   return [...values].sort();
 }
 
+function packages(source, deploymentPath, line) {
+  const values = backtickedArguments(
+    source.slice(PACKAGES_PREFIX.length),
+    ERROR_CODE,
+    deploymentPath,
+    "Deployment Packages",
+    line,
+    { maximum: Infinity }
+  );
+  if (values.length > PACKAGES_MAX) invalid(deploymentPath, `Deployment Packages names at most ${PACKAGES_MAX} packages.`, line);
+  const wrong = values.find((value) => !PACKAGE_NAME.test(value));
+  if (wrong !== undefined) {
+    invalid(
+      deploymentPath,
+      `Deployment Packages names packages as nixpkgs does, such as \`git\` or \`python313Packages.pip\`, or one output `
+        + `after ^, such as \`gcc-unwrapped^lib\`; ${JSON.stringify(wrong)} isn't one.`,
+      line
+    );
+  }
+  if (new Set(values).size !== values.length) invalid(deploymentPath, "Deployment Packages names a package twice.", line);
+  return values;
+}
+
 function instancesMax(source, deploymentPath, line) {
   const [count] = backtickedArguments(
     source.slice(INSTANCES_PREFIX.length),
@@ -166,6 +196,7 @@ function emptyDeployment() {
     generatedSecrets: [],
     setupCode: "",
     sandboxAllowances: [],
+    packages: [],
     instances: { max: 1 },
     readiness: null,
     steps: []
@@ -247,6 +278,12 @@ function parseVibe64DeploymentLines(lines, options = {}) {
       result.sandboxAllowances = sandboxAllowances(source, deploymentPath, line);
       continue;
     }
+    if (source.startsWith(PACKAGES_PREFIX)) {
+      if (seen.has("packages")) invalid(deploymentPath, "Duplicate Deployment Packages.", line);
+      seen.add("packages");
+      result.packages = packages(source, deploymentPath, line);
+      continue;
+    }
     if (source.startsWith(INSTANCES_PREFIX)) {
       if (seen.has("instances")) invalid(deploymentPath, "Duplicate Deployment Instances.", line);
       seen.add("instances");
@@ -322,6 +359,7 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
     generatedSecrets: parsed.generatedSecrets,
     setupCode: parsed.setupCode,
     sandboxAllowances: parsed.sandboxAllowances,
+    packages: parsed.packages,
     instances: parsed.instances,
     readiness: parsed.readiness,
     steps: parsed.steps

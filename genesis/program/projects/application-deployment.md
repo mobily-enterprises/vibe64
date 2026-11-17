@@ -17,7 +17,8 @@ named `Deployment`, validates it under the Vibe64-owned
 declared resources. The source is strict Markdown; its normalized result
 contains exact argument arrays, working directory, runtime requirements,
 release-recreation paths, generated secret names, the setup code name, sandbox
-allowances, how many instances a host may run, and success condition.
+allowances, system packages, how many instances a host may run, and success
+condition.
 Invalid, absent, and competing
 declarations remain explicit states.
 
@@ -50,6 +51,15 @@ where its owner permits it and refuses a deploy that needs one it does not grant
 [Workflow accounting](../execution/workflow-accounting.md) says exactly what
 each adds to the sandbox.
 
+`- Packages:` names, in backticks, the system packages the application's steps
+and service need beyond its runtimes, by their nixpkgs names: an attribute such
+as `git` or `python313Packages.pip`, or one output of it after `^`, such as
+`gcc-unwrapped^lib`; at most 200, each once, kept in the order given. A host that
+builds the deployment's machine from a package collection installs exactly these
+beside its runtimes and refuses a name it doesn't have; a host that runs the
+deployment on a machine it does not build, such as a workspace's own release
+service, ignores the line.
+
 `- Instances: up to` names, in backticks, how many identical copies of the
 application a host may run at once behind one address, from 1 to 100; the
 result is `instances: { max }`, 1 without the entry. An application declares
@@ -59,7 +69,7 @@ belongs in a declared resource. A host that runs one copy, such as a
 workspace's own release service, ignores it; a host never guesses it.
 
 The Deployment guidance for assistants also says where host-level preparation
-beyond the package manager goes: one script per hosting environment,
+beyond the package manager and Packages goes: one script per hosting environment,
 `scripts/hosting/<host>.sh`, named by the `HOSTING_SCRIPT` environment variable
 and run by the Prepare step, and only in an application that needs one. It
 never works around Vibe64's rules: what Vibe64 provides, such as a runtime or a

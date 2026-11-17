@@ -153,6 +153,8 @@ test("the Deployment spec gives a host's production mode to Serve only and lets 
   assert.match(deployment, /Setup code names the one secret of the deployment the application asks for when its first account registers on the deployment's empty database/u);
   assert.match(deployment, /shows its value only to the project owner; it is never printed, logged or given to an assistant/u);
   assert.match(deployment, /- Sandbox allows: `fuse` `gvisor`\n/u);
+  assert.match(deployment, /- Packages: `package`\.\.\.\n/u);
+  assert.match(deployment, /A host that builds the deployment's machine from a package collection installs exactly these/u);
   assert.match(deployment, /A host grants an allowance only where its owner permits it/u);
   assert.match(deployment, /An assistant never adds or changes this line on its own; it explains the failure and asks the person\./u);
   assert.match(deployment, /goes in one script per hosting environment, `scripts\/hosting\/<host>\.sh`, which the `HOSTING_SCRIPT` environment variable names and the Prepare step runs/u);
