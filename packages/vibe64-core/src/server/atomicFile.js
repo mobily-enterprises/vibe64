@@ -10,19 +10,23 @@ import path from "node:path";
  *
  * The write is durable once the call returns: the temporary file's data
  * reaches the disk before the rename, and the folder's entry after it, so a
- * power cut leaves the old file or the new one, never an empty one.
+ * power cut leaves the old file or the new one, never an empty one. Resolves
+ * to the published file's stats (bigints), taken before the rename, which
+ * keeps the file's inode and modification time.
  */
 async function writeFileAtomic(filePath, text, options = {}) {
   const { directoryMode, fileMode } = options;
   const directory = path.dirname(filePath);
   await mkdir(directory, { recursive: true, mode: directoryMode });
   const temporaryPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
+  let stats;
   try {
     const handle = await open(temporaryPath, "wx", fileMode);
     try {
       await handle.writeFile(text, "utf8");
       if (fileMode !== undefined) await handle.chmod(fileMode);
       await handle.sync();
+      stats = await handle.stat({ bigint: true });
     } finally {
       await handle.close();
     }
@@ -31,10 +35,11 @@ async function writeFileAtomic(filePath, text, options = {}) {
     await rm(temporaryPath, { force: true });
   }
   await syncDirectory(directory);
+  return stats;
 }
 
 async function writeJsonFileAtomic(filePath, value, options = {}) {
-  await writeFileAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`, options);
+  return writeFileAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`, options);
 }
 
 /**

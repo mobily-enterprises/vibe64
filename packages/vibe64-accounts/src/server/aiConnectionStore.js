@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 import { aiConnectionError } from "./aiConnectionError.js";
 import {
@@ -124,18 +126,7 @@ function createAiConnectionStore({
     const parentPath = path.dirname(targetPath);
     await mkdir(parentPath, { mode: 0o700, recursive: true });
     await chmod(parentPath, 0o700);
-    const temporaryPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, {
-        encoding: "utf8",
-        mode: 0o600
-      });
-      await rename(temporaryPath, targetPath);
-      await chmod(targetPath, 0o600);
-    } catch (error) {
-      await unlink(temporaryPath).catch(() => null);
-      throw error;
-    }
+    await writeJsonFileAtomic(targetPath, state, { fileMode: 0o600 });
     return state;
   }
 

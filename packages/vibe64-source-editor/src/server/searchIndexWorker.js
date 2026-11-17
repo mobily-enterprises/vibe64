@@ -1,7 +1,8 @@
 import { constants } from "node:fs";
-import { lstat, mkdir, open, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { sourceEditorPathExcluded } from "./filePolicy.js";
 
 // Finite command, run through the execution gateway. SQLite and text processing
@@ -106,8 +107,7 @@ async function refresh({ sourceRoot, directory, policy }) {
   const progress = async (force = false) => {
     if (force || Date.now() - lastProgress > 500) {
       lastProgress = Date.now();
-      await writeFile(`${statusPath}.tmp`, JSON.stringify(status), { mode: 0o600 });
-      await rename(`${statusPath}.tmp`, statusPath);
+      await writeFileAtomic(statusPath, JSON.stringify(status), { fileMode: 0o600 });
     }
   };
   try {

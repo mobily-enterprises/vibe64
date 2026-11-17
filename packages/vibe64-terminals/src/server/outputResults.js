@@ -5,8 +5,7 @@ import {
   open,
   readFile,
   rename,
-  rm,
-  writeFile
+  rm
 } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
@@ -16,6 +15,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import { openedFileWithin } from "./openedFileWithin.js";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { pathInside } from "@local/vibe64-core/server/core";
 
@@ -96,18 +96,7 @@ async function readOutputResultsIndex(root = "") {
 }
 
 async function writeOutputResultsIndex(root = "", index = {}) {
-  const temporaryPath = path.join(root, `.index-${crypto.randomUUID()}.tmp`);
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(index, null, 2)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600
-    });
-    await rename(temporaryPath, outputResultsIndexPath(root));
-  } catch (error) {
-    await rm(temporaryPath, { force: true }).catch(() => null);
-    throw error;
-  }
+  await writeJsonFileAtomic(outputResultsIndexPath(root), index, { directoryMode: 0o700, fileMode: 0o600 });
 }
 
 function sameFileSnapshot(before, after) {

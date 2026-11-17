@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@local/vibe64-runtime/shared";
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
 
@@ -93,14 +93,7 @@ function createClaudeConversationStorage({ createError: error }) {
     const file = scopedConversationPath(entry.context, entry.id);
     const contents = JSON.stringify({ schemaVersion: 1, ...state });
     const saving = (entry.saving || Promise.resolve()).then(async () => {
-      await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-      const temporary = `${file}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(temporary, contents, { mode: 0o600 });
-        await rename(temporary, file);
-      } finally {
-        await rm(temporary, { force: true });
-      }
+      await writeFileAtomic(file, contents, { directoryMode: 0o700, fileMode: 0o600 });
     });
     // The queue tail only orders later saves; this save's own caller receives its failure.
     entry.saving = saving.catch(() => {});

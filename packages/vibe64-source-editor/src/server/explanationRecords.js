@@ -1,7 +1,7 @@
-import crypto from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
@@ -139,12 +139,7 @@ async function writeSourceEditorExplanationCleanupRecords(context = {}, records 
     });
     return payload.records;
   }
-  await mkdir(path.dirname(ledgerPath), {
-    recursive: true
-  });
-  const temporaryPath = `${ledgerPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(payload, null, 2)}\n`);
-  await rename(temporaryPath, ledgerPath);
+  await writeJsonFileAtomic(ledgerPath, payload);
   return payload.records;
 }
 

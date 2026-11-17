@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { mkdir, readFile } from "node:fs/promises";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { GITHUB_ACCOUNT_MODE_USER, USER_CREDENTIAL_SCOPE } from "@local/vibe64-execution/server";
 
 // Files in a person's tool home: optional reads, private JSON writes, and the
@@ -49,13 +49,7 @@ async function readOptionalJson(filePath = "") {
 }
 
 async function writeJsonFile(filePath = "", value = {}) {
-  await mkdir(path.dirname(filePath), {
-    mode: 0o700,
-    recursive: true
-  });
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, {
-    mode: 0o600
-  });
+  await writeJsonFileAtomic(filePath, value, { directoryMode: 0o700, fileMode: 0o600 });
 }
 
 export {

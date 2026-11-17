@@ -24,6 +24,7 @@ import {
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
+import { assertDurablyReplaced, traceDurableWrites } from "./durableWriteTrace.js";
 
 const {
   OUTPUT_RESULTS_RETAINED_MAX_BYTES,
@@ -100,6 +101,19 @@ test("output results are immutable snapshots addressed only by generated ids", a
     (await stat(path.join(storeRoot, `run-${storedRun.id}`, storedRun.results[0].storageName))).mode & 0o777,
     0o400
   );
+});
+
+test("the output-result index reaches the disk before it is renamed into place, and its folder after", async (t) => {
+  const fixture = await outputResultFixture(t);
+  await writeFile(path.join(fixture.sourceRoot, "dist", "hello"), "build\n");
+  const events = await traceDurableWrites(t);
+  await snapshotDeclaredOutputResults({
+    downloads: [download()],
+    outputTargetId: "build",
+    session: fixture.session,
+    terminalSessionId: "terminal-1"
+  });
+  assertDurablyReplaced(events, path.join(outputResultsRoot(fixture.session), "index.json"));
 });
 
 test("output-result capture is idempotent per terminal and serializes concurrent runs", async (t) => {

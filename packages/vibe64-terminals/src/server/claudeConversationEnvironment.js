@@ -1,5 +1,6 @@
-import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { claudeModelConfiguration } from "@jskit-ai/assistant-core/server/claude-process";
 import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
@@ -58,10 +59,10 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
   if (settings.hasCompletedOnboarding === true &&
       folders.every(folder => projects[folder]?.hasTrustDialogAccepted === true)) return;
   for (const folder of folders) projects[folder] = { ...projects[folder], hasTrustDialogAccepted: true };
-  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-  const temporary = `${file}.vibe64-${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify({ ...settings, hasCompletedOnboarding: true, projects }, null, 2)}\n`, { mode: 0o600 });
-  await rename(temporary, file);
+  await writeJsonFileAtomic(file, { ...settings, hasCompletedOnboarding: true, projects }, {
+    directoryMode: 0o700,
+    fileMode: 0o600
+  });
 }
 
 /**

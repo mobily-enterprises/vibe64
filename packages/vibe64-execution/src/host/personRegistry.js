@@ -6,6 +6,7 @@ import {
   closeSync,
   fchmodSync,
   fstatSync,
+  fsyncSync,
   mkdirSync,
   openSync,
   readdirSync,
@@ -168,7 +169,8 @@ function readPersonRegistration(workspace = "", username = "", options = {}) {
 }
 
 // Root writes a registration whole, under its account's name, in a registry
-// directory it holds open.
+// directory it holds open, and durably: its data reaches the disk before the
+// rename, and the directory after it, so a power cut never leaves it empty.
 function writeRegistration(directory, record = {}) {
   const name = `${directoryEntryName(record.username)}.json`;
   const temporary = `.${name}.${process.pid}.tmp`;
@@ -176,10 +178,12 @@ function writeRegistration(directory, record = {}) {
   try {
     fchmodSync(descriptor, 0o644);
     writeFileSync(descriptor, `${JSON.stringify(record)}\n`);
+    fsyncSync(descriptor);
   } finally {
     closeSync(descriptor);
   }
   renameSync(openedPath(directory, temporary), openedPath(directory, name));
+  fsyncSync(directory);
 }
 
 function writePersonRegistration(directory, user = {}) {
@@ -417,6 +421,7 @@ function upgradePersonRegistry(workspace = "", {
       closeSync(directory);
     }
     renameSync(openedPath(root, staging), openedPath(root, workspace));
+    fsyncSync(root);
     return { imported, refused };
   } finally {
     closeSync(root);

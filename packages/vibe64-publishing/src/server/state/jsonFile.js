@@ -1,8 +1,8 @@
-// Small JSON state files written atomically (temporary file + rename), so a
-// crash never leaves half a record behind.
-import { randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+// Small JSON state files written atomically and durably (Core's atomic file
+// writer), so a crash or a power cut never leaves half a record behind.
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 /**
  * Reads one JSON state file; a missing file reads as what `fallback` returns.
@@ -23,15 +23,7 @@ async function readJsonFile(file, fallback) {
 
 async function writeJsonFile(file, value, options = {}) {
   const { mode = 0o600, directoryMode = 0o700 } = options;
-  await mkdir(path.dirname(file), { recursive: true, mode: directoryMode });
-  const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
-  try {
-    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode });
-    await rename(temporary, file);
-    await chmod(file, mode);
-  } finally {
-    await rm(temporary, { force: true });
-  }
+  await writeJsonFileAtomic(file, value, { directoryMode, fileMode: mode });
   return value;
 }
 

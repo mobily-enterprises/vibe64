@@ -19,6 +19,7 @@ import {
 } from "../../packages/vibe64-execution/src/host/hostSettings.js";
 import { installSystemdUnit, relinkSystemdUnits } from "../../packages/vibe64-execution/src/host/serviceOperations.js";
 import { execHelperSource } from "../fixtures/execHelperSource.js";
+import { assertDurablyReplaced, traceDurableWrites } from "./durableWriteTrace.js";
 
 const EXEC_HELPER = fileURLToPath(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url));
 const UID = process.getuid();
@@ -336,6 +337,15 @@ test("a unit in systemd's own folder is enabled by name; one in another folder i
   }
   await chmod(folder, 0o700);
   assert.deepEqual((await readdir(folder)).sort(), [MANAGED_UNIT, RELEASE_UNIT]);
+});
+
+test("a unit reaches the disk before it is moved into place, and its folder after", async (t) => {
+  const folder = await temporaryFolder(t, "v64-units-durable-");
+  const host = unitHost();
+  const events = await traceDurableWrites(t);
+  installSystemdUnit({ activation: "restart", rootUid: UID, run: host.run, runAllowFailure: host.runAllowFailure,
+    unit: "[Service]\n", unitName: RELEASE_UNIT, unitPath: path.join(folder, RELEASE_UNIT), unitRoot: folder });
+  assertDurablyReplaced(events, path.join(folder, RELEASE_UNIT));
 });
 
 test("relink-units links every unit root wrote outside systemd's folder again as it was installed and starts the release units", async (t) => {

@@ -5,6 +5,7 @@ import {
   closeSync,
   constants as fsConstants,
   fstatSync,
+  fsyncSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -38,6 +39,17 @@ function openRootOwnedDirectory(directoryPath = "", uid = 0) {
 // that directory's path, the name is looked up in the directory root opened.
 function openedPath(directory, name = "") {
   return path.join(`/proc/self/fd/${directory}`, name);
+}
+
+// Makes a directory's entries durable: a file root renamed into it stays so
+// after a power cut. The file's own data is synced before its rename.
+function fsyncDirectory(directoryPath = "") {
+  const descriptor = openSync(directoryPath, DIRECTORY_NO_FOLLOW);
+  try {
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 // Makes a directory unless its name is already taken; true when it made one.
@@ -135,6 +147,7 @@ export {
   canonicalPath,
   DIRECTORY_NO_FOLLOW,
   directoryEntryName,
+  fsyncDirectory,
   makeDirectory,
   NEW_FILE_NO_FOLLOW,
   openDirectoryBelow,

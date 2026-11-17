@@ -19,6 +19,9 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/terminalSessionRegistry.js`
 - `packages/vibe64-execution/src/host/managedWorkflows.js`
 - `packages/vibe64-execution/src/host/stagingAccess.js`
+- `packages/vibe64-execution/src/host/hostFiles.js`
+- `packages/vibe64-execution/src/host/personRegistry.js`
+- `packages/vibe64-execution/src/host/serviceOperations.js`
 - `packages/vibe64-execution/src/host/stagingLogin.js`
 - `packages/vibe64-execution/src/host/hostSettings.js`
 - `packages/vibe64-execution/src/host/executionReceipts.js`
@@ -284,6 +287,12 @@ or a helper command that is not such a path refuses the operation that needs
 it. A host's own server reads the configured
 unit folder through `@local/vibe64-execution/server/hostSettings`
 (`helperSystemdUnitRoot`).
+
+The helper writes what it keeps across restarts durably: a unit file, a
+person's or application's registration and a staging key or sudo rule have
+their data synced to disk before they are renamed into place, and their folder
+after (`hostFiles.js`'s `fsyncDirectory`), so a power cut leaves the old file or
+the new one, never an empty one.
 
 The helper's `managed-service` operation serves the daemon's own long-running
 services below the workspace service root. `install-start` writes the unit and

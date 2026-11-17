@@ -3,6 +3,8 @@
 
 import {
   closeSync,
+  fsyncSync,
+  openSync,
   readdirSync,
   readFileSync,
   unlinkSync,
@@ -31,6 +33,7 @@ import {
 } from "./hostAccounts.js";
 import {
   canonicalPath,
+  fsyncDirectory,
   openDirectoryBelow,
   openedPath,
   openRootOwnedDirectory,
@@ -392,10 +395,16 @@ function installSystemdUnit({
   }
   const linked = unitRoot !== SYSTEMD_UNIT_ROOT;
   if (linked) closeSync(openUnitRoot(unitRoot, rootUid));
+  // Durable: the unit's data reaches the disk before it is moved into place,
+  // and its folder after, so a power cut never leaves an empty unit.
   const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
-  writeFileSync(temporaryUnitPath, unit, {
-    mode: 0o644
-  });
+  const descriptor = openSync(temporaryUnitPath, "w", 0o644);
+  try {
+    writeFileSync(descriptor, unit);
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
   try {
     run("mv", [
       temporaryUnitPath,
@@ -409,6 +418,7 @@ function installSystemdUnit({
     }
     throw error;
   }
+  fsyncDirectory(path.dirname(unitPath));
   if (linked) {
     run("systemctl", [
       enable ? "enable" : "link",

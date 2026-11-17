@@ -38,6 +38,8 @@ host provide managed system values separately.
 - `src/composables/useRuntimeConfigDotenvDownload.js`
 - `packages/vibe64-core/src/server/atomicFile.js`
 - `tests/server/atomicFile.unit.test.js`
+- `tests/server/durableStateWriters.unit.test.js`
+- `tests/server/durableWriteTrace.js`
 - `src/components/studio/EnvPanel.vue`
 - `src/composables/useVibe64ProjectEnv.js`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
@@ -85,7 +87,13 @@ an interrupted save leaves the previous values readable.
 Core's `atomicFile.js` is the one temporary-file-and-rename writer: saved
 values, the generated dotenv and Git exclude projections, Preview identities
 and archive bundle records all use it, so its temporary file never outlives a
-failed write.
+failed write. Its writes are durable when they return: the temporary file's
+data is synced to disk before the rename and its folder after it, so a power
+cut leaves the previous file or the new one, never an empty one. The editor's
+other state writers (session text and metadata, the state upgrade ledger,
+Colleague and retained Claude conversations, work plans, AI connections,
+account status, publishing state and keys, usage recordings, output-result
+indexes) replace their files through it too.
 Codex, Claude, and OpenCode session commands receive the resolved development
 environment. The authenticated shell broker reads current project Env for every
 command using its bound project and exact session source, then supplies it through

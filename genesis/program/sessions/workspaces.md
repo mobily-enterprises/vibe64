@@ -453,9 +453,10 @@ session through the ordinary source path with the ordinary Senior default, and
 a lesson without an exercise creates no session. See
 [Retained learning session binding](#retained-learning-session-binding).
 
-Session text and metadata are replaced atomically, like the store's JSON records.
-Concurrent readers see a complete previous or next value during assistant changes;
-a failed replacement preserves the saved value. This does not make multiple
+Session text and metadata are replaced atomically and durably, like the store's
+JSON records, through Core's atomic file writer. Concurrent readers see a
+complete previous or next value during assistant changes; a failed replacement
+or a power cut preserves the saved value. This does not make multiple
 metadata files one transaction or change their saved format.
 
 A scoped conversation write may supply captured turn metadata for a new

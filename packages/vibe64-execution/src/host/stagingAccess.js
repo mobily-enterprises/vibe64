@@ -7,7 +7,7 @@
 // stack may still read an environment file of the account's (Ubuntu's reads ~/.pam_environment), so what a
 // login reports about itself stays only what it says; the host's record of each login is logind's.
 
-import { lstatSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, fsyncSync, lstatSync, mkdirSync, openSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -18,6 +18,7 @@ import {
   runRootCommand,
   runRootCommandAllowFailure
 } from "./hostAccounts.js";
+import { fsyncDirectory } from "./hostFiles.js";
 import { helperAccountDatabase, helperSudoersRoot } from "./hostSettings.js";
 
 const STAGING_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "staging-ssh");
@@ -98,20 +99,29 @@ function ensureStagingKeysRoot(keysRoot = STAGING_KEYS_ROOT, rootUid = ROOT_UID)
   }
 }
 
+// Durable: the new file's data reaches the disk before the rename, and its
+// folder after it, so a power cut leaves the old file or the new one.
 function replaceRootFile(target = "", content = "", mode = 0o644, check = null) {
   const temporary = `${path.dirname(target)}/.${path.basename(target)}.${process.pid}`;
-  writeFileSync(temporary, content, { flag: "wx", mode });
+  const descriptor = openSync(temporary, "wx", mode);
   try {
+    try {
+      writeFileSync(descriptor, content);
+      fsyncSync(descriptor);
+    } finally {
+      closeSync(descriptor);
+    }
     if (check) check(temporary);
     renameSync(temporary, target);
   } catch (error) {
     try {
       unlinkSync(temporary);
     } catch {
-      // The rename's or check's own error is the one to report.
+      // The write's, check's or rename's own error is the one to report.
     }
     throw error;
   }
+  fsyncDirectory(path.dirname(target));
 }
 
 // Looks before it removes, so taking back what an account never had writes nothing. On a read-only file system

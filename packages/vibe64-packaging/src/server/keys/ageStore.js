@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { publishError } from "../errors.js";
 import { DEFAULT_WORK_FACTOR, ageDecrypt, ageEncrypt } from "./age.js";
 
@@ -117,19 +117,13 @@ function createAgeStore({
   }
 
   /**
-   * Temporary file + rename, so a crash never leaves half a file behind.
+   * Core's atomic file writer, so neither a crash nor a power cut leaves half
+   * a file behind.
    */
   async function writePrivate(target, bytes) {
     await mkdir(directory, { recursive: true, mode: 0o700 });
     await chmod(directory, 0o700);
-    const temporary = path.join(directory, `.${path.basename(target)}.${process.pid}.${randomUUID()}.tmp`);
-    try {
-      await writeFile(temporary, bytes, { mode: 0o600, flag: "wx" });
-      await rename(temporary, target);
-      await chmod(target, 0o600);
-    } finally {
-      await rm(temporary, { force: true });
-    }
+    await writeFileAtomic(target, bytes, { fileMode: 0o600 });
   }
 
   async function open(passphrase) {

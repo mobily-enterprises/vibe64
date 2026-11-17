@@ -29,6 +29,7 @@ import {
   START_SCRIPT_RUNS_ARGUMENTS
 } from "../../packages/vibe64-execution/src/host/stagingLogin.js";
 import { deploymentServiceUnit } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
+import { assertDurablyReplaced, traceDurableWrites } from "./durableWriteTrace.js";
 
 const EXEC_HELPER = fileURLToPath(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url));
 const UID = process.getuid();
@@ -95,6 +96,14 @@ function readOnlyFolders(t, folders = []) {
   });
   return refused;
 }
+
+test("the staging key and sudo rule reach the disk before they are renamed into place, and their folders after", async (t) => {
+  const host = await stagingHost(t);
+  const events = await traceDurableWrites(t);
+  installStagingAccess({ shell: "/usr/sbin/nologin", username: ACCOUNT }, PUBLIC_KEY, HELPER, host.options);
+  assertDurablyReplaced(events, path.join(host.options.keysRoot, ACCOUNT));
+  assertDurablyReplaced(events, path.join(host.options.sudoersRoot, `vibe64-staging-${ACCOUNT}`));
+});
 
 test("granting staging access installs the key as root's file, the account's own sudo rule and /bin/sh as its login shell", async (t) => {
   const host = await stagingHost(t);

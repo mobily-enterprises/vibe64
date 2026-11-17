@@ -53,7 +53,9 @@ inspection may use temporary scratch space outside the installation, removed
 after inspection. It inspects every
 pending upgrade and prints INFO and WARNING diagnostics. `--apply` holds an
 exclusive lock, checks pending work again, then applies it in order. It records
-each completed script atomically in `<systemRoot>/upgrades/applied.json`.
+each completed script atomically and durably in
+`<systemRoot>/upgrades/applied.json`: the ledger's data and its folder are
+synced to disk, so a power cut never leaves an empty ledger.
 Completed entries are never run again during normal deployment.
 
 ## New installations: the baseline

@@ -15,6 +15,7 @@ import {
   upgradePersonRegistry
 } from "../../packages/vibe64-execution/src/host/personRegistry.js";
 import { execHelperSource } from "../fixtures/execHelperSource.js";
+import { assertDurablyReplaced, traceDurableWrites } from "./durableWriteTrace.js";
 
 const UID = process.getuid();
 // The workspace daemon account the helper serves, as the helper names it.
@@ -272,6 +273,20 @@ test("registration refuses system and administrator accounts and records only pe
     { schema: "vibe64.person-registration", schemaVersion: 1, uid: 1001, username: "alice" });
   assert.equal((await stat(file)).mode & 0o777, 0o644);
   assert.deepEqual(readPersonRegistration("test", "alice", host.registry), { uid: 1001, username: "alice" });
+});
+
+test("registrations reach the disk before they are renamed into place, and their registry after", async (t) => {
+  const host = await workspaceHost(t);
+  const events = await traceDurableWrites(t);
+  host.register("alice");
+  assertDurablyReplaced(events, path.join(host.registry.registryRoot, "test", "alice.json"));
+
+  // A workspace's first registry appears whole, durably, under its name.
+  await host.member("alice");
+  await rm(path.join(host.registry.registryRoot, "test"), { recursive: true });
+  upgradePersonRegistry("test", { ...host.registry, report: () => {}, resolveUser: host.resolveUser });
+  assertDurablyReplaced(events, path.join(host.registry.registryRoot, ".test.upgrading", "alice.json"));
+  assertDurablyReplaced(events, path.join(host.registry.registryRoot, "test"));
 });
 
 test("a registration only root could have written is the only registration", async (t) => {

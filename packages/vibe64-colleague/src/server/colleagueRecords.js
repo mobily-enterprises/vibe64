@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { createConversationTranscript, createConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { COLLEAGUE_TOOL_LIMITS } from "./protocol.js";
@@ -199,18 +197,13 @@ function createColleagueRecords({
         });
       }
       assignments.suspendDependencies(state);
-      const directory = path.dirname(state.file);
-      await mkdir(directory, { recursive: true, mode: 0o700 });
-      const temporary = path.join(directory, `${path.basename(state.file, ".json")}.${randomUUID()}.tmp`);
-      try {
-        await writeFile(temporary, JSON.stringify({ ...state.record, ...conversation }), { mode: 0o600 });
-        await rename(temporary, state.file);
-        if (conversation) {
-          Object.assign(state.record, conversation);
-          if (conversation.runtimeId) serviceState.conversationOwners.set(conversation.runtimeId, state);
-        }
-      } finally {
-        await rm(temporary, { force: true });
+      await writeFileAtomic(state.file, JSON.stringify({ ...state.record, ...conversation }), {
+        directoryMode: 0o700,
+        fileMode: 0o600
+      });
+      if (conversation) {
+        Object.assign(state.record, conversation);
+        if (conversation.runtimeId) serviceState.conversationOwners.set(conversation.runtimeId, state);
       }
     });
     state.saving = operation.catch(() => {}); // Waiters only wait; the save's failure reaches its caller.

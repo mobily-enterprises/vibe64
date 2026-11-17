@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { parseWorkPlanLines, workPlanScope } from "../shared/assistantWorkPlan.js";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
@@ -261,13 +261,7 @@ async function writePlan(file, text) {
   const directory = path.dirname(file);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   if (!(await lstat(directory)).isDirectory()) throw planError("The plan directory must not be a link.", "vibe64_work_plan_directory_link");
-  const temporary = file + "." + randomUUID() + ".tmp";
-  try {
-    await writeFile(temporary, text, { mode: 0o600, flag: "wx" });
-    await rename(temporary, file);
-  } finally {
-    await rm(temporary, { force: true });
-  }
+  await writeFileAtomic(file, text, { fileMode: 0o600 });
 }
 
 async function saveDocument(context, kind, text) {

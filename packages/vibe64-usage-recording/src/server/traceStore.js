@@ -1,8 +1,8 @@
-import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import { open, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { open, readdir } from "node:fs/promises";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 import {
   USAGE_INTERACTION_ID_PATTERN,
@@ -34,14 +34,7 @@ const READ_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBL
 const APPEND_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 
 async function writeJsonFile(filePath, value) {
-  const temporary = `${filePath}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
-  try {
-    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: "wx", mode: 0o660 });
-    await rename(temporary, filePath);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
+  await writeJsonFileAtomic(filePath, value, { fileMode: 0o660 });
 }
 
 async function appendJsonLine(filePath, value) {
