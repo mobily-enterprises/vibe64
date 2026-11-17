@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { serializeByKey, writeFileAtomic, writeJsonFileAtomic } from "../../packages/vibe64-core/src/server/atomicFile.js";
 import { readEnvUserValues, saveEnvUserValues } from "../../packages/vibe64-core/src/server/envUserValues.js";
+import { assertDurablyReplaced, traceDurableWrites } from "./durableWriteTrace.js";
 
 async function temporaryRoot(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-atomic-file-"));
@@ -31,6 +32,17 @@ test("atomic writes publish the exact mode and never leave a temporary file", as
   await writeFile(path.join(blocked, "occupied", "keep"), "");
   await assert.rejects(writeFileAtomic(path.join(blocked, "occupied"), "text"));
   assert.deepEqual(await readdir(blocked), ["occupied"], "a failed rename removes its temporary file");
+});
+
+test("an atomic write is durable: its data reaches the disk before the rename, and its folder after", async (t) => {
+  const root = await temporaryRoot(t);
+  const filePath = path.join(root, "upgrades", "applied.json");
+  const events = await traceDurableWrites(t);
+  await writeJsonFileAtomic(filePath, { applied: [] });
+  assertDurablyReplaced(events, filePath);
+  await writeFileAtomic(filePath, "replaced\n", { fileMode: 0o600 });
+  assertDurablyReplaced(events, filePath);
+  assert.equal(await readFile(filePath, "utf8"), "replaced\n");
 });
 
 test("serializeByKey runs one key's operations in order, past failures, and other keys independently", async () => {
