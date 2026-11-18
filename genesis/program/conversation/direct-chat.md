@@ -2318,9 +2318,12 @@ person to try, publish or deploy the work or offering next steps. Every other
 turn keeps its normal ending, and an after-plan pass's message carries no
 workflow instructions at all. Save is not a turn, so it adds no such line. Then every workflow turn hears how the
 work is saved (`assistantSaveInstruction`), from the same `autoSave` switch the
-automatic save reads (`savesAutomatically`): with it on, the note that the work
-will be saved automatically comes after the complete reply and never replaces
-it. A direct answer that reports nothing is told to say nothing about saving.
+automatic save reads (`savesAutomatically`): with it on, the agent saves each
+finished and checked stage itself with `vibe64-helper session save` (after
+`vibe64-helper session update` when the session is behind) and then tells the
+other sessions it works with, and its note of what it saved, or that the work
+will be saved automatically, comes after the complete reply and never replaces
+it; with it off, the command refuses in that chat. A direct answer that reports nothing is told to say nothing about saving.
 Senior's plan guidance
 (`workPlanInstructions`) says unfinished review reports continue through the
 workflow outcome command only in Auto's turns that report an outcome

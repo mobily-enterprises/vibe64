@@ -149,6 +149,14 @@ function createServiceCommandServices({
           code: "vibe64_session_update_unavailable",
           error: "Update is unavailable while Vibe64 starts or stops."
         },
+    // The sessions feature fills it; while it is absent, as Vibe64 starts or stops, Save is unavailable.
+    saveSessionWork: async (sessionId, input) => state.slots.sessionSave
+      ? state.slots.sessionSave(sessionId, input)
+      : {
+          ok: false,
+          code: "vibe64_session_save_unavailable",
+          error: "Save is unavailable while Vibe64 starts or stops."
+        },
     previewStartedBefore,
     listProjectSessions: input => listProjectSessions(input, {
       project,

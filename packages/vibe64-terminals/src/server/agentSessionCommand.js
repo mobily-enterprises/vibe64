@@ -10,6 +10,7 @@ import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { readAgentSessionStatus } from "./agentSessionStatus.js";
+import { runAgentSessionSave } from "./agentSessionSave.js";
 import { agentSessionUpdateAnswer } from "./agentSessionUpdate.js";
 import {
   WORKSPACE_SETUP_METADATA_NAME,
@@ -143,6 +144,11 @@ const commandServers = createSessionCommandServers({
       status: vibe64StatusCode,
       token: "controlToken"
     },
+    "/agent-session-command/save": {
+      handle: ({ commandService, sessionId }) => commandService.saveSession(sessionId),
+      status: vibe64StatusCode,
+      token: "controlToken"
+    },
     "/agent-session-command/plan": {
       handle: ({ commandService, input, sessionId }) => commandService.managePlan(sessionId, input),
       status: vibe64StatusCode,
@@ -189,6 +195,8 @@ const commandServers = createSessionCommandServers({
  * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.reportWorkflowOutcome
  * @param {(sessionId: string) => Promise<object>} dependencies.retryWorkspaceSetup
  * @param {(sessionId: string, input: object) => Promise<object>} dependencies.updateSessionWork the session's own Update
+ * @param {(sessionId: string, input: object) => Promise<object>} dependencies.saveSessionWork the session's own Save, to
+ * the destination it has now
  * @param {(sessionId: string, time: string) => boolean} dependencies.previewStartedBefore whether the session's
  * Preview runs in a process started before `time`
  * @param {RuntimeLogger} dependencies.logger
@@ -205,6 +213,7 @@ function createAgentSessionCommandService({
   reportWorkflowOutcome,
   retryWorkspaceSetup,
   updateSessionWork,
+  saveSessionWork,
   previewStartedBefore,
   logger,
   project,
@@ -398,6 +407,18 @@ function createAgentSessionCommandService({
         })
       };
     });
+  }
+
+  /**
+   * `vibe64-helper session save`: the session's own Save, for the main chat's AI while its Automatically save
+   * changes is on (`runAgentSessionSave` decides whose command it is).
+   * @param {string} sessionId
+   */
+  function saveSession(sessionId) {
+    return runInSessionProject(sessionId, async ({ binding, store }) => ({
+      sessionId,
+      ...await runAgentSessionSave({ actor: () => requestActor(store, sessionId, binding), saveSessionWork, sessionId, store })
+    }));
   }
 
   async function managePlan(sessionId, input) {
@@ -651,6 +672,7 @@ function createAgentSessionCommandService({
     sessionStatus,
     retrySetup,
     updateSession,
+    saveSession,
     managePlan,
     run
   });

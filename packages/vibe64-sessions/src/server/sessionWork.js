@@ -356,8 +356,9 @@ function createSessionWork({
           });
         }
         // A running turn learns its work so far was saved; an idle one has nothing to act on. A session left on
-        // its earlier version has nothing new to learn either.
-        if (result.reconciled === true) {
+        // its earlier version has nothing new to learn either, and neither has the AI that ran this Save itself
+        // (`requestedByAgent`): its command's answer says what was saved, and a steer could interrupt that command.
+        if (result.reconciled === true && input.requestedByAgent !== true) {
           await terminals.noteMainChat(sessionId, { message: saveMainChatNote(result) }, { runtime, vibe64User });
         }
         return {
@@ -397,6 +398,22 @@ function createSessionWork({
         workOperations.finish("save", sessionId, operationId);
       }
     }, "Vibe64 could not save this session's work.");
+  }
+
+  /**
+   * The Save no person reviews before it starts: automatic save's, and the one the session's AI runs with
+   * `vibe64-helper session save`. It is the ordinary Save, to the destination the session has now, the one Save's
+   * review shows; work with nothing new is Save's own refusal, found before Save takes the session.
+   * @param {string} sessionId
+   * @param {{ requestedByAgent?: boolean, vibe64User?: object | null }} input
+   */
+  async function saveToCurrentDestination(sessionId, input) {
+    const inspection = await inspectSessionWork(sessionId);
+    if (inspection?.ok === false) return inspection;
+    if (!inspection.unsaved) {
+      return { ok: false, code: "vibe64_session_save_no_changes", error: "This session has no work to save." };
+    }
+    return saveSessionWork(sessionId, { ...input, destinationReview: inspection.destination });
   }
 
   /**
@@ -575,6 +592,7 @@ function createSessionWork({
     inspectSessionChanges,
     inspectSessionWork,
     saveSessionWork,
+    saveToCurrentDestination,
     updateSessionWork
   });
 }

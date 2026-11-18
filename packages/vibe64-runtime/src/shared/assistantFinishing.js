@@ -110,13 +110,15 @@ function assistantContinuationInstruction(request) {
 
 /**
  * What every workflow turn tells its agent about saving: with the chat's
- * Automatically save changes on, Vibe64 saves the finished work after its last turn.
+ * Automatically save changes on, Vibe64 saves the finished work after its last
+ * turn, and the agent saves each finished, checked stage before then itself, so
+ * the project's other sessions can update onto it; with it off, the person saves.
  * @param {boolean} autoSave
  */
 function assistantSaveInstruction(autoSave) {
   return autoSave
-    ? "Vibe64 saves this work automatically once it is finished, after any plan-completion turn and after-plan passes: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
-    : "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
+    ? "Vibe64 saves this work automatically once it is finished, after any plan-completion turn and after-plan passes. Before then, save each finished and checked stage of a plan, or a finished piece of work, yourself with `vibe64-helper session save`, never mid-edit, running `vibe64-helper session update` first when session status says this session is behind; once it has saved, tell the other sessions you are working with, so they update before building on the old code. After your complete reply, say what you saved or that the work will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
+    : "This chat's settings turn automatic save off: the person saves finished work with the Save button, and `vibe64-helper session save` refuses in this chat.";
 }
 
 /**

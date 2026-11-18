@@ -882,7 +882,13 @@ can run while the AI works; Save asks first because it includes unfinished
 changes. Nothing written while either runs is lost: a file changed meanwhile
 stays as unsaved work, or Update stops, keeps every change and says to try again.
 Afterwards the main chat's AI is told which files Update changed so it re-reads
-them, and a working turn learns its work so far was saved. During either
+them, and a working turn learns its work so far was saved. While Automatically
+save changes is on, the main chat's AI also runs that same Save itself at each
+finished and checked stage of longer work, updating first when the session is
+behind, and then tells the sessions it works with to update, so parallel
+sessions of a project coordinate through its main before a long plan ends; in a
+temporary chat, an AI task, Fix it with AI, a lesson or with the switch off, its
+save command refuses and Save stays the person's. During either
 operation, an existing temporary chat's or open AI task's saved history remains
 readable and its plain text draft can be saved. Assistant sends, model or attachment changes and chat
 lifecycle actions still use source coordination. A lost Update response remains

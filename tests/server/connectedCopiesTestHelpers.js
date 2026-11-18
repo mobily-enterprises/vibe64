@@ -204,6 +204,7 @@ async function sessionService(f, {
 }
 
 export {
+  commandRunner,
   commitInCopy,
   copyPath,
   fixture,

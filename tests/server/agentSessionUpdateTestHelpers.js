@@ -1,5 +1,5 @@
-// `vibe64-helper session update` as the session's AI runs it: the generated vibe64-session script over the real
-// session command socket of a session command service.
+// `vibe64-helper session update` and `session save` as the session's AI runs them: the generated vibe64-session
+// script over the real session command socket of a session command service.
 import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -12,14 +12,19 @@ const execFileAsync = promisify(execFile);
 
 /**
  * The bound project the session command runs in, and the session store it reads: the session's source
- * descriptor and its stored values.
+ * descriptor and the store's own reads (its stored values, and for Save the session and its chats).
  * @param {{ sessionId: string, sourcePath: string, metadata: object }} session
- * @param {{ readMetadataValue: Function }} store
+ * @param {{ readMetadataValue: Function, readSession?: Function, listSessionConversations?: Function }} store
  */
 function sessionCommandProject(session, store) {
   return {
     async createSessionStore() {
-      return { readMetadataValue: store.readMetadataValue, readSessionSourceDescriptor: async () => session };
+      return {
+        listSessionConversations: store.listSessionConversations,
+        readMetadataValue: store.readMetadataValue,
+        readSession: store.readSession,
+        readSessionSourceDescriptor: async () => session
+      };
     },
     readCurrentProject: async () => ({ slug: "project" }),
     runInProjectContext: (_slug, operation) => operation()

@@ -157,14 +157,11 @@ function createService({
     const session = await runtime.getSessionWithoutSource(sessionId);
     const preferences = assistantRoutingFromMetadata(session.metadata);
     if (!preferences?.autoSave) return "";
-    const skipped = reason => `Automatic save didn't run: ${reason}`;
-    const inspection = await work.inspectSessionWork(sessionId);
-    if (inspection?.ok === false) return skipped(normalizeText(inspection.error) || "this session's work could not be inspected.");
-    if (!inspection.unsaved) return "Automatic save: nothing new to save.";
-    const saved = await work.saveSessionWork(sessionId, { destinationReview: inspection.destination, vibe64User: details.submittedBy });
-    return saved?.ok === false
-      ? skipped(normalizeText(saved.error) || "Save was refused.")
-      : "Saved automatically.";
+    const saved = await work.saveToCurrentDestination(sessionId, { vibe64User: details.submittedBy });
+    if (saved?.ok !== false) return "Saved automatically.";
+    return saved.code === "vibe64_session_save_no_changes"
+      ? "Automatic save: nothing new to save."
+      : `Automatic save didn't run: ${normalizeText(saved.error) || "Save was refused."}`;
   }
 
   const service = Object.freeze({
@@ -239,6 +236,10 @@ function createService({
   // `vibe64-helper session update` runs this same Update.
   // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
   terminals.setSessionUpdate(work.updateSessionWork);
+  // `vibe64-helper session save` runs the Save automatic save runs, once the session command has found that the
+  // main chat's AI asks, with its Automatically save changes on.
+  // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
+  terminals.setSessionSave(work.saveToCurrentDestination);
   return service;
 }
 

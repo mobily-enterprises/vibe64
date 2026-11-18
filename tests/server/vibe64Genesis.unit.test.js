@@ -409,12 +409,20 @@ test("Genesis accepts fully enabled main and temporary instructions with maximum
       assert.match(output, /Without --session, the pinned\/selected session receives it/u);
       assert.match(output, /first run `vibe64-helper session list-project <project>`/u);
       assert.match(output, /If exactly one other active session is listed, use it; ask only when several could be meant/u);
-      // Both chats update a session that is behind before building on its old code, and only the person saves.
+      // Both chats update a session that is behind before building on its old code; only the main chat, while
+      // automatic save is on, saves its own finished stages, and tells the sessions it works with.
       assert.match(output, /When `repository\.updateFirst` says this session is behind, update it with `vibe64-helper session update` before building on the old code, at a point where you can deal with a conflict\./u);
       // A shell tool's own time limit (often 2 minutes) must not leave the AI unsure whether Update finished.
       assert.match(output, /Update can take several minutes, so give the command a long time limit \(up to 30 minutes\); if your tool stops it early, Update carries on: read `vibe64-helper session status --json` until `repository\.updateFirst\.reason` is no longer `running`\./u);
       assert.match(output, /If it does, stop your other work and resolve them first, as it explains, or, if you can't now, leave them \(Update leaves a repository with clashing files unchanged\) and tell the person\./u);
-      assert.match(output, /run `vibe64-helper preview restart --wait` when it says Preview still runs the old code\. Update never saves: Save still needs the person/u);
+      assert.match(output, /run `vibe64-helper preview restart --wait` when it says Preview still runs the old code\. Update never saves\./u);
+      if (conversationKind === "main") {
+        assert.match(output, /While your turn's instructions say Vibe64 saves the work automatically, save each finished and checked stage of a plan, or a finished piece of work, with `vibe64-helper session save` \(never mid-edit; a long time limit, as for Update\), after `vibe64-helper session update` when `repository\.updateFirst` says this session is behind\./u);
+        assert.match(output, /Once it saves, tell the sessions you are working with \(`vibe64-helper session message-project`\) to run `vibe64-helper session update`\. With automatic save off it refuses: leave Save to the person\./u);
+      } else {
+        assert.match(output, /A temporary chat never saves: `vibe64-helper session save` refuses here, so leave Save to the person\./u);
+        assert.doesNotMatch(output, /save each finished and checked stage/u);
+      }
     }
   });
 });

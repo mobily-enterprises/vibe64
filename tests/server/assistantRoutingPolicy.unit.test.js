@@ -322,8 +322,8 @@ test("every turn that reports an outcome is told the person sees only its final 
   }
 });
 
-const SAVE_ON = "Vibe64 saves this work automatically once it is finished, after any plan-completion turn and after-plan passes: after your complete reply, say it will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save.";
-const SAVE_OFF = "This chat's settings turn automatic save off: the person saves finished work with the Save button.";
+const SAVE_ON = "Vibe64 saves this work automatically once it is finished, after any plan-completion turn and after-plan passes. Before then, save each finished and checked stage of a plan, or a finished piece of work, yourself with `vibe64-helper session save`, never mid-edit, running `vibe64-helper session update` first when session status says this session is behind; once it has saved, tell the other sessions you are working with, so they update before building on the old code. After your complete reply, say what you saved or that the work will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save.";
+const SAVE_OFF = "This chat's settings turn automatic save off: the person saves finished work with the Save button, and `vibe64-helper session save` refuses in this chat.";
 
 test("workflow instructions say what happens with saving, as the chat's Automatically save changes switch decides", () => {
   for (const mode of ["auto", "senior", "junior", "custom"]) for (const stage of ["implementation", "review"]) {

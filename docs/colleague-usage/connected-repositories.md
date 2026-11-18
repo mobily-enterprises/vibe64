@@ -118,6 +118,10 @@ session's own repository is clean.
    work, Save saves them and leaves the session's own repository as it is.
 
 The Save result lists the connected repositories it saved, with their commits.
+When Main chat's AI saves a finished stage itself, with **Automatically save
+changes** on, it is this same Save, copies first; its answer names each copy's
+commit and files as `../connected/<name>/...`. See [The session's AI saves its
+finished stages](github-work.md#the-sessions-ai-saves-its-finished-stages).
 
 If a copy's push is refused because someone saved to that repository's main
 meanwhile, Save stops with the same **Update first** refusal. Copies saved

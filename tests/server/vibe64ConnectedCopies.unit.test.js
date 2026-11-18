@@ -231,6 +231,8 @@ test("Save pushes each copy in order and records it before the next; the session
   const saved = await save(f, { events });
 
   assert.deepEqual(saved.map(result => result.name), ["library", "tools"]);
+  // Each copy's saved files, as the session's source names them.
+  assert.deepEqual(saved.map(result => result.changedPaths), [["../connected/library/work.txt"], ["../connected/tools/work.txt"]]);
   const [librarySave, toolsSave] = saved.map(result => result.saveCommit);
   assert.deepEqual(events, [
     "beforePush",

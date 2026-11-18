@@ -125,10 +125,12 @@ import http from "node:http";
 const args = process.argv.slice(2);
 const usage = [
   'Usage: vibe64-helper session status [--json] | setup retry | rename "Name" | list-project <project> [--json]',
-  "  | update [--resolved <review-id>] [--json]",
+  "  | update [--resolved <review-id>] [--json] | save [--json]",
   "  | message-project <project> [--session <session-id-or-name>] <message> [message-id: letters, digits, _ or -]",
   "  | project-preview <project> [--session <session-id-or-name>]",
   "update runs this session's Update (rebase onto its saved version), as its Update button does; it never saves.",
+  "save runs this session's Save, as its Save button does, only in the main chat with Automatically save changes on;",
+  "elsewhere it refuses and says why. Save a finished, checked piece of work, never mid-edit.",
   "Without --session, the project's selected session is addressed; in your own project that is often your own session.",
   "To reach another session (by name, or \\"the other session\\"), first run list-project <project>, then pass its ID or name to --session.",
   "If exactly one other active session is listed, use it; ask the person only when several could be meant."
@@ -154,11 +156,13 @@ const resolvedAt = updateArgs.indexOf("--resolved");
 const reviewedConflictId = resolvedAt >= 0 ? String(updateArgs[resolvedAt + 1] || "").trim() : "";
 const update = args[0] === "update" && updateArgs.length === (updateJson ? 1 : 0) + (resolvedAt >= 0 ? 2 : 0) &&
   (resolvedAt < 0 || Boolean(reviewedConflictId) && !reviewedConflictId.startsWith("-"));
-if (!status && !setupRetry && !listProject && !messageProject && !projectPreview && !update && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
+const save = args[0] === "save" && (args.length === 1 || args.length === 2 && args[1] === "--json");
+const saveJson = save && args[1] === "--json";
+if (!status && !setupRetry && !listProject && !messageProject && !projectPreview && !update && !save && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
   console.error(usage);
   process.exit(2);
 }
-const route = listProject ? "list-project" : messageProject ? "message-project" : projectPreview ? "project-preview" : status ? "status" : setupRetry ? "setup-retry" : update ? "update" : "rename";
+const route = listProject ? "list-project" : messageProject ? "message-project" : projectPreview ? "project-preview" : status ? "status" : setupRetry ? "setup-retry" : update ? "update" : save ? "save" : "rename";
 try {
   const control = JSON.parse(process.env.${SESSION_RENAME_CONTROL_ENV} || "null");
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) {
@@ -171,11 +175,12 @@ try {
     ...(reviewedConflictId ? { reviewedConflictId } : {}),
     token: control.token, sessionId: control.sessionId, generationId: control.generationId
   });
-  // Update fetches and rebases every repository of the session, so it waits as long as a session command runs.
+  // Update and Save fetch, rebase or push every repository of the session, so they wait as long as a session command runs.
+  const long = update || save;
   const result = await new Promise((resolve, reject) => {
     const request = http.request({
       socketPath: control.socketPath, method: "POST", path: "/agent-session-command/" + route,
-      timeout: update ? ${AGENT_SESSION_COMMAND_TIMEOUT_MS} : 15000,
+      timeout: long ? ${AGENT_SESSION_COMMAND_TIMEOUT_MS} : 15000,
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
     }, (response) => {
       let text = "";
@@ -187,11 +192,13 @@ try {
     request.on("error", reject);
     request.on("timeout", () => request.destroy(new Error(update
       ? "Update is still running. Read vibe64-helper session status --json until repository.updateFirst.reason is no longer running."
-      : "Session control timed out.")));
+      : save ? "Save is still running and carries on. In a few minutes run vibe64-helper session save again: it refuses while that Save runs, and says nothing is left to save once it has saved."
+        : "Session control timed out.")));
     request.end(body);
   });
-  if (update && result.status) {
-    console.log(updateJson ? JSON.stringify(result) : [result.message, result.next ? "Next: " + result.next : ""].filter(Boolean).join("\\n"));
+  if (long && result.status) {
+    console.log((update ? updateJson : saveJson) ? JSON.stringify(result)
+      : [result.message, result.next ? "Next: " + result.next : ""].filter(Boolean).join("\\n"));
     process.exitCode = result.ok === true ? 0 : 1;
   } else if (result.ok !== true) {
     throw new Error(result.error || "The session command failed.");

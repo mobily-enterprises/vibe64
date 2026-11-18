@@ -87,6 +87,7 @@ async function readAgentSessionStatus({ descriptor, project, projectRecord, sess
     },
     tools: {
       update: "vibe64-helper session update",
+      save: "vibe64-helper session save",
       environment: "vibe64-helper env status development",
       setupRetry: "vibe64-helper session setup retry",
       preview: "vibe64-helper preview status",

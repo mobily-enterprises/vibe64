@@ -89,6 +89,7 @@ Git commands.
 - `packages/vibe64-terminals/src/server/agentSessionStatus.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `packages/vibe64-terminals/src/server/agentSessionUpdate.js`
+- `packages/vibe64-terminals/src/server/agentSessionSave.js`
 - `packages/vibe64-terminals/src/server/serviceHostSlots.js`
 - `packages/vibe64-terminals/src/server/serviceCommandServices.js`
 - `packages/vibe64-terminals/src/server/sessionConnectedCopies.js`
@@ -477,6 +478,46 @@ no list of Update's codes.
 The command exits 0 only when Update finished and allows 30 minutes; it never
 Saves. Sources: `tests/server/agentSessionUpdate.unit.test.js` and
 `tests/server/agentSessionUpdate.integration.test.js`.
+
+While the main chat's Automatically save changes is on, the session's AI also
+runs this session's Save itself with `vibe64-helper session save [--json]`, at
+each finished and checked stage of a plan or finished piece of work, so the
+project's other sessions can update onto it before a long plan ends. Every chat
+of a session shares its command control, so the route
+(`/agent-session-command/save`) decides whose command it is from the session's
+own records before anything runs: `agentSessionSaveRefusal`
+(`agentSessionSave.js`) answers `not_allowed` in a lesson (`learning_session`),
+while a temporary chat (turn `starting` or `inProgress`) or an AI task
+(`task.active`; Fix it with AI for the update, save, workspace-setup,
+preview-identity and project-setup kinds) is at work, alone or beside the main
+chat, without a main chat turn (`sessionAssistantWorking`), and with the switch
+off (`savesAutomatically`). The terminals' `sessionSave` host slot
+(`setSessionSave`), which the sessions feature fills with
+`saveToCurrentDestination` (`sessionWork.js`, automatic save's own path) and
+clears on shutdown, then inspects the work, answers
+`vibe64_session_save_no_changes` when nothing is unsaved, and runs the ordinary
+Save to the destination the session has now, for the routing request's
+`submittedBy`; while the slot is empty the command answers
+`vibe64_session_save_unavailable`. Admission, the agent-write lock, checks,
+backups, connected copies, recovery and the Save task record are therefore the
+button's. Save admits itself while the assistant works and captures its
+checkpoint as it starts, so the AI waiting for the answer saves its files as
+they were at the command, and a file written meanwhile stays unsaved. With
+`requestedByAgent` no main-chat note is written or steered, because the answer
+says what was saved. `agentSessionSaveAnswer` turns the result into `saved` (each
+repository with its saved commit, the files saved, a copy's as
+`../connected/<name>/...` from `saveConnectedCopies`' `changedPaths`, the files
+Save regenerated, the count left unsaved and whether the session is on the saved
+version, then the next steps: re-read regenerated files, run Update when the
+session is not on the saved version, and tell the other sessions with
+`message-project`), `nothing_to_save`, `update_first` for
+`vibe64_session_save_update_required` (run Update, then save again), or `failed`
+with Save's own message and code and one next step. It runs no pass. The command
+exits 0 only when Save saved and allows 30 minutes. Sources:
+`tests/server/agentSessionSave.unit.test.js` and
+`tests/server/agentSessionSave.integration.test.js`, where two sessions of a
+managed Git project save through the command, find themselves behind and update
+onto each other's work.
 Naming resolves the actor's Quick helper (`commit_title`) before requesting
 its bounded tool-free profile. Its scoped conversation never changes the main
 chat's binding or history. Repository authorization and write admission still apply.
