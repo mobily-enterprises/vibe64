@@ -1,5 +1,5 @@
 // Production's needs from the saved commit's genesis/stack.md, and only from it: the Deployment section
-// (vibe64.application-deployment) says how the app builds, migrates, serves and how many instances it allows, and each
+// (vibe64.application-deployment.v2) says how the app builds, migrates, serves and its services, and each
 // `genesis-resource` of `## Resources` what it needs with the setting names it reads. Nothing is guessed from the app's
 // files. A Stack that does not say enough is refused, naming the fix in genesis/stack.md, which the coding agent can
 // make.
@@ -17,7 +17,9 @@ function problem(code, message) {
 /**
  * The needs, or the first reason the Stack can't give them.
  * @param {any} deployment the Stack's Deployment section as public Vibe64 inspected it (inspectVibe64Deployment), or
- *   null when the Stack has no usable one
+ *   null when the Stack has no usable one. One the grammar refused is `{ status: "blocked", diagnostics: [{ code,
+ *   message, line }] }`, `line` being the refusal's line in the section (the error's `details.line`), which the problem
+ *   carries.
  * @param {object} resourceRules the editor's resource rules
  * @param {(resource: object) => { bindings: Record<string, string>, allowEmpty?: string[] }} resourceRules.preferredAlternative
  *   a declared resource's one preferred alternative, its bindings checked for its kind; throws naming what is wrong
@@ -34,7 +36,15 @@ function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase
   }
   if (deployment.status !== "ready") {
     const why = deployment.diagnostics?.[0]?.message || "it isn't valid";
-    return { needs: null, problem: problem("production_deployment_invalid", `genesis/stack.md's Deployment section can't be used: ${why} Fix it in genesis/stack.md (the coding agent can do this), Save, then deploy.`) };
+    const line = deployment.diagnostics?.[0]?.line;
+    return {
+      needs: null,
+      problem: {
+        ...problem("production_deployment_invalid", `genesis/stack.md's Deployment section can't be used${Number.isInteger(line)
+          ? ` (line ${line} of the section)` : ""}: ${why} Fix it in genesis/stack.md (the coding agent can do this), Save, then deploy.`),
+        ...(Number.isInteger(line) ? { line } : {})
+      }
+    };
   }
   const resources = [];
   const supplied = [];
@@ -66,14 +76,25 @@ function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase
     }
   }
   const needs = {
-    instances: { max: deployment.instances?.max ?? 1 },
+    services: (Array.isArray(deployment.services) ? deployment.services : []).map((service) => ({
+      id: service.id,
+      exposure: service.exposure,
+      reached: service.reached,
+      instances: { min: service.instances?.min, max: service.instances?.max, start: service.instances?.production },
+      atLeast: service.atLeast ?? null,
+      reaches: (service.reaches ?? []).map((reach) => ({ service: reach.service, setting: reach.setting })),
+      settings: { ...service.settings },
+      sandbox: [...(service.sandboxAllowances ?? [])]
+    })),
     resources,
     supplied,
     generatedSecrets: [...(deployment.generatedSecrets ?? [])],
     setupCode: String(deployment.setupCode || "")
   };
   const wrong = needsProblem(needs);
-  if (wrong) return { needs: null, problem: problem("production_needs_invalid", `genesis/stack.md's resources can't be used: ${wrong} ${STACK_FIX}`) };
+  if (wrong) {
+    return { needs: null, problem: problem("production_needs_invalid", `genesis/stack.md's Deployment and resources can't be used: ${wrong} ${STACK_FIX}`) };
+  }
   return { needs, problem: null };
 }
 
