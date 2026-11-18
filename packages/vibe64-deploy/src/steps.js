@@ -7,8 +7,11 @@
 //   2. each resource's hosted service is made (labelled) or resized, and waited for;
 //   3. the public service's domain is added to the provider project when none covers it;
 //   4. each internal service, then each public one: its release is uploaded, then its service made (internal: no
-//      routes; public: routed at the domain, with a connection to each service it reaches) or handed the release, then,
-//      once that refresh is building, linked to every resource it isn't linked to yet, then the refresh waited for.
+//      routes; public: routed at the domain, with a connection to each service it reaches) or handed the release and,
+//      while that refresh is open, set to the count chosen (mobilynet's refresh rolls to the count the service has as
+//      it rolls, so it starts as many new instances as the plan says, and one that fails leaves the version before on
+//      that count), then, once that refresh is building, linked to every resource it isn't linked to yet, then the
+//      refresh waited for.
 //      A service still running the release it was last handed, made from the same upload (the archive and its
 //      declaration: releaseDigest), keeps it and is handed none, so none of its instances is replaced for nothing (a
 //      provider refreshes onto every release it is handed, even the one it runs). mobilynet checks a link against the release the service runs or, when that names no such need, the release its
@@ -21,8 +24,9 @@
 //   5. a resource the Stack no longer names is unlinked from every service that stays, now that none runs a release
 //      naming it, and kept running with its data;
 //   6. each service's settings (package.js settingValues) when they differ from those it was given, the services it
-//      reaches, then its size and count as the plan's choices say: after every move ended, since mobilynet refuses a
-//      settings replace while a link made ahead of its refresh is open. A count or size change alone is only that;
+//      reaches, then its size and (when it was handed no release) its count as the plan's choices say: after every
+//      move ended, since mobilynet refuses a settings replace while a link made ahead of its refresh is open. A count
+//      or size change alone is only that, and the record's choices follow each, so the next plan starts from what runs;
 //   7. a service the Stack no longer names is deleted (its links end with it);
 //   8. live, once every service runs its release with as many healthy instances as chosen and its last refresh did
 //      not fail.
@@ -282,6 +286,11 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (!values) return { kind: "wait", words: `Waiting for the services ${service.id} reaches` };
       return { kind: "createService", service: service.id, values };
     }
+    // The count chosen goes with the release, set while its refresh is open: mobilynet's refresh rolls to the count the
+    // service has as it rolls, so it starts as many new instances as chosen and, if it fails, the version before serves
+    // on that count. With no release handed, the count changes after the moves (6).
+    const { instances } = plan.choices.services[service.id];
+    if (state.refreshId && thing.instances !== instances) return { kind: "changeService", service: service.id, id: thing.id, change: { instances } };
     // A service runs one refresh at a time, the rest queued behind it, and shows the one under way, else the next: this
     // Deploy's has ended once none is. Its resources are linked once that refresh builds (against the release it moves
     // to, read as its build starts, before any instance started), or once none of its is open.
@@ -457,7 +466,11 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     }
     case "changeService": {
       const refreshId = await adapter.changeService(step.id, step.change, { idempotencyKey: keyOf(record, "change", step.service, step.change) });
-      Object.assign(record.items[`service.${step.service}`], step.change);
+      const item = Object.assign(record.items[`service.${step.service}`], step.change);
+      // The next plan starts from what the service runs now: a Deploy that fails after this keeps the count or size it set.
+      if (step.change.instances !== undefined || step.change.size) {
+        record.choices = { ...record.choices, services: { ...record.choices?.services, [step.service]: { size: item.size, instances: item.instances } } };
+      }
       if (refreshId) stateOf(step.service).refreshId = refreshId;
       break;
     }

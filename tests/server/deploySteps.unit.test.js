@@ -433,6 +433,59 @@ test("a count change alone hands no service a release, so none of its instances 
     [`/v1/services/${computers}/releases`, `/v1/services/${web}/releases`]);
 });
 
+test("a count changed with a new release goes with it: the release starts as many instances as chosen, and one that fails leaves the version before on the chosen count, which the record and the next plan keep", async () => {
+  const { standIn, run, record } = setup();
+  standIn.setQuota(standIn.projectId, { vcpus: 200, memoryGib: 400 });
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const computers = first.record.items["service.computers"].id;
+  const releaseRefresh = () => standIn.services.refreshes(computers).filter((one) => one.kind === "release").at(-1);
+  const startedBy = (refresh) => standIn.services.instances(computers).filter((one) => one.refreshId === refresh.id).length;
+  const serving = () => standIn.services.instances(computers).filter((one) => !one.removedReason).length;
+  const four = await run({ record: first.record, commit: "c1", choices: { services: { computers: { instances: 4 } } } });
+  assert.equal(four.outcome, "live", four.message);
+
+  // Its next release fails (instance_never_healthy): computers serves c1 on four instances.
+  standIn.faults.instancesUnhealthy = true;
+  const broken = await run({ record: four.record, commit: "c2" });
+  assert.equal(broken.outcome, "failed");
+  assert.match(broken.message, /^computers: the release did not go live: A new instance never became healthy/u);
+
+  // Lowered to 1 with another release that fails as well: the count goes with the release while its refresh is open,
+  // so mobilynet's refresh rolls to one instance and, when it fails, the version before serves on one.
+  const at = standIn.requests().length;
+  const lowered = await run({ record: broken.record, commit: "c3", choices: { services: { computers: { instances: 1 } } } });
+  assert.equal(lowered.outcome, "failed");
+  assert.equal(lowered.plan.items.find((item) => item.name === "computers").verb, "changed");
+  const writes = requestsAfter(standIn, at).filter((request) => isWrite(request) && request.path.startsWith(`/v1/services/${computers}`));
+  assert.deepEqual(writes.map((request) => [request.method, request.path]), [["POST", `/v1/services/${computers}/releases`], ["PATCH", `/v1/services/${computers}`]]);
+  assert.deepEqual(writes[1].body, { instances: 1 });
+  standIn.faults.instancesUnhealthy = false;
+  settle(standIn);
+  assert.deepEqual(standIn.services.service(computers).instances, { wanted: 1, running: 1, inRotation: 1, healthy: 1 });
+  assert.equal(serving(), 1);
+  assert.equal(lowered.record.items["service.computers"].instances, 1);
+  assert.deepEqual(lowered.record.choices.services.computers, { size: "a-8", instances: 1 }, "the record keeps the count computers runs");
+
+  // The next plan starts from what runs, one instance, kept; its Deploy starts one new instance and goes live.
+  const again = await run({ record: lowered.record, commit: "c3" });
+  assert.equal(again.outcome, "live", again.message);
+  assert.deepEqual(again.plan.choices.services.computers, { size: "a-8", instances: 1 });
+  assert.equal(again.plan.items.find((item) => item.name === "computers").verb, "kept");
+  settle(standIn);
+  assert.equal(startedBy(releaseRefresh()), 1);
+  assert.equal(serving(), 1);
+
+  // Raised to 3 with a new commit: the release refresh starts the three, and no instance starts on the version it leaves.
+  const startedBefore = standIn.services.instances(computers).length;
+  const raised = await run({ record: again.record, commit: "c4", choices: { services: { computers: { instances: 3 } } } });
+  assert.equal(raised.outcome, "live", raised.message);
+  settle(standIn);
+  assert.equal(startedBy(releaseRefresh()), 3);
+  assert.equal(standIn.services.instances(computers).length - startedBefore, 3, "no instance started beside the release's own");
+  assert.equal(serving(), 3);
+});
+
 test("take offline returns once the provider removed the services, or names those it is still removing, the record kept without them", async () => {
   const { standIn, run, record } = setup();
   const first = await run({ record, commit: "c1" });

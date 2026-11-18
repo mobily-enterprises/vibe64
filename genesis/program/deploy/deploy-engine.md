@@ -191,8 +191,11 @@ making it twice. In order:
 4. each internal service, then the public one: its release uploaded, its App
    Service made (labelled, internal ones with no routes, the public one routed
    at the domain with a connection to each service it reaches) or handed the
-   release, linked to every resource once that refresh is building, then the
-   refresh waited for. mobilynet checks a link against the release a service
+   release and, while that refresh is open, set to the count chosen, linked to
+   every resource once that refresh is building, then the refresh waited for.
+   mobilynet's refresh rolls to the count the service has as it rolls, so a
+   release starts as many new instances as the Plan says, and one that fails
+   leaves the version before serving on the chosen count. mobilynet checks a link against the release a service
    runs or, when that names no such need, the release its refresh in progress
    (building or rolling) moves it to, and that refresh's instances start with
    the link's settings; so a new service's first instances, and a release
@@ -213,9 +216,11 @@ making it twice. In order:
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
    setting the reached service's private address, the Production Env's values
-   for the names it declares), the services it reaches, its size and count,
-   only once every move ended: mobilynet refuses a settings replace while a
-   link made ahead of an open refresh stands;
+   for the names it declares), the services it reaches, its size and (when it
+   was handed no release) its count, only once every move ended: mobilynet
+   refuses a settings replace while a link made ahead of an open refresh
+   stands. The record's choices follow each count or size the Deploy sets, so
+   a Deploy that fails after one leaves the next Plan starting from what runs;
 7. a service the Stack no longer names is deleted;
 8. live, once every service runs its release on as many healthy instances as
    chosen and its last refresh (a link's or a change's) did not fail.
