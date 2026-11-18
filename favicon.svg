@@ -1,7 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#111827" />
-  <path
-    d="M20 16h24v8H28v20c0 6-4 10-10 10h-2v-8h2c2 0 2-1 2-3V16z"
-    fill="#22d3ee"
-  />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="64 64 384 384">
+  <!-- Vibe64's logo (docs/site/public/vibe64-logo.svg) cropped to its tile, with heavier waves so it reads at 16 px. -->
+  <defs>
+    <linearGradient id="tile" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2DA3FF" />
+      <stop offset="100%" stop-color="#0066FF" />
+    </linearGradient>
+    <radialGradient id="star" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e6f2ff" />
+    </radialGradient>
+  </defs>
+  <rect x="64" y="64" width="384" height="384" rx="90" fill="url(#tile)" />
+  <path d="M 256 175 Q 256 235 200 235 Q 256 235 256 295 Q 256 235 312 235 Q 256 235 256 175 Z" fill="url(#star)" />
+  <g fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 85 160 C 125 155, 155 180, 185 235 C 210 280, 240 320, 256 340 C 272 320, 302 280, 327 235 C 357 180, 387 155, 427 160" />
+    <path d="M 85 200 C 125 195, 155 220, 185 275 C 210 320, 240 360, 256 380 C 272 360, 302 320, 327 275 C 357 220, 387 195, 427 200" />
+    <path d="M 85 240 C 125 235, 155 260, 185 315 C 210 360, 240 400, 256 420 C 272 400, 302 360, 327 315 C 357 260, 387 235, 427 240" />
+  </g>
 </svg>

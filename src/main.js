@@ -122,4 +122,9 @@ void bootstrapClientShellApp({
   if (status) {
     status.textContent = "Vibe64 could not open. Reload the page to try again.";
   }
+  // The loading screen then offers its reload at once (index.html).
+  const shell = document.getElementById("startup-shell");
+  if (shell) {
+    shell.dataset.startup = "failed";
+  }
 });

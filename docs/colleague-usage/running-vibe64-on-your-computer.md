@@ -11,6 +11,14 @@ Vibe64 opens in your browser. To start it for a different folder, run
 run `PORT=3001 npx vibe64 --no-open` and open the address it prints after
 **Vibe64 is running at** yourself.
 
+While the editor loads, the page shows the Vibe64 logo and name, a thin
+moving bar and **Loading Vibe64…**. If the editor hasn't opened after about
+ten seconds, **Taking longer than usual? Reload the page** appears below it;
+choose **Reload the page** to try again. If the download fails, the page says
+**Vibe64 could not open. Reload the page to try again.**, the bar disappears
+and **Reload the page** shows at once. With JavaScript turned off in the browser it
+says **JavaScript must be enabled to open Vibe64.** instead.
+
 The address Vibe64 opens or prints ends with a private access key
 (`?vibe64-access=…`) that is new each time Vibe64 starts, so other programs and
 other accounts on this computer can't use your Vibe64. Opening it once lets that

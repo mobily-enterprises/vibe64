@@ -26,7 +26,8 @@ The whole app switches immediately, including the Learning environment (**L**),
 its lesson reader and the Learn page's Lesson pane. **System** follows your device's light or dark setting
 and changes when the device does. System is the default.
 
-The choice is saved in this browser only. Another browser, another device or a
+The choice is saved in this browser only. The loading screen Vibe64 shows
+while it opens follows it too. Another browser, another device or a
 private window starts in System, following that device, until you choose again;
 clearing site data also resets it. It does not change the appearance of the app shown inside
 **Preview**, which belongs to the project.
@@ -36,8 +37,9 @@ Vibe64 also follows the device's **reduce motion** setting (for example
 **Remove animations** on Android). With it on, screens, panels, menus and dialogs
 change at once instead of sliding, fading or expanding, and pages scroll without
 smooth scrolling. Loading bars and spinners for work whose length is unknown
-keep moving, because that motion is what shows the work is still going. Vibe64
-has no setting of its own for this; change it on the device.
+keep moving, because that motion is what shows the work is still going; the bar
+on the loading screen Vibe64 shows while it opens pulses in place instead of
+sliding. Vibe64 has no setting of its own for this; change it on the device.
 
 Colleague can explain these steps but cannot change your name or appearance for
 you: they are your own choices in the dialog.

@@ -296,10 +296,12 @@ Genesis guidance, needs no database or external services, and preserves edits
 across preview restarts. Frontend changes update through the development server;
 server changes take effect after restarting Preview.
 
-The initial document shows a lightweight loading shell before the editor's
-JavaScript starts. It remains visible during initialization, offers a page reload,
-and explains a failed download or initialization instead of leaving a blank
-page or a loading message that never ends after failure.
+The initial document shows a calm, branded loading screen before the editor's
+JavaScript starts: the Vibe64 logo and name, a slim loading bar and one quiet
+status line, in the editor's light or dark colours. It remains visible during
+initialization, offers a page reload when the editor has not started after about
+ten seconds, and explains a failed download or initialization, with the reload,
+instead of leaving a blank page or a loading message that never ends after failure.
 
 People can open or create a project, work in isolated sessions, and have a
 direct conversation with the agent while seeing the source, changes, running

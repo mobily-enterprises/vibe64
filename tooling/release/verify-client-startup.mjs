@@ -13,7 +13,9 @@ async function verifyClientStartup(distRoot) {
   try {
     for (const width of [390, 768, 1280]) {
       for (const failure of ["entry", "dependency"]) {
-        const context = await browser.newContext({ viewport: { width, height: 900 }, serviceWorkers: "block" });
+        // The phone width also stands for a device that asks for reduced motion.
+        const reducedMotion = width === 390 ? "reduce" : "no-preference";
+        const context = await browser.newContext({ viewport: { width, height: 900 }, serviceWorkers: "block", reducedMotion });
         let releaseScripts;
         const scriptsHeld = new Promise(resolve => { releaseScripts = resolve; });
         try {
@@ -36,11 +38,30 @@ async function verifyClientStartup(distRoot) {
             if (url.pathname === "/index.html") return route.fulfill({ contentType: "text/html", body: html });
             await route.fulfill({ path: file });
           });
+          await page.clock.install();
           await page.goto("http://startup.test/index.html", { waitUntil: "commit" });
-          await expect(page.getByRole("status")).toHaveText("Loading Vibe64…");
-          await expect(page.getByRole("status")).toBeVisible();
-          await expect(page.getByRole("link", { name: "Reload page" })).toBeVisible();
+          const status = page.getByRole("status");
+          const reload = page.getByRole("link", { name: "Reload the page" });
+          await expect(status).toHaveText("Loading Vibe64…");
+          await expect(status).toBeVisible();
+          await expect(page.getByText("Vibe64", { exact: true })).toBeVisible();
+          await expect(reload).toBeHidden();
           await expect.poll(() => scriptRequests).toBeGreaterThan(0);
+          // With every stylesheet applied, the app's own reduced-motion rule among them, the bar still shows that
+          // the editor is loading: it slides, or pulses in place for reduced motion.
+          await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('link[rel="stylesheet"]')]
+            .every((link) => link.sheet))).toBe(true);
+          const motion = await page.locator("#startup-shell .startup-progress span").evaluate((bar) => bar.getAnimations()
+            .map((animation) => ({ name: animation.animationName, iterations: animation.effect.getTiming().iterations })));
+          assert.deepEqual(motion, [{ name: reducedMotion === "reduce" ? "startup-pulse" : "startup-slide", iterations: Infinity }]);
+          if (failure === "entry") {
+            // A slow start offers the reload after ten seconds, not before.
+            await page.clock.fastForward(9_000);
+            await expect(reload).toBeHidden();
+            await page.clock.fastForward(1_000);
+            await expect(page.getByText("Taking longer than usual?")).toBeVisible();
+            await expect(reload).toBeVisible();
+          }
           const geometry = await page.evaluate(() => ({
             width: document.documentElement.clientWidth,
             scrollWidth: document.documentElement.scrollWidth,
@@ -49,8 +70,10 @@ async function verifyClientStartup(distRoot) {
           assert.ok(geometry.scrollWidth <= geometry.width + 1, "Startup shell overflows horizontally");
           assert.ok(geometry.reloadHeight >= 48, "Reload must have a 48px touch target");
           releaseScripts();
-          await expect(page.getByRole("status")).toHaveText("Vibe64 could not open. Reload the page to try again.");
-          await expect(page.getByRole("link", { name: "Reload page" })).toBeVisible();
+          await expect(status).toHaveText("Vibe64 could not open. Reload the page to try again.");
+          // A failure offers the reload at once and stops the loading bar.
+          await expect(reload).toBeVisible();
+          await expect(page.locator("#startup-shell .startup-progress")).toBeHidden();
         } finally {
           releaseScripts();
           await context.close();
@@ -60,7 +83,7 @@ async function verifyClientStartup(distRoot) {
   } finally {
     await browser.close();
   }
-  console.log("Cold startup proof passed: loading shell and failed entry/dependency recovery at 390, 768 and 1280px.");
+  console.log("Cold startup proof passed: loading screen, reload after ten seconds and failed entry/dependency recovery at 390, 768 and 1280px.");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
