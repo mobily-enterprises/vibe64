@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -13,9 +14,15 @@ import {
   playwrightBrowserLaunchCommandArgs
 } from "../../packages/vibe64-execution/src/server/runtime/browserRuntime.js";
 
+// Health's AI commands row starts its own helper as `sh -c '"$0"' <helper>`, as a session's shell starts its helper.
+const isAiCommandProbe = (command, args = []) => command === "sh" && args[1] === '"$0"';
+
 function successfulCommandResult(command = "", args = []) {
   const commandText = String(command);
   const script = args.join(" ");
+  if (isAiCommandProbe(commandText, args)) {
+    return { ok: true, output: "AI commands start here." };
+  }
   if (commandText.endsWith("/genesis")) {
     return { ok: true, output: "Usage:\n  genesis init" };
   }
@@ -105,11 +112,12 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
     "github-cli",
     "ripgrep",
     "codex",
+    "ai-commands",
     "genesis",
     "playwright",
     "playwright-browser"
   ]);
-  assert.equal(commandCalls.length, 8);
+  assert.equal(commandCalls.length, 9);
   // The host's Codex check is the original one: same command, label and wording.
   const codex = result.checks.find((check) => check.id === "codex");
   assert.equal(codex.label, "Codex CLI");
@@ -262,9 +270,9 @@ test("without runtime packs Health counts only what is needed; one AI tool is en
   assert.equal(byId.toolchain, undefined);
   assert.equal(result.healthy, true, "Codex alone is enough; the rest is optional");
   assert.deepEqual(result.checks.filter((check) => check.need === "needed").map((check) => check.id),
-    ["node", "git", "ai-tool", "ai-auth", "workspace", "genesis"]);
+    ["node", "git", "ai-tool", "ai-auth", "workspace", "ai-commands", "genesis"]);
   assert.equal(result.summary.failed, 0);
-  assert.equal(result.summary.total, 6);
+  assert.equal(result.summary.total, 7);
   assert.equal(result.summary.optionalMissing, 5, "Claude, opencode, GitHub CLI, ripgrep and one Playwright row");
   assert.equal(byId["ai-tool"].observed, "Codex 0.163.0");
   assert.equal(byId.node.observed, "Node.js 26.12.1 · /usr/bin/node");
@@ -307,6 +315,62 @@ test("without runtime packs a tool that is there but fails is not counted as ins
   assert.equal(byId.git.status, "fail");
   assert.equal(byId.git.observed, "Git is at /usr/bin/git but didn't start.");
   assert.doesNotMatch(byId["github-cli"].explanation, /pinned/u);
+});
+
+// 18 Nov: on a host whose homes are mounted noexec, every command a Claude Code session ran failed before it started
+// ("exit 126 ... Permission denied"): the session's helpers were below the home. The row starts a helper from the
+// session helpers' folder as a session's shell does, with the command the host would run, and names the noexec mount.
+test("Health's AI commands row starts a helper where sessions keep theirs, and names a noexec mount that refuses it", async (t) => {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "vibe64-health-ai-commands-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const studioRoot = path.join(root, "studio");
+  await mkdir(studioRoot);
+  await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
+  const helpers = path.join(root, "session-helpers");
+  const calls = [];
+  // The host's own start of the command: here, this machine's sh, as the managed command path runs it.
+  const run = ({ args, command, cwd }) => {
+    const ran = spawnSync(command, args, { cwd, encoding: "utf8" });
+    return { ok: ran.status === 0, exitCode: ran.status, output: `${ran.stdout}${ran.stderr}`.trim() };
+  };
+  const inspect = async ({ runCommand = run, mountTable } = {}) => {
+    const service = createService({
+      connections: { checkCustomEndpoints: async () => [], getStatus: async () => ({ ok: true, connections: [] }) },
+      env: { ...process.env, VIBE64_CODEX_ATTACHMENTS_ROOT: helpers },
+      ...(mountTable ? { mountTable } : {}),
+      project: { listProjects: async () => ({ ok: true, projects: [] }) },
+      async runCommand(options) {
+        if (!isAiCommandProbe(options.command, options.args)) return successfulCommandResult(options.command, options.args);
+        calls.push(options);
+        return runCommand(options);
+      },
+      studioRoot
+    });
+    return (await service.inspect()).checks.find((check) => check.id === "ai-commands");
+  };
+
+  const ran = await inspect();
+  assert.deepEqual([ran.status, ran.need, ran.group], ["pass", "needed", "AI tools"]);
+  assert.equal(ran.observed, `A command started from ${helpers}.`);
+  const [call] = calls;
+  assert.deepEqual([call.actor, call.mode, call.purpose, call.cwd], ["app", "capture", "health", studioRoot]);
+  assert.equal(call.args[2], path.join(helpers, "codex-git-command/health-check/vibe64-command-check"));
+
+  // Where the kernel refuses it: the shell's own words, and the noexec mount from the mount table.
+  const refused = { ok: false, exitCode: 126, output: `sh: 1: ${call.args[2]}: Permission denied` };
+  const table = (options) => [`22 1 0:21 / / rw,relatime shared:1 - ext4 /dev/sda1 rw`,
+    `33 22 0:30 / ${root} rw,nosuid,nodev,${options},relatime shared:2 - ext4 /dev/sda2 rw`].join("\n");
+  const noexec = await inspect({ runCommand: () => refused, mountTable: async () => table("noexec") });
+  assert.equal(noexec.status, "fail");
+  assert.equal(noexec.observed, [`exit 126 … sh: 1: ${call.args[2]}: Permission denied`,
+    `${helpers} is on a noexec mount (${root}): no program starts there.`].join("\n"));
+  assert.match(noexec.explanation, /VIBE64_CODEX_ATTACHMENTS_ROOT\) must be on a mount where programs may start/u);
+  // Refused on a mount that allows programs: the exit and the words, and no mount blamed.
+  const other = await inspect({ runCommand: () => refused, mountTable: async () => table("exec") });
+  assert.equal(other.observed, `exit 126 … sh: 1: ${call.args[2]}: Permission denied`);
+  // A helper that starts but answers something else is not a pass.
+  const wrong = await inspect({ runCommand: () => ({ ok: true, exitCode: 0, output: "something else" }) });
+  assert.equal(wrong.status, "fail");
 });
 
 test("the browser health probe launches pinned headless Chromium within the health deadline", (t) => {

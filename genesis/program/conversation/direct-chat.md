@@ -1224,7 +1224,10 @@ queue, account invalidation and shared recovery sequence. Both consumers acquire
 their native providers from it. Inventory and invalidation use the workspace's
 runtime root and the selected account; shared fallback recovery uses the exact
 runtime directory. That root comes from the server's env (`VIBE64_AGENT_RUNTIME_DIR`,
-else `$XDG_RUNTIME_DIR/vibe64/agent-providers`), and every Codex runtime
+else `$XDG_RUNTIME_DIR/vibe64/agent-providers`; a host whose `/run` cannot start
+programs names a folder on disk, and its exec helper's settings name the same
+place, `VIBE64_AGENT_RUNTIME_ROOT`, as `<root>/<workspace>`, or the helper refuses
+the provider's folders), and every Codex runtime
 directory sits below it: the Codex runtime host adds it to the provider options as
 `runtimeRoot`, because a provider's own env is its child's curated env. Vibe64 retains session barriers, stopped-state persistence,
 publication and Helper cleanup. Colleague's common runtime persists its native

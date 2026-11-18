@@ -15,6 +15,7 @@ missing, and how many optional extras aren't set up. Only **Needed** checks coun
 | Git | Git is missing or didn't start. |
 | An AI tool | None of Claude Code, Codex or opencode runs on this computer. One is enough. **Set up your AI** opens AI setup. |
 | AI connection | No AI is connected yet. **Set up your AI** opens AI setup (shown on the first AI row that needs it). |
+| AI commands | A command your AI runs can't start here. Every command the AI runs (Claude Code's and Codex's) starts through a small Vibe64 helper in Vibe64's session helpers folder; the row starts one the same way. A failure shows the exit and the shell's own words, such as `exit 126 … Permission denied`, and, when the folder is on a mount that refuses to run programs, which one: "… is on a noexec mount (/home): no program starts there." That folder (`VIBE64_CODEX_ATTACHMENTS_ROOT`) must be on a mount where programs may start; installing or signing in fixes nothing here. |
 | Vibe64, Genesis | Vibe64's own parts can't be read. This is not something a project setting fixes. When Vibe64 cannot find its Genesis, only the Genesis row fails, saying what is missing; the other rows still show. |
 
 **Optional** (nice to have; nothing depends on them): GitHub CLI, ripgrep, the AI
@@ -62,8 +63,10 @@ When Vibe64 starts in a terminal with no AI tool at all, it prints one plain
 message there with the Claude Code install command. It says nothing when one AI
 tool is installed.
 
-Health only reads. It never installs software, signs in or repairs anything, and
-a pass is not proof that a particular project builds.
+Health only reads, with one exception: **AI commands** writes its own small helper
+beside the sessions' helpers (in `codex-git-command/health-check/`) and starts it. It
+never installs software, signs in or repairs anything, and a pass is not proof that
+a particular project builds.
 
 ## Ask Colleague
 

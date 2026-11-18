@@ -759,6 +759,16 @@ Studio health performs read-only checks
 of workspace access, account readiness, command-line tools, Genesis, and the
 managed browser runtime. Failures identify the concrete host capability that is
 missing without attempting project-specific repairs.
+The needed **AI commands** row is the one that writes: every command an AI
+session runs starts through a helper Vibe64 writes for the session below the
+attachment root (`VIBE64_CODEX_ATTACHMENTS_ROOT`; the PreToolUse hook makes
+each command `"$VIBE64_WRAPPER"` and the command), so the row writes its own
+helper there (`codex-git-command/health-check/vibe64-command-check`) and starts
+it as the app, through the same command path as the other rows, as a session's
+shell starts its helper. A failure shows the exit and the shell's last line and,
+when `/proc/self/mountinfo` puts the root on a `noexec` mount, names that mount:
+on a host whose homes are mounted noexec, a root below the daemon's home failed
+every AI command with exit 126 (18 Nov 2026).
 The managed launcher relies on cgroup v2 CPU accounting and does not assign the
 deprecated `CPUAccounting` property. Launcher deprecation output must not precede
 version output and make installed runtimes appear unavailable.

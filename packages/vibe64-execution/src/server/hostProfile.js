@@ -7,12 +7,16 @@ import { isMainThread } from "node:worker_threads";
 // A host that provisions its own machines passes its values once at startup.
 const HOST_PROFILE_KEY = Symbol.for("vibe64.hostProfile");
 const HOST_UMASK_KEY = Symbol.for("vibe64.hostProfile.previousUmask");
-const PATH_FIELDS = ["runtimePackRoot", "sharedCacheRoot", "execHelperPath"];
+const PATH_FIELDS = ["runtimePackRoot", "sharedCacheRoot", "npmPrefixRoot", "execHelperPath"];
 const LOCAL_HOST_PROFILE = Object.freeze({
   // Pinned tool packs; "" means the person's own installed tools.
   runtimePackRoot: "",
   // Cache shared by every account on the machine.
   sharedCacheRoot: "",
+  // Where each person's and the daemon's npm prefix is, <root>/<login>, made
+  // by the host and that login's alone, when their homes cannot start programs
+  // (a noexec mount); "" means the login's own ~/.local.
+  npmPrefixRoot: "",
   // Privileged helper that runs commands as other OS users.
   execHelperPath: "",
   // Several OS users share project files through one group.

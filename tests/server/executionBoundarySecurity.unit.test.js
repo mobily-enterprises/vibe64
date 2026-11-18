@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import childProcess from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  agentProviderRuntimeRoot,
   helperChildEnv,
   resolveAllowedCwd,
   resolveAllowedUserHomePath,
@@ -65,6 +66,39 @@ test("OpenCode retains its private provider home and XDG directories", () => {
   const env = helperChildEnv(input, user, user.username, "opencode-app-server");
   for (const [name, value] of Object.entries(input)) assert.equal(env[name], value);
   assert.throws(() => helperChildEnv({ ...input, HOME: "/outside" }, user, user.username, "opencode-app-server"), /outside its provider runtime/u);
+});
+
+test("a host's settings put the agent providers' runtimes on disk, and OpenCode's folders and server must be there", async (t) => {
+  const user = { username: "v64d_workspace", home: "/home/v64d_workspace", uid: 4242 };
+  assert.equal(agentProviderRuntimeRoot(user.username, {}), "/run/vibe64-workspace/vibe64/agent-providers");
+  for (const configured of ["relative/agents", "/var/lib/vibe64/runtime/agents/", "/var/lib/../agents", "/"]) {
+    assert.throws(() => agentProviderRuntimeRoot(user.username, { VIBE64_AGENT_RUNTIME_ROOT: configured }), /not an absolute, normalized folder/u);
+  }
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "v64-agent-runtime-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const settings = { VIBE64_AGENT_RUNTIME_ROOT: root };
+  assert.equal(agentProviderRuntimeRoot(user.username, settings), path.join(root, "workspace"));
+
+  const providerRoot = path.join(root, "workspace", "opencode");
+  const input = { PATH: "/managed/toolchain/bin" };
+  for (const name of ["HOME", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"]) {
+    input[name] = `${providerRoot}/private-1/${name.toLowerCase()}`;
+  }
+  const env = helperChildEnv(input, user, user.username, "opencode-app-server", settings);
+  for (const [name, value] of Object.entries(input)) assert.equal(env[name], value);
+  // Once the host names the new place, the old one in /run is no provider runtime of this workspace.
+  const old = Object.fromEntries(Object.entries(input).map(([name, value]) => [name,
+    value.replace(path.join(root, "workspace"), "/run/vibe64-workspace/vibe64/agent-providers")]));
+  assert.throws(() => helperChildEnv(old, user, user.username, "opencode-app-server", settings), /outside its provider runtime/u);
+
+  const workdir = path.join(providerRoot, "workspace");
+  const codexRoot = path.join(root, "workspace", "codex-app-server-0123456789ab");
+  await mkdir(workdir, { recursive: true });
+  await mkdir(codexRoot);
+  assert.equal(resolveAllowedCwd(workdir, user.username, { operation: "opencode-app-server", settings, targetUser: user }), workdir);
+  assert.equal(resolveAllowedCwd(codexRoot, user.username, { operation: "codex-app-server", settings, targetUser: user }), codexRoot);
+  assert.throws(() => resolveAllowedCwd(path.join(root, "workspace"), user.username,
+    { operation: "opencode-app-server", settings, targetUser: user }));
 });
 
 test("gateway cwd permits in-root symlinks and a selected symlink root but rejects escaping links", async (t) => {
