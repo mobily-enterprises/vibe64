@@ -53,7 +53,10 @@ test("all project HTTP operations share canonical actions and current authority 
       ["GET", "/settings/engineering", "engineering.read", "readEngineeringSettings", { sessionId: "session-1" }],
       ["PUT", "/settings/engineering", "engineering.profile.save", "saveEngineeringProfile", { sessionId: "session-1", profile: "focused.v1" }],
       ["GET", "/preview-identities", "preview-identities.read", "readPreviewApplicationIdentities", { sessionId: "session-1" }],
-      ["PUT", "/preview-identities", "preview-identities.save", "savePreviewApplicationIdentities", { identities: [], sessionId: "session-1" }]
+      ["PUT", "/preview-identities", "preview-identities.save", "savePreviewApplicationIdentities", { identities: [], sessionId: "session-1" }],
+      // Add a service: the URL names the session.
+      ["GET", "/sessions/:sessionId/stack/service-choices", "stack.services.read", "readStackServiceChoices", {}],
+      ["POST", "/sessions/:sessionId/stack/services", "stack.services.add", "addStackService", { kind: "redis" }]
     ];
     const project = Object.fromEntries(cases.map(([, , , method]) => [method, async (...args) => {
       const context = currentProjectRequestContext();
@@ -74,7 +77,7 @@ test("all project HTTP operations share canonical actions and current authority 
       const actionId = `vibe64.project.${operation}`;
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });
       let actionInput;
-      const request = { params: routeProjectParams({ number: "42", commentId: "IC_actual" }), input: { [method === "GET" ? "query" : "body"]: data },
+      const request = { params: routeProjectParams({ number: "42", commentId: "IC_actual", sessionId: "session-1" }), input: { [method === "GET" ? "query" : "body"]: data },
         executeAction({ actionId: actualId, input }) {
           assert.equal(actualId, actionId);
           assert.equal(Object.hasOwn(input, "vibe64User"), false);
@@ -132,7 +135,8 @@ test("all project HTTP operations share canonical actions and current authority 
       ["pull-requests.update-branch", { number: 42, review: { ...review, headCommit: "latest" } }],
       ["env.secret.reveal", {}], ["env.user-values.save", {}], ["prompt-hints.save", {}], ["templates.apply", { sessionId: "session-1" }],
       ["onboarding.read", {}], ["onboarding.read", { sessionId: " " }], ["onboarding.read", { sessionId: "session-1", templateOffset: -1 }],
-      ["onboarding.read", { sessionId: "session-1", templateId: " " }], ["templates.apply", { sessionId: "", templateId: "starter" }]
+      ["onboarding.read", { sessionId: "session-1", templateId: " " }], ["templates.apply", { sessionId: "", templateId: "starter" }],
+      ["stack.services.read", {}], ["stack.services.add", { sessionId: "session-1", kind: "mongodb" }]
     ]) await assert.rejects(actions.execute({ actionId: `vibe64.project.${operation}`, input: { ...input, projectSlug: slug }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
     assert.equal(calls.length, count);
     assert.equal(currentProjectRequestContext(), null);
