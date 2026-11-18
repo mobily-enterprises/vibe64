@@ -428,11 +428,13 @@ test("a project at its spending cap refuses new creates and scale-ups, while rel
   const { hostedService: db } = await production.createHostedService({ app: "postgresql-18" }, { idempotencyKey: "hosted-db" });
   settle(standIn);
   assert.deepEqual(await production.readSpendingCap(), {
-    projectId, capNano: null, month: "2026-11", spentNano: "0", state: "none", currency: "USD", meteredUntil: AT.toISOString(), setAt: null
+    projectId, capNano: null, month: "2026-11", spentNano: "0", state: "none", currency: "USD", meteredUntil: AT.toISOString(), changedAt: null
   });
   standIn.setSpendingCap(projectId, 50_000_000_000n);
   standIn.spend(projectId, 40_000_000_000n);
-  assert.equal((await production.readSpendingCap()).state, "warning");
+  const capped = await production.readSpendingCap();
+  // mobilynet names when the cap last changed changedAt (its engine-support 092dbb87).
+  assert.deepEqual([capped.state, capped.changedAt, "setAt" in capped], ["warning", AT.toISOString(), false]);
   assert.equal((await client.changeService(serviceId, { instances: 3 })).service.instances.wanted, 3, "under the cap a raise works");
   standIn.spend(projectId, 10_000_000_000n);
   assert.deepEqual((await production.readSpendingCap()).state, "reached");

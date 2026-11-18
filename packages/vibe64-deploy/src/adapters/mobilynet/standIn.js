@@ -181,7 +181,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
   /** A mobilynet project of the organisation, with mobilynet's default quotas, no spending cap and nothing spent. @param {string} name */
   function addProject(name) {
     const id = nextId("prj");
-    projects.set(id, { id, name, limits: { ...DEFAULT_LIMITS }, capNano: null, spentNano: 0n, setAt: null });
+    projects.set(id, { id, name, limits: { ...DEFAULT_LIMITS }, capNano: null, spentNano: 0n, changedAt: null });
     return id;
   }
 
@@ -211,7 +211,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
       state,
       currency: prices.currency,
       meteredUntil: at(),
-      setAt: project.setAt
+      changedAt: project.changedAt
     };
   }
 
@@ -371,7 +371,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     /** Sets some of a mobilynet project's quotas. @param {string} id @param {Partial<typeof DEFAULT_LIMITS>} limits */
     setQuota: (id, limits) => Object.assign(projectNamed(id).limits, limits),
     /** Sets a mobilynet project's monthly spending cap in nano-units, or removes it (null). @param {string} id @param {bigint | number | string | null} capNano */
-    setSpendingCap: (id, capNano) => Object.assign(projectNamed(id), { capNano: capNano === null ? null : BigInt(capNano), setAt: at() }),
+    setSpendingCap: (id, capNano) => Object.assign(projectNamed(id), { capNano: capNano === null ? null : BigInt(capNano), changedAt: at() }),
     /** Adds to a mobilynet project's spend this month, as metering would. @param {string} id @param {bigint | number | string} nano */
     spend: (id, nano) => {
       projectNamed(id).spentNano += BigInt(nano);

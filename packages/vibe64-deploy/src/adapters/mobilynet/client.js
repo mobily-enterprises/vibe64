@@ -293,7 +293,7 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
       listHostedServices: ({ labels, app, state } = {}) => listAll(`${projectAt}/hosted-services`, { label: labelQuery(labels), app, state }),
       /**
        * The mobilynet project's monthly spending cap and this month's spend (`usage:read`): `{ projectId, capNano,
-       * month, spentNano, state, currency, meteredUntil, setAt }`, amounts as whole nano-units in decimal text, `state`
+       * month, spentNano, state, currency, meteredUntil, changedAt }`, amounts as whole nano-units in decimal text, `state`
        * `none`, `under`, `warning` (80%) or `reached`, when creates and scale-ups are refused.
        */
       readSpendingCap: async () => (await call("GET", `${projectAt}/spending-cap`)).spendingCap,
