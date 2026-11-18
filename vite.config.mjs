@@ -1,3 +1,4 @@
+import path from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
@@ -32,6 +33,108 @@ const clientEntry = (() => {
   return `/src/${normalized}`;
 })();
 
+// The loading screen (index.html) paints before the editor's stylesheets arrive. Vite links them in <head>, where
+// every one would hold the first paint, so a built page links them at the end of <body>, after the screen. Vite's
+// preload helper adds the stylesheets of lazily loaded modules after them there, so they still follow the page's own
+// in the cascade, as at the end of <head>. The editor never shows unstyled: the page's module scripts run only once
+// every stylesheet the parser met has loaded, wherever it stands, and a lazy import resolves once its stylesheets
+// have. Listed before JSKIT's plugin, so the build id JSKIT digests is the finished page.
+const stylesheetsAfterLoadingScreen = {
+  name: "vibe64-stylesheets-after-loading-screen",
+  enforce: "pre",
+  transform: {
+    filter: { id: /^\0vite\/preload-helper\.js$/u },
+    handler(code) {
+      const helper = code.replace("document.head.appendChild(link)", "document.body.appendChild(link)");
+      if (helper === code) {
+        this.error("vite.config.mjs adds lazily loaded stylesheets after the page's own, but Vite's preload helper no " +
+          "longer appends them with document.head.appendChild(link).");
+      }
+      return helper;
+    }
+  },
+  transformIndexHtml: {
+    order: "post",
+    handler(html, { bundle } = {}) {
+      if (!bundle) {
+        return html;
+      }
+      const stylesheets = [];
+      const page = html.replace(/\s*<link rel="stylesheet"[^>]*>/gu, (tag) => {
+        stylesheets.push(`\n    ${tag.trim()}`);
+        return "";
+      });
+      return page.replace(/\s*<\/body>/u, `${stylesheets.join("")}\n  </body>`);
+    }
+  }
+};
+
+// What the first screen needs comes in few files: over a slow link a cold start waits a round trip for each handful
+// of files, more than for their bytes. Every module the entry imports statically (Rolldown's $initial) comes in the
+// entry's own file. The project page (/app/project/:slug, where the editor opens) stays a lazy route: its file holds
+// the page and the modules it imports that nothing loaded without the page imports. The modules it shares with pages
+// or components loaded without it come one file for each set of those that import them, so none of them loads more
+// than before. A lazily loaded page or component loads only with the project page when it is one of the page's
+// nested routes, shows the page itself, or only the page's own modules load it. Whatever a shared module imports is
+// shared by the same pages or more, so these files import only files shared more widely, never in a circle, and a
+// group need not pull in its modules' imports.
+const indexPage = fileURLToPath(new URL("./index.html", import.meta.url));
+const projectPage = fileURLToPath(new URL("./src/pages/app/project/[slug].vue", import.meta.url));
+const projectPageRoutes = projectPage.replace(/\.vue$/u, "/");
+
+// The modules `roots` import, the roots among them: statically, or with `lazy` also lazily.
+function importedModules(chunking, roots, { lazy = false } = {}) {
+  const modules = new Set();
+  const pending = [...roots];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    const info = modules.has(id) ? null : chunking.getModuleInfo(id);
+    if (info) {
+      modules.add(id);
+      pending.push(...info.importedIds, ...(lazy ? info.dynamicallyImportedIds : []));
+    }
+  }
+  return modules;
+}
+
+function projectPageModules(chunking) {
+  for (const id of [indexPage, projectPage]) {
+    if (!chunking.getModuleInfo(id)) {
+      throw new Error(`vite.config.mjs puts the project page's modules in one file, but the build has no ${id}.`);
+    }
+  }
+  const project = importedModules(chunking, [projectPage]);
+  const loadedWithoutProjectPage = [...importedModules(chunking, [indexPage], { lazy: true })].filter((id) => {
+    const { dynamicImporters } = chunking.getModuleInfo(id);
+    return dynamicImporters.length > 0 && id !== projectPage && !id.startsWith(projectPageRoutes) &&
+      !dynamicImporters.every((importer) => project.has(importer)) &&
+      !importedModules(chunking, [id]).has(projectPage);
+  });
+  const sharers = new Map([...project].sort().map((id) => [id, []]));
+  loadedWithoutProjectPage.forEach((entry, index) => {
+    for (const id of importedModules(chunking, [entry])) {
+      sharers.get(id)?.push(index);
+    }
+  });
+  // A shared file is named after its first module, as Rolldown names its own, so it keeps its name across builds.
+  const sharedChunks = new Map();
+  return new Map([...sharers].map(([id, entries]) => {
+    const key = entries.join();
+    if (key && !sharedChunks.has(key)) {
+      sharedChunks.set(key, `project-shared-${path.basename(id).replace(/[?#].*$/u, "").replace(/\.[^.]+$/u, "")}`);
+    }
+    return [id, key ? sharedChunks.get(key) : "project"];
+  }));
+}
+
+const projectPageModulesByPass = new WeakMap();
+function projectPageChunk(moduleId, chunking) {
+  if (!projectPageModulesByPass.has(chunking)) {
+    projectPageModulesByPass.set(chunking, projectPageModules(chunking));
+  }
+  return projectPageModulesByPass.get(chunking).get(moduleId) ?? null;
+}
+
 export default defineConfig({
   resolve: {
     preserveSymlinks: true,
@@ -41,6 +144,7 @@ export default defineConfig({
     }
   },
   plugins: [
+    stylesheetsAfterLoadingScreen,
     createJskitClientBootstrapPlugin({
       proxyTarget: apiProxyTarget
     }),
@@ -90,7 +194,13 @@ export default defineConfig({
       output: {
         // Preserve the xtermjs/xterm.js#5800 workaround when using Vite 8's
         // minifier: do not recompress or mangle xterm's already minified ESM.
-        minify: { mangle: false, compress: false }
+        minify: { mangle: false, compress: false },
+        codeSplitting: {
+          groups: [
+            { name: "startup", tags: ["$initial"], priority: 2 },
+            { name: projectPageChunk, debugName: "project", priority: 1, includeDependenciesRecursively: false }
+          ]
+        }
       }
     }
   },

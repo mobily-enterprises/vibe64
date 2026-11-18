@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import test from "node:test";
 import { createMaterialVuetifyOptions } from "@jskit-ai/material-web/client";
 import { theme } from "../../src/theme/index.js";
 import { writeAppearance } from "../../src/lib/appearance.js";
+import viteConfig from "../../vite.config.mjs";
 
 const LOADING = "Loading Vibe64…";
 const FAILURE = "Vibe64 could not open. Reload the page to try again.";
@@ -228,4 +230,108 @@ test("bootstrap failure replaces the loading message without exposing the except
   assert.equal(shell.dataset.startup, "failed", "the failure offers the reload at once");
   context.document.getElementById = () => null;
   assert.doesNotThrow(() => vm.runInNewContext(handler[1], { ...context }));
+});
+
+test("a built page links its stylesheets after the loading screen, so they never hold its first paint", async () => {
+  const plugin = viteConfig.plugins.find((candidate) => candidate?.name === "vibe64-stylesheets-after-loading-screen");
+  assert.ok(plugin, "vite.config.mjs must move the built page's stylesheets");
+  const source = await readText("index.html");
+  // As Vite writes the page: the entry module, then its stylesheets, in <head>.
+  const entry = '<script type="module" crossorigin src="/assets/index-AbCd1234.js"></script>';
+  const stylesheets = ['<link rel="stylesheet" crossorigin href="/assets/index-EfGh5678.css">',
+    '<link rel="stylesheet" crossorigin href="/assets/vendor-IjKl9012.css">'];
+  const built = source.replace(/\s*<script type="module" src="\/src\/main\.js"><\/script>/u, "")
+    .replace("</head>", `  ${entry}\n    ${stylesheets.join("\n    ")}\n  </head>`);
+  const page = plugin.transformIndexHtml.handler(built, { bundle: {} });
+
+  const head = page.slice(0, page.indexOf("<body>"));
+  assert.ok(head.includes(entry), "the entry module stays in <head>, where it starts downloading at once");
+  assert.doesNotMatch(head, /rel="stylesheet"/u);
+  const bodyEnd = page.indexOf("</body>");
+  const appEnd = page.lastIndexOf("</div>", bodyEnd);
+  const positions = stylesheets.map((link) => page.indexOf(link));
+  assert.ok(positions.every((position) => position > appEnd && position < bodyEnd), "after the loading screen, before </body>");
+  assert.ok(positions[0] < positions[1], "in Vite's order, which keeps the cascade");
+  const flat = (text) => text.replace(/\s+/gu, "");
+  const links = flat(stylesheets.join(""));
+  assert.equal(flat(page), flat(built).replace(links, "").replace("</body>", `${links}</body>`), "nothing else changes");
+  // The development server injects styles from the modules themselves.
+  assert.equal(plugin.transformIndexHtml.handler(built, {}), built);
+
+  // A lazily loaded module's stylesheets follow the page's own, now at the end of <body>, as they followed them in
+  // <head>: one added to <head> would come first in the cascade and lose every tie to the page's.
+  const { filter, handler } = plugin.transform;
+  assert.match("\0vite/preload-helper.js", filter.id);
+  assert.doesNotMatch("/src/main.js", filter.id);
+  const helper = "link.href = dep.href;\n\t\t\t\tdocument.head.appendChild(link);\n\t\t\t\tif (isCss) return new Promise(";
+  assert.equal(handler.call({}, helper), helper.replace("document.head", "document.body"));
+  const build = { error(message) { throw new Error(message); } };
+  assert.throws(() => handler.call(build, "document.head.append(link);"), /preload helper no longer appends them/u);
+});
+
+test("the entry's static imports come in its own file, and the project page's in one file of its own", () => {
+  const { groups } = viteConfig.build.rolldownOptions.output.codeSplitting;
+  assert.deepEqual(groups[0], { name: "startup", tags: ["$initial"], priority: 2 });
+  assert.equal(groups[1].includeDependenciesRecursively, false);
+  const projectChunk = groups[1].name;
+  const file = (relative) => fileURLToPath(new URL(`../../${relative}`, import.meta.url));
+  const project = file("src/pages/app/project/[slug].vue");
+  const dashboard = file("src/pages/app/project/[slug]/dashboard.vue");
+  const learning = file("src/pages/app/learning.vue");
+  const account = file("src/pages/account.vue");
+  const launcher = file("src/pages/launcher.vue");
+  // Each module's static and lazy imports. The entry loads the routes lazily; the project page loads a terminal lazily,
+  // and so does the launcher, which loads without the project page.
+  const graph = {
+    [file("index.html")]: { imports: [file("src/main.js")] },
+    [file("src/main.js")]: { imports: ["startup.js"], lazy: [project, dashboard, learning, account, launcher] },
+    [project]: { imports: ["startup.js", "conversation.js", "layout.js", "toolbar.js", "panel.js"], lazy: ["terminal.js"] },
+    "conversation.js": { imports: ["markdown.js"] },
+    "layout.js": { imports: ["layout-frame.js", "toolbar.js"] },
+    [dashboard]: { imports: ["panel.js", "dashboard-table.js"] },
+    [learning]: { imports: [project] },
+    [account]: { imports: ["layout.js"] },
+    [launcher]: { imports: ["toolbar.js"], lazy: ["terminal.js"] },
+    "terminal.js": { imports: ["terminal-font.js"] }
+  };
+  // Rolldown's view of the graph while it chunks; a module with no entry above imports nothing.
+  const chunking = (modules) => {
+    const ids = new Set(Object.entries(modules).flatMap(([id, { imports = [], lazy = [] }]) => [id, ...imports, ...lazy]));
+    return {
+      ids,
+      getModuleInfo(id) {
+        if (!ids.has(id)) return null;
+        const dynamicImporters = Object.keys(modules).filter((importer) => modules[importer].lazy?.includes(id));
+        return { importedIds: modules[id]?.imports || [], dynamicallyImportedIds: modules[id]?.lazy || [], dynamicImporters };
+      }
+    };
+  };
+  const names = (modules) => {
+    const pass = chunking(modules);
+    return Object.fromEntries([...pass.ids].map((id) => [id, projectChunk(id, pass)]));
+  };
+  const chunks = names(graph);
+  // The project page with what only it needs, the nested routes' modules it imports among them.
+  assert.equal(chunks[project], "project");
+  assert.equal(chunks["conversation.js"], "project");
+  assert.equal(chunks["markdown.js"], "project");
+  assert.equal(chunks["panel.js"], "project", "the dashboard is the project page's nested route");
+  // What a page loaded without the project page imports too: one file for each set of such pages, so the account
+  // page and the launcher load none of the project page.
+  assert.equal(chunks["layout.js"], "project-shared-layout-frame", "named after its first module");
+  assert.equal(chunks["layout-frame.js"], "project-shared-layout-frame");
+  assert.equal(chunks["toolbar.js"], "project-shared-toolbar");
+  // Rolldown's own chunks: what the project page does not import, however it is loaded.
+  for (const id of [dashboard, learning, account, launcher, "dashboard-table.js", "terminal.js", "terminal-font.js"]) {
+    assert.equal(chunks[id], null, id);
+  }
+
+  // A component only the project page loads lazily loads with it; learning shows the project page itself.
+  const withTerminalOnlyInProject = { ...graph, [launcher]: { imports: ["toolbar.js"] }, "terminal.js": { imports: ["terminal-font.js", "panel.js"] } };
+  assert.equal(names(withTerminalOnlyInProject)["panel.js"], "project");
+  const withSharedTerminal = { ...graph, "terminal.js": { imports: ["terminal-font.js", "panel.js"] } };
+  assert.equal(names(withSharedTerminal)["panel.js"], "project-shared-panel", "the launcher loads the terminal too");
+
+  const withoutProjectPage = { [file("index.html")]: { imports: [file("src/main.js")] }, [file("src/main.js")]: { imports: ["startup.js"] } };
+  assert.throws(() => names(withoutProjectPage), /the build has no .*\[slug\]\.vue/u);
 });
