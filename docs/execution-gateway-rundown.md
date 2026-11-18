@@ -404,13 +404,27 @@ runtime packs; on a person's own computer the tools use their own defaults:
 }
 ```
 
-NPM prefix is derived from HOME:
+NPM prefix is derived from HOME, and its `bin` joins PATH:
 
 ```js
 {
   NPM_CONFIG_PREFIX: "/home/merc/.local"
 }
 ```
+
+A host whose homes cannot start programs (homes mounted `noexec`) names
+`npmPrefixRoot` in its host profile. Each person's and
+the daemon's prefix is then that login's own folder below it, which the host
+makes and keeps that login's alone, so a CLI installed with `npm -g` starts:
+
+```js
+{
+  NPM_CONFIG_PREFIX: "<npmPrefixRoot>/<login>"
+}
+```
+
+An application account keeps `~/.local`: its home is in its own area, where
+programs start.
 
 ## Database Env
 

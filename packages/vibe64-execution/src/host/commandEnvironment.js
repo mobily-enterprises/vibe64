@@ -70,6 +70,25 @@ function managedExecutionRuntimeBase(owner = {}) {
   return `/run/vibe64-${workspace}`;
 }
 
+/**
+ * The folder the workspace's agent providers keep their runtimes in (Codex's app-server, OpenCode): below the
+ * folder the host's settings name, VIBE64_AGENT_RUNTIME_ROOT, as <root>/<workspace>, on a host whose /run may not
+ * start programs; else the daemon's runtime folder's vibe64/agent-providers. The editor names the same folder to
+ * the providers (VIBE64_AGENT_RUNTIME_DIR), and only commands of the daemon's own runtime there pass.
+ * @param {string} ownerUsername the workspace's daemon
+ * @param {Record<string, string>} [settings]
+ */
+function agentProviderRuntimeRoot(ownerUsername = "", settings = helperSettings()) {
+  const configured = String(settings.VIBE64_AGENT_RUNTIME_ROOT || "").trim();
+  if (!configured) {
+    return path.join(managedExecutionRuntimeBase({ username: ownerUsername }), "vibe64", "agent-providers");
+  }
+  if (!path.isAbsolute(configured) || path.resolve(configured) !== configured || configured === "/") {
+    throw new Error("Vibe64 exec helper settings name a VIBE64_AGENT_RUNTIME_ROOT that is not an absolute, normalized folder.");
+  }
+  return path.join(configured, workspaceFromDaemonUsername(safeUsername(ownerUsername)));
+}
+
 function readEnvironmentFile(file = "") {
   return parseEnvironmentFile(readFileSync(file, "utf8"));
 }
@@ -188,6 +207,7 @@ function parseEnvironmentFile(text = "") {
 
 function resolveAllowedCwd(cwd = "", ownerUsername = "", {
   operation = "",
+  settings = undefined,
   targetUser = {}
 } = {}) {
   if (operation === "health-status") {
@@ -257,12 +277,11 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
   if (operation === "codex-app-server" || operation === "opencode-app-server") {
     const resolved = canonicalPath(normalized);
     const targetUid = Number(targetUser.uid);
-    const runtimeBases = [managedExecutionRuntimeBase({ username: ownerUsername })];
+    const runtimeRoots = [agentProviderRuntimeRoot(ownerUsername, settings)];
     if (Number.isSafeInteger(targetUid) && targetUid >= 0) {
-      runtimeBases.push(path.join("/run/user", String(targetUid)));
+      runtimeRoots.push(path.join("/run/user", String(targetUid), "vibe64", "agent-providers"));
     }
-    for (const runtimeBase of runtimeBases) {
-      const runtimeRootPath = path.join(runtimeBase, "vibe64", "agent-providers");
+    for (const runtimeRootPath of runtimeRoots) {
       if (!existsSync(runtimeRootPath)) continue;
       const runtimeRoot = canonicalPath(runtimeRootPath);
       const parts = relativePathParts(runtimeRoot, resolved);
@@ -334,7 +353,7 @@ function usageRecordingNodeOptions(preload = "", helperPath = process.argv[1]) {
   throw new Error("Vibe64 exec helper rejected a usage recording preload outside its runtime.");
 }
 
-function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operation = "") {
+function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operation = "", settings = undefined) {
   const env = {
     TERM: process.env.TERM || "xterm-256color"
   };
@@ -347,12 +366,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   // Read only when the caller names no PATH: a release runner, inside its sandbox, cannot read the settings.
   env.PATH ||= helperCommandPath();
   if (operation === "opencode-app-server") {
-    const providerRoot = path.join(
-      managedExecutionRuntimeBase({ username: ownerUsername }),
-      "vibe64",
-      "agent-providers",
-      "opencode"
-    );
+    const providerRoot = path.join(agentProviderRuntimeRoot(ownerUsername, settings), "opencode");
     for (const name of [
       "HOME",
       "XDG_CACHE_HOME",
@@ -381,6 +395,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 }
 
 export {
+  agentProviderRuntimeRoot,
   ALLOWED_COMMANDS,
   helperChildEnv,
   helperCommandPath,

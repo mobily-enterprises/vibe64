@@ -37,6 +37,7 @@ test("a person's own computer needs no host configuration", () => {
   assert.deepEqual({ ...vibe64Host() }, {
     runtimePackRoot: "",
     sharedCacheRoot: "",
+    npmPrefixRoot: "",
     execHelperPath: "",
     sharedGroupAccess: false
   });
@@ -47,6 +48,7 @@ test("a person's own computer needs no host configuration", () => {
 test("a host profile is validated, frozen and replaces the local defaults", (t) => {
   t.after(() => configureVibe64Host(null));
   assert.throws(() => configureVibe64Host({ runtimePackRoot: "relative/packs" }), /absolute path or empty/u);
+  assert.throws(() => configureVibe64Host({ npmPrefixRoot: "relative/npm" }), /npmPrefixRoot must be an absolute path or empty/u);
   assert.throws(() => configureVibe64Host({ sharedGroupAccess: "yes" }), /true or false/u);
   assert.throws(() => configureVibe64Host({ packRoot: "/srv/packs" }), /Unknown host profile setting: packRoot/u);
 

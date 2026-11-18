@@ -560,10 +560,9 @@ test("execution helper limits assistant services outside projects to their exact
   assert.match(source, /"opencode-app-server"/u);
   assert.match(source, /operation === "codex-app-server"/u);
   assert.match(source, /operation === "opencode-app-server"/u);
-  assert.match(source, /const runtimeBases = \[managedExecutionRuntimeBase\(\{ username: ownerUsername \}\)\]/u);
-  assert.match(source, /runtimeBases\.push\(path\.join\("\/run\/user", String\(targetUid\)\)\)/u);
-  assert.match(source, /for \(const runtimeBase of runtimeBases\)/u);
-  assert.match(source, /path\.join\(runtimeBase, "vibe64", "agent-providers"\)/u);
+  assert.match(source, /const runtimeRoots = \[agentProviderRuntimeRoot\(ownerUsername, settings\)\]/u);
+  assert.match(source, /runtimeRoots\.push\(path\.join\("\/run\/user", String\(targetUid\), "vibe64", "agent-providers"\)\)/u);
+  assert.match(source, /for \(const runtimeRootPath of runtimeRoots\)/u);
   assert.match(source, /providerRoot === "codex-app-server"/u);
   assert.match(source, /providerRoot === "opencode"/u);
   assert.match(source, /\^codex-app-server-\[a-f0-9\]\{12\}\$/u);
@@ -609,7 +608,8 @@ test("execution helper preserves only OpenCode private environment roots", async
   const source = await helperSource();
 
   assert.match(source, /operation === "opencode-app-server"/u);
-  assert.match(source, /managedExecutionRuntimeBase\(\{ username: ownerUsername \}\)[\s\S]+"agent-providers",[\s\S]+"opencode"/u);
+  assert.match(source, /const providerRoot = path\.join\(agentProviderRuntimeRoot\(ownerUsername, settings\), "opencode"\);/u);
+  assert.match(source, /path\.join\(managedExecutionRuntimeBase\(\{ username: ownerUsername \}\), "vibe64", "agent-providers"\)/u);
   for (const name of [
     "HOME",
     "XDG_CACHE_HOME",

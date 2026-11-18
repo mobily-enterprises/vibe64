@@ -242,6 +242,36 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
   assert.equal(env.committerEmail, "vibe64@sas.users.vibe64.invalid");
 });
 
+test("a host whose homes cannot start programs gives each login its own npm prefix, never ~/.local, and an application account keeps its home's", async (t) => {
+  const npmPrefixRoot = path.join(HOST_ROOT, "npm-prefixes");
+  useHost(t, { ...PACK_HOST, npmPrefixRoot });
+  const currentUser = os.userInfo();
+  const result = await runVibe64Command({
+    env: NO_PERSON_GIT_CONFIG_ENV,
+    command: process.execPath,
+    args: ["-e", "console.log(JSON.stringify({ npmPrefix: process.env.NPM_CONFIG_PREFIX, path: process.env.PATH }))"],
+    project: { workspace: "sas" },
+    userKey: "person"
+  });
+  assert.equal(result.ok, true, result.output);
+  const env = JSON.parse(result.stdout);
+  assert.equal(env.npmPrefix, path.join(npmPrefixRoot, currentUser.username));
+  const pathParts = env.path.split(":");
+  assert.ok(pathParts.includes(path.join(npmPrefixRoot, currentUser.username, "bin")), env.path);
+  assert.ok(!pathParts.includes(path.join(currentUser.homedir, ".local", "bin")), env.path);
+
+  const application = { username: "v64a_app", home: path.join(HOST_ROOT, "apps", "app", "home") };
+  const applicationEnv = resolveCommandEnv({
+    actor: { actor: "app", applicationAccount: true, user: application },
+    baseEnv: { PATH: "/usr/bin" },
+    request: { actor: "app", purpose: "source" },
+    resolvedGitIdentityEnv: {}
+  });
+  assert.equal(applicationEnv.NPM_CONFIG_PREFIX, path.join(application.home, ".local"));
+  assert.ok(applicationEnv.PATH.split(":").includes(path.join(application.home, ".local", "bin")));
+  assert.ok(!applicationEnv.PATH.includes(npmPrefixRoot));
+});
+
 test("execution gateway gives Codex commands only their declared database env, fallback git identity, shared browser runtime, and actor HOME", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({

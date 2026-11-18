@@ -40,6 +40,7 @@ import {
   resolveRuntimePath
 } from "../runtime/resolveRuntimePath.js";
 import { runtimePackRoot } from "../runtime/runtimePacks.js";
+import { vibe64Host } from "../hostProfile.js";
 import {
   envRecord
 } from "../normalize.js";
@@ -168,15 +169,18 @@ function commandEnvWithoutGitIdentity({
     ...sharedEnv,
     ...sessionAppEnv(request)
   };
+  // An application account's home is in its own area, where programs start;
+  // a person's and the daemon's may not be (vibe64Host().npmPrefixRoot).
+  const prefixRoot = actor.applicationAccount ? "" : vibe64Host().npmPrefixRoot;
   const finalEnv = {
     ...env,
-    ...npmToolEnv({ env }),
+    ...npmToolEnv({ env, prefixRoot }),
     VIBE64_DECLARED_RUNTIMES: declaredRuntimes
   };
   const PATH = resolveRuntimePath({
     env: finalEnv,
     existingPath: [
-      ...npmToolBinDirs({ env: finalEnv }),
+      ...npmToolBinDirs({ env: finalEnv, prefixRoot }),
       finalEnv.PATH
     ].filter(Boolean).join(":"),
     inheritedPath: localPath,
