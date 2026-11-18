@@ -255,7 +255,9 @@ and studio places (`learning`, `lesson`, `lesson-bar`, `courses`, `colleague`,
 Learning, or not at all: point-only), how the page focus shows it, and `who`
 may be shown it (`everyone` or the workspace `owner`). A host registers its
 own places, activities and fact names with `registerLearningVocabulary`; a
-name keeps one meaning. A project place opens in the project and session the
+name keeps one meaning. Public defines the `add-service` place, whose control
+sits on a page a host adds, as `addServicePlace(page)`: the host registers it
+with that page's guide id, pane and Dashboard link name. A project place opens in the project and session the
 initiating browser has open; a route place opens at its route, acknowledged by
 the browser's focus `route`. Each place is
 a path of `data-vibe64-guide` ids on existing controls: the project page's

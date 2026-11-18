@@ -1,3 +1,4 @@
+import { createAddServiceKind } from "./kinds/addService.js";
 import { createDatabaseOverviewKind } from "./kinds/databaseOverview.js";
 import { createPageRefreshKind } from "./kinds/pageRefresh.js";
 import { createPreviewIdentityKind } from "./kinds/previewIdentity.js";
@@ -35,6 +36,7 @@ function createAiTaskKinds({ databaseTools, hostKinds, pages, project, sessions,
     createProjectSetupKind({ project }),
     createDatabaseOverviewKind({ databaseTools }),
     createPageRefreshKind({ pages }),
+    createAddServiceKind({ project, sessions, terminals }),
     ...createRequestKinds(),
     ...hostKinds
   ];

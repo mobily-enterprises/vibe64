@@ -137,6 +137,22 @@ const BUILT_IN_PLACES = [
   },
   { id: "ai-setup", label: "AI setup", scope: "studio", open: null, steps: [ACCOUNT_MENU, pathStep("ai-setup", "AI setup")] }
 ];
+/**
+ * Add a service's place: its control is on a page a host adds (a Deploy page),
+ * so the host registers it with that page, named as the page's Dashboard link
+ * names it, and marks the control `data-vibe64-guide="add-service"`. The ring
+ * follows Dashboard, the page, then the control.
+ * @param {{ id: string, label: string, pane: string }} page
+ */
+function addServicePlace(page) {
+  return {
+    id: "add-service",
+    label: "Add a service",
+    scope: "project",
+    open: { pane: page.pane },
+    steps: [DASHBOARD, pathStep(page.id, page.label), pathStep("add-service", "Add a service")]
+  };
+}
 const BUILT_IN_ACTIVITIES = [
   { id: "send-message", event: "message-sent", place: "chat" },
   { id: "agent-finished", event: "agent-finished" },
@@ -501,6 +517,7 @@ const __testables = Object.freeze({ createLearningVocabulary, lessonStepNeeds })
 
 export {
   TRAINING_GUIDE_CAPTION_LIMIT,
+  addServicePlace,
   declaredLearningVocabulary,
   filePathExpression as TRAINING_GUIDE_FILE_PATH,
   learningPlaceOpenTo,

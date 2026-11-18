@@ -122,6 +122,7 @@ GET /api/app/:slug/vibe64/sessions/:sessionId/source-editor/files public app - v
 GET /api/app/:slug/vibe64/sessions/:sessionId/source-editor/search public app - vibe64.source-editor.search
 GET /api/app/:slug/vibe64/sessions/:sessionId/source-editor/stars public app - vibe64.source-editor.stars.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/source-editor/tree public app - vibe64.source-editor.tree.read
+GET /api/app/:slug/vibe64/sessions/:sessionId/stack/service-choices public app - vibe64.project.stack.services.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations public app - vibe64.terminals.temporary-conversation.list
 GET /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId public app - vibe64.terminals.temporary-conversation.read
 GET /api/app/:slug/vibe64/sessions/:sessionId/work public app - vibe64.sessions.work.inspect
@@ -297,6 +298,7 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/stream
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/file public app 32768 vibe64.source-editor.file.create
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/resolve-path public app 32768 vibe64.source-editor.path.resolve
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/stars public app 16384 vibe64.source-editor.star.set
+POST /api/app/:slug/vibe64/sessions/:sessionId/stack/services public app 16384 vibe64.project.stack.services.add
 POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations public app - vibe64.terminals.temporary-conversation.create
 POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/stop public app - vibe64.terminals.temporary-conversation.stop
 POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/turns public app - vibe64.terminals.temporary-conversation.turn.start

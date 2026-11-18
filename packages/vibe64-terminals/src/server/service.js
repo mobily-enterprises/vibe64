@@ -663,6 +663,7 @@ function createService({
     removeSessionCommandHelpers: terminals.removeSessionCommandHelpers,
     selectPreviewIdentity: terminals.selectPreviewIdentity,
     verifyPreviewIdentity: terminals.verifyPreviewIdentity,
+    restartPreviewAfterSetup: terminals.restartPreviewAfterSetup,
     startAgentTerminal: terminals.startAgentTerminal,
     startEphemeralAgentConversationTurn: agentConversations.startEphemeralAgentConversationTurn,
     stopEphemeralAgentConversation: agentConversations.stopEphemeralAgentConversation,

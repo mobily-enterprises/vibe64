@@ -200,6 +200,8 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.project.repository.branches.read",
     "vibe64.project.repository.workflow.save",
     "vibe64.project.settings.read",
+    "vibe64.project.stack.services.add",
+    "vibe64.project.stack.services.read",
     "vibe64.project.templates.apply",
     ...["list", "read", "create", "edit", "comment", "edit-comment", "state", "labels", "create-label", "set-labels", "mentions"].map((operation) => `vibe64.project.issues.${operation}`),
     ...["list", "read", "ready", "update-branch", "merge"].map((operation) => `vibe64.project.pull-requests.${operation}`)

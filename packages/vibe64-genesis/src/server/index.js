@@ -39,19 +39,9 @@ import {
   resolveVibe64OutputParameters,
   vibe64OutputsInspection
 } from "./outputs.js";
-import {
-  VIBE64_PROJECT_SERVICES_SECTION,
-  parseVibe64ProjectServicesLines,
-  vibe64ProjectServicesInspection
-} from "./projectServices.js";
-import {
-  VIBE64_WORKSPACE_SETUP_SECTION,
-  parseVibe64WorkspaceSetupLines,
-  vibe64WorkspaceSetupInspection
-} from "./workspaceSetup.js";
-import {
-  vibe64Driver
-} from "./promptContext.js";
+import { VIBE64_PROJECT_SERVICES_SECTION, parseVibe64ProjectServicesLines, vibe64ProjectServicesInspection } from "./projectServices.js";
+import { VIBE64_WORKSPACE_SETUP_SECTION, parseVibe64WorkspaceSetupLines, vibe64WorkspaceSetupInspection } from "./workspaceSetup.js";
+import { vibe64Driver } from "./promptContext.js";
 import {
   VIBE64_RESOURCE_ESTIMATES_SECTION,
   parseVibe64ResourceEstimatesLines,
@@ -104,6 +94,7 @@ const {
   inspectStackSection,
   inspectStackSections,
   inspectSubsystems,
+  listStackPieces,
   listTemplates,
   parserEnvironment: genesisParserEnvironment,
   setCollaboration,
@@ -248,6 +239,13 @@ function withVibe64StackCatalog(stackOptions = {}, options = {}) {
 
 function addGenesisStack(options = {}) {
   return runGenesisOperation(addStack, options);
+}
+
+/** The Stack catalogue (Vibe64's and the project's), each piece with its Requires, Conflicts and resourceDeclarations. */
+async function listGenesisStackPieces(options = {}) {
+  const pieces = await inspectGenesis(listStackPieces, options);
+  if (pieces.every((piece) => Array.isArray(piece?.resourceDeclarations))) return pieces;
+  throw new Error("This genesis-compiler lists no Stack resource declarations. Update it to the release Vibe64 declares.");
 }
 
 function initializeGenesisProject(options = {}) {
@@ -703,6 +701,7 @@ export {
   inspectGenesisAgentIntegrations,
   inspectGenesisSkills,
   listGenesisPasses,
+  listGenesisStackPieces,
   listGenesisTemplates,
   inspectGenesisStackComponents,
   inspectVibe64Deployment,

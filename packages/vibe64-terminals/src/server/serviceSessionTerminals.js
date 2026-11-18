@@ -16,6 +16,8 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
+import { waitForPreviewReady } from "./agentPreviewStatusText.js";
+import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
 import {
   closeTerminalControllersForSession,
   renewalPredecessorTerminalCleanupContext,
@@ -455,6 +457,34 @@ function createServiceSessionTerminals({
     return outputTarget.verifyPreviewIdentity(sessionId, { identityName });
   }
 
+  /**
+   * After a check's workspace preparation: restarts the session's running web Preview on what it prepared (unless
+   * preparation's own restart already did) and waits for it to be ready. A Preview that isn't running stays so.
+   * @param {string} sessionId
+   * @param {{ finishedAt?: string, signal?: AbortSignal }} options finishedAt: when that preparation finished
+   * @returns {Promise<{ ok: true, running: boolean } | { ok: false, code: string, error: string }>}
+   */
+  async function restartPreviewAfterSetup(sessionId, { finishedAt = "", signal } = {}) {
+    const restarted = await outputTarget.restartPreviewAfterWorkspaceSetup(sessionId, { finishedAt });
+    if (restarted?.ok === false) {
+      if (restarted.code === "vibe64_preview_stopped") return { ok: true, running: false };
+      return { ok: false, code: restarted.code || "vibe64_preview_not_ready", error: restarted.error || "Preview could not restart." };
+    }
+    const status = await outputTarget.launchStatus(sessionId);
+    const terminal = status?.activeTerminal;
+    if (status?.ok === false || !terminal || !launchTerminalIsRunning(terminal) || terminal.metadata?.outputPresentationKind !== "web") {
+      return { ok: true, running: false };
+    }
+    const waited = await waitForPreviewReady(outputTarget, sessionId, { terminalSessionId: terminal.id, signal });
+    if (waited.ok) return { ok: true, running: true };
+    return {
+      ok: false,
+      code: waited.timeout ? "vibe64_preview_wait_timeout" : "vibe64_preview_not_ready",
+      error: waited.status?.preview?.message || waited.status?.error ||
+        (waited.timeout ? "Preview did not become ready in time." : "Preview stopped before it was ready.")
+    };
+  }
+
   function startAgentTerminal(sessionId, input) {
     assertProjectEffectAdmission();
     return sessionAccess.runMainAgentWrite(sessionId, { vibe64User: input.vibe64User || null }, async (context) => {
@@ -584,6 +614,7 @@ function createServiceSessionTerminals({
     resumeTestApproval,
     selectPreviewIdentity,
     verifyPreviewIdentity,
+    restartPreviewAfterSetup,
     startAgentTerminal,
     startGlobalCodexTerminal,
     startOutputTargetTerminal,

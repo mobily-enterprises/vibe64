@@ -9,7 +9,8 @@
     "./server/agentSpecs": "./src/server/agentSpecs.js",
     "./server/packaging": "./src/server/packaging.js",
     "./server/promptContext": "./src/server/promptContext.js",
-    "./shared/connectedPackageTypes": "./src/shared/connectedPackageTypes.js"
+    "./shared/connectedPackageTypes": "./src/shared/connectedPackageTypes.js",
+    "./shared/deploymentServiceNames": "./src/shared/deploymentServiceNames.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -43,6 +44,10 @@
           {
             "subpath": "./shared/connectedPackageTypes",
             "summary": "Owns the connected-project package type vocabulary shared by Stack parsing, connection validation, schemas and the client."
+          },
+          {
+            "subpath": "./shared/deploymentServiceNames",
+            "summary": "Owns a Deployment service's id grammar and the most services a Deployment has, shared by the Deployment parser, Add a service and its form."
           }
         ]
       }

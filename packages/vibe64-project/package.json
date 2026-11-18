@@ -11,6 +11,7 @@
     "./server/managedProject": "./src/server/managedProject.js",
     "./server/resourceEnvironment": "./src/server/resourceEnvironment.js",
     "./server/savedEnvValues": "./src/server/savedEnvValues.js",
+    "./server/stackServices": "./src/server/stackServices.js",
     "./server/managedRepository": "./src/server/managedRepository.js",
     "./server/project-archive": "./src/server/projectArchive.js",
     "./server/projectSourceMutationLock": "./src/server/projectSourceMutationLock.js",
@@ -66,6 +67,10 @@
           {
             "subpath": "./server/savedEnvValues",
             "summary": "Declares the optional vibe64.project.saved-env-values capability, validates a host's saved Env values (vibe64.saved-env-values.v1) and turns the values the person linked into non-editable Development Env records."
+          },
+          {
+            "subpath": "./server/stackServices",
+            "summary": "Add a service: the kinds a session's Stack can add through its catalogue piece, and why another App Service can't be added as asked."
           },
           {
             "subpath": "./server/managedRepository",

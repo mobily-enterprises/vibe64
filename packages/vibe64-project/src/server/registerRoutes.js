@@ -22,6 +22,7 @@ import {
 } from "./inputSchemas.js";
 import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import {
+  ACTION_ADD_STACK_SERVICE,
   ACTION_APPLY_TEMPLATE,
   ACTION_COMMENT_ON_ISSUE,
   ACTION_CREATE_ISSUE,
@@ -46,6 +47,7 @@ import {
   ACTION_READ_PULL_REQUEST,
   ACTION_READ_REPOSITORY_BRANCHES,
   ACTION_READ_REPOSITORY_REMOTE,
+  ACTION_READ_STACK_SERVICES,
   ACTION_REPOSITORY_REMOTE,
   ACTION_REVEAL_ENV_SECRET,
   ACTION_SAVE_COLLABORATION_SETTINGS,
@@ -309,6 +311,21 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     buildInput: requestBody,
     summary: "Save the Genesis engineering profile in project source."
   });
+  // Add a service. The action validates its input after the person's access is decided, so the routes declare no
+  // schema of their own; the URL names the session.
+  routes.actionRoute("GET", "/sessions/:sessionId/stack/service-choices", {
+    actionId: ACTION_READ_STACK_SERVICES,
+    buildInput: stackServicesReadInput,
+    statusCode: stackServiceStatusCode,
+    summary: "Read what the session's Stack can add: each kind's catalogue piece, Env names and why it can't be added."
+  });
+  routes.actionRoute("POST", "/sessions/:sessionId/stack/services", {
+    actionId: ACTION_ADD_STACK_SERVICE,
+    bodyLimit: 16 * 1024,
+    buildInput: stackServiceAddInput,
+    statusCode: stackServiceStatusCode,
+    summary: "Add a database, Redis, a bucket or another App Service to the session's genesis/stack.md."
+  });
   routes.actionRoute("GET", "/preview-identities", {
     actionId: ACTION_READ_PREVIEW_APPLICATION_IDENTITIES,
     buildInput: requestQuery,
@@ -321,6 +338,35 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     buildInput: requestBody,
     summary: "Save repository-managed app identities to project source."
   });
+}
+
+/**
+ * The body for the URL's session. A body vibe64User is dropped: the action
+ * policy sets the trusted user.
+ */
+function stackServiceAddInput(request) {
+  const { vibe64User: _ignoredUser, ...body } = requestBody(request);
+  void _ignoredUser;
+  return { ...body, sessionId: request.params.sessionId };
+}
+
+function stackServicesReadInput(request) {
+  return { sessionId: request.params.sessionId };
+}
+
+function stackServiceStatusCode(response) {
+  if (response?.ok !== false) return 200;
+  if (response.code === "vibe64_session_not_found") return 404;
+  if ([
+    "vibe64_agent_write_mode_busy",
+    "vibe64_ai_task_active",
+    "vibe64_project_source_lock_timeout",
+    "vibe64_stack_service_refused",
+    "vibe64_stack_service_session_busy",
+    "vibe64_stack_service_session_closed",
+    "vibe64_workspace_setup_running"
+  ].includes(response.code)) return 409;
+  return 400;
 }
 
 /**

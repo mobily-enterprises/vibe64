@@ -38,6 +38,7 @@ upgrade cleans up the closing records older archives still hold.
 - `packages/vibe64-ai-tasks/src/server/kinds/projectSetup.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/databaseOverview.js`
 - `packages/vibe64-ai-tasks/src/server/kinds/pageRefresh.js`
+- `packages/vibe64-ai-tasks/src/server/kinds/addService.js`
 - `packages/vibe64-ai-tasks/src/server/pageRefreshTasks.js`
 - `packages/vibe64-ai-tasks/src/shared/aiTaskPhases.js`
 - `packages/vibe64-ai-tasks/src/client/aiTaskKey.js`
@@ -109,7 +110,10 @@ reads the page back and passes once its version has gone past the one the task
 started from. It holds no repository (`repository: false`), so Save and Update
 carry on beside it; the scheduler starts it only in an open session
 (`vibe64_ai_task_session_closed` otherwise) and follows it to its end
-([page refreshes](../pages/refreshes.md)). A request kind (`colleague` for Colleague's own
+([page refreshes](../pages/refreshes.md)). Add a service (`add-service`) connects the app to a
+service the person added ([Add a service](../projects/add-a-service.md)): a resource's check confirms the
+declaration, prepares the workspace and restarts a running Preview with its readiness; another App Service's check
+reads the Deployment back. A request kind (`colleague` for Colleague's own
 requests, `colleague-review` for an assignment's review) has nothing Vibe64 can
 prove, so it is checked by a person: its
 turns send no result schema, each ended turn stops at `needs_you(your_turn)`, and

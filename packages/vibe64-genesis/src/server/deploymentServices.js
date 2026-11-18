@@ -1,5 +1,6 @@
 // A Deployment's `### Service` and `### Resource` parts: each service's lines, the checks between services once the
 // section is read, and those that need the Stack's `## Resources`.
+import { DEPLOYMENT_SERVICE_ID, DEPLOYMENT_SERVICES_MAX } from "../shared/deploymentServiceNames.js";
 import {
   backtickedArguments,
   httpReadinessLine,
@@ -23,13 +24,12 @@ import {
   sandboxAllowances
 } from "./deploymentEntries.js";
 
-// Services: each kind of process of the application, run as identical instances from the one build. At most 8; an id
-// is a lowercase letter then up to 15 lowercase letters, digits and hyphens, since a host names its parts after it.
+// Services: each kind of process of the application (their ids and count: shared/deploymentServiceNames.js).
 const SERVICE_HEADING = /^### Service `([^`\r\n]*)`:[ \t]+(.+)$/u;
 const RESOURCE_HEADING = /^### Resource `([^`\r\n]*)`$/u;
-const SERVICE_ID = /^[a-z][a-z0-9-]{0,15}$/u;
+const SERVICE_ID = DEPLOYMENT_SERVICE_ID;
 const RESOURCE_ID = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/u;
-const SERVICES_MAX = 8;
+const SERVICES_MAX = DEPLOYMENT_SERVICES_MAX;
 // Public: behind a load balancer at the environment's address. Internal: no public address, reached only over the
 // private network by the services that name it.
 const SERVICE_EXPOSURES = Object.freeze(["public", "internal"]);
