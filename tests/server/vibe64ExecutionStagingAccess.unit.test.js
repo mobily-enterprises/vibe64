@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readlinkSync } from "node:fs";
+import fs, { existsSync, readlinkSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -60,6 +61,39 @@ async function stagingHost(t) {
   };
   await mkdir(options.sudoersRoot, { recursive: true });
   return { calls, options, root };
+}
+
+// The folders as a read-only file system answers the helper, whose node:fs imports this replaces for the test: a
+// write in one fails with EROFS once the folder it writes in is found, before the name it writes is looked up, so
+// removing a file that is not there fails too; looking still works. Each refused write is recorded.
+function readOnlyFolders(t, folders = []) {
+  const refused = [];
+  const inside = (file) => folders.some((folder) => {
+    const relative = path.relative(folder, path.resolve(String(file)));
+    return !relative.startsWith("..") && !path.isAbsolute(relative);
+  });
+  const originals = {};
+  for (const name of ["mkdirSync", "renameSync", "unlinkSync", "writeFileSync"]) {
+    const original = fs[name];
+    originals[name] = original;
+    fs[name] = (file, ...rest) => {
+      const target = (name === "renameSync" ? [file, rest[0]] : [file]).find(inside);
+      // Answered before the file system's check: a folder that is not there, or one mkdir finds already made.
+      if (target === undefined || !existsSync(path.dirname(path.resolve(String(target)))) ||
+          (name === "mkdirSync" && existsSync(target))) {
+        return original(file, ...rest);
+      }
+      refused.push([name, String(target)]);
+      throw Object.assign(new Error(`EROFS: read-only file system, ${name.replace(/Sync$/u, "")} '${target}'`),
+        { code: "EROFS", errno: -30, path: String(target), syscall: name.replace(/Sync$/u, "") });
+    };
+  }
+  syncBuiltinESMExports();
+  t.after(() => {
+    Object.assign(fs, originals);
+    syncBuiltinESMExports();
+  });
+  return refused;
 }
 
 test("granting staging access installs the key as root's file, the account's own sudo rule and /bin/sh as its login shell", async (t) => {
@@ -137,6 +171,40 @@ test("revoking staging access removes the key, the rule and the login shell, end
   // Nothing left to remove is no error, and an account that no longer exists has no login to end.
   host.calls.length = 0;
   assert.equal(removeStagingAccess(null, ACCOUNT, host.options), false);
+  assert.deepEqual(host.calls, []);
+});
+
+test("taking back staging access an account never had writes nothing, even where the sudo rule folder is read-only", async (t) => {
+  const host = await stagingHost(t);
+  // The whole etc folder read-only: its sudo rule folder there, and no staging key folder ever made.
+  const refused = readOnlyFolders(t, [path.join(host.root, "etc")]);
+
+  // The revoke still ends what a login could have left behind.
+  assert.equal(removeStagingAccess({ shell: "/usr/sbin/nologin", username: ACCOUNT }, ACCOUNT, host.options), false);
+  assert.deepEqual(host.calls, [
+    ["loginctl", "disable-linger", ACCOUNT],
+    ["loginctl", "terminate-user", ACCOUNT],
+    ["crontab", "-u", ACCOUNT, "-r"],
+    ["atq"],
+    ["atrm", "7"]
+  ]);
+  assert.equal(removeStagingAccess(null, ACCOUNT, host.options), false);
+  assert.deepEqual(refused, []);
+  assert.deepEqual(await readdir(host.options.sudoersRoot), []);
+});
+
+test("a sudo rule a read-only folder still holds fails its revoke rather than staying silently", async (t) => {
+  const host = await stagingHost(t);
+  installStagingAccess({ shell: "/usr/sbin/nologin", username: ACCOUNT }, PUBLIC_KEY, HELPER, host.options);
+  host.calls.length = 0;
+  const rule = path.join(host.options.sudoersRoot, `vibe64-staging-${ACCOUNT}`);
+  const refused = readOnlyFolders(t, [host.options.sudoersRoot]);
+
+  assert.throws(() => removeStagingAccess({ shell: "/bin/sh", username: ACCOUNT }, ACCOUNT, host.options),
+    { code: "EROFS", message: `EROFS: read-only file system, unlink '${rule}'` });
+  assert.deepEqual(refused, [["unlinkSync", rule]]);
+  assert.deepEqual(await readdir(host.options.sudoersRoot), [`vibe64-staging-${ACCOUNT}`]);
+  // Nothing after it ran: the login shell stays and no login was ended.
   assert.deepEqual(host.calls, []);
 });
 

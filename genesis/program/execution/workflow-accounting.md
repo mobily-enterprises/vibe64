@@ -399,7 +399,11 @@ login shell `/bin/sh`, which the account check accepts only while that key
 file exists. sshd starts even the forced command through that shell, and
 `/bin/sh -c` reads no file of the account's, where bash started by sshd would
 read the `~/.bashrc` the application can write. `revoke` removes all three,
-turns off lingering, ends the account's open logins (`loginctl
+the key file and rule only where it finds them: it looks before it removes, so
+taking back access an account never had writes nothing into either folder, and
+a read-only sudo rule folder (where unlink fails before it looks a name up)
+holding no rule is no error, while a rule such a folder still holds fails the
+revoke. It turns off lingering, ends the account's open logins (`loginctl
 terminate-user`) and removes the account's crontab and at jobs, which a login
 could leave to run later; `retire` refuses while anything of the account still
 runs (a staging login included) and only then revokes. The host's SSH

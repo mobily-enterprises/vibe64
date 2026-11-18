@@ -38,6 +38,17 @@ function stagingSudoersPath(username = "", sudoersRoot = helperSudoersRoot()) {
   return path.join(sudoersRoot, `vibe64-staging-${username}`);
 }
 
+// Whether the file is there, which looking finds out without writing anything.
+function filePresent(file = "") {
+  try {
+    lstatSync(file);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
 /**
  * The account's key and sudo rule files under their names from before the rename to staging access, where root
  * has not removed them.
@@ -50,15 +61,7 @@ function preRenameStagingFiles(username = "", {
   return [
     path.join(preRenameKeysRoot, username),
     path.join(sudoersRoot, `${PRE_RENAME_SUDOERS_PREFIX}${username}`)
-  ].filter((file) => {
-    try {
-      lstatSync(file);
-      return true;
-    } catch (error) {
-      if (error?.code === "ENOENT") return false;
-      throw error;
-    }
-  });
+  ].filter((file) => filePresent(file));
 }
 
 /** Why the account's staging access cannot change while files from before the rename remain, or "". */
@@ -111,7 +114,12 @@ function replaceRootFile(target = "", content = "", mode = 0o644, check = null) 
   }
 }
 
+// Looks before it removes, so taking back what an account never had writes nothing. On a read-only file system
+// unlink fails (EROFS) before it looks the name up, a name that is not there included, so a host whose sudo rule
+// folder is read-only, and so holds no rule of the account's, could otherwise take back no access at all. A file
+// that is there is removed, or its removal's error reported, read-only file system included.
 function removeIfPresent(file = "") {
+  if (!filePresent(file)) return false;
   try {
     unlinkSync(file);
     return true;
