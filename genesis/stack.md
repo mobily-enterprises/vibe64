@@ -166,4 +166,5 @@
 - Subsystem: `packages/vibe64-core`
 - Subsystem: `packages/vibe64-execution`
 - Subsystem: `packages/vibe64-genesis`
+- Subsystem: `packages/vibe64-deploy`
 - Subsystem: `packages/studio-terminal-core`

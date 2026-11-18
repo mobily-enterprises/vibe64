@@ -1088,6 +1088,22 @@ not allocate source, run treatment commands or certify source consumption.
 ### Data used
 - Nothing.
 
+## `packages-vibe64-deploy` Deploy engine
+
+Turns a project's Stack into what runs at a provider: Production's needs, the package each service runs, the Plan, the record of what was made and the steps that make it, with one adapter per provider (mobilynet first). It runs only in the editor, which gives it the credential, the record's place and the prices; it knows no host and depends on no editor or JSKIT package.
+
+### Source
+- Directory `packages/vibe64-deploy`
+
+### Program
+- Nothing.
+
+### Data owned
+- Nothing.
+
+### Data used
+- Nothing.
+
 ## `packages-studio-terminal-core` Terminal primitives
 
 Supplies common terminal paths, runtime identity and credential-home facilities for the terminal and native provider consumers. It supports shared account/runtime isolation without owning a separate conversation or process registry.
