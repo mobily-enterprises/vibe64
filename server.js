@@ -1,5 +1,4 @@
 import Fastify from "fastify";
-import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import getPort from "get-port";
 import {
@@ -75,6 +74,7 @@ import {
 import {
   SPA_INDEX_FILE,
   registerSpaNotFoundHandler,
+  registerWebBuildFiles,
   buildGlobalUiPaths
 } from "./server/lib/spaFallback.js";
 import {
@@ -483,11 +483,7 @@ async function createServer(options = {}) {
   }
 
   if (hasWebBuild) {
-    await app.register(fastifyStatic, {
-      root: distRoot,
-      index: false,
-      serve: false
-    });
+    await registerWebBuildFiles(app, distRoot);
   } else {
     logOperationalEvent(app.log, "warn", {
       component: "web-assets",

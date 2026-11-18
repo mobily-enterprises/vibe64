@@ -85,6 +85,38 @@ test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
   await expect(recoveryBanner).toHaveCount(0);
 });
 
+test("a tab still running the build before an update offers Reload when it opens a page the update removed", async ({ page }) => {
+  await mockReadyStudioShell(page);
+  await page.goto(DEVELOPMENT_PATH);
+  await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
+
+  // After an update the server has only the new build's files, so every file this tab has not loaded yet answers 404,
+  // as the editor's server answers a hashed file it does not have (tests/server/webBuildFiles.unit.test.js).
+  const missing: string[] = [];
+  await page.route("**/assets/**", async (route) => {
+    missing.push(new URL(route.request().url()).pathname);
+    await route.fulfill({ status: 404, contentType: "application/json", body: '{"statusCode":404,"error":"Not Found"}' });
+  });
+  // The tab's own router, as a link does.
+  await page.evaluate((path) => {
+    const app = (document.querySelector("#app") as unknown as { __vue_app__: { config: { globalProperties: { $router: { push(path: string): Promise<unknown> } } } } }).__vue_app__;
+    return app.config.globalProperties.$router.push(path).catch(() => undefined);
+  }, `${DASHBOARD_PATH}/history`);
+
+  // JSKIT's shell names what failed (the page, or a module it loads) and offers Reload.
+  const notice = page.getByRole("alert").filter({
+    hasText: /did not download\. The app may have been updated, or the network request failed\./u
+  });
+  await expect(notice).toBeVisible();
+  expect(missing.length).toBeGreaterThan(0);
+
+  // The server now has the update's files: Reload opens the same address on them.
+  await page.unroute("**/assets/**");
+  await notice.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+});
+
 function escapedPathPattern(pathValue: string) {
   return String(pathValue || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

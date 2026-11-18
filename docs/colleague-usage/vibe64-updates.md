@@ -9,6 +9,10 @@ appears at the top of the page:
 
 **Vibe64 was updated. Reload to get the latest version.** with **Reload**
 
+- **A plain reload is enough.** Choosing **Reload**, the browser's reload
+  button or opening Vibe64 again loads the new version. You never need a hard
+  reload (Ctrl+Shift+R, or Cmd+Shift+R on a Mac) or to clear the browser's
+  cache.
 - **Nothing reloads by itself.** Finish or save what you are doing first. Chat
   drafts stay in this browser when browser storage is available, but an open
   dialog or an unsaved form is lost when the page reloads.
@@ -27,6 +31,12 @@ appears at the top of the page:
 - Running Vibe64 from source in development mode (`npm run dev`) has no
   version to compare, so the banner never appears there; the development
   server updates the page itself.
+
+A tab still running the old version may also open a part of Vibe64 that the
+update replaced, before the banner shows. It then shows **App module did not
+download. The app may have been updated, or the network request failed.** (or
+**Page did not download. …**) with **Reload** and **Close**. Choose **Reload**:
+it opens the same address on the new version.
 
 Vibe64 notices the update only when the tab reconnects after the restart; it
 does not keep asking. A tab that stayed connected because Vibe64 was not
