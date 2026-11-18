@@ -1,8 +1,9 @@
-# Publish your project as an app or package (Publish)
+# Publish your project as an app or package (Packages)
 
-**Dashboard → Publish** is where a project becomes something people install: an
+**Dashboard → Packages** is where a project becomes something people install: an
 app on your own phone, or a package on a registry. On a phone, open Dashboard,
-then choose **Publish** from the **Dashboard section** menu.
+then choose **Packages** from the **Dashboard section** menu. The page's address
+stays `…/dashboard/publish`.
 
 The page has four parts:
 
@@ -101,7 +102,7 @@ While a release runs each of its target cards shows **Publishing 1.4.3…**;
 afterwards a card shows the version people get, **Live · published …** and a
 **Verified** checksum read back from the destination: npm's integrity value,
 or for PyPI and GitHub Releases each file's own sha256 (the value pip and the
-release page show). The Publish page's
+release page show). The Packages page's
 **Checks** line runs the checks on the saved commit at any time and, when they
 fail, shows which check failed with **Show output**.
 
@@ -119,7 +120,7 @@ short message at the bottom of the page.
 
 ### Colleague and publishing
 
-Colleague can read the Publish state, suggest and write a version bump into
+Colleague can read the Packages page's state, suggest and write a version bump into
 the session, read the plan and preflight, start a dry run, read history and
 logs, and **ask** to publish. Asking only shows a banner, **Your Colleague asked
 to publish plan …**, with **Review** and **Dismiss**; **Review** opens the same
@@ -195,6 +196,6 @@ Package registries Vibe64 releases to:
   from developers verified by Google; this goes worldwide in 2027. Preflight
   says so before a release.
 
-Colleague can open **Publish** for you, or point at it in the Dashboard, and
+Colleague can open **Packages** for you, or point at it in the Dashboard, and
 explain these steps. It cannot
 publish, confirm a release or see any credential.

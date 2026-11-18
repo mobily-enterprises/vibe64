@@ -86,7 +86,7 @@ An application whose first account becomes its owner can name, in its Stack's
 registration needs (``- Setup code: `NAME` ``). A host that publishes projects
 generates that code and shows it to the project owner alone; the Staging
 status lists the name, never the code, so the coding agent sends the person to
-the host's Staging page for it.
+the host's page that publishes to Staging for it.
 
 When the host publishes projects, `vibe64-helper deployment status` shows the
 coding agent the session project's Staging: whether it is published, its

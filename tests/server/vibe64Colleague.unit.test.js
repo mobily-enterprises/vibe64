@@ -6185,6 +6185,8 @@ test("a composed host adds its own project views to navigation.open, each with i
   assert.equal(composed.input.schema.structure.pane.enum.at(-1), "extra-view");
   assert.match(composed.extensions.assistant.description, /extra-view means the host's extra view/u);
   assert.doesNotMatch(local.extensions.assistant.description, /extra-view/u);
+  // The Packages page keeps its pane id: Colleague reads which page publish opens.
+  assert.match(local.extensions.assistant.description, /publish means Packages,/u);
   for (const navigationPanes of [[{ pane: "settings", meaning: "again" }], [{ pane: "Extra", meaning: "x" }], [{ pane: "extra-view" }]]) {
     assert.throws(() => createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes }), /new lowercase view name with a meaning/u);
   }

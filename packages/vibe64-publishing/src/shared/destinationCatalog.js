@@ -1,4 +1,4 @@
-// What the Publish page tells a person about each destination before they add
+// What the Packages page tells a person about each destination before they add
 // it: what it is, what it needs, how long the first and later releases take and
 // what it costs. Zero-account destinations come first. Which packages each one
 // takes is the destination's own (packaging), added when the page state is read.

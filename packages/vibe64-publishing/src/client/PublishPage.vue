@@ -1,8 +1,9 @@
 <script setup>
-// The Publish page: this project's targets (where releases go), the saved work
+// The Packages page: this project's targets (where releases go), the saved work
 // a release would use, and the history of releases. Every irreversible step
 // ends in the person's own confirmation.
 import { computed, ref, watch } from "vue";
+import { PACKAGES_PAGE } from "@local/vibe64-core/shared/pageNames";
 import Vibe64DashboardPageHeader from "/src/components/studio/Vibe64DashboardPageHeader.vue";
 import AddTargetDialog from "./AddTargetDialog.vue";
 import AndroidSdkLicenceDialog from "./AndroidSdkLicenceDialog.vue";
@@ -178,7 +179,7 @@ function openInstall({ releaseId, targetId }) {
     <Vibe64DashboardPageHeader
       icon="$package2"
       description="Release your project as an app on your phone or a package people can install."
-      title="Publish"
+      :title="PACKAGES_PAGE"
     >
       <template #actions>
         <v-btn :prepend-icon="keysIcon" data-test="open-keys" rounded="pill" variant="tonal" @click="openKeys()">Accounts &amp; keys</v-btn>
@@ -697,7 +698,7 @@ function openInstall({ releaseId, targetId }) {
 </style>
 
 <style>
-/* Shared by the Publish page's dialogs, which render outside the page. */
+/* Shared by the Packages page's dialogs, which render outside the page. */
 .publish-dialog__title {
   align-items: center;
   display: flex;

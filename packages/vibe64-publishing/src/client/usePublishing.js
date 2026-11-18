@@ -1,4 +1,4 @@
-// The Publish page's one connection to this project's publishing routes: the
+// The Packages page's one connection to this project's publishing routes: the
 // current state, refreshed while something runs in the background, and plain
 // calls that return the route's answer or throw its message.
 import { computed, onBeforeUnmount, ref, watch } from "vue";
@@ -15,7 +15,7 @@ function publishingRequest(suffix = "", { method = "GET", body } = {}) {
 }
 
 /**
- * The Publish page's state and calls. `active` is false while the page is hidden, which reads nothing then.
+ * The Packages page's state and calls. `active` is false while the page is hidden, which reads nothing then.
  * @param {{
  *   active: () => boolean,
  *   request?: typeof publishingRequest

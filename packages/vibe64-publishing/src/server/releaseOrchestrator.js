@@ -8,6 +8,7 @@ import {
   runPreflight
 } from "@local/vibe64-packaging/server";
 import { recoveryKitCovers } from "@local/vibe64-packaging/server/keys";
+import { PACKAGES_PAGE } from "@local/vibe64-core/shared/pageNames";
 
 import { publishingError } from "./publishingError.js";
 import { RELEASE_CHECKS, installKey } from "./releaseChecks.js";
@@ -33,7 +34,7 @@ import { createReleaseRuns } from "./releaseRuns.js";
  *   2. the person Saves it like any other change;
  *   3. plan: the exact plan for the saved commit, with preflight;
  *   4. dry run (optional): build once, ask every destination what would happen;
- *   5. the person confirms the exact plan on the Publish page (never in chat);
+ *   5. the person confirms the exact plan on the Packages page (never in chat);
  *   6. release: build every package once, tag the saved commit, fan out to every
  *      target, read each one back, and record it all in the release history.
  * Every target is resumable: confirming the same plan again finishes what is
@@ -439,16 +440,16 @@ function createReleaseOrchestrator({
     return {
       pendingConfirmation: request,
       planId: current.planId,
-      message: "The person confirms this plan on the Publish page. Nothing is published until they do."
+      message: `The person confirms this plan on the ${PACKAGES_PAGE} page. Nothing is published until they do.`
     };
   }
 
   /**
-   * The person opens the confirmation on the Publish page.
+   * The person opens the confirmation on the Packages page.
    */
   async function openConfirmation({ planHash, targetIds = [], acknowledged = [], actor }) {
     if (actor?.kind !== "person") {
-      throw publishingError("Only the person can open a publish confirmation, on the Publish page.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", {
+      throw publishingError(`Only the person can open a publish confirmation, on the ${PACKAGES_PAGE} page.`, "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", {
         messageCode: "vibe64_publishing_confirmation_open_person_only"
       });
     }

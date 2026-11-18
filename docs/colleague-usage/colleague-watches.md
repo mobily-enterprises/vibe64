@@ -15,7 +15,7 @@ finishes” for a completion watch instead. Watching starts only on your request
 checks your current project access and does not stop or resend the coding work.
 
 Colleague can also watch more than conversations, wherever your Vibe64 offers
-it, for example a project's releases from its **Publish** page: ask “Tell me
+it, for example a project's releases from its **Packages** page: ask “Tell me
 when my release is live”, “Tell me if the release fails” or “Tell me if anything
 changes in that release”. Ask Colleague what it can watch here; it lists what
 this installation offers. A release or app that is already live is reported at

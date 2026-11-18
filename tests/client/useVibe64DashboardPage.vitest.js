@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  activeSessionMobileSectionLinks
+  activeSessionMobileSectionLinks,
+  dashboardSectionLabel
 } from "../../src/composables/useVibe64DashboardPage.js";
 
 describe("useVibe64DashboardPage", () => {
+  it("names a Dashboard section as its link does, and nothing where no link leads", () => {
+    expect(dashboardSectionLabel("publish")).toBe("Packages");
+    expect(dashboardSectionLabel("env")).toBe("Env");
+    // Public adds no page for Staging: a composed host's own link names /dashboard/deploy.
+    expect(dashboardSectionLabel("deploy")).toBe("");
+  });
+
   it("includes selected-session tools in mobile dashboard navigation", () => {
     expect(activeSessionMobileSectionLinks({
       tools: [

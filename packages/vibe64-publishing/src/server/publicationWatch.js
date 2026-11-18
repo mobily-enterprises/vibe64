@@ -1,3 +1,4 @@
+import { PACKAGES_PAGE } from "@local/vibe64-core/shared/pageNames";
 import { PUBLISHING_ACTIONS } from "./publishingActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
@@ -44,7 +45,7 @@ function publicationWatchSource({ actionCatalogue }) {
   return Object.freeze({
     id: "publication",
     label: "Publication",
-    description: "A project's latest release from its Publish page: whether it is live on every target, still running, or failed.",
+    description: `A project's latest release from its ${PACKAGES_PAGE} page: whether it is live on every target, still running, or failed.`,
     input: { projectSlug: "The exact project slug." },
     conditions: {
       live: "The latest release is live on every target (reported at once if it already is).",

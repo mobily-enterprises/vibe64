@@ -165,8 +165,14 @@ verification.
 
 - The Publish feature is product functionality that publishes the selected
   user's project to its Staging from its Vibe64-owned Deployment contract.
-  A person always reads Publish and Staging, never Deploy; internal
-  identifiers, routes and stored state may keep their deployment names.
+  A person reads Publish for that action (**Publish to staging**) and Staging
+  for the environment, never for a page: the host's page that holds the
+  action is **Deploy**, and the editor's page for phone apps and installable
+  packages is **Packages**. Each page's name lives in one constant
+  (`@local/vibe64-core/shared/pageNames` for Packages; the host's own for
+  Deploy), and text naming a host's page reads its Dashboard link. Internal
+  identifiers, routes (`/dashboard/deploy`, `/dashboard/publish`), Colleague
+  panes and stored state keep their deployment and publish names.
   Genesis composes and returns that Stack section as opaque text; it does not
   define deployment.
 - This repository's `## Deployment` section describes only how this public

@@ -1,4 +1,4 @@
-// Only the person, on the Publish page, confirms publishing. Chat (Colleague),
+// Only the person, on the Packages page, confirms publishing. Chat (Colleague),
 // automation and internal callers are never the person; tokens are one-shot,
 // bound to the plan the person saw, and expire. Stale plans are refused.
 import assert from "node:assert/strict";
@@ -48,7 +48,8 @@ test("an assistant request only waits for the person; it confirms nothing", asyn
   assert.deepEqual(pending.targetIds, ["sdk-npm"]);
   assert.equal(pending.planId, PLAN.slice(7, 11));
   await assert.rejects(confirmations.open({ planHash: PLAN, actor: { kind: "assistant", id: "assistant" } }), { code: "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON" });
-  await assert.rejects(confirmations.redeem({ planHash: PLAN, token: "x".repeat(43), actor: { kind: "assistant", id: "assistant" } }), { code: "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON" });
+  await assert.rejects(confirmations.redeem({ planHash: PLAN, token: "x".repeat(43), actor: { kind: "assistant", id: "assistant" } }),
+    { code: "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", message: /^Only you can confirm publishing, on the Packages page\./u });
   assert.equal((await confirmations.pendingRequest()).planHash, PLAN);
 });
 

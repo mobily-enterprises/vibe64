@@ -1,5 +1,6 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime/errors";
 import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { PACKAGES_PAGE } from "@local/vibe64-core/shared/pageNames";
 
 // The learning vocabulary: the real Vibe64 places a lesson or its teacher can
 // point at or open, the activities a lesson `do` beat can wait for, and the
@@ -74,7 +75,13 @@ const BUILT_IN_PLACES = [
     open: { pane: "system" },
     steps: [DASHBOARD, pathStep("architecture", "Architecture")]
   },
-  { id: "publish", label: "Publish", scope: "project", open: { pane: "publish" }, steps: [DASHBOARD, pathStep("publish", "Publish")] },
+  {
+    id: "publish",
+    label: PACKAGES_PAGE,
+    scope: "project",
+    open: { pane: "publish" },
+    steps: [DASHBOARD, pathStep("publish", PACKAGES_PAGE)]
+  },
   {
     id: "chat",
     label: "Coding chat",

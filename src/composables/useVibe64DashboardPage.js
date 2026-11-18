@@ -61,6 +61,23 @@ function activeSessionMobileSectionLinks(activeSessionNav = null) {
     .filter((tool) => Boolean(tool.id !== "active-session:" && tool.label && tool.to));
 }
 
+/**
+ * The name a Dashboard section's link shows, found by the section's route below the project's dashboard (for
+ * example "deploy", the page a host adds for Staging), so text that sends the person there names the page as the
+ * Dashboard does; "" when no link leads there.
+ * @param {string} section
+ */
+function dashboardSectionLabel(section) {
+  const suffix = `/dashboard/${section}`;
+  const link = getPlacements().find((placement) => (
+    placement?.kind === "link" &&
+    placement?.owner === "app-dashboard" &&
+    placement?.target === "page.section-nav" &&
+    dashboardSectionSuffix(placement) === suffix
+  ));
+  return String(link?.props?.label || "");
+}
+
 function dashboardSectionSuffix(placement) {
   const suffix = String(placement.props?.scopedSuffix || placement.props?.unscopedSuffix || "").trim();
   if (!suffix) {
@@ -77,5 +94,6 @@ function dashboardSectionSuffix(placement) {
 export {
   activeSessionMobileSectionLinks,
   dashboardPlacementVisible,
+  dashboardSectionLabel,
   useVibe64DashboardPage
 };

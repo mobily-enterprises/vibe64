@@ -467,7 +467,7 @@ Conversation identity, message admission and native inference stay with the conv
 
 ## `packages-vibe64-publishing` Publishing
 
-Provides the local publishing experience: the project's Publish page, release
+Provides the local publishing experience: the project's Packages page, release
 orchestration (prepare a version change for Save, plan, preflight, dry run,
 the person's own confirmation, build once, tag the saved commit, fan out and
 read back), publishing targets and release history kept as local project state, and

@@ -1,4 +1,5 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
+import { PACKAGES_PAGE } from "@local/vibe64-core/shared/pageNames";
 import { githubProjectAvailable } from "./lib/vibe64GithubProject.js";
 import {
   VIBE64_ACTIVE_SESSION_NAV_OWNER,
@@ -250,7 +251,7 @@ addPlacement({
   surfaces: ["app"],
   order: 500,
   props: {
-    label: "Publish",
+    label: PACKAGES_PAGE,
     guideId: "publish",
     icon: "$package2",
     surface: "app",

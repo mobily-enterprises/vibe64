@@ -3,6 +3,7 @@
 // 2) review the exact plan for the saved commit with its preflight, then dry
 // run or Publish (which opens the person's confirmation).
 import { computed, ref, watch } from "vue";
+import { PACKAGES_PAGE } from "@local/vibe64-core/shared/pageNames";
 import { destinationIcon, hostOf, packageLabeller, shortCommit } from "./publishFormat.js";
 
 const props = defineProps({
@@ -219,8 +220,8 @@ function checkIcon(check) {
             />
             <div v-if="needsWriting && !sessionId" class="publish-release__note" role="note">
               <v-icon icon="$info" size="18" />
-              <span v-if="unreleasedSaved">Writing a new version needs a session. Start one with <strong>+</strong> and open Publish from it, or release what is saved as it is.</span>
-              <span v-else>The saved version is already published. Writing a new one needs a session: start one with <strong>+</strong> and open Publish from it.</span>
+              <span v-if="unreleasedSaved">Writing a new version needs a session. Start one with <strong>+</strong> and open {{ PACKAGES_PAGE }} from it, or release what is saved as it is.</span>
+              <span v-else>The saved version is already published. Writing a new one needs a session: start one with <strong>+</strong> and open {{ PACKAGES_PAGE }} from it.</span>
             </div>
             <v-alert v-if="prepared" class="publish-release__prepared" color="success" variant="tonal">
               <strong>Written into this session:</strong>
