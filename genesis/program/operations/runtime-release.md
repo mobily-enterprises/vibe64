@@ -10,6 +10,7 @@ so the same command works without a source checkout in the relocated runtime.
 
 - `index.html`
 - `favicon.svg`
+- `vite.config.mjs`
 - `src/main.js`
 - `src/theme/index.js`
 - `src/theme/icons.js`
@@ -223,6 +224,32 @@ downloads: loading feedback, the bar's motion with every stylesheet applied, no
 reload before ten seconds and one at ten, a failure explanation after abort, and
 a 48px Reload target, without horizontal overflow. Release artifact builders
 invoke the same public proof on their composed frontend.
+
+The built page opens the editor from few files. `vite.config.mjs` links the
+built stylesheets at the end of `<body>`, after the loading screen, instead of
+in `<head>`, where every one would hold the first paint: the screen paints as
+soon as the page arrives, and the editor's module scripts still run only once
+every stylesheet has applied, since a stylesheet the parser met holds the page's
+module scripts wherever it stands. Vite's preload helper adds a lazily loaded
+module's stylesheets at the end of `<body>` too, so they still follow the page's
+own in the cascade; the build fails, naming the change, if the helper no longer
+adds them as the config expects. Its Rolldown groups put every module the
+entry imports statically (`$initial`) into the entry's own file, so the page
+names one script and one stylesheet. The project page (`/app/project/:slug`,
+where the editor opens) stays a lazy route; its file holds the page and the
+modules it imports that nothing loaded without it imports. The modules it
+shares with pages or components loaded without it come one file for each set of
+those importers (`project-shared-<first module>`), so none of them loads more
+than before. A lazily loaded page or component counts as loaded with the project
+page when it is one of the page's nested routes, shows the page itself, or only
+the page's own modules load it. Other routes and lazily loaded components keep
+Rolldown's own chunks. `tests/server/clientStartup.unit.test.js` checks the
+stylesheet moves and the grouping on a sample module graph. Package releases also
+verify the exact built HTML names one script, no module preloads and its
+stylesheets after the screen; then, with every stylesheet held back, that the
+screen paints, the editor's code asks for nothing for a second after its entry
+arrived, and its first request after they arrive finds every stylesheet
+applied.
 
 `npm run build` builds the frontend for local source execution. `npm run
 pack:release` verifies package boundaries, builds the frontend, assembles a
