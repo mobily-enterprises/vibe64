@@ -2,7 +2,7 @@
 
 /**
  * What other owners fill after construction: the source editor, plan
- * completion, session Update and database tools providers, and the assistant runtime's functions.
+ * completion, session Save and Update and database tools providers, and the assistant runtime's functions.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  */
@@ -70,6 +70,17 @@ function createServiceHostSlots({ state }) {
   }
 
   /**
+   * Fills or, at its owner's shutdown, clears the session's own Save, which `vibe64-helper session save` runs.
+   * @param {Function | null} handler
+   */
+  function setSessionSave(handler) {
+    if (handler !== null && typeof handler !== "function") {
+      throw new TypeError("The session Save handler must be a function or null.");
+    }
+    state.slots.sessionSave = handler;
+  }
+
+  /**
    * Fills or, at its owner's shutdown, clears the database tools provider.
    * @param {object | null} provider
    */
@@ -101,6 +112,8 @@ function createServiceHostSlots({ state }) {
     setPagesProvider,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setPlanCompleted,
+    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
+    setSessionSave,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setSessionUpdate,
     // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals

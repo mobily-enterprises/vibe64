@@ -5415,3 +5415,62 @@ test("automatic save after a completed plan runs ordinary Save once and reports 
   assert.equal(await planCompleted("session-1", { submittedBy: owner }), "Saved automatically.");
   assert.equal(saves.length, 2);
 });
+
+test("the session's AI saves with the Save automatic save runs, to the destination it has now, and no note steers its turn", async () => {
+  let unsaved = true;
+  const saves = [];
+  const notes = [];
+  const destination = { mode: "managed_git", repository: "test-project", branch: "main" };
+  const session = () => ({ agentRuns: [{ active: true }], sessionId: "session-1", status: "active",
+    metadata: { assistant_routing: JSON.stringify({ mode: "auto", ...defaultSteps }) } });
+  const runtime = {
+    async getSession() { return session(); },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    async listSessionSummaries() { return [session()]; },
+    store: {
+      async listSessionConversations() { return []; },
+      async readBackgroundTask() { return null; },
+      async writeBackgroundTaskEvent(_sessionId, taskId, input) { return { ...input.patch, id: taskId, events: [input.event] }; },
+      async writeMetadataValue() {}
+    }
+  };
+  let planCompleted;
+  let sessionSave;
+  createService({
+    project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
+      async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
+    },
+    async publishSessionChanged() {},
+    terminals: {
+      setPlanCompleted(handler) { planCompleted = handler; },
+      setSessionSave(handler) { sessionSave = handler; },
+      async inspectSessionWork() { return { unsaved, destination }; },
+      async noteMainChat(_sessionId, note) {
+        notes.push(note.message);
+        return { delivered: true };
+      },
+      async saveSessionWork(_sessionId, input) {
+        saves.push(input);
+        await input.onRepositoryWriteAcquired();
+        return { reconciled: true, saveCommit: "def456", status: "saved" };
+      }
+    }
+  });
+  const owner = { role: "owner", username: "owner" };
+
+  const saved = await sessionSave("session-1", { requestedByAgent: true, vibe64User: owner });
+
+  assert.deepEqual([saved.ok, saved.saveCommit, saves.length], [true, "def456", 1]);
+  assert.deepEqual(saves[0].destinationReview, destination);
+  assert.equal(saves[0].vibe64User, owner);
+  assert.deepEqual(notes, [], "the command's answer tells the AI; a steer would interrupt the command");
+  // Automatic save, like the person's Save, still tells a running turn its work was saved.
+  assert.equal(await planCompleted("session-1", { submittedBy: owner }), "Saved automatically.");
+  assert.equal(notes.length, 1);
+  unsaved = false;
+  assert.deepEqual(await sessionSave("session-1", { requestedByAgent: true, vibe64User: owner }),
+    { ok: false, code: "vibe64_session_save_no_changes", error: "This session has no work to save." });
+  assert.equal(saves.length, 2, "work with nothing new never reaches Save");
+});

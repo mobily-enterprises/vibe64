@@ -5,8 +5,10 @@ piece of work is finished, the same in **Auto**, **Senior**, **Junior** and
 **Custom**:
 
 - **Automatically save changes**, the one switch under **Chat settings**, runs
-  the session's ordinary **Save** once the work is finished. It is on for new
-  chats.
+  the session's ordinary **Save** once the work is finished. While it is on, the
+  agent also saves each finished and checked stage of longer work itself (see
+  [The agent saves finished stages](#the-agent-saves-finished-stages)). It is on
+  for new chats.
 - **After a plan**, the ticks in [Passes](passes.md#choose-the-passes-that-run-after-a-plan),
   chooses the passes that run when a plan is completed, each in its own turn,
   before **Save**. **Review** and **Security pass** always run.
@@ -49,9 +51,9 @@ ends with **Automatic save on**.
 A change applies to the next piece of work. The switch is the owner's main chat
 choice: a team member sees it disabled, and it is disabled while a goal is
 active. Temporary chats, AI tasks and Fix it with AI have no Chat settings, run
-no pass after a plan and never save by themselves. Neither do lessons: Deslop
-never rewrites a learner's code, and saving is part of what a lesson teaches, so
-you choose **Save** yourself. **Chat mode** and the switch are the same on
+no pass after a plan and never save by themselves: their agent's save command
+refuses. Neither do lessons: Deslop never rewrites a learner's code, and saving
+is part of what a lesson teaches, so you choose **Save** yourself. **Chat mode** and the switch are the same on
 desktop and mobile.
 
 ## When work is finished
@@ -108,9 +110,32 @@ question the agent only answers ends without a note about saving, since nothing
 changed. You see only the agent's final message, never its reasoning or the
 outcome it reports to Vibe64, so its whole reply, including any question for
 you, is in that message. Every turn of a piece of work also knows how that work
-is saved: with **Automatically save changes** on, the agent says, after its
-reply and never in its place, that the work will be saved automatically, and
-never asks you to choose **Save**; with it off, it leaves **Save** to you.
+is saved: with **Automatically save changes** on, the agent saves each finished
+and checked stage itself, and says, after its reply and never in its place, what
+it saved or that the work will be saved automatically, and never asks you to
+choose **Save**; with it off, it leaves **Save** to you.
+
+## The agent saves finished stages
+
+Automatic save runs only once a request's work is finished, so a long plan with
+many stages would stay unsaved until its end, and the project's other sessions
+could not build on its finished stages meanwhile. So while **Automatically save
+changes** is on, Main chat's agent saves as it goes: at each finished and
+checked stage of a plan, or once a piece of work is finished, never in the
+middle of an edit. When the session is behind its saved version, it runs Update
+first. It runs the session's own **Save**, the one the Save button runs, with the
+same checks, backups and [connected repositories](connected-repositories.md),
+saving the files as they are when it runs; it runs no pass, and the passes after
+a plan still run as before. Then it tells the other sessions it is working with
+to update. [The session's AI saves its finished stages](github-work.md#the-sessions-ai-saves-its-finished-stages)
+describes what it does when Save cannot save.
+
+Only Main chat saves this way, during its own turn and only while the switch is
+on. With the switch off, in a temporary chat, an AI task, Fix it with AI or a
+lesson, the agent's save command refuses and says why, and saving stays your
+choice. While a temporary chat or AI task is working beside Main chat, the
+command also refuses, because Vibe64 can't tell which chat ran it; Main chat's
+agent saves once the other chat has finished.
 
 ## What the chat shows
 
@@ -119,7 +144,9 @@ Automatically save changes)**, then its result: **Saved automatically.**,
 **Automatic save: nothing new to save.**, or **Automatic save didn't run:**
 followed by Save's own reason (for example an Update is needed, a conflict, a
 required pull request or an unavailable repository). Automatic save never runs
-**Update** for you and never runs while the agent is working. In a session with
+**Update** for you and never runs while the agent is working. A stage the agent
+saves itself adds no automatic-save notice: the session shows **Saving work**
+while it runs, as for any Save, and the agent's reply says what it saved. In a session with
 connected repositories it saves their copies too, as **Save** does. The notices
 the passes after a plan add are described in [Passes](passes.md#what-the-chat-shows-after-a-plan).
 

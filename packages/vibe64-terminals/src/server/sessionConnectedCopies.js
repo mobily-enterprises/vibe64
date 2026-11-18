@@ -366,7 +366,8 @@ function updateFirstError(name) {
  * @param {(commits: object) => Promise<void>} input.recordCommits
  * @param {Function} [input.runProjectSourceExclusive]
  * @param {object} input.session
- * @returns {Promise<Array<{ name: string, saveCommit: string }>>} the copies saved
+ * @returns {Promise<Array<{ changedPaths: string[], name: string, saveCommit: string }>>} the copies saved, with the
+ * files each saved as the session's source names them
  */
 async function saveConnectedCopies({
   beforePush = doNothing,
@@ -428,7 +429,11 @@ async function saveConnectedCopies({
       [copy.name]: { canonicalCommit: result.saveCommit, ...(result.reconciled === true ? { baseCommit: result.saveCommit } : {}) }
     });
     await retireSessionWorkSave({ ...options, operationId });
-    saved.push({ name: copy.name, saveCommit: result.saveCommit });
+    saved.push({
+      changedPaths: (result.changedPaths || []).map(entry => `${copyConflictPrefix(copy.name)}${entry}`),
+      name: copy.name,
+      saveCommit: result.saveCommit
+    });
     await onProgress({
       kind: "connected",
       message: `[Connected] ${copy.name} saved at ${shortCommit(result.saveCommit)}.`,

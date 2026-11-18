@@ -178,7 +178,11 @@ conflict, with a time limit of up to 30 minutes (when its tool stops the command
 earlier, Update carries on and status shows when it ends); to resolve clashing
 files first, or leave them and tell the person; then to re-read what changed and
 restart a Preview still running old code. Nothing updates automatically, and
-Update never saves, so Save stays the person's
+Update never saves. The main chat's contribution adds that while its turn's
+instructions say the work is saved automatically, the agent saves each finished
+and checked stage itself with `vibe64-helper session save`, after an Update
+when the session is behind, then tells the sessions it works with to update;
+a temporary chat's says it never saves, so Save stays the person's there
 ([saving work](../source/save-work.md)). With the pages command it also
 tells every engine how to publish a page and when to offer one
 ([publishing pages](../pages/publishing.md)). Framework conventions, such as

@@ -147,4 +147,4 @@ function agentSessionUpdateAnswer(result, after) {
   };
 }
 
-export { agentSessionUpdateAnswer };
+export { agentSessionUpdateAnswer, fileCount };

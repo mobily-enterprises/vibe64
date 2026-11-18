@@ -51,7 +51,10 @@ piece of work's last turn ends: after a completed plan, once the passes ticked
 under **After a plan** in [Passes](passes.md) are done.
 Its progress, result and recovery are the ordinary Save's; when it cannot save,
 chat shows **Automatic save didn't run:** with the reason, and nothing changes.
-See [Choose what happens once work is finished](chat-settings.md).
+While it is on, the main chat's AI also runs this same Save itself at each
+finished and checked stage of longer work; see [The session's AI saves its
+finished stages](#the-sessions-ai-saves-its-finished-stages) and [Choose what
+happens once work is finished](chat-settings.md).
 
 Whenever Save or Update reports a problem, its activity panel offers **Fix it with
 AI**, which opens the [AI task window](ai-tasks.md) with the exact error. The AI
@@ -149,7 +152,8 @@ told its work was saved as it was when Save started and which files Save
 regenerated. A note sent to a working turn appears in the chat as Vibe64's, not
 as yours. An Update the session's AI ran itself (see below) does not interrupt
 its turn with that note, because its own command already told it; the note still
-leads your next message. Colleague can explain these notices; Save and Update
+leads your next message. A Save the AI ran itself sends no note at all: its
+command's answer already said what was saved and which files Save regenerated. Colleague can explain these notices; Save and Update
 themselves still need your instruction to Colleague. These steps apply on
 desktop and mobile.
 
@@ -178,9 +182,39 @@ session's files and tries again, or otherwise tells you what Update said. An
 Update can take several minutes; if the AI's own tool stops waiting sooner,
 Update carries on and the AI checks the session's status until it ends.
 
-Update never saves, and the AI cannot Save for you: **Save** still needs your
-choice, because it publishes the session's work. The same applies on desktop and
-mobile.
+Update never saves. The same applies on desktop and mobile.
+
+## The session's AI saves its finished stages
+
+**Save** publishes the session's work to the project's main, where the
+project's other sessions update onto it. With **Automatically save changes** on,
+Main chat's AI does not wait for a long plan to end: at each finished and checked
+stage of a plan, or once a piece of work is finished, it runs this session's
+Save itself, never in the middle of an edit, and runs Update first when the
+session is behind. It is the same Save as the Save button, with the same checks,
+backups and [connected repositories](connected-repositories.md): it runs inside
+the AI's own turn, saves the files as they are when the AI runs it, keeps any
+file written meanwhile as unsaved work, and runs no pass. While it runs the
+session shows **Saving work**, as for any Save. The AI runs it with
+`vibe64-helper session save`, which tells it each saved commit and the files
+saved. Then it tells the other sessions it is working with, through [project
+messages](project-messages.md), so they run Update before building on the old
+code.
+
+When Save cannot save, the command refuses with Save's own reason and changes
+nothing: when an Update is needed first, the AI runs Update and saves again;
+with nothing new to save, it says so plainly; for anything else, such as a
+conflict, a required pull request or an unavailable repository, it fixes a cause
+in the session's files and tries again, or tells you what Save said. A Save can
+take several minutes; if the AI's own tool stops waiting sooner, Save carries on.
+
+Only Main chat saves this way, and only while its **Automatically save changes**
+is on. With it off, and in a temporary chat, an AI task, Fix it with AI or a
+lesson, the command refuses and says why, and **Save** stays your choice. Vibe64
+decides this from the session's own record of which chats are working, never
+from what the command says: while a temporary chat or AI task works beside Main
+chat, it refuses because it can't tell which chat ran it, and Main chat's AI
+saves once the other has finished. The same applies on desktop and mobile.
 
 ## When the repository needs help
 
