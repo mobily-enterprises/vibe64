@@ -27,6 +27,14 @@ test("a two-service deploy runs web on Cloud Run and workers on machines of thei
   assert.equal(first.outcome, "live", first.message);
   assert.deepEqual(first.plan.items.map((item) => item.verb), ["new", "new", "new", "new"]);
   assert.deepEqual([first.plan.choices.services.web.size, first.plan.choices.services.workers.size], ["run-1-2", "e2-standard-4"]);
+  // Each service is linked to its resources while its first rollout runs, right after it is made: Google built its image
+  // before the rollout began, so nothing waits for a build to start, and the link never waits for the rollout to end.
+  assert.deepEqual(first.steps.filter((step) => step.endsWith("to start building")), []);
+  for (const service of ["web", "workers"]) {
+    const made = first.steps.indexOf(`createService ${service}`);
+    const linked = first.steps.indexOf(`link ${service}`, made);
+    assert.ok(made >= 0 && linked > made && linked < first.steps.indexOf(`checkRefresh ${service}`, made), `${service}: ${first.steps.join(", ")}`);
+  }
   const { items } = first.record;
 
   // web: Cloud Run, ingress only from the load balancer, two instances always on, its egress from Cloud Run's subnet.

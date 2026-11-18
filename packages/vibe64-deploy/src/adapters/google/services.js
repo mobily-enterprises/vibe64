@@ -9,6 +9,10 @@ import { BOOT_DISK_GIB, MACHINES, SHAPES } from "./prices.js";
 // the resources' credentials, its firewall rule and its load balancer; read back as the engine's inventory reads them.
 
 const MACHINE_SIZES = new Set(MACHINES.map((machine) => machine.name));
+// A release's rollout, as the engine's refresh: its id is the release it moves to, read back from the service's image or
+// template, and it is rolling from the start, since Cloud Build built the image before it began. So the engine links a
+// service's resources while the rollout runs (their credentials are in the release's settings already).
+const rolloutOf = (version) => ({ id: `release:${version}`, state: "rolling" });
 
 function createGoogleServices(g) {
   const {
@@ -159,12 +163,13 @@ function createGoogleServices(g) {
       const exposure = one.ingress === "INGRESS_TRAFFIC_INTERNAL_ONLY" ? "internal" : "public";
       const working = Boolean(one.reconciling) || (one.observedGeneration !== undefined && String(one.observedGeneration) !== String(one.generation));
       const ready = one.terminalCondition?.state === "CONDITION_SUCCEEDED" && one.latestReadyRevision === one.latestCreatedRevision;
+      const version = String(container.image ?? "").split(":").pop() || null;
       return {
         id: ids.run(name), name, kind: "service", labels: engineLabels(one.labels),
         size: SHAPES.find((shape) => String(shape.vcpus) === String(limits.cpu) && `${shape.memoryGib}Gi` === limits.memory)?.name ?? `cpu-${limits.cpu}-${limits.memory}`,
         instances, exposure, state: working ? "updating" : ready ? "running" : "failed",
-        version: String(container.image ?? "").split(":").pop() || null,
-        refresh: working ? { state: "running" } : null,
+        version,
+        refresh: working ? rolloutOf(version) : null,
         healthy: ready && !working ? instances : 0,
         internalName: one.uri ? new URL(one.uri).host : null,
         internalUrl: exposure === "internal" && one.uri ? one.uri : null,
@@ -193,7 +198,7 @@ function createGoogleServices(g) {
       things.push({
         id: ids.group(name), name, kind: "service", labels: engineLabels(own), size: last(template.properties?.machineType), instances: group.targetSize,
         exposure, state: errors.length > 0 ? "failed" : working ? "updating" : "running", version,
-        refresh: working && errors.length === 0 ? { state: "running" } : null, healthy,
+        refresh: working && errors.length === 0 ? rolloutOf(version) : null, healthy,
         internalName: exposure === "internal" ? internalNameOf(name) : null,
         connections: connectionsOf(name, firewalls),
         lastError: errors.length > 0 ? { message: `A machine of ${name} did not start: ${errors[0].message}` } : null
@@ -207,7 +212,7 @@ function createGoogleServices(g) {
     const kind = String(refreshId).split(":")[0];
     const thing = (await servicesNow()).find((one) => one.id === id);
     if (!thing) return { kind, state: "failed", error: { message: "the service is gone at Google Cloud." } };
-    if (thing.refresh) return { kind, state: "running" };
+    if (thing.refresh) return { kind, state: thing.refresh.state };
     if (thing.lastError) return { kind, state: "failed", error: thing.lastError };
     return { kind, state: "succeeded" };
   }
@@ -229,7 +234,7 @@ function createGoogleServices(g) {
         }));
       }
       if (exposure === "public") await frontend(name, { domain });
-      return { id, refreshId: "create" };
+      return { id, refreshId: rolloutOf(version).id };
     }
     await projectRole("roles/logging.logWriter", email, true);
     await call("artifactregistry", "GET", `v1/${P}/locations/${region}/repositories/${REPOSITORY}`);
@@ -245,7 +250,7 @@ function createGoogleServices(g) {
     });
     if (exposure === "public") await frontend(name, { group: group.instanceGroup, domain, health: health.selfLink });
     else await internalFrontend(name, { group: group.instanceGroup, health: health.selfLink });
-    return { id: ids.group(name), refreshId: "create" };
+    return { id: ids.group(name), refreshId: rolloutOf(version).id };
   }
 
   /** Hands a service a new release: its image once built, the resources its release needs. `{ version, refreshId }`. */
@@ -264,13 +269,13 @@ function createGoogleServices(g) {
         container.env = [...(container.env ?? []).filter((entry) => !isLink(entry)), ...links];
         container.startupProbe = { httpGet: { path: upload.declaration.healthPath, port: SERVICE_PORT }, periodSeconds: 10, failureThreshold: 30 };
       });
-      return { version, refreshId: "release" };
+      return { version, refreshId: rolloutOf(version).id };
     }
     const group = await compute("GET", `regions/${region}/instanceGroupManagers/${name}`);
     const { template } = await templateOf(group);
     const links = await linksEnv(upload.declaration.needs, engineLabels(template.properties.labels), name, email);
     await changeGroup(id, (now) => ({ ...now, image, version, env: [...now.env.filter((entry) => !isLink(entry)), ...links], release: upload.declaration }));
-    return { version, refreshId: "release" };
+    return { version, refreshId: rolloutOf(version).id };
   }
 
   /** Replaces a service's own settings and secrets, its resources' kept. */

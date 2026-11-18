@@ -3,8 +3,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { labelsProblem } from "./platform.js";
 
 // The stand-in's Cloud Run Admin API v2 services: made, read, listed, patched (the whole service, a new revision each
-// time) and deleted, each answering a long-running operation. A revision gets ready at the next advance when it could
-// start: its image built into the registry, its service account there and allowed to read every secret its settings
+// time) and deleted, each answering a long-running operation. A revision starts at the next advance and, at the one
+// after, as Cloud Run takes a while to start one, gets ready when it could start: its image built into the registry, its service account there and allowed to read every secret its settings
 // name, its Direct VPC egress network and subnet there; otherwise it fails, the revision before it still serving.
 
 const SERVICE_ID = /^[a-z]([-a-z0-9]{0,47}[a-z0-9])?$/u;
@@ -77,14 +77,15 @@ function createStandInRun(world) {
   const view = (service) => {
     const shown = structuredClone(service);
     delete shown.problems;
+    delete shown.starting;
     return shown;
   };
 
-  /** The next revision of a service: its generation up, reconciling until the next advance. */
+  /** The next revision of a service: its generation up, reconciling for two advances. */
   function newRevision(service) {
     const generation = Number(service.generation ?? 0) + 1;
     Object.assign(service, {
-      generation: String(generation), observedGeneration: String(generation), reconciling: true, updateTime: world.at(), etag: `"${randomUUID()}"`,
+      generation: String(generation), observedGeneration: String(generation), reconciling: true, starting: true, updateTime: world.at(), etag: `"${randomUUID()}"`,
       latestCreatedRevision: `${service.name.split("/").pop()}-${String(generation).padStart(5, "0")}-${randomUUID().slice(0, 3)}`,
       terminalCondition: { type: "Ready", state: "CONDITION_RECONCILING", lastTransitionTime: world.at() }
     });
@@ -135,10 +136,14 @@ function createStandInRun(world) {
     return null;
   }
 
-  /** Each reconciling service's revision: ready, or failed with the reason. */
+  /** Each reconciling service's revision: started, then ready, or failed with the reason. */
   function advance() {
     for (const service of services.values()) {
       if (!service.reconciling) continue;
+      if (service.starting) {
+        service.starting = false;
+        continue;
+      }
       const problems = revisionProblems(service);
       service.reconciling = false;
       if (problems.length === 0) {

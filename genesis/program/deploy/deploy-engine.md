@@ -244,7 +244,10 @@ credential is a token, or a source whose `token()` gives the token now and
   DNS name the services reaching it are given. A new release, setting or
   machine type is a new template, and the group replaces its machines, the new
   ones first. A service can't move between Cloud Run and machines in place:
-  take the app offline, then deploy.
+  take the app offline, then deploy. A rollout is the refresh the steps wait
+  for: its id is the release it moves to, and it is `rolling` from the start,
+  as Cloud Build built the image before it began, so a service is linked to its
+  resources while it rolls (their credentials are in its settings already).
 - **Reaches.** A firewall rule opens the reached machines' port to the
   reaching service: to its machines' tag, or, from Cloud Run, to the subnet
   Cloud Run's Direct VPC egress leaves from, as that traffic carries no tag an
