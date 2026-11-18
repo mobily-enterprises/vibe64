@@ -133,6 +133,24 @@ The quote's lines are at list price; the hash covers the needs, the choices in
 effect, the decisions, the items, the lines and a digest of the observed state,
 so a Deploy held to a plan read before anything moved is refused.
 
+Where the offer says the provider project's quotas (`quota.quotas`: each
+quota's unit, limit and use, and `quota.counts`: which of them a service's
+instance and a resource's machine count against), the Plan's `quota` lists what
+the Deploy adds to each, and each it would pass is the problem
+`production_quota_short`, naming the quota, its limit, its use, what the Deploy
+needs and how much more than is left, so a Deploy that wouldn't fit stops
+before anything is made. A Deploy makes and grows things before it shrinks or
+deletes any, so it adds each item's growth and is credited nothing for what it
+shrinks or removes. mobilynet's offer reads the project's quotas
+(`GET /v1/projects/{id}/quotas`): an App Service counts its instances' vCPUs and
+memory, a hosted service its machine, vCPUs, memory and data disk. An offer
+that says its quotas aren't checked (`quota.unchecked`: Google Cloud's and
+AWS's, whose quotas no one call answers with their use), or says nothing, gives
+`{ checked: false, words }`, and a quota passed stops the Deploy at the step
+that needs more, with the provider's reason. The hash leaves the quotas out:
+their use moves with the rest of the provider project, and the Deploy counts
+them again as it starts.
+
 The adapter's offer always gives its title, currency, service `sizes`, the load
 balancer's price and each resource kind's sizes. Three fields are optional, for
 a provider that runs some services or kinds differently; an offer without them
@@ -183,7 +201,14 @@ making it twice. In order:
    yet is refused with a `422` the client marks to try again, and the next step
    asks again. A refresh that fails ends the links made against it, which the
    record lets go so the next Deploy makes them again, and fails the Deploy
-   with the service's reason; services not yet moved keep serving their version;
+   with the service's reason; services not yet moved keep serving their version.
+   The record keeps, with each service, the release it was last handed: its
+   upload's SHA-256 and its declaration (`releaseDigest`) and the version. A
+   service still running that version with no error, for the same upload, keeps
+   it and is handed no release, since a provider refreshes onto every release it
+   is handed, even the one it runs; so a Deploy that changes only a count or a
+   size replaces no instance for nothing. One whose release failed, or whose
+   record was made again from labels, is handed its release again;
 5. a resource the Stack no longer names is unlinked from the services that
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
@@ -199,8 +224,20 @@ A refusal from the provider (a quota, the spending cap) fails the Deploy with
 its reason, the record kept as far as it got; an answer the provider may give
 later is tried again. A Deploy never deletes or makes again a hosted service
 and never acts on a thing the record does not hold. `takeOffline()` deletes the
-services, public first, and keeps every resource; `deleteResource()` deletes a
-disconnected resource and its data only when the owner typed its name.
+services, public first, and keeps every resource: it keeps the record without
+them (`save`) once each delete is asked, then reads the provider again
+(`pause` between reads, 5 seconds unless given) until it lists none of them,
+and returns. A provider still removing some after `maxReads` reads (120 unless
+given) is refused `deployment_offline_unfinished`, naming them; they take no
+new requests by then, and the provider finishes by itself. `deleteResource()`
+deletes a disconnected resource and its data only when the owner typed its
+name.
+
+Every App Service the mobilynet adapter makes asks for mobilynet's shortest
+drain, 30 seconds (`DRAIN_SECONDS`; genesis/stack.md has no line for it): an
+instance leaving (a count lowered, a refresh replacing it, its service deleted)
+leaves the load balancer, has that long to finish the requests it has, then
+gets a stop signal and as long again.
 
 Linking against the release a refresh moves to is mobilynet's engine-support
 M14, in its final shape, which its stand-in follows: only the refresh in
@@ -255,7 +292,11 @@ credential is a token, or a source whose `token()` gives the token now and
   `V64_WORK_DIR` and, reached at each instance, `V64_INSTANCE_URL`, the
   machine's internal DNS name). A public group stands behind the same load
   balancer; an internal one behind an internal passthrough load balancer whose
-  DNS name the services reaching it are given. A new release, setting or
+  DNS name the services reaching it are given. A Cloud Run service's count is
+  its own scaling, not its template's, so a count change makes no revision; a
+  group's is its size. A machine leaving a group gets 30 seconds to finish the
+  requests it has (connection draining on its backend service; Google's
+  default is none), and Cloud Run drains its own. A new release, setting or
   machine type is a new template, and the group replaces its machines, the new
   ones first. A service can't move between Cloud Run and machines in place:
   take the app offline, then deploy. A rollout is the refresh the steps wait
@@ -341,7 +382,9 @@ refreshed once.
   runs. A machine tells Auto Scaling it is ready only once the service answers
   its health path. A release is a new task definition revision, which ECS rolls
   out and rolls back by its circuit breaker, or a new template version, which an
-  instance refresh rolls in, the new machines ready before the old go. A rollout
+  instance refresh rolls in, the new machines ready before the old go; a count
+  changes in place. A task or machine leaving the load balancer drains for its
+  target group's deregistration delay, AWS's default of 300 seconds. A rollout
   is the refresh the steps wait for: its id (the create, release or change and
   the revision or version it moves to) is kept as the service's
   `vibe64-refresh` tag, and it is `rolling` from the start, as CodeBuild built
@@ -389,7 +432,7 @@ request's signature (or the gateway's token), for the engine's tests.
 - `needsOfStack()` — the needs from the inspected Stack.
 - `servicePackages()` — one mobilynet declaration per service and the scripts.
 - `imagePackages()`, `imageUpload()` — the image per service, for container providers.
-- `planOf()` — the Plan with verbs, drift, the quote and its hash.
+- `planOf()` — the Plan with verbs, drift, the quote, the quotas and its hash.
 - `deploy()` — a whole Deploy, step by step, under the lease.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
 - `createGoogleAdapter()` — the same for Google Cloud; `createGoogleClient()` its REST client.

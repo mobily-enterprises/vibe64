@@ -9,12 +9,12 @@ import { vibe64DeploymentInspection } from "../../packages/vibe64-genesis/src/se
 import { preferredAlternative, resourceKindIsDatabase } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
 import { createMobilynetClient } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
 import { servicePackages } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
-import { createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapters/mobilynet/index.js";
+import { DRAIN_SECONDS, createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapters/mobilynet/index.js";
 import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
 import { settingsPerService, withRootFile } from "../../packages/vibe64-deploy/src/package.js";
 import { planOf } from "../../packages/vibe64-deploy/src/plan.js";
 import { LABEL, createRecordStore, newRecord, rebuildFromLabels } from "../../packages/vibe64-deploy/src/record.js";
-import { applyStep, deleteResource, deploy, nextStep, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
+import { applyStep, deleteResource, deploy, nextStep, releaseDigest, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
 import { MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploymentServices.js";
 import { runningShop, settle, world } from "./vibe64DeployStandInHelpers.js";
 
@@ -235,9 +235,9 @@ test("a dropped resource is unlinked and kept, a dropped service deleted; a coun
   assert.deepEqual(requestsAfter(standIn, at).filter((request) => request.method === "DELETE" && request.path.includes("/hosted-services/") && !request.path.includes("/links/")), [],
     "a Deploy never deletes a hosted service");
 
-  // Take offline: the services go, every hosted service stays with its data.
-  const offline = await takeOffline(setupAdapterOf(standIn), third.record);
-  for (let step = 0; step < 10; step += 1) standIn.advance();
+  // Take offline: the services go, every hosted service stays with its data; it returns once mobilynet removed them.
+  const offline = await takeOffline(setupAdapterOf(standIn), third.record, { pause: () => standIn.advance() });
+  assert.equal(standIn.services.service(items["service.web"].id).state, "deleted");
   assert.deepEqual(Object.keys(offline.items).sort(), ["resource.database", "resource.files", "resource.uploads"]);
   assert.ok([items["resource.database"].id, items["resource.files"].id].every((id) => standIn.hosted.service(id).state === "running"));
 
@@ -292,6 +292,16 @@ test("a resource is linked once this Deploy's refresh builds; a service whose la
   // While that refresh is still under way, the Deploy waits.
   const working = failed.map((thing) => (thing.lastError ? { ...thing, refresh: { id: "rfr_x", kind: "settings", state: "rolling" } } : thing));
   assert.equal(next(working).kind, "wait");
+  // A later Deploy of the same upload: each service keeps the release it runs, but one whose last refresh failed is
+  // handed it again, as is every service for another commit.
+  const digestsOf = (made) => Object.fromEntries(stack.needs.services.map((service) => [service.id,
+    releaseDigest(adapter.serviceUpload(made.archive, made.declarations[service.id]), made.declarations[service.id])]));
+  const again = { ...structuredClone(first.record), run: { ...first.record.run, id: "run_again", services: {} } };
+  const later = (things, made = release) => nextStep({ plan: first.plan, needs: stack.needs, record: again, observed: things, release: { ...made, digests: digestsOf(made) } });
+  assert.deepEqual(later(observed), { kind: "keepRelease", service: "computers" });
+  assert.deepEqual(later(failed), { kind: "releaseService", service: "computers", id: first.record.items["service.computers"].id });
+  assert.deepEqual(later(observed, { ...releaseOf("c2", stack), port: adapter.servicePort, trustedProxies: release.trustedProxies }),
+    { kind: "releaseService", service: "computers", id: first.record.items["service.computers"].id });
 
   // computers handed a release (its refresh rfr_ours) with files not linked yet: linked only once that refresh builds,
   // so mobilynet checks the link against the release it moves to before any instance starts.
@@ -352,12 +362,90 @@ test("a Deploy is refused when its plan is stale, and while another Vibe64 holds
   assert.deepEqual(standIn.requests().filter((request) => request.method === "POST" && /\/(services|hosted-services)$/u.test(request.path)), [], "nothing was made");
   await client.releaseLease(lease.id);
 
-  // A provider's refusal fails the Deploy with its reason, the record kept as far as it got, the lease given up.
+  // A quota too small for what the Deploy adds is the Plan's problem, naming what is short and by how much: nothing
+  // is made. Two a-2 webs, two a-8 computers and two m-1 hosted services take 22 vCPU.
   standIn.setQuota(standIn.projectId, { vcpus: 12 });
-  const refused = await run({ record, commit: "c1" });
+  const short = await run({ record, commit: "c1" }).catch((error) => error);
+  assert.equal(short.code, "deployment_plan_refused");
+  assert.equal(short.message, "mobilynet's quota of vCPU for this project is 12, 0 in use: this Deploy needs 22 more, 10 more than is left. "
+    + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy.");
+  assert.deepEqual(standIn.requests().filter((request) => request.method === "POST" && /\/(services|hosted-services)$/u.test(request.path)), [], "nothing was made");
+
+  // A provider's refusal fails the Deploy with its reason, the record kept as far as it got, the lease given up: the
+  // quota lowered once the hosted services were made, after the Plan counted it.
+  standIn.setQuota(standIn.projectId, { vcpus: 96 });
+  const lowered = () => {
+    if (standIn.hosted.all().length === 2) standIn.setQuota(standIn.projectId, { vcpus: 12 });
+    standIn.advance();
+  };
+  const refused = await run({ record, commit: "c1", pause: lowered });
   assert.deepEqual([refused.outcome, refused.message], ["failed", "createService computers: The project has used its quota of vcpus (12)."]);
   assert.deepEqual(Object.keys(refused.record.items).sort(), ["resource.database", "resource.files"]);
   assert.deepEqual(standIn.leases(), []);
   standIn.setQuota(standIn.projectId, { vcpus: 96 });
   assert.equal((await run({ record: refused.record, commit: "c1" })).outcome, "live", "a Deploy run again goes on from its record");
+});
+
+test("a count change alone hands no service a release, so none of its instances is replaced; each service drains for mobilynet's 30 seconds", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const { items } = first.record;
+  const [web, computers] = [items["service.web"].id, items["service.computers"].id];
+  // Each App Service asks, when it is made, for mobilynet's shortest drain: an instance leaving leaves the rotation and
+  // has that long to finish what it serves.
+  const made = standIn.requests().filter((request) => request.method === "POST" && /^\/v1\/projects\/[^/]+\/services$/u.test(request.path));
+  assert.deepEqual(made.map((request) => request.body.drainSeconds), [DRAIN_SECONDS, DRAIN_SECONDS]);
+  assert.deepEqual([standIn.services.service(web).drainSeconds, standIn.services.service(computers).drainSeconds, DRAIN_SECONDS], [30, 30, 30]);
+  const serving = (id) => standIn.services.instances(id).filter((one) => !one.removedReason).map((one) => one.id).sort();
+  const [webBefore, computersBefore] = [serving(web), serving(computers)];
+
+  // The same commit with computers raised to 3: one PATCH of its count, no release, no settings, no refresh.
+  const at = standIn.requests().length;
+  const raised = await run({ record: first.record, commit: "c1", choices: { services: { computers: { instances: 3 } } } });
+  assert.equal(raised.outcome, "live", raised.message);
+  const writes = requestsAfter(standIn, at).filter((request) => isWrite(request) && !request.path.startsWith("/v1/leases"));
+  assert.deepEqual(writes.map((request) => [request.method, request.path, request.body]), [["PATCH", `/v1/services/${computers}`, { instances: 3 }]]);
+  for (const id of [web, computers]) assert.deepEqual(standIn.services.refreshes(id).map((one) => one.kind), ["create"]);
+  assert.deepEqual(serving(web), webBefore, "web runs the same instances");
+  assert.ok(computersBefore.every((id) => serving(computers).includes(id)) && serving(computers).length === 3, "computers kept its two and started one");
+  const versions = (done) => Object.fromEntries(Object.entries(done.record.run.services).map(([name, state]) => [name, state.version]));
+  assert.deepEqual(versions(raised), versions(first), "both run the versions they ran");
+
+  // Lowered back to 2, the instance the count removes leaves the rotation first, so it takes no new requests, then goes.
+  let draining = null;
+  const watch = () => {
+    standIn.advance();
+    draining ??= standIn.services.instances(computers).find((one) => one.rotation === "draining" && !one.removedReason)?.id ?? null;
+  };
+  const back = await run({ record: raised.record, commit: "c1", choices: { services: { computers: { instances: 2 } } }, pause: watch });
+  assert.equal(back.outcome, "live", back.message);
+  settle(standIn);
+  assert.ok(draining, "an instance drained");
+  assert.equal(standIn.services.instances(computers).find((one) => one.id === draining).removedReason, "count_lowered");
+  assert.equal(serving(computers).length, 2);
+
+  // A new commit is a release again, to each service.
+  const at2 = standIn.requests().length;
+  const moved = await run({ record: back.record, commit: "c2" });
+  assert.equal(moved.outcome, "live", moved.message);
+  assert.deepEqual(requestsAfter(standIn, at2).filter((request) => request.method === "POST" && /\/services\/[^/]+\/releases$/u.test(request.path)).map((request) => request.path),
+    [`/v1/services/${computers}/releases`, `/v1/services/${web}/releases`]);
+});
+
+test("take offline returns once the provider removed the services, or names those it is still removing, the record kept without them", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const adapter = setupAdapterOf(standIn);
+  let kept = null;
+  const slow = await takeOffline(adapter, first.record, { save: (next) => (kept = next), pause: () => {}, maxReads: 3 }).catch((error) => error);
+  assert.equal(slow.code, "deployment_offline_unfinished");
+  assert.equal(slow.message, "web and computers are still being removed at mobilynet; they take no new requests, and it finishes removing them by itself.");
+  assert.deepEqual(slow.details, { removing: ["web", "computers"] });
+  assert.deepEqual(Object.keys(kept.items).sort(), ["resource.database", "resource.files"]);
+  // Asked again once mobilynet moved on, nothing is left to delete or wait for.
+  settle(standIn);
+  for (const name of ["web", "computers"]) assert.equal(standIn.services.service(first.record.items[`service.${name}`].id).state, "deleted");
+  assert.deepEqual(await takeOffline(adapter, kept, { pause: () => assert.fail("nothing to wait for") }), kept);
 });

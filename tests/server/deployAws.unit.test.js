@@ -199,8 +199,12 @@ test("changed counts and sizes: web's task count changes in place; workers' bigg
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   const name = `v64-${shortOf(record)}-service-workers`;
+  const revisions = standIn.requests().filter((request) => request.action === "RegisterTaskDefinition").length;
   const resized = await run({ record: first.record, commit: "c1", choices: { services: { web: { instances: 3 }, workers: { instances: 4, size: "m7i.2xlarge" } } } });
   assert.equal(resized.outcome, "live", resized.message);
+  // The same commit hands neither service a release: web keeps its revision, its tasks only counted up.
+  assert.deepEqual(resized.steps.filter((step) => step.startsWith("releaseService")), []);
+  assert.equal(standIn.requests().filter((request) => request.action === "RegisterTaskDefinition").length, revisions);
   assert.equal(standIn.view().services.find((one) => one.name === "shop-web").desiredCount, 3);
   const group = standIn.view().scalingGroups.find((one) => one.name === name);
   assert.deepEqual([group.desired, group.max], [4, 8]);
@@ -228,9 +232,8 @@ test("taking the app offline removes the services and their secrets; the resourc
   assert.equal(first.outcome, "live", first.message);
   const name = `v64-${shortOf(record)}-service-workers`;
 
-  const offline = await takeOffline(adapter, first.record);
+  const offline = await takeOffline(adapter, first.record, { pause: () => standIn.advance() });
   assert.deepEqual(Object.keys(offline.items).sort(), ["resource.database", "resource.files"]);
-  standIn.advance();
   assert.deepEqual([standIn.view().services.filter((one) => one.status !== "INACTIVE"), standIn.view().scalingGroups], [[], []]);
   assert.deepEqual(standIn.view().listeners.find((one) => one.port === 443).actions[0].Type, "fixed-response");
   // The services' own secrets wait out their recovery window; the bucket's key and RDS's login stay.
@@ -246,7 +249,7 @@ test("taking the app offline removes the services and their secrets; the resourc
 
   // Once genesis/stack.md drops a resource, its own action deletes it: the database with a final snapshot, the bucket
   // (empty) with its user, its key and the secret that held it.
-  const offlineAgain = await takeOffline(adapter, again.record);
+  const offlineAgain = await takeOffline(adapter, again.record, { pause: () => standIn.advance() });
   const stack = workersStack(undefined, []);
   const withoutDatabase = await deleteResource(adapter, offlineAgain, stack.needs, { name: "database", typed: "database" });
   assert.equal(withoutDatabase.items["resource.database"], undefined);

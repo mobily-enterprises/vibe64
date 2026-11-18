@@ -11,7 +11,8 @@ import path from "node:path";
 // state: one per project and environment (`<root>/<project>/<environment>.json`), written only over the revision the
 // writer read (`expectedRevision`), so a writer that read an older one is refused `deployment_record_stale` rather than
 // putting back what another wrote since. What labels cannot carry (approvals, the last plan, values kept write-only at
-// the provider) is the file's alone.
+// the provider, the release each service was last handed) is the file's alone: a record made again from labels hands
+// each service its release again at the next Deploy.
 
 const FORMAT = "vibe64.deploy-record.v1";
 const KINDS = Object.freeze(["service", "resource"]);

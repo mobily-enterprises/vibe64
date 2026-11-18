@@ -16,6 +16,8 @@ test("each size is priced from its SKUs, exactly: a month of always-on Cloud Run
   const { adapter } = googleWorld();
   const offer = await adapter.offer();
   assert.deepEqual([offer.title, offer.currency], ["Google Cloud", "USD"]);
+  // Its quotas aren't counted before a Deploy, and the Plan says so.
+  assert.match(offer.quota.unchecked, /^Google Cloud's quotas aren't checked before a Deploy: /u);
   // Cloud Run: $0.000018 a vCPU-second and $0.000002 a GiB-second, past the free tier, for 730 hours.
   const run = offer.sizes.find((size) => size.name === "run-1-2");
   assert.equal(run.monthlyNano, String(MONTH * 3600n * (18_000n + 2n * 2_000n)));

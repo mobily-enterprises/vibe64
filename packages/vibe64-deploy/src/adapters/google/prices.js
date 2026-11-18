@@ -40,6 +40,9 @@ const RESOURCE_TITLES = Object.freeze({
   mysql: "Cloud SQL for MySQL 8.4 (MySQL itself: Google Cloud runs no MariaDB)",
   bucket: "Cloud Storage through its S3-compatible XML API, an HMAC key per service, priced by what it holds and serves"
 });
+// Why the Plan doesn't count a Deploy against Google Cloud's quotas.
+const QUOTA_UNCHECKED = "Google Cloud's quotas aren't checked before a Deploy: Cloud Run, Compute Engine and Cloud SQL each keep their own. A "
+  + "Deploy that passes one stops at the step that needs more, with Google's reason, and what it made is kept for the next.";
 /** Each resource kind Google Cloud runs none of yet, with the reason the Plan's refusal names. */
 const UNSUPPORTED = Object.freeze({
   redis: "Memorystore for Valkey comes later on Google Cloud: remove the resource from genesis/stack.md (the coding agent can do this), "
@@ -140,7 +143,9 @@ async function offerOf(listSkus, region) {
       mysql: databaseOffer("mysql"),
       bucket: { title: RESOURCE_TITLES.bucket, defaultSize: "standard", sizes: [{ name: "standard", monthlyNano: "0" }] }
     },
-    unsupported: { ...UNSUPPORTED }
+    unsupported: { ...UNSUPPORTED },
+    // Cloud Run, Compute Engine (by machine family) and Cloud SQL each keep their own, and no one call answers them all.
+    quota: { unchecked: QUOTA_UNCHECKED }
   };
 }
 

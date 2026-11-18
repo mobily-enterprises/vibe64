@@ -40,8 +40,9 @@ test("a two-service deploy runs web on Cloud Run and workers on machines of thei
   // web: Cloud Run, ingress only from the load balancer, two instances always on, its egress from Cloud Run's subnet.
   const web = standIn.run.service("shop-web");
   assert.equal(items["service.web"].id, `projects/${standIn.project}/locations/${standIn.region}/services/shop-web`);
-  assert.deepEqual([web.ingress, web.template.scaling, web.template.containers[0].resources], [
-    "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER", { minInstanceCount: 2, maxInstanceCount: 2 }, { limits: { cpu: "1", memory: "2Gi" }, cpuIdle: false }
+  // Its count is the service's own scaling, so a count change makes no revision.
+  assert.deepEqual([web.ingress, web.scaling, web.template.scaling, web.template.containers[0].resources], [
+    "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER", { minInstanceCount: 2, maxInstanceCount: 2 }, undefined, { limits: { cpu: "1", memory: "2Gi" }, cpuIdle: false }
   ]);
   assert.equal(web.template.vpcAccess.networkInterfaces[0].subnetwork, `vibe64-${standIn.region}-run`);
   assert.match(web.template.containers[0].image, new RegExp(`^${standIn.region}-docker\\.pkg\\.dev/${standIn.project}/vibe64/shop-web:r-[0-9a-f]{32}$`, "u"));
@@ -60,6 +61,9 @@ test("a two-service deploy runs web on Cloud Run and workers on machines of thei
   assert.deepEqual([template.properties.machineType, template.properties.disks[0].initializeParams.diskType], ["e2-standard-4", "pd-balanced"]);
   assert.deepEqual(standIn.compute.parts("forwardingRules").filter((rule) => rule.loadBalancingScheme === "INTERNAL").map((rule) => rule.serviceName),
     [`app.shop-workers-internal.il4.${standIn.region}.lb.${standIn.project}.internal`]);
+  // A machine leaving workers' group gets no new connections and 30 seconds to finish those it has (Google's default is none).
+  assert.deepEqual(standIn.compute.parts("backendServices").filter((backend) => backend.name.startsWith("shop-workers")).map((backend) => [backend.name, backend.connectionDraining]),
+    [["shop-workers-internal", { drainingTimeoutSec: 30 }]]);
 
   // The load balancer: https and http (redirecting) at the domain's address, its certificate map, web's serverless backend.
   const address = standIn.compute.parts("addresses").find((one) => one.addressType === "EXTERNAL");
@@ -148,13 +152,18 @@ test("a second deploy rolls each service onto its new image; its old machines an
   assert.match(standIn.compute.metadataOf("shop-workers")["startup-script"], new RegExp(`docker pull \\S+/shop-workers:${second.record.run.services.workers.version}\\n`, "u"));
 });
 
-test("changed counts and sizes: Cloud Run's count changes its revision, the group is resized, a bigger machine rolls it", async () => {
+test("changed counts and sizes: Cloud Run's count changes in place, no revision and no new image; the group is resized, a bigger machine rolls it", async () => {
   const { standIn, run, record } = googleWorld();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
+  const revision = standIn.run.service("shop-web").latestCreatedRevision;
+  const builds = standIn.requests().filter((request) => request.method === "POST" && request.path.includes("/builds")).length;
   const resized = await run({ record: first.record, commit: "c1", choices: { services: { web: { instances: 3 }, workers: { instances: 4, size: "e2-highmem-4" } } } });
   assert.equal(resized.outcome, "live", resized.message);
-  assert.deepEqual(standIn.run.service("shop-web").template.scaling, { minInstanceCount: 3, maxInstanceCount: 3 });
+  assert.deepEqual(standIn.run.service("shop-web").scaling, { minInstanceCount: 3, maxInstanceCount: 3 });
+  assert.equal(standIn.run.service("shop-web").latestCreatedRevision, revision, "web runs the revision it ran");
+  assert.equal(standIn.requests().filter((request) => request.method === "POST" && request.path.includes("/builds")).length, builds, "no image built again");
+  assert.deepEqual(resized.steps.filter((step) => step.startsWith("releaseService")), []);
   assert.equal(standIn.compute.group("shop-workers").targetSize, 4);
   const machines = standIn.compute.machines("shop-workers");
   assert.equal(machines.length, 4);
@@ -170,7 +179,7 @@ test("taking the app offline removes the services and their parts; the resources
   assert.equal(first.outcome, "live", first.message);
   const accounts = standIn.platform.accounts().length;
 
-  const offline = await takeOffline(adapter, first.record);
+  const offline = await takeOffline(adapter, first.record, { pause: () => standIn.advance() });
   assert.deepEqual(Object.keys(offline.items).sort(), ["resource.database", "resource.files"]);
   assert.deepEqual([standIn.run.service("shop-web"), standIn.compute.group("shop-workers")], [null, null]);
   for (const collection of ["forwardingRules", "targetHttpsProxies", "targetHttpProxies", "urlMaps", "backendServices", "networkEndpointGroups", "instanceTemplates", "healthChecks"]) {

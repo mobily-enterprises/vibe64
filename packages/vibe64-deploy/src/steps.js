@@ -9,7 +9,9 @@
 //   4. each internal service, then each public one: its release is uploaded, then its service made (internal: no
 //      routes; public: routed at the domain, with a connection to each service it reaches) or handed the release, then,
 //      once that refresh is building, linked to every resource it isn't linked to yet, then the refresh waited for.
-//      mobilynet checks a link against the release the service runs or, when that names no such need, the release its
+//      A service still running the release it was last handed, made from the same upload (the archive and its
+//      declaration: releaseDigest), keeps it and is handed none, so none of its instances is replaced for nothing (a
+//      provider refreshes onto every release it is handed, even the one it runs). mobilynet checks a link against the release the service runs or, when that names no such need, the release its
 //      refresh in progress moves it to, whose instances then start with the link's settings (engine-support M14): so
 //      a new service's first instances, and a release naming a new resource, start with their resources, and none
 //      restarts while the build runs. Asked while it can't check that release yet, mobilynet answers a refusal the
@@ -20,15 +22,15 @@
 //      naming it, and kept running with its data;
 //   6. each service's settings (package.js settingValues) when they differ from those it was given, the services it
 //      reaches, then its size and count as the plan's choices say: after every move ended, since mobilynet refuses a
-//      settings replace while a link made ahead of its refresh is open;
+//      settings replace while a link made ahead of its refresh is open. A count or size change alone is only that;
 //   7. a service the Stack no longer names is deleted (its links end with it);
 //   8. live, once every service runs its release with as many healthy instances as chosen and its last refresh did
 //      not fail.
 //
 // What the record does not hold is never touched: every call names a thing the engine made and labelled (record.js
 // labelsFor). A Deploy never deletes or makes again a thing that holds data; deleting a disconnected resource is
-// `deleteResource`, and taking the services down `takeOffline`, each its own call. A Deploy holds the lease
-// `deploy:<deployment id>` while it runs, renewed at each step, where the adapter takes leases.
+// `deleteResource`, and taking the services down `takeOffline`, which returns once they are gone, each its own call. A
+// Deploy holds the lease `deploy:<deployment id>` while it runs, renewed at each step, where the adapter takes leases.
 //
 // Each call's idempotency key names this Deploy's run, so a call tried again within it gets the first answer, and a
 // later Deploy asking the same again (a count put back, a service made again after it was taken offline) is not
@@ -41,6 +43,11 @@ import { LABEL, labelsFor } from "./record.js";
 import { settingValues } from "./package.js";
 
 const LEASE_SECONDS = 600;
+// How long takeOffline waits between reads of the provider while the services go, and how many reads it makes: an
+// instance leaving drains first (mobilynet's 30 seconds and its stop signal's as long again; AWS's load balancer its
+// 300), so ten minutes in all.
+const OFFLINE_PAUSE_MS = 5_000;
+const OFFLINE_READS = 120;
 
 /** A refusal or failure of a Deploy: `code`, a message a person can act on, and `status` for the caller's answer. */
 function deployError(code, message, status = 409, details = {}) {
@@ -59,6 +66,16 @@ function servicesInOrder(needs) {
  */
 function keyOf(record, call, item, asked = null) {
   return [record.deploymentId, record.run.id, call, item, createHash("sha256").update(stableJson(asked)).digest("hex").slice(0, 16)].join("-");
+}
+
+/**
+ * What a service's release is made of: its upload's SHA-256 (the archive with what the provider adds for the service)
+ * and its declaration. The record keeps it with the version the service was handed (`release`), so a Deploy of the
+ * same commit, Stack and engine hands no service a release again.
+ * @param {{ sha256: string }} upload @param {unknown} declaration
+ */
+function releaseDigest(upload, declaration) {
+  return `sha256:${createHash("sha256").update(stableJson({ upload: upload.sha256, declaration })).digest("hex")}`;
 }
 
 /** The thing of the provider labelled as this deployment's item, made by a Deploy cut short before its record kept it. */
@@ -98,7 +115,8 @@ function connectionsOf(service, record, port) {
  * @param {any} context.needs needsOfStack's needs
  * @param {any} context.record the record, its `run` this Deploy's
  * @param {any[]} context.observed the adapter's inventory now
- * @param {{ id: string, declarations: Record<string, any>, settings: Record<string, any>, env: Record<string, string>, domain: string, trustedProxies: string, port: number }} context.release
+ * @param {{ id: string, declarations: Record<string, any>, digests: Record<string, string>, settings: Record<string, any>, env: Record<string, string>, domain: string, trustedProxies: string, port: number }} context.release
+ *   `digests` each service's releaseDigest
  */
 function nextStep({ plan, needs, record, observed, release }) {
   const run = record.run;
@@ -142,7 +160,14 @@ function nextStep({ plan, needs, record, observed, release }) {
       const made = labelledAs(observed, record, "service", service.id);
       if (made && !item) return { kind: "adopt", item: "service", name: service.id, thing: made };
     }
-    if (!state.version) return { kind: thing ? "releaseService" : "uploadRelease", service: service.id, id: thing?.id ?? null };
+    if (!state.version) {
+      // Kept only while the provider runs it with no error: one that failed since is handed it again.
+      const live = item?.release;
+      if (thing && live?.digest === release.digests[service.id] && thing.version === live.version && !thing.lastError) {
+        return { kind: "keepRelease", service: service.id };
+      }
+      return { kind: thing ? "releaseService" : "uploadRelease", service: service.id, id: thing?.id ?? null };
+    }
     if (!thing) {
       const name = release.declarations[service.id].name;
       const leaving = observed.find((one) => one.name === name);
@@ -250,9 +275,13 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     case "uploadRelease":
       stateOf(step.service).version = (await adapter.uploadRelease(release.declarations[step.service].name, upload(step.service))).version;
       break;
+    case "keepRelease":
+      stateOf(step.service).version = record.items[`service.${step.service}`].release.version;
+      break;
     case "releaseService": {
       const answer = await adapter.releaseService(step.id, upload(step.service));
       Object.assign(stateOf(step.service), { version: answer.version, refreshId: answer.refreshId });
+      record.items[`service.${step.service}`].release = { digest: release.digests[step.service], version: answer.version };
       break;
     }
     case "createService": {
@@ -268,7 +297,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       }, { idempotencyKey: keyOf(record, "service", service.id, name) });
       record.items[`service.${service.id}`] = {
         kind: "service", name: service.id, id: made.id, providerName: name, origin: "made", size: choice.size, instances: choice.instances,
-        exposure: service.exposure, settingsHash: values.hash
+        exposure: service.exposure, settingsHash: values.hash, release: { digest: release.digests[service.id], version: state.version }
       };
       state.refreshId = made.refreshId;
       break;
@@ -303,8 +332,10 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       const refresh = await adapter.readRefresh(step.id, step.refreshId);
       const state = stateOf(step.service);
       if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
-        // The links made against it ended with it: the next Deploy makes them again.
+        // The links made against it ended with it, and the release it moved to may not run: the next Deploy makes them
+        // and hands it that release again.
         for (const resource of state.linkedAhead ?? []) delete record.items[`resource.${resource}`]?.links?.[step.service];
+        if (record.items[`service.${step.service}`]) delete record.items[`service.${step.service}`].release;
         const what = ["create", "release"].includes(refresh.kind) ? "the release did not go live" : `its ${refresh.kind} change did not go live`;
         run.failure = `${step.service}: ${what}: ${refresh.error?.message ?? `its refresh ${refresh.state}`}`
           + (refresh.fromVersion ? ` The version before (${refresh.fromVersion}) still serves.` : "");
@@ -375,7 +406,11 @@ async function deploy({ adapter, needs, record: start, choices = {}, decisions =
   if (plan.hash !== planHash) throw deployError("deployment_plan_stale", "What this Deploy would do changed since the plan was read: read the plan again, then deploy.");
   if (plan.problems.length > 0) throw deployError("deployment_plan_refused", plan.problems[0].message, 422, { problems: plan.problems });
   const lease = await takeDeployLease(adapter, start, holder);
-  const full = { ...release, port: adapter.servicePort, trustedProxies: await adapter.trustedProxies() };
+  const digests = Object.fromEntries(needs.services.map((service) => {
+    const declaration = release.declarations[service.id];
+    return [service.id, releaseDigest(adapter.serviceUpload(release.archive, declaration), declaration)];
+  }));
+  const full = { ...release, digests, port: adapter.servicePort, trustedProxies: await adapter.trustedProxies() };
   const run = { id: `run_${randomBytes(6).toString("hex")}`, release: release.id, planHash, state: "deploying", domain: null, services: {}, failure: null };
   let record = await save({ ...structuredClone(start), run });
   const steps = [];
@@ -409,11 +444,15 @@ async function deploy({ adapter, needs, record: start, choices = {}, decisions =
 }
 
 /**
- * Takes the environment's services down, the public one first: their App Services go, every resource and its data
- * stay. Answers the record without them.
+ * Takes the environment's services down, the public one first: their services go, every resource and its data stay.
+ * Once each delete is asked the record without them is kept (`save`); then the provider is read again (`pause` between
+ * reads) until it lists none of them, each instance having drained, and the record is answered. A provider still
+ * removing some after `maxReads` reads is refused `deployment_offline_unfinished`, naming them: the record kept says
+ * they are gone, and the provider finishes removing them by itself.
  * @param {any} adapter @param {any} record
+ * @param {{ save?: (record: any) => Promise<any> | any, pause?: () => Promise<void> | void, maxReads?: number }} [options]
  */
-async function takeOffline(adapter, record) {
+async function takeOffline(adapter, record, { save = (kept) => kept, pause = () => new Promise((resolve) => setTimeout(resolve, OFFLINE_PAUSE_MS)), maxReads = OFFLINE_READS } = {}) {
   const kept = structuredClone(record);
   const services = Object.values(kept.items).filter((item) => item.kind === "service")
     .sort((one, other) => (one.exposure === "public" ? -1 : 0) - (other.exposure === "public" ? -1 : 0));
@@ -422,7 +461,16 @@ async function takeOffline(adapter, record) {
     delete kept.items[`service.${item.name}`];
     for (const resource of Object.values(kept.items)) delete resource.links?.[item.name];
   }
-  return kept;
+  const saved = await save(kept);
+  const going = new Map(services.map((item) => [item.id, item.name]));
+  let left = [];
+  for (let read = 0; read < maxReads; read += 1) {
+    left = (await adapter.inventory()).filter((thing) => going.has(thing.id)).map((thing) => going.get(thing.id));
+    if (left.length === 0) return saved;
+    await pause();
+  }
+  throw deployError("deployment_offline_unfinished", `${left.join(" and ")} ${left.length === 1 ? "is" : "are"} still being removed at ${adapter.title}; `
+    + "they take no new requests, and it finishes removing them by itself.", 504, { removing: left });
 }
 
 /**
@@ -441,4 +489,4 @@ async function deleteResource(adapter, record, needs, { name, typed }) {
   return kept;
 }
 
-export { LEASE_SECONDS, applyStep, deleteResource, deploy, nextStep, takeDeployLease, takeOffline };
+export { LEASE_SECONDS, applyStep, deleteResource, deploy, nextStep, releaseDigest, takeDeployLease, takeOffline };

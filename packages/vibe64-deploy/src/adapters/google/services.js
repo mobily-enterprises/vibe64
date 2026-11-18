@@ -38,17 +38,20 @@ function createGoogleServices(g) {
 
   // --- Services: Cloud Run, or a managed instance group --------------------------------------------------------------
 
-  /** A Cloud Run service's body: its ingress, account, count, network, image, size, settings and readiness. */
+  /**
+   * A Cloud Run service's body: its ingress, count, account, network, image, size, settings and readiness. The count is
+   * the service's own scaling, not its template's, so changing it makes no new revision and replaces no instance.
+   */
   function runBody({ labels, exposure, size, instances, image, env, email, healthPath }) {
     const shape = SHAPES.find((one) => one.name === size);
     return {
       labels,
       ingress: exposure === "public" ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_INTERNAL_ONLY",
       invokerIamDisabled: true,
+      scaling: { minInstanceCount: instances, maxInstanceCount: instances },
       template: {
         labels,
         serviceAccount: email,
-        scaling: { minInstanceCount: instances, maxInstanceCount: instances },
         vpcAccess: { networkInterfaces: [{ network: NETWORK, subnetwork: runSubnet }], egress: "ALL_TRAFFIC" },
         executionEnvironment: "EXECUTION_ENVIRONMENT_GEN2",
         containers: [{
@@ -159,7 +162,7 @@ function createGoogleServices(g) {
       const name = last(one.name);
       const container = one.template?.containers?.[0] ?? {};
       const limits = container.resources?.limits ?? {};
-      const instances = one.template?.scaling?.minInstanceCount ?? 0;
+      const instances = one.scaling?.minInstanceCount ?? 0;
       const exposure = one.ingress === "INGRESS_TRAFFIC_INTERNAL_ONLY" ? "internal" : "public";
       const working = Boolean(one.reconciling) || (one.observedGeneration !== undefined && String(one.observedGeneration) !== String(one.generation));
       const ready = one.terminalCondition?.state === "CONDITION_SUCCEEDED" && one.latestReadyRevision === one.latestCreatedRevision;
@@ -301,7 +304,7 @@ function createGoogleServices(g) {
     return "settings";
   }
 
-  /** Changes a service's size, count or the services it reaches; a size or a Cloud Run count is a refresh. */
+  /** Changes a service's size (a refresh), its count (the group resized, the Cloud Run service's scaling) or what it reaches. */
   async function changeService(id, change) {
     const name = last(id);
     if (change.connections) await putReaches(name, change.connections, kindOf(id) === "run");
@@ -325,9 +328,9 @@ function createGoogleServices(g) {
         return null;
       }
       await patchRun(id, (body) => {
-        body.template.scaling = { minInstanceCount: change.instances, maxInstanceCount: change.instances };
+        body.scaling = { minInstanceCount: change.instances, maxInstanceCount: change.instances };
       });
-      return "instances";
+      return null;
     }
     return null;
   }

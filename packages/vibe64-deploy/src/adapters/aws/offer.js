@@ -31,6 +31,10 @@ const ENGINES = Object.freeze({
   postgresql: Object.freeze({ title: "Amazon RDS for PostgreSQL", engine: "postgres", priceEngine: "PostgreSQL", port: 5432 }),
   mysql: Object.freeze({ title: "Amazon RDS for MariaDB", engine: "mariadb", priceEngine: "MariaDB", port: 3306 })
 });
+// Why the Plan doesn't count a Deploy against AWS's quotas.
+const QUOTA_UNCHECKED = "AWS's quotas aren't checked before a Deploy: AWS says its limits but not what is used of them. A Deploy that passes one "
+  + "stops at the step that needs more, with AWS's reason, and what it made is kept for the next.";
+
 const UNSUPPORTED = Object.freeze({
   redis: "Vibe64 doesn't make Valkey (ElastiCache) at AWS yet: remove the resource from genesis/stack.md, or deploy this environment elsewhere."
 });
@@ -175,7 +179,9 @@ async function readOffer(client) {
     machineSizes,
     balancer: { monthlyNano: (balancerHourly * HOURS_A_MONTH).toString() },
     resources,
-    unsupported: { ...UNSUPPORTED }
+    unsupported: { ...UNSUPPORTED },
+    // Service Quotas answers an account's limits, not what is used of them (CloudWatch's, metric by metric).
+    quota: { unchecked: QUOTA_UNCHECKED }
   };
 }
 

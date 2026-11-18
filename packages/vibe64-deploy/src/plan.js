@@ -6,7 +6,10 @@
 // the owner decides, per difference, to keep or to put back; things of the provider project that are not this
 // deployment's are listed and left alone. The quote is at list price. The hash covers the needs, the choices in
 // effect, the decisions and a digest of the observed state, so a Deploy whose plan was read before anything moved
-// (a size, a price, a thing gone or changed by hand) is refused and the plan read again.
+// (a size, a price, a thing gone or changed by hand) is refused and the plan read again. Where the provider's offer
+// says its project's quotas and what is used of them, the Plan counts what the Deploy adds to each and names any it
+// would pass, before anything is made (quotaOf); where it doesn't, the Plan says they aren't checked. The hash leaves
+// the quotas out: their use moves with the rest of the provider project, and the Deploy counts them again as it starts.
 //
 // Nothing here calls a provider: the adapter's `offer()` and `inventory()` answer what the plan reads.
 import { createHash } from "node:crypto";
@@ -61,6 +64,59 @@ function digestOf(thing) {
   };
 }
 
+const NOTHING = Object.freeze({ machines: 0, vcpus: 0, memoryGib: 0, diskGib: 0 });
+
+/** What one machine of a size takes of each quota a provider may count. */
+function takenBy(size) {
+  return { machines: 1, vcpus: size?.vcpus ?? 0, memoryGib: size?.memoryGib ?? 0, diskGib: size?.dataDiskGib ?? 0 };
+}
+
+/**
+ * What the Deploy adds to the provider project's quotas, against what is left of each: `{ checked: true, quotas: [{
+ * quota, unit, limit, used, adding }] }` with a problem for each it would pass, or `{ checked: false, words }` where the
+ * offer doesn't say them. Each service counts its instances at its size, each resource its machine, as the offer's
+ * `quota.counts` says the provider counts them. A Deploy makes and grows things (resources, then services) before it
+ * shrinks or deletes any, so what it adds is each item's growth, never less than nothing: a service made smaller, fewer
+ * or removed frees its share only after the rest is made.
+ * @param {any} offer @param {any} needs @param {{ services: Record<string, any>, resources: Record<string, any> }} effective
+ * @param {(kind: string, name: string) => any} thingOf the provider's thing of an item the record holds, or undefined
+ * @param {Array<{ code: string, message: string }>} problems
+ */
+function quotaOf(offer, needs, effective, thingOf, problems) {
+  if (!offer.quota?.quotas) {
+    return { checked: false, words: offer.quota?.unchecked ?? `${offer.title} doesn't say its quotas, so a Deploy doesn't check them before it starts.` };
+  }
+  const { quotas, counts } = offer.quota;
+  const adding = Object.fromEntries(quotas.map((line) => [line.quota, 0]));
+  const grow = (kind, wanted, held) => {
+    for (const quota of counts[kind] ?? []) if (quota in adding) adding[quota] += Math.max(0, wanted[quota] - held[quota]);
+  };
+  const times = (taken, count) => Object.fromEntries(Object.entries(taken).map(([quota, amount]) => [quota, amount * count]));
+  const serviceSizes = [...offer.sizes, ...(offer.machineSizes ?? [])];
+  for (const service of needs.services) {
+    const choice = effective.services[service.id];
+    const thing = thingOf("service", service.id);
+    const wanted = times(takenBy(sizesOffered(offer, service).find((size) => size.name === choice.size)), Number.isInteger(choice.instances) ? choice.instances : 0);
+    const held = thing ? times(takenBy(serviceSizes.find((size) => size.name === thing.size)), thing.instances ?? 0) : NOTHING;
+    grow("service", wanted, held);
+  }
+  for (const resource of needs.resources) {
+    const sizes = offer.resources[resource.kind]?.sizes ?? [];
+    const thing = thingOf("resource", resource.id);
+    const wanted = takenBy(sizes.find((size) => size.name === effective.resources[resource.id]?.size));
+    grow("resource", wanted, thing ? takenBy(sizes.find((size) => size.name === thing.size)) : NOTHING);
+  }
+  const lines = quotas.map(({ quota, unit, limit, used }) => ({ quota, unit, limit, used, adding: adding[quota] }));
+  for (const line of lines) {
+    const short = line.used + line.adding - line.limit;
+    if (line.adding > 0 && short > 0) {
+      problems.push(problem("production_quota_short", `${offer.title}'s quota of ${line.unit} for this project is ${line.limit}, ${line.used} in use: this Deploy `
+        + `needs ${line.adding} more, ${short} more than is left. Ask ${offer.title} to raise it, or choose smaller sizes or fewer instances, then deploy.`, `quota.${line.quota}`));
+    }
+  }
+  return { checked: true, quotas: lines };
+}
+
 /**
  * The Plan of a Deploy.
  * @param {object} input
@@ -73,7 +129,8 @@ function digestOf(thing) {
  *   `machineSizes`, the whole machines a provider that runs some services apart offers a service with a sandbox
  *   allowance or reached at each instance (sizesOffered); `resources[kind].title`, the product a kind is, which the
  *   Plan's resource carries; `unsupported`, the provider's reason for each resource kind it runs none of, which the
- *   refusal carries
+ *   refusal carries; `quota`, the provider project's quotas (`quotas: [{ quota, unit, limit, used }]`, and `counts`:
+ *   which of them a service's instance and a resource's machine count against), or `unchecked`, why it doesn't say
  * @param {{ services?: Record<string, { size?: string, instances?: number }>, resources?: Record<string, { size?: string }> }} [input.choices]
  *   the owner's choices now, over those the record keeps
  * @param {Record<string, "keep" | "putBack">} [input.decisions] for each drift (`<kind>.<name>.<field>`), keep the
@@ -209,6 +266,11 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
     if (thing && price?.monthlyNano) lines.push({ item: key, part: thing.resourceKind ?? item.resourceKind, size: thing.size, monthlyNano: String(price.monthlyNano) });
   }
 
+  const quota = quotaOf(offer, needs, effective, (kind, name) => {
+    const item = recorded[itemKey(kind, name)];
+    return item?.id ? byId.get(item.id) : undefined;
+  }, problems);
+
   // The provider project's other things: not this deployment's, never changed, linked, deleted or priced.
   const foreign = observed
     .filter((thing) => !ours.has(thing.id) && (!deploymentId || thing.labels?.[LABEL.deployment] !== deploymentId))
@@ -238,7 +300,7 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
   const hash = `sha256:${createHash("sha256").update(stableJson({
     needs, choices: effective, decisions, items, lines, observed: relevant, currency: offer.currency
   })).digest("hex")}`;
-  return { services, resources, items, foreign, choices: effective, lines, monthlyNano, currency: offer.currency, problems, hash };
+  return { services, resources, items, foreign, choices: effective, lines, monthlyNano, currency: offer.currency, quota, problems, hash };
 }
 
 export { eligibleSizes, planOf, stableJson };

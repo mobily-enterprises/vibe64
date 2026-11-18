@@ -300,6 +300,11 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
        */
       readSpendingCap: async () => (await call("GET", `${projectAt}/spending-cap`)).spendingCap,
       /**
+       * The mobilynet project's quotas with their limits and use (any key of the project; mobilynet's readQuotas):
+       * `[{ quota, unit, limit, used }]`, `machines`, `vcpus`, `memoryGib` and `diskGib` among them.
+       */
+      readQuotas: async () => (await call("GET", `${projectAt}/quotas`)).quotas,
+      /**
        * One page of the mobilynet project's events after the id given, oldest first (`events:read`): `{ items, next }`.
        * @param {{ after?: string }} [cursor]
        */

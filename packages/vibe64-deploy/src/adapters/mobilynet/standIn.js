@@ -12,8 +12,8 @@ import { createStandInServices } from "./standIn/services.js";
 // each (standIn/hosted.js); regions, domains and the App Services' routes (standIn/network.js); prices
 // (standIn/prices.js); and the parts mobilynet is building for the engine (its docs/stages/engine-support.md at
 // 7d775240): labels on App Services and hosted services (M2), App Service instances in the project's vCPU and memory
-// quotas beside its hosted services' machines (M12), and a monthly spending cap that refuses new creates and scale-ups
-// (M13). Nothing here reaches a network.
+// quotas beside its hosted services' machines (M12), read with their use as mobilynet's readQuotas answers them, and a
+// monthly spending cap that refuses new creates and scale-ups (M13). Nothing here reaches a network.
 //
 // Keys: the stand-in starts with one mobilynet project (`projectId`) and one key of it (`key`) holding the scopes the
 // engine's key holds (ENGINE_SCOPES) unless made with `scopes`; `addKey` makes others, of a project or of the
@@ -47,6 +47,8 @@ const ENGINE_SCOPES = Object.freeze([
 /** A project's quotas, as mobilynet's quotas.js gives an ordinary project. */
 const DEFAULT_LIMITS = Object.freeze({ machines: 10, vcpus: 20, memoryGib: 40, diskGib: 1000 });
 const QUOTAS = Object.freeze(Object.keys(DEFAULT_LIMITS));
+// Each quota's unit, as mobilynet's machines.js QUOTAS name them.
+const QUOTA_UNITS = Object.freeze({ machines: "machines", vcpus: "vCPU", memoryGib: "GiB of RAM", diskGib: "GiB of data disk" });
 const FAULTS = Object.freeze(["down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails"]);
 const LEASE_MAX_SECONDS = 3600;
 const LEASE_TEXT = 200;
@@ -156,8 +158,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
           projectId, capNano: project.capNano.toString(), spentNano: project.spentNano.toString(), month: month(), currency: prices.currency
         });
       }
-      const used = { ...services.usage(projectId), machines: 0, diskGib: 0 };
-      for (const [quota, amount] of Object.entries(hosted.usage(projectId))) used[quota] += amount;
+      const used = usedBy(projectId);
       for (const quota of QUOTAS) {
         const limit = project.limits[quota];
         if ((adding[quota] ?? 0) > 0 && used[quota] + adding[quota] > limit) {
@@ -167,6 +168,13 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
       return null;
     }
   };
+
+  /** What a mobilynet project's App Services and hosted services take of its quotas now. @param {string} projectId */
+  function usedBy(projectId) {
+    const used = { ...services.usage(projectId), machines: 0, diskGib: 0 };
+    for (const [quota, amount] of Object.entries(hosted.usage(projectId))) used[quota] += amount;
+    return used;
+  }
 
   const releases = createStandInReleases(world);
   const network = createStandInNetwork(world, { members: (serviceId) => services.serving(serviceId) });
@@ -279,11 +287,16 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     const answered = network.request(request) ?? services.request(request) ?? hosted.request(request);
     if (answered) return answered;
     if (/^\/v1\/leases(\/[^/]+)?$/u.test(path)) return leaseRequest(method, path, body, caller) ?? world.notFound("route");
-    const projectPath = /^\/v1\/projects\/([^/]+)\/(events|spending-cap)$/u.exec(path);
+    const projectPath = /^\/v1\/projects\/([^/]+)\/(events|spending-cap|quotas)$/u.exec(path);
     if (projectPath && method === "GET") {
       const id = decodeURIComponent(projectPath[1]);
       if (!world.reaches(caller, id)) return world.notFound("project");
       if (projectPath[2] === "spending-cap") return answer(200, { spendingCap: capView(projects.get(id)) });
+      if (projectPath[2] === "quotas") {
+        const used = usedBy(id);
+        const quotas = QUOTAS.map((quota) => ({ quota, unit: QUOTA_UNITS[quota], limit: projects.get(id).limits[quota], used: used[quota] }));
+        return answer(200, { quotas, rateLimits: { perSecond: 20, perMinute: 600 }, openRequests: [] });
+      }
       const after = Number(params.get("after") || 0);
       const limit = Math.min(Number(params.get("limit") || 100), 100);
       const own = events.filter((event) => event.projectId === id && Number(event.id) > after);

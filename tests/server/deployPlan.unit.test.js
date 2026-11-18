@@ -54,6 +54,7 @@ const verbs = (plan) => Object.fromEntries(plan.items.map((item) => [`${item.kin
 
 test("the first plan makes everything new, offers each service the sizes that meet its machine, and quotes at list price", async () => {
   const { standIn, client } = world();
+  standIn.setQuota(standIn.projectId, { vcpus: 96, memoryGib: 192 });
   const offer = await createMobilynetAdapter({ client, project: standIn.projectId }).offer();
   const plan = planOf({ needs: NEEDS, record: null, observed: [], offer });
   assert.deepEqual(plan.problems, []);
@@ -90,6 +91,56 @@ test("the first plan makes everything new, offers each service the sizes that me
     "choices.services.computers.size is one of a-8.",
     "choices.services.computers.instances is 1 to 20, as genesis/stack.md's - Instances: says."
   ]);
+});
+
+test("the plan counts what a Deploy adds against the provider project's quotas and names any it would pass, by how much", async () => {
+  const { standIn, client } = world();
+  const adapter = createMobilynetAdapter({ client, project: standIn.projectId });
+  // mobilynet's default quotas: 10 machines, 20 vCPU, 40 GiB, 1,000 GiB of disk. The first Deploy adds two a-2 webs
+  // (2 vCPU, 2 GiB each), two a-8 computers (8 and 16) and two m-1 hosted services (1 and 2, 10 and 50 GiB of disk).
+  const first = planOf({ needs: NEEDS, record: null, observed: [], offer: await adapter.offer() });
+  assert.deepEqual(first.quota, { checked: true, quotas: [
+    { quota: "machines", unit: "machines", limit: 10, used: 0, adding: 2 },
+    { quota: "vcpus", unit: "vCPU", limit: 20, used: 0, adding: 22 },
+    { quota: "memoryGib", unit: "GiB of RAM", limit: 40, used: 0, adding: 40 },
+    { quota: "diskGib", unit: "GiB of data disk", limit: 1000, used: 0, adding: 60 }
+  ] });
+  assert.deepEqual(first.problems, [{
+    code: "production_quota_short", item: "quota.vcpus",
+    message: "mobilynet's quota of vCPU for this project is 20, 0 in use: this Deploy needs 22 more, 2 more than is left. "
+      + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy."
+  }]);
+  // One computer fits: 14 vCPU and 24 GiB.
+  assert.deepEqual(planOf({ needs: NEEDS, record: null, observed: [], offer: await adapter.offer(), choices: { services: { computers: { instances: 1 } } } }).problems, []);
+
+  // Once deployed, what runs is counted as used, and a later plan adds only what grows: a third computer is 8 vCPU and
+  // 16 GiB more; fewer of them, or the same, add nothing even at a quota already passed.
+  const { record, observed } = deployed();
+  const at = (used, limits = {}) => {
+    standIn.setQuota(standIn.projectId, limits);
+    return adapter.offer().then((offer) => ({ ...offer, quota: { ...offer.quota, quotas: offer.quota.quotas.map((line) => ({ ...line, used: used[line.quota] ?? line.used })) } }));
+  };
+  const running = { machines: 2, vcpus: 22, memoryGib: 40, diskGib: 60 };
+  const more = planOf({ needs: NEEDS, record, observed, offer: await at(running, { vcpus: 24, memoryGib: 64 }), choices: { services: { computers: { instances: 3 } } } });
+  assert.deepEqual(more.quota.quotas.map(({ quota, adding }) => [quota, adding]), [["machines", 0], ["vcpus", 8], ["memoryGib", 16], ["diskGib", 0]]);
+  assert.deepEqual(more.problems.map((one) => one.message), [
+    "mobilynet's quota of vCPU for this project is 24, 22 in use: this Deploy needs 8 more, 6 more than is left. "
+      + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy."
+  ]);
+  const passed = await at(running, { vcpus: 10, memoryGib: 10 });
+  for (const choices of [{}, { services: { computers: { instances: 1 } } }]) assert.deepEqual(planOf({ needs: NEEDS, record, observed, offer: passed, choices }).problems, []);
+  // web made larger, a-2 to a-4: 4 vCPU and 12 GiB more.
+  const larger = planOf({ needs: NEEDS, record, observed, offer: await at(running, { vcpus: 100, memoryGib: 100 }), choices: { services: { web: { size: "a-4" } } } });
+  assert.deepEqual(larger.quota.quotas.map(({ quota, adding }) => [quota, adding]), [["machines", 0], ["vcpus", 4], ["memoryGib", 12], ["diskGib", 0]]);
+
+  // A provider whose offer doesn't say its quotas: not checked, and the plan says so.
+  const silent = { ...await adapter.offer(), quota: undefined };
+  assert.deepEqual(planOf({ needs: NEEDS, record: null, observed: [], offer: silent }).quota,
+    { checked: false, words: "mobilynet doesn't say its quotas, so a Deploy doesn't check them before it starts." });
+  const unchecked = planOf({ needs: NEEDS, record: null, observed: [], offer: { ...silent, quota: { unchecked: "Not counted here." } } });
+  assert.deepEqual([unchecked.quota, unchecked.problems], [{ checked: false, words: "Not counted here." }, []]);
+  // The quotas' use is left out of the hash: it moves with the rest of the provider project.
+  assert.equal(planOf({ needs: NEEDS, record, observed, offer: await at({ vcpus: 3 }) }).hash, planOf({ needs: NEEDS, record, observed, offer: await at({ vcpus: 4 }) }).hash);
 });
 
 test("a later plan keeps what didn't change, changes a count, removes a dropped service and disconnects a dropped resource", async () => {

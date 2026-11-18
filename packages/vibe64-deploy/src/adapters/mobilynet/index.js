@@ -2,8 +2,9 @@
 // mobilynet project and region. Each service is an App Service and each resource a hosted service of mobilynet's
 // catalogue (its interface the resource's kind: mysql, postgresql, redis, s3 for a bucket), linked to every service
 // under the resource's need (V64_<ID>). Its offer is mobilynet's App Service instance sizes with their list prices, the
-// load balancer's and each hosted app's sizes; its inventory every App Service and hosted service of the project with
-// its labels, the only things the steps act on being those the record holds.
+// load balancer's and each hosted app's sizes, and the project's quotas with their use; its inventory every App Service
+// and hosted service of the project with its labels, the only things the steps act on being those the record holds.
+// Every App Service it makes drains for mobilynet's shortest time (DRAIN_SECONDS).
 //
 // Leases: mobilynet has none yet. The lease calls (client.js takeLease, renewLease, releaseLease) exist in the shape
 // the engine asks mobilynet for, and its stand-in answers them; until mobilynet builds them, an adapter made without
@@ -14,6 +15,13 @@ import { MOBILYNET_INTERFACES, needAs, serviceUpload } from "./declaration.js";
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
 // mobilynet's names for an App Service and a hosted service: 1 to 64 lowercase letters, digits and hyphens.
 const HOSTED_NAME_MAX = 40;
+// How mobilynet counts against its project's quotas (engine-support M12): an App Service's instances, each its size's
+// vCPUs and memory; a hosted service's machine, with its vCPUs, memory and data disk.
+const QUOTA_COUNTS = Object.freeze({ service: Object.freeze(["vcpus", "memoryGib"]), resource: Object.freeze(["machines", "vcpus", "memoryGib", "diskGib"]) });
+// An instance leaving (a count lowered, a refresh replacing it, its service deleted) leaves the load balancer and gets
+// this long to finish the requests it has, then a stop signal and as long again: mobilynet's shortest drain, which
+// genesis/stack.md has no line to change.
+const DRAIN_SECONDS = 30;
 
 /**
  * @param {object} options
@@ -25,12 +33,9 @@ const HOSTED_NAME_MAX = 40;
 function createMobilynetAdapter({ client, project, region = "us", leases = false }) {
   const calls = client.project(project);
 
-  /** The offer: App Service sizes by price, the load balancer's price, and each resource kind's hosted app and sizes. */
-  async function offer() {
-    const [prices, catalogue] = await Promise.all([client.readPrices(), client.readHostedCatalogue()]);
-    const sizes = prices.sizes.filter((size) => size.kind === "instance" && size.price)
-      .map((size) => ({ name: size.name, vcpus: size.vcpus, memoryGib: size.memoryGib, monthlyNano: String(size.price.monthlyNano) }));
-    const balancer = prices.inForce.prices.find((row) => row.kind === "load_balancer");
+  /** Each resource kind's hosted app of the catalogue, its default size and its sizes. */
+  async function resourcesOffered() {
+    const catalogue = await client.readHostedCatalogue();
     const resources = {};
     for (const entry of catalogue.items) {
       const kind = RESOURCE_KIND_OF[entry.interface.id];
@@ -41,7 +46,30 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         sizes: entry.sizes.map((size) => ({ name: size.name, vcpus: size.vcpus, memoryGib: size.memoryGib, dataDiskGib: size.dataDiskGib, monthlyNano: size.monthlyNano }))
       };
     }
-    return { title: "mobilynet", currency: prices.inForce.currency, sizes, balancer: balancer ? { monthlyNano: balancer.monthlyNano } : null, resources };
+    return resources;
+  }
+
+  /**
+   * The offer: App Service sizes by price, the load balancer's price, each resource kind's hosted app and sizes, and
+   * the project's quotas with their use, which the Plan counts what a Deploy adds against.
+   */
+  async function offer() {
+    const [prices, resources, quotas] = await Promise.all([client.readPrices(), resourcesOffered(), calls.readQuotas()]);
+    const sizes = prices.sizes.filter((size) => size.kind === "instance" && size.price)
+      .map((size) => ({ name: size.name, vcpus: size.vcpus, memoryGib: size.memoryGib, monthlyNano: String(size.price.monthlyNano) }));
+    const balancer = prices.inForce.prices.find((row) => row.kind === "load_balancer");
+    const counted = new Set(Object.values(QUOTA_COUNTS).flat());
+    return {
+      title: "mobilynet",
+      currency: prices.inForce.currency,
+      sizes,
+      balancer: balancer ? { monthlyNano: balancer.monthlyNano } : null,
+      resources,
+      quota: {
+        quotas: quotas.filter((line) => counted.has(line.quota)).map(({ quota, unit, limit, used }) => ({ quota, unit, limit, used })),
+        counts: QUOTA_COUNTS
+      }
+    };
   }
 
   /**
@@ -98,7 +126,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     needOf: (resource) => needAs(resource),
     /** Makes a resource's hosted service, labelled. */
     createResource: async ({ name, kind, size, labels }, { idempotencyKey }) => {
-      const { app } = (await offer()).resources[kind];
+      const { app } = (await resourcesOffered())[kind];
       return (await calls.createHostedService({ app, name, size, region, labels }, { idempotencyKey })).hostedService;
     },
     resizeResource: (id, size, { idempotencyKey }) => client.changeHostedService(id, { size }, { idempotencyKey }),
@@ -123,7 +151,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
       const answer = await client.createServiceRelease(id, { archive: upload.bytes, sha256: upload.sha256 });
       return { version: answer.release.version, refreshId: answer.refresh?.id ?? null };
     },
-    /** Makes an App Service, labelled: internal ones with no routes, public ones routed at the domain. */
+    /** Makes an App Service, labelled, with mobilynet's drain: internal ones with no routes, public ones routed at the domain. */
     async createService({ name, exposure, size, instances, app, version, settings, secrets, domain, connections, labels }, { idempotencyKey }) {
       const { service, refresh } = await calls.createService({
         name,
@@ -131,6 +159,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         exposure,
         size,
         instances,
+        drainSeconds: DRAIN_SECONDS,
         app: { name: app, version },
         settings,
         secrets,
@@ -156,4 +185,4 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
   });
 }
 
-export { createMobilynetAdapter };
+export { DRAIN_SECONDS, createMobilynetAdapter };

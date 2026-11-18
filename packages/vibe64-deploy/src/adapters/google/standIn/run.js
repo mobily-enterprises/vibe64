@@ -2,8 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { labelsProblem } from "./platform.js";
 
-// The stand-in's Cloud Run Admin API v2 services: made, read, listed, patched (the whole service, a new revision each
-// time) and deleted, each answering a long-running operation. A revision starts at the next advance and, at the one
+// The stand-in's Cloud Run Admin API v2 services: made, read, listed, patched (the whole service; a new revision when
+// its template changed, none for its own fields, such as its scaling) and deleted, each answering a long-running
+// operation. A revision starts at the next advance and, at the one
 // after, as Cloud Run takes a while to start one, gets ready when it could start: its image built into the registry, its service account there and allowed to read every secret its settings
 // name, its Direct VPC egress network and subnet there; otherwise it fails, the revision before it still serving.
 
@@ -13,6 +14,10 @@ const INGRESS = new Set(["INGRESS_TRAFFIC_ALL", "INGRESS_TRAFFIC_INTERNAL_ONLY",
 const MEMORY_MAX = Object.freeze({ 1: 4, 2: 8, 4: 16, 8: 32 });
 const OUTPUT_ONLY = Object.freeze(["uid", "generation", "createTime", "updateTime", "creator", "lastModifier", "observedGeneration", "terminalCondition", "conditions",
   "latestReadyRevision", "latestCreatedRevision", "trafficStatuses", "uri", "urls", "reconciling", "etag"]);
+
+/** A value with every object's keys in order, so two equal ones print alike. */
+const sorted = (value) => (Array.isArray(value) ? value.map(sorted)
+  : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sorted(value[key])])) : value);
 
 function createStandInRun(world) {
   const { project, region, answer, error } = world;
@@ -39,8 +44,9 @@ function createStandInRun(world) {
       if (!MEMORY_MAX[cpu] || !gib || gib > MEMORY_MAX[cpu]) return `Invalid resources: ${cpu} CPU with ${memory} memory.`;
       if (Number(cpu) >= 4 && gib < 2) return "4 CPU or more needs at least 2Gi of memory.";
     }
-    const scaling = body.template?.scaling;
-    if (scaling && scaling.maxInstanceCount !== undefined && scaling.minInstanceCount > scaling.maxInstanceCount) return "min instances can't be above max instances.";
+    for (const scaling of [body.scaling, body.template?.scaling]) {
+      if (scaling && scaling.maxInstanceCount !== undefined && scaling.minInstanceCount > scaling.maxInstanceCount) return "min instances can't be above max instances.";
+    }
     if (body.template?.serviceAccount && !world.platform.accountExists(body.template.serviceAccount)) {
       return `Service account ${body.template.serviceAccount} does not exist.`;
     }
@@ -130,7 +136,11 @@ function createStandInRun(world) {
       const kept = Object.fromEntries(OUTPUT_ONLY.filter((field) => service[field] !== undefined).map((field) => [field, service[field]]));
       const replaced = { ...structuredClone(body), ...kept, name: service.name, launchStage: service.launchStage ?? "GA", traffic: service.traffic };
       services.set(one[3], replaced);
-      newRevision(replaced);
+      if (JSON.stringify(sorted(body.template ?? null)) !== JSON.stringify(sorted(service.template ?? null))) newRevision(replaced);
+      else {
+        const generation = String(Number(service.generation ?? 0) + 1);
+        Object.assign(replaced, { generation, observedGeneration: generation, updateTime: world.at(), etag: `"${randomUUID()}"` });
+      }
       return answer(200, world.operation(`projects/${project}/locations/${region}/operations/${randomUUID()}`, () => view(replaced)));
     }
     return null;

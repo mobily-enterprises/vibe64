@@ -5,6 +5,11 @@ import { domainNameOf, SHARED_LABEL, tagOf } from "./names.js";
 // Load Balancer before the public service, an internal passthrough load balancer before an internal group, and the
 // domain's certificate (Certificate Manager, with a DNS authorisation) and address.
 
+// A group's machine leaving (the group resized down, rolled onto a new template, deleted) gets no new requests and this
+// long to finish those it has before Compute Engine deletes it; with none set, Google ends them at once. Cloud Run
+// drains its own.
+const DRAIN_SECONDS = 30;
+
 function createGoogleFrontends(g) {
   const {
     orNull, orExisting, project, region, P, networkUrl, subnetUrl, compute, certificates, computeDone, operationDone, ensureCompute,
@@ -57,7 +62,7 @@ function createGoogleFrontends(g) {
     if (group) {
       backendBody = {
         name: `${name}-backend`, loadBalancingScheme: "EXTERNAL_MANAGED", protocol: "HTTP", portName: "http", timeoutSec: 3600, healthChecks: [health],
-        backends: [{ group, balancingMode: "UTILIZATION", capacityScaler: 1 }], description: DESCRIPTION
+        backends: [{ group, balancingMode: "UTILIZATION", capacityScaler: 1 }], connectionDraining: { drainingTimeoutSec: DRAIN_SECONDS }, description: DESCRIPTION
       };
     } else {
       const neg = await ensureCompute(`regions/${region}/networkEndpointGroups/${name}-neg`, `regions/${region}/networkEndpointGroups`, {
@@ -96,7 +101,8 @@ function createGoogleFrontends(g) {
   /** The internal passthrough load balancer an internal group is reached through, and its DNS name. */
   async function internalFrontend(name, { group, health }) {
     const backend = await ensureCompute(`regions/${region}/backendServices/${name}-internal`, `regions/${region}/backendServices`, {
-      name: `${name}-internal`, loadBalancingScheme: "INTERNAL", protocol: "TCP", healthChecks: [health], backends: [{ group, balancingMode: "CONNECTION" }], description: DESCRIPTION
+      name: `${name}-internal`, loadBalancingScheme: "INTERNAL", protocol: "TCP", healthChecks: [health], backends: [{ group, balancingMode: "CONNECTION" }],
+      connectionDraining: { drainingTimeoutSec: DRAIN_SECONDS }, description: DESCRIPTION
     });
     await ensureCompute(`regions/${region}/forwardingRules/${name}-internal`, `regions/${region}/forwardingRules`, {
       name: `${name}-internal`, loadBalancingScheme: "INTERNAL", backendService: backend.selfLink, IPProtocol: "TCP", ports: [String(SERVICE_PORT)],

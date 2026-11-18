@@ -14,6 +14,8 @@ test("each size is priced from the Price List, exactly: Fargate with its address
   const { adapter } = awsWorld();
   const offer = await adapter.offer();
   assert.deepEqual([offer.title, offer.currency], ["AWS", "USD"]);
+  // Its quotas aren't counted before a Deploy, and the Plan says so.
+  assert.match(offer.quota.unchecked, /^AWS's quotas aren't checked before a Deploy: /u);
   // Fargate: $0.04048 a vCPU-hour, $0.004445 a GB-hour and $0.005 an hour for the task's public IPv4 address.
   const fargate = offer.sizes.find((size) => size.name === "fargate-1x2");
   assert.equal(fargate.monthlyNano, String(MONTH * (40_480_000n + 2n * 4_445_000n + 5_000_000n)));

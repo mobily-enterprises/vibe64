@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
+import { gunzipSync } from "node:zlib";
 
 import { bindingExportLines, declarationNeeds, serviceUpload } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
 import { PACKAGE_MAX_BYTES, archiveProblem, declaredSettingsOf, packArchive } from "../../packages/vibe64-deploy/src/package.js";
@@ -58,6 +59,22 @@ test("the commit is packed once with Vibe64's scripts, each service's upload add
   assert.deepEqual(archive.files, ["genesis/", "genesis/stack.md", "package.json", "server.js", "vibe64-app/build.sh",
     "vibe64-app/serve-computers.sh", "vibe64-app/serve-web.sh"]);
   assert.equal(await archive.read("vibe64-app/serve-computers.sh"), "c\n");
+  // The same commit and scripts pack to the same bytes whenever they are packed: every entry, the scripts written now
+  // among them, carries the commit's time, and the gzip header none. So a Deploy of an unchanged commit hands no
+  // service its release again (steps.js releaseDigest).
+  const later = path.join(root, "later");
+  await mkdir(later);
+  assert.equal((await packArchive({ commit, git, scratch: later, scripts })).sha256, sha256);
+  const committed = Number.parseInt((await git(["show", "-s", "--format=%ct", commit])).trim(), 10);
+  const tar = gunzipSync(bytes);
+  const times = [];
+  for (let at = 0; at + 512 <= tar.length && tar.subarray(at, at + 512).some((byte) => byte !== 0);) {
+    const field = (offset, length) => Number.parseInt(tar.subarray(at + offset, at + offset + length).toString("latin1").replace(/\0.*$/su, "").trim() || "0", 8);
+    times.push(field(136, 12));
+    at += 512 + Math.ceil(field(124, 12) / 512) * 512;
+  }
+  assert.ok(times.length >= 7 && times.every((time) => time === committed), times.join(","));
+  assert.equal(bytes.readUInt32LE(4), 0, "no time in the gzip header");
 
   // One service's upload: the same files and its declaration at the root, which tar reads back exactly.
   const declaration = { name: "books-web", settings: { APP_ENV: {}, PORT: {} }, long: "x".repeat(700) };
