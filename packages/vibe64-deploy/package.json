@@ -12,6 +12,7 @@
     "./plan": "./src/plan.js",
     "./steps": "./src/steps.js",
     "./record": "./src/record.js",
+    "./image": "./src/image.js",
     "./adapters/mobilynet": "./src/adapters/mobilynet/index.js",
     "./adapters/mobilynet/declaration": "./src/adapters/mobilynet/declaration.js",
     "./adapters/mobilynet/client": "./src/adapters/mobilynet/client.js",
@@ -37,6 +38,10 @@
           {
             "subpath": ".",
             "summary": "The deploy engine's public entry: needs from the Stack, the package, the Plan and the steps."
+          },
+          {
+            "subpath": "./image",
+            "summary": "The release as an OCI image for a provider that runs containers: each service's declaration, scripts and Containerfile."
           },
           {
             "subpath": "./adapters/mobilynet",

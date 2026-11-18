@@ -12,6 +12,7 @@ provider.
 - `packages/vibe64-deploy/src/needs.js`
 - `packages/vibe64-deploy/src/needsOfStack.js`
 - `packages/vibe64-deploy/src/package.js`
+- `packages/vibe64-deploy/src/image.js`
 - `packages/vibe64-deploy/src/plan.js`
 - `packages/vibe64-deploy/src/steps.js`
 - `packages/vibe64-deploy/src/record.js`
@@ -69,6 +70,23 @@ declared login on the machine's data disk (owned by the login, mounted without
 mobilynet makes every data path root's and `start` is one command, which could
 not also give the login a folder. This is the decided choice; no owner field on
 mobilynet's data paths is needed.
+
+## The image
+
+A provider that runs containers gets the release as an OCI image per service,
+built at the provider by its own build service from the service's upload, with
+no Vibe64 credential in the build. `imagePackages()` is the container twin of
+mobilynet's `servicePackages()`: the same archive and build script, and a serve
+script per service that reads every setting from the container's environment
+(each resource's fields as `V64_<RESOURCE>_<FIELD>`, the names mobilynet's needs
+give, mapped to the app's bound names the same way), takes the instance facts
+the runtime gives (a service reached at each instance stops without
+`V64_INSTANCE_URL`), then migrates and serves on port 3000. Its declaration per
+service names the image's packages (the same nixpkgs attribute names mobilynet
+declares), port, health path, machine features, the resources it needs and its
+settings. `imageUpload()` adds `vibe64-app/Containerfile` to the archive: Nix's
+image, the packages from one nixpkgs commit the editor names (never a branch),
+the release, the shared build, then the serve script as a user of its own.
 
 ## The Plan
 
@@ -192,6 +210,7 @@ environment.
 
 - `needsOfStack()` — the needs from the inspected Stack.
 - `servicePackages()` — one mobilynet declaration per service and the scripts.
+- `imagePackages()`, `imageUpload()` — the image per service, for container providers.
 - `planOf()` — the Plan with verbs, drift, the quote and its hash.
 - `deploy()` — a whole Deploy, step by step, under the lease.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
