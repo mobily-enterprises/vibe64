@@ -132,6 +132,31 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     resizeResource: (id, size, { idempotencyKey }) => client.changeHostedService(id, { size }, { idempotencyKey }),
     linkResource: async (id, serviceId, need, { idempotencyKey }) => (await client.linkHostedService(id, { consumer: { service: serviceId }, need }, { idempotencyKey })).link,
     listLinks: (id) => client.listHostedLinks(id),
+    /**
+     * A resource's backups as an owner reads them (`hosted:read`): its point-in-time window (`from`, and `to`, null
+     * while it reaches the newest point, `latest`), the reason they fail while they do, and its machine's disk backups
+     * (how often, the newest first, each with when it was taken and until when it can be restored).
+     * @param {string} id the hosted service's id
+     */
+    backupsOf: async (id) => {
+      const backups = await client.readHostedBackups(id);
+      // A hosted service runs one app, whose backups are its data's.
+      const app = backups.apps?.[0] ?? null;
+      const disk = backups.disk ?? null;
+      return {
+        enabled: backups.enabled === true,
+        pointInTime: app?.restorable ? { from: app.restorable.from, to: app.restorable.to ?? null, latest: app.lastLogAt ?? null } : null,
+        failure: app?.failure?.message ?? null,
+        disk: disk
+          ? {
+            made: disk.server === "making",
+            everyHours: disk.everyHours ?? null,
+            failure: disk.failure?.message ?? null,
+            backups: (disk.backups ?? []).map((one) => ({ at: one.at, restorableUntil: one.restorableUntil }))
+          }
+          : null
+      };
+    },
     unlinkResource: (id, linkId) => client.unlinkHostedService(id, linkId),
     /** Deletes a resource's hosted service and its data (deleteResource, never a Deploy), its links with it. */
     deleteResource: (id) => client.deleteHostedService(id, { revokeLinks: true }),

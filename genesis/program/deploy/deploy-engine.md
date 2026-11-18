@@ -307,6 +307,20 @@ output as a test sets it (`services.setLogs`), its reads ending at the next
 reason, which the refresh names too, as mobilynet named a build whose output
 passed its limit.
 
+For an owner looking at what a Deploy made, the adapter also reads a
+resource's links (`listLinks`, each link's consumer and its connection's
+plain fields: host, port, database, user, never a secret field) and its
+backups (`backupsOf`, from `readHostedBackups`,
+`GET /v1/hosted-services/{id}/backups`, `hosted:read`): the point-in-time
+window its app's backups reach (`from`, `to`, null while it reaches the newest
+point, `latest`), their failure while it lasts, and its machine's disk backups,
+each with when it was taken and until when it can be restored, newest first.
+`bindingField(kind, semantic)` (`declaration.js`) names the link field each
+binding of a resource is given, or null for a URL made of several (the
+password with them) and a bucket's `driver`. The stand-in answers a fresh
+hosted service's backups as on with nothing restorable yet, and as a test sets
+them (`hosted.setBackups`).
+
 ## The Google Cloud adapter
 
 `createGoogleAdapter()` answers the engine in Google Cloud's REST calls for one

@@ -74,6 +74,7 @@ const ROUTES = Object.freeze([
   [`^/v1/builds/${ID}/log$`, { GET: "vps:read" }],
   [`^/v1/hosted-services/${ID}$`, { GET: "hosted:read", PATCH: "hosted:manage", DELETE: "hosted:manage" }],
   [`^/v1/hosted-services/${ID}/links(/${ID})?$`, { GET: "hosted:read", POST: "hosted:manage", DELETE: "hosted:manage" }],
+  [`^/v1/hosted-services/${ID}/backups$`, { GET: "hosted:read" }],
   [`^/v1/leases(/${ID})?$`, { POST: "services:deploy", PATCH: "services:deploy", DELETE: "services:deploy" }]
 ].map(([pattern, methods]) => Object.freeze([new RegExp(pattern, "u"), Object.freeze(methods)])));
 const SERVICE_PATH = new RegExp(`^/v1/services/${ID}$`, "u");

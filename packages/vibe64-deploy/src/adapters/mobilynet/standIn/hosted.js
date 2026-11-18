@@ -46,6 +46,8 @@ function createStandInHosted(world, { services, prices }) {
   const hosted = new Map();
   /** @type {Map<string, any>} each link, by id, in the order made */
   const links = new Map();
+  /** @type {Map<string, any>} what a test set a hosted service's backups to read as (setBackups), by its id */
+  const backupsSet = new Map();
 
   const invalid = (fieldErrors) => failure(422, "validation_failed", `Check ${Object.keys(fieldErrors).join(", ")}.`, { fieldErrors });
   const invalidState = (state) => failure(409, "invalid_state", `This can't be done while it is ${state}.`, { state });
@@ -135,6 +137,22 @@ function createStandInHosted(world, { services, prices }) {
       activeAt: link.activeAt,
       revokedAt: link.revokedAt
     };
+  }
+
+  /**
+   * A hosted service's backups as `GET /v1/hosted-services/{id}/backups` answers them (mobilynet's VpsBackups): on, its
+   * app with no point stored yet and no base backup, and its machine's disk backups made daily with none yet, until a
+   * test sets them. @param {any} one
+   */
+  function backupsView(one) {
+    const fresh = {
+      enabled: true,
+      apps: [{ app: one.app, lastLog: null, lastLogAt: null, failure: null, restorable: null }],
+      bases: [],
+      restoredFrom: null,
+      disk: { enabled: true, available: true, server: "making", everyHours: 24, failure: null, held: null, newest: null, storedBytes: 0, backups: [] }
+    };
+    return { backups: structuredClone({ ...fresh, ...backupsSet.get(one.id) }) };
   }
 
   /** A hosted service's operation as its answers show it. */
@@ -536,10 +554,11 @@ function createStandInHosted(world, { services, prices }) {
       }
       return null;
     }
-    const hostedPath = /^\/v1\/hosted-services\/([^/]+)(\/links(?:\/([^/]+))?)?$/u.exec(path);
+    const hostedPath = /^\/v1\/hosted-services\/([^/]+)(\/links(?:\/([^/]+))?|\/backups)?$/u.exec(path);
     if (!hostedPath) return null;
     const one = hosted.get(decodeURIComponent(hostedPath[1]));
     if (!one || one.deletedAt || !world.reaches(caller, one.projectId)) return notFound("hosted service");
+    if (hostedPath[2] === "/backups") return method === "GET" ? answer(200, backupsView(one)) : null;
     if (!hostedPath[2]) {
       if (method === "GET") return answer(200, { hostedService: view(one) });
       if (method === "PATCH") return idempotencyKey ? once(idempotencyKey, `${one.id} change ${JSON.stringify(body)}`, () => change(one, body)) : change(one, body);
@@ -567,7 +586,14 @@ function createStandInHosted(world, { services, prices }) {
     /** One hosted service with its links, or null. @param {string} id */
     service: (id) => (hosted.has(id) ? heldView(hosted.get(id)) : null),
     /** The catalogue as `GET /v1/hosted-services/catalogue` answers it. */
-    catalogue
+    catalogue,
+    /**
+     * What a hosted service's backups read as from now on: mobilynet's VpsBackups fields, each replacing the fresh one's.
+     * @param {string} id @param {Record<string, unknown>} backups
+     */
+    setBackups: (id, backups) => {
+      backupsSet.set(id, structuredClone(backups));
+    }
   });
 
   return Object.freeze({

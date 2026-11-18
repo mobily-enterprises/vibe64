@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { AT, DAY, HOST, SHOP, refusal, refused, runningShop, settle, upload, webSpec, world } from "./vibe64DeployStandInHelpers.js";
 import { createMobilynetClient } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
+import { createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapters/mobilynet/index.js";
 
 // The deploy engine's mobilynet stand-in, asked through the engine's client with no server: a project's releases,
 // App Services made from them and refreshed, public and internal with connections, hosted services linked to several
@@ -682,4 +683,43 @@ test("a build's log is read from a byte on, as mobilynet answers it, with vps:re
   const rest = await reader.readBuildLog(buildId, { after: first.next });
   assert.deepEqual(rest, { text: "The output is 4440 MiB; it may be at most 4096 MiB.\n", next: first.next + rest.text.length, state: "failed", done: true });
   assert.deepEqual(refusal(await refused(reader.readBuildLog("bld_nope"))), { status: 404, code: "not_found", fields: [] });
+});
+
+test("a hosted service's backups are read with hosted:read as mobilynet answers them, and the adapter names its point-in-time window and its disk backups", async () => {
+  const { standIn, client, production, projectId } = world();
+  const { hostedService } = await production.createHostedService({ app: "postgresql-18" }, { idempotencyKey: "hosted-db" });
+  const fresh = await client.readHostedBackups(hostedService.id);
+  assert.deepEqual(fresh.apps, [{ app: "postgresql-18", lastLog: null, lastLogAt: null, failure: null, restorable: null }]);
+  assert.deepEqual([fresh.enabled, fresh.disk.server, fresh.disk.everyHours, fresh.disk.backups], [true, "making", 24, []]);
+  const adapter = createMobilynetAdapter({ client, project: projectId });
+  assert.deepEqual(await adapter.backupsOf(hostedService.id), {
+    enabled: true, pointInTime: null, failure: null, disk: { made: true, everyHours: 24, failure: null, backups: [] }
+  }, "before its first base backup nothing is restorable");
+  standIn.hosted.setBackups(hostedService.id, {
+    apps: [{
+      app: "postgresql-18", lastLog: "000000010000000000000007", lastLogAt: "2026-11-19T00:20:00.000Z", failure: null,
+      restorable: { from: "2026-11-12T00:21:00.000Z", to: null }
+    }],
+    disk: {
+      enabled: true, available: true, server: "making", everyHours: 24, failure: { code: "store_failed", message: "The store did not answer.", at: "2026-11-19T00:00:00.000Z" },
+      held: null, newest: null, storedBytes: 9, backups: [
+        { label: "d2", at: "2026-11-18T03:00:00.000Z", chain: "c1", diskBytes: 10, dataBytes: 4, storedBytes: 1, restorableUntil: "2026-12-18T03:00:00.000Z" },
+        { label: "d1", at: "2026-11-17T03:00:00.000Z", chain: "c1", diskBytes: 10, dataBytes: 4, storedBytes: 8, restorableUntil: "2026-12-17T03:00:00.000Z" }
+      ]
+    }
+  });
+  assert.deepEqual(await adapter.backupsOf(hostedService.id), {
+    enabled: true,
+    pointInTime: { from: "2026-11-12T00:21:00.000Z", to: null, latest: "2026-11-19T00:20:00.000Z" },
+    failure: null,
+    disk: {
+      made: true, everyHours: 24, failure: "The store did not answer.",
+      backups: [{ at: "2026-11-18T03:00:00.000Z", restorableUntil: "2026-12-18T03:00:00.000Z" }, { at: "2026-11-17T03:00:00.000Z", restorableUntil: "2026-12-17T03:00:00.000Z" }]
+    }
+  });
+  assert.equal(standIn.requests().at(-1).path, `/v1/hosted-services/${hostedService.id}/backups`);
+  // It needs hosted:read; another project's hosted service is not found.
+  const blind = createMobilynetClient({ baseUrl: standIn.baseUrl, fetch: standIn.fetch, credential: standIn.addKey({ projectId, scopes: ["services:read"] }) });
+  assert.equal((await refused(blind.readHostedBackups(hostedService.id))).code, "scope_missing");
+  assert.deepEqual(refusal(await refused(client.readHostedBackups("hsv_none"))), { status: 404, code: "not_found", fields: [] });
 });
