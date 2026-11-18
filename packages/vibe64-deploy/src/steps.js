@@ -68,15 +68,17 @@ function labelledAs(observed, record, kind, name) {
 }
 
 /**
- * The values a service is given, with each of its Reaches settings the reached service's private address.
+ * The values a service is given, with each of its Reaches settings the reached service's private address: its own
+ * (`internalUrl`) where the provider reports one, else `http://<internalName>:<port>`.
  * @param {any} service the need's service @param {any} context the run's context @param {Map<string, any>} byId
  */
 function valuesOf(service, { record, release }, byId) {
   const reached = {};
   for (const reach of service.reaches) {
     const thing = byId.get(record.items[`service.${reach.service}`]?.id);
-    if (!thing?.internalName) return null;
-    reached[reach.setting] = `http://${thing.internalName}:${release.port}`;
+    const address = thing?.internalUrl ?? (thing?.internalName ? `http://${thing.internalName}:${release.port}` : null);
+    if (!address) return null;
+    reached[reach.setting] = address;
   }
   return settingValues({
     declared: release.settings[service.id], env: release.env, domain: release.domain, trustedProxies: release.trustedProxies, port: release.port, reached

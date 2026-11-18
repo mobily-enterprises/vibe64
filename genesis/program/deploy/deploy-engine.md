@@ -90,6 +90,25 @@ The quote's lines are at list price; the hash covers the needs, the choices in
 effect, the decisions, the items, the lines and a digest of the observed state,
 so a Deploy held to a plan read before anything moved is refused.
 
+The adapter's offer always gives its title, currency, service `sizes`, the load
+balancer's price and each resource kind's sizes. Three fields are optional, for
+a provider that runs some services or kinds differently; an offer without them
+(mobilynet's) plans exactly as before:
+
+- `machineSizes`: the whole machines offered to a service with a sandbox
+  allowance or reached at each instance, where the provider runs those apart
+  from the rest. Such a service is offered these, and priced from them, in
+  place of `sizes`; a size from the other list is refused like any choice.
+- `resources[kind].title`: the product a resource kind is at the provider
+  (such as its database engine and version), carried into the Plan's resource
+  so the owner reads what will run.
+- `unsupported[kind]`: the provider's reason for a resource kind it runs none
+  of, added to the `production_resource_unsupported` refusal.
+
+In the inventory, a service may report `internalUrl`, the address other
+services reach it at when that is not `http://<internalName>:<port>`; each
+Reaches setting is then that address.
+
 ## The steps
 
 `deploy()` reads the Plan again and refuses a Deploy whose hash is not the one

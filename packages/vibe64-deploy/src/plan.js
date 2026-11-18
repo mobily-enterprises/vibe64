@@ -37,6 +37,15 @@ function eligibleSizes(sizes, atLeast) {
     .sort((one, other) => (BigInt(one.monthlyNano) < BigInt(other.monthlyNano) ? -1 : BigInt(one.monthlyNano) > BigInt(other.monthlyNano) ? 1 : 0));
 }
 
+/**
+ * The sizes a service is offered: the provider's whole machines (`offer.machineSizes`) for one with a sandbox allowance
+ * or reached at each instance, where the provider runs those apart from the rest; `offer.sizes` otherwise, and for
+ * every service when the offer has no machineSizes.
+ */
+function sizesOffered(offer, service) {
+  return offer.machineSizes && (service.sandbox.length > 0 || service.reached === "each") ? offer.machineSizes : offer.sizes;
+}
+
 /** What the plan reads of an observed thing: the fields drift and the hash compare. */
 function digestOf(thing) {
   return {
@@ -59,8 +68,12 @@ function digestOf(thing) {
  * @param {any | null} input.record the environment's record (record.js), null before the first deploy
  * @param {Array<{ id: string, name: string, kind: "service" | "resource", labels?: Record<string, string>, size?: string | null, instances?: number | null, exposure?: string, resourceKind?: string }>} input.observed
  *   the adapter's inventory: every thing of the provider project now
- * @param {{ title: string, currency: string, sizes: Array<{ name: string, vcpus: number, memoryGib: number, monthlyNano: string }>, balancer: { monthlyNano: string } | null, resources: Record<string, { sizes: Array<{ name: string, monthlyNano: string }>, defaultSize: string }> }} input.offer
- *   the adapter's offer: its service sizes and the load balancer's price, and each resource kind's sizes
+ * @param {{ title: string, currency: string, sizes: Array<{ name: string, vcpus: number, memoryGib: number, monthlyNano: string }>, machineSizes?: Array<{ name: string, vcpus: number, memoryGib: number, monthlyNano: string }>, balancer: { monthlyNano: string } | null, resources: Record<string, { title?: string, sizes: Array<{ name: string, monthlyNano: string }>, defaultSize: string }>, unsupported?: Record<string, string> }} input.offer
+ *   the adapter's offer: its service sizes and the load balancer's price, and each resource kind's sizes. Optional:
+ *   `machineSizes`, the whole machines a provider that runs some services apart offers a service with a sandbox
+ *   allowance or reached at each instance (sizesOffered); `resources[kind].title`, the product a kind is, which the
+ *   Plan's resource carries; `unsupported`, the provider's reason for each resource kind it runs none of, which the
+ *   refusal carries
  * @param {{ services?: Record<string, { size?: string, instances?: number }>, resources?: Record<string, { size?: string }> }} [input.choices]
  *   the owner's choices now, over those the record keeps
  * @param {Record<string, "keep" | "putBack">} [input.decisions] for each drift (`<kind>.<name>.<field>`), keep the
@@ -100,7 +113,7 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
     const item = recorded[key];
     const thing = item?.id ? byId.get(item.id) : undefined;
     const atLeast = service.atLeast;
-    const sizes = eligibleSizes(offer.sizes, atLeast);
+    const sizes = eligibleSizes(sizesOffered(offer, service), atLeast);
     if (sizes.length === 0) {
       problems.push(problem("production_size_unavailable", `${offer.title} offers no size with at least ${atLeast.vcpus} vCPU and `
         + `${atLeast.memoryGib} GiB right now, which ${service.id} needs.`, key));
@@ -149,7 +162,8 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
     const thing = item?.id ? byId.get(item.id) : undefined;
     const kind = offer.resources[resource.kind];
     if (!kind) {
-      problems.push(problem("production_resource_unsupported", `${offer.title} runs no ${resource.kind} for ${resource.id}.`, key));
+      const why = offer.unsupported?.[resource.kind];
+      problems.push(problem("production_resource_unsupported", `${offer.title} runs no ${resource.kind} for ${resource.id}.${why ? ` ${why}` : ""}`, key));
       continue;
     }
     const drift = item && thing ? driftOf(item, thing, ["size"]) : [];
@@ -201,7 +215,7 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
     .map((thing) => ({ id: thing.id, name: thing.name, kind: thing.kind, vibe64: Boolean(thing.labels?.[LABEL.deployment]) }));
 
   const services = needs.services.map((service) => {
-    const sizes = eligibleSizes(offer.sizes, service.atLeast);
+    const sizes = eligibleSizes(sizesOffered(offer, service), service.atLeast);
     return {
       id: service.id,
       exposure: service.exposure,
@@ -214,6 +228,7 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
   const resources = needs.resources.filter((resource) => offer.resources[resource.kind]).map((resource) => ({
     id: resource.id,
     kind: resource.kind,
+    ...(offer.resources[resource.kind].title ? { title: offer.resources[resource.kind].title } : {}),
     sizes: offer.resources[resource.kind].sizes,
     defaultSize: effective.resources[resource.id]?.size ?? offer.resources[resource.kind].defaultSize
   }));
