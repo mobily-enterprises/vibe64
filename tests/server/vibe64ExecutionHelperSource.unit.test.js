@@ -977,17 +977,17 @@ test("a release service unit loads its environment as its user, then becomes its
 // and managed service the helper starts for the daemon or a person: an agent, a terminal or a Preview runs as the
 // daemon's own user, which file modes alone would let read it. An application's sandbox has no home at all.
 test("the daemon's and a person's executions and managed services never see the daemon's private state", async () => {
-  const owner = { home: "/home/v64d_acme", username: "v64d_acme" };
-  const line = "InaccessiblePaths=-/home/v64d_acme/.local/state/vibe64/editor-private";
+  const owner = { home: "/home/daemon", username: "daemon" };
+  const line = "InaccessiblePaths=-/home/daemon/.local/state/vibe64/editor-private";
   assert.equal(editorPrivateStateLine(owner), line);
-  const unit = managedServiceUnit({ owner, servicePath: "/usr/bin", startScript: "/home/v64d_acme/services/db/start",
-    unitName: "vibe64-acme-db.service", workingDirectory: "/home/v64d_acme/services/db" });
+  const unit = managedServiceUnit({ owner, servicePath: "/usr/bin", startScript: "/home/daemon/services/db/start",
+    unitName: "vibe64-acme-db.service", workingDirectory: "/home/daemon/services/db" });
   assert.ok(unit.split("\n").includes(line), unit);
   const source = await helperSource();
   const args = source.slice(source.indexOf("const systemdArgs = ["), source.indexOf('const started = spawnSync("systemd-run"'));
   assert.match(args, /\.\.\.\(application \? \[\] : \[`--property=\$\{editorPrivateStateLine\(owner\)\}`\]\),/u);
   // Without the daemon's home there is nothing to hide, so nothing starts.
-  assert.throws(() => editorPrivateStateLine({ username: "v64d_acme" }), /daemon's home/u);
-  assert.throws(() => managedServiceUnit({ owner: { username: "v64d_acme" }, servicePath: "/usr/bin", startScript: "/s",
+  assert.throws(() => editorPrivateStateLine({ username: "daemon" }), /daemon's home/u);
+  assert.throws(() => managedServiceUnit({ owner: { username: "daemon" }, servicePath: "/usr/bin", startScript: "/s",
     unitName: "vibe64-acme-db.service", workingDirectory: "/w" }), /daemon's home/u);
 });
