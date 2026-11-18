@@ -1,3 +1,4 @@
+import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -11,6 +12,16 @@ const STATIC_GLOBAL_UI_PATHS = Object.freeze([
   "/robots.txt",
   "/manifest.webmanifest"
 ]);
+// Vite writes under assets/ only files named by their content's hash, however the build splits them, and copies
+// public/'s files beside index.html instead; so a file under assets/ never changes at its address, and browsers keep
+// it for good. The page and every other file are fetched again on each use, so a plain reload after an update runs
+// the new build: with no validator, because @fastify/send's ETag and Last-Modified come from a file's size and date,
+// and an installation such as the Nix store dates every file 1970, so a changed file of the same size would match
+// and the browser would keep the old one.
+const HASHED_BUILD_FILES = "assets/";
+const HASHED_BUILD_FILE_CACHE = Object.freeze({ maxAge: 365 * 24 * 60 * 60 * 1000, immutable: true });
+const UNHASHED_FILE_CACHE = "no-cache";
+const UNHASHED_FILE_SEND = Object.freeze({ cacheControl: false, etag: false, lastModified: false });
 
 function isApiPath(pathname) {
   return matchesPathPrefix(pathname, API_BASE_PATH);
@@ -85,6 +96,35 @@ async function readSpaDocument(distRoot) {
 }
 
 /**
+ * Lets the not-found handler send the build's files (reply.sendFile): a file's brotli or gzip copy beside it, which
+ * the build writes for the files under assets/ (tooling/release/precompress-assets.mjs), to a browser that accepts
+ * it, and `Vary: Accept-Encoding` on every file.
+ * @param {import("fastify").FastifyInstance} app
+ * @param {string} distRoot
+ */
+function registerWebBuildFiles(app, distRoot) {
+  return app.register(fastifyStatic, {
+    root: distRoot,
+    index: false,
+    serve: false,
+    preCompressed: true
+  });
+}
+
+/**
+ * Sends one of the build's files, kept for good when it is under assets/, where every name carries its content's
+ * hash, and fetched again on each use otherwise.
+ * @param {import("fastify").FastifyReply} reply
+ * @param {string} staticFilePath relative to the build's folder
+ */
+function sendBuildFile(reply, staticFilePath) {
+  if (staticFilePath.startsWith(HASHED_BUILD_FILES)) {
+    return reply.sendFile(staticFilePath, HASHED_BUILD_FILE_CACHE);
+  }
+  return reply.header("Cache-Control", UNHASHED_FILE_CACHE).sendFile(staticFilePath, UNHASHED_FILE_SEND);
+}
+
+/**
  * Answers every unmatched request: API paths, other methods and missing files
  * get a 404, and page routes get the single-page application's index.
  * @param {import("fastify").FastifyInstance} app
@@ -108,7 +148,7 @@ function registerSpaNotFoundHandler(app, { distRoot, hasWebBuild }) {
     if (hasFileExtension(pathname)) {
       const staticFilePath = toStaticFilePath(pathname);
       if (hasWebBuild && staticFilePath && canServeStaticFile(distRoot, staticFilePath)) {
-        return reply.sendFile(staticFilePath);
+        return sendBuildFile(reply, staticFilePath);
       }
       return reply.code(404).send({
         message: `Route ${method}:${pathname} not found`,
@@ -131,5 +171,6 @@ function registerSpaNotFoundHandler(app, { distRoot, hasWebBuild }) {
 export {
   SPA_INDEX_FILE,
   buildGlobalUiPaths,
-  registerSpaNotFoundHandler
+  registerSpaNotFoundHandler,
+  registerWebBuildFiles
 };

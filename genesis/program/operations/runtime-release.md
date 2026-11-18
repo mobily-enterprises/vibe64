@@ -34,6 +34,10 @@ so the same command works without a source checkout in the relocated runtime.
 - `tooling/release/verify-runtime.mjs`
 - `tooling/release/verify-client-startup.mjs`
 - `tests/server/clientStartup.unit.test.js`
+- `tooling/release/precompress-assets.mjs`
+- `server/lib/spaFallback.js`
+- `tests/server/webBuildFiles.unit.test.js`
+- `tests/server/webBuildReload.browser.test.js`
 - `tooling/package-install-smoke.mjs`
 - `tooling/verify-package-boundaries.mjs`
 - `tests/server/runtimePackage.unit.test.js`
@@ -77,6 +81,28 @@ operators apply the complete candidate ledger with learner and conversation
 writers stopped before admitting optional question/delivery snapshots. The step
 converts no application files and creates no provenance for old messages; retry
 changes only the ledger. The prior registry refuses its completed entry.
+
+The build compresses each file Vite writes under `dist/assets/` once, beside
+it: after `vite build`, package.json's build scripts run
+`tooling/release/precompress-assets.mjs dist`, which writes a brotli (`.br`,
+quality 11) and a gzip (`.gz`, level 9) copy of each script, stylesheet, SVG,
+JSON, WebAssembly, icon and TrueType or OpenType font of at least 1 KB, each
+only when it is smaller; images and woff/woff2 fonts are compressed already.
+The server (`server/lib/spaFallback.js`) sends the copy the request's
+`Accept-Encoding` accepts, brotli first, with `Vary: Accept-Encoding`; nothing
+is compressed per request. Vite names every file it writes under `assets/` by
+its content's hash, however the build splits the client, and the build has no
+`public/assets/` to copy there unhashed (`webBuildFiles.unit.test.js` checks
+both), so each file there is `public, max-age=31536000, immutable` and a browser
+never asks for it again. The page is `no-store`, and every other file
+`no-cache` with no ETag or Last-Modified: an installation such as the Nix store
+dates every file 1970, so a validator from a file's size and date would match a
+changed file of the same size. A plain reload or a new visit after an update
+therefore loads the new build's page, which names only the new build's files;
+a hard reload is never needed. A tab still running the old build that then
+loads one of its modules finds that file gone (404), and JSKIT's shell shows
+**App module did not download** (or **Page did not download**) with
+**Reload**, which opens the same address on the new build.
 
 An open tab keeps the client build it loaded. JSKIT names each production
 build in `index.html` (its `jskit-client-build` meta tag), and the realtime
