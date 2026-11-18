@@ -35,6 +35,8 @@ const CONTAINERFILE = `${APP_SCRIPTS_FOLDER}/Containerfile`;
 const NIX_IMAGE = "docker.io/nixos/nix:2.28.4";
 // Where the release is in the image, and the user the service runs as.
 const APP_ROOT = "/srv/app";
+// The Nix profile the service's packages are installed into, beside the release.
+const PACKAGES_PROFILE = "/srv/packages";
 const APP_USER = "10001:10001";
 const APP_HOME = "/home/app";
 // The nixpkgs the packages come from: one commit of NixOS/nixpkgs, never a branch, so a build is the same every time.
@@ -178,9 +180,9 @@ function containerfileOf({ service, packages, port }, { nixpkgs }) {
   return [
     `# Made by Vibe64: service ${service}'s image, built at the provider from this release.`,
     `FROM ${NIX_IMAGE}`,
-    "RUN nix --extra-experimental-features 'nix-command flakes' profile install --profile /opt/vibe64 \\",
+    `RUN nix --extra-experimental-features 'nix-command flakes' profile install --profile ${PACKAGES_PROFILE} \\`,
     ...packages.map((name, index) => `  ${shellWord(`github:NixOS/nixpkgs/${nixpkgs}#${name}`)}${index < packages.length - 1 ? " \\" : ""}`),
-    "ENV PATH=/opt/vibe64/bin:$PATH",
+    `ENV PATH=${PACKAGES_PROFILE}/bin:$PATH`,
     `WORKDIR ${APP_ROOT}`,
     `COPY . ${APP_ROOT}`,
     `RUN bash ${BUILD_SCRIPT}`,

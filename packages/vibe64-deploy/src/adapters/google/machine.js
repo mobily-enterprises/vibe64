@@ -14,7 +14,10 @@ const FEATURE_FLAGS = Object.freeze({
   userns: Object.freeze(["--security-opt", "seccomp=unconfined", "--security-opt", "apparmor=unconfined"])
 });
 const WORK_DIR = "/srv/work";
-const HOST_WORK_DIR = "/var/lib/vibe64/work";
+// The machine's own folder, on Container-Optimized OS's writable home (its root is read-only): Docker's credentials and
+// the service's work folder.
+const HOST_ROOT = "/home/vibe64";
+const HOST_WORK_DIR = `${HOST_ROOT}/work`;
 // The user the image's service runs as (image.js).
 const APP_USER = "10001:10001";
 
@@ -65,7 +68,7 @@ function startupScript({ image, region, port, reached, machineFeatures }) {
       : []),
     `mkdir -p ${HOST_WORK_DIR} && chown ${APP_USER} ${HOST_WORK_DIR}`,
     // Container-Optimized OS keeps /root read-only: Docker's credentials live beside the work folder.
-    "export HOME=/var/lib/vibe64",
+    `export HOME=${HOST_ROOT}`,
     `docker-credential-gcr configure-docker --registries=${region}-docker.pkg.dev`,
     "docker rm -f app > /dev/null 2>&1 || true",
     `docker pull ${image}`,

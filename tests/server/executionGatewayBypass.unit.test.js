@@ -100,6 +100,9 @@ const ENV_POLICY_ALLOWLIST = new Map([
   ["packages/vibe64-terminals/src/server/opencodeServerProcess.js", {
     "export HOME": { count: 1, reason: "A managed OpenCode server keeps its home and XDG roots in its execution's private directory, so a stop without its handle still removes them." }
   }],
+  ["packages/vibe64-deploy/src/adapters/google/machine.js", {
+    "export HOME": { count: 1, reason: "The startup script of a deployed app's Google Cloud machine, never the person's computer, gives Docker's credential helper a writable home, as Container-Optimized OS keeps /root read-only." }
+  }],
   ["packages/vibe64-terminals/src/server/vibe64OutputTargets.js", {
     "export PATH": { count: 1, reason: "Output startup restores the tool PATH Vibe64 resolved after a login shell (macOS path_helper) reorders it." }
   }]

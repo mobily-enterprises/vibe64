@@ -67,6 +67,10 @@ test("a service's upload carries its Containerfile: nixpkgs at one commit, the b
   assert.match(lines[1], /^FROM docker\.io\/nixos\/nix:/u);
   assert.ok(lines.includes(`  'github:NixOS/nixpkgs/${NIXPKGS}#xvfb'`), file);
   assert.equal(lines.filter((line) => line.includes(`github:NixOS/nixpkgs/${NIXPKGS}#`)).length, declarations.workers.packages.length);
+  // The packages go into one Nix profile, whose bin is first on PATH.
+  const profile = lines[2].match(/ profile install --profile (\S+) \\$/u)?.[1];
+  assert.ok(profile, file);
+  assert.ok(lines.includes(`ENV PATH=${profile}/bin:$PATH`), file);
   for (const line of ["RUN bash vibe64-app/build.sh", "USER 10001:10001", "EXPOSE 3000", 'ENTRYPOINT ["bash", "/srv/app/vibe64-app/serve-workers.sh"]']) {
     assert.ok(lines.includes(line), `${line} in\n${file}`);
   }

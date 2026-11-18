@@ -70,7 +70,7 @@ test("the startup script runs the image with every setting, the secrets read wit
   await stub("chown", "exit 0");
 
   const image = "us-central1-docker.pkg.dev/shop-standin/vibe64/shop-workers:r-1";
-  const script = startupScript({ image, region: "us-central1", port: 3000, reached: "each", machineFeatures: ["fuse", "userns"] }).replaceAll("/var/lib/vibe64", path.join(root, "host"));
+  const script = startupScript({ image, region: "us-central1", port: 3000, reached: "each", machineFeatures: ["fuse", "userns"] }).replaceAll("/home/vibe64", path.join(root, "host"));
   await writeFile(path.join(root, "startup.sh"), script);
   const ran = spawnSync("bash", [path.join(root, "startup.sh")], { env: { PATH: `${bin}:${process.env.PATH}` }, encoding: "utf8" });
   assert.equal(ran.status, 0, ran.stderr);
