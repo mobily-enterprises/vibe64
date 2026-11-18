@@ -1096,7 +1096,7 @@ Turns a project's Stack into what runs at a provider: Production's needs, the pa
 - Directory `packages/vibe64-deploy`
 
 ### Program
-- Nothing.
+- `genesis/program/deploy/deploy-engine.md`
 
 ### Data owned
 - Nothing.

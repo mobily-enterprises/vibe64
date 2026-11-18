@@ -12,6 +12,7 @@
     "./plan": "./src/plan.js",
     "./steps": "./src/steps.js",
     "./record": "./src/record.js",
+    "./adapters/mobilynet": "./src/adapters/mobilynet/index.js",
     "./adapters/mobilynet/declaration": "./src/adapters/mobilynet/declaration.js",
     "./adapters/mobilynet/client": "./src/adapters/mobilynet/client.js",
     "./adapters/mobilynet/stand-in": "./src/adapters/mobilynet/standIn.js"
@@ -36,6 +37,10 @@
           {
             "subpath": ".",
             "summary": "The deploy engine's public entry: needs from the Stack, the package, the Plan and the steps."
+          },
+          {
+            "subpath": "./adapters/mobilynet",
+            "summary": "The mobilynet adapter: its offer (sizes and list prices), its inventory of labelled things, and the calls the steps make."
           },
           {
             "subpath": "./adapters/mobilynet/declaration",
