@@ -409,7 +409,7 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
       revokeLinks ? { query: { links: "revoke" } } : {}
     )),
     /**
-     * A hosted service's backups (`hosted:read`), as a VPS's are read: `{ enabled, apps: [{ app, lastLog, lastLogAt,
+     * A hosted service's backups (`hosted:read`), as a machine's are read: `{ enabled, apps: [{ app, lastLog, lastLogAt,
      * failure, restorable: { from, to } | null }], bases, restoredFrom, disk: { enabled, available, server, everyHours,
      * failure, held, newest, storedBytes, backups: [{ label, at, restorableUntil, ... }] } }`, the disk's newest first.
      * @param {string} hostedServiceId
