@@ -18,9 +18,11 @@ in one of their sessions. Vibe64 writes the declaration through Genesis's own
 - `packages/vibe64-terminals/src/server/serviceSessionTerminals.js`
 - `src/composables/useVibe64StackServices.js`
 - `src/components/studio/Vibe64AddServiceDialog.vue`
+- `packages/vibe64-training/src/shared/learningVocabulary.js`
 - `tests/server/vibe64StackServices.unit.test.js`
 - `tests/server/aiTaskAddService.unit.test.js`
 - `tests/client/addServiceDialog.vitest.js`
+- `tests/server/vibe64LearningVocabulary.unit.test.js`
 
 ## Public contract
 
@@ -115,6 +117,15 @@ Slots `price` (the Production line, shown only when filled), `preview` and `note
 each receive the row as `choice`. A disabled row names its reason through
 `aria-describedby`. A bucket row warns that `genesis verify` stays blocked until
 its settings are in Env. After Add, the rows are read again.
+
+The button that opens the dialog is the host's, on a page the host adds. The host
+marks it `data-vibe64-guide="add-service"` and registers Colleague's and lessons'
+`add-service` place with `addServicePlace(page)`
+(`@local/vibe64-training/shared/learning-vocabulary`). `page` is `{ id, label,
+pane }`: the page's guide id and pane, and its name as its Dashboard link shows
+it. The ring follows Dashboard, that page, then **Add a service**. Public alone
+registers no such place, so `navigation.guide` refuses `add-service` there and
+lists the places it has.
 
 There is no Remove: a person or the AI deletes the declaration and the app's use
 of it in a session.

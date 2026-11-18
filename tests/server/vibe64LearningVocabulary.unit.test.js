@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { __testables, declaredLearningVocabulary, lessonAvailable, lessonStepAvailable, trainingGuideCommand, trainingGuideRequest, trainingPlaceShown } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
+import { __testables, addServicePlace, declaredLearningVocabulary, lessonAvailable, lessonStepAvailable, trainingGuideCommand, trainingGuideRequest, trainingPlaceShown } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 import { beatNeedsPracticeProject, splitStepBeats } from "../../packages/vibe64-training/src/shared/beats.js";
 import { createLearningFacts } from "../../packages/vibe64-training/src/server/learningFacts.js";
 
@@ -111,4 +111,22 @@ test("Publish is a built-in project place that opens its Dashboard section", () 
   assert.deepEqual(trainingGuideCommand(trainingGuideRequest({ target: "publish", navigate: true, highlight: false }, vocabulary),
     { id: "one", projectSlug: "alpha", sessionId: "s1" }, vocabulary),
   { id: "one", projectSlug: "alpha", sessionId: "s1", conversationId: "", pane: "publish", status: "pending" });
+});
+
+test("Add a service is a place a host registers with the page that offers it, named as that page's Dashboard link", () => {
+  const vocabulary = createLearningVocabulary({ facts: [] });
+  assert.equal(vocabulary.place("add-service"), null, "public alone has no page that offers Add a service");
+  vocabulary.register({ places: [addServicePlace({ id: "deploy", label: "Deploy", pane: "deploy" })] });
+  const pointed = trainingGuideCommand(trainingGuideRequest({ target: "add-service" }, vocabulary), { id: "one" }, vocabulary);
+  assert.deepEqual(pointed.guide.steps, [{ id: "dashboard", label: "Dashboard" }, { id: "deploy", label: "Deploy" },
+    { id: "add-service", label: "Add a service" }]);
+  assert.equal(pointed.guide.caption, "Dashboard → Deploy → Add a service");
+  assert.deepEqual(trainingGuideCommand(trainingGuideRequest({ target: "add-service", navigate: true, highlight: false }, vocabulary),
+    { id: "two", projectSlug: "alpha", sessionId: "s1" }, vocabulary),
+  { id: "two", projectSlug: "alpha", sessionId: "s1", conversationId: "", pane: "deploy", status: "pending" });
+  assert.equal(vocabulary.place("add-service").who, "everyone", "any member who may open the page may add a service");
+  assert.throws(() => vocabulary.register({ places: [addServicePlace({ id: "deploy", label: "Production", pane: "deploy" })] }),
+    /add-service is already registered with another meaning/u);
+  assert.throws(() => createLearningVocabulary().register({ places: [addServicePlace({ id: "deploy", label: "", pane: "deploy" })] }),
+    /Place add-service needs 1 to 6 labelled steps/u, "the host must name its page");
 });
