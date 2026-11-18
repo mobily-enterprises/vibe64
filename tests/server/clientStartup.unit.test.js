@@ -12,6 +12,13 @@ const FAILURE = "Vibe64 could not open. Reload the page to try again.";
 const readText = (relative) => readFile(new URL(`../../${relative}`, import.meta.url), "utf8");
 const squash = (text) => text.replace(/\s+/gu, " ").trim();
 
+// An SVG's drawing: its path data, gradient colours and Vibe64's tile, whatever its size or stroke widths.
+const drawing = (svg) => ({
+  paths: [...svg.matchAll(/\sd="([^"]+)"/gu)].map(([, data]) => squash(data)),
+  stops: [...svg.matchAll(/stop-color="([^"]+)"/gu)].map(([, colour]) => colour.toLowerCase()),
+  tile: svg.match(/<rect x="64" y="64" width="384" height="384" rx="90"/u)?.[0]
+});
+
 function startupShell(html) {
   const start = html.indexOf('<div id="startup-shell">');
   assert.ok(start > 0, "the document must hold the startup shell");
@@ -106,14 +113,17 @@ test("the mark is Vibe64's logo drawn inline, so it shows before any request", a
   const mark = shell.match(/<svg class="startup-mark"[\s\S]*?<\/svg>/u);
   assert.ok(mark, "the shell must draw the mark inline");
   assert.match(mark[0], /aria-hidden="true"/u);
-  const drawing = (svg) => ({
-    paths: [...svg.matchAll(/\sd="([^"]+)"/gu)].map(([, data]) => squash(data)),
-    stops: [...svg.matchAll(/stop-color="([^"]+)"/gu)].map(([, colour]) => colour.toLowerCase()),
-    tile: svg.match(/<rect x="64" y="64" width="384" height="384" rx="90"/u)?.[0]
-  });
   assert.ok(drawing(logo).tile, "the logo's tile");
   assert.deepEqual(drawing(mark[0]), drawing(logo));
   assert.doesNotMatch(shell, /<img|\ssrc=|url\((?!#)/u, "nothing in the shell waits for a request");
+});
+
+test("the browser tab's icon is Vibe64's logo, cropped to its tile", async () => {
+  const html = await readText("index.html");
+  const favicon = await readText("favicon.svg");
+  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg" \/>/u);
+  assert.deepEqual(drawing(favicon), drawing(await readText("docs/site/public/vibe64-logo.svg")));
+  assert.match(favicon, /viewBox="64 64 384 384"/u, "the tile fills the tab's 16 px");
 });
 
 test("the loading screen paints the editor's Material 3 roles in light and dark", async () => {

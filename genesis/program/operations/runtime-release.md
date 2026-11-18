@@ -9,6 +9,7 @@ so the same command works without a source checkout in the relocated runtime.
 ## Sources
 
 - `index.html`
+- `favicon.svg`
 - `src/main.js`
 - `src/theme/index.js`
 - `src/theme/icons.js`
@@ -186,8 +187,10 @@ download, or a bootstrap failure, changes the status to a retry explanation,
 hides the bar and offers the reload at once. The download-error handler lives in
 the initial document so it works even when the application cannot execute.
 Without JavaScript the noscript explanation replaces the bar and the loading
-line. `tests/server/clientStartup.unit.test.js` keeps the colours equal to the
-generated schemes and the mark equal to the logo. Package releases verify the
+line. The browser tab's icon, `favicon.svg`, is the same logo cropped to its tile,
+with heavier waves so it reads at 16 pixels on light and dark tabs.
+`tests/server/clientStartup.unit.test.js` keeps the colours equal to the
+generated schemes, and the mark and the tab icon equal to the logo. Package releases verify the
 exact built HTML in cold browser contexts at 390 (with reduced motion), 768 and
 1280 pixels with JavaScript requests held back, then failed entry or dependency
 downloads: loading feedback, the bar's motion with every stylesheet applied, no
