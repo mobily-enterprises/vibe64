@@ -6,48 +6,209 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Vibe64</title>
     <script>
-      // This must run before the module graph, whose download failures never reach main.js.
-      window.addEventListener("error", (event) => {
-        if (!(event.target instanceof HTMLScriptElement) || event.target.type !== "module") return;
-        const showFailure = () => {
-          const status = document.getElementById("startup-status");
-          if (status) status.textContent = "Vibe64 could not open. Reload the page to try again.";
+      // This must run before the module graph, whose download failures never reach main.js. It also offers the
+      // reload when the editor has not started within ten seconds; the editor's mount replaces the screen first.
+      (() => {
+        const showStartup = (state) => {
+          const shell = document.getElementById("startup-shell");
+          if (shell && shell.dataset.startup !== "failed") shell.dataset.startup = state;
         };
-        if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", showFailure, { once: true });
-        } else {
-          showFailure();
-        }
-      }, true);
+        window.addEventListener("error", (event) => {
+          if (!(event.target instanceof HTMLScriptElement) || event.target.type !== "module") return;
+          const showFailure = () => {
+            const status = document.getElementById("startup-status");
+            if (status) status.textContent = "Vibe64 could not open. Reload the page to try again.";
+            showStartup("failed");
+          };
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", showFailure, { once: true });
+          } else {
+            showFailure();
+          }
+        }, true);
+        setTimeout(() => showStartup("slow"), 10000);
+      })();
     </script>
     <style>
-      #startup-shell { position: fixed; inset: 0; display: grid; grid-template-rows: 56px 1fr; background: #faf9fc; color: #25232a; font: 15px system-ui, sans-serif; }
-      #startup-shell header { display: flex; align-items: center; padding: 0 24px; border-bottom: 1px solid #dedce3; font-weight: 600; }
-      #startup-shell main { display: grid; grid-template-columns: 240px 1fr; min-height: 0; }
-      #startup-shell aside { border-right: 1px solid #dedce3; padding: 24px; }
-      #startup-shell .startup-placeholder { height: 16px; margin-bottom: 20px; border-radius: 4px; background: #e5e2eb; }
-      #startup-shell section { padding: 32px; }
-      #startup-shell a { display: inline-flex; align-items: center; min-height: 48px; color: inherit; }
-      @media (max-width: 600px) { #startup-shell main { grid-template-columns: 1fr; } #startup-shell aside { display: none; } }
-      @media (prefers-color-scheme: dark) { #startup-shell { background: #19181d; color: #eeeaf3; } #startup-shell header, #startup-shell aside { border-color: #3c3942; } #startup-shell .startup-placeholder { background: #35323d; } }
+      /* The loading screen paints before any JavaScript, so its colours are literal: the editor's Material 3 roles,
+         which JSKIT generates from src/theme/index.js's seed, each named after its role. The mark is
+         docs/site/public/vibe64-logo.svg. tests/server/clientStartup.unit.test.js keeps both in step. */
+      #startup-shell {
+        --startup-background: #f9f9ff;
+        --startup-on-surface: #191c20;
+        --startup-on-surface-variant: #43474e;
+        --startup-surface-container-highest: #e2e2e9;
+        --startup-primary: #3f5f90;
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        padding: 24px 16px;
+        background: var(--startup-background);
+        color: var(--startup-on-surface-variant);
+        font: 14px/20px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        letter-spacing: 0.01em;
+        text-align: center;
+      }
+      @media (prefers-color-scheme: dark) {
+        #startup-shell:not([data-appearance="light"]) {
+          --startup-background: #111318;
+          --startup-on-surface: #e2e2e9;
+          --startup-on-surface-variant: #c4c6cf;
+          --startup-surface-container-highest: #33353a;
+          --startup-primary: #a8c8ff;
+        }
+      }
+      #startup-shell[data-appearance="dark"] {
+        --startup-background: #111318;
+        --startup-on-surface: #e2e2e9;
+        --startup-on-surface-variant: #c4c6cf;
+        --startup-surface-container-highest: #33353a;
+        --startup-primary: #a8c8ff;
+      }
+      #startup-shell p {
+        margin: 0;
+      }
+      #startup-shell .startup-mark {
+        display: block;
+        width: 64px;
+        height: 64px;
+        border-radius: 15px;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 4px 16px rgb(0 0 0 / 0.08);
+      }
+      #startup-shell .startup-wordmark {
+        margin-top: 16px;
+        color: var(--startup-on-surface);
+        font-size: 22px;
+        font-weight: 500;
+        line-height: 28px;
+        letter-spacing: 0;
+      }
+      #startup-shell .startup-progress {
+        position: relative;
+        width: 128px;
+        height: 3px;
+        margin: 28px 0 16px;
+        overflow: hidden;
+        border-radius: 2px;
+        background: var(--startup-surface-container-highest);
+      }
+      #startup-shell .startup-progress span {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: var(--startup-primary);
+        opacity: 0.6;
+      }
+      #startup-shell noscript {
+        margin-top: 28px;
+      }
+      #startup-shell .startup-reload {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        column-gap: 4px;
+        margin-top: 4px;
+        visibility: hidden;
+        opacity: 0;
+      }
+      #startup-shell[data-startup] .startup-reload {
+        visibility: visible;
+        opacity: 1;
+      }
+      #startup-shell[data-startup="failed"] .startup-progress {
+        visibility: hidden;
+      }
+      #startup-shell[data-startup="failed"] .startup-slow {
+        display: none;
+      }
+      #startup-shell[data-startup="failed"] #startup-status {
+        color: var(--startup-on-surface);
+      }
+      #startup-shell a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 4px;
+        border-radius: 4px;
+        color: var(--startup-primary);
+        font-weight: 500;
+        text-decoration: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+      #startup-shell a:focus-visible {
+        outline: 2px solid var(--startup-primary);
+        outline-offset: 2px;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        #startup-shell .startup-progress span {
+          right: auto;
+          width: 40%;
+          opacity: 1;
+          animation: startup-slide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        #startup-shell .startup-reload {
+          transition: opacity 200ms ease-out;
+        }
+      }
+      /* The app's own reduced-motion rule ends every other animation at once; the bar still shows that the editor
+         is loading, so it pulses in place instead of sliding. */
+      @media (prefers-reduced-motion: reduce) {
+        #startup-shell .startup-progress span {
+          animation: startup-pulse 1.6s ease-in-out infinite alternate !important;
+        }
+      }
+      @keyframes startup-slide {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(250%); }
+      }
+      @keyframes startup-pulse {
+        from { opacity: 0.25; }
+        to { opacity: 0.8; }
+      }
     </style>
+    <noscript><style>#startup-shell .startup-progress, #startup-status { display: none; }</style></noscript>
   </head>
   <body>
     <div id="app">
       <div id="startup-shell">
-        <header>Vibe64</header>
-        <main>
-          <aside aria-hidden="true">
-            <div class="startup-placeholder"></div>
-            <div class="startup-placeholder"></div>
-            <div class="startup-placeholder"></div>
-          </aside>
-          <section>
-            <p id="startup-status" role="status" aria-live="polite">Loading Vibe64…</p>
-            <noscript>JavaScript must be enabled to open Vibe64.</noscript>
-            <a href="">Reload page</a>
-          </section>
-        </main>
+        <script>
+          // This browser's Appearance choice (src/lib/appearance.js), read before the screen paints; System, the
+          // default, follows the device.
+          try {
+            const appearance = JSON.parse(localStorage.getItem("vibe64.appearance"));
+            if (appearance === "light" || appearance === "dark") document.currentScript.parentElement.dataset.appearance = appearance;
+          } catch {}
+        </script>
+        <svg class="startup-mark" viewBox="64 64 384 384" aria-hidden="true">
+          <defs>
+            <linearGradient id="startup-mark-tile" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#2DA3FF" />
+              <stop offset="100%" stop-color="#0066FF" />
+            </linearGradient>
+            <radialGradient id="startup-mark-star" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="100%" stop-color="#e6f2ff" />
+            </radialGradient>
+          </defs>
+          <rect x="64" y="64" width="384" height="384" rx="90" fill="url(#startup-mark-tile)" />
+          <path d="M 256 175 Q 256 235 200 235 Q 256 235 256 295 Q 256 235 312 235 Q 256 235 256 175 Z" fill="url(#startup-mark-star)" />
+          <g fill="none" stroke="#ffffff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M 85 160 C 125 155, 155 180, 185 235 C 210 280, 240 320, 256 340 C 272 320, 302 280, 327 235 C 357 180, 387 155, 427 160" />
+            <path d="M 85 200 C 125 195, 155 220, 185 275 C 210 320, 240 360, 256 380 C 272 360, 302 320, 327 275 C 357 220, 387 195, 427 200" />
+            <path d="M 85 240 C 125 235, 155 260, 185 315 C 210 360, 240 400, 256 420 C 272 400, 302 360, 327 315 C 357 260, 387 235, 427 240" />
+          </g>
+        </svg>
+        <p class="startup-wordmark">Vibe64</p>
+        <div class="startup-progress" aria-hidden="true"><span></span></div>
+        <p id="startup-status" role="status" aria-live="polite">Loading Vibe64…</p>
+        <noscript>JavaScript must be enabled to open Vibe64.</noscript>
+        <p class="startup-reload"><span class="startup-slow">Taking longer than usual?</span> <a href="">Reload the page</a></p>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

@@ -32,6 +32,7 @@ so the same command works without a source checkout in the relocated runtime.
 - Main: `tooling/release/pack-release.mjs`
 - `tooling/release/verify-runtime.mjs`
 - `tooling/release/verify-client-startup.mjs`
+- `tests/server/clientStartup.unit.test.js`
 - `tooling/package-install-smoke.mjs`
 - `tooling/verify-package-boundaries.mjs`
 - `tests/server/runtimePackage.unit.test.js`
@@ -168,17 +169,31 @@ Workspace setup and deployment installation declare Node and C++ runtimes becaus
 native dependency, including when npm considers its existing installation current
 but its binary is missing. Example startup also declares Git.
 
-The initial HTML contains a lightweight, responsive loading shell with inline
-styles and a reload link. Vue replaces it when bootstrap and initial routing
-finish; a failed entry-module or dependency download, or a bootstrap failure,
-changes its status to a retry explanation. The download-error handler lives in
-the initial document so it works even when the application cannot execute. The
-document remains useful while JavaScript downloads or is unavailable.
-Package releases verify the exact built HTML in cold browser contexts at 390,
-768 and 1280 pixels with JavaScript requests held back, then failed entry or
-dependency downloads. Loading feedback, a failure explanation after abort, and a
-48px Reload target must remain visible without horizontal overflow. Release
-artifact builders invoke the same public proof on their composed frontend.
+The initial HTML contains a responsive loading screen with inline styles and no
+requests of its own: Vibe64's logo drawn inline (the drawing of
+`docs/site/public/vibe64-logo.svg`), its name, a slim loading bar and the
+`role="status"` line. Its colours are literals, because it paints before the
+theme: the editor's Material 3 background, on-surface, on-surface-variant,
+surface-container-highest and primary roles from the seed's light and dark
+schemes. It follows the device's light or dark setting, or this browser's
+Appearance choice, which a small script inside the screen reads before it
+paints. The bar slides only without a reduced-motion preference; with one it
+pulses in place, overriding the app's own reduced-motion rule, which would leave
+it still. Vue replaces the screen when bootstrap and initial routing finish. The
+initial document's script offers "Taking longer than usual? Reload the page"
+after ten seconds without the editor; a failed entry-module or dependency
+download, or a bootstrap failure, changes the status to a retry explanation,
+hides the bar and offers the reload at once. The download-error handler lives in
+the initial document so it works even when the application cannot execute.
+Without JavaScript the noscript explanation replaces the bar and the loading
+line. `tests/server/clientStartup.unit.test.js` keeps the colours equal to the
+generated schemes and the mark equal to the logo. Package releases verify the
+exact built HTML in cold browser contexts at 390 (with reduced motion), 768 and
+1280 pixels with JavaScript requests held back, then failed entry or dependency
+downloads: loading feedback, the bar's motion with every stylesheet applied, no
+reload before ten seconds and one at ten, a failure explanation after abort, and
+a 48px Reload target, without horizontal overflow. Release artifact builders
+invoke the same public proof on their composed frontend.
 
 `npm run build` builds the frontend for local source execution. `npm run
 pack:release` verifies package boundaries, builds the frontend, assembles a
