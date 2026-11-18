@@ -88,13 +88,16 @@ test("each service is its own declaration: its name, its serve script, its packa
 });
 
 test("a service given more settings than mobilynet takes, packages it can't take, or an Env entry Production sets itself is refused, naming the service", () => {
-  // 50 settings is mobilynet's limit per declaration: computers has 10 without Env entries, so 40 of its own fit and 41 don't.
+  // 100 settings is mobilynet's own limit per declaration: computers has 10 without Env entries, so 90 of its own fit
+  // (100 settings, packaged) and 91 don't, naming the limit.
   const extra = (count) => Array.from({ length: count }, (_, at) => ({ key: `COMPUTERS_${at}`, secret: false, services: ["computers"] }));
-  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(40))), null);
-  const over = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(41)));
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(90))), null);
+  const hundred = servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(90)) });
+  assert.equal(Object.keys(hundred.declarations.computers.settings).length, 100);
+  const over = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(91)));
   assert.equal(over.code, "vibe64_production_too_many_settings");
-  assert.match(over.message, /^mobilynet takes at most 50 settings for a service and service computers would need 51\./u);
-  assert.throws(() => servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(41)) }),
+  assert.match(over.message, /^mobilynet takes at most 100 settings for a service and service computers would need 101\./u);
+  assert.throws(() => servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(91)) }),
     { code: "vibe64_production_too_many_settings", status: 422 });
 
   // Packages: the shared and a service's own together count against the 200, naming the service.

@@ -7,6 +7,7 @@
 // secret it is given exists with its key and version and its role may read it. A task or machine meeting a problem
 // doesn't start: the deployment fails (and ECS puts the revision before back), the refresh fails, the machine is ended.
 // Faults: tasksFail (tasks never get healthy), machinesNeverReady (no machine says it is ready), buildFails.
+import { specPlaceOf } from "../machine.js";
 import { fault, listOf, required, tagsOfList } from "./wire.js";
 
 const members = (items) => ({ member: items });
@@ -341,10 +342,12 @@ function createStandInCompute(world) {
     const data = world.network.templateData(one.template.id, version);
     if (!data) return "the launch template version does not exist";
     if (world.faults.machinesNeverReady) return "the service never answered its health path";
-    const spec = JSON.parse(Buffer.from(Buffer.from(data.UserData ?? "", "base64").toString("utf8").split("\n")[1]?.replace("# vibe64-spec ", "") ?? "", "base64").toString("utf8") || "{}");
     const profileRole = world.data.view().profiles.find((profile) => profile.arn === data.IamInstanceProfile?.Arn)?.roles[0];
     const roleArn = world.data.view().roles.find((role) => role.name === profileRole)?.arn;
     if (!roleArn) return "Invalid IamInstanceProfile";
+    const { spec, resource, problem } = world.data.specAt(specPlaceOf(data.UserData));
+    if (problem) return problem;
+    if (!world.data.roleMay(roleArn, "s3:GetObject", resource)) return `AccessDenied: the machine's role may not read ${resource}`;
     const container = { image: spec.image ?? "", secrets: Object.entries(spec.secrets ?? {}).map(([name, ref]) => ({ name, valueFrom: `${ref.arn}:${ref.key}::${ref.versionId ?? ""}` })) };
     return startProblem({ containerDefinitions: [container] }, roleArn).replace("Task failed container health checks", "");
   }

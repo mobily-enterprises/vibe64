@@ -75,7 +75,7 @@ need for every resource, and the settings that service is given
 (`settingsPerService`): Production's own and the generated secrets every
 service, the setup code the public one, each Reaches setting the service that
 reaches, and each Production Env entry the services it names (the public one
-when it names none), at most 50 per service.
+when it names none), at most 100 per service, mobilynet's own limit.
 
 Each serve script exports the settings mobilynet gave the instance, the
 resources' bound names, the instance facts, the service's own Setting lines,
@@ -346,7 +346,15 @@ refreshed once.
   the revision or version it moves to) is kept as the service's
   `vibe64-refresh` tag, and it is `rolling` from the start, as CodeBuild built
   the image before it began, so a service is linked to its resources while it
-  rolls (their settings are in what it runs already).
+  rolls (their settings are in what it runs already). What a service runs
+  (its image, settings and where each secret is) is kept in the releases
+  bucket under its SHA-256, which the task definition's label and the
+  template's user data name: a machine reads it as it starts and runs nothing
+  if it isn't the one named. So neither grows with the settings, and a service
+  takes as many as AWS does: AWS counts none, its limits being 64 KB of task
+  definition (the settings once) and 64 KB for the secret that holds a
+  service's secret settings; a machine's user data (16 KB at AWS) holds only
+  the script and that place.
 - **Reaches.** A security group rule opens the reached service's port to the
   reaching service's group; each database's group lets in the services linked
   to it.

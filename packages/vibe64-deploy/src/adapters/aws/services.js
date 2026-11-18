@@ -20,13 +20,15 @@
 // secret of its own, each read by version) and, as its release needs them, its resources' fields (resources.js
 // linkValues): when it is made or handed a release, so its first tasks or machines start with them. The engine's link
 // step then finds them given and lets the service's group into a database's.
+import { createHash } from "node:crypto";
+
 import { LABEL } from "../../record.js";
 import { shellWord } from "../mobilynet/declaration.js";
 import { ensureBase, ensureSecurityGroup, notOurs, unless } from "./base.js";
 import { builtImage, declarationOf, uploadRelease } from "./build.js";
 import { SERVICE_PORT, adapterError, keyValueTags, lowerTags, tagSpecification, tagsOf, tokenOf } from "./context.js";
 import { routeTo, targetGroupOf } from "./domain.js";
-import { NAMES_IMAGE, READY_HOOK, READY_SECONDS, specOf, userDataOf } from "./machine.js";
+import { NAMES_IMAGE, READY_HOOK, READY_SECONDS, specPlaceOf, userDataOf } from "./machine.js";
 import { ROOT_DISK_GIB, fargateShape, isMachineSize } from "./offer.js";
 import { databaseGroup, isBucket, linkValues, resourcesNow } from "./resources.js";
 import { asList } from "./xml.js";
@@ -71,21 +73,41 @@ function runtimeCheck(declaration, size) {
 
 // --- Reading what a service runs -------------------------------------------------------------------------------------
 
-/** The spec a task definition revision carries. */
+/**
+ * Keeps a service's spec in the deployment's releases bucket under its SHA-256, where a machine reads it as it starts:
+ * a task definition's label and a template's user data name only that place, `s3://<bucket>/<key> <sha256>`, so
+ * neither grows with the settings (EC2 takes 16 KB of user data, ECS 64 KB of task definition, the settings once).
+ */
+async function keepSpec(ctx, base, spec) {
+  const body = JSON.stringify(spec);
+  const sha256 = createHash("sha256").update(body).digest("hex");
+  const key = `specs/${spec.service}/${sha256}.json`;
+  await ctx.client.s3("PUT", base.bucket, key, { body, headers: { "content-type": "application/json" } });
+  return `s3://${base.bucket}/${key} ${sha256}`;
+}
+
+/** The spec kept at a place keepSpec named. */
+async function specAt(ctx, place) {
+  const [, bucket, key] = /^s3:\/\/([^/]+)\/(\S+) [0-9a-f]{64}$/u.exec(String(place ?? "")) ?? [];
+  if (!bucket) throw adapterError("aws_spec_unknown", `A service at AWS names its spec as "${place}", which isn't a place Vibe64 keeps one.`);
+  return JSON.parse((await ctx.client.s3("GET", bucket, key)).text);
+}
+
+/** The spec a task definition revision names. */
 async function specOfRevision(ctx, arn) {
   if (!ctx.cache.revisions.has(arn)) {
     const { taskDefinition } = await ctx.client.json("ecs", "DescribeTaskDefinition", { taskDefinition: arn });
-    ctx.cache.revisions.set(arn, JSON.parse(taskDefinition.containerDefinitions[0].dockerLabels[SPEC_LABEL]));
+    ctx.cache.revisions.set(arn, await specAt(ctx, taskDefinition.containerDefinitions[0].dockerLabels?.[SPEC_LABEL]));
   }
   return ctx.cache.revisions.get(arn);
 }
 
-/** The spec a launch template version carries. */
+/** The spec a launch template version names. */
 async function specOfTemplate(ctx, templateId, version) {
   const key = `${templateId}:${version}`;
   if (!ctx.cache.revisions.has(key)) {
     const answer = await ctx.client.query("ec2", "DescribeLaunchTemplateVersions", { LaunchTemplateId: templateId, LaunchTemplateVersion: [String(version)] });
-    ctx.cache.revisions.set(key, specOf(asList(answer.launchTemplateVersionSet?.item)[0]?.launchTemplateData?.userData));
+    ctx.cache.revisions.set(key, await specAt(ctx, specPlaceOf(asList(answer.launchTemplateVersionSet?.item)[0]?.launchTemplateData?.userData)));
   }
   return ctx.cache.revisions.get(key);
 }
@@ -324,6 +346,7 @@ async function linksOf(ctx, declaration, group) {
 /** A new task definition revision running the spec: its ARN. */
 async function registerRevision(ctx, base, spec, labels) {
   const { vcpus, memoryGib } = fargateShape(spec.size);
+  const place = await keepSpec(ctx, base, spec);
   const { taskDefinition } = await ctx.client.json("ecs", "RegisterTaskDefinition", {
     family: ctx.nameOf(`service-${spec.service}`, 255),
     networkMode: "awsvpc",
@@ -344,7 +367,7 @@ async function registerRevision(ctx, base, spec, labels) {
         interval: 15, timeout: 5, retries: 4, startPeriod: 120
       },
       logConfiguration: { logDriver: "awslogs", options: { "awslogs-group": base.logGroup, "awslogs-region": ctx.region, "awslogs-stream-prefix": spec.service } },
-      dockerLabels: { [SPEC_LABEL]: JSON.stringify(spec) }
+      dockerLabels: { [SPEC_LABEL]: place }
     }],
     tags: lowerTags(labels)
   });
@@ -363,7 +386,7 @@ async function templateVersionFor(ctx, base, spec, labels, group) {
     NetworkInterface: [{ DeviceIndex: 0, AssociatePublicIpAddress: true, SecurityGroupId: [group] }],
     MetadataOptions: { HttpTokens: "required", HttpEndpoint: "enabled" },
     BlockDeviceMapping: [{ DeviceName: "/dev/xvda", Ebs: { VolumeSize: ROOT_DISK_GIB, VolumeType: "gp3", Encrypted: true, DeleteOnTermination: true } }],
-    UserData: userDataOf(spec),
+    UserData: userDataOf(await keepSpec(ctx, base, spec)),
     TagSpecification: [{ ResourceType: "instance", Tag: keyValueTags({ ...labels, Name: name }) }, { ResourceType: "volume", Tag: keyValueTags(labels) }]
   };
   const found = asList((await unless(["InvalidLaunchTemplateName.NotFoundException"], () => client.query("ec2", "DescribeLaunchTemplates", { LaunchTemplateName: [name] })))

@@ -18,8 +18,9 @@ const BUILD_SCRIPT = `${APP_SCRIPTS_FOLDER}/build.sh`;
 const DECLARATION_FILE = "mobilynet.json";
 // The port every service listens on, which a service it reaches and the load balancer ask.
 const SERVICE_PORT = 3000;
-// mobilynet takes at most this many settings in one declaration, and app names (logins too) of at most 32 characters.
-const MAX_DECLARED_SETTINGS = 50;
+// mobilynet's own limits: at most 100 settings in one declaration (its limit since 17 Nov 2026, where it was 50), and
+// app names (logins too) of at most 32 characters.
+const MAX_DECLARED_SETTINGS = 100;
 const APP_NAME_MAX = 32;
 // The Stack's runtimes by the runtime packs below; a runtime not here can't be declared.
 const STACK_RUNTIME_PACKS = Object.freeze({

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { specOf } from "../../packages/vibe64-deploy/src/adapters/aws/machine.js";
+import { specPlaceOf } from "../../packages/vibe64-deploy/src/adapters/aws/machine.js";
 import { LABEL, labelsFor } from "../../packages/vibe64-deploy/src/record.js";
 import { deleteResource, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
 import { WORKERS_RESOURCES, workersStack } from "../fixtures/deployWorkersApp.js";
-import { DOMAIN, awsWorld, releaseOf } from "./deployAwsHelpers.js";
+import { DOMAIN, ENV, ENV_RECORDS, awsWorld, releaseOf } from "./deployAwsHelpers.js";
 
 // The two-service app deployed to AWS through the engine alone, against AWS's stand-in: web on Fargate behind the
 // deployment's Application Load Balancer, workers (gVisor and FUSE sandboxes, reached at each instance) on whole
@@ -26,7 +26,7 @@ function handMade(standIn, identifier = "hand-made") {
 }
 
 test("a two-service deploy runs web on Fargate and workers on machines of their own, tagged, linked and reached", async () => {
-  const { standIn, adapter, run, record } = awsWorld();
+  const { standIn, client, adapter, run, record } = awsWorld();
   handMade(standIn);
   const before = standIn.requests().length;
   const short = shortOf(record);
@@ -78,7 +78,10 @@ test("a two-service deploy runs web on Fargate and workers on machines of their 
   assert.equal(group.hook.DefaultResult, "ABANDON");
   const data = view.templates.find((one) => one.id === group.template.id).versions[0];
   assert.deepEqual([data.InstanceType, data.MetadataOptions.HttpTokens, data.BlockDeviceMapping["1"].Ebs.VolumeSize], ["m7i.xlarge", "required", "40"]);
-  const spec = specOf(data.UserData);
+  // Its spec is kept in the releases bucket under its SHA-256, which the user data names.
+  const [, releases, specKey, sha256] = /^s3:\/\/([^/]+)\/(\S+) ([0-9a-f]{64})$/u.exec(specPlaceOf(data.UserData));
+  assert.deepEqual([releases, specKey], [`v64-${short}-releases`, `specs/workers/${sha256}.json`]);
+  const spec = JSON.parse((await client.s3("GET", releases, specKey)).text);
   assert.deepEqual([spec.privileged, spec.size, spec.healthPath], [true, "m7i.xlarge", "/api/health"]);
   assert.equal(view.services.some((one) => one.name === "shop-workers"), false);
 
@@ -369,4 +372,27 @@ test("through a gateway the same Deploy goes live, every request carrying the ga
   assert.deepEqual([...new Set(requests.map((one) => one.mode))], ["gateway"]);
   assert.equal(requests.some((one) => one.status === 401), false);
   assert.equal(standIn.view().scalingGroups[0].instances.filter((one) => one.state === "InService").length, 2);
+});
+
+test("a service on machines takes the 100 settings mobilynet takes: its user data names where its spec is, never a setting", async () => {
+  const { standIn, run, record } = awsWorld();
+  // workers given 100 settings, half of them secret, each value 60 characters: far past what a machine's user data
+  // (16 KB at AWS) could carry with the settings in it.
+  const base = Object.keys(releaseOf("c1", workersStack()).settings.workers).length;
+  const extra = Array.from({ length: 100 - base }, (_, at) => ({ key: `WORKERS_SETTING_${at}`, secret: at % 2 === 0, services: ["workers"] }));
+  const env = { ...ENV, ...Object.fromEntries(extra.map(({ key }, at) => [key, `value ${at} `.padEnd(60, "x")])) };
+  const records = [...ENV_RECORDS, ...extra];
+  assert.equal(Object.keys(releaseOf("c1", workersStack(), env, records).settings.workers).length, 100);
+
+  const done = await run({ record, commit: "c1", env, records });
+  assert.equal(done.outcome, "live", done.message);
+  const short = shortOf(record);
+  const group = standIn.view().scalingGroups.find((one) => one.name === `v64-${short}-service-workers`);
+  const userData = Buffer.from(standIn.view().templates.find((one) => one.id === group.template.id).versions.at(-1).UserData, "base64").toString("utf8");
+  assert.ok(userData.length < 16384, `user data of ${userData.length} bytes`);
+  assert.equal(extra.some(({ key }) => userData.includes(key)), false);
+  // Each machine starts with every one of them, the secret ones read from Secrets Manager.
+  const running = standIn.environmentOf(group.name);
+  assert.deepEqual(extra.map(({ key }) => running.env[key]), extra.map(({ key }) => env[key]));
+  assert.deepEqual(running.secrets.filter((name) => name.startsWith("WORKERS_SETTING_")).length, extra.filter((one) => one.secret).length);
 });

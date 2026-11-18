@@ -204,6 +204,15 @@ function createStandInData(world) {
     InstanceProfileName: profile.name, Path: profile.path, Arn: profile.arn, Roles: members(profile.roles.map((name) => roleView(roles.get(name)))), Tags: members(keyValues(profile.tags))
   });
 
+  /** The spec a machine's user data names, as the machine reads it (checked against its SHA-256), or why it can't. */
+  function specAt(place) {
+    const [, bucket, key, sha256] = /^s3:\/\/([^/]+)\/(\S+) ([0-9a-f]{64})$/u.exec(String(place ?? "")) ?? [];
+    const body = bucket ? buckets.get(bucket)?.objects.get(key)?.body : null;
+    if (!body) return { problem: `the service spec ${place ?? "(none named)"} isn't in S3` };
+    if (createHash("sha256").update(body).digest("hex") !== sha256) return { problem: `the service spec at s3://${bucket}/${key} isn't the one its user data names` };
+    return { spec: JSON.parse(body.toString("utf8")), resource: `arn:aws:s3:::${bucket}/${key}` };
+  }
+
   /** Whether a role's inline policies let it do an action on a resource (Allow statements only). */
   function roleMay(roleArn, action, resource) {
     const role = [...roles.values()].find((one) => one.arn === roleArn);
@@ -430,6 +439,7 @@ function createStandInData(world) {
     /** Whether a role is seen by AWS's other services: from the advance after IAM made it (IAM is eventually consistent). */
     roleSeen: (arn) => [...roles.values()].some((one) => one.arn === arn && one.seen),
     objectExists: (bucket, key) => Boolean(buckets.get(bucket)?.objects.has(key)),
+    specAt,
     certificateStatus: (arn) => certificates.get(arn)?.status ?? null,
     /** The owner put a domain's validation records in place: AWS issues its certificates at the next advance. */
     issue: (domain) => validated.add(domain),

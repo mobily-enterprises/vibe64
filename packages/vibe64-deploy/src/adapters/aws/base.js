@@ -272,7 +272,8 @@ async function ensureBase(ctx) {
     ...pull,
     { Effect: "Allow", Action: ["servicediscovery:RegisterInstance", "servicediscovery:DeregisterInstance"], Resource: `arn:aws:servicediscovery:${region}:*:service/*` },
     { Effect: "Allow", Action: ["route53:ChangeResourceRecordSets", "route53:GetHealthCheck", "route53:CreateHealthCheck", "route53:UpdateHealthCheck", "route53:DeleteHealthCheck", "ec2:DescribeInstances"], Resource: "*" },
-    { Effect: "Allow", Action: "autoscaling:CompleteLifecycleAction", Resource: `arn:aws:autoscaling:${region}:*:autoScalingGroup:*:autoScalingGroupName/${ctx.nameOf("")}*` }
+    { Effect: "Allow", Action: "autoscaling:CompleteLifecycleAction", Resource: `arn:aws:autoscaling:${region}:*:autoScalingGroup:*:autoScalingGroupName/${ctx.nameOf("")}*` },
+    { Effect: "Allow", Action: "s3:GetObject", Resource: `arn:aws:s3:::${bucket}/specs/*` }
   ]);
   const profile = (await unless(["NoSuchEntity"], () => client.query("iam", "GetInstanceProfile", { InstanceProfileName: machine.name })))?.InstanceProfile
     ?? (await client.query("iam", "CreateInstanceProfile", { InstanceProfileName: machine.name, Path: ROLE_PATH, "Tags.member": keyValueTags(ctx.tagsFor("base.machine")) })).InstanceProfile;

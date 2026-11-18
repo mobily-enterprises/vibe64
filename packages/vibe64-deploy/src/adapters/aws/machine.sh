@@ -1,12 +1,17 @@
-# Made by Vibe64: runs one service's image on this machine (its spec is the line above), then says it is ready.
+# Made by Vibe64: runs one service's image on this machine (the line above names where its spec is), then says it is ready.
 set -euo pipefail
 dnf install -y -q docker jq
 systemctl enable --now docker
 token="$(curl -fsS -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 900' http://169.254.169.254/latest/api/token)"
 imds() { curl -fsS -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/$1"; }
-spec="$(imds user-data | sed -n 's/^# vibe64-spec //p' | base64 -d)"
+read -r spec_uri spec_sha < <(imds user-data | sed -n 's/^# vibe64-spec //p')
+region="$(imds meta-data/placement/region)"
+spec="$(aws s3 cp "$spec_uri" - --region "$region")"
+if [ "$(printf '%s' "$spec" | sha256sum | cut -d ' ' -f 1)" != "$spec_sha" ]; then
+  echo "The spec at $spec_uri is not the one this machine's user data names." >&2
+  exit 1
+fi
 field() { jq -r --arg name "$1" '.[$name]' <<<"$spec"; }
-region="$(field region)"
 port="$(field port)"
 V64_INSTANCE_ID="$(imds meta-data/instance-id)"
 V64_PRIVATE_ADDRESS="$(imds meta-data/local-ipv4)"

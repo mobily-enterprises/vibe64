@@ -4,7 +4,7 @@ import { createStandInData } from "./standIn/data.js";
 import { createStandInNetwork } from "./standIn/network.js";
 import { createStandInPrices } from "./standIn/prices.js";
 import { Fault, fault, listOf, unflatten } from "./standIn/wire.js";
-import { specOf } from "./machine.js";
+import { specPlaceOf } from "./machine.js";
 import { xmlOf } from "./xml.js";
 
 // AWS's stand-in for the deploy engine's AWS adapter: a `fetch` that answers the requests the adapter's client makes
@@ -135,7 +135,7 @@ function createAwsStandIn({ region = "us-east-1", account = "123456789012", cred
     } else {
       const group = scalingGroups.find((one) => one.name === name);
       if (!group) return null;
-      const spec = specOf(world.network.templateData(group.template.id, group.template.version).UserData);
+      const { spec } = world.data.specAt(specPlaceOf(world.network.templateData(group.template.id, group.template.version).UserData));
       container = { image: spec.image, environment: Object.entries(spec.env).map(([key, value]) => ({ name: key, value })), secrets: Object.entries(spec.secrets).map(([key, ref]) => ({ name: key, valueFrom: `${ref.arn}:${ref.key}::${ref.versionId ?? ""}` })) };
     }
     const env = Object.fromEntries((container.environment ?? []).map((one) => [one.name, one.value]));
