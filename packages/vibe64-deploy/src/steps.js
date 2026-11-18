@@ -36,8 +36,10 @@
 // ends, in the engine's own words (`stepWords`), each wait when its words change, each call tried again (a step's, or a
 // read of the provider that got no answer, a 5xx or its rate limit, which a Deploy waiting for a long build may meet)
 // and the end. A report names the step, the service or resource and the refresh it started, never a setting's value,
-// and one that throws or rejects never stops the run. A read of the provider that may answer later is tried again at
-// the next step, as a step's call is, so a Deploy waiting for a build lives until it is live or fails.
+// and one that throws or rejects never stops the run. A read of the provider that may answer later is tried again,
+// waiting one pause, then two, four and at most six, so a Deploy waiting for a build lives until it is live or fails.
+// A Deploy first reads how the refreshes a Deploy before it started and never read ended (that one stopped in its
+// wait), letting go of a failed one's links and release as that Deploy would have (settleLastRun).
 //
 // Each call's idempotency key names this Deploy's run, so a call tried again within it gets the first answer, and a
 // later Deploy asking the same again (a count put back, a service made again after it was taken offline) is not
@@ -178,6 +180,38 @@ function stepEvent(step, words, record = null) {
 
 /** A read of the provider that may answer later: no answer, a 5xx, its rate limit, a thing busy. @param {any} error */
 const retryable = (error) => error?.retryable === true;
+/** Text ending as a sentence ends, its own full stop kept. @param {string} text */
+const sentence = (text) => (/[.!?]$/u.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+// A read tried again waits one pause, then two, four and at most six (5, 10, 20 and 30 seconds at the caller's 5).
+const BACKOFF_PAUSES_MAX = 6;
+/** The pauses before the provider is read again after this many failed reads in a row. @param {number} failures */
+const backoffPauses = (failures) => Math.min(2 ** (failures - 1), BACKOFF_PAUSES_MAX);
+
+/**
+ * What a Deploy that stopped before it read how its refreshes ended (the editor stopped, or a read failed in its wait)
+ * left: each refresh it started is read now, and one that failed or was aborted is let go as the run would have let it
+ * go, its links made ahead dropped (they ended with it) and its service handed its release again, so the next Deploy
+ * makes them again and nothing it holds is stale. A refresh still open is waited for by the next Deploy as it reads
+ * the service. Answers the record with the reason of each that failed.
+ * @param {any} adapter @param {any} record @param {(event: any) => void} tell
+ */
+async function settleLastRun(adapter, record, tell) {
+  const kept = structuredClone(record);
+  for (const [service, state] of Object.entries(kept.run?.services ?? {})) {
+    const id = kept.items[`service.${service}`]?.id;
+    if (!state?.refreshId || !id || kept.run.state === "live") continue;
+    const words = `Reading how the last Deploy's update of ${service} ended`;
+    tell({ kind: "step", phase: "start", step: "settleRefresh", service, words, refresh: { serviceId: id, refreshId: state.refreshId } });
+    const refresh = await adapter.readRefresh(id, state.refreshId);
+    if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
+      for (const resource of state.linkedAhead ?? []) delete kept.items[`resource.${resource}`]?.links?.[service];
+      delete kept.items[`service.${service}`].release;
+      tell({ kind: "step", phase: "done", step: "settleRefresh", service, words,
+        message: `It ${refresh.state}: ${sentence(refresh.error?.message ?? "the provider gave no reason")} This Deploy hands ${service} its release again.` });
+    } else tell({ kind: "step", phase: "done", step: "settleRefresh", service, words, message: `It is ${refresh?.state ?? "gone"}.` });
+  }
+  return kept;
+}
 
 /**
  * The next step of a Deploy, or `{ kind: "live" }`, or `{ kind: "failed", message }`, or `{ kind: "wait", words }`
@@ -491,19 +525,22 @@ async function deploy({
   }));
   const full = { ...release, digests, port: adapter.servicePort, trustedProxies: await adapter.trustedProxies() };
   const run = { id: `run_${randomBytes(6).toString("hex")}`, release: release.id, planHash, state: "deploying", domain: null, services: {}, failure: null };
-  let record = await save({ ...structuredClone(start), run });
+  let record = await save({ ...(await settleLastRun(adapter, start, tell)), run });
   const steps = [];
   let waiting = null;
+  let failedReads = 0;
   try {
     for (let count = 0; count < maxSteps; count += 1) {
       let observed;
       try {
         observed = await adapter.inventory();
+        failedReads = 0;
       } catch (error) {
-        // The provider may answer later (a long build keeps it busy): read it again at the next step.
+        // The provider may answer later (a long build keeps it busy): read it again, waiting longer each time.
         if (!retryable(error)) throw error;
-        tell({ kind: "retry", words: `Reading ${adapter.title} again`, message: error.message });
-        await pause();
+        failedReads += 1;
+        tell({ kind: "retry", words: `Reading ${adapter.title} again`, attempt: failedReads, message: error.message });
+        for (let one = 0; one < backoffPauses(failedReads); one += 1) await pause();
         continue;
       }
       const step = nextStep({ plan, needs, record, observed, release: full });
@@ -582,14 +619,17 @@ async function takeOffline(adapter, record, {
   const going = new Map(services.map((item) => [item.id, item.name]));
   let left = [...going.values()];
   let waiting = null;
+  let failedReads = 0;
   for (let read = 0; read < maxReads; read += 1) {
     let listed;
     try {
       listed = await adapter.inventory();
+      failedReads = 0;
     } catch (error) {
       if (!retryable(error)) throw error;
-      tell({ kind: "retry", words: `Reading ${adapter.title} again`, message: error.message });
-      await pause();
+      failedReads += 1;
+      tell({ kind: "retry", words: `Reading ${adapter.title} again`, attempt: failedReads, message: error.message });
+      for (let one = 0; one < backoffPauses(failedReads); one += 1) await pause();
       continue;
     }
     const now = listed.filter((thing) => going.has(thing.id)).map((thing) => going.get(thing.id));

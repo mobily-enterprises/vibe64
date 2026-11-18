@@ -543,6 +543,86 @@ test("a provider read that fails while a Deploy waits (no answer, a 5xx, its rat
   assert.deepEqual(retries.slice(1).map((event) => event.message), ["mobilynet answered 503", "mobilynet answered 429"]);
 });
 
+test("reads of the provider that keep failing while a Deploy waits are tried again further apart, one pause, then two, four and at most six", async () => {
+  const { standIn, record } = setup();
+  const originalFetch = standIn.fetch;
+  let down = 0;
+  const client = createMobilynetClient({
+    baseUrl: standIn.baseUrl, credential: standIn.key,
+    fetch: (url, init) => (down > 0 && (down -= 1, true) ? Promise.reject(new TypeError("fetch failed")) : originalFetch(url, init))
+  });
+  const adapter = createMobilynetAdapter({ client, project: standIn.projectId, leases: false });
+  const stack = stackOf();
+  const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer() });
+  const said = [];
+  let pauses = 0;
+  const result = await deploy({
+    adapter, needs: stack.needs, record, planHash: plan.hash, release: releaseOf("c1", stack), holder: HOLDER,
+    report: (event) => said.push({ ...event, pauses }),
+    pause: () => {
+      pauses += 1;
+      // Once the computers' build runs, mobilynet answers no read for its next six inventories (two calls each).
+      if (pauses === 4) down = 12;
+      standIn.advance();
+    }
+  });
+  assert.equal(result.outcome, "live", result.message);
+  const retries = said.filter((event) => event.kind === "retry");
+  assert.deepEqual(retries.map((event) => event.attempt), [1, 2, 3, 4, 5, 6]);
+  const gaps = retries.slice(1).map((event, index) => event.pauses - retries[index].pauses);
+  assert.deepEqual(gaps, [1, 2, 4, 6, 6]);
+});
+
+test("a Deploy that stopped while its build ran, the build then failing, is resumed by the next: it reads how that refresh ended, names its reason, lets go of the links made against it and makes them again", async () => {
+  const { standIn, run, record } = setup();
+  const tooLarge = "The output is 4440 MiB; it may be at most 4096 MiB.";
+  // computers' build will fail, naming why. The editor's run stops at the first pause after computers is linked to the
+  // database while its build runs (a read it could not try again, or the editor stopping): its record says deploying,
+  // computers made, its link made ahead.
+  standIn.faults.releaseBuildFails = { code: "output_too_large", message: tooLarge };
+  let kept = null;
+  const stopped = await run({
+    record, commit: "c1",
+    save: (one) => {
+      kept = structuredClone(one);
+      return one;
+    },
+    pause: () => {
+      if (kept?.items["resource.database"]?.links?.computers) throw new Error("the editor stopped");
+      standIn.advance();
+    }
+  }).catch((error) => error);
+  assert.equal(stopped.message, "the editor stopped");
+  assert.equal(kept.run.state, "deploying");
+  assert.deepEqual(kept.run.services.computers.linkedAhead, ["database"]);
+  // mobilynet then fails the refresh, and the link made against it ends with it.
+  settle(standIn);
+  standIn.faults.releaseBuildFails = false;
+  const computersId = kept.items["service.computers"].id;
+  assert.equal(standIn.services.refreshes(computersId).at(-1).error.message, tooLarge);
+
+  const events = [];
+  const resumed = await run({ record: kept, commit: "c2", report: (event) => events.push(event) });
+  assert.equal(resumed.outcome, "live", resumed.message);
+  const settled = events.filter((event) => event.step === "settleRefresh");
+  assert.deepEqual(settled.map((event) => [event.phase, event.service]), [["start", "computers"], ["done", "computers"]]);
+  assert.equal(settled[1].message, `It failed: ${tooLarge} This Deploy hands computers its release again.`);
+  assert.equal(resumed.record.items["service.computers"].id, computersId, "computers is the App Service made before, not made twice");
+  for (const item of ["resource.database", "resource.files"]) {
+    const held = standIn.hosted.service(resumed.record.items[item].id).links.filter((link) => ["issuing", "active"].includes(link.state));
+    assert.deepEqual(held.map((link) => link.consumer.id).sort(), [computersId, resumed.record.items["service.web"].id].sort());
+    assert.deepEqual(Object.values(resumed.record.items[item].links).sort(), held.map((link) => link.id).sort());
+  }
+});
+
+test("a build that fails naming why fails the Deploy with mobilynet's own words", async () => {
+  const { standIn, run, record } = setup();
+  standIn.faults.releaseBuildFails = { code: "output_too_large", message: "The output is 4440 MiB; it may be at most 4096 MiB." };
+  const failed = await run({ record, commit: "c1" });
+  assert.equal(failed.outcome, "failed");
+  assert.equal(failed.message, "computers: the release did not go live: The output is 4440 MiB; it may be at most 4096 MiB.");
+});
+
 test("take offline reports each App Service deleted, the wait while the provider removes them and each one gone, and tries a failed read again", async () => {
   const { standIn, run, record } = setup();
   const first = await run({ record, commit: "c1" });

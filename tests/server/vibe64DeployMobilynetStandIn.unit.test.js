@@ -667,3 +667,19 @@ test("an instance's logs are read by an operation: 202 first, then 200 with its 
   const other = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: blind, fetch: standIn.fetch });
   assert.equal((await refused(other.readServiceLogs(serviceId, { instance: instance.id }))).code, "scope_missing");
 });
+
+test("a build's log is read from a byte on, as mobilynet answers it, with vps:read or packages:publish, and names a failed build's reason", async () => {
+  const { standIn, client, production, projectId } = world();
+  const { release } = await production.createRelease("shop", upload(SHOP, "1"));
+  const [{ buildId }] = standIn.releases(projectId, "shop");
+  // The engine's scopes hold neither: mobilynet's buildReader refuses them.
+  assert.deepEqual(refusal(await refused(client.readBuildLog(buildId))), { status: 403, code: "scope_missing", fields: [] });
+  const reader = createMobilynetClient({ baseUrl: standIn.baseUrl, fetch: standIn.fetch, credential: standIn.addKey({ projectId, scopes: ["packages:publish"] }) });
+  const first = await reader.readBuildLog(buildId);
+  assert.deepEqual([first.state, first.done, first.text], ["building", false, `Building shop ${release.version}: running its build command\n`]);
+  standIn.faults.releaseBuildFails = { code: "output_too_large", message: "The output is 4440 MiB; it may be at most 4096 MiB." };
+  standIn.advance();
+  const rest = await reader.readBuildLog(buildId, { after: first.next });
+  assert.deepEqual(rest, { text: "The output is 4440 MiB; it may be at most 4096 MiB.\n", next: first.next + rest.text.length, state: "failed", done: true });
+  assert.deepEqual(refusal(await refused(reader.readBuildLog("bld_nope"))), { status: 404, code: "not_found", fields: [] });
+});

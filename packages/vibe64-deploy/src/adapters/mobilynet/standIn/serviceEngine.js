@@ -287,7 +287,8 @@ function createStandInServiceEngine(world, parts) {
     }
     if (!release || release.build === "building") return;
     if (release.build === "failed") {
-      failRefresh(service, refresh, { code: "app_build_failed", message: "The release's build or its check failed.", details: { buildId: release.buildId } }, "build_failed");
+      const message = release.error?.named ? release.error.message : "The release's build or its check failed.";
+      failRefresh(service, refresh, { code: "app_build_failed", message, details: { buildId: release.buildId } }, "build_failed");
       return;
     }
     const refused = releaseRefusal(service, release.declaration, specOf(service, refresh));

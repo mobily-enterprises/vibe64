@@ -224,9 +224,15 @@ A refusal from the provider (a quota, the spending cap) fails the Deploy with
 its reason, the record kept as far as it got; an answer the provider may give
 later is tried again. That holds for the provider read at the top of each step
 too: a read that got no answer, a 5xx or the provider's rate limit (as a Deploy
-waiting minutes for a build may meet) is tried again at the next step, so the
-run lives until it is live or failed; before, one such read ended the run with
-its record still deploying. A Deploy never deletes or makes again a hosted service
+waiting minutes for a build may meet) is tried again, one pause later, then two,
+four and at most six (30 seconds at a caller's 5), for as long as the Deploy
+waits, so the run lives until it is live or failed; before, one such read ended
+the run with its record still deploying. A Deploy first reads how each refresh
+the Deploy before it started, and never read, ended (`settleLastRun`: that one
+stopped in its wait): one that failed or was aborted is let go as that Deploy
+would have let it go, its links made ahead dropped, since they ended with it,
+and its service handed its release again, so a Deploy after a run that stopped
+makes the links again and reuses everything else it made. A Deploy never deletes or makes again a hosted service
 and never acts on a thing the record does not hold. `takeOffline()` deletes the
 services, public first, and keeps every resource: it keeps the record without
 them (`save`) once each delete is asked, then reads the provider again
@@ -291,11 +297,15 @@ refresh with its steps (`readServiceRefresh`: build started, passed or failed,
 each instance started, healthy, joined or never healthy) and an instance's logs
 (`readServiceLogs`, `GET /v1/services/{id}/logs`, `services:read`): read by an
 operation, `logs` null with `202` until it ends, then the lines, each of the
-service's secrets masked as `[secret]`. The stand-in answers both, an
-instance's output as a test sets it (`services.setLogs`), its reads ending at
-the next `advance()` (`standIn/serviceLogs.js`). A build's own log
-(`GET /v1/builds/{id}/log`) needs `vps:read` or `packages:publish`, which a key
-holding the engine's scopes lacks.
+service's secrets masked as `[secret]`; and a build's own log
+(`readBuildLog`, `GET /v1/builds/{id}/log`: `{ text, next, state, done }` from
+byte `after`), which needs `vps:read` or `packages:publish`, scopes a key
+holding only the engine's lacks. The stand-in answers each, an instance's
+output as a test sets it (`services.setLogs`), its reads ending at the next
+`advance()` (`standIn/serviceLogs.js`), and a build's own lines; its
+`releaseBuildFails` fault, given `{ code, message }`, fails a build with that
+reason, which the refresh names too, as mobilynet named a build whose output
+passed its limit.
 
 ## The Google Cloud adapter
 

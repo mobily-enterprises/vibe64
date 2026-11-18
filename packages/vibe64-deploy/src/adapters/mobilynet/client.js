@@ -376,6 +376,13 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
      * @param {string} serviceId @param {{ instance?: string, unit?: string, since?: string, lines?: number }} which
      */
     readServiceLogs: (serviceId, { instance, unit, since, lines } = {}) => call("GET", `${servicePath(serviceId)}/logs`, { query: { instance, unit, since, lines } }),
+    /**
+     * A build's log from byte `after` (`GET /v1/builds/{id}/log`, `vps:read` or `packages:publish`): `{ text, next,
+     * state, done }`, at most 256 KiB, `next` the byte to ask from next; with `wait` (0 to 25 seconds) and nothing new
+     * it answers when text comes, the build ends or the wait passes.
+     * @param {string} buildId @param {{ after?: number, wait?: number }} [from]
+     */
+    readBuildLog: (buildId, { after = 0, wait } = {}) => call("GET", `/v1/builds/${encodeURIComponent(buildId)}/log`, { query: { after, wait } }),
     /** An App Service's refreshes, newest first (`services:read`). @param {string} serviceId */
     listServiceRefreshes: (serviceId) => listAll(`${servicePath(serviceId)}/refreshes`),
     /** One refresh of an App Service with its steps (`services:read`). @param {string} serviceId @param {string} refreshId */
