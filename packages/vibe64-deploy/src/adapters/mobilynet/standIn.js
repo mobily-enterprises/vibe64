@@ -50,6 +50,8 @@ const QUOTAS = Object.freeze(Object.keys(DEFAULT_LIMITS));
 const FAULTS = Object.freeze(["down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails"]);
 const LEASE_MAX_SECONDS = 3600;
 const LEASE_TEXT = 200;
+// mobilynet's Idempotency-Key: 1 to 128 printable characters (its idempotency.js).
+const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,128}$/u;
 
 const ID = "[^/]+";
 /** Each route's scope by method, as the OpenAPI document's `x-scopes` give them; the first pattern that matches decides. */
@@ -134,7 +136,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
      * @param {string | undefined} key @param {string} fingerprint @param {() => any} make
      */
     once: (key, fingerprint, make) => {
-      if (!key) return failure(400, "invalid_request", "The Idempotency-Key header is required.");
+      if (!key || !IDEMPOTENCY_KEY.test(key)) return failure(400, "invalid_request", "Send an Idempotency-Key header (up to 128 characters) with every create.", { header: "Idempotency-Key" });
       const known = idempotency.get(key);
       if (known) return known.fingerprint === fingerprint ? known.answer : failure(409, "idempotency_key_reused", "This Idempotency-Key was used with another request.");
       const made = make();

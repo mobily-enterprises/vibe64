@@ -112,6 +112,10 @@ test("an App Service made from a release runs once its instances are healthy, ea
   assert.deepEqual([unknownRelease.status, unknownRelease.code], [404, "not_found"]);
   const noKey = await refused(production.createService(webSpec(release.version, { name: "api", routes: [] }), { idempotencyKey: undefined }));
   assert.deepEqual([noKey.status, noKey.code], [400, "invalid_request"]);
+  // mobilynet takes a key of 1 to 128 printable characters (its idempotency.js).
+  const longKey = await refused(production.createService(webSpec(release.version, { name: "api", routes: [] }), { idempotencyKey: "k".repeat(129) }));
+  assert.deepEqual([longKey.status, longKey.code, longKey.details], [400, "invalid_request", { header: "Idempotency-Key" }]);
+  assert.equal((await production.createService(webSpec(release.version, { name: "api", routes: [] }), { idempotencyKey: "k".repeat(128) })).service.name, "api");
 });
 
 test("an internal service has no routes and is reached by another's connection on its port", async () => {

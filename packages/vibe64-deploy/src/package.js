@@ -148,6 +148,32 @@ function settingsPerService(needs, envRecords = []) {
 }
 
 /**
+ * The values a service is given, split into settings and secrets as declared: Production's own (APP_ENV=production,
+ * HOST=0.0.0.0, PORT, APP_PUBLIC_URL at the domain, TRUSTED_PROXIES as the provider names them), each Reaches setting
+ * the reached service's private address, and the Production Env's values (generated secrets and the setup code
+ * among them) for the names it declares. A declared name without a value is left out, never blanked.
+ * @param {object} options
+ * @param {Record<string, { secret: boolean, required: boolean }>} options.declared the service's settings (settingsPerService)
+ * @param {Record<string, string>} options.env the Production Env's values by name
+ * @param {string} options.domain @param {string} options.trustedProxies @param {number} options.port
+ * @param {Record<string, string>} [options.reached] each of the service's Reaches settings with the reached service's address
+ */
+function settingValues({ declared, env, domain, trustedProxies, port, reached = {} }) {
+  const own = { APP_ENV: "production", HOST: "0.0.0.0", PORT: String(port), APP_PUBLIC_URL: `https://${domain}`, TRUSTED_PROXIES: trustedProxies };
+  const all = { ...env, ...reached, ...own };
+  const settings = {};
+  const secrets = {};
+  for (const [name, { secret }] of Object.entries(declared)) {
+    if (typeof all[name] === "string") (secret ? secrets : settings)[name] = all[name];
+  }
+  return { settings, secrets, hash: `sha256:${sha256Of(Buffer.from(JSON.stringify([sortedObject(settings), sortedObject(secrets)])))}` };
+}
+
+function sortedObject(value) {
+  return Object.fromEntries(Object.entries(value).sort(([one], [other]) => (one < other ? -1 : 1)));
+}
+
+/**
  * Why a Production Env entry can't be given to the services it names, or "": it names a service there isn't, or it is
  * a setting Production gives itself, a resource binds, or a service's own `- Setting` or Reaches sets.
  * @param {{ key: string, services?: string[] }} record @param {object} needs needsOfStack's needs
@@ -189,6 +215,7 @@ export {
   declaredSettingsOf,
   envEntryProblem,
   packArchive,
+  settingValues,
   settingsPerService,
   withRootFile
 };

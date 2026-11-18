@@ -13,6 +13,7 @@ provider.
 - `packages/vibe64-deploy/src/needsOfStack.js`
 - `packages/vibe64-deploy/src/package.js`
 - `packages/vibe64-deploy/src/plan.js`
+- `packages/vibe64-deploy/src/steps.js`
 - `packages/vibe64-deploy/src/record.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/declaration.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/index.js`
@@ -29,7 +30,10 @@ count, its smallest machine, the services it reaches under which setting, its
 own settings and sandbox allowances), each resource with the settings its
 bindings name, the generated secrets and the setup code. Every service uses
 every resource. A Stack that doesn't say enough is refused, naming the fix in
-`genesis/stack.md` and, for a grammar refusal, its line in the section.
+`genesis/stack.md` and, for a grammar refusal, its line in the section. The
+Genesis boundary's result names the section's `### Resource` entries
+`deploymentResources`, since the inspection's `resources` already names
+`## Resources`.
 
 ## The package
 
@@ -83,6 +87,56 @@ The quote's lines are at list price; the hash covers the needs, the choices in
 effect, the decisions, the items, the lines and a digest of the observed state,
 so a Deploy held to a plan read before anything moved is refused.
 
+## The steps
+
+`deploy()` reads the Plan again and refuses a Deploy whose hash is not the one
+the owner confirmed (`deployment_plan_stale`) or whose plan has problems, takes
+the lease `deploy:<deployment id>` for 600 seconds where the adapter takes
+leases (refused `deployment_lease_held`, naming the holder and since when),
+then does one step at a time (`nextStep`, `applyStep`), keeping the record after
+each and renewing the lease, until the deployment is live or failed, and gives
+the lease up either way. Every call carries an idempotency key naming this
+Deploy's run, so a call tried again gets its first answer while a later Deploy
+asking the same again is not answered with an old one; a Deploy cut short
+between a create and keeping its record is made whole by the next, which adopts
+the thing labelled as that item (and a link already standing) rather than
+making it twice. In order:
+
+1. a service whose exposure changed is deleted, to be made again;
+2. each resource's hosted service is made, labelled, or resized, and waited for;
+3. the domain is added to the provider project when none covers it;
+4. each internal service, then the public one: its release uploaded, its App
+   Service made (labelled, internal ones with no routes, the public one routed
+   at the domain with a connection to each service it reaches) or handed the
+   release, its refresh waited for, then linked to every resource. mobilynet
+   checks a link against the release a service runs, which moves only when a
+   refresh succeeds, so a link follows the refresh; a refresh that fails fails
+   the Deploy with the service's reason, and services not yet moved keep
+   serving their version;
+5. a resource the Stack no longer names is unlinked from the services that
+   stay and kept with its data;
+6. each service's settings (`settingValues`: Production's own, each Reaches
+   setting the reached service's private address, the Production Env's values
+   for the names it declares), the services it reaches, its size and count;
+7. a service the Stack no longer names is deleted;
+8. live, once every service runs its release on as many healthy instances as
+   chosen and its last refresh (a link's or a change's) did not fail.
+
+A refusal from the provider (a quota, the spending cap) fails the Deploy with
+its reason, the record kept as far as it got; an answer the provider may give
+later is tried again. A Deploy never deletes or makes again a hosted service
+and never acts on a thing the record does not hold. `takeOffline()` deletes the
+services, public first, and keeps every resource; `deleteResource()` deletes a
+disconnected resource and its data only when the owner typed its name.
+
+Not covered yet: mobilynet links a hosted service only to an App Service that
+runs a release, and a new App Service runs one only once its first instances
+are healthy, which start without their resources' settings. The serve script
+migrates before it serves, so at mobilynet the first Deploy of an application
+with a database fails until mobilynet lets a link follow the release a refresh
+brings, or takes links when a service is made. The stand-in's instances run no
+script, so its tests do not show this.
+
 ## The record
 
 The record (`record.js`) keys what was made by (environment, kind, name), each
@@ -106,4 +160,5 @@ environment.
 - `needsOfStack()` — the needs from the inspected Stack.
 - `servicePackages()` — one mobilynet declaration per service and the scripts.
 - `planOf()` — the Plan with verbs, drift, the quote and its hash.
+- `deploy()` — a whole Deploy, step by step, under the lease.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.

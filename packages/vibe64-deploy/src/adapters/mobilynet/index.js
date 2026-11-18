@@ -47,7 +47,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
   /**
    * Every App Service and hosted service of the project, as the plan, the steps and the record read them: `{ id, name,
    * kind, labels, size, instances, ... }`, a service with its exposure, version, refresh, healthy count, internal
-   * name and last error, a resource with its kind and state.
+   * name, connections and last error, a resource with its kind and state.
    */
   async function inventory() {
     const [services, hosted] = await Promise.all([calls.listServices(), calls.listHostedServices()]);
@@ -65,6 +65,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         refresh: one.refresh ?? null,
         healthy: one.instances?.healthy ?? 0,
         internalName: one.internalName ?? null,
+        connections: (one.connections ?? []).map(({ to, port }) => ({ to, port })),
         lastError: one.lastError ?? null
       })),
       ...hosted.filter((one) => one.state !== "deleted").map((one) => ({

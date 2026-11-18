@@ -102,7 +102,8 @@ allowances, which one approval covers.
 `### Resource \`id\`` names a resource of `## Resources` and says how
 development provides it: `- Development: \`local folder\`` for a bucket the
 application keeps in its own folder there, or `\`own bucket\`` (the default).
-The result carries these as `deploymentResources`. The inspection, which has
+The result carries these as `deploymentResources` (named apart from the
+inspection's `resources`, the Stack's `## Resources`). The inspection, which has
 the Stack's resources, refuses a heading for an undeclared resource,
 Development on a resource that is not a bucket, and a service's Reaches or
 Setting naming a setting a resource binds.
