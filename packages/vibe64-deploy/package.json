@@ -19,7 +19,10 @@
     "./adapters/mobilynet/stand-in": "./src/adapters/mobilynet/standIn.js",
     "./adapters/google": "./src/adapters/google/index.js",
     "./adapters/google/client": "./src/adapters/google/client.js",
-    "./adapters/google/stand-in": "./src/adapters/google/standIn.js"
+    "./adapters/google/stand-in": "./src/adapters/google/standIn.js",
+    "./adapters/aws": "./src/adapters/aws/index.js",
+    "./adapters/aws/client": "./src/adapters/aws/client.js",
+    "./adapters/aws/stand-in": "./src/adapters/aws/standIn.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -61,6 +64,14 @@
           {
             "subpath": "./adapters/google/client",
             "summary": "The Google Cloud REST client: each API directly, or every API through a gateway, with an access token or a token source."
+          },
+          {
+            "subpath": "./adapters/aws",
+            "summary": "The AWS adapter: its offer (Fargate shapes, EC2 machine types, RDS classes at list price), its inventory of tagged things, and the calls the steps make."
+          },
+          {
+            "subpath": "./adapters/aws/client",
+            "summary": "The AWS client: JSON, Query and S3 calls signed with Signature Version 4, or sent through a gateway that signs, with a short-lived token."
           }
         ]
       }

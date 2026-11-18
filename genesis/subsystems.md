@@ -1090,7 +1090,7 @@ not allocate source, run treatment commands or certify source consumption.
 
 ## `packages-vibe64-deploy` Deploy engine
 
-Turns a project's Stack into what runs at a provider: Production's needs, the package each service runs, the Plan, the record of what was made and the steps that make it, with one adapter per provider (mobilynet, Google Cloud). It runs only in the editor, which gives it the credential, the record's place and the prices; it knows no host and depends on no editor or JSKIT package.
+Turns a project's Stack into what runs at a provider: Production's needs, the package each service runs, the Plan, the record of what was made and the steps that make it, with one adapter per provider (mobilynet, Google Cloud, AWS). It runs only in the editor, which gives it the credential, the record's place and the prices; it knows no host and depends on no editor or JSKIT package.
 
 ### Source
 - Directory `packages/vibe64-deploy`

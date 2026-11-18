@@ -4,7 +4,7 @@ The deploy engine, `@local/vibe64-deploy`, turns a project's Stack into what
 runs at a provider. It runs only in Vibe64's editor, which gives it the
 provider's credential, the place of its record and the prices it shows; it
 depends on no editor or JSKIT package and knows no host. Its providers are
-mobilynet and Google Cloud.
+mobilynet, Google Cloud and AWS.
 
 ## Sources
 
@@ -31,6 +31,20 @@ mobilynet and Google Cloud.
 - `packages/vibe64-deploy/src/adapters/google/prices.js`
 - `packages/vibe64-deploy/src/adapters/google/client.js`
 - `packages/vibe64-deploy/src/adapters/google/standIn.js`
+- `packages/vibe64-deploy/src/adapters/aws/index.js`
+- `packages/vibe64-deploy/src/adapters/aws/context.js`
+- `packages/vibe64-deploy/src/adapters/aws/base.js`
+- `packages/vibe64-deploy/src/adapters/aws/build.js`
+- `packages/vibe64-deploy/src/adapters/aws/domain.js`
+- `packages/vibe64-deploy/src/adapters/aws/resources.js`
+- `packages/vibe64-deploy/src/adapters/aws/services.js`
+- `packages/vibe64-deploy/src/adapters/aws/machine.js`
+- `packages/vibe64-deploy/src/adapters/aws/machine.sh`
+- `packages/vibe64-deploy/src/adapters/aws/offer.js`
+- `packages/vibe64-deploy/src/adapters/aws/client.js`
+- `packages/vibe64-deploy/src/adapters/aws/sigv4.js`
+- `packages/vibe64-deploy/src/adapters/aws/xml.js`
+- `packages/vibe64-deploy/src/adapters/aws/standIn.js`
 
 ## Needs
 
@@ -290,6 +304,78 @@ Google Cloud has no leases: the adapter takes none, safe only while one editor
 deploys an environment. Its stand-in (`standIn.js`) answers every call the
 adapter makes in Google's shapes, in memory, for the engine's tests.
 
+## The AWS adapter
+
+`createAwsAdapter()` answers the engine in AWS's calls for one deployment (the
+record's `deploymentId`, app and environment) in one region of one AWS account.
+Its client takes `{ region, credential }`: the person's own access key (or a
+source of short-lived ones), each request signed in the client with Signature
+Version 4; or a gateway's https address and a short-lived token, each request
+sent to `<gateway>/<signing name>/<region>/<AWS host><path>` with the token and
+no signature, the gateway signing it. A credential AWS calls expired is
+refreshed once.
+
+- **Names and tags.** Everything is named `v64-<the deployment id's last
+  eight>-<part>`, so no two deployments' things meet, and carries Vibe64's tags
+  (the item's, or `base.<part>` for what the deployment's services share). The
+  inventory reads only what carries this deployment's tags; every call that
+  changes a thing reads it first and refuses one found under its name that
+  isn't tagged as this deployment's (`aws_not_ours`), as it refuses a bucket
+  name another AWS account holds.
+- **Network.** The deployment's own VPC with two subnets in two zones, an
+  internet gateway, a free S3 gateway endpoint and interface endpoints for ECR,
+  and no NAT gateway: each task and machine has a public address of its own for
+  its way out, and its security group lets in only the load balancer and the
+  services that reach it.
+- **Services.** A service runs on Fargate as an ECS service in the
+  deployment's cluster: a public one behind the deployment's Application Load
+  Balancer, an internal one in the deployment's private names (Cloud Map), at
+  `<service>.<names domain>`. A service with a sandbox allowance, or reached at
+  each instance, is offered `machineSizes` instead and runs on whole machines
+  of its own, an EC2 Auto Scaling group from a launch template on Amazon Linux:
+  its user data (`machine.sh`) runs the image with Docker, privileged for the
+  sandbox on a machine that is the service's alone, with its settings, each
+  secret read from Secrets Manager at its version, and the instance facts
+  (`V64_INSTANCE_URL` is the machine's private address); a second container,
+  restarted by Docker, keeps the machine in the private names while the service
+  runs. A machine tells Auto Scaling it is ready only once the service answers
+  its health path. A release is a new task definition revision, which ECS rolls
+  out and rolls back by its circuit breaker, or a new template version, which an
+  instance refresh rolls in, the new machines ready before the old go. A rollout
+  is the refresh the steps wait for: its id (the create, release or change and
+  the revision or version it moves to) is kept as the service's
+  `vibe64-refresh` tag, and it is `rolling` from the start, as CodeBuild built
+  the image before it began, so a service is linked to its resources while it
+  rolls (their settings are in what it runs already).
+- **Reaches.** A security group rule opens the reached service's port to the
+  reaching service's group; each database's group lets in the services linked
+  to it.
+- **Resources.** `postgresql` is RDS for PostgreSQL and `mysql` RDS for MariaDB
+  (a standby copy is Multi-AZ), private, encrypted, backed up for 7 days, its
+  login kept by RDS in Secrets Manager; deleting one takes a final snapshot. A
+  `bucket` is private S3 with an IAM user whose key reaches that bucket alone,
+  kept in Secrets Manager; a bucket that still holds files is not deleted.
+  `redis` is refused in the Plan with its reason.
+- **Images.** CodeBuild builds each service's upload (the Containerfile
+  `imageUpload()` adds) into the deployment's ECR, tagged with the upload's
+  SHA-256, so the same upload is never built twice; while it builds, the step
+  asks again at the next one, and a failed build fails the Deploy with its phase
+  and reason.
+- **Domain.** An ACM certificate validated by DNS on the load balancer, port 80
+  redirecting to 443. Each Deploy waits up to 15 minutes for AWS to issue it,
+  then fails naming the two records the owner adds (the validation record and
+  the domain at the load balancer), which `domainRecords()` also gives.
+- **Prices.** The offer reads AWS's list prices from the Price List API in US
+  dollars for the region: Fargate per vCPU-hour and GB-hour, machines per hour
+  with their 40 GiB root disk, a public IPv4 address for each, databases with
+  their first 20 GiB, the load balancer by the hour. A price it needs that the
+  Price List lacks refuses the offer, naming it.
+
+AWS has no leases: the adapter takes none, safe only while one editor deploys an
+environment. Its stand-in (`standIn.js` and `standIn/`) answers every call the
+adapter makes in AWS's three protocols and shapes, in memory, checking each
+request's signature (or the gateway's token), for the engine's tests.
+
 ## Implementation map
 
 - `needsOfStack()` — the needs from the inspected Stack.
@@ -299,3 +385,4 @@ adapter makes in Google's shapes, in memory, for the engine's tests.
 - `deploy()` — a whole Deploy, step by step, under the lease.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
 - `createGoogleAdapter()` — the same for Google Cloud; `createGoogleClient()` its REST client.
+- `createAwsAdapter()` — the same for AWS; `createAwsClient()` its client.
