@@ -22,7 +22,7 @@ const OTHER_SOFTWARE_LOCATIONS = new Set([
   // leaves each app's settings for its start step (root, tmpfs), and the folder that step copies them to for the
   // service's login, as mobilynet's catalogue apps keep a /run folder of their own (packages/vibe64-deploy's
   // adapters/mobilynet/declaration.js).
-  "/run/mobilynet", "/run/vibe64-apps"
+  "/run/mobilynet", "/run/app-settings"
 ]);
 // Known blocker: the privileged helper (every module of its folder), its test
 // files and its release packaging still describe the host they run on.

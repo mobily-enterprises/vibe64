@@ -22,7 +22,7 @@ import {
 // operation, when nothing else changes), and a list filters by them. Its machine counts against the project's
 // machines, vCPU, memory and disk quotas, and a project at its spending cap makes none and resizes none up (M12, M13:
 // `world.admit`). Faults: `neverBoots` (a hosted service stays `creating`) and `noCapacity`.
-// STAND-IN ONLY: a link's consumer is an App Service alone (a VPS's app or another hosted service is refused `422`); a
+// STAND-IN ONLY: a link's consumer is an App Service alone (a mobilynet machine's app or another hosted service is refused `422`); a
 // link makes no allow rule; a restore (`fromBackup`) is refused; an operation is answered within the hosted service's
 // answers only; health has no metrics, and backups are on with no point yet.
 

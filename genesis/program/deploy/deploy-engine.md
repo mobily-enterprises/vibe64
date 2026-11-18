@@ -58,7 +58,10 @@ then Serve's defaults, migrates and serves. The instance facts come from the
 `V64_INSTANCE_ID` (its hostname), `V64_PRIVATE_ADDRESS`, `V64_WORK_DIR` and,
 for a service reached at each instance, `V64_INSTANCE_URL`. An instance without
 `_mobilynet` gets none, and a service reached at each instance then stops,
-naming why.
+naming why. mobilynet leaves an app's settings to its `start` step, as root, in
+`/run/mobilynet/apps/<app>/settings.json`; `start` copies them for the
+service's login to `/run/app-settings/<app>/settings.json` (mode `0400`), which
+the serve script reads.
 
 `V64_WORK_DIR` is `/srv/<login>`, the work area mobilynet makes for each
 declared login on the machine's data disk (owned by the login, mounted without

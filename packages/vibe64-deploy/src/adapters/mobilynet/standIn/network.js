@@ -10,7 +10,7 @@ import { EDGE_ADDRESSES, HOST_REGIONS, REGIONS, REGION_NAMES, thingName } from "
 // not deleted (`409 domain_in_use`). An App Service's routes are its own (services.js makes them, on the label
 // `mobilynet-service`): each answers its service's own name as its CNAME target, and is live once its domain is
 // verified and the service has an instance in rotation; deleting one is `409 made_by_service`.
-// STAND-IN ONLY: the stand-in makes no route to a VPS or a group of VPSes (it has no VPSes), so a route's create is
+// STAND-IN ONLY: the stand-in makes no route to a mobilynet machine or a group of them (it has no machines), so a route's create is
 // refused `422`; it issues no certificate.
 
 // A name: an exact one or a wildcard one level up, as mobilynet's domains take it.
@@ -23,7 +23,7 @@ const DOMAIN_WORDS = Object.freeze({
   failed: "Not verified in 7 days",
   moved: "Verified in another project"
 });
-const ROUTE_WAITING_WORDS = Object.freeze({ domain: "Its domain to be verified", machines: "A VPS of its group with a place" });
+const ROUTE_WAITING_WORDS = Object.freeze({ domain: "Its domain to be verified", machines: "A machine of its group with a place" });
 const CHALLENGE_ZONE = "acme.mobilynet.standin";
 const REGION_LIST = Object.freeze(REGIONS.map((id) => Object.freeze({
   id, name: REGION_NAMES[id], state: "open", edge: { addresses: HOST_REGIONS.includes(id) ? [...EDGE_ADDRESSES] : [] }
@@ -150,7 +150,7 @@ function createStandInNetwork(world, services) {
         return answer(200, { items: held.map(shown), next: null });
       }
       if (method === "GET" && kind === "routes") return answer(200, { items: routes.filter((route) => route.projectId === projectId).map(routeView), next: null });
-      if (method === "POST" && kind === "routes") return invalid({ vpsId: "The stand-in makes no route to a VPS or a group: an App Service's routes are its own." });
+      if (method === "POST" && kind === "routes") return invalid({ vpsId: "The stand-in makes no route to a machine or a group: an App Service's routes are its own." });
       return null;
     }
     const id = decodeURIComponent(rawId);

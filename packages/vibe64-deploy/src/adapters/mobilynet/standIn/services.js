@@ -172,7 +172,7 @@ function createStandInServices(world, { releases, network }) {
     for (const [index, { to }] of connections.entries()) {
       const other = services.get(to);
       if (!other || other.id === serviceId || other.projectId !== projectId || ["deleting", "deleted"].includes(other.state)) {
-        errors[`connections.${index}.to`] = "No VPS or other service of this project has this id.";
+        errors[`connections.${index}.to`] = "No machine or other service of this project has this id.";
       }
     }
     return Object.keys(errors).length > 0 ? invalid(errors) : null;

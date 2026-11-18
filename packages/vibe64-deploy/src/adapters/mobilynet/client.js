@@ -9,7 +9,7 @@ import { performance } from "node:perf_hooks";
 // `Idempotency-Key` the caller gives, follows no redirect and is tried once: the engine's next step tries again with the
 // same key. A refusal is a MobilynetError with mobilynet's `{ code, message, details, requestId }`.
 // Three parts follow mobilynet's design for the engine (its docs/stages/engine-support.md at 7d775240, being built):
-// labels on App Services and hosted services as VPSes have them (M2: `labels` set at create, replaced whole by a PATCH,
+// labels on App Services and hosted services as mobilynet machines have them (M2: `labels` set at create, replaced whole by a PATCH,
 // answered in reads and lists, a list filtered by `label=key:value`, each one matched); an App Service's instances times
 // its size counted against the mobilynet project's vCPU and memory quotas (M12: `429 quota_exceeded` with `{ quota,
 // limit }` at a create, a count raised or a size made larger, as a hosted service's machine already was); and a monthly

@@ -107,7 +107,7 @@ function appHome(login) {
 
 /** Where start leaves the app's settings for its login, until the next boot. @param {string} name */
 function settingsFileForLogin(name) {
-  return `/run/vibe64-apps/${name}/settings.json`;
+  return `/run/app-settings/${name}/settings.json`;
 }
 
 /** A word as the shell reads it back, in single quotes. @param {string} text */
@@ -186,7 +186,7 @@ function stepLines(role, step) {
  * they leave out), then runs Migrate then Serve, as the app's login on `port`. Every step is a shell command, run in
  * `workdir`. No setting has a value here.
  * @param {object} app
- * @param {string} app.name the app's name on the VPS
+ * @param {string} app.name the app's name on the mobilynet machine
  * @param {string} app.login the login its service runs as
  * @param {number} app.port
  * @param {string} app.healthPath

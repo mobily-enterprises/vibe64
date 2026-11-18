@@ -34,10 +34,10 @@ import { createStandInServices } from "./standIn/services.js";
 // SHA-256, and the status and error code it got), so a test can see what was asked and of what.
 // STAND-IN ONLY: leases (`/v1/leases`) answer in the shape the engine asks mobilynet for (client.js), which mobilynet
 // has not built yet; idempotency keys are kept across the organisation, not per key; at a create or
-// scale-up the spending cap is asked before the quotas; there are no VPSes, allow rules, webhooks or usage.
+// scale-up the spending cap is asked before the quotas; there are no mobilynet machines, allow rules, webhooks or usage.
 
 /**
- * The scopes the engine's key holds: App Services, hosted services, the network, events and usage; never a VPS, project,
+ * The scopes the engine's key holds: App Services, hosted services, the network, events and usage; never a machine, project,
  * key, DNS, webhook or audit scope.
  */
 const ENGINE_SCOPES = Object.freeze([

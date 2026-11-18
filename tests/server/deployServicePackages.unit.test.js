@@ -55,7 +55,7 @@ test("each service is its own declaration: its name, its serve script, its packa
   const common = (name) => ({
     name,
     build: { command: "bash vibe64-app/build.sh", cache: ["~/.npm"], output: ["."] },
-    start: `install -D --owner=${name} --mode=0400 /run/mobilynet/apps/${name}/settings.json /run/vibe64-apps/${name}/settings.json`,
+    start: `install -D --owner=${name} --mode=0400 /run/mobilynet/apps/${name}/settings.json /run/app-settings/${name}/settings.json`,
     check: "curl --fail --silent --show-error --output /dev/null --retry 30 --retry-delay 3 --retry-all-errors "
       + "--retry-max-time 100 --max-time 10 http://127.0.0.1:3000/api/health",
     logins: [{ name }],
@@ -133,7 +133,7 @@ test("each service's script exports its settings, its resources' names, the inst
   const settingsFile = (service) => path.join(root, `${service}.json`);
   for (const [file, text] of Object.entries(scripts)) {
     const service = /serve-([a-z-]+)\.sh$/u.exec(file)?.[1];
-    await writeFile(path.join(release, file), service ? text.replace(`/run/vibe64-apps/memobot-${service}/settings.json`, settingsFile(service)) : text);
+    await writeFile(path.join(release, file), service ? text.replace(`/run/app-settings/memobot-${service}/settings.json`, settingsFile(service)) : text);
   }
   const serve = async (service, settings) => {
     await writeFile(settingsFile(service), JSON.stringify(settings));

@@ -39,7 +39,7 @@ test("an app's mobilynet.json is built by its build block, and its start and che
     name: "shop",
     requiredPackages: ["bash", "coreutils", "curl", "jq", "nodejs_26", "corepack"],
     build: { command: "bash vibe64-app/build.sh", cache: ["~/.npm"], output: ["."] },
-    start: "install -D --owner=shop --mode=0400 /run/mobilynet/apps/shop/settings.json /run/vibe64-apps/shop/settings.json",
+    start: "install -D --owner=shop --mode=0400 /run/mobilynet/apps/shop/settings.json /run/app-settings/shop/settings.json",
     services: [{ name: "web", command: "bash vibe64-app/serve-web.sh", user: "shop", port: 3000, healthPath: "/api/health" }],
     check: "curl --fail --silent --show-error --output /dev/null --retry 30 --retry-delay 3 --retry-all-errors "
       + "--retry-max-time 100 --max-time 10 http://127.0.0.1:3000/api/health",
@@ -90,7 +90,7 @@ test("the build script runs Prepare then Build, and the service exports its sett
   await mkdir(path.join(root, "release/app"), { recursive: true });
   for (const [file, text] of Object.entries(scripts)) {
     await mkdir(path.dirname(path.join(root, "release", file)), { recursive: true });
-    await writeFile(path.join(root, "release", file), text.replace("/run/vibe64-apps/shop/settings.json", settingsFile));
+    await writeFile(path.join(root, "release", file), text.replace("/run/app-settings/shop/settings.json", settingsFile));
   }
   const run = (file) => exec("bash", [file], { cwd: path.join(root, "release"), env: { PATH: process.env.PATH } });
 

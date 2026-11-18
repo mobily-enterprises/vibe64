@@ -7,7 +7,7 @@ import { randomInt } from "node:crypto";
 // STAND-IN ONLY: the registry holds the four interfaces of the catalogue's four apps; a need of another of mobilynet's
 // interfaces is refused as unknown.
 
-/** VPS sizes: a hosted service's machine is one. */
+/** mobilynet machine sizes: a hosted service's machine is one. */
 const MACHINE_SIZES = Object.freeze({
   "m-1": Object.freeze({ vcpus: 1, memoryGib: 2 }),
   "m-2": Object.freeze({ vcpus: 2, memoryGib: 4 }),
@@ -33,7 +33,7 @@ const EDGE_ADDRESSES = Object.freeze(["203.0.113.40", "203.0.113.41"]);
 /** The stand-in's apps domain, which every thing's own name is under. */
 const APPS_DOMAIN = "mobilynet.standin";
 
-// Labels, as a VPS's (validation.js labels), App Services' and hosted services' (engine-support M2).
+// Labels, as a mobilynet machine's (validation.js labels), App Services' and hosted services' (engine-support M2).
 const LABEL_KEY = /^[a-z0-9](?:[a-z0-9._/-]{0,61}[a-z0-9])?$/u;
 const MAX_LABELS = 20;
 const MAX_LABEL_VALUE = 256;

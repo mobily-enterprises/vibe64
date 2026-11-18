@@ -57,7 +57,7 @@ function connectionsOf(given) {
   if (!Array.isArray(given) || given.length > LIMITS.connections) return { errors: { connections: `A list of up to ${LIMITS.connections} connections.` } };
   const errors = {};
   for (const [index, connection] of given.entries()) {
-    if (!isRecord(connection) || typeof connection.to !== "string") errors[`connections.${index}.to`] = "The id of a VPS or a service of this project.";
+    if (!isRecord(connection) || typeof connection.to !== "string") errors[`connections.${index}.to`] = "The id of a machine or a service of this project.";
     if (!Number.isInteger(connection?.port) || connection.port < 1 || connection.port > 65535) errors[`connections.${index}.port`] = "A port from 1 to 65535.";
   }
   return Object.keys(errors).length > 0 ? { errors } : { connections: given.map((connection) => ({ to: connection.to, port: connection.port })) };
