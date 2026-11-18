@@ -172,7 +172,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
   const network = createStandInNetwork(world, { members: (serviceId) => services.serving(serviceId) });
   const services = createStandInServices(world, { releases, network });
   const hosted = createStandInHosted(world, { services, prices });
-  services.useHooks({ nameTaken: hosted.nameTaken, consumerGone: hosted.consumerGone });
+  services.useHooks({ nameTaken: hosted.nameTaken, consumerGone: hosted.consumerGone, refreshFailed: hosted.refreshFailed });
 
   /** Moves everything one step on: releases build, services refresh, hosted services boot, links turn active. */
   function advance() {

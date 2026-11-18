@@ -14,7 +14,7 @@ import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
 import { settingsPerService, withRootFile } from "../../packages/vibe64-deploy/src/package.js";
 import { planOf } from "../../packages/vibe64-deploy/src/plan.js";
 import { LABEL, createRecordStore, newRecord, rebuildFromLabels } from "../../packages/vibe64-deploy/src/record.js";
-import { deleteResource, deploy, nextStep, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
+import { applyStep, deleteResource, deploy, nextStep, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
 import { MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploymentServices.js";
 import { runningShop, settle, world } from "./vibe64DeployStandInHelpers.js";
 
@@ -68,6 +68,8 @@ function setup() {
 }
 
 const requestsAfter = (standIn, count) => standIn.requests().slice(count);
+/** The names of an instance's settings and secrets that start with `prefix`: a link's, for a need's prefix. */
+const namesOf = (instance, prefix) => [...Object.keys(instance.settings), ...Object.keys(instance.secrets)].filter((name) => name.startsWith(prefix));
 const isWrite = (request) => request.method !== "GET";
 
 test("a two-service deploy makes both App Services and both hosted services, labelled, linked, connected and given their own settings", async (t) => {
@@ -117,6 +119,13 @@ test("a two-service deploy makes both App Services and both hosted services, lab
   assert.deepEqual([web.settings.MEMOBOT_MAX_COMPUTERS, computers.settings.MEMOBOT_MAX_COMPUTERS, web.settings.MEMOBOT_OWNERS], [undefined, "4", "owner@example.com"]);
   assert.equal(web.settings.MEMOBOT_COMPUTERS_URL, `http://${computers.internalName}:3000`);
   assert.deepEqual([web.settings.APP_ENV, web.settings.PORT, web.settings.APP_PUBLIC_URL], ["production", "3000", `https://${DOMAIN}`]);
+  // Linked while each service's first refresh was under way, so its first instances started with both resources and
+  // no settings refresh followed.
+  for (const service of [web, computers]) {
+    assert.deepEqual(standIn.services.refreshes(service.id).map((one) => one.kind), ["create"]);
+    const started = standIn.services.instances(service.id).filter((one) => one.removedReason !== "link_added");
+    assert.ok(started.length >= 2 && started.every((one) => namesOf(one, "V64_DATABASE_").length > 0 && namesOf(one, "V64_FILES_").length > 0));
+  }
   // The lease was taken, renewed at each step and given up; nothing unlabelled was asked about but by listing.
   const asked = requestsAfter(standIn, before);
   assert.ok(asked.some((request) => request.method === "POST" && request.path === "/v1/leases"));
@@ -144,13 +153,25 @@ function setupAdapterOf(standIn) {
 }
 
 test("a new commit moves computers then web; a failing computers build fails with its reason while both keep their versions", async () => {
-  const { standIn, run, record } = setup();
+  const { standIn, client, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   const { items } = first.record;
   const before = standIn.requests().length;
-  const second = await run({ record: first.record, commit: "c2" });
+  // computers is in a settings refresh of its own when the Deploy starts, so its release is queued behind it: web is
+  // handed its release only once computers' release went live.
+  const held = standIn.services.service(items["service.computers"].id);
+  const ownOf = (values) => Object.fromEntries(Object.entries(values).filter(([name]) => !/^V64_(DATABASE|FILES)_/u.test(name)));
+  await client.putServiceSettings(held.id, { settings: ownOf(held.settings), secrets: ownOf(held.secrets) });
+  let webTooSoon = false;
+  const pause = () => {
+    const releaseOf = (id) => standIn.services.refreshes(id).filter((one) => one.kind === "release").at(-1);
+    if (releaseOf(items["service.web"].id) && releaseOf(items["service.computers"].id)?.state !== "succeeded") webTooSoon = true;
+    standIn.advance();
+  };
+  const second = await run({ record: first.record, commit: "c2", pause });
   assert.equal(second.outcome, "live", second.message);
+  assert.equal(webTooSoon, false);
   assert.deepEqual(second.plan.items.map((item) => item.verb), ["kept", "kept", "kept", "kept"]);
   const releases = requestsAfter(standIn, before).filter((request) => request.method === "POST" && /\/services\/[^/]+\/releases$/u.test(request.path));
   assert.deepEqual(releases.map((request) => request.path.split("/")[3]), [items["service.computers"].id, items["service.web"].id], "computers first, then web");
@@ -203,6 +224,10 @@ test("a dropped resource is unlinked and kept, a dropped service deleted; a coun
   assert.deepEqual(Object.fromEntries(third.plan.items.map((item) => [item.name, item.verb])), { web: "kept", database: "kept", uploads: "new", computers: "removed", files: "disconnected" });
   const files = standIn.hosted.service(items["resource.files"].id);
   assert.equal(files.state, "running");
+  // uploads was linked to web while web's new release rolled, so that release's instances started with it.
+  const rolled = standIn.services.refreshes(items["service.web"].id).find((one) => one.kind === "release" && one.toVersion === third.record.run.services.web.version);
+  const rolledInstances = standIn.services.instances(items["service.web"].id).filter((one) => one.refreshId === rolled.id && one.removedReason !== "link_added");
+  assert.ok(rolledInstances.length > 0 && rolledInstances.every((one) => namesOf(one, "V64_UPLOADS_").length > 0));
   assert.deepEqual(standIn.services.service(items["service.web"].id).connections, [], "web no longer reaches computers");
   assert.deepEqual(files.links.filter((link) => link.state === "active"), [], "files is linked to nothing");
   assert.equal(standIn.services.service(items["service.computers"].id).state === "deleted" || standIn.services.service(items["service.computers"].id).state === "deleting", true);
@@ -222,6 +247,31 @@ test("a dropped resource is unlinked and kept, a dropped service deleted; a coun
   const left = await deleteResource(adapter, offline, dropped.needs, { name: "files", typed: "files" });
   assert.equal("resource.files" in left.items, false);
   assert.equal(standIn.hosted.service(items["resource.files"].id).state, "deleted");
+});
+
+test("a first release that fails ends the links made against it, and the next Deploy makes them again", async () => {
+  const { standIn, adapter, run, record } = setup();
+  standIn.faults.releaseBuildFails = true;
+  const failed = await run({ record, commit: "c1" });
+  standIn.faults.releaseBuildFails = false;
+  assert.equal(failed.outcome, "failed");
+  assert.match(failed.message, /^computers: the release did not go live: The release's build or its check failed\.$/u);
+  assert.deepEqual([failed.record.items["resource.database"].links, failed.record.items["resource.files"].links], [{}, {}]);
+  // A link refused because the refresh it was to be made against ended first is left for the next step, which reads
+  // how that refresh ended; computers now runs no release and has no refresh ahead.
+  const late = structuredClone(failed.record);
+  late.run = { ...late.run, id: "run_next", services: { computers: { ...late.run.services.computers, refreshId: "rfr_ended" } } };
+  const step = { kind: "link", resource: "database", id: late.items["resource.database"].id, service: "computers", serviceId: late.items["service.computers"].id };
+  const { record: after } = await applyStep(adapter, step, { record: late, needs: stackOf().needs, plan: failed.plan, release: null });
+  assert.deepEqual(after.items["resource.database"].links, {});
+  settle(standIn);
+  const fixed = await run({ record: failed.record, commit: "c2" });
+  assert.equal(fixed.outcome, "live", fixed.message);
+  for (const item of ["resource.database", "resource.files"]) {
+    const held = standIn.hosted.service(fixed.record.items[item].id).links.filter((link) => ["issuing", "active"].includes(link.state));
+    assert.deepEqual(held.map((link) => link.consumer.id).sort(), [fixed.record.items["service.computers"].id, fixed.record.items["service.web"].id].sort());
+    assert.deepEqual(Object.values(fixed.record.items[item].links).sort(), held.map((link) => link.id).sort());
+  }
 });
 
 test("a service whose last refresh failed (a link's, after its release went live) is not live, naming it", async () => {

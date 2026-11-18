@@ -223,13 +223,17 @@ test("one hosted service holds a link for each service that needs it, each its o
 });
 
 test("a link is refused as mobilynet refuses it: an app unknown, a size unknown, a release not built, a need not declared or not named", async () => {
-  const { client, production, release, serviceId } = await runningShop();
+  const { standIn, client, production, release, serviceId } = await runningShop();
   const unknownApp = await refused(production.createHostedService({ app: "mongodb-8" }, { idempotencyKey: "hosted-1" }));
   assert.deepEqual(refusal(unknownApp), { status: 422, code: "validation_failed", fields: ["app"] });
   const unknownSize = await refused(production.createHostedService({ app: "valkey-9", size: "tiny" }, { idempotencyKey: "hosted-2" }));
   assert.equal(unknownSize.details.fieldErrors.size, "One of small, medium, large, xlarge.");
   const { hostedService: db } = await production.createHostedService({ app: "postgresql-18" }, { idempotencyKey: "hosted-3" });
+  // A service whose first release failed runs none and has no refresh ahead.
+  standIn.faults.instancesUnhealthy = true;
   const waiting = await production.createService(webSpec(release.version, { name: "worker", exposure: "internal", routes: [] }), { idempotencyKey: "service-worker" });
+  settle(standIn);
+  standIn.faults.instancesUnhealthy = false;
   const notBuilt = await refused(client.linkHostedService(db.id, { consumer: { service: waiting.service.id } }));
   assert.equal(notBuilt.details.fieldErrors.consumer, "Its app has no release built yet: link it once one has.");
   const shape = await refused(client.linkHostedService(db.id, { consumer: { svc: serviceId } }));
@@ -246,6 +250,49 @@ test("a link is refused as mobilynet refuses it: an app unknown, a size unknown,
   const several = await refused(two.client.linkHostedService(other.id, { consumer: { service: two.serviceId } }));
   assert.equal(several.details.fieldErrors.need, "Its app declares several needs of postgresql: name one of DB, AUDIT.");
   assert.deepEqual((await two.client.linkHostedService(other.id, { consumer: { service: two.serviceId }, need: "AUDIT" })).link.settings.slice(0, 2), ["AUDIT_HOST", "AUDIT_PORT"]);
+});
+
+test("a link is made against the release a refresh ahead moves to: during a create, and for a need a new release names; that refresh's instances have its settings, and its failure ends the link", async () => {
+  // engine-support M14: today's rule (the release the service runs alone) refuses both links below.
+  const { standIn, client, production, release, serviceId } = await runningShop();
+  const { hostedService: db } = await production.createHostedService({ app: "postgresql-18" }, { idempotencyKey: "hosted-db" });
+  const { hostedService: cache } = await production.createHostedService({ app: "valkey-9" }, { idempotencyKey: "hosted-cache" });
+  settle(standIn);
+  const live = (id) => standIn.services.instances(id).filter((one) => one.rotation !== "gone");
+  const linkNames = (instance, prefix) => [...Object.keys(instance.settings), ...Object.keys(instance.secrets)].filter((name) => name.startsWith(prefix)).sort();
+
+  // A service just made: linked at once, against the release its create moves to, and every instance starts with it.
+  const worker = await production.createService(webSpec(release.version, { name: "worker", exposure: "internal", routes: [] }), { idempotencyKey: "service-worker" });
+  const early = await client.linkHostedService(db.id, { consumer: { service: worker.service.id } }, { idempotencyKey: "link-worker" });
+  assert.equal(early.link.need, "DB");
+  settle(standIn);
+  assert.equal((await client.readService(worker.service.id)).version, release.version);
+  assert.deepEqual(live(worker.service.id).map((one) => linkNames(one, "DB_")), [0, 1].map(() => ["DB_DATABASE", "DB_HOST", "DB_PASSWORD", "DB_PORT", "DB_SSLMODE", "DB_USER"]));
+  assert.deepEqual(standIn.services.refreshes(worker.service.id).map((one) => one.kind), ["create"], "no settings refresh of its own");
+
+  // A new release naming a new need: linked while it rolls; the instances it started before are drained and started
+  // again, and every instance it leaves serving has the cache's settings.
+  const withCache = { ...SHOP, needs: [...SHOP.needs, { interface: "redis", as: "CACHE" }] };
+  const next = await client.createServiceRelease(serviceId, upload(withCache, "2"));
+  for (let step = 0; step < 20 && live(serviceId).every((one) => one.refreshId !== next.refresh.id); step += 1) standIn.advance();
+  const before = live(serviceId).filter((one) => one.refreshId === next.refresh.id).map((one) => one.id);
+  assert.ok(before.length > 0);
+  await client.linkHostedService(cache.id, { consumer: { service: serviceId } }, { idempotencyKey: "link-cache" });
+  assert.deepEqual(standIn.services.instances(serviceId).filter((one) => before.includes(one.id)).map((one) => [one.rotation, one.removedReason]), before.map(() => ["gone", "link_added"]));
+  settle(standIn);
+  assert.equal((await client.readService(serviceId)).version, next.release.version);
+  assert.ok(live(serviceId).every((one) => linkNames(one, "CACHE_").length > 0));
+  assert.deepEqual(standIn.services.refreshes(serviceId).map((one) => one.kind), ["create", "release"]);
+
+  // A first release that fails ends the link made against it, as a deleted consumer's would end.
+  standIn.faults.instancesUnhealthy = true;
+  const doomed = await production.createService(webSpec(release.version, { name: "doomed", exposure: "internal", routes: [] }), { idempotencyKey: "service-doomed" });
+  const lost = await client.linkHostedService(db.id, { consumer: { service: doomed.service.id } }, { idempotencyKey: "link-doomed" });
+  settle(standIn);
+  standIn.faults.instancesUnhealthy = false;
+  assert.equal((await client.readService(doomed.service.id)).state, "failed");
+  assert.ok(["revoking", "revoked"].includes(standIn.hosted.service(db.id).links.find((one) => one.id === lost.link.id).state));
+  assert.equal(standIn.hosted.service(db.id).links.find((one) => one.id === early.link.id).state, "active", "the worker's link stands");
 });
 
 test("a count change places or drains instances at once, and a new size is a refresh", async () => {

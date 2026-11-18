@@ -108,11 +108,14 @@ making it twice. In order:
 4. each internal service, then the public one: its release uploaded, its App
    Service made (labelled, internal ones with no routes, the public one routed
    at the domain with a connection to each service it reaches) or handed the
-   release, its refresh waited for, then linked to every resource. mobilynet
-   checks a link against the release a service runs, which moves only when a
-   refresh succeeds, so a link follows the refresh; a refresh that fails fails
-   the Deploy with the service's reason, and services not yet moved keep
-   serving their version;
+   release, linked to every resource while that refresh is under way, then the
+   refresh waited for. mobilynet checks a link against the release a service
+   runs or, when that names no such need, the release its refresh in progress
+   moves it to, and that refresh's instances start with the link's settings;
+   so a new service's first instances, and a release naming a new resource,
+   start with their resources. A refresh that fails ends the links made against
+   it, which the next Deploy makes again, and fails the Deploy with the
+   service's reason; services not yet moved keep serving their version;
 5. a resource the Stack no longer names is unlinked from the services that
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
@@ -129,13 +132,10 @@ and never acts on a thing the record does not hold. `takeOffline()` deletes the
 services, public first, and keeps every resource; `deleteResource()` deletes a
 disconnected resource and its data only when the owner typed its name.
 
-Not covered yet: mobilynet links a hosted service only to an App Service that
-runs a release, and a new App Service runs one only once its first instances
-are healthy, which start without their resources' settings. The serve script
-migrates before it serves, so at mobilynet the first Deploy of an application
-with a database fails until mobilynet lets a link follow the release a refresh
-brings, or takes links when a service is made. The stand-in's instances run no
-script, so its tests do not show this.
+Linking against the release a refresh moves to is mobilynet's engine-support
+M14, which its stand-in follows; until mobilynet runs it, mobilynet links only
+against the release a service runs, and the first Deploy of an application
+whose serve script needs its database there fails.
 
 ## The record
 

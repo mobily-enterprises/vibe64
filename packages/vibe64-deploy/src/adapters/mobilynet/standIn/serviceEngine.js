@@ -170,7 +170,8 @@ function specOf(service, refresh = null) {
  * @param {Map<string, any>} parts.services each service, by id
  * @param {Map<string, any>} parts.instances each instance, by id, in the order started
  * @param {{ advance: () => void }} parts.releases its projects' releases, each built a step on before the services move
- * @param {{ consumerGone: (kind: string, id: string) => void }} parts.hooks what a deleted service's links do
+ * @param {{ consumerGone: (kind: string, id: string) => void, refreshFailed: (service: any) => void }} parts.hooks what a
+ *   deleted service's links do, and a failed refresh's
  * @param {(serviceId: string) => any[]} parts.liveOf a service's instances not gone, oldest first
  * @param {(serviceId: string) => any} parts.currentRefresh a service's refresh under way, or the next queued
  * @param {(service: any, version: string | null) => any} parts.releaseOf the release of a service's app at a version
@@ -247,6 +248,15 @@ function createStandInServiceEngine(world, parts) {
     for (const instance of liveOf(service.id).filter((one) => one.refreshId === refresh.id)) removed(instance, "refresh_failed");
     patch(service, { state: service.version ? "running" : "failed", lastError: error });
     event(service, "service.refresh_failed", { refreshId: refresh.id, kind: refresh.kind, version: refresh.toVersion, error: { code: error.code, message: error.message } });
+    hooks.refreshFailed(service);
+  }
+
+  /** A refresh's instances started without what a link made since gives them: drained, to be started again. */
+  function restartFresh(service, refresh, reason) {
+    for (const instance of liveOf(service.id).filter((one) => one.refreshId === refresh.id)) {
+      removed(instance, reason);
+      refresh.steps.push(stepOf("instance_removed", instance.id, reason));
+    }
   }
 
   /** A refresh's end, succeeded: the service moves onto what it brought. */
@@ -382,6 +392,7 @@ function createStandInServiceEngine(world, parts) {
 
   return Object.freeze({
     advance,
+    restartFresh,
     startInstance
   });
 }

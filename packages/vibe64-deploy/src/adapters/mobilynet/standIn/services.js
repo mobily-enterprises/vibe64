@@ -41,7 +41,7 @@ function createStandInServices(world, { releases, network }) {
   /** @type {Map<string, any>} each instance, by id, in the order started */
   const instances = new Map();
   /** What else holds a name in a mobilynet project (its hosted services), and what a deleted service's links do. */
-  const hooks = { nameTaken: () => false, consumerGone: () => {} };
+  const hooks = { nameTaken: () => false, consumerGone: () => {}, refreshFailed: () => {} };
 
   const { invalid } = releases;
   const { notFound } = world;
@@ -474,14 +474,45 @@ function createStandInServices(world, { releases, network }) {
   }
 
   /**
+   * A service's refresh ahead (engine-support M14): its first open refresh moving it to another release, the one
+   * building or rolling, else the oldest queued; right after a create or a new release it is that one. Null when none.
+   * @param {any} service
+   */
+  function refreshAhead(service) {
+    const moving = refreshesOf(service.id).filter((one) => OPEN_REFRESH.includes(one.state) && one.toVersion && one.toVersion !== service.version);
+    return moving.find((one) => RUNNING_REFRESH.includes(one.state)) ?? moving[0] ?? null;
+  }
+
+  /**
    * A service as a link reaches it (serviceLinks.js linkConsumer): of the hosted service's project and not being
-   * deleted, with the declaration of the release it runs (null before its first).
+   * deleted, with the declaration of the release it runs (null before its first) and, when it has one, its refresh
+   * ahead with the declaration of the release that refresh moves it to.
    * @param {string} serviceId @param {string} projectId
    */
   function linkConsumer(serviceId, projectId) {
     const service = services.get(serviceId);
     if (!service || service.projectId !== projectId || ["deleting", "deleted"].includes(service.state)) return { refusal: notFound("service") };
-    return { service, declaration: declarationOf(service) };
+    const ahead = refreshAhead(service);
+    return { service, declaration: declarationOf(service), ahead: ahead ? { refresh: ahead, declaration: releaseOf(service, ahead.toVersion)?.declaration ?? null } : null };
+  }
+
+  /**
+   * A link made against a service's refresh ahead (M14): its settings and secrets join that refresh's target, and
+   * every open refresh's after it, so every instance it starts has them, and the instances it started without them
+   * are drained (`link_added`) and started again.
+   * @param {any} service @param {any} ahead the refresh ahead @param {{ settings: Record<string, string>, secrets: Record<string, string> }} values
+   */
+  function linkSettingsAhead(service, ahead, { settings, secrets }) {
+    const open = refreshesOf(service.id).filter((one) => OPEN_REFRESH.includes(one.state));
+    for (const refresh of open.slice(open.indexOf(ahead))) {
+      if (refresh !== ahead && !refresh.target.settings && !refresh.target.secrets) continue;
+      refresh.target = {
+        ...refresh.target,
+        settings: { ...(refresh.target.settings ?? service.settings), ...settings },
+        secrets: { ...(refresh.target.secrets ?? service.secrets), ...secrets }
+      };
+    }
+    engine.restartFresh(service, ahead, "link_added");
   }
 
   /** A link's settings given to or taken out of a service (serviceLinks.js linkSettings): a settings refresh. */
@@ -543,6 +574,7 @@ function createStandInServices(world, { releases, network }) {
     advance: engine.advance,
     linkConsumer,
     linkSettings,
+    linkSettingsAhead,
     nameTaken,
     usage,
     serving,

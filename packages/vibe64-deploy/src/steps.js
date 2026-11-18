@@ -7,12 +7,13 @@
 //   2. each resource's hosted service is made (labelled) or resized, and waited for;
 //   3. the public service's domain is added to the provider project when none covers it;
 //   4. each internal service, then each public one: its release is uploaded, then its service made (internal: no
-//      routes; public: routed at the domain, with a connection to each service it reaches) or handed the release, its
-//      refresh waited for, then linked to every resource it isn't linked to yet. mobilynet checks a link against the
-//      release the service runs, which moves only when a refresh succeeds, so a link follows the refresh that brings
-//      the release naming its need; the link's settings reach the instances in a refresh of their own, which step 8
-//      waits for. A refresh that fails fails the deployment with that service's reason, and the services not yet
-//      moved keep serving their version;
+//      routes; public: routed at the domain, with a connection to each service it reaches) or handed the release, then
+//      linked to every resource it isn't linked to yet while that refresh is under way, then the refresh waited for.
+//      mobilynet checks a link against the release the service runs or, when that names no such need, the release its
+//      refresh ahead moves it to, whose instances then start with the link's settings (engine-support M14): so a new
+//      service's first instances, and a release naming a new resource, start with their resources. A refresh that
+//      fails ends the links made against it, which the record lets go so the next Deploy makes them again, and fails
+//      the deployment with that service's reason; the services not yet moved keep serving their version;
 //   5. a resource the Stack no longer names is unlinked from every service that stays, now that none runs a release
 //      naming it, and kept running with its data;
 //   6. each service's settings (package.js settingValues) when they differ from those it was given, the services it
@@ -146,13 +147,14 @@ function nextStep({ plan, needs, record, observed, release }) {
       return { kind: "createService", service: service.id, values };
     }
     // A service runs one refresh at a time, the rest queued behind it: this Deploy's has ended once none is under way.
+    // Linked while this Deploy's refresh is under way (against the release it moves to), or once none of its is.
+    const unlinked = needs.resources.find((resource) => !itemOf("resource", resource.id).links?.[service.id]);
+    if (unlinked && (thing.refresh || !state.refreshId)) {
+      return { kind: "link", resource: unlinked.id, id: itemOf("resource", unlinked.id).id, service: service.id, serviceId: thing.id };
+    }
     if (state.refreshId) {
       if (thing.refresh) return { kind: "wait", words: `Updating ${service.id}` };
       return { kind: "checkRefresh", service: service.id, id: thing.id, refreshId: state.refreshId };
-    }
-    for (const resource of needs.resources) {
-      const resourceItem = itemOf("resource", resource.id);
-      if (!resourceItem.links?.[service.id]) return { kind: "link", resource: resource.id, id: resourceItem.id, service: service.id, serviceId: thing.id };
     }
   }
 
@@ -265,15 +267,19 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       break;
     }
     case "link": {
+      const state = stateOf(step.service);
       let linkId;
       try {
         linkId = (await adapter.linkResource(step.id, step.serviceId, adapter.needOf(step.resource), { idempotencyKey: keyOf(record, "link", step.resource, step.service) })).id;
       } catch (error) {
+        // The refresh it was to be made against ended first: the next step reads how, and links after it.
+        if (error?.code === "validation_failed" && state.refreshId) break;
         // Linked by a Deploy cut short before its record kept the link: the link stands, and is kept now.
         if (error?.code !== "need_linked" || !error.details?.linkId) throw error;
         linkId = error.details.linkId;
       }
       record.items[`resource.${step.resource}`].links[step.service] = linkId;
+      if (state.refreshId) state.linkedAhead = [...(state.linkedAhead ?? []), step.resource];
       break;
     }
     case "adopt": {
@@ -287,12 +293,15 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     }
     case "checkRefresh": {
       const refresh = await adapter.readRefresh(step.id, step.refreshId);
+      const state = stateOf(step.service);
       if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
+        // The links made against it ended with it: the next Deploy makes them again.
+        for (const resource of state.linkedAhead ?? []) delete record.items[`resource.${resource}`]?.links?.[step.service];
         const what = ["create", "release"].includes(refresh.kind) ? "the release did not go live" : `its ${refresh.kind} change did not go live`;
         run.failure = `${step.service}: ${what}: ${refresh.error?.message ?? `its refresh ${refresh.state}`}`
           + (refresh.fromVersion ? ` The version before (${refresh.fromVersion}) still serves.` : "");
       }
-      stateOf(step.service).refreshId = null;
+      Object.assign(state, { refreshId: null, linkedAhead: [] });
       break;
     }
     case "putSettings": {

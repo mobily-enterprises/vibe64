@@ -11,7 +11,9 @@ import {
 // its hosted service runs, then `active`. A hosted service holds several links, one per need of each consumer. A link
 // gives its consumer its need's settings (`<AS>_<FIELD>`, secret fields as secrets) as it is made, through a settings
 // refresh of the App Service (services.js linkSettings), and takes them out as it is removed (`revoking`, then
-// `revoked`). A delete is refused `409 hosted_service_linked` while links are held, unless `?links=revoke` ends them
+// `revoked`). A link is checked against the release its consumer runs or, when that names no such need, the release
+// its refresh ahead moves it to (engine-support M14, mobilynet feat/engine-support): its settings then go into that
+// refresh (services.js linkSettingsAhead), and should that refresh fail, the link ends as a deleted consumer's does. A delete is refused `409 hosted_service_linked` while links are held, unless `?links=revoke` ends them
 // with it. A size change resizes its machine (`202`, `resizing`, then running again), or answers `200` with no
 // operation when its machine already is that size. Labels (engine-support M2) are set at create and replaced whole by
 // a PATCH (`200`, no operation, when nothing else changes), and a list filters by them. Its machine counts against the
@@ -222,20 +224,15 @@ function createStandInHosted(world, { services, prices }) {
     if (lacking) return { refusal: lacking };
     const reached = services.linkConsumer(record.service, one.projectId);
     if (reached.refusal) return reached;
-    const { service, declaration } = reached;
-    if (!declaration) return { refusal: invalid({ consumer: "Its app has no release built yet: link it once one has." }) };
-    const needs = declaration.needs.filter((entry) => entry.interface === one.interface);
-    let need;
-    if (input.need !== undefined && input.need !== null) {
-      need = needs.find((entry) => entry.as === input.need);
-      if (!need) return { refusal: invalid({ need: `Its app declares no need ${String(input.need)} of ${one.interface}.` }) };
-    } else if (needs.length === 1) {
-      [need] = needs;
-    } else if (needs.length === 0) {
-      return { refusal: invalid({ need: `Its app declares no need of ${one.interface} (the needs of its mobilynet.json).` }) };
-    } else {
-      return { refusal: invalid({ need: `Its app declares several needs of ${one.interface}: name one of ${needs.map((entry) => entry.as).join(", ")}.` }) };
+    const { service, declaration, ahead } = reached;
+    // The release it runs, if it names the need; else the release its refresh ahead moves it to (M14); else refused.
+    const running = declaration ? needOf(declaration, one, input) : null;
+    const coming = !running?.need && ahead?.declaration ? needOf(ahead.declaration, one, input) : null;
+    if (!running?.need && !coming?.need) {
+      if (!running && !coming) return { refusal: invalid({ consumer: "Its app has no release built yet: link it once one has." }) };
+      return { refusal: (running ?? coming).refusal };
     }
+    const need = running?.need ?? coming.need;
     const held = [...links.values()].find((link) => link.consumerKind === "service" && link.consumerId === service.id
       && link.need === need.as && HELD.includes(link.state))
       ?? planned.find((plan) => plan.service.id === service.id && plan.need.as === need.as);
@@ -245,11 +242,23 @@ function createStandInHosted(world, { services, prices }) {
     }
     const count = linksOf(one.id).filter((link) => HELD.includes(link.state)).length + planned.length;
     if (count >= MAX_LINKS) return { refusal: invalid({ consumer: `A hosted service has at most ${MAX_LINKS} links.` }) };
-    return { plan: { service, need } };
+    return { plan: { service, need, ahead: running?.need ? null : ahead.refresh } };
+  }
+
+  /** The need of a declaration a link fills, or why none: the one named, else its one need of the interface. */
+  function needOf(declaration, one, input) {
+    const needs = declaration.needs.filter((entry) => entry.interface === one.interface);
+    if (input.need !== undefined && input.need !== null) {
+      const need = needs.find((entry) => entry.as === input.need);
+      return need ? { need } : { refusal: invalid({ need: `Its app declares no need ${String(input.need)} of ${one.interface}.` }) };
+    }
+    if (needs.length === 1) return { need: needs[0] };
+    if (needs.length === 0) return { refusal: invalid({ need: `Its app declares no need of ${one.interface} (the needs of its mobilynet.json).` }) };
+    return { refusal: invalid({ need: `Its app declares several needs of ${one.interface}: name one of ${needs.map((entry) => entry.as).join(", ")}.` }) };
   }
 
   /** Keeps a planned link, `issuing`, and gives its consumer its need's settings. Answers it and its secret fields. */
-  function makeLink(one, { service, need }) {
+  function makeLink(one, { service, need, ahead }) {
     const id = nextId("lnk");
     const credential = newCredential(one.interface, id);
     const link = {
@@ -272,9 +281,11 @@ function createStandInHosted(world, { services, prices }) {
     };
     links.set(id, link);
     const values = needValues(need, connectionOf(one), credential);
-    // A settings refresh of a running service is refused only when its declaration's required settings are missing,
-    // which a service that runs a release never has: the link's settings are queued behind any refresh under way.
-    services.linkSettings(service, { settings: values.settings, secrets: values.secrets });
+    // Made against the refresh ahead, the link's settings go into that refresh; else, a settings refresh of a running
+    // service is refused only when its declaration's required settings are missing, which a service that runs a
+    // release never has: the link's settings are queued behind any refresh under way.
+    if (ahead) services.linkSettingsAhead(service, ahead, { settings: values.settings, secrets: values.secrets });
+    else services.linkSettings(service, { settings: values.settings, secrets: values.secrets });
     return { link, secrets: credential.secret };
   }
 
@@ -455,6 +466,20 @@ function createStandInHosted(world, { services, prices }) {
     }
   }
 
+  /**
+   * A refresh of an App Service failed (M14): each held link whose need the release it still runs doesn't name (every
+   * one, when its first release failed) ends as a deleted consumer's does.
+   * @param {any} service
+   */
+  function refreshFailed(service) {
+    const running = services.linkConsumer(service.id, service.projectId).declaration;
+    for (const entry of links.values()) {
+      if (entry.consumerKind !== "service" || entry.consumerId !== service.id || !HELD.includes(entry.state)) continue;
+      if (running?.needs.some((need) => need.as === entry.need && need.interface === entry.interface)) continue;
+      endLink(entry, { gone: Boolean(hosted.get(entry.hostedServiceId)?.deletedAt), consumerGoing: true });
+    }
+  }
+
   /** A deleted App Service's links end with it, their settings not taken out (hostedLinks.js consumerGone). */
   function consumerGone(kind, consumerId) {
     for (const entry of links.values()) {
@@ -535,6 +560,7 @@ function createStandInHosted(world, { services, prices }) {
     request,
     advance,
     consumerGone,
+    refreshFailed,
     nameTaken,
     usage,
     controls
