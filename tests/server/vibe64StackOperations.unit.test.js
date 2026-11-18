@@ -302,7 +302,23 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
       { label: "Build", argv: ["npm", "run", "build"], role: "build" },
       { label: "Migrate", argv: ["npm", "run", "db:prepare"], role: "migrate" },
       { label: "Start", argv: ["npm", "start"], role: "serve" }
-    ]
+    ],
+    // Without `### Service` headings, the Deployment is one public service.
+    services: [{
+      id: "web",
+      summary: "",
+      exposure: "public",
+      reached: "any",
+      serve: { label: "Start", argv: ["npm", "start"] },
+      readyWhen: { method: "GET", path: "/api/health", status: 200 },
+      instances: { min: 1, max: 1, production: 1 },
+      atLeast: null,
+      reaches: [],
+      settings: {},
+      packages: [],
+      sandboxAllowances: []
+    }],
+    deploymentResources: {}
   });
   assert.deepEqual(parseVibe64DeploymentLines(["- Nothing."]), {
     version: 1,
@@ -315,7 +331,9 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     packages: [],
     instances: { max: 1 },
     readiness: null,
-    steps: []
+    steps: [],
+    services: [],
+    deploymentResources: {}
   });
   assert.deepEqual(parseVibe64DeploymentLines([
     "- Generated secrets: `AUTH_LOCAL_SESSION_SECRET` `OIDC_HUB_SECRET`",
@@ -337,7 +355,8 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     ...deploymentLines()
   ]), {
     ...parseVibe64DeploymentLines(deploymentLines()),
-    sandboxAllowances: ["fuse", "gvisor"]
+    sandboxAllowances: ["fuse", "gvisor"],
+    services: [{ ...parseVibe64DeploymentLines(deploymentLines()).services[0], sandboxAllowances: ["fuse", "gvisor"] }]
   });
   assert.deepEqual(parseVibe64DeploymentLines(["- Sandbox allows: `gvisor`", ...deploymentLines()]).sandboxAllowances,
     ["gvisor"]);
@@ -357,7 +376,8 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
   // the application says more, never guessed from its source.
   assert.deepEqual(parseVibe64DeploymentLines(["- Instances: up to `4`", ...deploymentLines()]), {
     ...parseVibe64DeploymentLines(deploymentLines()),
-    instances: { max: 4 }
+    instances: { max: 4 },
+    services: [{ ...parseVibe64DeploymentLines(deploymentLines()).services[0], instances: { min: 1, max: 4, production: 1 } }]
   });
   for (const lines of [
     ["- Instances: up to `0`", ...deploymentLines()],

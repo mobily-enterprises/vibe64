@@ -8,12 +8,14 @@ guessing.
 
 - `packages/vibe64-genesis/src/server/index.js`
 - Main: `packages/vibe64-genesis/src/server/applicationDeployment.js`
+- `packages/vibe64-genesis/src/server/deploymentEntries.js`
+- `packages/vibe64-genesis/src/server/deploymentServices.js`
 
 ## Public contract
 
 `inspectVibe64Deployment()` asks Genesis for the exact composed Stack section
 named `Deployment`, validates it under the Vibe64-owned
-`vibe64.application-deployment.v1` contract, and combines it with the Stack's
+`vibe64.application-deployment.v2` contract, and combines it with the Stack's
 declared resources. The source is strict Markdown; its normalized result
 contains exact argument arrays, working directory, runtime requirements,
 release-recreation paths, generated secret names, the setup code name, sandbox
@@ -67,6 +69,43 @@ more only when no copy keeps anything a later request needs (files on its own
 disk, sign-ins in memory or files, a job that must run once): such state
 belongs in a declared resource. A host that runs one copy, such as a
 workspace's own release service, ignores it; a host never guesses it.
+
+## Services and resources
+
+A Deployment may describe the application's services: each kind of process it
+runs, as identical instances from the one build, under a heading
+`### Service \`id\`: summary` (1 to 8; an id is a lowercase letter then up to
+15 lowercase letters, digits and hyphens). The entries above the first heading
+are shared by every service: Workdir, Runtimes, Recreate on restore, Generated
+secrets, Setup code, Packages and the Prepare, Build and Migrate steps (one
+build serves them all). Under its heading each service says its Exposure
+(`public` or `internal`, exactly one public), its Serve step, Ready when and
+Instances (`min` to `max`), and may say Needs at least (the smallest machine in
+whole vCPUs and GiB), Production (the count Production starts with), Reached
+(`each instance` for an internal service whose instances are reached one by
+one), Reaches (a service it reaches and the setting that gets its address),
+Setting (a non-secret fact of the source), its own Packages and Sandbox allows.
+A top-level Serve, Ready when, Instances or Sandbox allows beside services is
+refused with the fix; so are a duplicate id, no public service or two, a
+Reaches to an unknown service or itself, a setting name used twice or owned by
+the host (`APP_ENV`, `HOST`, `PORT`, `APP_PUBLIC_URL`, `TRUSTED_PROXIES`, any
+`V64_` name), a generated secret's or the setup code's name, Reached on a public
+service, and a Production count outside Instances. Each refusal names its line.
+
+The result always carries `services`: a Deployment without headings is one
+public service, `web`, made from its Serve, Ready when, Instances and Sandbox
+allows, and its recipe hashes exactly as before. With headings, the top-level
+fields a single-service reader uses describe the public service (its Serve
+after the shared steps, its health and instances) and every service's sandbox
+allowances, which one approval covers.
+
+`### Resource \`id\`` names a resource of `## Resources` and says how
+development provides it: `- Development: \`local folder\`` for a bucket the
+application keeps in its own folder there, or `\`own bucket\`` (the default).
+The result carries these as `deploymentResources`. The inspection, which has
+the Stack's resources, refuses a heading for an undeclared resource,
+Development on a resource that is not a bucket, and a service's Reaches or
+Setting naming a setting a resource binds.
 
 The Deployment guidance for assistants also says where host-level preparation
 beyond the package manager and Packages goes: one script per hosting environment,

@@ -5,6 +5,9 @@ import { ARCHITECTURE_OBSERVATIONS_SCHEMA } from "genesis-compiler";
 
 import {
   DEPLOYMENT_ENTRY_FORMS,
+  DEPLOYMENT_HEADING_FORMS,
+  DEPLOYMENT_RESOURCE_ENTRY_FORMS,
+  DEPLOYMENT_SERVICE_ENTRY_FORMS,
   DEPLOYMENT_STEP_ROLES,
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
   VIBE64_APPLICATION_DEPLOYMENT_SECTION
@@ -244,6 +247,12 @@ ${list(DEPLOYMENT_ENTRY_FORMS)}
 - Host-level preparation beyond the package manager and Packages, such as devices or host permissions, goes in one script per hosting environment, \`scripts/hosting/<host>.sh\`, which the \`HOSTING_SCRIPT\` environment variable names and the Prepare step runs; an application that needs none has no such script. It never works around Vibe64's rules: what Vibe64 provides, such as a runtime or a sandbox allowance, is declared in this section, never installed or switched on by the script, and where the host lacks something the script fails with one plain sentence instead of switching features off.
 - Instances says how many identical copies of the application a host may run at once behind one address, each with a disk and memory of its own (a count from 1 to 100). Without it a host runs one copy. Declare it only when no copy keeps anything a later request needs: uploaded files on its own disk, sign-ins or sessions in memory or in files, or a scheduled job that must run once. Such state belongs in a declared resource (a database, a bucket, Redis); a host never guesses it from the source. Migrate may then run in several copies as they start, so a migration takes a lock and keeps working beside the release before it.
 - One Ready when entry is required (status 200 through 399). Workdir defaults to \`.\`. Each other entry appears at most once.
+- Services: an application that runs as more than one kind of process (a different machine size, untrusted work kept apart from secrets, scaling apart) lists them under headings ${DEPLOYMENT_HEADING_FORMS.map((form) => `\`\` ${form} \`\``).join(" and ")}, after the entries shared by every service (Workdir, Runtimes, Recreate on restore, Generated secrets, Setup code, Packages, and the Prepare, Build and Migrate steps: one build serves every service). Without such headings the Deployment is one public service, \`web\`. With them, each service says its own Serve, Ready when, Instances and Sandbox allows, and none of these stays above the headings. A service's id is a lowercase letter then up to 15 lowercase letters, digits and hyphens; there are 1 to 8, exactly one public. \`### Service\` entries:
+${list(DEPLOYMENT_SERVICE_ENTRY_FORMS)}
+  Exposure, Serve, Ready when and Instances (1 to 100, the least first) are required. Needs at least is the smallest machine it runs on, in whole vCPUs and GiB, never a provider's size name. Production is the count Production starts with (default the least). Reached \`each instance\` (internal services only) gives each instance the address the others reach it at. Reaches opens the reached service's port to this one and sets SETTING to its address. A Setting is a fact of the source, the same in every environment; secrets and values that differ per environment belong in the environment's Env. No Reaches or Setting names a setting the host gives (\`APP_ENV\`, \`HOST\`, \`PORT\`, \`APP_PUBLIC_URL\`, \`TRUSTED_PROXIES\`, any \`V64_\` name), a generated secret, the setup code or a name a resource binds. A service's Packages come beside the shared ones.
+- \`### Resource\` entries, for a resource of \`## Resources\` by its id:
+${list(DEPLOYMENT_RESOURCE_ENTRY_FORMS)}
+  For a bucket only: \`local folder\` means development gives the application no bucket settings and it keeps its files in its own folder; \`own bucket\` (the default) lets the person enter a bucket's settings.
 - Recreate on restore lists project-relative globs (only \`*\` and \`**\`) that a restored deployment rebuilds with its Prepare step, such as installed dependencies. It requires a Prepare step.
 - Migrate applies pending migrations without destroying data.
 - Prepare and Build never need the database or another managed service: a host may run them alone, without those credentials, to check that a revision builds before it publishes it.
