@@ -554,6 +554,9 @@ light delete, for normal projects and, inside a practice scope, for practice
 projects in the learning space. Hosts add their own managed resources (for
 example databases, resource profiles); Learning and ownership checks stay with Training.
 
+Owns Add a service: what a session's Stack can add through its catalogue piece,
+and adding it with Genesis's `stack add` under the session's source locks.
+
 Owns project values supplied to managed application work.
 Colleague uses the canonical Project Env read/save actions through a bounded
 metadata presentation and explicit user-value patches. Shared service guards
@@ -565,6 +568,7 @@ protect host-owned values; stored-value inspection and secret reveal stay in Env
 ### Program
 - `genesis/program/environment/project-values.md`
 - `genesis/program/preview/application-identities.md`
+- `genesis/program/projects/add-a-service.md`
 - `genesis/program/projects/catalog.md`
 - `genesis/program/projects/collaboration-approach.md`
 - `genesis/program/projects/connected-projects.md`

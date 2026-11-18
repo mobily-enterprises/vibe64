@@ -4,7 +4,8 @@ When Vibe64 offers **Fix it with AI** on an Update, Save, workspace preparation,
 preview sign-in or project setup problem, the whole fix happens in
 one window: the problem, the conversation with the AI, what Vibe64 is doing, and the
 result. Starting, adopting or inspecting a project from its setup screen, and
-creating or reviewing the Database's Data overview, use the same window. So do the
+creating or reviewing the Database's Data overview, and connecting the app to a
+service you add ([Add a service to a project](add-a-service.md)), use the same window. So do the
 tasks Colleague runs for you and its reviews, and a page's AI refresh, which starts
 by itself on its schedule ([Keep a page up to date](pages.md#keep-a-page-up-to-date)). You close it once the task is
 **Done** or **Not done**. It can't end any other way.
@@ -50,6 +51,7 @@ Two views sit under the problem, and only one shows at a time:
   | Preview sign-in | **The AI repairs the app's seed** | **Vibe64 signs in as this identity** |
   | Project setup | **The AI sets up the project** | **Vibe64 inspects the project** |
   | Data overview | **The AI groups the tables** | **Vibe64 reads the overview back** |
+  | Add a service | **The AI connects the app to the service** | **Vibe64 prepares the workspace and restarts Preview** |
   | Colleague's tasks and reviews | **The AI works on the request** | **You finish the task** |
 
   Choose **Update output**, **Save output** or **Preparation output** to read what

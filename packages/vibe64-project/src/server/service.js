@@ -32,6 +32,7 @@ import { createProjectSelection } from "./projectSelection.js";
 import { createProjectSessionEnvironment } from "./projectSessionEnvironment.js";
 import { createProjectSessionWork } from "./projectSessionWork.js";
 import { createProjectSettings } from "./projectSettings.js";
+import { createStackServices } from "./stackServices.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -126,6 +127,7 @@ function createService({
     selection,
     sessionWork
   });
+  const stackServices = createStackServices({ inspectEnvironment, resourceEnvironmentProvider, selection, sessionWork });
   const sessionEnvironment = createProjectSessionEnvironment({
     environment,
     logger,
@@ -155,6 +157,22 @@ function createService({
         .catch((error) => logger.warn({ error: error?.message }, "Workspace preparation after a starter could not start."));
     }
     return result;
+  }
+
+  /**
+   * What the session's Stack can add (a database, Redis, a bucket or another App Service), each with its Env names.
+   * @param {{ sessionId: string }} input
+   */
+  function readStackServiceChoices(input) {
+    return projectResult(() => stackServices.serviceChoices(input));
+  }
+
+  /**
+   * Adds one through Genesis's `stack add` in the session's source; answers the AI task that connects the app to it.
+   * @param {{ sessionId: string, kind: string, serviceId?: string, reachedBy?: string }} input
+   */
+  function addStackService(input) {
+    return projectResult(() => stackServices.addService(input));
   }
 
   async function createProject(input) {
@@ -415,6 +433,8 @@ function createService({
   return Object.freeze({
     readOnboarding,
     applyTemplate: applyProjectTemplate,
+    readStackServiceChoices,
+    addStackService,
     get selectedProject() {
       return projectContext.selectedProject;
     },

@@ -28,6 +28,8 @@ import {
   projectsReadInputValidator,
   projectSelectInputValidator,
   projectSettingsReadInputValidator,
+  projectStackServiceAddInputValidator,
+  projectStackServicesReadInputValidator,
   projectConnectedProjectsInputValidator,
   projectPromptHintsInputValidator,
   previewApplicationIdentitiesInputValidator,
@@ -76,6 +78,8 @@ const ACTION_SAVE_ENGINEERING_PROFILE = "vibe64.project.engineering.profile.save
 const ACTION_SAVE_PROJECT_PROMPT_HINTS = "vibe64.project.prompt-hints.save";
 const ACTION_SAVE_DEVELOPMENT_DATABASE_SCOPE = "vibe64.project.development-database.scope.save";
 const ACTION_READ_PREVIEW_APPLICATION_IDENTITIES = "vibe64.project.preview-identities.read";
+const ACTION_READ_STACK_SERVICES = "vibe64.project.stack.services.read";
+const ACTION_ADD_STACK_SERVICE = "vibe64.project.stack.services.add";
 const ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES = "vibe64.project.preview-identities.save";
 const VIBE64_PROJECT_CHANGED_EVENT = "vibe64.project.changed";
 
@@ -521,11 +525,27 @@ function createProjectActions({ project }) {
       events: [projectChangedEvent()],
       extensions: { assistant: settingsTool("preview-identities.save"), vibe64: PROJECT_OPERATION },
       execute: (input) => project.savePreviewApplicationIdentities(input)
+    }),
+    // Add a service: the person's dialog, which then starts the add-service AI task.
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: ACTION_READ_STACK_SERVICES,
+      input: projectStackServicesReadInputValidator,
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => project.readStackServiceChoices(input)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_ADD_STACK_SERVICE,
+      input: projectStackServiceAddInputValidator,
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => project.addStackService(input)
     })
   ]);
 }
 
 export {
+  ACTION_ADD_STACK_SERVICE,
   ACTION_APPLY_TEMPLATE,
   ACTION_COMMENT_ON_ISSUE,
   ACTION_CREATE_ISSUE,
@@ -550,6 +570,7 @@ export {
   ACTION_READ_PULL_REQUEST,
   ACTION_READ_REPOSITORY_BRANCHES,
   ACTION_READ_REPOSITORY_REMOTE,
+  ACTION_READ_STACK_SERVICES,
   ACTION_REPOSITORY_REMOTE,
   ACTION_REVEAL_ENV_SECRET,
   ACTION_SAVE_COLLABORATION_SETTINGS,

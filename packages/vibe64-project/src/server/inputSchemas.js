@@ -3,6 +3,7 @@ import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 import { PREVIEW_APPLICATION_IDENTITY_LIMIT, PREVIEW_IDENTITY_SELECTOR_TYPES } from "@local/vibe64-core/server/previewAuth";
 import { RUNTIME_CONFIG_SCOPES } from "@local/vibe64-core/server/runtimeConfig";
 import { CONNECTED_PACKAGE_TYPE_VALUES } from "@local/vibe64-genesis/shared/connectedPackageTypes";
+import { STACK_SERVICE_KINDS } from "./stackServices.js";
 const createProjectSchema = createSchema.createFactory();
 const maxItems = ({ value, parameterValue, throwParamError }) => {
   if (Array.isArray(value) && value.length > parameterValue) {
@@ -48,6 +49,16 @@ const previewApplicationIdentitiesReadInputValidator = inputSchema({
     type: "string",
     noTrim: false
   }
+});
+const projectStackServicesReadInputValidator = inputSchema({
+  sessionId: { type: "string", noTrim: false, minLength: 1, maxLength: 255, required: true }
+});
+const projectStackServiceAddInputValidator = inputSchema({
+  sessionId: { type: "string", noTrim: false, minLength: 1, maxLength: 255, required: true },
+  kind: { type: "string", enum: [...STACK_SERVICE_KINDS, "service"], required: true },
+  // Another App Service: its name and the service that reaches it, checked against the Deployment.
+  serviceId: { type: "string", noTrim: false, maxLength: 64 },
+  reachedBy: { type: "string", noTrim: false, maxLength: 64 }
 });
 const projectSettingsReadInputValidator = inputSchema({
   sessionId: {
@@ -320,6 +331,8 @@ export {
   projectPromptHintsInputValidator,
   projectSelectInputValidator,
   projectSettingsReadInputValidator,
+  projectStackServiceAddInputValidator,
+  projectStackServicesReadInputValidator,
   previewApplicationIdentitySchema,
   previewApplicationIdentitiesInputValidator,
   previewApplicationIdentitiesReadInputValidator
