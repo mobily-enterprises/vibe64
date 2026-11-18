@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, chmod, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -18,6 +18,7 @@ import {
 import {
   genesisPackageBinDirectory
 } from "@local/vibe64-genesis/server";
+import { codexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 
 /** @typedef {import("@local/vibe64-accounts/server/types").ConnectionsService} ConnectionsService */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -131,6 +132,98 @@ async function requiredNodeMajor(studioRoot) {
 }
 
 const AI_TOOLS = ["claude", "codex", "opencode"];
+// The session helpers' folder (VIBE64_CODEX_ATTACHMENTS_ROOT): every command an AI session runs, Claude Code's and
+// Codex's, starts through a helper Vibe64 writes there for the session (its PreToolUse hook makes each command
+// "$VIBE64_WRAPPER" and the command). Where programs may not start, as on a noexec mount, the kernel refuses each one
+// (exit 126, "Permission denied") before it runs. The row writes one such helper beside the sessions' own and starts
+// it as a session's shell starts its helper, through the same command path as Health's other commands.
+const AI_COMMAND_HELPER = path.join("codex-git-command", "health-check", "vibe64-command-check");
+const AI_COMMAND_ANSWER = "AI commands start here.";
+
+/** Linux's mount table for this process; elsewhere reading it fails. */
+function readMountTable() {
+  return readFile("/proc/self/mountinfo", "utf8");
+}
+
+/**
+ * The mount point holding `folder`, when that mount refuses to start programs (noexec), else "": also where there is
+ * no mount table to read.
+ * @param {string} folder
+ * @param {() => Promise<string>} mountTable
+ */
+async function noexecMount(folder, mountTable) {
+  let real;
+  let table;
+  try {
+    real = await realpath(folder);
+    table = await mountTable();
+  } catch {
+    return "";
+  }
+  let holder = null;
+  for (const line of table.split("\n")) {
+    const fields = line.split(" ");
+    if (fields.length < 6) continue;
+    const point = fields[4].replace(/\\([0-7]{3})/gu, (_, octal) => String.fromCharCode(Number.parseInt(octal, 8)));
+    if (real !== point && !real.startsWith(point === "/" ? "/" : `${point}/`)) continue;
+    // A later mount at the same point is the one on top.
+    if (!holder || point.length >= holder.point.length) holder = { point, options: fields[5].split(",") };
+  }
+  return holder?.options.includes("noexec") ? holder.point : "";
+}
+
+/**
+ * Whether a command an AI session runs can start here: a helper written in the session helpers' folder, started as
+ * the session's shell starts its own. A failure shows the exit, the shell's own words, and the mount that refuses
+ * programs, when one does.
+ */
+async function aiCommandCheck(dependencies) {
+  return { ...await aiCommandRow(dependencies), need: "needed" };
+}
+
+async function aiCommandRow({ env, mountTable, runCommand, studioRoot }) {
+  const root = codexAttachmentHostRoot({ env });
+  const helper = path.join(root, AI_COMMAND_HELPER);
+  const check = {
+    id: "ai-commands",
+    label: "AI commands",
+    group: "AI tools",
+    expected: "A command an AI session runs starts here.",
+    explanation: `Every command your AI runs starts through a small Vibe64 helper in ${root}.`
+  };
+  try {
+    await mkdir(path.dirname(helper), { recursive: true, mode: 0o700 });
+    await writeFile(helper, `#!/bin/sh\necho "${AI_COMMAND_ANSWER}"\n`, { mode: 0o755 });
+    await chmod(helper, 0o755);
+  } catch (error) {
+    return failedCheck({ ...check, observed: `Vibe64 cannot write its helper in ${root}: ${error.message}` });
+  }
+  const result = await runCommand({
+    actor: "app",
+    args: ["-c", '"$0"', helper],
+    command: "sh",
+    cwd: studioRoot,
+    mode: "capture",
+    purpose: "health",
+    runtimes: [],
+    timeout: COMMAND_TIMEOUT_MS
+  });
+  const output = compactOutput(result?.output);
+  if (result?.ok && output === AI_COMMAND_ANSWER) {
+    return passedCheck({ ...check, observed: `A command started from ${root}.` });
+  }
+  const mount = await noexecMount(root, mountTable);
+  const said = output.split("\n").at(-1) || result?.error || "It did not start.";
+  return failedCheck({
+    ...check,
+    observed: [`exit ${result?.exitCode ?? "unknown"} … ${said}`,
+      mount ? `${root} is on a noexec mount (${mount}): no program starts there.` : ""].filter(Boolean).join("\n"),
+    explanation: mount
+      ? `Every command your AI runs starts through a Vibe64 helper in ${root}, so none can run. That folder (VIBE64_CODEX_ATTACHMENTS_ROOT) must be on a mount where programs may start.`
+      : check.explanation
+  });
+}
+
 // Without packs these help but are never required; signing in to GitHub too.
 const OPTIONAL_CHECKS = new Set(["git-identity", "github-auth", "playwright", "playwright-browser"]);
 const LOCAL_TOOL_CHECKS = Object.freeze({
@@ -421,6 +514,7 @@ function packCommandChecks(check, { runCommand, studioRoot }) {
  * @param {ConnectionsService} dependencies.connections
  * @param {RuntimeEnv} dependencies.env the environment the person's tools are checked with
  * @param {typeof genesisPackageBinDirectory} [dependencies.genesisBinDirectory]
+ * @param {() => Promise<string>} [dependencies.mountTable] the mount table, as /proc/self/mountinfo reads
  * @param {ProjectService} dependencies.project
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {string} dependencies.studioRoot
@@ -429,6 +523,7 @@ function createService({
   connections,
   env,
   genesisBinDirectory = genesisPackageBinDirectory,
+  mountTable = readMountTable,
   project,
   runCommand = runVibe64Command,
   studioRoot
@@ -442,6 +537,7 @@ function createService({
     const commandChecks = [
       ...(packs ? [] : [gitIdentityCheck({ runCommand, studioRoot })]),
       ...(packs ? packCommandChecks(check, { runCommand, studioRoot }) : []),
+      aiCommandCheck({ env, mountTable, runCommand, studioRoot }),
       genesisCommandCheck(check, genesisBinDirectory, {
         id: "genesis",
         label: "Genesis",
