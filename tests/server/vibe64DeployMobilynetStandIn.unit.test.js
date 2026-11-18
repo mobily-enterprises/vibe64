@@ -252,47 +252,89 @@ test("a link is refused as mobilynet refuses it: an app unknown, a size unknown,
   assert.deepEqual((await two.client.linkHostedService(other.id, { consumer: { service: two.serviceId }, need: "AUDIT" })).link.settings.slice(0, 2), ["AUDIT_HOST", "AUDIT_PORT"]);
 });
 
-test("a link is made against the release a refresh ahead moves to: during a create, and for a need a new release names; that refresh's instances have its settings, and its failure ends the link", async () => {
-  // engine-support M14: today's rule (the release the service runs alone) refuses both links below.
+const NOT_READ = "The release it is moving to isn't read yet (its refresh is queued or starting): try again once that refresh is building; its build reads the release first.";
+/** The names of an instance's or a refresh target's settings and secrets that start with `prefix`. */
+const namesFrom = (values, prefix) => [...Object.keys(values.settings ?? {}), ...Object.keys(values.secrets ?? {})].filter((name) => name.startsWith(prefix)).sort();
+
+test("a link is made ahead of the release the refresh in progress moves to: tried again while that refresh is queued, made while it builds so no instance restarts, and its started instances replaced while it rolls", async () => {
+  // engine-support M14: checked against the release the service runs, else the release its refresh in progress moves to.
   const { standIn, client, production, release, serviceId } = await runningShop();
   const { hostedService: db } = await production.createHostedService({ app: "postgresql-18" }, { idempotencyKey: "hosted-db" });
   const { hostedService: cache } = await production.createHostedService({ app: "valkey-9" }, { idempotencyKey: "hosted-cache" });
   settle(standIn);
   const live = (id) => standIn.services.instances(id).filter((one) => one.rotation !== "gone");
-  const linkNames = (instance, prefix) => [...Object.keys(instance.settings), ...Object.keys(instance.secrets)].filter((name) => name.startsWith(prefix)).sort();
 
-  // A service just made: linked at once, against the release its create moves to, and every instance starts with it.
+  // A service just made: its create is queued, so a link is refused for the moment, a refusal the client tries again.
   const worker = await production.createService(webSpec(release.version, { name: "worker", exposure: "internal", routes: [] }), { idempotencyKey: "service-worker" });
+  const soon = await refused(client.linkHostedService(db.id, { consumer: { service: worker.service.id } }, { idempotencyKey: "link-worker-soon" }));
+  assert.deepEqual([refusal(soon), soon.details.fieldErrors.consumer, soon.retryable], [{ status: 422, code: "validation_failed", fields: ["consumer"] }, NOT_READ, true]);
+  // Once it builds: linked against the release it moves to, before any instance started, so none restarts.
+  standIn.advance();
+  assert.equal((await client.readService(worker.service.id)).refresh.state, "building");
   const early = await client.linkHostedService(db.id, { consumer: { service: worker.service.id } }, { idempotencyKey: "link-worker" });
   assert.equal(early.link.need, "DB");
   settle(standIn);
   assert.equal((await client.readService(worker.service.id)).version, release.version);
-  assert.deepEqual(live(worker.service.id).map((one) => linkNames(one, "DB_")), [0, 1].map(() => ["DB_DATABASE", "DB_HOST", "DB_PASSWORD", "DB_PORT", "DB_SSLMODE", "DB_USER"]));
+  assert.deepEqual(live(worker.service.id).map((one) => namesFrom(one, "DB_")), [0, 1].map(() => ["DB_DATABASE", "DB_HOST", "DB_PASSWORD", "DB_PORT", "DB_SSLMODE", "DB_USER"]));
+  assert.deepEqual(standIn.services.instances(worker.service.id).filter((one) => one.removedReason), [], "no instance restarted");
   assert.deepEqual(standIn.services.refreshes(worker.service.id).map((one) => one.kind), ["create"], "no settings refresh of its own");
 
-  // A new release naming a new need: linked while it rolls; the instances it started before are drained and started
-  // again, and every instance it leaves serving has the cache's settings.
+  // A new release naming a new need: refused for the moment while queued; linked once it rolls, the instances it
+  // started already are drained and started again, and every instance it leaves serving has the cache's settings.
   const withCache = { ...SHOP, needs: [...SHOP.needs, { interface: "redis", as: "CACHE" }] };
   const next = await client.createServiceRelease(serviceId, upload(withCache, "2"));
+  assert.equal((await refused(client.linkHostedService(cache.id, { consumer: { service: serviceId } }))).retryable, true);
   for (let step = 0; step < 20 && live(serviceId).every((one) => one.refreshId !== next.refresh.id); step += 1) standIn.advance();
   const before = live(serviceId).filter((one) => one.refreshId === next.refresh.id).map((one) => one.id);
   assert.ok(before.length > 0);
   await client.linkHostedService(cache.id, { consumer: { service: serviceId } }, { idempotencyKey: "link-cache" });
-  assert.deepEqual(standIn.services.instances(serviceId).filter((one) => before.includes(one.id)).map((one) => [one.rotation, one.removedReason]), before.map(() => ["gone", "link_added"]));
+  assert.deepEqual(standIn.services.instances(serviceId).filter((one) => before.includes(one.id)).map((one) => [one.rotation, one.removedReason]), before.map(() => ["gone", "link_changed"]));
   settle(standIn);
   assert.equal((await client.readService(serviceId)).version, next.release.version);
-  assert.ok(live(serviceId).every((one) => linkNames(one, "CACHE_").length > 0));
+  assert.ok(live(serviceId).every((one) => namesFrom(one, "CACHE_").length > 0));
   assert.deepEqual(standIn.services.refreshes(serviceId).map((one) => one.kind), ["create", "release"]);
+});
 
-  // A first release that fails ends the link made against it, as a deleted consumer's would end.
-  standIn.faults.instancesUnhealthy = true;
-  const doomed = await production.createService(webSpec(release.version, { name: "doomed", exposure: "internal", routes: [] }), { idempotencyKey: "service-doomed" });
-  const lost = await client.linkHostedService(db.id, { consumer: { service: doomed.service.id } }, { idempotencyKey: "link-doomed" });
+test("a link made ahead joins the changes of settings queued behind its refresh, a settings replace waits for the move, a need both releases name queues its own change, and a failed move ends the link and takes its settings out", async () => {
+  const { standIn, client, production, release, serviceId } = await runningShop();
+  const { hostedService: db } = await production.createHostedService({ app: "postgresql-18" }, { idempotencyKey: "hosted-db" });
+  const { hostedService: cache } = await production.createHostedService({ app: "valkey-9" }, { idempotencyKey: "hosted-cache" });
   settle(standIn);
+  const withCache = { ...SHOP, needs: [...SHOP.needs, { interface: "redis", as: "CACHE" }] };
+  const next = await client.createServiceRelease(serviceId, upload(withCache, "2"));
+  // A replace made before linking is taken, queued behind the release.
+  await client.putServiceSettings(serviceId, { settings: { mode: "web-2" }, secrets: { sessionKey: "session-1" } }, { idempotencyKey: "settings-1" });
+  standIn.advance();
+  const refreshesOf = (kind) => standIn.services.refreshes(serviceId).filter((one) => one.kind === kind);
+  assert.equal(refreshesOf("release").at(-1).state, "building");
+
+  // DB, which the release it runs names too: not made ahead, its settings in a change of its own queued behind the move.
+  await client.linkHostedService(db.id, { consumer: { service: serviceId } }, { idempotencyKey: "link-db" });
+  assert.deepEqual(namesFrom(refreshesOf("release").at(-1).target, "DB_"), []);
+  assert.deepEqual(refreshesOf("settings").map((one) => [one.state, namesFrom(one.target, "DB_").length > 0]), [["queued", false], ["queued", true]]);
+  // CACHE, which only the release ahead names: made ahead, its settings in that refresh and every change queued behind it.
+  const { link: cacheLink } = await client.linkHostedService(cache.id, { consumer: { service: serviceId } }, { idempotencyKey: "link-cache" });
+  assert.ok([refreshesOf("release").at(-1), ...refreshesOf("settings")].every((one) => namesFrom(one.target, "CACHE_").length > 0));
+  // A replace now is checked against the release it runs, which doesn't declare the cache's settings: refused until the move ends.
+  const late = await refused(client.putServiceSettings(serviceId, { settings: { mode: "web-3" }, secrets: { sessionKey: "session-1" } }, { idempotencyKey: "settings-2" }));
+  assert.deepEqual([late.status, late.code], [422, "validation_failed"]);
+  assert.deepEqual(Object.keys(late.details.fieldErrors).map((key) => key.replace(/^(settings|secrets)\./u, "")).sort(), [...cacheLink.settings].sort());
+  assert.ok(Object.values(late.details.fieldErrors).every((words) => words === "The app declares no such setting."));
+
+  // The move fails: the cache's link ends, as a deleted consumer's would, and leaves the changes queued; DB's stands.
+  standIn.faults.instancesUnhealthy = true;
+  for (let step = 0; step < 20 && refreshesOf("release").at(-1).state !== "failed"; step += 1) standIn.advance();
   standIn.faults.instancesUnhealthy = false;
-  assert.equal((await client.readService(doomed.service.id)).state, "failed");
-  assert.ok(["revoking", "revoked"].includes(standIn.hosted.service(db.id).links.find((one) => one.id === lost.link.id).state));
-  assert.equal(standIn.hosted.service(db.id).links.find((one) => one.id === early.link.id).state, "active", "the worker's link stands");
+  assert.equal(refreshesOf("release").at(-1).id, next.refresh.id);
+  assert.equal(refreshesOf("release").at(-1).state, "failed");
+  const linkOf = (hosted) => standIn.hosted.service(hosted.id).links.find((one) => one.consumer.id === serviceId);
+  assert.ok(["revoking", "revoked"].includes(linkOf(cache).state));
+  assert.ok(["issuing", "active"].includes(linkOf(db).state));
+  assert.ok(refreshesOf("settings").every((one) => namesFrom(one.target, "CACHE_").length === 0));
+  settle(standIn);
+  // The changes queued behind ran on the release it runs: the replace and DB's settings, none of the cache's.
+  const served = standIn.services.service(serviceId);
+  assert.deepEqual([served.version, served.settings.mode, namesFrom(served, "CACHE_"), namesFrom(served, "DB_").length > 0], [release.version, "web-2", [], true]);
 });
 
 test("a count change places or drains instances at once, and a new size is a refresh", async () => {

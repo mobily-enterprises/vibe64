@@ -16,14 +16,17 @@ import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingW
 // Faults: `instancesUnhealthy` (a refresh's new instances never get healthy: it fails `instance_never_healthy`),
 // `noCapacity` (a count raise answers `409 no_capacity`) and `releaseBuildFails`.
 // STAND-IN ONLY: ids are the stand-in's own (`svc_s000123`), a connection makes no allow rule (`ruleId` null), a
-// release's settings are checked only for the required ones its declaration declares, and a service's route, before
-// the service has a port, shows `{ host, tls, target }` alone.
+// release's settings are checked only for the required ones its declaration declares (a replace also for names it
+// doesn't declare), unlinking a link made ahead queues a settings refresh rather than changing its refresh ahead, and a
+// service's route, before the service has a port, shows `{ host, tls, target }` alone.
 
 /** The label every instance of a service carries, so a public service's route group sends to them. */
 const SERVICE_LABEL = "mobilynet-service";
 const APP_NAME = /^[a-z][a-z0-9-]{0,40}$/u;
 const OPEN_REFRESH = Object.freeze(["queued", "building", "rolling", "aborting"]);
 const RUNNING_REFRESH = Object.freeze(["building", "rolling", "aborting"]);
+// The refreshes that move a service to another release; the others (settings, size) keep the one it runs.
+const MOVING_KINDS = Object.freeze(["create", "release", "rollback"]);
 const COVER_WORDS = "No domain of this project covers this name: add the domain first.";
 
 /**
@@ -221,6 +224,9 @@ function createStandInServices(world, { releases, network }) {
     }
   }
 
+  /** A service's changes of settings still queued, oldest first. @param {string} serviceId */
+  const queuedSettings = (serviceId) => refreshesOf(serviceId).filter((one) => one.state === "queued" && one.kind === "settings");
+
   /** The settings and secrets a service runs with once its open refreshes ran (serviceLinks.js settingsAhead). */
   function settingsAhead(service) {
     const open = refreshesOf(service.id);
@@ -361,22 +367,33 @@ function createStandInServices(world, { releases, network }) {
     return answer(refresh ? 202 : 200, { service: view(service), refresh: refreshView(refresh) });
   }
 
-  /** `PUT /v1/services/{id}/settings` (replaceServiceSettings): a need's settings are its link's alone, and kept. */
+  /**
+   * `PUT /v1/services/{id}/settings` (replaceServiceSettings): a need's settings are its link's alone, and kept, those
+   * of the release its refresh ahead moves it to too (M14); the whole set is checked against the release it runs
+   * (serviceFields.js checkSettings), so after a link made ahead, whose settings that release doesn't declare, a
+   * replace is refused until the move ends.
+   */
   function putSettings(service, body) {
     const refused = unchangeable(service);
     if (refused) return refused;
     const values = valuesOf(invalid, isRecord(body) ? body : {});
     if (values.refusal) return values.refusal;
     const declaration = declarationOf(service);
-    const linked = linkedNames(declaration);
+    const next = refreshAhead(service)?.declaration ?? null;
+    const linked = [...new Set([...linkedNames(declaration), ...linkedNames(next)])];
     const given = [...Object.keys(values.values.settings), ...Object.keys(values.values.secrets)].filter((name) => linked.includes(name));
     if (given.length > 0) {
-      const needOf = (name) => declaration.needs.find((need) => needSettings(need).some((entry) => entry.name === name)).as;
+      const needOf = (name) => [declaration, next].flatMap((one) => one?.needs ?? []).find((need) => needSettings(need).some((entry) => entry.name === name)).as;
       return invalid(Object.fromEntries(given.map((name) => [name, `Set by the link of its need ${needOf(name)} to a hosted service alone: link or unlink it instead.`])));
     }
     const ahead = settingsAhead(service);
     const picked = (from) => Object.fromEntries(Object.entries(from).filter(([name]) => linked.includes(name)));
     const target = { settings: { ...values.values.settings, ...picked(ahead.settings) }, secrets: { ...values.values.secrets, ...picked(ahead.secrets) } };
+    if (service.version) {
+      const declared = [...Object.keys(isRecord(declaration.settings) ? declaration.settings : {}), ...linkedNames(declaration)];
+      const undeclared = ["settings", "secrets"].flatMap((field) => Object.keys(target[field]).filter((name) => !declared.includes(name)).map((name) => `${field}.${name}`));
+      if (undeclared.length > 0) return invalid(Object.fromEntries(undeclared.map((key) => [key, "The app declares no such setting."])));
+    }
     const changed = changeOrRefresh(service, { kind: "settings", target });
     if (changed.refusal) return changed.refusal;
     return answer(changed.refresh ? 202 : 200, { service: view(service), refresh: refreshView(changed.refresh) });
@@ -474,45 +491,54 @@ function createStandInServices(world, { releases, network }) {
   }
 
   /**
-   * A service's refresh ahead (engine-support M14): its first open refresh moving it to another release, the one
-   * building or rolling, else the oldest queued; right after a create or a new release it is that one. Null when none.
-   * @param {any} service
+   * A service's refresh ahead (engine-support M14, serviceLinks.js refreshAhead): the refresh in progress (`building`
+   * or `rolling`; one runs at a time) when it moves the service to another release than the one it runs (its first, a
+   * release, a rollback), with that release's declaration (an upload's, read at its intake). Every refresh still
+   * queued runs after it, and an aborting one moves the service nowhere. Null without one.
+   * @param {any} service @returns {{ refresh: any, declaration: any } | null}
    */
   function refreshAhead(service) {
-    const moving = refreshesOf(service.id).filter((one) => OPEN_REFRESH.includes(one.state) && one.toVersion && one.toVersion !== service.version);
-    return moving.find((one) => RUNNING_REFRESH.includes(one.state)) ?? moving[0] ?? null;
+    const refresh = refreshesOf(service.id).find((one) => ["building", "rolling"].includes(one.state));
+    if (!refresh || !MOVING_KINDS.includes(refresh.kind) || refresh.toVersion === service.version) return null;
+    return { refresh, declaration: releaseOf(service, refresh.toVersion)?.declaration ?? null };
   }
 
   /**
    * A service as a link reaches it (serviceLinks.js linkConsumer): of the hosted service's project and not being
-   * deleted, with the declaration of the release it runs (null before its first) and, when it has one, its refresh
-   * ahead with the declaration of the release that refresh moves it to.
+   * deleted, with the declaration of the release it runs (null before its first), its refresh ahead, and `pending`
+   * while a move can't be checked yet: that refresh hasn't read its release, or a refresh moving the service is still
+   * queued.
    * @param {string} serviceId @param {string} projectId
    */
   function linkConsumer(serviceId, projectId) {
     const service = services.get(serviceId);
     if (!service || service.projectId !== projectId || ["deleting", "deleted"].includes(service.state)) return { refusal: notFound("service") };
     const ahead = refreshAhead(service);
-    return { service, declaration: declarationOf(service), ahead: ahead ? { refresh: ahead, declaration: releaseOf(service, ahead.toVersion)?.declaration ?? null } : null };
+    const queued = refreshesOf(service.id).some((one) => one.state === "queued" && MOVING_KINDS.includes(one.kind));
+    return { service, declaration: declarationOf(service), ahead, pending: Boolean((ahead && !ahead.declaration) || queued) };
   }
 
   /**
-   * A link made against a service's refresh ahead (M14): its settings and secrets join that refresh's target, and
-   * every open refresh's after it, so every instance it starts has them, and the instances it started without them
-   * are drained (`link_added`) and started again.
+   * A link made ahead (M14, serviceLinks.js intoRefreshAhead): its settings and secrets join its refresh ahead's
+   * target and each change of settings queued behind it, so none runs without them; the instances that refresh started
+   * already are drained (`link_changed`), and its roll starts them again with them.
    * @param {any} service @param {any} ahead the refresh ahead @param {{ settings: Record<string, string>, secrets: Record<string, string> }} values
    */
   function linkSettingsAhead(service, ahead, { settings, secrets }) {
-    const open = refreshesOf(service.id).filter((one) => OPEN_REFRESH.includes(one.state));
-    for (const refresh of open.slice(open.indexOf(ahead))) {
-      if (refresh !== ahead && !refresh.target.settings && !refresh.target.secrets) continue;
+    for (const refresh of [ahead, ...queuedSettings(service.id)]) {
       refresh.target = {
         ...refresh.target,
         settings: { ...(refresh.target.settings ?? service.settings), ...settings },
         secrets: { ...(refresh.target.secrets ?? service.secrets), ...secrets }
       };
     }
-    engine.restartFresh(service, ahead, "link_added");
+    engine.restartFresh(service, ahead, "link_changed");
+  }
+
+  /** Takes ended links' settings out of each change of settings still queued (M14, serviceLinks.js dropLinkSettings). */
+  function dropLinkSettings(service, names) {
+    const kept = (values) => Object.fromEntries(Object.entries(values).filter(([name]) => !names.includes(name)));
+    for (const refresh of queuedSettings(service.id)) refresh.target = { ...refresh.target, settings: kept(refresh.target.settings), secrets: kept(refresh.target.secrets) };
   }
 
   /** A link's settings given to or taken out of a service (serviceLinks.js linkSettings): a settings refresh. */
@@ -575,6 +601,7 @@ function createStandInServices(world, { releases, network }) {
     linkConsumer,
     linkSettings,
     linkSettingsAhead,
+    dropLinkSettings,
     nameTaken,
     usage,
     serving,

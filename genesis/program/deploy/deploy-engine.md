@@ -108,19 +108,24 @@ making it twice. In order:
 4. each internal service, then the public one: its release uploaded, its App
    Service made (labelled, internal ones with no routes, the public one routed
    at the domain with a connection to each service it reaches) or handed the
-   release, linked to every resource while that refresh is under way, then the
+   release, linked to every resource once that refresh is building, then the
    refresh waited for. mobilynet checks a link against the release a service
    runs or, when that names no such need, the release its refresh in progress
-   moves it to, and that refresh's instances start with the link's settings;
-   so a new service's first instances, and a release naming a new resource,
-   start with their resources. A refresh that fails ends the links made against
-   it, which the next Deploy makes again, and fails the Deploy with the
-   service's reason; services not yet moved keep serving their version;
+   (building or rolling) moves it to, and that refresh's instances start with
+   the link's settings; so a new service's first instances, and a release
+   naming a new resource, start with their resources, and linked while the
+   build runs, no instance restarts. A link asked while that release isn't read
+   yet is refused with a `422` the client marks to try again, and the next step
+   asks again. A refresh that fails ends the links made against it, which the
+   record lets go so the next Deploy makes them again, and fails the Deploy
+   with the service's reason; services not yet moved keep serving their version;
 5. a resource the Stack no longer names is unlinked from the services that
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
    setting the reached service's private address, the Production Env's values
-   for the names it declares), the services it reaches, its size and count;
+   for the names it declares), the services it reaches, its size and count,
+   only once every move ended: mobilynet refuses a settings replace while a
+   link made ahead of an open refresh stands;
 7. a service the Stack no longer names is deleted;
 8. live, once every service runs its release on as many healthy instances as
    chosen and its last refresh (a link's or a change's) did not fail.
@@ -133,9 +138,15 @@ services, public first, and keeps every resource; `deleteResource()` deletes a
 disconnected resource and its data only when the owner typed its name.
 
 Linking against the release a refresh moves to is mobilynet's engine-support
-M14, which its stand-in follows; until mobilynet runs it, mobilynet links only
-against the release a service runs, and the first Deploy of an application
-whose serve script needs its database there fails.
+M14, in its final shape, which its stand-in follows: only the refresh in
+progress counts, never a queued one; the link's settings go into that refresh
+and every change of settings queued behind it, and instances it started
+already are replaced (`link_changed`); when it fails, a link made ahead ends
+and its settings leave the changes queued. A link a service's running release
+and its release ahead both name is not made ahead: its settings refresh queues
+behind the move. Until mobilynet runs M14, mobilynet links only against the
+release a service runs, and the first Deploy of an application whose serve
+script needs its database there fails.
 
 ## The record
 

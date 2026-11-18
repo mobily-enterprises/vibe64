@@ -12,13 +12,16 @@ import {
 // gives its consumer its need's settings (`<AS>_<FIELD>`, secret fields as secrets) as it is made, through a settings
 // refresh of the App Service (services.js linkSettings), and takes them out as it is removed (`revoking`, then
 // `revoked`). A link is checked against the release its consumer runs or, when that names no such need, the release
-// its refresh ahead moves it to (engine-support M14, mobilynet feat/engine-support): its settings then go into that
-// refresh (services.js linkSettingsAhead), and should that refresh fail, the link ends as a deleted consumer's does. A delete is refused `409 hosted_service_linked` while links are held, unless `?links=revoke` ends them
-// with it. A size change resizes its machine (`202`, `resizing`, then running again), or answers `200` with no
-// operation when its machine already is that size. Labels (engine-support M2) are set at create and replaced whole by
-// a PATCH (`200`, no operation, when nothing else changes), and a list filters by them. Its machine counts against the
-// project's machines, vCPU, memory and disk quotas, and a project at its spending cap makes none and resizes none up
-// (M12, M13: `world.admit`). Faults: `neverBoots` (a hosted service stays `creating`) and `noCapacity`.
+// its refresh ahead moves it to, the refresh in progress (engine-support M14, mobilynet feat/engine-support): its
+// settings then go into that refresh and the changes of settings queued behind it (services.js linkSettingsAhead), and
+// should that refresh fail, the link ends as a deleted consumer's does, its settings out of those changes. While a move
+// can't be checked yet (its refresh queued), such a link is refused `422`, to be tried again once that refresh builds.
+// A delete is refused `409 hosted_service_linked` while links are held, unless `?links=revoke` ends them with it. A
+// size change resizes its machine (`202`, `resizing`, then running again), or answers `200` with no operation when its
+// machine already is that size. Labels (engine-support M2) are set at create and replaced whole by a PATCH (`200`, no
+// operation, when nothing else changes), and a list filters by them. Its machine counts against the project's
+// machines, vCPU, memory and disk quotas, and a project at its spending cap makes none and resizes none up (M12, M13:
+// `world.admit`). Faults: `neverBoots` (a hosted service stays `creating`) and `noCapacity`.
 // STAND-IN ONLY: a link's consumer is an App Service alone (a VPS's app or another hosted service is refused `422`); a
 // link makes no allow rule; a restore (`fromBackup`) is refused; an operation is answered within the hosted service's
 // answers only; health has no metrics, and backups are on with no point yet.
@@ -26,6 +29,9 @@ import {
 const MACHINE_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
 const HELD = Object.freeze(["issuing", "active", "failed"]);
 const MAX_LINKS = 10;
+// hostedLinks.js make's refusal while a move can't be checked yet: asked again once that refresh is building.
+const NOT_READ_WORDS = "The release it is moving to isn't read yet (its refresh is queued or starting): try again once that refresh is building; "
+  + "its build reads the release first.";
 const CONSUMER_WORDS = "A consumer of this project: { \"service\": \"svc_…\" }, { \"vps\": \"vps_…\", \"app\": \"…\" } or { \"hostedService\": \"hs_…\" }.";
 
 /**
@@ -224,11 +230,13 @@ function createStandInHosted(world, { services, prices }) {
     if (lacking) return { refusal: lacking };
     const reached = services.linkConsumer(record.service, one.projectId);
     if (reached.refusal) return reached;
-    const { service, declaration, ahead } = reached;
-    // The release it runs, if it names the need; else the release its refresh ahead moves it to (M14); else refused.
+    const { service, declaration, ahead, pending } = reached;
+    // The release it runs, if it names the need; else the release its refresh ahead moves it to (M14); else refused,
+    // for a moment while a move can't be checked yet.
     const running = declaration ? needOf(declaration, one, input) : null;
     const coming = !running?.need && ahead?.declaration ? needOf(ahead.declaration, one, input) : null;
     if (!running?.need && !coming?.need) {
+      if (pending) return { refusal: invalid({ consumer: NOT_READ_WORDS }) };
       if (!running && !coming) return { refusal: invalid({ consumer: "Its app has no release built yet: link it once one has." }) };
       return { refusal: (running ?? coming).refusal };
     }
@@ -467,17 +475,23 @@ function createStandInHosted(world, { services, prices }) {
   }
 
   /**
-   * A refresh of an App Service failed (M14): each held link whose need the release it still runs doesn't name (every
-   * one, when its first release failed) ends as a deleted consumer's does.
+   * A refresh of an App Service failed (M14, hostedLinks.js refreshAbandoned): each held link whose need the release it
+   * still runs doesn't name (every one, when its first release failed) ends as a deleted consumer's does, its settings
+   * taken out of each change of settings still queued, so one queued behind runs on the release the service runs.
+   * STAND-IN ONLY: no refresh is aborted, so none other is under way as one ends, and no link is kept for the settings
+   * a refresh ahead carries, as mobilynet keeps it.
    * @param {any} service
    */
   function refreshFailed(service) {
     const running = services.linkConsumer(service.id, service.projectId).declaration;
+    const ended = [];
     for (const entry of links.values()) {
       if (entry.consumerKind !== "service" || entry.consumerId !== service.id || !HELD.includes(entry.state)) continue;
       if (running?.needs.some((need) => need.as === entry.need && need.interface === entry.interface)) continue;
       endLink(entry, { gone: Boolean(hosted.get(entry.hostedServiceId)?.deletedAt), consumerGoing: true });
+      ended.push(...needSettings({ as: entry.need, interface: entry.interface }).map((setting) => setting.name));
     }
+    if (ended.length > 0) services.dropLinkSettings(service, ended);
   }
 
   /** A deleted App Service's links end with it, their settings not taken out (hostedLinks.js consumerGone). */

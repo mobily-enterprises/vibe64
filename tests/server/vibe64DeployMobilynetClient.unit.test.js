@@ -78,6 +78,9 @@ test("a refusal is a MobilynetError with mobilynet's code, message, details and 
     [refusalOf("invalid_state", 409, { state: "working" }), true],
     [refusalOf("invalid_state", 409, { state: "creating" }), false],
     [refusalOf("lease_held", 409, { holder: "Vibe64 on laptop" }), false],
+    // A link whose consumer's move mobilynet can't check yet is asked again in a moment (M14); other field errors wait.
+    [refusalOf("validation_failed", 422, { fieldErrors: { consumer: "The release it is moving to isn't read yet (its refresh is queued or starting): try again once that refresh is building; its build reads the release first." } }), true],
+    [refusalOf("validation_failed", 422, { fieldErrors: { need: "Its app declares no need of redis (the needs of its mobilynet.json)." } }), false],
     [{ status: 502, text: "<html>bad gateway</html>" }, true]
   ];
   const seen = [];

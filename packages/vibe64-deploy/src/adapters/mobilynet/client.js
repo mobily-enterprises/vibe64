@@ -49,9 +49,11 @@ class MobilynetError extends Error {
     this.details = details;
     this.requestId = requestId;
     // A refusal waits for a person; anything else (no answer, a 5xx, the rate limit) is tried again later, as is a
-    // thing busy with another of its jobs (`409 invalid_state` "working").
+    // thing busy with another of its jobs (`409 invalid_state` "working") and a link to an App Service whose move
+    // mobilynet can't check yet (`422`, `consumer`: its refresh queued or not yet read its release; M14).
     const busy = code === "invalid_state" && /** @type {any} */ (details)?.state === "working";
-    this.retryable = busy || (!REFUSALS.has(code) && status !== 404);
+    const unread = code === "validation_failed" && /isn't read yet/u.test(/** @type {any} */ (details)?.fieldErrors?.consumer ?? "");
+    this.retryable = busy || unread || (!REFUSALS.has(code) && status !== 404);
   }
 }
 

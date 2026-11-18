@@ -119,15 +119,16 @@ test("a two-service deploy makes both App Services and both hosted services, lab
   assert.deepEqual([web.settings.MEMOBOT_MAX_COMPUTERS, computers.settings.MEMOBOT_MAX_COMPUTERS, web.settings.MEMOBOT_OWNERS], [undefined, "4", "owner@example.com"]);
   assert.equal(web.settings.MEMOBOT_COMPUTERS_URL, `http://${computers.internalName}:3000`);
   assert.deepEqual([web.settings.APP_ENV, web.settings.PORT, web.settings.APP_PUBLIC_URL], ["production", "3000", `https://${DOMAIN}`]);
-  // Linked while each service's first refresh was under way, so its first instances started with both resources and
-  // no settings refresh followed.
+  // Linked once each service's first refresh was building, each link taken at once: its first instances started with
+  // both resources, none restarted, and no settings refresh followed.
+  const asked = requestsAfter(standIn, before);
+  assert.deepEqual(asked.filter((request) => request.method === "POST" && request.path.endsWith("/links")).map((request) => request.status), [202, 202, 202, 202]);
   for (const service of [web, computers]) {
     assert.deepEqual(standIn.services.refreshes(service.id).map((one) => one.kind), ["create"]);
-    const started = standIn.services.instances(service.id).filter((one) => one.removedReason !== "link_added");
-    assert.ok(started.length >= 2 && started.every((one) => namesOf(one, "V64_DATABASE_").length > 0 && namesOf(one, "V64_FILES_").length > 0));
+    const started = standIn.services.instances(service.id);
+    assert.ok(started.length >= 2 && started.every((one) => !one.removedReason && namesOf(one, "V64_DATABASE_").length > 0 && namesOf(one, "V64_FILES_").length > 0));
   }
   // The lease was taken, renewed at each step and given up; nothing unlabelled was asked about but by listing.
-  const asked = requestsAfter(standIn, before);
   assert.ok(asked.some((request) => request.method === "POST" && request.path === "/v1/leases"));
   assert.ok(asked.some((request) => request.method === "PATCH" && request.path.startsWith("/v1/leases/")));
   assert.deepEqual(standIn.leases(), []);
@@ -224,10 +225,10 @@ test("a dropped resource is unlinked and kept, a dropped service deleted; a coun
   assert.deepEqual(Object.fromEntries(third.plan.items.map((item) => [item.name, item.verb])), { web: "kept", database: "kept", uploads: "new", computers: "removed", files: "disconnected" });
   const files = standIn.hosted.service(items["resource.files"].id);
   assert.equal(files.state, "running");
-  // uploads was linked to web while web's new release rolled, so that release's instances started with it.
+  // uploads was linked to web while web's new release built, so that release's instances started with it, none again.
   const rolled = standIn.services.refreshes(items["service.web"].id).find((one) => one.kind === "release" && one.toVersion === third.record.run.services.web.version);
-  const rolledInstances = standIn.services.instances(items["service.web"].id).filter((one) => one.refreshId === rolled.id && one.removedReason !== "link_added");
-  assert.ok(rolledInstances.length > 0 && rolledInstances.every((one) => namesOf(one, "V64_UPLOADS_").length > 0));
+  const rolledInstances = standIn.services.instances(items["service.web"].id).filter((one) => one.refreshId === rolled.id);
+  assert.ok(rolledInstances.length > 0 && rolledInstances.every((one) => one.removedReason !== "link_changed" && namesOf(one, "V64_UPLOADS_").length > 0));
   assert.deepEqual(standIn.services.service(items["service.web"].id).connections, [], "web no longer reaches computers");
   assert.deepEqual(files.links.filter((link) => link.state === "active"), [], "files is linked to nothing");
   assert.equal(standIn.services.service(items["service.computers"].id).state === "deleted" || standIn.services.service(items["service.computers"].id).state === "deleting", true);
@@ -274,7 +275,7 @@ test("a first release that fails ends the links made against it, and the next De
   }
 });
 
-test("a service whose last refresh failed (a link's, after its release went live) is not live, naming it", async () => {
+test("a resource is linked once this Deploy's refresh builds; a service whose last refresh failed (a link's, after its release went live) is not live, naming it", async () => {
   const { adapter, run, record } = setup();
   const stack = stackOf();
   const first = await run({ stack, record, commit: "c1" });
@@ -291,6 +292,23 @@ test("a service whose last refresh failed (a link's, after its release went live
   // While that refresh is still under way, the Deploy waits.
   const working = failed.map((thing) => (thing.lastError ? { ...thing, refresh: { id: "rfr_x", kind: "settings", state: "rolling" } } : thing));
   assert.equal(next(working).kind, "wait");
+
+  // computers handed a release (its refresh rfr_ours) with files not linked yet: linked only once that refresh builds,
+  // so mobilynet checks the link against the release it moves to before any instance starts.
+  const computersId = first.record.items["service.computers"].id;
+  const handed = structuredClone(first.record);
+  handed.run.services.computers.refreshId = "rfr_ours";
+  delete handed.items["resource.files"].links.computers;
+  const refreshing = (refresh) => nextStep({ plan: first.plan, needs: stack.needs, record: handed, release,
+    observed: observed.map((thing) => (thing.id === computersId ? { ...thing, refresh } : thing)) });
+  const waiting = { kind: "wait", words: "Waiting for computers to start building" };
+  assert.deepEqual(refreshing({ id: "rfr_ours", kind: "release", state: "queued" }), waiting);
+  assert.deepEqual(refreshing({ id: "rfr_other", kind: "settings", state: "rolling" }), waiting, "queued behind another");
+  for (const state of ["building", "rolling"]) {
+    assert.deepEqual(refreshing({ id: "rfr_ours", kind: "release", state }), { kind: "link", resource: "files", id: handed.items["resource.files"].id, service: "computers", serviceId: computersId });
+  }
+  assert.deepEqual(refreshing({ id: "rfr_ours", kind: "release", state: "aborting" }), { kind: "wait", words: "Updating computers" });
+  assert.deepEqual(refreshing(null), { kind: "checkRefresh", service: "computers", id: computersId, refreshId: "rfr_ours" });
 });
 
 test("a Deploy cut short between a create or a link and keeping its record is made whole by the next: nothing is made twice", async () => {
