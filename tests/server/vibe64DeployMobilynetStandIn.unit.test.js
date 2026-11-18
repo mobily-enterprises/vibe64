@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { AT, DAY, HOST, SHOP, refusal, refused, runningShop, settle, upload, webSpec, world } from "./vibe64DeployStandInHelpers.js";
 import { createMobilynetClient } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
+import { createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapters/mobilynet/index.js";
 
 // The deploy engine's mobilynet stand-in, asked through the engine's client with no server: a project's releases,
 // App Services made from them and refreshed, public and internal with connections, hosted services linked to several
@@ -641,4 +642,84 @@ test("every request is kept in order with what it asked of what, and a stand-in 
   standIn.faults.down = true;
   const down = await refused(client.readService(serviceId));
   assert.deepEqual([down.status, down.code, down.retryable], [null, "unreachable", true]);
+});
+
+test("an instance's logs are read by an operation: 202 first, then 200 with its lines once mobilynet moved on, each secret of its service masked, for a live instance or one removed in the last 7 days", async () => {
+  const parts = await runningShop();
+  const { standIn, client, serviceId } = parts;
+  const [instance] = standIn.services.instances(serviceId);
+  standIn.services.setLogs(instance.id, "Migrate: Migrate database\nmigrated 3 tables with session-1\nweb: listening on 3000\n");
+  const pending = await client.readServiceLogs(serviceId, { instance: instance.id, lines: 50 });
+  assert.equal(pending.logs, null);
+  assert.equal(pending.instance, instance.id);
+  assert.equal(pending.operation.kind, "app_logs");
+  assert.equal(pending.operation.state, "running");
+  standIn.advance();
+  const read = await client.readServiceLogs(serviceId, { instance: instance.id, lines: 50 });
+  assert.equal(read.operation.state, "succeeded");
+  // The service's own secret (sessionKey's value) is masked as mobilynet masks it; the rest is the instance's output.
+  assert.equal(read.logs, "Migrate: Migrate database\nmigrated 3 tables with [secret]\nweb: listening on 3000\n");
+  assert.ok(Number.isFinite(Date.parse(read.readAt)));
+  // Without an instance, or with another service's, mobilynet refuses.
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, {}))), { status: 422, code: "validation_failed", fields: ["instance"] });
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, { instance: "ins_none" }))), { status: 404, code: "not_found", fields: [] });
+  // It needs services:read.
+  const blind = standIn.addKey({ projectId: parts.projectId, scopes: ["hosted:read"] });
+  const other = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: blind, fetch: standIn.fetch });
+  assert.equal((await refused(other.readServiceLogs(serviceId, { instance: instance.id }))).code, "scope_missing");
+});
+
+test("a build's log is read from a byte on, as mobilynet answers it, with vps:read or packages:publish, and names a failed build's reason", async () => {
+  const { standIn, client, production, projectId } = world();
+  const { release } = await production.createRelease("shop", upload(SHOP, "1"));
+  const [{ buildId }] = standIn.releases(projectId, "shop");
+  // The engine's scopes hold neither: mobilynet's buildReader refuses them.
+  assert.deepEqual(refusal(await refused(client.readBuildLog(buildId))), { status: 403, code: "scope_missing", fields: [] });
+  const reader = createMobilynetClient({ baseUrl: standIn.baseUrl, fetch: standIn.fetch, credential: standIn.addKey({ projectId, scopes: ["packages:publish"] }) });
+  const first = await reader.readBuildLog(buildId);
+  assert.deepEqual([first.state, first.done, first.text], ["building", false, `Building shop ${release.version}: running its build command\n`]);
+  standIn.faults.releaseBuildFails = { code: "output_too_large", message: "The output is 4440 MiB; it may be at most 4096 MiB." };
+  standIn.advance();
+  const rest = await reader.readBuildLog(buildId, { after: first.next });
+  assert.deepEqual(rest, { text: "The output is 4440 MiB; it may be at most 4096 MiB.\n", next: first.next + rest.text.length, state: "failed", done: true });
+  assert.deepEqual(refusal(await refused(reader.readBuildLog("bld_nope"))), { status: 404, code: "not_found", fields: [] });
+});
+
+test("a hosted service's backups are read with hosted:read as mobilynet answers them, and the adapter names its point-in-time window and its disk backups", async () => {
+  const { standIn, client, production, projectId } = world();
+  const { hostedService } = await production.createHostedService({ app: "postgresql-18" }, { idempotencyKey: "hosted-db" });
+  const fresh = await client.readHostedBackups(hostedService.id);
+  assert.deepEqual(fresh.apps, [{ app: "postgresql-18", lastLog: null, lastLogAt: null, failure: null, restorable: null }]);
+  assert.deepEqual([fresh.enabled, fresh.disk.server, fresh.disk.everyHours, fresh.disk.backups], [true, "making", 24, []]);
+  const adapter = createMobilynetAdapter({ client, project: projectId });
+  assert.deepEqual(await adapter.backupsOf(hostedService.id), {
+    enabled: true, pointInTime: null, failure: null, disk: { made: true, everyHours: 24, failure: null, backups: [] }
+  }, "before its first base backup nothing is restorable");
+  standIn.hosted.setBackups(hostedService.id, {
+    apps: [{
+      app: "postgresql-18", lastLog: "000000010000000000000007", lastLogAt: "2026-11-19T00:20:00.000Z", failure: null,
+      restorable: { from: "2026-11-12T00:21:00.000Z", to: null }
+    }],
+    disk: {
+      enabled: true, available: true, server: "making", everyHours: 24, failure: { code: "store_failed", message: "The store did not answer.", at: "2026-11-19T00:00:00.000Z" },
+      held: null, newest: null, storedBytes: 9, backups: [
+        { label: "d2", at: "2026-11-18T03:00:00.000Z", chain: "c1", diskBytes: 10, dataBytes: 4, storedBytes: 1, restorableUntil: "2026-12-18T03:00:00.000Z" },
+        { label: "d1", at: "2026-11-17T03:00:00.000Z", chain: "c1", diskBytes: 10, dataBytes: 4, storedBytes: 8, restorableUntil: "2026-12-17T03:00:00.000Z" }
+      ]
+    }
+  });
+  assert.deepEqual(await adapter.backupsOf(hostedService.id), {
+    enabled: true,
+    pointInTime: { from: "2026-11-12T00:21:00.000Z", to: null, latest: "2026-11-19T00:20:00.000Z" },
+    failure: null,
+    disk: {
+      made: true, everyHours: 24, failure: "The store did not answer.",
+      backups: [{ at: "2026-11-18T03:00:00.000Z", restorableUntil: "2026-12-18T03:00:00.000Z" }, { at: "2026-11-17T03:00:00.000Z", restorableUntil: "2026-12-17T03:00:00.000Z" }]
+    }
+  });
+  assert.equal(standIn.requests().at(-1).path, `/v1/hosted-services/${hostedService.id}/backups`);
+  // It needs hosted:read; another project's hosted service is not found.
+  const blind = createMobilynetClient({ baseUrl: standIn.baseUrl, fetch: standIn.fetch, credential: standIn.addKey({ projectId, scopes: ["services:read"] }) });
+  assert.equal((await refused(blind.readHostedBackups(hostedService.id))).code, "scope_missing");
+  assert.deepEqual(refusal(await refused(client.readHostedBackups("hsv_none"))), { status: 404, code: "not_found", fields: [] });
 });

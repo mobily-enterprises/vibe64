@@ -300,6 +300,16 @@ const FIELD_OF = Object.freeze({
 });
 
 /**
+ * The field of a resource's link a binding semantic is given (`host`, `user`, `bucket`...), or null for one made from
+ * several (a database's or Redis's `url`, the password with them) or a constant (a bucket's `driver`, `s3`).
+ * @param {string} kind the resource's kind @param {string} semantic
+ */
+function bindingField(kind, semantic) {
+  const group = kind === "mysql" || kind === "postgresql" ? "database" : kind;
+  return FIELD_OF[group]?.[semantic] ?? null;
+}
+
+/**
  * The service script's lines that set each setting the app's bindings name from the need's settings: a field as it
  * is, a URL made of the fields (each part URL-encoded by jq), a bucket's driver as `s3`. They run after the settings
  * are exported, so a need's settings are there.
@@ -466,6 +476,7 @@ export {
   appHome,
   appPackage,
   bindingExportLines,
+  bindingField,
   commandOf,
   declarationNeeds,
   healthPathProblem,

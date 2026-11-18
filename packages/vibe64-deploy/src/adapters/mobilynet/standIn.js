@@ -28,7 +28,8 @@ import { createStandInServices } from "./standIn/services.js";
 //   noCapacity         a hosted service's create and a service's count raise answer no_capacity
 //   instancesUnhealthy an App Service's new instances never get healthy: its refresh fails instance_never_healthy
 //   neverBoots         new hosted services stay `creating`
-//   releaseBuildFails  a release's build fails, and a refresh onto it fails app_build_failed
+//   releaseBuildFails  a release's build fails, and a refresh onto it fails app_build_failed: `true`, its build
+//                      command exited; `{ code, message }`, that failure, the refresh naming its message too
 //
 // Every request is kept in order (`requests()`: its method, path, query, Idempotency-Key, JSON body or upload's
 // SHA-256, and the status and error code it got), so a test can see what was asked and of what.
@@ -69,11 +70,15 @@ const ROUTES = Object.freeze([
   [`^/v1/services/${ID}/settings$`, { PUT: "services:manage" }],
   [`^/v1/services/${ID}/(releases|actions/rollback)$`, { POST: "services:deploy" }],
   [`^/v1/services/${ID}/(instances|refreshes)(/${ID})?$`, { GET: "services:read" }],
+  [`^/v1/services/${ID}/logs$`, { GET: "services:read" }],
+  [`^/v1/builds/${ID}/log$`, { GET: "vps:read" }],
   [`^/v1/hosted-services/${ID}$`, { GET: "hosted:read", PATCH: "hosted:manage", DELETE: "hosted:manage" }],
   [`^/v1/hosted-services/${ID}/links(/${ID})?$`, { GET: "hosted:read", POST: "hosted:manage", DELETE: "hosted:manage" }],
+  [`^/v1/hosted-services/${ID}/backups$`, { GET: "hosted:read" }],
   [`^/v1/leases(/${ID})?$`, { POST: "services:deploy", PATCH: "services:deploy", DELETE: "services:deploy" }]
 ].map(([pattern, methods]) => Object.freeze([new RegExp(pattern, "u"), Object.freeze(methods)])));
 const SERVICE_PATH = new RegExp(`^/v1/services/${ID}$`, "u");
+const BUILD_LOG_PATH = new RegExp(`^/v1/builds/(${ID})/log$`, "u");
 
 /**
  * The scope a request needs, or null: a service's PATCH `services:manage` for any field but `instances`, which needs
@@ -86,6 +91,8 @@ function missingScope(method, path, body, held) {
     const needed = [...(fields.some((field) => field !== "instances") ? ["services:manage"] : []), ...(fields.includes("instances") || fields.length === 0 ? ["services:deploy"] : [])];
     return needed.find((scope) => !held.has(scope)) ?? null;
   }
+  // A build's log takes `packages:publish` in place of `vps:read` (mobilynet's buildModel.js buildReader).
+  if (method === "GET" && BUILD_LOG_PATH.test(path) && held.has("packages:publish")) return null;
   const scope = ROUTES.find(([pattern]) => pattern.test(path))?.[1][method];
   return scope && !held.has(scope) ? scope : null;
 }
@@ -287,6 +294,11 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     const answered = network.request(request) ?? services.request(request) ?? hosted.request(request);
     if (answered) return answered;
     if (/^\/v1\/leases(\/[^/]+)?$/u.test(path)) return leaseRequest(method, path, body, caller) ?? world.notFound("route");
+    const buildLog = method === "GET" ? BUILD_LOG_PATH.exec(path) : null;
+    if (buildLog) {
+      const part = releases.buildLog((id) => world.reaches(caller, id), decodeURIComponent(buildLog[1]), Number(params.get("after") || 0));
+      return part ? answer(200, part) : world.notFound("build");
+    }
     const projectPath = /^\/v1\/projects\/([^/]+)\/(events|spending-cap|quotas)$/u.exec(path);
     if (projectPath && method === "GET") {
       const id = decodeURIComponent(projectPath[1]);
@@ -397,7 +409,10 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     routes: network.routes,
     /** A mobilynet project's releases of an app, with their builds and declarations. */
     releases: releases.list,
-    /** App Services: `all()`, `service(id)` with their values, `instances(id)` with `_mobilynet`, `refreshes(id)`, `reaches(from, to, port)`. */
+    /**
+     * App Services: `all()`, `service(id)` with their values, `instances(id)` with `_mobilynet`, `refreshes(id)`,
+     * `reaches(from, to, port)`, and `setLogs(instanceId, text)`, what an instance's logs say.
+     */
     services: services.controls,
     /** Hosted services: `all()`, `service(id)` with their links and secrets, `catalogue()`. */
     hosted: hosted.controls,

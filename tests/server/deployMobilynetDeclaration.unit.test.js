@@ -8,6 +8,7 @@ import test from "node:test";
 
 import {
   appPackage,
+  bindingField,
   healthPathProblem,
   machineFeaturesOf,
   packagesProblem,
@@ -107,4 +108,18 @@ test("the build script runs Prepare then Build, and the service exports its sett
   assert.equal(await readFile(path.join(root, "steps"), "utf8"), "migrate staging it's $HOME `x`\nserve staging it's $HOME `x`\n");
   assert.ok((await exec("test", ["-d", signIns]).then(() => true)), "the sign-in folder is made");
   assert.match(scripts["vibe64-app/serve-web.sh"], /^if \[ -z "\$\{TRUSTED_PROXIES\+set\}" \]; then export TRUSTED_PROXIES='loopback'; fi$/mu);
+});
+
+test("each binding reads the link field it is given, and a URL or a bucket's driver none, so an owner sees which field fills which name", () => {
+  assert.deepEqual(
+    ["host", "port", "database", "username", "password", "url", "sslmode"].map((semantic) => bindingField("postgresql", semantic)),
+    ["host", "port", "database", "user", "password", null, null]
+  );
+  assert.equal(bindingField("mysql", "username"), "user");
+  assert.deepEqual(
+    ["bucket", "region", "endpoint", "accessKeyId", "secretAccessKey", "driver"].map((semantic) => bindingField("bucket", semantic)),
+    ["bucket", "region", "endpoint", "accessKeyId", "secretAccessKey", null]
+  );
+  assert.equal(bindingField("redis", "url"), null);
+  assert.equal(bindingField("mongodb", "host"), null, "a kind Production doesn't make has no fields");
 });

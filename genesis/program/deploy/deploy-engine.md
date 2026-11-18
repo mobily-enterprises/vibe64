@@ -191,8 +191,11 @@ making it twice. In order:
 4. each internal service, then the public one: its release uploaded, its App
    Service made (labelled, internal ones with no routes, the public one routed
    at the domain with a connection to each service it reaches) or handed the
-   release, linked to every resource once that refresh is building, then the
-   refresh waited for. mobilynet checks a link against the release a service
+   release and, while that refresh is open, set to the count chosen, linked to
+   every resource once that refresh is building, then the refresh waited for.
+   mobilynet's refresh rolls to the count the service has as it rolls, so a
+   release starts as many new instances as the Plan says, and one that fails
+   leaves the version before serving on the chosen count. mobilynet checks a link against the release a service
    runs or, when that names no such need, the release its refresh in progress
    (building or rolling) moves it to, and that refresh's instances start with
    the link's settings; so a new service's first instances, and a release
@@ -213,16 +216,28 @@ making it twice. In order:
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
    setting the reached service's private address, the Production Env's values
-   for the names it declares), the services it reaches, its size and count,
-   only once every move ended: mobilynet refuses a settings replace while a
-   link made ahead of an open refresh stands;
+   for the names it declares), the services it reaches, its size and (when it
+   was handed no release) its count, only once every move ended: mobilynet
+   refuses a settings replace while a link made ahead of an open refresh
+   stands. The record's choices follow each count or size the Deploy sets, so
+   a Deploy that fails after one leaves the next Plan starting from what runs;
 7. a service the Stack no longer names is deleted;
 8. live, once every service runs its release on as many healthy instances as
    chosen and its last refresh (a link's or a change's) did not fail.
 
 A refusal from the provider (a quota, the spending cap) fails the Deploy with
 its reason, the record kept as far as it got; an answer the provider may give
-later is tried again. A Deploy never deletes or makes again a hosted service
+later is tried again. That holds for the provider read at the top of each step
+too: a read that got no answer, a 5xx or the provider's rate limit (as a Deploy
+waiting minutes for a build may meet) is tried again, one pause later, then two,
+four and at most six (30 seconds at a caller's 5), for as long as the Deploy
+waits, so the run lives until it is live or failed; before, one such read ended
+the run with its record still deploying. A Deploy first reads how each refresh
+the Deploy before it started, and never read, ended (`settleLastRun`: that one
+stopped in its wait): one that failed or was aborted is let go as that Deploy
+would have let it go, its links made ahead dropped, since they ended with it,
+and its service handed its release again, so a Deploy after a run that stopped
+makes the links again and reuses everything else it made. A Deploy never deletes or makes again a hosted service
 and never acts on a thing the record does not hold. `takeOffline()` deletes the
 services, public first, and keeps every resource: it keeps the record without
 them (`save`) once each delete is asked, then reads the provider again
@@ -232,6 +247,20 @@ given) is refused `deployment_offline_unfinished`, naming them; they take no
 new requests by then, and the provider finishes by itself. `deleteResource()`
 deletes a disconnected resource and its data only when the owner typed its
 name.
+
+Both say what they do as they do it, through the caller's `report(event)`:
+each step as it starts and ends (`{ kind: "step", phase: "start" | "done" |
+"refused", step, words, service?, resource?, refresh? }`) in the engine's own
+words (`stepWords`: "Making the hosted service for database", "Uploading the
+release of web", "Making App Service web, public behind the load balancer at
+app.example.com", "Linking web to database", "Reading how the update of web
+ended", "Deleting App Service web"), each wait when its words change, each call
+tried again (`{ kind: "retry", words, message }`), each service gone at Take
+offline and the end (`{ kind: "end", outcome }`). A step that starts a refresh,
+or reads how one ended, names it (`refresh: { serviceId, refreshId }`), so the
+caller can follow what the provider does in it. No event carries a setting's
+value, and a report that throws or rejects never stops the run. Every event has
+its time (`at`).
 
 Every App Service the mobilynet adapter makes asks for mobilynet's shortest
 drain, 30 seconds (`DRAIN_SECONDS`; genesis/stack.md has no line for it): an
@@ -267,6 +296,35 @@ its inventory of App Services and hosted services with their labels, and the
 calls the steps make. mobilynet has no leases yet: an adapter made without
 `leases: true` takes none, which is safe only while one editor deploys an
 environment.
+
+Its client also reads what mobilynet did, for a caller that shows it: a
+refresh with its steps (`readServiceRefresh`: build started, passed or failed,
+each instance started, healthy, joined or never healthy) and an instance's logs
+(`readServiceLogs`, `GET /v1/services/{id}/logs`, `services:read`): read by an
+operation, `logs` null with `202` until it ends, then the lines, each of the
+service's secrets masked as `[secret]`; and a build's own log
+(`readBuildLog`, `GET /v1/builds/{id}/log`: `{ text, next, state, done }` from
+byte `after`), which needs `vps:read` or `packages:publish`, scopes a key
+holding only the engine's lacks. The stand-in answers each, an instance's
+output as a test sets it (`services.setLogs`), its reads ending at the next
+`advance()` (`standIn/serviceLogs.js`), and a build's own lines; its
+`releaseBuildFails` fault, given `{ code, message }`, fails a build with that
+reason, which the refresh names too, as mobilynet named a build whose output
+passed its limit.
+
+For an owner looking at what a Deploy made, the adapter also reads a
+resource's links (`listLinks`, each link's consumer and its connection's
+plain fields: host, port, database, user, never a secret field) and its
+backups (`backupsOf`, from `readHostedBackups`,
+`GET /v1/hosted-services/{id}/backups`, `hosted:read`): the point-in-time
+window its app's backups reach (`from`, `to`, null while it reaches the newest
+point, `latest`), their failure while it lasts, and its machine's disk backups,
+each with when it was taken and until when it can be restored, newest first.
+`bindingField(kind, semantic)` (`declaration.js`) names the link field each
+binding of a resource is given, or null for a URL made of several (the
+password with them) and a bucket's `driver`. The stand-in answers a fresh
+hosted service's backups as on with nothing restorable yet, and as a test sets
+them (`hosted.setBackups`).
 
 ## The Google Cloud adapter
 

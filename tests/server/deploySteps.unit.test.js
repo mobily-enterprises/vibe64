@@ -56,11 +56,11 @@ function setup() {
   // Room for two a-8 computers (three when raised by hand), two a-2 webs and their rolling replacements.
   parts.standIn.setQuota(parts.projectId, { vcpus: 96, memoryGib: 192 });
   const adapter = createMobilynetAdapter({ client: parts.client, project: parts.projectId, leases: true });
-  const run = async ({ stack = stackOf(), record, commit, choices = {}, decisions = {}, planHash, save, pause = () => parts.standIn.advance() }) => {
+  const run = async ({ stack = stackOf(), record, commit, choices = {}, decisions = {}, planHash, save, report, pause = () => parts.standIn.advance() }) => {
     const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer(), choices, decisions });
     const result = await deploy({
       adapter, needs: stack.needs, record, choices, decisions, planHash: planHash ?? plan.hash, release: releaseOf(commit, stack), holder: HOLDER,
-      pause, ...(save ? { save } : {})
+      pause, ...(save ? { save } : {}), ...(report ? { report } : {})
     });
     return { ...result, plan };
   };
@@ -433,6 +433,59 @@ test("a count change alone hands no service a release, so none of its instances 
     [`/v1/services/${computers}/releases`, `/v1/services/${web}/releases`]);
 });
 
+test("a count changed with a new release goes with it: the release starts as many instances as chosen, and one that fails leaves the version before on the chosen count, which the record and the next plan keep", async () => {
+  const { standIn, run, record } = setup();
+  standIn.setQuota(standIn.projectId, { vcpus: 200, memoryGib: 400 });
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const computers = first.record.items["service.computers"].id;
+  const releaseRefresh = () => standIn.services.refreshes(computers).filter((one) => one.kind === "release").at(-1);
+  const startedBy = (refresh) => standIn.services.instances(computers).filter((one) => one.refreshId === refresh.id).length;
+  const serving = () => standIn.services.instances(computers).filter((one) => !one.removedReason).length;
+  const four = await run({ record: first.record, commit: "c1", choices: { services: { computers: { instances: 4 } } } });
+  assert.equal(four.outcome, "live", four.message);
+
+  // Its next release fails (instance_never_healthy): computers serves c1 on four instances.
+  standIn.faults.instancesUnhealthy = true;
+  const broken = await run({ record: four.record, commit: "c2" });
+  assert.equal(broken.outcome, "failed");
+  assert.match(broken.message, /^computers: the release did not go live: A new instance never became healthy/u);
+
+  // Lowered to 1 with another release that fails as well: the count goes with the release while its refresh is open,
+  // so mobilynet's refresh rolls to one instance and, when it fails, the version before serves on one.
+  const at = standIn.requests().length;
+  const lowered = await run({ record: broken.record, commit: "c3", choices: { services: { computers: { instances: 1 } } } });
+  assert.equal(lowered.outcome, "failed");
+  assert.equal(lowered.plan.items.find((item) => item.name === "computers").verb, "changed");
+  const writes = requestsAfter(standIn, at).filter((request) => isWrite(request) && request.path.startsWith(`/v1/services/${computers}`));
+  assert.deepEqual(writes.map((request) => [request.method, request.path]), [["POST", `/v1/services/${computers}/releases`], ["PATCH", `/v1/services/${computers}`]]);
+  assert.deepEqual(writes[1].body, { instances: 1 });
+  standIn.faults.instancesUnhealthy = false;
+  settle(standIn);
+  assert.deepEqual(standIn.services.service(computers).instances, { wanted: 1, running: 1, inRotation: 1, healthy: 1 });
+  assert.equal(serving(), 1);
+  assert.equal(lowered.record.items["service.computers"].instances, 1);
+  assert.deepEqual(lowered.record.choices.services.computers, { size: "a-8", instances: 1 }, "the record keeps the count computers runs");
+
+  // The next plan starts from what runs, one instance, kept; its Deploy starts one new instance and goes live.
+  const again = await run({ record: lowered.record, commit: "c3" });
+  assert.equal(again.outcome, "live", again.message);
+  assert.deepEqual(again.plan.choices.services.computers, { size: "a-8", instances: 1 });
+  assert.equal(again.plan.items.find((item) => item.name === "computers").verb, "kept");
+  settle(standIn);
+  assert.equal(startedBy(releaseRefresh()), 1);
+  assert.equal(serving(), 1);
+
+  // Raised to 3 with a new commit: the release refresh starts the three, and no instance starts on the version it leaves.
+  const startedBefore = standIn.services.instances(computers).length;
+  const raised = await run({ record: again.record, commit: "c4", choices: { services: { computers: { instances: 3 } } } });
+  assert.equal(raised.outcome, "live", raised.message);
+  settle(standIn);
+  assert.equal(startedBy(releaseRefresh()), 3);
+  assert.equal(standIn.services.instances(computers).length - startedBefore, 3, "no instance started beside the release's own");
+  assert.equal(serving(), 3);
+});
+
 test("take offline returns once the provider removed the services, or names those it is still removing, the record kept without them", async () => {
   const { standIn, run, record } = setup();
   const first = await run({ record, commit: "c1" });
@@ -448,4 +501,205 @@ test("take offline returns once the provider removed the services, or names thos
   settle(standIn);
   for (const name of ["web", "computers"]) assert.equal(standIn.services.service(first.record.items[`service.${name}`].id).state, "deleted");
   assert.deepEqual(await takeOffline(adapter, kept, { pause: () => assert.fail("nothing to wait for") }), kept);
+});
+
+/** Every value of the release's Env (but a count, which any time holds), which no report of a Deploy may carry. */
+const ENV_VALUES = Object.values(ENV).filter((value) => value.length > 4);
+
+test("a Deploy reports each step as it starts and ends in the engine's words, each wait once, each retry and its end, with no setting's value; a report that throws never stops it", async () => {
+  const { run, record } = setup();
+  const events = [];
+  const first = await run({ record, commit: "c1", report: (event) => events.push(event) });
+  assert.equal(first.outcome, "live", first.message);
+  for (const event of events) assert.ok(Number.isFinite(Date.parse(event.at)), `${JSON.stringify(event)} has its time`);
+  const text = JSON.stringify(events);
+  for (const value of ENV_VALUES) assert.equal(text.includes(value), false, `no report carries ${value}`);
+
+  const said = events.filter((event) => event.kind === "step").map((event) => `${event.phase} ${event.words}`);
+  for (const words of [
+    "Making the hosted service for database",
+    "Making the hosted service for files",
+    `Adding the domain ${DOMAIN}`,
+    "Uploading the release of computers",
+    "Making App Service computers, internal: only the app's other services reach it",
+    "Linking computers to database",
+    "Uploading the release of web",
+    `Making App Service web, public behind the load balancer at ${DOMAIN}`,
+    "Reading how the update of computers ended"
+  ]) {
+    const start = said.indexOf(`start ${words}`);
+    assert.ok(start >= 0, `${words} starts: ${said.join(" | ")}`);
+    assert.ok(said.indexOf(`done ${words}`) > start, `${words} ends after it starts`);
+  }
+  // In the order the steps run: the resources, the domain, the internal service, then the public one.
+  const order = ["start Making the hosted service for database", `start Adding the domain ${DOMAIN}`, "start Uploading the release of computers",
+    "start Uploading the release of web"].map((line) => said.indexOf(line));
+  assert.deepEqual([...order].sort((one, other) => one - other), order);
+  // A step that starts a refresh names it, so its caller can follow what the provider does; reading how it ended too.
+  const made = events.find((event) => event.kind === "step" && event.phase === "done" && event.step === "createService" && event.service === "web");
+  assert.deepEqual(Object.keys(made.refresh ?? {}).sort(), ["refreshId", "serviceId"]);
+  assert.equal(made.refresh.serviceId, first.record.items["service.web"].id);
+  const read = events.find((event) => event.step === "checkRefresh" && event.phase === "done" && event.service === "web");
+  assert.equal(read.refresh.refreshId, made.refresh.refreshId);
+  // A wait is said when its words change, never again at each step it lasts.
+  const waits = events.filter((event) => event.kind === "wait").map((event) => event.words);
+  assert.ok(waits.length > 0);
+  assert.ok(waits.every((words, index) => index === 0 || words !== waits[index - 1]), waits.join(" | "));
+  assert.deepEqual(events.at(-1), { at: events.at(-1).at, kind: "end", outcome: "live" });
+
+  // A report that throws, or rejects, is the caller's problem alone.
+  const again = await run({ record: first.record, commit: "c2", report: () => {
+    throw new Error("the report broke");
+  } });
+  assert.equal(again.outcome, "live", again.message);
+  const third = await run({ record: again.record, commit: "c3", report: () => Promise.reject(new Error("the report broke")) });
+  assert.equal(third.outcome, "live", third.message);
+});
+
+test("a provider read that fails while a Deploy waits (no answer, a 5xx, its rate limit) is tried again at the next step, said as a retry, and the Deploy goes live", async () => {
+  const { standIn, record } = setup();
+  // mobilynet answers nothing at the inventory after the first two waits, then a 503, then its rate limit, as it may
+  // while it builds; the Deploy carries on.
+  const originalFetch = standIn.fetch;
+  let pauses = 0;
+  let failing = [];
+  const fetchOf = (url, init) => {
+    const next = failing.shift();
+    if (next === "down") return Promise.reject(new TypeError("fetch failed"));
+    if (next) {
+      return Promise.resolve(new Response(JSON.stringify({ error: { code: next === 503 ? "internal_error" : "rate_limited", message: `mobilynet answered ${next}` } }),
+        { status: next, headers: { "content-type": "application/json" } }));
+    }
+    return originalFetch(url, init);
+  };
+  const client = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: standIn.key, fetch: fetchOf });
+  const adapter = createMobilynetAdapter({ client, project: standIn.projectId, leases: false });
+  const stack = stackOf();
+  const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer() });
+  const events = [];
+  const result = await deploy({
+    adapter, needs: stack.needs, record, planHash: plan.hash, release: releaseOf("c1", stack), holder: HOLDER,
+    report: (event) => events.push(event),
+    pause: () => {
+      pauses += 1;
+      // The next request after this pause is the inventory of the next step: each kind of failure once.
+      if (pauses === 3) failing = ["down"];
+      if (pauses === 4) failing = [503];
+      if (pauses === 5) failing = [429];
+      standIn.advance();
+    }
+  });
+  assert.equal(result.outcome, "live", result.message);
+  const retries = events.filter((event) => event.kind === "retry");
+  assert.deepEqual(retries.map((event) => event.words), ["Reading mobilynet again", "Reading mobilynet again", "Reading mobilynet again"]);
+  assert.match(retries[0].message, /mobilynet did not answer: fetch failed/u);
+  assert.deepEqual(retries.slice(1).map((event) => event.message), ["mobilynet answered 503", "mobilynet answered 429"]);
+});
+
+test("reads of the provider that keep failing while a Deploy waits are tried again further apart, one pause, then two, four and at most six", async () => {
+  const { standIn, record } = setup();
+  const originalFetch = standIn.fetch;
+  let down = 0;
+  const client = createMobilynetClient({
+    baseUrl: standIn.baseUrl, credential: standIn.key,
+    fetch: (url, init) => (down > 0 && (down -= 1, true) ? Promise.reject(new TypeError("fetch failed")) : originalFetch(url, init))
+  });
+  const adapter = createMobilynetAdapter({ client, project: standIn.projectId, leases: false });
+  const stack = stackOf();
+  const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer() });
+  const said = [];
+  let pauses = 0;
+  const result = await deploy({
+    adapter, needs: stack.needs, record, planHash: plan.hash, release: releaseOf("c1", stack), holder: HOLDER,
+    report: (event) => said.push({ ...event, pauses }),
+    pause: () => {
+      pauses += 1;
+      // Once the computers' build runs, mobilynet answers no read for its next six inventories (two calls each).
+      if (pauses === 4) down = 12;
+      standIn.advance();
+    }
+  });
+  assert.equal(result.outcome, "live", result.message);
+  const retries = said.filter((event) => event.kind === "retry");
+  assert.deepEqual(retries.map((event) => event.attempt), [1, 2, 3, 4, 5, 6]);
+  const gaps = retries.slice(1).map((event, index) => event.pauses - retries[index].pauses);
+  assert.deepEqual(gaps, [1, 2, 4, 6, 6]);
+});
+
+test("a Deploy that stopped while its build ran, the build then failing, is resumed by the next: it reads how that refresh ended, names its reason, lets go of the links made against it and makes them again", async () => {
+  const { standIn, run, record } = setup();
+  const tooLarge = "The output is 4440 MiB; it may be at most 4096 MiB.";
+  // computers' build will fail, naming why. The editor's run stops at the first pause after computers is linked to the
+  // database while its build runs (a read it could not try again, or the editor stopping): its record says deploying,
+  // computers made, its link made ahead.
+  standIn.faults.releaseBuildFails = { code: "output_too_large", message: tooLarge };
+  let kept = null;
+  const stopped = await run({
+    record, commit: "c1",
+    save: (one) => {
+      kept = structuredClone(one);
+      return one;
+    },
+    pause: () => {
+      if (kept?.items["resource.database"]?.links?.computers) throw new Error("the editor stopped");
+      standIn.advance();
+    }
+  }).catch((error) => error);
+  assert.equal(stopped.message, "the editor stopped");
+  assert.equal(kept.run.state, "deploying");
+  assert.deepEqual(kept.run.services.computers.linkedAhead, ["database"]);
+  // mobilynet then fails the refresh, and the link made against it ends with it.
+  settle(standIn);
+  standIn.faults.releaseBuildFails = false;
+  const computersId = kept.items["service.computers"].id;
+  assert.equal(standIn.services.refreshes(computersId).at(-1).error.message, tooLarge);
+
+  const events = [];
+  const resumed = await run({ record: kept, commit: "c2", report: (event) => events.push(event) });
+  assert.equal(resumed.outcome, "live", resumed.message);
+  const settled = events.filter((event) => event.step === "settleRefresh");
+  assert.deepEqual(settled.map((event) => [event.phase, event.service]), [["start", "computers"], ["done", "computers"]]);
+  assert.equal(settled[1].message, `It failed: ${tooLarge} This Deploy hands computers its release again.`);
+  assert.equal(resumed.record.items["service.computers"].id, computersId, "computers is the App Service made before, not made twice");
+  for (const item of ["resource.database", "resource.files"]) {
+    const held = standIn.hosted.service(resumed.record.items[item].id).links.filter((link) => ["issuing", "active"].includes(link.state));
+    assert.deepEqual(held.map((link) => link.consumer.id).sort(), [computersId, resumed.record.items["service.web"].id].sort());
+    assert.deepEqual(Object.values(resumed.record.items[item].links).sort(), held.map((link) => link.id).sort());
+  }
+});
+
+test("a build that fails naming why fails the Deploy with mobilynet's own words", async () => {
+  const { standIn, run, record } = setup();
+  standIn.faults.releaseBuildFails = { code: "output_too_large", message: "The output is 4440 MiB; it may be at most 4096 MiB." };
+  const failed = await run({ record, commit: "c1" });
+  assert.equal(failed.outcome, "failed");
+  assert.equal(failed.message, "computers: the release did not go live: The output is 4440 MiB; it may be at most 4096 MiB.");
+});
+
+test("take offline reports each App Service deleted, the wait while the provider removes them and each one gone, and tries a failed read again", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const adapter = setupAdapterOf(standIn);
+  const events = [];
+  let reads = 0;
+  const kept = await takeOffline(adapter, first.record, {
+    report: (event) => events.push(event),
+    pause: () => {
+      reads += 1;
+      if (reads === 1) standIn.faults.down = true;
+      else standIn.faults.down = false;
+      standIn.advance();
+    }
+  });
+  assert.deepEqual(Object.keys(kept.items).sort(), ["resource.database", "resource.files"]);
+  const said = events.map((event) => [event.kind, event.phase, event.words].filter(Boolean).join(" "));
+  assert.deepEqual(said.filter((line) => line.startsWith("step")), [
+    "step start Deleting App Service web", "step done Deleting App Service web",
+    "step start Deleting App Service computers", "step done Deleting App Service computers"
+  ]);
+  assert.ok(said.includes("wait Waiting for mobilynet to remove web and computers"), said.join(" | "));
+  assert.ok(said.includes("retry Reading mobilynet again"), said.join(" | "));
+  assert.deepEqual(events.at(-1).kind, "end");
+  assert.equal(events.at(-1).outcome, "offline");
 });

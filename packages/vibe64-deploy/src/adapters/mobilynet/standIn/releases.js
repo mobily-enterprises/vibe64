@@ -184,6 +184,7 @@ function createStandInReleases(world) {
       build: "building",
       buildId: nextId("bld"),
       error: null,
+      log: `Building ${app} ${now().toISOString().slice(0, 10).replace(/-/gu, "")}-${digest.slice(0, 7)}: running its build command\n`,
       declaration: read.declaration
     };
     versions.set(release.version, release);
@@ -193,15 +194,39 @@ function createStandInReleases(world) {
   /** A mobilynet project's release of an app by its version, or null. @param {string} projectId @param {string} app @param {string} version */
   const named = (projectId, app, version) => releases.get(keyOf(projectId, app))?.get(String(version)) ?? null;
 
-  /** Builds every release still building, or fails it while `releaseBuildFails` is on. */
+  /**
+   * Builds every release still building, or fails it while `releaseBuildFails` is on: `true`, its build command's exit;
+   * `{ code, message }`, that failure, which the refresh then names too, as mobilynet named a build's output past its
+   * limit (`output_too_large`, "The output is 4440 MiB; it may be at most 4096 MiB.", 18 Nov).
+   */
   function advance() {
+    const fault = faults.releaseBuildFails;
     for (const versions of releases.values()) {
       for (const release of versions.values()) {
         if (release.build !== "building") continue;
-        release.build = faults.releaseBuildFails ? "failed" : "built";
-        release.error = faults.releaseBuildFails ? { code: "build_failed", message: "The build command exited with status 1." } : null;
+        release.build = fault ? "failed" : "built";
+        release.error = !fault ? null
+          : fault === true ? { code: "build_failed", message: "The build command exited with status 1." }
+            : { code: String(fault.code ?? "build_failed"), message: String(fault.message), named: true };
+        release.log += release.error ? `${release.error.message}\n` : "The build passed.\n";
       }
     }
+  }
+
+  /**
+   * A build's log from byte `after` (`GET /v1/builds/{id}/log`, as mobilynet's buildCalls.js followLog answers it):
+   * `{ text, next, state, done }`, its state `building`, `succeeded` or `failed`; another project's build is not found.
+   * STAND-IN ONLY: `wait` is not waited; the text is the stand-in's own lines.
+   * @param {(projectId: string) => boolean} reaches whether the caller's key reaches a project @param {string} buildId
+   * @param {number} after
+   */
+  function buildLog(reaches, buildId, after) {
+    const release = [...releases.values()].flatMap((versions) => [...versions.values()]).find((one) => one.buildId === buildId);
+    if (!release || !reaches(release.projectId)) return null;
+    const bytes = Buffer.from(release.log, "utf8");
+    const from = Math.min(Math.max(0, after), bytes.length);
+    const state = { building: "building", built: "succeeded", failed: "failed" }[release.build];
+    return { text: bytes.subarray(from).toString("utf8"), next: bytes.length, state, done: release.build !== "building" };
   }
 
   /** A project's releases of an app, with their builds and declarations, for tests. @param {string} projectId @param {string} app */
@@ -216,6 +241,7 @@ function createStandInReleases(world) {
     named,
     view,
     advance,
+    buildLog,
     list,
     invalid
   });

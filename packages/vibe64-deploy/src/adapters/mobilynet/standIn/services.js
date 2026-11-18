@@ -1,5 +1,6 @@
 import { INSTANCE_SIZES, isRecord, labelsMatch, labelsOf, needSettings, pageOf, projectLabel, thingName } from "./catalogue.js";
 import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, valuesOf } from "./serviceEngine.js";
+import { createStandInServiceLogs } from "./serviceLogs.js";
 
 // mobilynet's App Services as its stand-in answers them (openApiServices.js, and its machines package's services.js,
 // serviceViews.js, serviceEngine.js and serviceLinks.js): a service is one app on a count of instances of an `a-`
@@ -43,6 +44,7 @@ function createStandInServices(world, { releases, network }) {
   const refreshes = new Map();
   /** @type {Map<string, any>} each instance, by id, in the order started */
   const instances = new Map();
+  const logs = createStandInServiceLogs(world, instances);
   /** What else holds a name in a mobilynet project (its hosted services), and what a deleted service's links do. */
   const hooks = { nameTaken: () => false, consumerGone: () => {}, refreshFailed: () => {} };
 
@@ -481,6 +483,7 @@ function createStandInServices(world, { releases, network }) {
       return answer(200, pageOf(listed.map((one) => instanceView(service, one)), params));
     }
     if (route === "GET /refreshes") return answer(200, pageOf(refreshesOf(service.id).reverse().map(refreshView), params));
+    if (route === "GET /logs") return logs.read(service, params);
     const refreshPath = /^\/refreshes\/([^/]+)$/u.exec(rest);
     if (refreshPath && method === "GET") {
       const refresh = refreshes.get(decodeURIComponent(refreshPath[1]));
@@ -584,6 +587,11 @@ function createStandInServices(world, { releases, network }) {
     instances: (id) => [...instances.values()].filter((one) => one.serviceId === id).map((one) => ({
       ...instanceView(services.get(id), one), settings: { ...one.settings }, secrets: { ...one.secrets }, mobilynet: structuredClone(one.mobilynet), refreshId: one.refreshId
     })),
+    /**
+     * Sets what an instance's logs say (`GET /v1/services/{id}/logs`), its service's secrets then masked as mobilynet
+     * masks them. @param {string} instanceId @param {string} text
+     */
+    setLogs: (instanceId, text) => logs.set(instanceId, text),
     /** A service's refreshes, oldest first, each with its target. @param {string} id */
     refreshes: (id) => refreshesOf(id).map((one) => ({ ...refreshView(one), target: structuredClone(one.target) })),
     /** Whether one service's instances reach another's on a port: a connection of the first to the second. */
@@ -597,7 +605,10 @@ function createStandInServices(world, { releases, network }) {
 
   return Object.freeze({
     request,
-    advance: engine.advance,
+    advance: () => {
+      logs.advance();
+      engine.advance();
+    },
     linkConsumer,
     linkSettings,
     linkSettingsAhead,
