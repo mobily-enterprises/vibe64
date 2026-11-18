@@ -24,6 +24,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/host/serviceOperations.js`
 - `packages/vibe64-execution/src/host/stagingLogin.js`
 - `packages/vibe64-execution/src/host/hostSettings.js`
+- `packages/vibe64-execution/src/host/editorPrivateState.js`
 - `packages/vibe64-execution/src/host/executionReceipts.js`
 - `packages/vibe64-execution/src/host/executionState.js`
 - `packages/vibe64-execution/src/server/policy/cwdPolicy.js`
@@ -345,7 +346,14 @@ protect an administrator: the command could still change the account's own
 files, such as its SSH keys, shell start-up files or user services, which run
 with all of its rights at its next sign-in. A managed execution's runner gets
 no new privileges from `setpriv --no-new-privs`, because a container's systemd
-drop-in can switch a unit's `NoNewPrivileges=` off. Host setup runs the root-only
+drop-in can switch a unit's `NoNewPrivileges=` off. The daemon's private state
+(`editor-private` below its state root, `editorPrivateState.js`: Production's
+Env and the key that seals it, which the editor's own service alone reads) is
+hidden from every execution and managed service the helper starts for the
+daemon or a person (`InaccessiblePaths=`), so an agent, a terminal or a Preview
+running as the daemon's own user is refused by the filesystem; the leading `-`
+lets a unit start before the editor first makes the folder, which it does when
+it starts. Host setup runs the root-only
 `upgrade-person-registry <workspace>` once per workspace: it registers each
 membership whose account is already in the shared group, except system and
 administrator accounts, which it reports; a workspace that has a registry keeps

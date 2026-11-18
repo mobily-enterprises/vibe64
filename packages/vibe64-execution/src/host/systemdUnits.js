@@ -12,6 +12,7 @@ import {
   workspaceFromDaemonUsername,
   workspaceTempRoot
 } from "./hostAccounts.js";
+import { editorPrivateStateLine } from "./editorPrivateState.js";
 import { canonicalPath, relativePathParts } from "./hostFiles.js";
 import { helperSystemdUnitRoot } from "./hostSettings.js";
 
@@ -212,12 +213,14 @@ function managedSystemdUnitPath(unitName = "", owner = {}, unitRoot = helperSyst
   return path.join(unitRoot, assertValidManagedServiceUnitName(unitName, owner));
 }
 
+// A managed service runs as the daemon, without the daemon's private state.
 function serviceAccountUnitLines(owner = {}) {
   return [
     `User=${systemdUnitSafeValue(owner.username)}`,
     `Group=${VIBE64_GROUP}`,
     "SupplementaryGroups=nix-users",
-    "UMask=0007"
+    "UMask=0007",
+    editorPrivateStateLine(owner)
   ];
 }
 

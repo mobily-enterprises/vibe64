@@ -8,6 +8,7 @@
     ".": "./src/server/index.js",
     "./server": "./src/server/index.js",
     "./server/hostProfile": "./src/server/hostProfile.js",
+    "./server/editorPrivateState": "./src/host/editorPrivateState.js",
     "./server/hostSettings": "./src/host/hostSettings.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
     "./server/types": "./src/server/types.js"

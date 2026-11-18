@@ -56,6 +56,7 @@ import {
   managedWorkflowOperation,
   managedWorkflowState
 } from "./managedWorkflows.js";
+import { editorPrivateStateLine } from "./editorPrivateState.js";
 import { accountUnitLines } from "./systemdUnits.js";
 
 const CONTROLLER_LEASE_NAME = "resource-controller.sock";
@@ -230,6 +231,9 @@ function handleManagedExecutionOperation(payload = {}) {
     `--slice=${executionSlice}`,
     `--property=Description=Vibe64 ${kind} execution`,
     ...accountUnitLines(targetUser, { receiptRoot, sandboxAllowances }).map((line) => `--property=${line}`),
+    // The daemon's and a person's executions never see the daemon's private state; an application's sandbox has no
+    // home at all.
+    ...(application ? [] : [`--property=${editorPrivateStateLine(owner)}`]),
     `--property=WorkingDirectory=${cwd}`,
     "--property=KillMode=control-group",
     "--property=ExitType=cgroup",
