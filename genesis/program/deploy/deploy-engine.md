@@ -205,6 +205,23 @@ making it twice. In order:
    asks again. A refresh that fails ends the links made against it, which the
    record lets go so the next Deploy makes them again, and fails the Deploy
    with the service's reason; services not yet moved keep serving their version.
+   The record names each link the engine made, but a link counts only while the
+   provider holds it: the mobilynet adapter's inventory lists, for each hosted
+   service Vibe64 made, the links mobilynet holds (issuing, active or failed),
+   and a link the record names that mobilynet ended counts as none, so the next
+   step makes it again. mobilynet ends every link the release a service still
+   runs doesn't name when a refresh of it fails or is aborted, whichever run
+   made the link and even when no Deploy reads that refresh (the run that made
+   it stopped first, and the next began while it was still open), and an owner
+   may remove a link by hand; a record that kept such a link would start the
+   service's next release without that resource's settings. A service that runs
+   no release yet (its first failed) is linked again ahead of the release the
+   Deploy hands it, whose instances start with the resource; one whose running
+   release names the need gets the link's settings in a settings refresh queued
+   behind that release, so its instances serve with the resource once the Deploy
+   is live. A link mobilynet still holds that a record made again from labels
+   lacks is taken up when the link is asked again (`need_linked`). Adapters that
+   list no links (Google Cloud, AWS) are taken at the record's word.
    The record keeps, with each service, the release it was last handed: its
    upload's SHA-256 and its declaration (`releaseDigest`) and the version. A
    service still running that version with no error, for the same upload, keeps
@@ -275,7 +292,9 @@ and every change of settings queued behind it, and instances it started
 already are replaced (`link_changed`); when it fails, a link made ahead ends
 and its settings leave the changes queued. A link a service's running release
 and its release ahead both name is not made ahead: its settings refresh queues
-behind the move. Until mobilynet runs M14, mobilynet links only against the
+behind the move, and starts, as mobilynet's does, on the release that move
+brought (a settings or size refresh runs on the release its service runs as it
+starts, never the one it ran when queued). Until mobilynet runs M14, mobilynet links only against the
 release a service runs, and the first Deploy of an application whose serve
 script needs its database there fails.
 
@@ -286,16 +305,20 @@ with the provider's id and name; everything the engine makes carries the labels
 `vibe64-deployment`, `vibe64-app`, `vibe64-environment` and `vibe64-item`, so
 `rebuildFromLabels()` makes the record again from the provider. Its file, in
 the editor's private state, is written only over the revision its writer read.
+The links it names are believed only while the provider holds them, where the
+adapter lists them (The steps, 4).
 
 ## The mobilynet adapter
 
 `createMobilynetAdapter()` answers the engine in mobilynet's calls for one
 mobilynet project and region: its offer (App Service instance sizes with their
 list prices, the load balancer's, each resource kind's hosted app and sizes),
-its inventory of App Services and hosted services with their labels, and the
-calls the steps make. mobilynet has no leases yet: an adapter made without
-`leases: true` takes none, which is safe only while one editor deploys an
-environment.
+its inventory of App Services and hosted services with their labels, each
+hosted service Vibe64 made with the links mobilynet holds of it (one `GET
+/v1/hosted-services/{id}/links`, `hosted:read`, per such hosted service at
+each read), and the calls the steps make. mobilynet has no leases yet: an
+adapter made without `leases: true` takes none, which is safe only while one
+editor deploys an environment.
 
 Its client also reads what mobilynet did, for a caller that shows it: a
 refresh with its steps (`readServiceRefresh`: build started, passed or failed,
