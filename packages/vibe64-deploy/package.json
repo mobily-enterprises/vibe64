@@ -1,7 +1,7 @@
 {
   "name": "@local/vibe64-deploy",
   "version": "0.1.0",
-  "description": "The deploy engine: Production's needs from a project's Stack, the package per service, the Plan, the record, the steps and the provider adapters (mobilynet first). Plain Node, with no editor or JSKIT dependency: the editor gives it the credential, the record's place and the prices.",
+  "description": "The deploy engine: Production's needs from a project's Stack, the package per service, the Plan, the record, the steps and the provider adapters (mobilynet, Google Cloud). Plain Node, with no editor or JSKIT dependency: the editor gives it the credential, the record's place and the prices.",
   "private": true,
   "type": "module",
   "exports": {
@@ -16,7 +16,10 @@
     "./adapters/mobilynet": "./src/adapters/mobilynet/index.js",
     "./adapters/mobilynet/declaration": "./src/adapters/mobilynet/declaration.js",
     "./adapters/mobilynet/client": "./src/adapters/mobilynet/client.js",
-    "./adapters/mobilynet/stand-in": "./src/adapters/mobilynet/standIn.js"
+    "./adapters/mobilynet/stand-in": "./src/adapters/mobilynet/standIn.js",
+    "./adapters/google": "./src/adapters/google/index.js",
+    "./adapters/google/client": "./src/adapters/google/client.js",
+    "./adapters/google/stand-in": "./src/adapters/google/standIn.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -50,6 +53,14 @@
           {
             "subpath": "./adapters/mobilynet/declaration",
             "summary": "How a service becomes a mobilynet App Service's release declaration (mobilynet.json) and its scripts."
+          },
+          {
+            "subpath": "./adapters/google",
+            "summary": "The Google Cloud adapter: its offer (Cloud Run shapes, machine types, Cloud SQL tiers at list price), its inventory of labelled things, and the calls the steps make."
+          },
+          {
+            "subpath": "./adapters/google/client",
+            "summary": "The Google Cloud REST client: each API directly, or every API through a gateway, with an access token or a token source."
           }
         ]
       }

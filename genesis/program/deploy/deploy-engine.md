@@ -3,8 +3,8 @@
 The deploy engine, `@local/vibe64-deploy`, turns a project's Stack into what
 runs at a provider. It runs only in Vibe64's editor, which gives it the
 provider's credential, the place of its record and the prices it shows; it
-depends on no editor or JSKIT package and knows no host. mobilynet is its first
-provider.
+depends on no editor or JSKIT package and knows no host. Its providers are
+mobilynet and Google Cloud.
 
 ## Sources
 
@@ -20,6 +20,17 @@ provider.
 - `packages/vibe64-deploy/src/adapters/mobilynet/index.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/client.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/standIn.js`
+- `packages/vibe64-deploy/src/adapters/google/index.js`
+- `packages/vibe64-deploy/src/adapters/google/base.js`
+- `packages/vibe64-deploy/src/adapters/google/releases.js`
+- `packages/vibe64-deploy/src/adapters/google/resources.js`
+- `packages/vibe64-deploy/src/adapters/google/frontends.js`
+- `packages/vibe64-deploy/src/adapters/google/services.js`
+- `packages/vibe64-deploy/src/adapters/google/machine.js`
+- `packages/vibe64-deploy/src/adapters/google/names.js`
+- `packages/vibe64-deploy/src/adapters/google/prices.js`
+- `packages/vibe64-deploy/src/adapters/google/client.js`
+- `packages/vibe64-deploy/src/adapters/google/standIn.js`
 
 ## Needs
 
@@ -206,6 +217,76 @@ calls the steps make. mobilynet has no leases yet: an adapter made without
 `leases: true` takes none, which is safe only while one editor deploys an
 environment.
 
+## The Google Cloud adapter
+
+`createGoogleAdapter()` answers the engine in Google Cloud's REST calls for one
+Google Cloud project and region. Its client takes `{ baseUrl, credential }`:
+with no `baseUrl` it calls each API at its own `googleapis.com` host, the
+person's own project reached with their access token; with one, every API is
+under that address, the same calls through a gateway in front of Google. The
+credential is a token, or a source whose `token()` gives the token now and
+`refresh()` a new one after Google refused the last.
+
+- **Services.** A service runs on Cloud Run with its CPU always allocated and
+  a fixed count of instances: a public one takes requests only from the
+  external Application Load Balancer, an internal one only from the project's
+  network, at its own `https` address (the inventory's `internalUrl`). A
+  service with a sandbox allowance, or reached at each instance, is offered
+  the machine types of `machineSizes` instead and runs as a regional managed
+  instance group of Compute Engine machines: an instance template from the
+  release's image, the service's own service account and network tag, and a
+  startup script that runs the image with Docker on Container-Optimized OS,
+  with the flags its sandbox needs (user namespaces, `/dev/fuse`), its
+  settings, and the instance facts (`V64_INSTANCE_ID`, `V64_PRIVATE_ADDRESS`,
+  `V64_WORK_DIR` and, reached at each instance, `V64_INSTANCE_URL`, the
+  machine's internal DNS name). A public group stands behind the same load
+  balancer; an internal one behind an internal passthrough load balancer whose
+  DNS name the services reaching it are given. A new release, setting or
+  machine type is a new template, and the group replaces its machines, the new
+  ones first. A service can't move between Cloud Run and machines in place:
+  take the app offline, then deploy.
+- **Reaches.** A firewall rule opens the reached machines' port to the
+  reaching service: to its machines' tag, or, from Cloud Run, to the subnet
+  Cloud Run's Direct VPC egress leaves from, as that traffic carries no tag an
+  ingress rule matches, so such a rule lets every Cloud Run service of the
+  network in. An internal Cloud Run service takes no rule: its internal ingress
+  admits the whole network.
+- **Resources.** `postgresql` and `mysql` are Cloud SQL (PostgreSQL 16, MySQL
+  8.4, Enterprise edition) on a private address of the shared network, with
+  backups and deletion protection; Google Cloud runs no MariaDB, so the Plan
+  names MySQL itself. Every service shares one login of a database, so each can
+  use the tables another migrated. A `bucket` is Cloud Storage, private, reached
+  through its S3-compatible API with an HMAC key of each service's own
+  account. `redis` is refused in the Plan with Google's reason (Memorystore for
+  Valkey comes later). A resource's settings reach a service when it is made or
+  handed a release (the release's declaration, kept beside its source, names
+  what it needs), so its first instances start with them.
+- **Secrets, logs and the domain.** Secret settings and credentials are Secret
+  Manager's, read only by the service's account; logs go to Cloud Logging. The
+  domain is a Certificate Manager certificate with a DNS authorisation, on the
+  load balancer's address; `domainRecords()` gives the records the owner adds.
+- **Images.** Cloud Build builds each service's image from its upload (the
+  Containerfile `imageUpload()` adds) into Artifact Registry, once per upload;
+  while a build runs, the step asks again at the next one, and a failed build
+  fails the Deploy with Cloud Build's reason and log.
+- **Labels.** Everything a deployment makes carries Vibe64's labels where
+  Google keeps them (Cloud Run services, instance templates, Cloud SQL
+  instances, buckets, secrets). Google's label values take no `.`, so the item
+  label is written `<kind>_<name>` and read back the same. A resource name
+  another deployment or another Google customer holds is refused, never
+  adopted. What every deployment of the project shares (the network, its NAT,
+  the private services connection, the registry, the build bucket) is made
+  once and never deleted by a step.
+- **Prices.** The offer reads Google's list prices from the Cloud Billing
+  Catalog in US dollars for the region, and refuses to price at all when a SKU
+  it needs is missing. The load balancer's line is the forwarding rules'
+  minimum; an internal group's load balancer and Cloud Storage's use are not in
+  the Plan's price.
+
+Google Cloud has no leases: the adapter takes none, safe only while one editor
+deploys an environment. Its stand-in (`standIn.js`) answers every call the
+adapter makes in Google's shapes, in memory, for the engine's tests.
+
 ## Implementation map
 
 - `needsOfStack()` — the needs from the inspected Stack.
@@ -214,3 +295,4 @@ environment.
 - `planOf()` — the Plan with verbs, drift, the quote and its hash.
 - `deploy()` — a whole Deploy, step by step, under the lease.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
+- `createGoogleAdapter()` — the same for Google Cloud; `createGoogleClient()` its REST client.
