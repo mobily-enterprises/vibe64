@@ -1254,8 +1254,10 @@ chosen environment and slot are remembered per project; live connection state
 is reread. Release changes invalidate old command responses and dismiss dialogs.
 Every setup request requires its selected slot to exist in the current configuration;
 a release that removes that slot clears its displayed connection without probing it.
-Staging Env links lead to the Staging page with no development prefill; the panel
-explains that Env changes must be published to affect the running release.
+Staging Env links lead to the host's page at `/dashboard/deploy` with no
+development prefill; the panel names that page as its Dashboard link does
+(`dashboardSectionLabel`) and explains that Env changes must be published to
+affect the running release.
 
 The Integrations panel checks saved shared-account configuration through this
 route and displays application-reported state. Unsaved configuration cannot

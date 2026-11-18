@@ -1,5 +1,5 @@
 // Irreversible publishing runs only after the person confirms the exact plan in
-// Vibe64's own Publish page. An assistant can ask for that confirmation (it then
+// Vibe64's own Packages page. An assistant can ask for that confirmation (it then
 // appears on the page as a pending request), but it can never open or redeem
 // one: confirmations come only from the person's own request on the "api"
 // channel. Tokens are never stored; the record keeps their hash.
@@ -11,6 +11,7 @@ import {
   redeemPublishConfirmation
 } from "@local/vibe64-packaging/server/confirmationToken";
 import { publishPlanDisplayId } from "@local/vibe64-packaging/server/plan";
+import { PACKAGES_PAGE } from "@local/vibe64-core/shared/pageNames";
 
 import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 import { publishingError } from "./publishingError.js";
@@ -63,7 +64,7 @@ function createConfirmationService({
 
   /**
    * An assistant (or the person) asks for the confirmation prompt to open for
-   * this plan and its targets. Nothing runs; the Publish page shows the request.
+   * this plan and its targets. Nothing runs; the Packages page shows the request.
    */
   function request({ planHash, targetIds, requestedBy = "assistant" } = {}) {
     return exclusive(async () => {
@@ -116,7 +117,7 @@ function createConfirmationService({
     return exclusive(async () => {
       if (actor?.kind !== "person") {
         throw publishingError(
-          "Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.",
+          `Only you can confirm publishing, on the ${PACKAGES_PAGE} page. An assistant's request is not a confirmation.`,
           "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
           { messageCode: "vibe64_publishing_confirmation_person_only" }
         );
@@ -126,7 +127,7 @@ function createConfirmationService({
       // wrong (already used, expired or another plan).
       const index = value.records.findIndex((record) => record.actorId === actor.id && publishConfirmationTokenMatches(record, token));
       if (index === -1) {
-        throw publishingError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID", {
+        throw publishingError(`Open the confirmation on the ${PACKAGES_PAGE} page first.`, "VIBE64_PUBLISH_CONFIRMATION_INVALID", {
           messageCode: "vibe64_publishing_confirmation_not_opened"
         });
       }

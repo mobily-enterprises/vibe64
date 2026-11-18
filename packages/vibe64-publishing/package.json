@@ -1,7 +1,7 @@
 {
   "name": "@local/vibe64-publishing",
   "version": "0.1.0",
-  "description": "The local publishing experience: release orchestration, local targets and history, and the Publish page.",
+  "description": "The local publishing experience: release orchestration, local targets and history, and the Packages page.",
   "private": true,
   "type": "module",
   "exports": {
@@ -48,7 +48,7 @@
         "surfaces": [
           {
             "subpath": "./client/publish-page",
-            "summary": "Renders the project's Publish page: targets, release, confirmation, history, publishing keys and phone installs."
+            "summary": "Renders the project's Packages page: targets, release, confirmation, history, publishing keys and phone installs."
           },
           {
             "subpath": "./server/actions",

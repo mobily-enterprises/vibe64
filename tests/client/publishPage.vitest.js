@@ -1,4 +1,4 @@
-// The Publish page: it reads the project's publishing state, shows each target
+// The Packages page: it reads the project's publishing state, shows each target
 // with what it still needs, and publishes only through the person's own
 // confirmation (unlock, open the confirmation, redeem it) for the plan shown.
 import { createRenderer, createSSRApp, nextTick, ssrContextKey } from "vue";
@@ -64,6 +64,12 @@ function publishingState(overrides = {}) {
     ...overrides
   };
 }
+
+it("is the Packages page: its header names it as its Dashboard link does, where it was Publish", async () => {
+  const html = await render(PublishPage, { request: vi.fn(async () => publishingState()), dashboardContext: {} });
+  expect(html).toMatch(/<h2 class="vibe64-dashboard-page-header__title"[^>]*>Packages<\/h2>/u);
+  expect(html).not.toMatch(/__title"[^>]*>Publish</u);
+});
 
 it("reads the project's publishing state and asks the person to review an assistant's request", async () => {
   const calls = [];

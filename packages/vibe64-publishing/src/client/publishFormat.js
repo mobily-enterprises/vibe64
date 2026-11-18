@@ -1,4 +1,4 @@
-// How the Publish page names and colours things, in one place.
+// How the Packages page names and colours things, in one place.
 
 const DESTINATION_ICONS = Object.freeze({
   "android-sideload": "$installMobile",

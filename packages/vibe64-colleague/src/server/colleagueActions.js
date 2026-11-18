@@ -2,6 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, PROJECT_OPERATION, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_COLLEAGUE_PANES, VIBE64_COLLEAGUE_SESSION_PANES } from "../shared/navigationPanes.js";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
+import { PACKAGES_PAGE } from "@local/vibe64-core/shared/pageNames";
 import {
   assignmentCreateInput,
   assignmentLinkInput,
@@ -99,7 +100,7 @@ function createColleagueActions({
   navigationPanes
 }) {
   assertNavigationPanes(navigationPanes);
-  const paneMeanings = [["settings", "Project settings"], ["access", "App access"], ["publish", "Publish"], ["history", "Session History"],
+  const paneMeanings = [["settings", "Project settings"], ["access", "App access"], ["publish", PACKAGES_PAGE], ["history", "Session History"],
     ["project-files", "Project files (Project Dropzone and Project Backups)"],
     ["system", "Subsystems"], ...navigationPanes.map(({
       pane,

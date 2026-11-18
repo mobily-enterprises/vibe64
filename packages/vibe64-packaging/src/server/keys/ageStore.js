@@ -43,7 +43,7 @@ function serialized() {
  * short window. While unlocked, the decrypted values live only in this process's
  * memory and are never written decrypted to disk; locking (or the window
  * ending) zeroes them. Any program running as the same user can read memory and
- * files of that user, which the Publish page says plainly.
+ * files of that user, which the Packages page says plainly.
  * @param {object} options
  * @param {string} options.directory the private folder that holds the key file
  * @param {() => number} [options.now]

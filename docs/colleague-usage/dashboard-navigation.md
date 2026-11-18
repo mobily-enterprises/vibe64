@@ -2,8 +2,8 @@
 
 Open a project and select **Dashboard** beside **Preview**. The Dashboard provides
 the available session and project tools, including Files, Changes, Database,
-Architecture, AI Terminal, Project settings, Git log, Project files, Env, App access, Integrations, Publish, Issues
-and Pull requests. **Publish** turns the project into an app or package people install; see
+Architecture, AI Terminal, Project settings, Git log, Project files, Env, App access, Integrations, Packages, Issues
+and Pull requests. **Packages** turns the project into an app or package people install; see
 [Publish your project](publishing.md). Availability depends on the selected session, host and permissions.
 On desktop the section list is grouped: tools under the **Project** label come first,
 then a **Session** label with the selected session's name and its tools. The
@@ -74,13 +74,13 @@ has no separate lesson Dashboard. See
 
 Colleague can open supported views in your initiating browser and wait for the
 actual selection before reporting success. Ask “Show me Database for this session”,
-“Open Project settings”, “Open Project files” or “Open Publish”: it opens Preview and every Dashboard
+“Open Project settings”, “Open Project files” or “Open Packages”: it opens Preview and every Dashboard
 section listed above (session tools need a session). It can explain visible
 controls using its guides.
 During a lesson, it opens the practice project's ordinary **Preview** or
 **Database → ERD** like any project's, minimising Learning if it is open.
 By default Colleague points at the real tab or Dashboard section (Database, Files,
-Current changes, Git log, Session info, Architecture, Publish) with a short ring and
+Current changes, Git log, Session info, Architecture, Packages) with a short ring and
 caption so you click it yourself. A changed project, session or browser is
 refused instead of being silently retargeted. Agent navigation is a demonstration,
 not proof that the learner used the control; only the learner's own step

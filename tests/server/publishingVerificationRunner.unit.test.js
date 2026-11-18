@@ -1,5 +1,5 @@
 // Checks on the saved commit: a failure keeps which check failed and the end of
-// its output (with the throwaway home hidden), so the Publish page can show why
+// its output (with the throwaway home hidden), so the Packages page can show why
 // without a terminal. A pass keeps neither.
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";

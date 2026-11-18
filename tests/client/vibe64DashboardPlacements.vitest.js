@@ -40,9 +40,11 @@ describe("Vibe64 dashboard placements", () => {
       "Project settings",
       "Git log",
       "Project files",
-      "Publish",
+      "Packages",
       "Session History"
     ]));
+    // The page that makes phone apps and installable packages is Packages; it was Publish.
+    expect(labels).not.toContain("Publish");
     expect(labels).not.toContain("Configure");
     expect(labels).not.toContain("Incoming changes");
     expect(labels).not.toContain("Github repository");
@@ -58,7 +60,7 @@ describe("Vibe64 dashboard placements", () => {
       ["Project files", "$folderCopy"],
       ["Session History", "$history"],
       ["Issues/PR", "$github"],
-      ["Publish", "$package2"]
+      ["Packages", "$package2"]
     ]));
     for (const placement of dashboardLinks) {
       expect(placement.props.scopedSuffix).toMatch(/^\/project\/\[slug\]\/dashboard\//u);
@@ -98,7 +100,7 @@ describe("Vibe64 dashboard placements", () => {
         order: 400,
         owner: "app-dashboard",
         props: {
-          label: "Publish",
+          label: "Packages",
           scopedSuffix: "/project/[slug]/dashboard/publish"
         },
         target: "page.section-nav"

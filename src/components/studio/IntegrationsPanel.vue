@@ -11,6 +11,7 @@ import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { useIntegrationsPanelNavigation } from "@/composables/useIntegrationsPanelNavigation.js";
 import { integrationCallbackUrl } from "@/lib/integrationCallbackUrl.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
+import { dashboardSectionLabel } from "@/composables/useVibe64DashboardPage.js";
 import { VIBE64_COLLEAGUE_INTEGRATIONS_KEY } from "@/lib/vibe64AssistantHost.js";
 import { useVibe64SavedEnvValues } from "@/lib/vibe64SavedEnvValues.js";
 import GoogleAdsSearchPanel from "@/components/studio/GoogleAdsSearchPanel.vue";
@@ -51,6 +52,9 @@ const integrationContext = computed(() => ({
 const { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, releaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard } =
   useVibe64Integrations(integrationContext, selectedId);
 const projectSlug = useVibe64ProjectSlug();
+// Staging Env lives on the page a host adds at /dashboard/deploy, named here as its Dashboard link names it.
+const stagingEnvPageName = dashboardSectionLabel("deploy");
+const stagingEnvPage = stagingEnvPageName ? `on the ${stagingEnvPageName} page` : "where the host publishes to staging";
 function openPaymentEnv({ key, value, secret }) {
   return router.push({ path: projectAppPath(projectSlug.value, staging.value ? "/dashboard/deploy" : "/dashboard/env"),
     query: { prefillKey: key, ...(secret ? { prefillSecret: "true" } : {}), ...(value === undefined ? {} : { prefillValue: value }) } });
@@ -428,7 +432,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <v-btn variant="text" :disabled="disabled" @click="registrationNeedsReview = false">I checked {{ provider.name }} and Env — allow another attempt</v-btn>
               </template>
             </section>
-            <p v-if="staging">Staging Env is managed on the Staging page. Publish to apply changes to the running release.</p>
+            <p v-if="staging">Staging Env is managed {{ stagingEnvPage }}. Publish to apply changes to the running release.</p>
             <section v-for="credential in credentials" :key="credential.label" :aria-label="credential.label" class="mt-4">
               <h3 class="text-title-medium">{{ credential.label }}</h3>
               <p>Save the credential as {{ credential.key }} in {{ environment }} Env. Your application receives it through Env.</p>
