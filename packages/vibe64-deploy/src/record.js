@@ -12,7 +12,9 @@ import path from "node:path";
 // writer read (`expectedRevision`), so a writer that read an older one is refused `deployment_record_stale` rather than
 // putting back what another wrote since. What labels cannot carry (approvals, the last plan, values kept write-only at
 // the provider, the release each service was last handed) is the file's alone: a record made again from labels hands
-// each service its release again at the next Deploy.
+// each service its release again at the next Deploy. Each resource's links (`links`, the link's id by service) are
+// the file's too, believed only while the provider holds them (steps.js): one it ended is made again, and a record
+// made again from labels, which holds none, takes up each the provider holds as the next Deploy asks for it again.
 
 const FORMAT = "vibe64.deploy-record.v1";
 const KINDS = Object.freeze(["service", "resource"]);

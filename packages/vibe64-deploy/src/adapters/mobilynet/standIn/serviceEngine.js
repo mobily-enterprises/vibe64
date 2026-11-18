@@ -14,6 +14,8 @@ const LIMITS = Object.freeze({ instances: 100, routes: 20, connections: 20, minD
 const HEALTH_CHECK_DEFAULTS = Object.freeze({ intervalSeconds: 5, timeoutSeconds: 2, healthyAfter: 2, unhealthyAfter: 3 });
 const HEALTH_CHECK_BOUNDS = Object.freeze({ intervalSeconds: [2, 60], timeoutSeconds: [1, 30], healthyAfter: [1, 10], unhealthyAfter: [1, 10] });
 const MAX_SECRET = 4096;
+// The refreshes that keep the release a service runs (serviceEngine.js SAME_RELEASE; this stand-in has no base change).
+const SAME_RELEASE = Object.freeze(["settings", "size"]);
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** The setting every instance's app gets beside its service's (machines' shared/services.js INSTANCE_SETTING). */
 const INSTANCE_SETTING = "_mobilynet";
@@ -279,6 +281,10 @@ function createStandInServiceEngine(world, parts) {
 
   /** A building refresh's next step: its release built, or failed, or still building. */
   function build(service, refresh) {
+    // A change of settings or size starts on the release the service runs as it starts (serviceEngine.js
+    // currentRefresh, SAME_RELEASE), not the one it ran when it was queued: one queued behind a move runs on the
+    // release that move brought.
+    if (refresh.state === "queued" && SAME_RELEASE.includes(refresh.kind)) Object.assign(refresh, { fromVersion: service.version, toVersion: service.version });
     const release = releaseOf(service, refresh.toVersion);
     if (refresh.state === "queued") {
       Object.assign(refresh, { state: "building", startedAt: at(), buildId: release?.buildId ?? null });

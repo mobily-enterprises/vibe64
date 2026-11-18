@@ -668,6 +668,127 @@ test("a Deploy that stopped while its build ran, the build then failing, is resu
   }
 });
 
+/** Whether an instance has both resources' settings. @param {any} instance */
+const withResources = (instance) => namesOf(instance, "V64_DATABASE_").length > 0 && namesOf(instance, "V64_FILES_").length > 0;
+
+/**
+ * That each resource holds a link to each service and the record keeps the ids mobilynet holds, and that computers'
+ * instances serving now run this Deploy's release with both resources' settings.
+ * @param {any} standIn @param {any} kept the record the Deploy answered
+ */
+function assertLinkedAndServing(standIn, kept) {
+  const { items } = kept;
+  const computersId = items["service.computers"].id;
+  for (const item of ["resource.database", "resource.files"]) {
+    const held = standIn.hosted.service(items[item].id).links.filter((link) => ["issuing", "active"].includes(link.state));
+    assert.deepEqual(held.map((link) => link.consumer.id).sort(), [computersId, items["service.web"].id].sort(), `${item} holds a link to each service`);
+    assert.deepEqual(Object.values(items[item].links).sort(), held.map((link) => link.id).sort(), `the record keeps the links of ${item} that mobilynet holds`);
+  }
+  const serving = standIn.services.instances(computersId).filter((one) => !one.removedReason);
+  assert.ok(serving.length > 0 && serving.every((one) => one.version === kept.run.services.computers.version && withResources(one)),
+    "computers' instances serve this Deploy's release with the database's and the files' settings");
+}
+
+test("a link mobilynet ended while the record still holds it is made again by the next Deploy, and the service serves with that resource", async () => {
+  const { standIn, client, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const { items } = first.record;
+  // mobilynet ends computers' two links (removed by hand, or with a refresh that failed): the record still holds them.
+  for (const item of ["resource.database", "resource.files"]) await client.unlinkHostedService(items[item].id, items[item].links.computers);
+  settle(standIn);
+  for (const item of ["resource.database", "resource.files"]) {
+    assert.equal(standIn.hosted.service(items[item].id).links.find((link) => link.id === items[item].links.computers).state, "revoked");
+  }
+
+  // Linked again while its new release builds: the release it runs names both needs, so each link's settings go in a
+  // settings refresh queued behind that release (M14), which runs on the release that one brought.
+  const second = await run({ record: first.record, commit: "c2" });
+  assert.equal(second.outcome, "live", second.message);
+  assertLinkedAndServing(standIn, second.record);
+});
+
+test("links mobilynet ended with a build no Deploy read are made again: the run that made them stopped, and the next started while that build still ran", async () => {
+  const { standIn, run, record } = setup();
+  const tooLarge = "The output is 4440 MiB; it may be at most 4096 MiB.";
+  // The first Deploy links computers to both resources while its first build runs (that build to fail on its output's
+  // size), then stops in its wait, as one that met a read it could not try again did: its record still deploying.
+  standIn.faults.releaseBuildFails = { code: "output_too_large", message: tooLarge };
+  let kept = null;
+  const linkedTo = (resource) => Boolean(kept?.items[`resource.${resource}`]?.links?.computers);
+  const stopped = await run({
+    record, commit: "c1",
+    save: (one) => {
+      kept = structuredClone(one);
+      return one;
+    },
+    pause: () => {
+      if (linkedTo("database") && linkedTo("files")) throw new TypeError("mobilynet did not answer: fetch failed");
+      // Held still between the two links, so both are made while the build runs.
+      if (!linkedTo("database")) standIn.advance();
+    }
+  }).catch((error) => error);
+  assert.equal(stopped.message, "mobilynet did not answer: fetch failed");
+  assert.deepEqual([kept.run.state, kept.run.services.computers.linkedAhead], ["deploying", ["database", "files"]]);
+  const computersId = kept.items["service.computers"].id;
+  assert.equal(standIn.services.refreshes(computersId).at(-1).state, "building");
+
+  // The next Deploy starts while that build still runs, so it has nothing to let go yet; the build then fails, and
+  // mobilynet ends both links with it, while the record still holds them.
+  standIn.faults.releaseBuildFails = false;
+  const events = [];
+  const resumed = await run({ record: kept, commit: "c2", report: (event) => events.push(event) });
+  assert.equal(resumed.outcome, "live", resumed.message);
+  const settled = events.filter((event) => event.step === "settleRefresh" && event.phase === "done");
+  assert.deepEqual(settled.map((event) => [event.service, event.message]), [["computers", "It is building."]]);
+  const first = standIn.services.refreshes(computersId).find((one) => one.kind === "create");
+  assert.deepEqual([first.state, first.error.message], ["failed", tooLarge]);
+  for (const item of ["resource.database", "resource.files"]) {
+    assert.equal(standIn.hosted.service(kept.items[item].id).links.find((link) => link.id === kept.items[item].links.computers).state, "revoked");
+  }
+  assert.equal(resumed.record.items["service.computers"].id, computersId, "computers is the App Service made before");
+  assertLinkedAndServing(standIn, resumed.record);
+  // computers runs no release yet, so the links are made ahead of the release this Deploy handed it, whose own
+  // instances start with both resources: none started without its database.
+  const rolled = standIn.services.refreshes(computersId).find((one) => one.kind === "release" && one.toVersion === resumed.record.run.services.computers.version);
+  const started = standIn.services.instances(computersId).filter((one) => one.refreshId === rolled.id);
+  assert.ok(started.length > 0 && started.every(withResources), "the release's own instances started with both resources");
+});
+
+test("a record made again from labels, which holds no links, takes up the links mobilynet holds", async () => {
+  const { standIn, adapter, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const [rebuilt] = await rebuildFromLabels(adapter, standIn.projectId, { app: "memobot", environment: "production" });
+  assert.equal(rebuilt.items["resource.database"].links, undefined);
+
+  const again = await run({ record: rebuilt, commit: "c2" });
+  assert.equal(again.outcome, "live", again.message);
+  assertLinkedAndServing(standIn, again.record);
+  for (const item of ["resource.database", "resource.files"]) {
+    assert.deepEqual(again.record.items[item].links, first.record.items[item].links, `${item}'s links are those the first Deploy made, none made twice`);
+  }
+});
+
+test("the mobilynet inventory lists the links mobilynet holds of each hosted service Vibe64 made, one being removed left out, and reads no other's", async () => {
+  const { standIn, client, adapter, run, record, projectId } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const { items } = first.record;
+  const { hostedService: byHand } = await client.project(projectId).createHostedService({ app: "valkey-9", name: "by-hand", labels: { team: "ops" } }, { idempotencyKey: "hosted-by-hand" });
+  settle(standIn);
+  await client.unlinkHostedService(items["resource.files"].id, items["resource.files"].links.computers);
+  const at = standIn.requests().length;
+  const things = new Map((await adapter.inventory()).map((thing) => [thing.id, thing]));
+  const linksOf = (item) => things.get(items[item].id).links.map((link) => [link.id, link.service, link.need]).sort();
+  assert.deepEqual(linksOf("resource.database"), [
+    [items["resource.database"].links.computers, items["service.computers"].id, "V64_DATABASE"], [items["resource.database"].links.web, items["service.web"].id, "V64_DATABASE"]
+  ].sort());
+  assert.deepEqual(linksOf("resource.files"), [[items["resource.files"].links.web, items["service.web"].id, "V64_FILES"]], "a link being removed is not held");
+  assert.equal(things.get(byHand.id).links, null);
+  assert.deepEqual(requestsAfter(standIn, at).filter((request) => request.path.includes(byHand.id)), [], "a hosted service Vibe64 didn't make is only listed");
+});
+
 test("a build that fails naming why fails the Deploy with mobilynet's own words", async () => {
   const { standIn, run, record } = setup();
   standIn.faults.releaseBuildFails = { code: "output_too_large", message: "The output is 4440 MiB; it may be at most 4096 MiB." };

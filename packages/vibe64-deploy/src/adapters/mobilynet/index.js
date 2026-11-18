@@ -3,13 +3,15 @@
 // catalogue (its interface the resource's kind: mysql, postgresql, redis, s3 for a bucket), linked to every service
 // under the resource's need (V64_<ID>). Its offer is mobilynet's App Service instance sizes with their list prices, the
 // load balancer's and each hosted app's sizes, and the project's quotas with their use; its inventory every App Service
-// and hosted service of the project with its labels, the only things the steps act on being those the record holds.
+// and hosted service of the project with its labels, the only things the steps act on being those the record holds,
+// each hosted service Vibe64 made with the links mobilynet holds of it, which the steps believe over the record's.
 // Every App Service it makes drains for mobilynet's shortest time (DRAIN_SECONDS).
 //
 // Leases: mobilynet has none yet. The lease calls (client.js takeLease, renewLease, releaseLease) exist in the shape
 // the engine asks mobilynet for, and its stand-in answers them; until mobilynet builds them, an adapter made without
 // `leases: true` takes none, which is safe only while one editor deploys a project's environment (Managed today:
 // the workspace's own editor is the only writer).
+import { LABEL } from "../../record.js";
 import { MOBILYNET_INTERFACES, needAs, serviceUpload } from "./declaration.js";
 
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
@@ -22,6 +24,11 @@ const QUOTA_COUNTS = Object.freeze({ service: Object.freeze(["vcpus", "memoryGib
 // this long to finish the requests it has, then a stop signal and as long again: mobilynet's shortest drain, which
 // genesis/stack.md has no line to change.
 const DRAIN_SECONDS = 30;
+// The states in which mobilynet holds a link (hostedLinks.js HELD): its consumer has or is being given its need's
+// settings, and a second link of that need is refused (`need_linked`). One `revoking` or `revoked` has ended: removed,
+// or ended with a refresh of its consumer that failed or was aborted, which ends every link the release the consumer
+// still runs doesn't name (engine-support M14), whichever Deploy made it.
+const HELD_LINK_STATES = Object.freeze(["issuing", "active", "failed"]);
 
 /**
  * @param {object} options
@@ -73,12 +80,33 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
   }
 
   /**
+   * The links mobilynet holds of a hosted service Vibe64 made, `[{ id, service, need }]` (`service` the consuming App
+   * Service's id); null for one Vibe64 didn't make, which no step links, or one gone since it was listed.
+   * @param {any} one the hosted service as mobilynet lists it
+   */
+  async function linksHeld(one) {
+    if (!one.labels?.[LABEL.deployment]) return null;
+    let listed;
+    try {
+      listed = await client.listHostedLinks(one.id);
+    } catch (error) {
+      if (error?.status === 404) return null;
+      throw error;
+    }
+    return listed.filter((link) => HELD_LINK_STATES.includes(link.state))
+      .map((link) => ({ id: link.id, service: link.consumer?.kind === "service" ? link.consumer.id : null, need: link.need ?? null }));
+  }
+
+  /**
    * Every App Service and hosted service of the project, as the plan, the steps and the record read them: `{ id, name,
    * kind, labels, size, instances, ... }`, a service with its exposure, version, refresh, healthy count, internal
-   * name, connections and last error, a resource with its kind and state.
+   * name, connections and last error, a resource with its kind, state and the links mobilynet holds of it (`links`,
+   * null for a hosted service Vibe64 didn't make).
    */
   async function inventory() {
-    const [services, hosted] = await Promise.all([calls.listServices(), calls.listHostedServices()]);
+    const [services, listed] = await Promise.all([calls.listServices(), calls.listHostedServices()]);
+    const hosted = listed.filter((one) => one.state !== "deleted");
+    const links = await Promise.all(hosted.map(linksHeld));
     return [
       ...services.filter((one) => one.state !== "deleted").map((one) => ({
         id: one.id,
@@ -96,7 +124,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         connections: (one.connections ?? []).map(({ to, port }) => ({ to, port })),
         lastError: one.lastError ?? null
       })),
-      ...hosted.filter((one) => one.state !== "deleted").map((one) => ({
+      ...hosted.map((one, index) => ({
         id: one.id,
         name: one.name,
         kind: "resource",
@@ -104,7 +132,8 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         size: one.size,
         resourceKind: RESOURCE_KIND_OF[one.interface] ?? null,
         state: one.state,
-        lastError: one.lastError ?? null
+        lastError: one.lastError ?? null,
+        links: links[index]
       }))
     ];
   }
