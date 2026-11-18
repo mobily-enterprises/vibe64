@@ -193,3 +193,9 @@ test("the Deployment spec an assistant reads gives every service and resource fo
   }
   assert.match(spec, /Without such headings the Deployment is one public service, `web`/u);
 });
+
+test("a host reading releases it recorded before services takes the v1 contract's name from the Genesis boundary", async () => {
+  const boundary = await import("../../packages/vibe64-genesis/src/server/index.js");
+  assert.equal(boundary.VIBE64_APPLICATION_DEPLOYMENT_CONTRACT, "vibe64.application-deployment.v2");
+  assert.equal(boundary.VIBE64_APPLICATION_DEPLOYMENT_V1_CONTRACT, "vibe64.application-deployment.v1");
+});
