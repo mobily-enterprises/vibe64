@@ -222,7 +222,11 @@ making it twice. In order:
 
 A refusal from the provider (a quota, the spending cap) fails the Deploy with
 its reason, the record kept as far as it got; an answer the provider may give
-later is tried again. A Deploy never deletes or makes again a hosted service
+later is tried again. That holds for the provider read at the top of each step
+too: a read that got no answer, a 5xx or the provider's rate limit (as a Deploy
+waiting minutes for a build may meet) is tried again at the next step, so the
+run lives until it is live or failed; before, one such read ended the run with
+its record still deploying. A Deploy never deletes or makes again a hosted service
 and never acts on a thing the record does not hold. `takeOffline()` deletes the
 services, public first, and keeps every resource: it keeps the record without
 them (`save`) once each delete is asked, then reads the provider again
@@ -232,6 +236,20 @@ given) is refused `deployment_offline_unfinished`, naming them; they take no
 new requests by then, and the provider finishes by itself. `deleteResource()`
 deletes a disconnected resource and its data only when the owner typed its
 name.
+
+Both say what they do as they do it, through the caller's `report(event)`:
+each step as it starts and ends (`{ kind: "step", phase: "start" | "done" |
+"refused", step, words, service?, resource?, refresh? }`) in the engine's own
+words (`stepWords`: "Making the hosted service for database", "Uploading the
+release of web", "Making App Service web, public behind the load balancer at
+app.example.com", "Linking web to database", "Reading how the update of web
+ended", "Deleting App Service web"), each wait when its words change, each call
+tried again (`{ kind: "retry", words, message }`), each service gone at Take
+offline and the end (`{ kind: "end", outcome }`). A step that starts a refresh,
+or reads how one ended, names it (`refresh: { serviceId, refreshId }`), so the
+caller can follow what the provider does in it. No event carries a setting's
+value, and a report that throws or rejects never stops the run. Every event has
+its time (`at`).
 
 Every App Service the mobilynet adapter makes asks for mobilynet's shortest
 drain, 30 seconds (`DRAIN_SECONDS`; genesis/stack.md has no line for it): an
@@ -267,6 +285,17 @@ its inventory of App Services and hosted services with their labels, and the
 calls the steps make. mobilynet has no leases yet: an adapter made without
 `leases: true` takes none, which is safe only while one editor deploys an
 environment.
+
+Its client also reads what mobilynet did, for a caller that shows it: a
+refresh with its steps (`readServiceRefresh`: build started, passed or failed,
+each instance started, healthy, joined or never healthy) and an instance's logs
+(`readServiceLogs`, `GET /v1/services/{id}/logs`, `services:read`): read by an
+operation, `logs` null with `202` until it ends, then the lines, each of the
+service's secrets masked as `[secret]`. The stand-in answers both, an
+instance's output as a test sets it (`services.setLogs`), its reads ending at
+the next `advance()` (`standIn/serviceLogs.js`). A build's own log
+(`GET /v1/builds/{id}/log`) needs `vps:read` or `packages:publish`, which a key
+holding the engine's scopes lacks.
 
 ## The Google Cloud adapter
 

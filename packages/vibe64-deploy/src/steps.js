@@ -32,6 +32,13 @@
 // `deleteResource`, and taking the services down `takeOffline`, which returns once they are gone, each its own call. A
 // Deploy holds the lease `deploy:<deployment id>` while it runs, renewed at each step, where the adapter takes leases.
 //
+// A Deploy and a Take offline say what they do as they do it, through the caller's `report`: each step as it starts and
+// ends, in the engine's own words (`stepWords`), each wait when its words change, each call tried again (a step's, or a
+// read of the provider that got no answer, a 5xx or its rate limit, which a Deploy waiting for a long build may meet)
+// and the end. A report names the step, the service or resource and the refresh it started, never a setting's value,
+// and one that throws or rejects never stops the run. A read of the provider that may answer later is tried again at
+// the next step, as a step's call is, so a Deploy waiting for a build lives until it is live or fails.
+//
 // Each call's idempotency key names this Deploy's run, so a call tried again within it gets the first answer, and a
 // later Deploy asking the same again (a count put back, a service made again after it was taken offline) is not
 // answered with an old one (mobilynet keeps a key's first answer for 7 days). A Deploy cut short between a create and
@@ -106,6 +113,71 @@ function valuesOf(service, { record, release }, byId) {
 function connectionsOf(service, record, port) {
   return service.reaches.map((reach) => ({ to: record.items[`service.${reach.service}`]?.id ?? null, port }));
 }
+
+/**
+ * What a step does, in the words a person reads in a Deploy's log: the step and the service or resource it is for.
+ * @param {any} step nextStep's step @param {{ needs?: any, release?: { domain?: string } }} [context]
+ */
+function stepWords(step, { needs, release } = {}) {
+  const exposure = needs?.services.find((one) => one.id === step.service)?.exposure;
+  switch (step.kind) {
+    case "createResource": return `Making the hosted service for ${step.resource}`;
+    case "resizeResource": return `Resizing the hosted service of ${step.resource} to ${step.size}`;
+    case "adopt": return `Taking up ${step.item === "service" ? "App Service" : "the hosted service of"} ${step.name}, made by a Deploy cut short`;
+    case "ensureDomain": return `Adding the domain ${step.domain}`;
+    case "uploadRelease": return `Uploading the release of ${step.service}`;
+    case "keepRelease": return `${step.service} keeps the release it runs: the same commit, Stack and engine`;
+    case "releaseService": return `Handing App Service ${step.service} the new release`;
+    case "createService": return exposure === "public"
+      ? `Making App Service ${step.service}, public behind the load balancer at ${release?.domain ?? "its domain"}`
+      : `Making App Service ${step.service}, internal: only the app's other services reach it`;
+    case "link": return `Linking ${step.service} to ${step.resource}`;
+    case "checkRefresh": return `Reading how the update of ${step.service} ended`;
+    case "unlink": return `Unlinking ${step.resource}, no longer in genesis/stack.md, from ${step.service}`;
+    case "putSettings": return `Updating the settings of ${step.service}`;
+    case "changeService": {
+      const { change } = step;
+      if (change.connections) return `Updating the services ${step.service} reaches`;
+      if (change.size) return `Resizing App Service ${step.service} to ${change.size}`;
+      return `Setting App Service ${step.service} to ${change.instances} instance${change.instances === 1 ? "" : "s"}`;
+    }
+    case "deleteService": return step.replaced
+      ? `Deleting App Service ${step.service}, to make it again: its exposure changed`
+      : `Deleting App Service ${step.service}, no longer in genesis/stack.md`;
+    default: return step.kind;
+  }
+}
+
+/**
+ * The caller's report, stamped with the time, never failing the run: a report that throws or rejects is ignored.
+ * @param {(event: any) => unknown} report
+ */
+function reporterOf(report) {
+  return (event) => {
+    try {
+      const answered = report({ at: new Date().toISOString(), ...event });
+      if (typeof answered?.catch === "function") answered.catch(() => {});
+    } catch {
+      // A report is the caller's: it never stops the run it reports on.
+    }
+  };
+}
+
+/**
+ * What a report says of a step: its kind, the service or resource it is for, its words, and the refresh it started or
+ * read (`{ serviceId, refreshId }`); never its values.
+ * @param {any} step @param {string} words @param {any} [record] the record after the step, for the refresh it started
+ */
+function stepEvent(step, words, record = null) {
+  const event = { kind: "step", step: step.kind, words, ...(step.service ? { service: step.service } : {}), ...(step.resource ? { resource: step.resource } : {}) };
+  if (step.kind === "checkRefresh") return { ...event, refresh: { serviceId: step.id, refreshId: step.refreshId } };
+  const refreshId = step.service ? record?.run.services[step.service]?.refreshId : null;
+  const serviceId = step.service ? record?.items[`service.${step.service}`]?.id : null;
+  return refreshId && serviceId ? { ...event, refresh: { serviceId, refreshId } } : event;
+}
+
+/** A read of the provider that may answer later: no answer, a 5xx, its rate limit, a thing busy. @param {any} error */
+const retryable = (error) => error?.retryable === true;
 
 /**
  * The next step of a Deploy, or `{ kind: "live" }`, or `{ kind: "failed", message }`, or `{ kind: "wait", words }`
@@ -397,10 +469,17 @@ async function takeDeployLease(adapter, record, holder) {
  * @param {string} options.holder who holds the lease, such as "Vibe64 on my-workstation"
  * @param {(record: any) => Promise<any> | any} [options.save] keeps the record after each step, answering it as kept
  * @param {() => Promise<void> | void} [options.pause] between steps, while the provider works
+ * @param {(event: any) => unknown} [options.report] told each step as it starts and ends (`{ at, kind: "step", phase:
+ *   "start" | "done" | "refused", step, words, service?, resource?, refresh?, message? }`), each wait when its words
+ *   change (`{ kind: "wait", words }`), each call tried again (`{ kind: "retry", words, message }`) and the end (`{ kind:
+ *   "end", outcome, message? }`)
  * @param {number} [options.maxSteps]
  * @returns {Promise<{ outcome: "live" | "failed", message?: string, record: any, steps: string[] }>}
  */
-async function deploy({ adapter, needs, record: start, choices = {}, decisions = {}, planHash, release, holder, save = (kept) => kept, pause = () => {}, maxSteps = 1000 }) {
+async function deploy({
+  adapter, needs, record: start, choices = {}, decisions = {}, planHash, release, holder, save = (kept) => kept, pause = () => {}, report = () => {}, maxSteps = 1000
+}) {
+  const tell = reporterOf(report);
   const [offer, observed] = await Promise.all([adapter.offer(), adapter.inventory()]);
   const plan = planOf({ needs, record: start, observed, offer, choices, decisions });
   if (plan.hash !== planHash) throw deployError("deployment_plan_stale", "What this Deploy would do changed since the plan was read: read the plan again, then deploy.");
@@ -414,26 +493,56 @@ async function deploy({ adapter, needs, record: start, choices = {}, decisions =
   const run = { id: `run_${randomBytes(6).toString("hex")}`, release: release.id, planHash, state: "deploying", domain: null, services: {}, failure: null };
   let record = await save({ ...structuredClone(start), run });
   const steps = [];
+  let waiting = null;
   try {
     for (let count = 0; count < maxSteps; count += 1) {
-      const step = nextStep({ plan, needs, record, observed: await adapter.inventory(), release: full });
+      let observed;
+      try {
+        observed = await adapter.inventory();
+      } catch (error) {
+        // The provider may answer later (a long build keeps it busy): read it again at the next step.
+        if (!retryable(error)) throw error;
+        tell({ kind: "retry", words: `Reading ${adapter.title} again`, message: error.message });
+        await pause();
+        continue;
+      }
+      const step = nextStep({ plan, needs, record, observed, release: full });
       if (step.kind === "live" || step.kind === "failed") {
         const ended = { ...structuredClone(record), run: { ...record.run, state: step.kind, failure: step.message ?? null } };
         if (step.kind === "live") Object.assign(ended, { choices: structuredClone(plan.choices), lastPlan: { hash: plan.hash } });
         record = await save(ended);
+        tell({ kind: "end", outcome: step.kind, ...(step.message ? { message: step.message } : {}) });
         return { outcome: step.kind, ...(step.message ? { message: step.message } : {}), record, steps };
       }
       steps.push(step.kind === "wait" ? `wait: ${step.words}` : `${step.kind}${step.service ? ` ${step.service}` : step.resource ? ` ${step.resource}` : ""}`);
-      if (step.kind !== "wait") {
+      if (step.kind === "wait") {
+        if (step.words !== waiting) tell({ kind: "wait", words: step.words });
+        waiting = step.words;
+      } else {
+        waiting = null;
+        const words = stepWords(step, { needs, release: full });
+        tell({ ...stepEvent(step, words), phase: "start" });
         try {
           record = await save((await applyStep(adapter, step, { record, needs, plan, release: full })).record);
+          tell({ ...stepEvent(step, words, record), phase: "done" });
         } catch (error) {
           // A refusal waits for a person: the Deploy fails with it, its record kept as far as it got. Anything the
           // provider may answer later (no answer, its rate limit, a thing busy) is tried again at the next step.
           if (typeof error?.retryable !== "boolean") throw error;
-          if (!error.retryable) record = await save({ ...structuredClone(record), run: { ...record.run, failure: `${steps.at(-1)}: ${error.message}` } });
+          if (error.retryable) tell({ ...stepEvent(step, words), kind: "retry", message: error.message });
+          else {
+            record = await save({ ...structuredClone(record), run: { ...record.run, failure: `${steps.at(-1)}: ${error.message}` } });
+            tell({ ...stepEvent(step, words), phase: "refused", message: error.message });
+          }
         }
-        if (lease) await adapter.lease.renew(lease.id, LEASE_SECONDS);
+        if (lease) {
+          try {
+            await adapter.lease.renew(lease.id, LEASE_SECONDS);
+          } catch (error) {
+            if (!retryable(error)) throw error;
+            tell({ kind: "retry", words: "Renewing the Deploy's lease", message: error.message });
+          }
+        }
       }
       await pause();
     }
@@ -450,23 +559,49 @@ async function deploy({ adapter, needs, record: start, choices = {}, decisions =
  * removing some after `maxReads` reads is refused `deployment_offline_unfinished`, naming them: the record kept says
  * they are gone, and the provider finishes removing them by itself.
  * @param {any} adapter @param {any} record
- * @param {{ save?: (record: any) => Promise<any> | any, pause?: () => Promise<void> | void, maxReads?: number }} [options]
+ * @param {{ save?: (record: any) => Promise<any> | any, pause?: () => Promise<void> | void, maxReads?: number, report?: (event: any) => unknown }} [options]
+ *   `report` told each delete as it starts and ends, the wait, each service gone (`{ kind: "gone", service, words }`),
+ *   each read tried again and the end, as a Deploy tells them
  */
-async function takeOffline(adapter, record, { save = (kept) => kept, pause = () => new Promise((resolve) => setTimeout(resolve, OFFLINE_PAUSE_MS)), maxReads = OFFLINE_READS } = {}) {
+async function takeOffline(adapter, record, {
+  save = (kept) => kept, pause = () => new Promise((resolve) => setTimeout(resolve, OFFLINE_PAUSE_MS)), maxReads = OFFLINE_READS, report = () => {}
+} = {}) {
+  const tell = reporterOf(report);
   const kept = structuredClone(record);
   const services = Object.values(kept.items).filter((item) => item.kind === "service")
     .sort((one, other) => (one.exposure === "public" ? -1 : 0) - (other.exposure === "public" ? -1 : 0));
   for (const item of services) {
+    const words = `Deleting App Service ${item.name}`;
+    tell({ kind: "step", phase: "start", step: "deleteService", service: item.name, words });
     await adapter.deleteService(item.id);
+    tell({ kind: "step", phase: "done", step: "deleteService", service: item.name, words });
     delete kept.items[`service.${item.name}`];
     for (const resource of Object.values(kept.items)) delete resource.links?.[item.name];
   }
   const saved = await save(kept);
   const going = new Map(services.map((item) => [item.id, item.name]));
-  let left = [];
+  let left = [...going.values()];
+  let waiting = null;
   for (let read = 0; read < maxReads; read += 1) {
-    left = (await adapter.inventory()).filter((thing) => going.has(thing.id)).map((thing) => going.get(thing.id));
-    if (left.length === 0) return saved;
+    let listed;
+    try {
+      listed = await adapter.inventory();
+    } catch (error) {
+      if (!retryable(error)) throw error;
+      tell({ kind: "retry", words: `Reading ${adapter.title} again`, message: error.message });
+      await pause();
+      continue;
+    }
+    const now = listed.filter((thing) => going.has(thing.id)).map((thing) => going.get(thing.id));
+    for (const name of left.filter((one) => !now.includes(one))) tell({ kind: "gone", service: name, words: `App Service ${name} is gone` });
+    left = now;
+    if (left.length === 0) {
+      tell({ kind: "end", outcome: "offline" });
+      return saved;
+    }
+    const words = `Waiting for ${adapter.title} to remove ${left.join(" and ")}`;
+    if (words !== waiting) tell({ kind: "wait", words });
+    waiting = words;
     await pause();
   }
   throw deployError("deployment_offline_unfinished", `${left.join(" and ")} ${left.length === 1 ? "is" : "are"} still being removed at ${adapter.title}; `
@@ -489,4 +624,4 @@ async function deleteResource(adapter, record, needs, { name, typed }) {
   return kept;
 }
 
-export { LEASE_SECONDS, applyStep, deleteResource, deploy, nextStep, releaseDigest, takeDeployLease, takeOffline };
+export { LEASE_SECONDS, applyStep, deleteResource, deploy, nextStep, releaseDigest, stepWords, takeDeployLease, takeOffline };

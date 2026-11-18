@@ -56,11 +56,11 @@ function setup() {
   // Room for two a-8 computers (three when raised by hand), two a-2 webs and their rolling replacements.
   parts.standIn.setQuota(parts.projectId, { vcpus: 96, memoryGib: 192 });
   const adapter = createMobilynetAdapter({ client: parts.client, project: parts.projectId, leases: true });
-  const run = async ({ stack = stackOf(), record, commit, choices = {}, decisions = {}, planHash, save, pause = () => parts.standIn.advance() }) => {
+  const run = async ({ stack = stackOf(), record, commit, choices = {}, decisions = {}, planHash, save, report, pause = () => parts.standIn.advance() }) => {
     const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer(), choices, decisions });
     const result = await deploy({
       adapter, needs: stack.needs, record, choices, decisions, planHash: planHash ?? plan.hash, release: releaseOf(commit, stack), holder: HOLDER,
-      pause, ...(save ? { save } : {})
+      pause, ...(save ? { save } : {}), ...(report ? { report } : {})
     });
     return { ...result, plan };
   };
@@ -448,4 +448,125 @@ test("take offline returns once the provider removed the services, or names thos
   settle(standIn);
   for (const name of ["web", "computers"]) assert.equal(standIn.services.service(first.record.items[`service.${name}`].id).state, "deleted");
   assert.deepEqual(await takeOffline(adapter, kept, { pause: () => assert.fail("nothing to wait for") }), kept);
+});
+
+/** Every value of the release's Env (but a count, which any time holds), which no report of a Deploy may carry. */
+const ENV_VALUES = Object.values(ENV).filter((value) => value.length > 4);
+
+test("a Deploy reports each step as it starts and ends in the engine's words, each wait once, each retry and its end, with no setting's value; a report that throws never stops it", async () => {
+  const { run, record } = setup();
+  const events = [];
+  const first = await run({ record, commit: "c1", report: (event) => events.push(event) });
+  assert.equal(first.outcome, "live", first.message);
+  for (const event of events) assert.ok(Number.isFinite(Date.parse(event.at)), `${JSON.stringify(event)} has its time`);
+  const text = JSON.stringify(events);
+  for (const value of ENV_VALUES) assert.equal(text.includes(value), false, `no report carries ${value}`);
+
+  const said = events.filter((event) => event.kind === "step").map((event) => `${event.phase} ${event.words}`);
+  for (const words of [
+    "Making the hosted service for database",
+    "Making the hosted service for files",
+    `Adding the domain ${DOMAIN}`,
+    "Uploading the release of computers",
+    "Making App Service computers, internal: only the app's other services reach it",
+    "Linking computers to database",
+    "Uploading the release of web",
+    `Making App Service web, public behind the load balancer at ${DOMAIN}`,
+    "Reading how the update of computers ended"
+  ]) {
+    const start = said.indexOf(`start ${words}`);
+    assert.ok(start >= 0, `${words} starts: ${said.join(" | ")}`);
+    assert.ok(said.indexOf(`done ${words}`) > start, `${words} ends after it starts`);
+  }
+  // In the order the steps run: the resources, the domain, the internal service, then the public one.
+  const order = ["start Making the hosted service for database", `start Adding the domain ${DOMAIN}`, "start Uploading the release of computers",
+    "start Uploading the release of web"].map((line) => said.indexOf(line));
+  assert.deepEqual([...order].sort((one, other) => one - other), order);
+  // A step that starts a refresh names it, so its caller can follow what the provider does; reading how it ended too.
+  const made = events.find((event) => event.kind === "step" && event.phase === "done" && event.step === "createService" && event.service === "web");
+  assert.deepEqual(Object.keys(made.refresh ?? {}).sort(), ["refreshId", "serviceId"]);
+  assert.equal(made.refresh.serviceId, first.record.items["service.web"].id);
+  const read = events.find((event) => event.step === "checkRefresh" && event.phase === "done" && event.service === "web");
+  assert.equal(read.refresh.refreshId, made.refresh.refreshId);
+  // A wait is said when its words change, never again at each step it lasts.
+  const waits = events.filter((event) => event.kind === "wait").map((event) => event.words);
+  assert.ok(waits.length > 0);
+  assert.ok(waits.every((words, index) => index === 0 || words !== waits[index - 1]), waits.join(" | "));
+  assert.deepEqual(events.at(-1), { at: events.at(-1).at, kind: "end", outcome: "live" });
+
+  // A report that throws, or rejects, is the caller's problem alone.
+  const again = await run({ record: first.record, commit: "c2", report: () => {
+    throw new Error("the report broke");
+  } });
+  assert.equal(again.outcome, "live", again.message);
+  const third = await run({ record: again.record, commit: "c3", report: () => Promise.reject(new Error("the report broke")) });
+  assert.equal(third.outcome, "live", third.message);
+});
+
+test("a provider read that fails while a Deploy waits (no answer, a 5xx, its rate limit) is tried again at the next step, said as a retry, and the Deploy goes live", async () => {
+  const { standIn, record } = setup();
+  // mobilynet answers nothing at the inventory after the first two waits, then a 503, then its rate limit, as it may
+  // while it builds; the Deploy carries on.
+  const originalFetch = standIn.fetch;
+  let pauses = 0;
+  let failing = [];
+  const fetchOf = (url, init) => {
+    const next = failing.shift();
+    if (next === "down") return Promise.reject(new TypeError("fetch failed"));
+    if (next) {
+      return Promise.resolve(new Response(JSON.stringify({ error: { code: next === 503 ? "internal_error" : "rate_limited", message: `mobilynet answered ${next}` } }),
+        { status: next, headers: { "content-type": "application/json" } }));
+    }
+    return originalFetch(url, init);
+  };
+  const client = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: standIn.key, fetch: fetchOf });
+  const adapter = createMobilynetAdapter({ client, project: standIn.projectId, leases: false });
+  const stack = stackOf();
+  const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer() });
+  const events = [];
+  const result = await deploy({
+    adapter, needs: stack.needs, record, planHash: plan.hash, release: releaseOf("c1", stack), holder: HOLDER,
+    report: (event) => events.push(event),
+    pause: () => {
+      pauses += 1;
+      // The next request after this pause is the inventory of the next step: each kind of failure once.
+      if (pauses === 3) failing = ["down"];
+      if (pauses === 4) failing = [503];
+      if (pauses === 5) failing = [429];
+      standIn.advance();
+    }
+  });
+  assert.equal(result.outcome, "live", result.message);
+  const retries = events.filter((event) => event.kind === "retry");
+  assert.deepEqual(retries.map((event) => event.words), ["Reading mobilynet again", "Reading mobilynet again", "Reading mobilynet again"]);
+  assert.match(retries[0].message, /mobilynet did not answer: fetch failed/u);
+  assert.deepEqual(retries.slice(1).map((event) => event.message), ["mobilynet answered 503", "mobilynet answered 429"]);
+});
+
+test("take offline reports each App Service deleted, the wait while the provider removes them and each one gone, and tries a failed read again", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const adapter = setupAdapterOf(standIn);
+  const events = [];
+  let reads = 0;
+  const kept = await takeOffline(adapter, first.record, {
+    report: (event) => events.push(event),
+    pause: () => {
+      reads += 1;
+      if (reads === 1) standIn.faults.down = true;
+      else standIn.faults.down = false;
+      standIn.advance();
+    }
+  });
+  assert.deepEqual(Object.keys(kept.items).sort(), ["resource.database", "resource.files"]);
+  const said = events.map((event) => [event.kind, event.phase, event.words].filter(Boolean).join(" "));
+  assert.deepEqual(said.filter((line) => line.startsWith("step")), [
+    "step start Deleting App Service web", "step done Deleting App Service web",
+    "step start Deleting App Service computers", "step done Deleting App Service computers"
+  ]);
+  assert.ok(said.includes("wait Waiting for mobilynet to remove web and computers"), said.join(" | "));
+  assert.ok(said.includes("retry Reading mobilynet again"), said.join(" | "));
+  assert.deepEqual(events.at(-1).kind, "end");
+  assert.equal(events.at(-1).outcome, "offline");
 });

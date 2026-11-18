@@ -642,3 +642,28 @@ test("every request is kept in order with what it asked of what, and a stand-in 
   const down = await refused(client.readService(serviceId));
   assert.deepEqual([down.status, down.code, down.retryable], [null, "unreachable", true]);
 });
+
+test("an instance's logs are read by an operation: 202 first, then 200 with its lines once mobilynet moved on, each secret of its service masked, for a live instance or one removed in the last 7 days", async () => {
+  const parts = await runningShop();
+  const { standIn, client, serviceId } = parts;
+  const [instance] = standIn.services.instances(serviceId);
+  standIn.services.setLogs(instance.id, "Migrate: Migrate database\nmigrated 3 tables with session-1\nweb: listening on 3000\n");
+  const pending = await client.readServiceLogs(serviceId, { instance: instance.id, lines: 50 });
+  assert.equal(pending.logs, null);
+  assert.equal(pending.instance, instance.id);
+  assert.equal(pending.operation.kind, "app_logs");
+  assert.equal(pending.operation.state, "running");
+  standIn.advance();
+  const read = await client.readServiceLogs(serviceId, { instance: instance.id, lines: 50 });
+  assert.equal(read.operation.state, "succeeded");
+  // The service's own secret (sessionKey's value) is masked as mobilynet masks it; the rest is the instance's output.
+  assert.equal(read.logs, "Migrate: Migrate database\nmigrated 3 tables with [secret]\nweb: listening on 3000\n");
+  assert.ok(Number.isFinite(Date.parse(read.readAt)));
+  // Without an instance, or with another service's, mobilynet refuses.
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, {}))), { status: 422, code: "validation_failed", fields: ["instance"] });
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, { instance: "ins_none" }))), { status: 404, code: "not_found", fields: [] });
+  // It needs services:read.
+  const blind = standIn.addKey({ projectId: parts.projectId, scopes: ["hosted:read"] });
+  const other = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: blind, fetch: standIn.fetch });
+  assert.equal((await refused(other.readServiceLogs(serviceId, { instance: instance.id }))).code, "scope_missing");
+});

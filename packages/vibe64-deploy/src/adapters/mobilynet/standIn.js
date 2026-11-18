@@ -69,6 +69,7 @@ const ROUTES = Object.freeze([
   [`^/v1/services/${ID}/settings$`, { PUT: "services:manage" }],
   [`^/v1/services/${ID}/(releases|actions/rollback)$`, { POST: "services:deploy" }],
   [`^/v1/services/${ID}/(instances|refreshes)(/${ID})?$`, { GET: "services:read" }],
+  [`^/v1/services/${ID}/logs$`, { GET: "services:read" }],
   [`^/v1/hosted-services/${ID}$`, { GET: "hosted:read", PATCH: "hosted:manage", DELETE: "hosted:manage" }],
   [`^/v1/hosted-services/${ID}/links(/${ID})?$`, { GET: "hosted:read", POST: "hosted:manage", DELETE: "hosted:manage" }],
   [`^/v1/leases(/${ID})?$`, { POST: "services:deploy", PATCH: "services:deploy", DELETE: "services:deploy" }]
@@ -397,7 +398,10 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     routes: network.routes,
     /** A mobilynet project's releases of an app, with their builds and declarations. */
     releases: releases.list,
-    /** App Services: `all()`, `service(id)` with their values, `instances(id)` with `_mobilynet`, `refreshes(id)`, `reaches(from, to, port)`. */
+    /**
+     * App Services: `all()`, `service(id)` with their values, `instances(id)` with `_mobilynet`, `refreshes(id)`,
+     * `reaches(from, to, port)`, and `setLogs(instanceId, text)`, what an instance's logs say.
+     */
     services: services.controls,
     /** Hosted services: `all()`, `service(id)` with their links and secrets, `catalogue()`. */
     hosted: hosted.controls,

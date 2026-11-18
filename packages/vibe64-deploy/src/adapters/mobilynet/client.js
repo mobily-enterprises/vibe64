@@ -369,6 +369,13 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
      * @param {string} serviceId @param {{ removed?: boolean }} [filter]
      */
     listServiceInstances: (serviceId, { removed } = {}) => listAll(`${servicePath(serviceId)}/instances`, { removed: removed ? "true" : undefined }),
+    /**
+     * An instance's logs (`services:read`), live or removed in the last 7 days, read from its host by an operation:
+     * `{ instance, logs, readAt, operation }`, `logs` null (`202`) until that operation ends; the same call then answers
+     * the lines (`200`) for a minute. mobilynet masks each of the service's secrets as `[secret]`.
+     * @param {string} serviceId @param {{ instance?: string, unit?: string, since?: string, lines?: number }} which
+     */
+    readServiceLogs: (serviceId, { instance, unit, since, lines } = {}) => call("GET", `${servicePath(serviceId)}/logs`, { query: { instance, unit, since, lines } }),
     /** An App Service's refreshes, newest first (`services:read`). @param {string} serviceId */
     listServiceRefreshes: (serviceId) => listAll(`${servicePath(serviceId)}/refreshes`),
     /** One refresh of an App Service with its steps (`services:read`). @param {string} serviceId @param {string} refreshId */
