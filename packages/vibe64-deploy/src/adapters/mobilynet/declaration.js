@@ -1,5 +1,7 @@
-// The mobilynet adapter's declaration: the package Vibe64 hands mobilynet for an app, its mobilynet.json and its two
-// scripts, in mobilynet's build model of 16 Nov 2026. mobilynet builds the release from source in a throwaway build VM
+// The mobilynet adapter's declaration: the package Vibe64 hands mobilynet for each service of an app, its mobilynet.json
+// and the scripts it runs, in mobilynet's build model of 16 Nov 2026. Every service builds from the one archive (the
+// saved commit with the shared build script and one serve script per service); each is its own app at mobilynet,
+// `<app>-<service>`, whose upload is that archive with its declaration at the root. mobilynet builds the release from source in a throwaway build VM
 // by the declaration's `build` block, keeps the folder as the app's read-only output and runs the app as a service, as
 // the app's own login.
 //
@@ -8,10 +10,22 @@
 // reads, and check is `curl` asking the app's health path. Both are programs on the machine's PATH, outside the app's
 // folder. The app's own code runs only in its service, as its login.
 
-/** Where in the release the app's scripts go: `build` (the build VM runs it) and `serve` (the service). */
+import { withRootFile } from "../../package.js";
+
+/** Where in the release the app's scripts go: `build.sh` (the build VM runs it) and `serve-<service>.sh` (a service). */
 const APP_SCRIPTS_FOLDER = "vibe64-app";
-const BUILD_SCRIPT = `${APP_SCRIPTS_FOLDER}/build`;
-const SERVE_SCRIPT = `${APP_SCRIPTS_FOLDER}/serve`;
+const BUILD_SCRIPT = `${APP_SCRIPTS_FOLDER}/build.sh`;
+const DECLARATION_FILE = "mobilynet.json";
+// The port every service listens on, which a service it reaches and the load balancer ask.
+const SERVICE_PORT = 3000;
+// mobilynet takes at most this many settings in one declaration, and app names (logins too) of at most 32 characters.
+const MAX_DECLARED_SETTINGS = 50;
+const APP_NAME_MAX = 32;
+// The Stack's runtimes by the runtime packs below; a runtime not here can't be declared.
+const STACK_RUNTIME_PACKS = Object.freeze({
+  composer: "composer", cpp: "cpp", git: "git", mariadb: "mariadb", nodejs: "node26", php: "php", playwright: "playwright",
+  postgresql: "postgresql", python: "python"
+});
 
 // The nixpkgs packages of each runtime pack a Deployment can name (node26 for the Stack's nodejs), as mobilynet's base
 // index names them. A pack not here can't be declared yet: playwright's browsers are not in the index.
@@ -101,6 +115,65 @@ function shellWord(text) {
   return `'${String(text).replace(/'/gu, "'\\''")}'`;
 }
 
+/** An argument list as one shell command: plain words as they are, any other in single quotes. @param {string[]} argv */
+function commandOf(argv) {
+  return argv.map((word) => (COMMAND_WORD.test(word) ? word : shellWord(word))).join(" ");
+}
+
+/** The serve script of a service. @param {string} service */
+function serveScriptOf(service) {
+  return `${APP_SCRIPTS_FOLDER}/serve-${service}.sh`;
+}
+
+/**
+ * A service's app at mobilynet: the app's name and the service's id, the app's part shortened to fit 32 characters.
+ * @param {string} app productionAppName's name @param {string} service
+ */
+function serviceAppName(app, service) {
+  return `${app.slice(0, APP_NAME_MAX - service.length - 1).replace(/-+$/u, "")}-${service}`;
+}
+
+/**
+ * The instance-local folder a service's login writes and may run programs in: the work area mobilynet makes for each
+ * declared login on the machine's data disk (`/srv/<login>`, mounted nosuid,nodev but not noexec), which goes with the
+ * instance. A declared data path would be root's, and start, one command, couldn't also give it to the login.
+ * @param {string} login
+ */
+function workDirOf(login) {
+  return `/srv/${login}`;
+}
+
+/**
+ * The serve script's lines that give the instance facts, read from the `_mobilynet` object mobilynet puts in each
+ * instance's settings: V64_INSTANCE_ID (its hostname), V64_PRIVATE_ADDRESS, V64_WORK_DIR and, for a service reached at
+ * each instance, V64_INSTANCE_URL, the address the services that reach it ask this instance at. An instance without
+ * `_mobilynet` gets none of them, and a service reached at each instance stops, naming why.
+ * @param {{ service: string, login: string, port: number, reached: "any" | "each" }} service
+ */
+function instanceFactLines({ service, login, port, reached }) {
+  const lines = [
+    "unset V64_INSTANCE_ID V64_PRIVATE_ADDRESS V64_INSTANCE_URL V64_WORK_DIR",
+    `if jq -e '._mobilynet | type == "object"' "$settings" > /dev/null; then`,
+    `  export V64_INSTANCE_ID="$(jq -r '._mobilynet.hostname // "" | tostring' "$settings")"`,
+    `  export V64_PRIVATE_ADDRESS="$(jq -r '._mobilynet.privateAddress // "" | tostring' "$settings")"`,
+    `  export V64_WORK_DIR=${shellWord(workDirOf(login))}`
+  ];
+  if (reached !== "each") return [...lines, "fi"];
+  const url = `._mobilynet | select([.hostname, .service, .projectId] | all(type == "string" and length > 0))`
+    + ` | "http://\\(.hostname).\\(.service).\\(.projectId | gsub("_"; "-")).internal:${port}"`;
+  return [
+    ...lines,
+    `  V64_INSTANCE_URL="$(jq -r ${shellWord(url)} "$settings")"`,
+    "  if [ -n \"$V64_INSTANCE_URL\" ]; then export V64_INSTANCE_URL; else unset V64_INSTANCE_URL; fi",
+    "fi",
+    "if [ -z \"${V64_INSTANCE_URL:-}\" ]; then",
+    `  echo ${shellWord(`Service ${service} is reached at each instance, so it needs this instance's own address: its `
+      + "settings have no _mobilynet with its hostname, service and projectId, which mobilynet gives each instance.")} >&2`,
+    "  exit 1",
+    "fi"
+  ];
+}
+
 /** The lines that print a step's name and run its command. @param {string} role @param {Step | null | undefined} step */
 function stepLines(role, step) {
   if (!step?.command) return [];
@@ -132,8 +205,10 @@ function stepLines(role, step) {
  * @typedef {{ command: string, label?: string }} Step
  */
 function appPackage({
-  name, login, port, healthPath, runtimes, settings, workdir = ".", steps, needs = [], bindingLines = [], packages = [], sandboxAllowances = []
+  name, login, port, healthPath, runtimes, settings, workdir = ".", steps, needs = [], bindingLines = [], packages = [], sandboxAllowances = [],
+  service = "web", reached = "any", serviceSettings = {}
 }) {
+  const serveScript = serveScriptOf(service);
   const machineFeatures = machineFeaturesOf(sandboxAllowances);
   const declaration = {
     name,
@@ -144,7 +219,7 @@ function appPackage({
       output: ["."]
     },
     start: `install -D --owner=${login} --mode=0400 /run/mobilynet/apps/${name}/settings.json ${settingsFileForLogin(name)}`,
-    services: [{ name: "web", command: `bash ${SERVE_SCRIPT}`, user: login, port, healthPath }],
+    services: [{ name: service, command: `bash ${serveScript}`, user: login, port, healthPath }],
     // About 100 of the 110 seconds mobilynet gives check, asking again while the service starts.
     check: "curl --fail --silent --show-error --output /dev/null --retry 30 --retry-delay 3 --retry-all-errors "
       + `--retry-max-time 100 --max-time 10 http://127.0.0.1:${port}${healthPath}`,
@@ -165,15 +240,19 @@ function appPackage({
   ];
   const serve = [
     "#!/usr/bin/env bash",
-    "# Made by Vibe64: the app's service. It exports the settings start left for this login, then migrates and serves.",
+    `# Made by Vibe64: the app's service ${service}. It exports the settings start left for this login and the instance's `
+      + "facts, then migrates and serves.",
     "set -euo pipefail",
     `settings=${shellWord(settingsFileForLogin(name))}`,
     `if [ ! -r "$settings" ]; then echo "No settings at $settings: the app's start step writes them." >&2; exit 1; fi`,
     "while IFS= read -r -d '' key && IFS= read -r -d '' value; do export \"$key=$value\"; done < <(",
-    "  jq -j 'to_entries[] | select(.key | test(\"^[A-Za-z_][A-Za-z0-9_]*$\")) | .key, \"\\u0000\", (.value | tostring), \"\\u0000\"' \"$settings\")",
+    "  jq -j 'to_entries[] | select(.key != \"_mobilynet\" and (.key | test(\"^[A-Za-z_][A-Za-z0-9_]*$\"))) | .key, \"\\u0000\", (.value | tostring), \"\\u0000\"' \"$settings\")",
     // The app's folder is read-only, so sign-ins kept in files live where the setting says, in the login's home.
     "if [ -n \"${AUTH_LOCAL_STORE_DIR:-}\" ]; then mkdir -p -- \"$AUTH_LOCAL_STORE_DIR\"; fi",
     ...bindingLines,
+    ...instanceFactLines({ service, login, port, reached }),
+    // The service's own facts of the source (its `- Setting` lines), whatever the settings say.
+    ...Object.entries(serviceSettings).map(([key, value]) => `export ${key}=${shellWord(value)}`),
     ...Object.entries(steps.serve.defaults ?? {})
       .map(([key, value]) => `if [ -z "\${${key}+set}" ]; then export ${key}=${shellWord(value)}; fi`),
     ...intoWorkdir,
@@ -181,7 +260,7 @@ function appPackage({
     steps.serve.command,
     ""
   ];
-  return { declaration, scripts: { [BUILD_SCRIPT]: build.join("\n"), [SERVE_SCRIPT]: serve.join("\n") } };
+  return { declaration, scripts: { [BUILD_SCRIPT]: build.join("\n"), [serveScript]: serve.join("\n") } };
 }
 
 // How Production's neutral needs (needs.js) become mobilynet's. A resource kind is one of mobilynet's interfaces, which a
@@ -252,18 +331,151 @@ function bindingExportLines(needs) {
   return lines;
 }
 
+/** A refusal a caller shows as it is, with its code and HTTP status. */
+function declarationError({ code, message }) {
+  return Object.assign(new Error(message), { code, status: 422 });
+}
+
+/**
+ * Why mobilynet can't take a package for these services, as `{ code, message }`, or null: a Deployment that isn't
+ * ready, a runtime or sandbox allowance no package can declare yet, a health path check can't ask, a service's
+ * packages mobilynet can't take, or a service given more settings than a declaration takes. Each names the service.
+ * @param {any} deployment the Stack's Deployment section as public Vibe64 inspected it (v2)
+ * @param {Record<string, Record<string, object>>} [settings] each service's settings (package.js settingsPerService)
+ */
+function servicePackagesProblem(deployment, settings = {}) {
+  if (deployment?.status !== "ready" || !Array.isArray(deployment.services) || deployment.services.length === 0) {
+    return {
+      code: "vibe64_app_package_deployment_unready",
+      message: `Vibe64 makes mobilynet.json from the Stack's Deployment section, which isn't ready: ${deployment?.diagnostics?.[0]?.message || "the Stack has none."}`
+    };
+  }
+  const runtimes = deployment.runtimeRequirements.map((runtime) => STACK_RUNTIME_PACKS[runtime] ?? runtime);
+  const unsupported = unsupportedRuntimes(runtimes);
+  if (unsupported.length > 0) {
+    return {
+      code: "vibe64_app_package_runtime_unsupported",
+      message: `The Deployment needs ${unsupported.join(", ")}, which a mobilynet package can't declare yet. `
+        + "Remove it from the Stack's - Runtimes: line, Save, then try again."
+    };
+  }
+  for (const service of deployment.services) {
+    const allowances = unsupportedSandboxAllowances(service.sandboxAllowances);
+    if (allowances.length > 0) {
+      return {
+        code: "vibe64_app_package_sandbox_unsupported",
+        message: `Service ${service.id}'s - Sandbox allows: names ${allowances.join(", ")}, which a mobilynet package can't declare yet.`
+      };
+    }
+    const health = healthPathProblem(service.readyWhen.path);
+    if (health) return { code: "vibe64_app_package_health_path_invalid", message: `Service ${service.id}: ${health}` };
+    const packages = packagesProblem([...deployment.packages, ...service.packages], runtimes);
+    if (packages) {
+      return {
+        code: "vibe64_app_package_packages_invalid",
+        message: `genesis/stack.md's Deployment - Packages: for service ${service.id} can't be declared: ${packages} Fix it in `
+          + "genesis/stack.md (the coding agent can do this), Save, then deploy."
+      };
+    }
+    const count = Object.keys(settings[service.id] ?? {}).length;
+    if (count > MAX_DECLARED_SETTINGS) {
+      return {
+        code: "vibe64_production_too_many_settings",
+        message: `mobilynet takes at most ${MAX_DECLARED_SETTINGS} settings for a service and service ${service.id} would `
+          + `need ${count}. Remove Production Env entries it doesn't use, or give them only to the services that use them.`
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * mobilynet's package for each service of a Deployment: one declaration per service, named `<app>-<service>` and run
+ * as a login of that name, which builds from the shared build script and runs its own serve script; every service
+ * needs every resource. Refuses with servicePackagesProblem's reason.
+ * @param {object} options
+ * @param {string} options.app the app's name (productionAppName)
+ * @param {any} options.deployment the Stack's Deployment section as public Vibe64 inspected it (v2)
+ * @param {object} options.needs needsOfStack's needs
+ * @param {Record<string, Record<string, { secret: boolean, required: boolean }>>} options.settings each service's
+ *   settings (package.js settingsPerService)
+ * @param {Record<string, string>} [options.defaults] Serve's own defaults beside the runtime's (the Stack's Environment
+ *   defaults), which a setting overrides
+ * @returns {{ declarations: Record<string, object>, scripts: Record<string, string> }}
+ */
+function servicePackages({ app, deployment, needs, settings, defaults = {} }) {
+  const problem = servicePackagesProblem(deployment, settings);
+  if (problem) throw declarationError(problem);
+  const runtimes = deployment.runtimeRequirements.map((runtime) => STACK_RUNTIME_PACKS[runtime]);
+  const step = (role) => {
+    const steps = deployment.steps.filter((entry) => entry.role === role);
+    return steps.length === 0 ? null : { command: steps.map((entry) => commandOf(entry.argv)).join(" && "), label: steps.map((entry) => entry.label).join("; ") };
+  };
+  // Like Heroku and Dokku, a Node app's service runs in production mode; only the service, so Prepare keeps the
+  // devDependencies Build needs.
+  const serveDefaults = { ...defaults, ...(runtimes.includes("node26") ? { NODE_ENV: "production" } : {}) };
+  const declarations = {};
+  const scripts = {};
+  for (const service of deployment.services) {
+    const name = serviceAppName(app, service.id);
+    const made = appPackage({
+      name,
+      login: name,
+      service: service.id,
+      reached: service.reached,
+      port: SERVICE_PORT,
+      healthPath: service.readyWhen.path,
+      runtimes,
+      settings: Object.fromEntries(Object.entries(settings[service.id] ?? {})
+        .map(([key, { secret, required }]) => [key, { type: "string", secret, required }])),
+      workdir: deployment.workdir,
+      steps: {
+        prepare: step("prepare"),
+        build: step("build"),
+        migrate: step("migrate"),
+        serve: { command: commandOf(service.serve.argv), label: service.serve.label, defaults: serveDefaults }
+      },
+      needs: declarationNeeds(needs),
+      bindingLines: bindingExportLines(needs),
+      packages: [...deployment.packages, ...service.packages],
+      sandboxAllowances: service.sandboxAllowances,
+      serviceSettings: service.settings
+    });
+    declarations[service.id] = made.declaration;
+    Object.assign(scripts, made.scripts);
+  }
+  return { declarations, scripts };
+}
+
+/**
+ * The upload of one service: the archive with that service's declaration at its root, and its SHA-256.
+ * @param {Buffer} archive package.js packArchive's bytes @param {object} declaration
+ */
+function serviceUpload(archive, declaration) {
+  return withRootFile(archive, DECLARATION_FILE, `${JSON.stringify(declaration, null, 2)}\n`);
+}
+
+
 export {
   APP_SCRIPTS_FOLDER,
+  MAX_DECLARED_SETTINGS,
   MOBILYNET_INTERFACES,
+  SERVICE_PORT,
   appHome,
   appPackage,
   bindingExportLines,
   declarationNeeds,
   healthPathProblem,
+  instanceFactLines,
   machineFeaturesOf,
   needAs,
   needSetting,
   packagesProblem,
+  serviceAppName,
+  servicePackages,
+  servicePackagesProblem,
+  serviceUpload,
   unsupportedRuntimes,
-  unsupportedSandboxAllowances
+  unsupportedSandboxAllowances,
+  workDirOf
 };

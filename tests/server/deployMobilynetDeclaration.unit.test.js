@@ -38,9 +38,9 @@ test("an app's mobilynet.json is built by its build block, and its start and che
   assert.deepEqual(appPackage(SHOP).declaration, {
     name: "shop",
     requiredPackages: ["bash", "coreutils", "curl", "jq", "nodejs_26", "corepack"],
-    build: { command: "bash vibe64-app/build", cache: ["~/.npm"], output: ["."] },
+    build: { command: "bash vibe64-app/build.sh", cache: ["~/.npm"], output: ["."] },
     start: "install -D --owner=shop --mode=0400 /run/mobilynet/apps/shop/settings.json /run/vibe64-apps/shop/settings.json",
-    services: [{ name: "web", command: "bash vibe64-app/serve", user: "shop", port: 3000, healthPath: "/api/health" }],
+    services: [{ name: "web", command: "bash vibe64-app/serve-web.sh", user: "shop", port: 3000, healthPath: "/api/health" }],
     check: "curl --fail --silent --show-error --output /dev/null --retry 30 --retry-delay 3 --retry-all-errors "
       + "--retry-max-time 100 --max-time 10 http://127.0.0.1:3000/api/health",
     logins: [{ name: "shop" }],
@@ -94,17 +94,17 @@ test("the build script runs Prepare then Build, and the service exports its sett
   }
   const run = (file) => exec("bash", [file], { cwd: path.join(root, "release"), env: { PATH: process.env.PATH } });
 
-  await run("vibe64-app/build");
+  await run("vibe64-app/build.sh");
   assert.equal(await readFile(path.join(root, "steps"), "utf8"), "prepare unset unset\nbuild unset unset\n");
 
   // Without its settings the service stops at once, naming where they should be.
-  await assert.rejects(run("vibe64-app/serve"), (error) => error.stderr.includes(`No settings at ${settingsFile}`));
+  await assert.rejects(run("vibe64-app/serve-web.sh"), (error) => error.stderr.includes(`No settings at ${settingsFile}`));
   const signIns = path.join(root, "home/auth");
   await writeFile(settingsFile, JSON.stringify({ NODE_ENV: "staging", WEIRD: "it's $HOME `x`", AUTH_LOCAL_STORE_DIR: signIns, "bad-name": "x" }));
   await rm(path.join(root, "steps"));
-  await run("vibe64-app/serve");
+  await run("vibe64-app/serve-web.sh");
   // A setting wins over Serve's default; quotes and $ stay as they are; Migrate runs before Serve, in the work folder.
   assert.equal(await readFile(path.join(root, "steps"), "utf8"), "migrate staging it's $HOME `x`\nserve staging it's $HOME `x`\n");
   assert.ok((await exec("test", ["-d", signIns]).then(() => true)), "the sign-in folder is made");
-  assert.match(scripts["vibe64-app/serve"], /^if \[ -z "\$\{TRUSTED_PROXIES\+set\}" \]; then export TRUSTED_PROXIES='loopback'; fi$/mu);
+  assert.match(scripts["vibe64-app/serve-web.sh"], /^if \[ -z "\$\{TRUSTED_PROXIES\+set\}" \]; then export TRUSTED_PROXIES='loopback'; fi$/mu);
 });

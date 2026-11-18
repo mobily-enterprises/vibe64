@@ -6,11 +6,12 @@ import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 
-import { bindingExportLines, declarationNeeds } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
-import { PACKAGE_MAX_BYTES, archiveProblem, declaredSettingsOf, packProduction } from "../../packages/vibe64-deploy/src/package.js";
+import { bindingExportLines, declarationNeeds, serviceUpload } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
+import { PACKAGE_MAX_BYTES, archiveProblem, declaredSettingsOf, packArchive } from "../../packages/vibe64-deploy/src/package.js";
 
-// The archive a deploy sends: the saved commit packed by git, with the files Vibe64 makes for it, and how the service
-// script turns the settings mobilynet gives a linked need into the names the app's bindings read.
+// The archive a deploy sends: the saved commit packed once by git with the scripts Vibe64 makes for it, each service's
+// upload with its declaration, and how the service script turns the settings mobilynet gives a linked need into the
+// names the app's bindings read.
 const exec = promisify(execFile);
 
 const NEEDS = Object.freeze({
@@ -34,26 +35,41 @@ async function repository(root, files) {
   return { git, commit: (await git(["rev-parse", "HEAD"])).trim() };
 }
 
-test("the commit is packed with its declaration at the root and its scripts in vibe64-app, and refused when too big or holding Vibe64's own files", async (t) => {
+test("the commit is packed once with Vibe64's scripts, each service's upload adds its declaration at the root, and Vibe64's own files or too big an archive are refused", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-deploy-package-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const app = path.join(root, "app");
   const { git, commit } = await repository(app, { "package.json": "{}\n", "server.js": "// app\n", "genesis/stack.md": "# Stack\n" });
   const scratch = path.join(root, "scratch");
   await mkdir(scratch);
-  const made = { declaration: { name: "books", settings: { APP_ENV: {}, PORT: {} } }, scripts: { "vibe64-app/build": "b\n", "vibe64-app/serve": "s\n" } };
+  const scripts = { "vibe64-app/build.sh": "b\n", "vibe64-app/serve-web.sh": "w\n", "vibe64-app/serve-computers.sh": "c\n" };
   assert.equal(await archiveProblem({ commit, git }), null);
-  const { archive, sha256 } = await packProduction({ commit, git, scratch, made });
-  const bytes = Buffer.from(archive, "base64");
+  const { bytes, sha256 } = await packArchive({ commit, git, scratch, scripts });
   const { createHash } = await import("node:crypto");
   assert.equal(sha256, createHash("sha256").update(bytes).digest("hex"));
-  const file = path.join(root, "package.tar.gz");
-  await writeFile(file, bytes);
-  const listed = (await exec("tar", ["-tzf", file])).stdout.split("\n").filter(Boolean).sort();
-  assert.deepEqual(listed, ["genesis/", "genesis/stack.md", "mobilynet.json", "package.json", "server.js", "vibe64-app/build", "vibe64-app/serve"]);
-  assert.deepEqual(JSON.parse((await exec("tar", ["-xOzf", file, "mobilynet.json"])).stdout), made.declaration);
-  assert.equal((await exec("tar", ["-xOzf", file, "vibe64-app/serve"])).stdout, "s\n");
-  assert.deepEqual(declaredSettingsOf(made.declaration), ["APP_ENV", "PORT"]);
+  const listOf = async (archive, name) => {
+    const file = path.join(root, `${name}.tar.gz`);
+    await writeFile(file, archive);
+    const read = async (entry) => (await exec("tar", ["-xOzf", file, entry])).stdout;
+    return { files: (await exec("tar", ["-tzf", file])).stdout.split("\n").filter(Boolean).sort(), read };
+  };
+  // The archive carries no provider's declaration; every service's scripts are in it.
+  const archive = await listOf(bytes, "archive");
+  assert.deepEqual(archive.files, ["genesis/", "genesis/stack.md", "package.json", "server.js", "vibe64-app/build.sh",
+    "vibe64-app/serve-computers.sh", "vibe64-app/serve-web.sh"]);
+  assert.equal(await archive.read("vibe64-app/serve-computers.sh"), "c\n");
+
+  // One service's upload: the same files and its declaration at the root, which tar reads back exactly.
+  const declaration = { name: "books-web", settings: { APP_ENV: {}, PORT: {} }, long: "x".repeat(700) };
+  const upload = serviceUpload(bytes, declaration);
+  assert.equal(upload.sha256, createHash("sha256").update(upload.bytes).digest("hex"));
+  assert.notEqual(upload.sha256, sha256);
+  assert.deepEqual(serviceUpload(bytes, declaration), upload, "the same archive and declaration make the same upload");
+  const uploaded = await listOf(upload.bytes, "upload");
+  assert.deepEqual(uploaded.files, [...archive.files, "mobilynet.json"].sort());
+  assert.deepEqual(JSON.parse(await uploaded.read("mobilynet.json")), declaration);
+  assert.equal(await uploaded.read("server.js"), "// app\n");
+  assert.deepEqual(declaredSettingsOf(declaration), ["APP_ENV", "PORT"]);
 
   // A commit that brings its own declaration or scripts folder is refused, naming the fix.
   const own = await repository(path.join(root, "own"), { "mobilynet.json": "{}\n", "vibe64-app/serve": "x\n" });
@@ -63,7 +79,7 @@ test("the commit is packed with its declaration at the root and its scripts in v
 
   // An archive past the limit (about 48 MiB unless given) is refused with its size.
   assert.equal(PACKAGE_MAX_BYTES, 50_282_496);
-  await assert.rejects(packProduction({ commit, git, scratch, made, maxBytes: bytes.length - 1 }), (error) => error.code === "vibe64_production_package_too_large"
+  await assert.rejects(packArchive({ commit, git, scratch, scripts, maxBytes: bytes.length - 1 }), (error) => error.code === "vibe64_production_package_too_large"
     && error.status === 422 && /^The packed app is 0\.0 MiB; Production takes at most 0\.0 MiB\. Keep built files/u.test(error.message));
 });
 
