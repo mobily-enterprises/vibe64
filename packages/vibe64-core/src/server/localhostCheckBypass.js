@@ -1,4 +1,4 @@
-import { appEnvironment, isDeployed } from "@jskit-ai/kernel/shared/support/appEnvironment";
+import { appEnvironment, isStagingOrProduction } from "@jskit-ai/kernel/shared/support/appEnvironment";
 import { vibe64Host } from "@local/vibe64-execution/server/hostProfile";
 import { isLoopbackAddress } from "./localStudioRequest.js";
 
@@ -78,7 +78,7 @@ function isLocalhostCheckBypassEnabled({
   if (enabled && (host.sharedGroupAccess || host.execHelperPath || host.runtimePackRoot || host.sharedCacheRoot)) {
     throw bypassRefusal("this host shares or provisions its machine.");
   }
-  if (enabled && isDeployed(env)) {
+  if (enabled && isStagingOrProduction(env)) {
     throw bypassRefusal(`APP_ENV is ${appEnvironment(env)}.`);
   }
   return enabled;
