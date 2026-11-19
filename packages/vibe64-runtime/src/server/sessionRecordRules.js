@@ -3,6 +3,13 @@ import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import { SESSION_RENEWAL_ID_PATTERN } from "./sessionRenewalIds.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import {
+  ACTIVE_AGENT_RUN_STATES,
+  AGENT_RUN_ID_PATTERN,
+  AGENT_RUN_STATES,
+  TERMINAL_AGENT_RUN_STATES,
+  VIBE64_AGENT_RUN_STATE
+} from "./agentRunStates.js";
 
 // What a stored session record may hold: schema versions, statuses, session,
 // metadata, agent-run and background-task ids and states, list filters,
@@ -91,7 +98,6 @@ const SESSION_ARCHIVE_INDEX_METADATA_NAMES = Object.freeze([
 const SESSION_ARCHIVE_TIMEOUT_MS = 60_000;
 const COMMAND_BUFFER_BYTES = 50 * 1024 * 1024;
 const BACKGROUND_TASK_EVENT_LIMIT = 200;
-const AGENT_RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const BACKGROUND_TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 const UUID_V4_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -126,30 +132,6 @@ const BACKGROUND_TASK_STATUS = Object.freeze({
   RUNNING: "running"
 });
 const BACKGROUND_TASK_STATUSES = new Set(Object.values(BACKGROUND_TASK_STATUS));
-const VIBE64_AGENT_RUN_STATE = Object.freeze({
-  ACTIVE: "active",
-  CANCELLED: "cancelled",
-  COMPLETED: "completed",
-  FAILED: "failed",
-  FINALIZING: "finalizing",
-  INTERRUPTED: "interrupted",
-  STARTING: "starting",
-  TIMED_OUT: "timed_out"
-});
-const AGENT_RUN_STATES = new Set(Object.values(VIBE64_AGENT_RUN_STATE));
-const TERMINAL_AGENT_RUN_STATES = new Set([
-  VIBE64_AGENT_RUN_STATE.CANCELLED,
-  VIBE64_AGENT_RUN_STATE.COMPLETED,
-  VIBE64_AGENT_RUN_STATE.FAILED,
-  VIBE64_AGENT_RUN_STATE.INTERRUPTED,
-  VIBE64_AGENT_RUN_STATE.TIMED_OUT
-]);
-
-const ACTIVE_AGENT_RUN_STATES = new Set([
-  VIBE64_AGENT_RUN_STATE.ACTIVE,
-  VIBE64_AGENT_RUN_STATE.FINALIZING,
-  VIBE64_AGENT_RUN_STATE.STARTING
-]);
 
 function isValidVibe64SessionId(sessionId) {
   const normalizedSessionId = toText(sessionId);

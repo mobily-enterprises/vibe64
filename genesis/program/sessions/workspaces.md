@@ -41,6 +41,8 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-runtime/src/server/sessionRuntimeRenewal.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/server/sessionRecords.js`
+- `packages/vibe64-runtime/src/server/agentRunStates.js`
+- `packages/vibe64-runtime/src/server/workingTurns.js`
 - `packages/vibe64-runtime/src/server/sessionCreation.js`
 - `packages/vibe64-runtime/src/server/sessionListing.js`
 - `packages/vibe64-runtime/src/server/sessionArchivePublishing.js`
@@ -302,6 +304,16 @@ for a session's whole life, so the store remembers each session's answer by its
 only after the store writes one of them or the folder itself changes; a refresh
 reads no run files. The session limit's renewal reservations come from session
 summaries (`listSessionsForRenewal`), which read no runs or background tasks.
+A tool that tells a host's work from outside the editor reads the same
+answer with `readVibe64WorkingTurns({ systemRoot })` (`workingTurns.js`): each
+project's active sessions whose Main chat is working, with when the turn
+started (the first of the run's last events that are all active), and nothing
+of a message or an error. It imports only Node and the run states
+(`agentRunStates.js`, which `sessionRecordRules.js` validates by), opens runs
+without following links, and counts a run over 4 MiB, which it does not read,
+as working with its start unknown, so a tool deciding whether a restart would
+interrupt a turn does not take it for ended. Evidence:
+`tests/server/workingTurns.unit.test.js`.
 The session-data owner
 applies newer turn events to every listed session and refreshes on reconnect.
 These project-scoped updates cannot be replaced by older responses or events.
