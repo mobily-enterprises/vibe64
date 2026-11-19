@@ -12,6 +12,7 @@ import { currentActorUser } from "../../packages/vibe64-execution/src/server/act
 import { previewPublicSocketPath } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
 import { once } from "node:events";
 import { io } from "socket.io-client";
+import WebSocket from "ws";
 import {
   inspectGenesisProject, inspectGenesisSubsystems, inspectVibe64Outputs, inspectVibe64WorkspaceSetup
 } from "@local/vibe64-genesis/server";
@@ -147,9 +148,18 @@ process.exit(1);
     const claudeAccount = claudeAccounts.accounts.find((account) => account.id === "claude");
     assert.equal(claudeAccount.connected, true);
     assert.equal(claudeAccount.username, "local-cli@example.test");
-    const realtime = await fetch(`${origin}/socket.io/?EIO=4&transport=polling`);
-    assert.equal(realtime.status, 200);
-    assert.match(await realtime.text(), /^0\{"sid"/u);
+    // Realtime connects by WebSocket only: long-polling's addresses carry the session id, and JSKIT's realtime refuses
+    // it from the release after catalog 0.2.95. The handshake through the development server opens an Engine.IO session.
+    const handshake = new WebSocket(`ws://127.0.0.1:${port}/socket.io/?EIO=4&transport=websocket`, { origin });
+    let openPacket;
+    try {
+      [openPacket] = await once(handshake, "message", { signal: AbortSignal.timeout(20_000) });
+    } catch (error) {
+      throw new Error(`Development editor realtime handshake failed: ${logs}`, { cause: error });
+    } finally {
+      handshake.terminate();
+    }
+    assert.match(String(openPacket), /^0\{"sid"/u);
     const socket = io(origin, { autoConnect: false, forceNew: true, reconnection: false,
       transports: ["websocket"], extraHeaders: { Origin: origin, "x-forwarded-proto": "https" } });
     try {
