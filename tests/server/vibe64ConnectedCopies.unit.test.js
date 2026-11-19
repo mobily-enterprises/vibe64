@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -122,7 +122,7 @@ test("Prepare copies each listed repository from its default branch, through its
   assert.equal(await pathExists(copyPath(f, "tools")), false);
   await writeFile(path.join(copyPath(f, "library"), "notes.md"), "unsaved\n");
   assert.deepEqual((await prepare(f, [])).lines, [
-    "[Connected] library kept: it is no longer listed but has unsaved work. Save it, then prepare again."
+    "[Connected] library kept: it is no longer listed but holds 1 uncommitted file. Save it or move it away, then prepare again."
   ]);
   assert.deepEqual(f.copies().map(copy => copy.name), ["library"]);
   assert.equal(await readFile(path.join(copyPath(f, "library"), "notes.md"), "utf8"), "unsaved\n");
@@ -140,6 +140,142 @@ test("Prepare refuses this project's own repository and a folder it did not reco
   await assert.rejects(prepare(f, ["library"]), { code: "vibe64_connected_copy_path_exists" });
   assert.equal(await pathExists(path.join(copyPath(f, "library"), "stray")), true);
   assert.deepEqual(f.copies(), []);
+});
+
+/** A copy's Git state that Prepare must leave as it found it. */
+async function copyState(copy) {
+  return Promise.all([
+    git(copy, ["rev-parse", "HEAD"]),
+    git(copy, ["status", "--porcelain=v1", "--untracked-files=all"]),
+    git(copy, ["stash", "list"]),
+    git(copy, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/heads"])
+  ]);
+}
+
+test("Prepare keeps a copy no longer listed while it holds any work, Save's or not, and names that work", async (t) => {
+  const f = await fixture(t);
+  const library = await githubRepository(f, "library");
+  const tools = await githubRepository(f, "tools");
+  await prepare(f, ["library", "tools"]);
+  const copy = copyPath(f, "library");
+  const sequenceEditor = (todo) => ["-c", `sequence.editor=sh -c 'printf "${todo}\\n" >"$1"' -`];
+  const sideBranch = async (commit) => {
+    await git(copy, ["switch", "-c", "side"]);
+    await commit();
+    await git(copy, ["switch", "-"]);
+  };
+  const cases = [
+    {
+      work: "1 stash",
+      make: async () => {
+        await writeFile(path.join(copy, "library.txt"), "stashed\n");
+        await git(copy, ["stash"]);
+      },
+      undo: () => git(copy, ["stash", "drop"])
+    },
+    {
+      work: "1 commit its main lacks",
+      make: () => commitInCopy(f, "library", "session.txt", "session\n"),
+      undo: () => git(copy, ["reset", "--hard", library.base])
+    },
+    {
+      // A commit on a branch the session is not on is work too.
+      work: "1 commit its main lacks",
+      make: () => sideBranch(() => commitInCopy(f, "library", "side.txt", "side\n")),
+      undo: () => git(copy, ["branch", "-D", "side"])
+    },
+    {
+      work: "a rebase in progress",
+      make: () => git(copy, [...sequenceEditor("break"), "rebase", "-i", "HEAD"]),
+      undo: () => git(copy, ["rebase", "--abort"])
+    },
+    {
+      work: "a merge in progress",
+      make: async () => {
+        await sideBranch(() => git(copy, ["commit", "--allow-empty", "-m", "side"]));
+        await git(copy, ["merge", "--no-ff", "--no-commit", "side"]);
+        await git(copy, ["branch", "-D", "side"]);
+      },
+      undo: () => git(copy, ["merge", "--abort"])
+    },
+    {
+      work: "2 uncommitted files and 1 stash",
+      make: async () => {
+        await writeFile(path.join(copy, "library.txt"), "stashed\n");
+        await git(copy, ["stash"]);
+        await writeFile(path.join(copy, "notes.md"), "unsaved\n");
+        await writeFile(path.join(copy, "library.txt"), "changed\n");
+      },
+      undo: async () => {
+        await rm(path.join(copy, "notes.md"));
+        await git(copy, ["checkout", "--", "library.txt"]);
+        await git(copy, ["stash", "drop"]);
+      }
+    }
+  ];
+  const recorded = f.copies();
+  for (const { make, undo, work } of cases) {
+    await make();
+    const before = await copyState(copy);
+    assert.deepEqual((await prepare(f, ["tools"])).lines, [
+      `[Connected] tools ready at ${tools.base.slice(0, 12)}.`,
+      `[Connected] library kept: it is no longer listed but holds ${work}. Save it or move it away, then prepare again.`
+    ], work);
+    assert.deepEqual(await copyState(copy), before, work);
+    assert.deepEqual(f.copies().map(item => item.name).sort(), recorded.map(item => item.name).sort());
+    await undo();
+  }
+
+  // Control: once nothing is left in it, the copy goes.
+  assert.deepEqual((await prepare(f, ["tools"])).lines, [
+    `[Connected] tools ready at ${tools.base.slice(0, 12)}.`,
+    "[Connected] library removed; it is no longer listed."
+  ]);
+  assert.equal(await pathExists(copy), false);
+  assert.deepEqual(f.copies().map(item => item.name), ["tools"]);
+});
+
+test("Prepare refuses, changing nothing, a copy whose connection now names another repository of the same name, and names its work", async (t) => {
+  const f = await fixture(t);
+  await githubRepository(f, "library", { owner: "archive" });
+  const tools = await githubRepository(f, "tools");
+  await prepare(f, ["archive/library", "tools"]);
+  // The list now names another repository whose folder is also connected/library.
+  const library = await githubRepository(f, "library");
+  const copy = copyPath(f, "library");
+  const recorded = f.copies();
+
+  for (const work of ["", " and holds 1 uncommitted file and 1 stash"]) {
+    if (work) {
+      await writeFile(path.join(copy, "library.txt"), "stashed\n");
+      await git(copy, ["stash"]);
+      await writeFile(path.join(copy, "notes.md"), "unsaved\n");
+    }
+    const before = await copyState(copy);
+    const requests = [];
+    // tools is no longer listed and holds no work, yet it stays: nothing changes.
+    await assert.rejects(prepare(f, ["library"], { requests }), (error) => {
+      assert.equal(error.code, "vibe64_connected_copy_repository_changed");
+      assert.equal(error.message, `Connected repository library now names example/library, but this session's copy at ${copy} is a clone of archive/library${work}. Nothing was changed. Save any work in it, move the folder away, then prepare again.`);
+      return true;
+    });
+    assert.deepEqual(await copyState(copy), before);
+    assert.deepEqual(f.copies(), recorded);
+    assert.deepEqual((await readdir(f.connectedRoot)).sort(), ["library", "tools"]);
+    assert.deepEqual(requests, []);
+  }
+
+  // Moving the folder away, as the refusal says, lets Prepare copy the new repository.
+  await rename(copy, path.join(f.root, "old-library"));
+  assert.deepEqual((await prepare(f, ["library", "tools"])).lines, [
+    `[Connected] library copied at ${library.base.slice(0, 12)}.`,
+    `[Connected] tools ready at ${tools.base.slice(0, 12)}.`
+  ]);
+  assert.deepEqual(f.copies().map(item => [item.name, item.repository, item.baseCommit]), [
+    ["library", "example/library", library.base],
+    ["tools", "example/tools", tools.base]
+  ]);
+  assert.equal(await git(copy, ["config", "--get", "remote.origin.url"]), "https://github.com/example/library.git");
 });
 
 test("Update brings every copy onto its main; a copy that conflicts stays exactly as it was while the others update", async (t) => {

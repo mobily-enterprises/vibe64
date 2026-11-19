@@ -46,9 +46,12 @@ The output has one line per repository:
   session (rebase)** brings it up to date;
 - `[Connected] library removed; it is no longer listed.` when the repository
   left the list and its copy held no work;
-- `[Connected] library kept: it is no longer listed but has unsaved work. Save it,
-  then prepare again.` when it did. Save still saves that copy; the next
-  preparation then removes it.
+- `[Connected] library kept: it is no longer listed but holds 1 uncommitted file.
+  Save it or move it away, then prepare again.` when it held work: uncommitted
+  files, stashes, commits its main lacks on any branch, or an unfinished rebase,
+  merge, cherry-pick or revert. Files Git ignores are not work. Save still saves
+  that copy's commits and files; the next preparation then removes it. For work
+  Save does not take, such as a stash, apply or drop it, or move the folder away.
 
 Preparation then writes the Stack's `Sources file` pointing at the copies and
 runs the declared connected Prepare and Verify commands; see
@@ -60,7 +63,16 @@ Preparation stops, naming the repository, when:
 - a folder the session did not record is already where the copy goes: move it
   away, then **Retry**;
 - a recorded copy's folder is missing: Vibe64 does not replace it, because its
-  work could be lost. Restore the folder from a backup, or start a new session.
+  work could be lost. Restore the folder from a backup, or start a new session;
+- the list now names another repository with the name of a copy the session
+  has, for example `example/library` where `connected/library` is a clone of
+  `archive/library`. Preparation stops before it changes anything: `Connected
+  repository library now names example/library, but this session's copy at
+  /…/connected/library is a clone of archive/library. Nothing was changed. Save
+  any work in it, move the folder away, then prepare again.` When the copy holds
+  work, the message names it. Vibe64 never replaces a copy itself: Save still
+  saves the copy's work to the old repository; then move the folder out of
+  `connected` and choose **Retry** to copy the new repository.
 
 ## Update this session (rebase) updates every copy
 

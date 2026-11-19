@@ -171,24 +171,84 @@ async function cloneConnectedCopy({ commandOptions, mirror, repository, runComma
   return { name, repository, branch, path: copyPath, baseCommit: cloned.commit, canonicalCommit: cloned.commit };
 }
 
+function counted(count, one, many) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+const UNFINISHED_GIT_OPERATIONS = Object.freeze([
+  ["rebase-merge", "a rebase in progress"],
+  ["rebase-apply", "a rebase in progress"],
+  ["MERGE_HEAD", "a merge in progress"],
+  ["CHERRY_PICK_HEAD", "a cherry-pick in progress"],
+  ["REVERT_HEAD", "a revert in progress"]
+]);
+
 /**
- * A copy no longer listed goes only when nothing in it is unsaved: a clean
- * worktree with no commit its main lacks.
+ * The work in one copy that its repository does not hold, read without the
+ * network, as a person reads it: uncommitted files, stashes, commits on HEAD
+ * or any branch that its main (as recorded, fetched or observed) lacks, and an
+ * unfinished rebase, merge, cherry-pick or revert. Files Git ignores are not
+ * work. A copy whose folder is gone holds none; one that cannot be read
+ * counts as holding work, so nothing treats it as safe to lose.
+ * @returns {Promise<string>} empty when it holds no work
  */
-async function copyHoldsNoWork(copy, runCommand) {
-  const roots = [path.dirname(copy.path), copy.path];
-  if (!(await lstat(copy.path).catch(() => null))?.isDirectory()) return true;
-  const status = await runGit(copy.path, ["status", "--porcelain=v1", "--untracked-files=normal"], roots, { runCommand });
-  if (status) return false;
-  return await runGit(copy.path, ["rev-list", "--count", `${copy.canonicalCommit}..HEAD`], roots, { runCommand }) === "0";
+async function copyWork(copy, runCommand) {
+  if (!(await lstat(copy.path).catch(() => null))?.isDirectory()) return "";
+  const git = (args) => runGit(copy.path, args, [path.dirname(copy.path), copy.path], { runCommand });
+  try {
+    const count = (output) => output.split("\n").filter(Boolean).length;
+    const [status, stashes, commits, gitDir] = await Promise.all([
+      git(["status", "--porcelain=v1", "--untracked-files=all"]),
+      git(["stash", "list"]),
+      git(["rev-list", "--count", "HEAD", "--branches", "--not", copy.canonicalCommit, "--remotes", "--glob=refs/vibe64/canonical/*"]),
+      git(["rev-parse", "--absolute-git-dir"])
+    ]);
+    const work = [];
+    if (count(status)) work.push(counted(count(status), "uncommitted file", "uncommitted files"));
+    if (count(stashes)) work.push(counted(count(stashes), "stash", "stashes"));
+    if (Number(commits)) work.push(counted(Number(commits), "commit its main lacks", "commits its main lacks"));
+    for (const [marker, description] of UNFINISHED_GIT_OPERATIONS) {
+      if (!work.includes(description) && await lstat(path.join(gitDir, marker)).catch(() => null)) work.push(description);
+    }
+    return work.length < 2 ? work.join("") : `${work.slice(0, -1).join(", ")} and ${work.at(-1)}`;
+  } catch (error) {
+    return `work that could not be checked (${normalizeText(error?.message) || "Git could not read it"})`;
+  }
+}
+
+/**
+ * Prepare never replaces a copy: a recorded copy whose folder the list now
+ * gives to another repository of the same name refuses it before anything
+ * changes. Such a copy whose folder is gone holds nothing, so its record goes.
+ * @returns {Promise<object[]>} the recorded copies Prepare keeps working with
+ */
+async function refuseChangedRepositories({ connections, recorded, runCommand }) {
+  const kept = [];
+  for (const copy of recorded) {
+    const replacement = connections.find(({ fullName }) =>
+      fullName !== copy.repository && connectedRepositoryName(fullName) === copy.name)?.fullName;
+    if (!replacement) {
+      kept.push(copy);
+    } else if ((await lstat(copy.path).catch(() => null))?.isDirectory()) {
+      const work = await copyWork(copy, runCommand);
+      throw saveError(
+        `Connected repository ${copy.name} now names ${replacement}, but this session's copy at ${copy.path} is a clone of ` +
+        `${copy.repository}${work ? ` and holds ${work}` : ""}. Nothing was changed. Save any work in it, move the folder away, then prepare again.`,
+        "vibe64_connected_copy_repository_changed",
+        { connectedRepository: copy.name, repository: copy.repository, replacement }
+      );
+    }
+  }
+  return kept;
 }
 
 /**
  * Prepare's part: a copy for every listed repository that has none, from its
  * default branch, through a local GitHub mirror of it when one exists and then
- * dissociated from it. An existing copy is never fetched, reset or replaced.
- * A copy whose repository is no longer listed is removed only when it holds no
- * work. Each new copy is recorded as soon as it exists.
+ * dissociated from it. An existing copy is never fetched, reset or replaced
+ * (`refuseChangedRepositories`). A copy whose repository is no longer listed is
+ * removed only when it holds no work (`copyWork`). Each new copy is recorded as
+ * soon as it exists.
  * @param {object} input
  * @param {object} input.commandOptions the clones' GitHub credentials, with their runCommand
  * @param {Array<{ fullName: string }>} input.connections the listed repositories, in order
@@ -211,7 +271,7 @@ async function prepareConnectedCopies({
   if (!sourcePath) {
     throw saveError("This session has no source checkout to keep connected repositories beside.", "vibe64_connected_copy_source_missing");
   }
-  const recorded = sessionConnectedCopies(session);
+  const recorded = await refuseChangedRepositories({ connections, recorded: sessionConnectedCopies(session), runCommand });
   const copies = [];
   const lines = [];
   const unlisted = () => recorded.filter(copy => !connections.some(({ fullName }) => fullName === copy.repository));
@@ -249,12 +309,13 @@ async function prepareConnectedCopies({
     }
   }
   for (const copy of unlisted()) {
-    if (await copyHoldsNoWork(copy, runCommand)) {
+    const work = await copyWork(copy, runCommand);
+    if (!work) {
       await rm(copy.path, { force: true, recursive: true });
       lines.push(`[Connected] ${copy.name} removed; it is no longer listed.`);
     } else {
       copies.push(copy);
-      lines.push(`[Connected] ${copy.name} kept: it is no longer listed but has unsaved work. Save it, then prepare again.`);
+      lines.push(`[Connected] ${copy.name} kept: it is no longer listed but holds ${work}. Save it or move it away, then prepare again.`);
     }
   }
   await writeCopies(copies);

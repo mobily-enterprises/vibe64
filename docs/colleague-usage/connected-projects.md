@@ -76,6 +76,9 @@ signing in. A connected GitHub account still supplies repository access.
 **Remove** removes an entry from the draft. Saving that removal deletes no work:
 a session's next **Prepare workspace** removes its copy of that repository only
 when the copy holds no unsaved work. An empty saved list remains authoritative.
+Replacing an entry with another repository of the same name leaves a session's
+copy alone too: its next preparation stops until that copy is moved away; see
+[Work in connected repositories](connected-repositories.md#prepare-workspace-makes-the-missing-copies).
 
 If another edit changed the file, saving refuses to overwrite it. Review your
 draft, use **Reload saved list**, and reapply the intended edits. A malformed

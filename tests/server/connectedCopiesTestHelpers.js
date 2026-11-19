@@ -90,18 +90,19 @@ async function fixture(t) {
   };
 }
 
-/** A GitHub repository `example/<name>` with one commit on its default branch, and a seed clone for peers. */
-async function githubRepository(f, name, { branch = "main" } = {}) {
-  const bare = path.join(f.root, "github", "example", `${name}.git`);
-  const seed = path.join(f.root, "seeds", name);
+/** A GitHub repository `<owner>/<name>` with one commit on its default branch, and a seed clone for peers. */
+async function githubRepository(f, name, { branch = "main", owner = "example" } = {}) {
+  const bare = path.join(f.root, "github", owner, `${name}.git`);
+  const seed = path.join(f.root, "seeds", owner, name);
   await git(f.root, ["init", "--bare", `--initial-branch=${branch}`, bare]);
   await git(f.root, ["init", `--initial-branch=${branch}`, seed]);
   await git(seed, ["remote", "add", "origin", bare]);
   await writeFile(path.join(seed, `${name}.txt`), "initial\n");
   await git(seed, ["add", "."]);
-  await git(seed, ["commit", "-m", "initial"]);
+  // Repositories of one name under different owners have histories of their own.
+  await git(seed, ["commit", "-m", `initial ${owner}/${name}`]);
   await git(seed, ["push", "origin", `HEAD:${branch}`]);
-  return { bare, base: await git(seed, ["rev-parse", "HEAD"]), branch, name, seed };
+  return { bare, base: await git(seed, ["rev-parse", "HEAD"]), branch, fullName: `${owner}/${name}`, name, seed };
 }
 
 /** Someone else's saved work on the repository's main (or another branch). */
@@ -120,7 +121,7 @@ function remoteMain(repository) {
 function prepare(f, names, { mirrorFor, requests = null } = {}) {
   return prepareConnectedCopies({
     commandOptions: { runCommand: f.github(requests) },
-    connections: names.map(name => ({ fullName: `example/${name}` })),
+    connections: names.map(name => ({ fullName: name.includes("/") ? name : `example/${name}` })),
     mirrorFor,
     ownRepository: "example/project",
     runCommand: f.plain,

@@ -150,9 +150,14 @@ else (`cloneCanonicalSource`). It checks out `vibe64/<sessionId>`, removes the
 cloned default branch like any new source and records the copy at once. It never
 fetches, resets or replaces an existing copy, and refuses the project's own
 repository, an unrecorded folder at the copy's path and a recorded copy whose
-folder is missing. A copy no longer listed is removed only when its worktree is
-clean and it has no commit beyond its canonical commit. Each repository adds one
-line to the preparation output.
+folder is missing. Before anything changes, `refuseChangedRepositories` refuses a
+recorded copy whose folder the list now gives to another repository of the same
+name (`vibe64_connected_copy_repository_changed`, naming its work) and drops the
+record of one whose folder is gone. A copy no longer listed is removed only when
+`copyWork` finds no work: no uncommitted file or stash, no commit on HEAD or any
+branch that its canonical commit, remote branches or observed canonical refs
+lack, and no unfinished rebase, merge, cherry-pick or revert. Each repository
+adds one line to the preparation output.
 
 Save (`saveConnectedCopies`) first runs the update check for every copy: a copy
 behind its main refuses with `vibe64_session_save_update_required` (details
