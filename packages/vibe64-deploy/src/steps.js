@@ -9,17 +9,17 @@
 //   4. each internal service, then each public one: a service that runs a release is first linked to each resource
 //      it isn't linked to at the provider, so the instances its next release starts have them however soon the
 //      provider starts them (one that reuses a build starts them as the refresh starts: a production Deploy, 18 Nov);
-//      a service to be handed a release is then given its settings where they differ from those it was given, and
-//      that refresh waited for, so the release's instances start with them (the version it runs restarts with them
-//      first). Handed the release first, a release that failed for a setting's value (an app refusing it as it boots)
-//      failed again at each Deploy with the value changed, which never reached the settings (a production Deploy, 19
-//      Nov). Where the provider names the settings a service holds (`held`: mobilynet takes only those the release it
-//      runs declares), only those go ahead, and a name new to it follows the release (6): a production Deploy adding
-//      one (19 Nov) was refused it. A new release requiring one the service doesn't hold fails the Deploy before any
-//      change, naming the fix (such a provider's release brings no settings). A provider may still refuse settings
-//      the release the service runs doesn't take (one only it requires, a first release under way): its adapter
-//      refuses them SETTINGS_NEED_RELEASE. Those, and settings that didn't go live on the version it runs, follow the
-//      release (6), as a kept release's do;
+//      a service to be handed a release is then given all its settings where they differ from those it was given,
+//      names new to it among them, and that refresh waited for, so the release's instances start with them (the
+//      version it runs restarts with them first). Handed the release first, a release that failed for a setting's value
+//      (an app refusing it as it boots) failed again at each Deploy with the value changed, which never reached the
+//      settings (a production Deploy, 19 Nov). A release declares only what the Stack names (a Production Env entry is
+//      no part of it), so a provider must take a name the release a service runs doesn't declare, as mobilynet does
+//      (decided 19 Nov); a new release requiring one (a new generated secret, a new Reaches) then finds it given. A setting
+//      a service requires that the Production Env has no value for fails the Deploy before any change, naming it. A
+//      provider may still refuse settings the release the service runs doesn't take (one only it requires, a first
+//      release under way): its adapter refuses them SETTINGS_NEED_RELEASE. Those, and settings that didn't go live on
+//      the version it runs, follow the release (6), as a kept release's do;
 //      its release is uploaded, then its service made (internal: no routes; public: routed at the domain, with a
 //      connection to each service it reaches) or handed the release and, while that refresh is open, set to the count
 //      chosen (a provider's refresh may roll to the count the service has as it rolls, as mobilynet's does, so it starts
@@ -40,11 +40,12 @@
 //      carries the migrations, once, unless the database ran that code's (the record's `migrated`);
 //   5. a resource the Stack no longer names is unlinked from every service that stays, now that none runs a release
 //      naming it, and kept running with its data;
-//   6. each service's settings (package.js settingValues) when they differ from those it was given (a service handed
-//      a release got them before it, in 4, unless they had to follow it), the services it reaches, then its size and
-//      (when it was handed no release) its count as the plan's choices say: after every move ended, since a provider
-//      may refuse a settings replace while a link made ahead of a refresh is open (mobilynet does). A count or size
-//      change alone is only that, and the record's choices follow each, so the next plan starts from what runs. A
+//   6. each service's settings (package.js settingValues) when they differ from those it was given (one that kept its
+//      release gets them here, so a change of the Production Env alone is a settings refresh of the release it runs;
+//      one handed a release got them before it, in 4, unless they had to follow it), the services it reaches, then its
+//      size and (when it was handed no release) its count as the plan's choices say: after every move ended, since a
+//      provider may refuse a settings replace while a link made ahead of a refresh is open (mobilynet does). A count or
+//      size change alone is only that, and the record's choices follow each, so the next plan starts from what runs. A
 //      settings refresh that fails lets go of the settings the record says the service was given (the provider kept
 //      those before), so the next Deploy gives them again;
 //   7. a service the Stack no longer names is deleted (its links end with it);
@@ -83,7 +84,7 @@ import { MIGRATED_NOTE, migrationDue, migrationsOf, noteHandOver, noteTask } fro
 import { planOf, stableJson } from "./plan.js";
 import { LABEL, labelsFor } from "./record.js";
 import { reporterOf, sentence, stepEvent, stepWords } from "./report.js";
-import { heldValues, settingValues } from "./package.js";
+import { requiredWithoutValue, settingValues } from "./package.js";
 
 const LEASE_SECONDS = 600;
 // An adapter's refusal of a link its provider takes only with the service's new release under way: the release the
@@ -227,19 +228,13 @@ function nextStep({ plan, needs, record, observed, release }) {
   const keeps = (service, item, thing) => Boolean(thing) && item?.release?.digest === release.digests[service.id]
     && thing.version === item.release.version && !thing.lastError;
 
-  // Where the provider names the settings a service holds (`held`, those the release it runs takes), it gives settings
-  // only for the release a service runs and a release only those it holds: a new release can't bring one it requires
-  // that the service doesn't hold, so the Deploy says so before it changes anything (one made again gets all).
+  // A setting a service requires that the Production Env has no value for (a generated secret it doesn't hold) would
+  // fail the release or the App Service requiring it, so the Deploy says so before it changes anything.
   for (const service of needs.services) {
-    const item = itemOf("service", service.id);
-    const thing = thingOf(item);
-    const handed = thing?.version && Array.isArray(thing.held) && thing.exposure === service.exposure && !run.services[service.id]?.version;
-    const missing = handed && !keeps(service, item, thing)
-      ? Object.entries(release.settings[service.id]).filter(([name, { required }]) => required && !thing.held.includes(name)).map(([name]) => name) : [];
+    const missing = requiredWithoutValue(release.settings[service.id], release.env, service.reaches.map((reach) => reach.setting));
     if (missing.length > 0) {
-      return { kind: "failed", message: `${service.id}'s new release requires ${missing.join(", ")}, which ${service.id} doesn't hold, and `
-        + "its provider gives a service settings only for the release it runs, so a release can't bring one it requires: take "
-        + `Production offline, then deploy. ${service.id} is made again with every setting; its databases and files are kept.` };
+      return { kind: "failed", message: `${service.id} requires ${missing.join(", ")}, which the Production Env has no value for: `
+        + `give ${missing.length === 1 ? "it a value" : "each a value"} in the Production Env, then deploy.` };
     }
   }
 
@@ -292,12 +287,11 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (first) return { kind: "link", resource: first.id, id: itemOf("resource", first.id).id, service: service.id, serviceId: thing.id, beforeRelease: true };
       if (keeps(service, item, thing)) return { kind: "keepRelease", service: service.id };
       if (!thing) return { kind: "uploadRelease", service: service.id, id: null };
-      // Its settings before its release, where they changed, so the release's instances start with them: where the
-      // provider names those it holds, only those, a fixed value among them; a name new to it, one the release it runs
-      // doesn't take, and those that didn't go live on it follow the release (6).
+      // All its settings before its release, where they changed, names new to it among them, so the release's instances
+      // start with them; those the release it runs doesn't take, and those that didn't go live on it, follow the
+      // release (6).
       const values = state.settingsAfterRelease ? null : valuesOf(service, { record, release }, byId);
-      const ahead = values && thing.version && Array.isArray(thing.held) ? heldValues(values, thing.held) : values;
-      if (ahead && ahead.hash !== item.settingsHash) return { kind: "putSettings", service: service.id, id: thing.id, values: ahead, beforeRelease: true };
+      if (values && values.hash !== item.settingsHash) return { kind: "putSettings", service: service.id, id: thing.id, values, beforeRelease: true };
       return { kind: "releaseService", service: service.id, id: thing.id, ...migrateTask(service.id) };
     }
     if (!thing) {

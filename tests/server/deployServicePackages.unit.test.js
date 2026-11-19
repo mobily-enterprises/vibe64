@@ -10,7 +10,7 @@ import { vibe64DeploymentInspection } from "../../packages/vibe64-genesis/src/se
 import { preferredAlternative, resourceKindIsDatabase } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
 import { servicePackages, servicePackagesProblem } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
 import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
-import { envEntryProblem, settingsPerService } from "../../packages/vibe64-deploy/src/package.js";
+import { envEntryProblem, settingsPerService, stackSettingsPerService } from "../../packages/vibe64-deploy/src/package.js";
 import { MEMOBOT_COMPUTERS_PACKAGES, MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploymentServices.js";
 
 // The package of a two-service app: one declaration per service at mobilynet, the settings each service is given, and
@@ -38,16 +38,18 @@ function declared(entries) {
   return Object.fromEntries(Object.entries(entries).map(([name, [secret, required]]) => [name, { type: "string", secret, required }]));
 }
 
-test("each service is its own declaration: its name, its serve script, its packages and machine features, every resource's need and its own settings", () => {
+test("each service is its own declaration: its name, its serve script, its packages and machine features, every resource's need and the settings its Stack names", () => {
   const settings = settingsPerService(NEEDS, ENV);
   const own = Object.fromEntries(Object.keys(PRODUCTION_OWN).map((name) => [name, [false, true]]));
   const generated = Object.fromEntries(GENERATED.map((name) => [name, [true, true]]));
-  // The setup code and the reached service's address only on web; a web-only secret never on computers.
-  assert.deepEqual(settings.web, Object.fromEntries(Object.entries({
-    ...own, ...generated, AUTH_LOCAL_SETUP_CODE: [true, false], MEMOBOT_COMPUTERS_URL: [false, true],
-    OPENAI_API_KEY: [true, false], STRIPE_SECRET_KEY: [true, false], MEMOBOT_OWNERS: [false, false]
-  }).map(([name, [secret, required]]) => [name, { secret, required }])));
+  const flags = (entries) => Object.fromEntries(Object.entries(entries).map(([name, [secret, required]]) => [name, { secret, required }]));
+  // What each service is given: the setup code and the reached service's address only on web, a web-only secret never
+  // on computers, and each Production Env entry the services it names.
+  const webStack = { ...own, ...generated, AUTH_LOCAL_SETUP_CODE: [true, false], MEMOBOT_COMPUTERS_URL: [false, true] };
+  assert.deepEqual(settings.web, flags({ ...webStack, OPENAI_API_KEY: [true, false], STRIPE_SECRET_KEY: [true, false], MEMOBOT_OWNERS: [false, false] }));
   assert.deepEqual(Object.keys(settings.computers), [...Object.keys(own), ...GENERATED, "MEMOBOT_MAX_COMPUTERS", "MEMOBOT_GVISOR_PLATFORM"]);
+  // What each release declares: the Stack's alone, with no Production Env entry.
+  assert.deepEqual(stackSettingsPerService(NEEDS), { web: flags(webStack), computers: flags({ ...own, ...generated }) });
 
   const { declarations, scripts } = servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: NEEDS, settings });
   const shared = DEPLOYMENT.packages;
@@ -66,17 +68,16 @@ test("each service is its own declaration: its name, its serve script, its packa
     ...common("memobot-web"),
     requiredPackages: [...new Set([...base, ...shared])],
     services: [{ name: "web", command: "bash vibe64-app/serve-web.sh", user: "memobot-web", port: 3000, healthPath: "/api/health" }],
-    settings: declared({
-      ...own, ...generated, AUTH_LOCAL_SETUP_CODE: [true, false], MEMOBOT_COMPUTERS_URL: [false, true],
-      OPENAI_API_KEY: [true, false], STRIPE_SECRET_KEY: [true, false], MEMOBOT_OWNERS: [false, false]
-    })
+    settings: declared(webStack)
   });
   assert.deepEqual(declarations.computers, {
     ...common("memobot-computers"),
     requiredPackages: [...new Set([...base, ...shared, ...MEMOBOT_COMPUTERS_PACKAGES])],
     services: [{ name: "computers", command: "bash vibe64-app/serve-computers.sh", user: "memobot-computers", port: 3000, healthPath: "/api/health" }],
-    settings: declared({ ...own, ...generated, MEMOBOT_MAX_COMPUTERS: [false, false], MEMOBOT_GVISOR_PLATFORM: [false, false] })
+    settings: declared({ ...own, ...generated })
   });
+  // The Production Env is no part of a release: without its entries, or with others, the declarations are the same.
+  assert.deepEqual(servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS) }).declarations, declarations);
   // The shared packages once: jq is the base's and the Stack's.
   assert.equal(declarations.computers.requiredPackages.filter((name) => name === "jq").length, 1);
   assert.equal(declarations.computers.requiredPackages.length, 4 + 2 + shared.length - 1 + MEMOBOT_COMPUTERS_PACKAGES.length);
@@ -88,12 +89,13 @@ test("each service is its own declaration: its name, its serve script, its packa
 });
 
 test("a service given more settings than mobilynet takes, packages it can't take, or an Env entry Production sets itself is refused, naming the service", () => {
-  // 100 settings is mobilynet's own limit per declaration: computers has 10 without Env entries, so 90 of its own fit
-  // (100 settings, packaged) and 91 don't, naming the limit.
+  // 100 settings is mobilynet's own limit per declaration, which a service's settings are held to with its Env entries:
+  // computers has 10 without them, so 90 of its own fit (100 settings, packaged, its declaration the Stack's 10) and 91
+  // don't, naming the limit.
   const extra = (count) => Array.from({ length: count }, (_, at) => ({ key: `COMPUTERS_${at}`, secret: false, services: ["computers"] }));
   assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(90))), null);
   const hundred = servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(90)) });
-  assert.equal(Object.keys(hundred.declarations.computers.settings).length, 100);
+  assert.equal(Object.keys(hundred.declarations.computers.settings).length, 10);
   const over = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(91)));
   assert.equal(over.code, "vibe64_production_too_many_settings");
   assert.match(over.message, /^mobilynet takes at most 100 settings for a service and service computers would need 101\./u);

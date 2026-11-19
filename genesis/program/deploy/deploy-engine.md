@@ -73,11 +73,20 @@ archive with that service's `mobilynet.json` added at its root
 (`servicePackages`, `serviceUpload`). Each declaration requires the base's
 packages, the runtime's, the shared Packages and the service's own, each once
 and at most 200; declares the machine features its sandbox allowances need, a
-need for every resource, and the settings that service is given
-(`settingsPerService`): Production's own and the generated secrets every
-service, the setup code the public one, each Reaches setting the service that
-reaches, and each Production Env entry the services it names (the public one
-when it names none), at most 100 per service, mobilynet's own limit.
+need for every resource, and the settings the Stack names for that service
+(`stackSettingsPerService`), with their types and required flags: Production's
+own and the generated secrets every service, the setup code the public one, and
+each Reaches setting the service that reaches. A Production Env entry is never
+declared. Each service is given its declared settings and each Production Env
+entry the services it names (the public one when it names none;
+`settingsPerService`), at most 100 in all per service, mobilynet's own limit
+for a declaration; mobilynet takes an entry no release declares in a settings
+replace, as a plain setting or a secret (decided 19 Nov). So a release is made
+of the code and the Stack alone (`releaseDigest`), and adding, changing or
+removing a Production Env entry is a settings change of the release a service
+runs, never a new release or build: until 19 Nov every entry was declared, and
+adding one made mobilynet build the same code again (about four minutes for a
+production web service, for one name).
 
 Each serve script exports the settings mobilynet gave the instance, the
 resources' bound names, the instance facts, the service's own Setting lines,
@@ -251,28 +260,28 @@ making it twice. In order:
      release whose new code needs a value its running version refuses still
      fails: that value would have to go in the release's own refresh, which
      mobilynet has no call for.
-   - mobilynet takes a service's settings only for the release it runs: it
-     checks a replace against that release's declaration, refusing a setting
-     the release doesn't declare `422 validation_failed`, one lacking a setting
-     it requires `422 settings_missing`, and any replace while the service's
-     first release is still under way `409 invalid_state`. A release brings no
-     settings: its refresh starts from those the service holds and, once built,
-     checks them against the new declaration, failing `settings_missing` when
-     one it requires is missing and `validation_failed` when the service holds
-     one it doesn't declare. So where the provider names the settings a service
-     holds (mobilynet's service read does, `held`; each is one the release it
-     runs declares), only those go ahead of the release (`heldValues`), a fixed
-     value among them, and a name new to the service follows the release (6).
-     A production Deploy adding a Production Env entry (19 Nov) was refused it
-     when the engine gave every setting ahead. A name the new release no longer
-     declares is left out ahead, so the release doesn't find it held.
-   - A new release requiring a setting the service doesn't hold (a new
-     generated secret, a new Reaches) can't be handed at such a provider in any
-     order, so the Deploy fails before any change, naming the fix: take
-     Production offline, then deploy; services made again get every setting,
-     and their databases and files are kept. Bringing one with a release would
-     need mobilynet to take a settings replace against a held release refresh,
-     as it takes a link (M14).
+   - mobilynet checks a settings replace against the release a service runs
+     and takes a name that release doesn't declare as a plain setting or a
+     secret, text of up to 4096 characters, but never one a need's link sets
+     (decided 19 Nov). It refuses a setting the release declares otherwise (a
+     secret given as a plain setting) `422 validation_failed`, one lacking a
+     setting it requires `422 settings_missing`, and any replace while the
+     service's first release is still under way `409 invalid_state`. A release
+     brings no settings: its refresh starts from those the service holds and,
+     once built, checks them against the new declaration, failing
+     `settings_missing` when one it requires is missing. So every setting goes
+     ahead of the release, names new to the service among them: a Production
+     Env entry, and one a new release requires (a new generated secret, a new
+     Reaches), which the release's refresh then finds given. Until 19 Nov
+     mobilynet refused a name the running release doesn't declare, so a name
+     new to a service followed its release, and a new release requiring one
+     could be handed only after Production was taken offline.
+   - A setting a service requires that the Production Env has no value for (a
+     generated secret it doesn't hold; Production's own and the Reaches
+     settings have theirs from Production and the provider) would fail the
+     release or the App Service requiring it, so the Deploy fails before any
+     change, naming it and the fix: give it a value in the Production Env, then
+     deploy.
    - The mobilynet adapter answers its refusals of settings ahead with the
      engine's own code, `settings_need_release`, and those settings then follow
      the release. Settings whose refresh fails on the version the service runs
@@ -323,10 +332,11 @@ making it twice. In order:
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
    setting the reached service's private address, the Production Env's values
-   for the names it declares) where they differ from those it was given: a
-   service that kept its release, one given names new to it, or one whose
-   settings had to follow its release (4). Then the services it reaches, its size and (when it was handed
-   no release) its count, only once every move ended: mobilynet refuses a
+   for the names it is given) where they differ from those it was given: a
+   service that kept its release, so that a change of the Production Env alone
+   is a settings refresh of the release it runs, or one whose settings had to
+   follow its release (4). Then the services it reaches, its size and (when it
+   was handed no release) its count, only once every move ended: mobilynet refuses a
    settings replace while a link made ahead of an open refresh stands. The
    record's choices follow each count or size the Deploy sets, so a Deploy that
    fails after one leaves the next Plan starting from what runs. A settings
@@ -343,20 +353,24 @@ only resized when its chosen size changes, and is never made again, restarted or
 given a new setting; a link is made once and kept while the provider holds it,
 so the same server keeps the same login, and a Deploy makes one again only for a
 link the provider ended. Only an App Service whose release changed (its code,
-its declaration) or whose last release failed is handed a release, and so gets
-new machines; the others keep theirs. One whose settings changed with its
-release gets them twice: the version it runs restarts with the new values of the
-names it holds, then the release starts. A Deploy of unchanged code and Stack
-sends the provider nothing but its lease. The migrations run at most once per
+its declaration: the Stack, never the Production Env) or whose last release
+failed is handed a release, and so gets new machines; the others keep theirs.
+One whose Production Env entries alone changed keeps its release and gets a
+settings refresh of it. One whose settings changed with its release gets them
+twice: the version it runs restarts with the new values, then the release
+starts. A Deploy of unchanged code, Stack and Production Env sends the provider
+nothing but its lease. The migrations run at most once per
 Deploy, and not at all when no release is handed or the database already ran
 this code's. The engine's tests hold the provider to these exact writes
 (deploySteps: an unchanged redeploy, one of two services changed, a failed
 release handed again, the migrations run, skipped and failing, a secret's new
-value given before the release it fixes, a name new to a service following its
-release, a fixed value going ahead beside one, a new required setting refused
-before any change, settings that follow the release when the release a service
-runs fails with them, and a Deploy resumed after such settings failed or while
-they still ran). Two parts rest on mobilynet: a link made ahead of a failed
+value given before the release it fixes, a Production Env entry added, changed
+or removed on unchanged code given as a settings refresh alone with the same
+release digest and no upload or release, a new generated secret going ahead of
+the release requiring it, a fixed value going ahead beside a new entry, a
+required setting the Production Env has no value for refused before any change,
+settings that follow the release when the release a service runs fails with
+them, and a Deploy resumed after such settings failed or while they still ran). Two parts rest on mobilynet: a link made ahead of a failed
 refresh ends with it (M14), so the next Deploy makes it again with a new login;
 and the migrations run once only where the provider runs a release's task.
 

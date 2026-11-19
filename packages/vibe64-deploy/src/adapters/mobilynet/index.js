@@ -50,11 +50,13 @@ function linkRefusal(error) {
 /**
  * A replace of a service's settings mobilynet takes only with its new release, as the engine's own refusal
  * (SETTINGS_NEED_RELEASE): mobilynet checks a replace against the release the service runs (serviceFields.js
- * checkSettings), so it refuses `422 validation_failed` one naming a setting only the new release declares (or declares
- * otherwise), `422 settings_missing` one lacking a setting only the release it runs requires, and `409 invalid_state`
- * one asked while the service's first release is still under way. The engine then gives them after the release, which
- * is also where a value that fits no release is refused again, as mobilynet refused it. One tried again later (a
- * service busy) is mobilynet's, as it gave it.
+ * checkSettings). It takes a name that release doesn't declare as a plain setting or a secret (decided 19 Nov), so a
+ * Production Env entry, which no release declares, goes in a replace whatever the release; it refuses `422
+ * validation_failed` one giving a setting the release declares otherwise (a secret as a plain setting), `422
+ * settings_missing` one lacking a setting only the release it runs requires, and `409 invalid_state` one asked while the
+ * service's first release is still under way. The engine then gives them after the release, which is also where a
+ * value that fits no release is refused again, as mobilynet refused it. One tried again later (a service busy) is
+ * mobilynet's, as it gave it.
  * @param {any} error
  */
 function settingsRefusal(error) {
@@ -135,8 +137,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
   /**
    * Every App Service and hosted service of the project, as the plan, the steps and the record read them: `{ id, name,
    * kind, labels, size, instances, ... }`, a service with its exposure, version, refresh, healthy count, internal
-   * name, connections, last error and the names of the settings and secrets it holds (`held`: mobilynet takes only
-   * those the release it runs declares, a link's among them; null when it doesn't name them), a resource with its kind, state and the links mobilynet holds of it (`links`,
+   * name, connections and last error, a resource with its kind, state and the links mobilynet holds of it (`links`,
    * null for a hosted service Vibe64 didn't make).
    */
   async function inventory() {
@@ -158,8 +159,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         healthy: one.instances?.healthy ?? 0,
         internalName: one.internalName ?? null,
         connections: (one.connections ?? []).map(({ to, port }) => ({ to, port })),
-        lastError: one.lastError ?? null,
-        held: Array.isArray(one.settings) && Array.isArray(one.secrets) ? [...one.settings, ...one.secrets] : null
+        lastError: one.lastError ?? null
       })),
       ...hosted.map((one, index) => ({
         id: one.id,

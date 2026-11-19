@@ -14,6 +14,9 @@ const LIMITS = Object.freeze({ instances: 100, routes: 20, connections: 20, minD
 const HEALTH_CHECK_DEFAULTS = Object.freeze({ intervalSeconds: 5, timeoutSeconds: 2, healthyAfter: 2, unhealthyAfter: 3 });
 const HEALTH_CHECK_BOUNDS = Object.freeze({ intervalSeconds: [2, 60], timeoutSeconds: [1, 30], healthyAfter: [1, 10], unhealthyAfter: [1, 10] });
 const MAX_SECRET = 4096;
+// The names mobilynet sets itself for a Vibe64 app, which no replace sets: its needs' settings (`V64_<RESOURCE>_<FIELD>`)
+// and the instance facts read from `_mobilynet` (`V64_INSTANCE_ID`...).
+const MOBILYNET_SET = /^V64_/u;
 // The refreshes that keep the release a service runs (serviceEngine.js SAME_RELEASE; this stand-in has no base change).
 const SAME_RELEASE = Object.freeze(["settings", "size"]);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -135,6 +138,25 @@ function valuesOf(invalid, input) {
   }
   if (Object.keys(errors).length > 0) return { refusal: invalid(errors) };
   return { values: { settings: { ...(isRecord(input.settings) ? input.settings : {}) }, secrets: { ...(isRecord(input.secrets) ? input.secrets : {}) } } };
+}
+
+/**
+ * The field errors of a replace's names the release a service runs doesn't declare (mobilynet's rule, decided 19 Nov):
+ * each is taken as a plain setting or a secret, its value text of up to 4096 characters; a name mobilynet sets itself
+ * (V64_*) or a need's link sets is refused, as before. Null when none is refused.
+ * @param {string[]} declared the names the release declares, its needs' settings among them
+ * @param {string[]} linked the names a need's link sets, a refresh ahead's too
+ * @param {{ settings: Record<string, unknown>, secrets: Record<string, unknown> }} target the settings and secrets replaced
+ */
+function undeclaredErrors(declared, linked, target) {
+  const errors = {};
+  for (const field of ["settings", "secrets"]) {
+    for (const [name, value] of Object.entries(target[field]).filter(([one]) => !declared.includes(one))) {
+      if (MOBILYNET_SET.test(name) || linked.includes(name)) errors[`${field}.${name}`] = "The app declares no such setting.";
+      else if (typeof value !== "string" || value.length > MAX_SECRET) errors[`${field}.${name}`] = `Text of up to ${MAX_SECRET} characters.`;
+    }
+  }
+  return Object.keys(errors).length > 0 ? errors : null;
 }
 
 /** The required settings a declaration declares that the values lack. */
@@ -446,4 +468,4 @@ function createStandInServiceEngine(world, parts) {
   });
 }
 
-export { INSTANCE_SETTING, createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, valuesOf };
+export { INSTANCE_SETTING, createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, undeclaredErrors, valuesOf };

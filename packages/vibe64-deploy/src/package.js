@@ -117,10 +117,32 @@ function withRootFile(archive, name, text) {
 }
 
 /**
- * What each service is given: Production's own settings and the generated secrets every
- * service, the setup code the public one, each Reaches setting the service that reaches, and each Production Env entry
- * the services it names (the public one when it names none). Values are the deploy's; here each setting is
- * `{ secret, required }`. A resource's settings come from its link and are not here.
+ * What each service's release declares, from the Stack alone: Production's own settings and the generated secrets every
+ * service, the setup code the public one and each Reaches setting the service that reaches, each `{ secret, required }`.
+ * A resource's settings come from its link and are not here, nor is a Production Env entry: a release is made of the
+ * code and the Stack, so a change of the Env changes no release (settingsPerService adds the Env's entries).
+ * @param {object} needs needsOfStack's needs
+ * @returns {Record<string, Record<string, { secret: boolean, required: boolean }>>}
+ */
+function stackSettingsPerService(needs) {
+  const publicId = needs.services.find((service) => service.exposure === "public")?.id;
+  return Object.fromEntries(needs.services.map((service) => {
+    const settings = {};
+    const declare = (name, secret, required) => {
+      settings[name] ??= { secret, required };
+    };
+    for (const name of PRODUCTION_SETTINGS) declare(name, false, true);
+    for (const secret of needs.generatedSecrets) declare(secret, true, true);
+    if (needs.setupCode && service.id === publicId) declare(needs.setupCode, true, false);
+    for (const reach of service.reaches) declare(reach.setting, false, true);
+    return [service.id, settings];
+  }));
+}
+
+/**
+ * What each service is given: the settings its release declares (stackSettingsPerService) and each Production Env
+ * entry the services it names (the public one when it names none), an entry `{ secret, required: false }`. Values are
+ * the deploy's; a Deploy gives a service all of them in a settings replace, whether or not its release declares them.
  * @param {object} needs needsOfStack's needs
  * @param {Array<{ key: string, secret?: boolean, services?: string[] }>} [envRecords] the Production Env's entries
  * @returns {Record<string, Record<string, { secret: boolean, required: boolean }>>}
@@ -131,17 +153,11 @@ function settingsPerService(needs, envRecords = []) {
     const problem = envEntryProblem(record, needs);
     if (problem) throw packageError(`${problem} Remove it from the Production Env, then deploy.`, "vibe64_production_env_invalid");
   }
+  const declared = stackSettingsPerService(needs);
   return Object.fromEntries(needs.services.map((service) => {
-    const settings = {};
-    const declare = (name, secret, required) => {
-      settings[name] ??= { secret, required };
-    };
-    for (const name of PRODUCTION_SETTINGS) declare(name, false, true);
-    for (const secret of needs.generatedSecrets) declare(secret, true, true);
-    if (needs.setupCode && service.id === publicId) declare(needs.setupCode, true, false);
-    for (const reach of service.reaches) declare(reach.setting, false, true);
+    const settings = { ...declared[service.id] };
     for (const record of envRecords) {
-      if ((record.services ?? [publicId]).includes(service.id)) declare(record.key, record.secret === true, false);
+      if ((record.services ?? [publicId]).includes(service.id)) settings[record.key] ??= { secret: record.secret === true, required: false };
     }
     return [service.id, settings];
   }));
@@ -166,22 +182,20 @@ function settingValues({ declared, env, domain, trustedProxies, port, reached = 
   for (const [name, { secret }] of Object.entries(declared)) {
     if (typeof all[name] === "string") (secret ? secrets : settings)[name] = all[name];
   }
-  return hashedValues(settings, secrets);
-}
-
-/** A service's settings and secrets with the hash a Deploy compares them by. */
-function hashedValues(settings, secrets) {
   return { settings, secrets, hash: `sha256:${sha256Of(Buffer.from(JSON.stringify([sortedObject(settings), sortedObject(secrets)])))}` };
 }
 
 /**
- * Those of a service's values (settingValues) whose names it holds at its provider (`held`), with their own hash: what a
- * Deploy gives it ahead of a release, where the provider takes only those the release it runs declares.
- * @param {{ settings: Record<string, string>, secrets: Record<string, string> }} values @param {string[]} held
+ * The settings a service requires that the Production Env has no value for (a generated secret it doesn't hold): each
+ * required one but Production's own and the service's Reaches settings, whose values Production and the provider give.
+ * @param {Record<string, { required: boolean }>} declared the service's settings (settingsPerService)
+ * @param {Record<string, string>} env the Production Env's values by name
+ * @param {string[]} [reaches] the service's Reaches settings
  */
-function heldValues(values, held) {
-  const pick = (from) => Object.fromEntries(Object.entries(from).filter(([name]) => held.includes(name)));
-  return hashedValues(pick(values.settings), pick(values.secrets));
+function requiredWithoutValue(declared, env, reaches = []) {
+  return Object.entries(declared)
+    .filter(([name, { required }]) => required && !PRODUCTION_SETTINGS.includes(name) && !reaches.includes(name) && typeof env[name] !== "string")
+    .map(([name]) => name);
 }
 
 function sortedObject(value) {
@@ -229,9 +243,10 @@ export {
   archiveProblem,
   declaredSettingsOf,
   envEntryProblem,
-  heldValues,
   packArchive,
+  requiredWithoutValue,
   settingValues,
   settingsPerService,
+  stackSettingsPerService,
   withRootFile
 };

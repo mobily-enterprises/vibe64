@@ -1,5 +1,5 @@
 import { INSTANCE_SIZES, isRecord, labelsMatch, labelsOf, needSettings, pageOf, projectLabel, thingName } from "./catalogue.js";
-import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, valuesOf } from "./serviceEngine.js";
+import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, undeclaredErrors, valuesOf } from "./serviceEngine.js";
 import { createStandInServiceLogs } from "./serviceLogs.js";
 
 // mobilynet's App Services as its stand-in answers them (openApiServices.js, and its machines package's services.js,
@@ -16,8 +16,10 @@ import { createStandInServiceLogs } from "./serviceLogs.js";
 // larger is admitted by the project's spending cap and its vCPU and memory quotas, instances times size (M12, M13).
 // Faults: `instancesUnhealthy` (a refresh's new instances never get healthy, every one or those its function picks:
 // it fails `instance_never_healthy`), `noCapacity` (a count raise answers `409 no_capacity`) and `releaseBuildFails`.
+// A replace takes a name the release the service runs doesn't declare as a plain setting or a secret, text of up to
+// 4096 characters, but never one mobilynet sets itself (V64_*) or a need's link sets (undeclaredErrors).
 // STAND-IN ONLY: ids are the stand-in's own (`svc_s000123`), a connection makes no allow rule (`ruleId` null), a
-// release's settings are checked only for the required ones its declaration declares (a replace also for names it
+// release's settings are checked only for the required ones its declaration declares (a replace also for the names it
 // doesn't declare), unlinking a link made ahead queues a settings refresh rather than changing its refresh ahead, and a
 // service's route, before the service has a port, shows `{ host, tls, target }` alone.
 
@@ -389,8 +391,9 @@ function createStandInServices(world, { releases, network }) {
   /**
    * `PUT /v1/services/{id}/settings` (replaceServiceSettings): a need's settings are its link's alone, and kept, those
    * of the release its refresh ahead moves it to too (M14); the whole set is checked against the release it runs
-   * (serviceFields.js checkSettings), so after a link made ahead, whose settings that release doesn't declare, a
-   * replace is refused until the move ends.
+   * (serviceFields.js checkSettings), which takes a name it doesn't declare as a plain setting or a secret, but not a
+   * link's, so after a link made ahead, whose settings that release doesn't declare, a replace is refused until the
+   * move ends.
    */
   function putSettings(service, body) {
     const refused = unchangeable(service);
@@ -410,8 +413,8 @@ function createStandInServices(world, { releases, network }) {
     const target = { settings: { ...values.values.settings, ...picked(ahead.settings) }, secrets: { ...values.values.secrets, ...picked(ahead.secrets) } };
     if (service.version) {
       const declared = [...Object.keys(isRecord(declaration.settings) ? declaration.settings : {}), ...linkedNames(declaration)];
-      const undeclared = ["settings", "secrets"].flatMap((field) => Object.keys(target[field]).filter((name) => !declared.includes(name)).map((name) => `${field}.${name}`));
-      if (undeclared.length > 0) return invalid(Object.fromEntries(undeclared.map((key) => [key, "The app declares no such setting."])));
+      const errors = undeclaredErrors(declared, linked, target);
+      if (errors) return invalid(errors);
     }
     const changed = changeOrRefresh(service, { kind: "settings", target });
     if (changed.refusal) return changed.refusal;

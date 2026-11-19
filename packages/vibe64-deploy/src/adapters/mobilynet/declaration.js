@@ -10,7 +10,7 @@
 // reads, and check is `curl` asking the app's health path. Both are programs on the machine's PATH, outside the app's
 // folder. The app's own code runs only in its service, as its login.
 
-import { withRootFile } from "../../package.js";
+import { stackSettingsPerService, withRootFile } from "../../package.js";
 
 // Whether mobilynet runs a release's task once per refresh, after its build passed and before any instance starts (the
 // engine's ask of mobilynet, M-C: a declaration's `tasks`, a refresh asked with `task`). mobilynet has none yet, so a
@@ -29,7 +29,8 @@ const BUILD_SCRIPT = `${APP_SCRIPTS_FOLDER}/build.sh`;
 const DECLARATION_FILE = "mobilynet.json";
 // The port every service listens on, which a service it reaches and the load balancer ask.
 const SERVICE_PORT = 3000;
-// mobilynet's own limits: at most 100 settings in one declaration (its limit since 17 Nov 2026, where it was 50), and
+// mobilynet's own limits: at most 100 settings in one declaration (its limit since 17 Nov 2026, where it was 50), to
+// which the engine also holds all a service is given, its Production Env entries with those its release declares, and
 // app names (logins too) of at most 32 characters.
 const MAX_DECLARED_SETTINGS = 100;
 const APP_NAME_MAX = 32;
@@ -388,7 +389,8 @@ function declarationError({ code, message }) {
 /**
  * Why mobilynet can't take a package for these services, as `{ code, message }`, or null: a Deployment that isn't
  * ready, a runtime or sandbox allowance no package can declare yet, a health path check can't ask, a service's
- * packages mobilynet can't take, or a service given more settings than a declaration takes. Each names the service.
+ * packages mobilynet can't take, or a service given more settings than mobilynet's limit, its Production Env entries
+ * counted with those its release declares. Each names the service.
  * @param {any} deployment the Stack's Deployment section as public Vibe64 inspected it (v2)
  * @param {Record<string, Record<string, object>>} [settings] each service's settings (package.js settingsPerService)
  */
@@ -441,13 +443,17 @@ function servicePackagesProblem(deployment, settings = {}) {
 /**
  * mobilynet's package for each service of a Deployment: one declaration per service, named `<app>-<service>` and run
  * as a login of that name, which builds from the shared build script and runs its own serve script; every service
- * needs every resource. Refuses with servicePackagesProblem's reason.
+ * needs every resource. A declaration declares only the settings the Stack names for its service, with their types and
+ * required flags (package.js stackSettingsPerService), and a need per resource, whose settings its link gives: never a
+ * Production Env entry, which mobilynet takes in a settings replace as a setting or a secret the release doesn't
+ * declare. So a release is made of the code and the Stack alone, and a change of the Env is a change of settings, never
+ * a new release or build. Refuses with servicePackagesProblem's reason.
  * @param {object} options
  * @param {string} options.app the app's name (productionAppName)
  * @param {any} options.deployment the Stack's Deployment section as public Vibe64 inspected it (v2)
  * @param {object} options.needs needsOfStack's needs
  * @param {Record<string, Record<string, { secret: boolean, required: boolean }>>} options.settings each service's
- *   settings (package.js settingsPerService)
+ *   settings (package.js settingsPerService), counted against mobilynet's limit
  * @param {Record<string, string>} [options.defaults] Serve's own defaults beside the runtime's (the Stack's Environment
  *   defaults), which a setting overrides
  * @param {boolean} [options.releaseTasks] whether Migrate is each release's `migrate` task (the adapter's capability)
@@ -465,6 +471,7 @@ function servicePackages({ app, deployment, needs, settings, defaults = {}, rele
   // Like Heroku and Dokku, a Node app's service runs in production mode; only the service, so Prepare keeps the
   // devDependencies Build needs.
   const serveDefaults = { ...defaults, ...(runtimes.includes("node26") ? { NODE_ENV: "production" } : {}) };
+  const declared = stackSettingsPerService(needs);
   const declarations = {};
   const scripts = {};
   for (const service of deployment.services) {
@@ -477,7 +484,7 @@ function servicePackages({ app, deployment, needs, settings, defaults = {}, rele
       port: SERVICE_PORT,
       healthPath: service.readyWhen.path,
       runtimes,
-      settings: Object.fromEntries(Object.entries(settings[service.id] ?? {})
+      settings: Object.fromEntries(Object.entries(declared[service.id] ?? {})
         .map(([key, { secret, required }]) => [key, { type: "string", secret, required }])),
       workdir: deployment.workdir,
       steps: {

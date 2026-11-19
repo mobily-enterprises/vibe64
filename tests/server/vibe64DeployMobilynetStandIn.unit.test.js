@@ -119,6 +119,29 @@ test("an App Service made from a release runs once its instances are healthy, ea
   assert.equal((await production.createService(webSpec(release.version, { name: "api", routes: [] }), { idempotencyKey: "k".repeat(128) })).service.name, "api");
 });
 
+test("a settings replace takes a name its release doesn't declare as a plain setting or a secret, text of up to 4096 characters, but never a V64_ name", async () => {
+  const { standIn, client, serviceId } = await runningShop();
+  // The shop's release declares mode and sessionKey alone: GREETING and API_KEY are new to it.
+  const taken = await client.putServiceSettings(serviceId, { settings: { mode: "web", GREETING: "x".repeat(4096) }, secrets: { sessionKey: "session-1", API_KEY: "key-1" } });
+  assert.equal(taken.refresh.kind, "settings");
+  settle(standIn);
+  const service = await client.readService(serviceId);
+  assert.deepEqual([service.settings, service.secrets], [["GREETING", "mode"], ["API_KEY", "sessionKey"]]);
+  const serving = standIn.services.instances(serviceId).filter((one) => one.rotation !== "gone");
+  assert.ok(serving.length === 2 && serving.every((one) => one.settings.GREETING.length === 4096 && one.secrets.API_KEY === "key-1"), "onto new instances with both");
+  // Such a name's value is text of up to 4096 characters; a name mobilynet sets itself for a Vibe64 app (V64_*), a
+  // need's or an instance's, is refused as a plain setting or a secret. A link's own names are refused below.
+  const long = await refused(client.putServiceSettings(serviceId, { settings: { mode: "web", GREETING: "x".repeat(4097) }, secrets: { sessionKey: "session-1" } }));
+  assert.deepEqual(refusal(long), { status: 422, code: "validation_failed", fields: ["settings.GREETING"] });
+  const number = await refused(client.putServiceSettings(serviceId, { settings: { mode: "web", RETRIES: 3 }, secrets: { sessionKey: "session-1" } }));
+  assert.deepEqual(refusal(number), { status: 422, code: "validation_failed", fields: ["settings.RETRIES"] });
+  const own = await refused(client.putServiceSettings(serviceId, {
+    settings: { mode: "web", V64_DATABASE_HOST: "elsewhere" }, secrets: { sessionKey: "session-1", V64_INSTANCE_ID: "i-1" }
+  }));
+  assert.deepEqual(refusal(own), { status: 422, code: "validation_failed", fields: ["secrets.V64_INSTANCE_ID", "settings.V64_DATABASE_HOST"] });
+  assert.deepEqual(standIn.services.refreshes(serviceId).map((one) => one.kind), ["create", "settings"], "a refused replace starts no refresh");
+});
+
 test("an internal service has no routes and is reached by another's connection on its port", async () => {
   const { standIn, client, production, projectId, release, serviceId } = await runningShop();
   const computers = await production.createService(webSpec(release.version, { name: "computers", exposure: "internal", routes: [], instances: 1 }), { idempotencyKey: "service-computers" });
