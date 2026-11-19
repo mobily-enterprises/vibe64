@@ -51,7 +51,7 @@ Groups:
   preview      Preview lifecycle, opening a page in the Preview pane, browser inspection, screenshots and logs
   playwright   Managed project browser test suites
   env          Project environment settings
-  deployment   Staging status, and how this session reaches staging itself (ssh staging)
+  staging      Staging status, and how this session reaches staging itself (ssh staging)
   database     Database refresh, overview and diagram operations
   github       GitHub view refresh
   pages        Publish, update and list pages everyone on the project can open
@@ -64,7 +64,7 @@ Use vibe64-helper <group> --help for that group.
 Commands use the current managed session and its access checks.'
     exit 0
     ;;
-  preview|playwright|env|deployment|database|github|pages|session|plan|training|spec)
+  preview|playwright|env|staging|database|github|pages|session|plan|training|spec)
     command_group=$1
     shift
     ;;
@@ -78,9 +78,9 @@ case "$0" in
   *) wrapper_dir=. ;;
 esac
 command_path="$wrapper_dir/vibe64-$command_group"
-if [ "$command_group" = deployment ]; then
+if [ "$command_group" = staging ]; then
   command_path="$wrapper_dir/vibe64-env"
-  set -- deployment "$@"
+  set -- staging "$@"
 fi
 if [ "$command_group" = training ] || [ "$command_group" = spec ]; then
   exec "$wrapper_dir/vibe64" "$command_group" "$@"

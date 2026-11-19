@@ -110,6 +110,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/server/nativeConversationUpgrade.js`
 - `packages/vibe64-colleague/src/server/nativeContinuityRepairs.js`
 - `packages/vibe64-colleague/src/server/retiredOperationUpgrade.js`
+- `packages/vibe64-colleague/src/server/watchSourceRename.js`
 - `packages/vibe64-publishing/src/server/publicationWatch.js`
 
 ## Public contract
@@ -808,6 +809,27 @@ the 16-watch budget, pause/resume/cancel and wake delivery are shared with
 conversation watches. Public Publishing registers the `publication` source, and
 a composed host may register its own. Application usage
 ("stats") has no source until something records usage.
+
+An owner that renames a source it registers, and perhaps some of its
+conditions, moves saved watches with it through `renameColleagueWatchSource({
+systemRoot, apply, backupRoot, report, from, to, conditions })`
+(`watchSourceRename.js`, exported by `conversationUpgrade.js`), called from
+that owner's numbered stopped-service upgrade. On every watch whose `source`
+is `from` it sets `to`, and renames a condition named in `conditions` (a plain
+map of old to new condition names) in the watch's `condition`, its cursor's
+`conditionsMet` and the `reason` of each queued observation it made, which
+also takes the new `source`; a watch on another source keeps its conditions,
+and a condition the map leaves out is kept. It reads each person's Develop
+record and Learn threads with their owner keys and keeps the rest of each
+record. Each record is validated before and after, and a record of the wrong
+shape refuses the whole upgrade, naming its file, before anything is written.
+Check reports how many watches move in each project and writes nothing; apply
+publishes the changed records through `publishStateUpgradeFiles` with a
+backup under `backupRoot`, and a second run changes nothing. It returns
+`{ watches }`, how many watches were still on `from` when it began (0 once all
+are renamed). `from` and `to` must be two different valid source names, and
+`conditions` valid condition names with no new name given twice. Public
+registers no renamed source, so no public upgrade calls it.
 
 Learn threads may create watches, of either kind, only on their own lesson
 attempt's practice project (the mode's `currentAttemptId` must be the thread's

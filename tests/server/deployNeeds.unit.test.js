@@ -185,6 +185,9 @@ test("needs whose services break a rule of the Stack are refused, naming the ser
     /reaches other services/u);
   assert.match(withServices([web, { ...computers, settings: { APP_PUBLIC_URL: "x" } }]), /settings are its own/u);
   assert.match(withServices([{ ...web, settings: { MEMOBOT_COMPUTERS_URL: "x" } }, computers]), /settings are its own/u);
+  // Nor SIDE_EFFECTS, which APP_ENV replaced and no host gives.
+  assert.match(withServices([{ ...web, reaches: [{ service: "computers", setting: "SIDE_EFFECTS" }] }, computers]), /reaches other services/u);
+  assert.match(withServices([web, { ...computers, settings: { SIDE_EFFECTS: "live" } }]), /settings are its own/u);
   assert.match(withServices([web, { ...computers, sandbox: ["docker"] }]), /needs\.services computers sandbox allows only fuse and gvisor/u);
   assert.match(withServices([web, { ...computers, size: "a-8" }]), /needs\.services computers has no field "size"/u);
   // needsOfStack refuses them with the fix in genesis/stack.md.

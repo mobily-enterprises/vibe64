@@ -76,11 +76,11 @@ const BUILT_IN_PLACES = [
     steps: [DASHBOARD, pathStep("architecture", "Architecture")]
   },
   {
-    id: "publish",
+    id: "packages",
     label: PACKAGES_PAGE,
     scope: "project",
-    open: { pane: "publish" },
-    steps: [DASHBOARD, pathStep("publish", PACKAGES_PAGE)]
+    open: { pane: "packages" },
+    steps: [DASHBOARD, pathStep("packages", PACKAGES_PAGE)]
   },
   {
     id: "chat",

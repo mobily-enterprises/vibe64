@@ -20,7 +20,7 @@ import { helperSystemdUnitRoot } from "./hostSettings.js";
 // an application's only as itself, inside its sandbox, where its area and its
 // receipt are all it may write.
 function accountUnitLines(targetUser = {}, { receiptRoot = "", sandboxAllowances = [] } = {}) {
-  if (!targetUser.application) {
+  if (!targetUser.stagingAccount) {
     return [
       `User=${targetUser.username}`,
       `Group=${VIBE64_GROUP}`,
@@ -32,27 +32,27 @@ function accountUnitLines(targetUser = {}, { receiptRoot = "", sandboxAllowances
     `User=${targetUser.username}`,
     `Group=${targetUser.username}`,
     "UMask=0077",
-    ...applicationSandboxLines(targetUser.application, [receiptRoot], sandboxAllowances)
+    ...stagingSandboxLines(targetUser.stagingAccount, [receiptRoot], sandboxAllowances)
   ];
 }
 
-function releaseServicePort(value) {
+function stagingUnitPort(value) {
   const port = Number(value);
   if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) {
-    throw new Error("Vibe64 exec helper rejected a release service port.");
+    throw new Error("Vibe64 exec helper rejected a staging service port.");
   }
   return port;
 }
 
-// What an application's commands and release service run inside: its own area
+// What an application's commands and staging service run inside: its own area
 // is all they may write, they never gain privileges, and they see no other
 // user's processes, homes, temporary or shared-memory files, devices or System
 // V IPC, nor the kernel's settings. They use only internet, local and netlink sockets (Node's
 // os.networkInterfaces() needs netlink) and the system calls of an ordinary
 // service; any other call fails with EPERM rather than killing the process.
 // A set-user-ID or set-group-ID file they make does nothing: host setup mounts
-// the application area nosuid,nodev, which the helper requires before any
-// application code runs (assertApplicationAreaNosuid), so the kernel ignores
+// the staging area nosuid,nodev, which the helper requires before any
+// application code runs (assertStagingAreaNosuid), so the kernel ignores
 // those bits there for every process on the host; their private /tmp and
 // /var/tmp, /dev/shm and receipt in /run are nosuid too. There is no
 // RestrictSUIDSGID=: under it systemd refuses openat2() with ENOSYS, since it
@@ -60,7 +60,7 @@ function releaseServicePort(value) {
 // folder it unpacks with openat2(), so tar and dpkg-deb could unpack nothing.
 //
 // A release whose Deployment section says `Sandbox allows:` gets more, and only
-// on a host whose owner lists the allowance (applicationSandboxAllowances):
+// on a host whose owner lists the allowance (stagingSandboxAllowances):
 // - `gvisor` lets its code start gVisor's rootless runsc, which makes its own
 //   user, mount, PID, IPC, UTS and network namespaces, mounts inside them and
 //   traces its own subprocesses (systrap);
@@ -70,7 +70,7 @@ function releaseServicePort(value) {
 // capabilities only over what that namespace owns, the mounts it inherits are
 // locked (so ProtectSystem=, InaccessiblePaths= and ReadWritePaths= hold), its
 // files keep their real owner outside, and it can trace only its own processes.
-const APPLICATION_SANDBOX_ALLOWANCES = Object.freeze({
+const STAGING_SANDBOX_ALLOWANCES = Object.freeze({
   fuse: Object.freeze({
     devices: Object.freeze(["/dev/fuse"]),
     namespaces: Object.freeze(["user", "mnt"]),
@@ -84,11 +84,11 @@ const APPLICATION_SANDBOX_ALLOWANCES = Object.freeze({
 });
 const NAMESPACE_ORDER = Object.freeze(["user", "mnt", "pid", "ipc", "uts", "net"]);
 
-function applicationSandboxAllowanceLines(allowances = []) {
+function stagingSandboxAllowanceLines(allowances = []) {
   const profiles = allowances.map((name) => {
-    const profile = APPLICATION_SANDBOX_ALLOWANCES[name];
+    const profile = STAGING_SANDBOX_ALLOWANCES[name];
     if (!profile) {
-      throw new Error("Vibe64 exec helper rejected an unknown application sandbox allowance.");
+      throw new Error("Vibe64 exec helper rejected an unknown staging sandbox allowance.");
     }
     return profile;
   });
@@ -104,8 +104,8 @@ function applicationSandboxAllowanceLines(allowances = []) {
   };
 }
 
-function applicationSandboxLines(identity = {}, writablePaths = [], allowances = []) {
-  const allowed = applicationSandboxAllowanceLines(allowances);
+function stagingSandboxLines(identity = {}, writablePaths = [], allowances = []) {
+  const allowed = stagingSandboxAllowanceLines(allowances);
   return [
     "NoNewPrivileges=yes",
     "PrivateTmp=yes",
@@ -164,20 +164,20 @@ function resolveAllowedManagedServicePath(candidatePath = "", owner = {}) {
   throw new Error("Vibe64 exec helper rejected a managed service path outside the workspace service root.");
 }
 
-// A release service unit of the calling daemon's own workspace; no daemon
+// A staging service unit of the calling daemon's own workspace; no daemon
 // installs, stops, removes or reads another workspace's.
-function assertValidDeploymentUnitName(unitName = "", owner = {}) {
+function assertValidStagingUnitName(unitName = "", owner = {}) {
   const normalized = String(unitName || "").trim();
   const workspace = workspaceFromDaemonUsername(safeUsername(owner.username));
   if (
     !owner.username?.startsWith(DAEMON_USERNAME_PREFIX) ||
-    !normalized.startsWith(`vibe64-release-${workspace}-`) ||
+    !normalized.startsWith(`vibe64-staging-${workspace}-`) ||
     !normalized.endsWith(".service") ||
     !/^[A-Za-z0-9_.@:-]+$/u.test(normalized) ||
     normalized.includes("/") ||
     normalized.includes("..")
   ) {
-    throw new Error("Vibe64 exec helper rejected an unsafe deployment service unit name.");
+    throw new Error("Vibe64 exec helper rejected an unsafe staging unit name.");
   }
   return normalized;
 }
@@ -206,7 +206,7 @@ function assertValidManagedServiceProcessModel(value = "") {
 }
 
 function systemdUnitPath(unitName = "", owner = {}, unitRoot = helperSystemdUnitRoot()) {
-  return path.join(unitRoot, assertValidDeploymentUnitName(unitName, owner));
+  return path.join(unitRoot, assertValidStagingUnitName(unitName, owner));
 }
 
 function managedSystemdUnitPath(unitName = "", owner = {}, unitRoot = helperSystemdUnitRoot()) {
@@ -236,7 +236,7 @@ function serviceResourceUnitLines(owner = {}) {
   ];
 }
 
-function deploymentServiceUnit({
+function stagingUnitFile({
   environmentFile = "",
   helperPath = "",
   loopbackPort = 0,
@@ -252,7 +252,7 @@ function deploymentServiceUnit({
   const dependencies = Array.isArray(requiredUnits) ? requiredUnits : [];
   return [
     "[Unit]",
-    `Description=Vibe64 release service ${unitName}`,
+    `Description=Vibe64 staging service ${unitName}`,
     `After=${["network-online.target", ...dependencies].join(" ")}`,
     "Wants=network-online.target",
     ...(dependencies.length > 0 ? [`Requires=${dependencies.join(" ")}`] : []),
@@ -268,16 +268,16 @@ function deploymentServiceUnit({
     // open: a UDP client (Node's dgram, for StatsD or syslog) binds before it
     // sends, often to port 0, which no port rule names, and no host service
     // listens on an unprivileged UDP port.
-    `SocketBindAllow=tcp:${releaseServicePort(loopbackPort)}`,
+    `SocketBindAllow=tcp:${stagingUnitPort(loopbackPort)}`,
     "SocketBindAllow=udp",
     "SocketBindDeny=any",
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
     `Environment=PATH=${systemdUnitSafeValue(servicePath)}`,
     "Environment=TMPDIR=/tmp",
     // The service's own user loads its environment at every start; see
-    // runReleaseService. setpriv holds even where a drop-in switches the
+    // runStagingUnit. setpriv holds even where a drop-in switches the
     // unit's NoNewPrivileges= off.
-    `ExecStart=/usr/bin/setpriv --no-new-privs -- ${systemdUnitSafeValue(helperPath)} run-release-service "${systemdUnitSafeValue(environmentFile)}" "${systemdUnitSafeValue(startScript)}"`,
+    `ExecStart=/usr/bin/setpriv --no-new-privs -- ${systemdUnitSafeValue(helperPath)} run-staging-unit "${systemdUnitSafeValue(environmentFile)}" "${systemdUnitSafeValue(startScript)}"`,
     "Restart=always",
     "RestartSec=3",
     "KillSignal=SIGTERM",
@@ -332,16 +332,16 @@ function systemdUnitSafeValue(value = "") {
 
 export {
   accountUnitLines,
-  APPLICATION_SANDBOX_ALLOWANCES,
-  applicationSandboxLines,
+  STAGING_SANDBOX_ALLOWANCES,
+  stagingSandboxLines,
   assertSafeManagedServicePath,
-  assertValidDeploymentUnitName,
+  assertValidStagingUnitName,
   assertValidManagedServiceProcessModel,
   assertValidManagedServiceUnitName,
-  deploymentServiceUnit,
+  stagingUnitFile,
   managedServiceUnit,
   managedSystemdUnitPath,
-  releaseServicePort,
+  stagingUnitPort,
   resolveAllowedManagedServicePath,
   systemdUnitPath
 };

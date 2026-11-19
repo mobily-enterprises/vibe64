@@ -1,10 +1,10 @@
 import { unavailableStagingStatus } from "./agentEnvCommandText.js";
-import { DEPLOYMENT_UNAVAILABLE_REASON } from "./agentDeploymentStatus.js";
+import { STAGING_UNAVAILABLE_REASON } from "./agentStagingStatus.js";
 
 /** @typedef {import("./types.js").StagingEnvironmentProvider} StagingEnvironmentProvider */
 
-// A composed host's staging Env (the variables of a project's deployed
-// application), a names-only view of that deployment and, where the host
+// A composed host's staging Env (the variables of a project's staging
+// app), a names-only view of that staging and, where the host
 // allows a session, staging itself (its values and an SSH login) are
 // provided to the agent Env command through this token. Without one the
 // command offers Development Env only and reports that the installation does
@@ -19,24 +19,24 @@ async function stagingEnvironmentUnavailable() {
   };
 }
 
-async function deploymentUnavailable() {
+async function stagingStatusUnavailable() {
   return {
     ok: false,
-    code: "vibe64_agent_deployment_unavailable",
-    error: DEPLOYMENT_UNAVAILABLE_REASON
+    code: "vibe64_agent_staging_status_unavailable",
+    error: STAGING_UNAVAILABLE_REASON
   };
 }
 
 /**
- * The workspace without a staging Env: it has no records, deployment or staging to reach, and refuses
+ * The workspace without a staging Env: it has no records, Staging status or staging to reach, and refuses
  * every change.
  * @type {StagingEnvironmentProvider}
  */
 const NO_STAGING_ENVIRONMENT = Object.freeze({
   isUserValueRecord: () => false,
-  openStagingSsh: deploymentUnavailable,
-  readDeployment: deploymentUnavailable,
-  readStagingValues: deploymentUnavailable,
+  openStagingSsh: stagingStatusUnavailable,
+  readStagingStatus: stagingStatusUnavailable,
+  readStagingValues: stagingStatusUnavailable,
   readRecords: stagingEnvironmentUnavailable,
   removeVariable: stagingEnvironmentUnavailable,
   // readable-check: allow setter-seam - not a slot: setVariable saves one staging Env variable
@@ -50,7 +50,7 @@ function offersStagingEnvironment(provider) {
 
 const STAGING_OPERATIONS = Object.freeze([
   "readRecords",
-  "readDeployment",
+  "readStagingStatus",
   "readStagingValues",
   "openStagingSsh",
   "isUserValueRecord",

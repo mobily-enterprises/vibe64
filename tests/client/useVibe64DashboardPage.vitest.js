@@ -7,7 +7,7 @@ import {
 
 describe("useVibe64DashboardPage", () => {
   it("names a Dashboard section as its link does, and nothing where no link leads", () => {
-    expect(dashboardSectionLabel("publish")).toBe("Packages");
+    expect(dashboardSectionLabel("packages")).toBe("Packages");
     expect(dashboardSectionLabel("env")).toBe("Env");
     // Public adds no page for Staging: a composed host's own link names /dashboard/deploy.
     expect(dashboardSectionLabel("deploy")).toBe("");

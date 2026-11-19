@@ -352,7 +352,7 @@ test("renewal stages the connected copies with the source, restores them on fail
   });
 });
 
-test("renewal source staging rejects dirty work and corrupt recovery evidence", async () => {
+test("renewal source preparation rejects dirty work and corrupt recovery evidence", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const dirtyProjectRoot = path.join(targetRoot, "dirty-project");
     const cleanProjectRoot = path.join(targetRoot, "clean-project");
@@ -804,7 +804,7 @@ test("ordinary archiving refuses to bypass the renewal archive transaction", asy
   });
 });
 
-test("renewal archive retries clean only exact crash-owned staging paths", async () => {
+test("renewal archive retries clean only exact crash-owned packing paths", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const fixture = await createRenewalFixture(targetRoot);
     const archiveRoot = fixture.runtime.store.paths().archivedSessionsRoot;

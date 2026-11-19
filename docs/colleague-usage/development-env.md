@@ -88,7 +88,7 @@ generates that code and shows it to the project owner alone; the Staging
 status lists the name, never the code, so the coding agent sends the person to
 the host's page that publishes to Staging for it.
 
-When the host publishes projects, `vibe64-helper deployment status` shows the
+When the host publishes projects, `vibe64-helper staging status` shows the
 coding agent the session project's Staging: whether it is published, its
 public addresses, the current release with its commit, publish time and recorded
 Deployment commands, its Staging Env variable names with their source, and what
@@ -101,8 +101,8 @@ the agent reports the host's message instead of retrying.
 Where the host offers it and allows the session, the coding agent can also work
 on staging itself, to find out what is wrong there:
 
-- `ssh staging` logs in to the staging host as the live release's own
-  application account, in its folder, with the Env it runs with (its database
+- `ssh staging` logs in to the staging host as the staging release's own
+  staging account, in its folder, with the Env it runs with (its database
   connection included). `scp`, `sftp` and `rsync` reach `staging:<path>` the
   same way. Inside, `staging-logs [--lines <n>] [--since <time>]`,
   `staging-status` and `staging-restart` read or restart the app's own
@@ -111,7 +111,7 @@ on staging itself, to find out what is wrong there:
   private `/tmp`, a FUSE volume it mounted), which the login itself does not
   see. It is not root and has no general sudo, since the host may also run
   Vibe64 and other projects.
-- `vibe64-helper env get staging <KEY>` prints one value the live release
+- `vibe64-helper env get staging <KEY>` prints one value the staging release
   runs with, secrets included, and `vibe64-helper env export staging` prints
   them all as shell `export` lines.
 

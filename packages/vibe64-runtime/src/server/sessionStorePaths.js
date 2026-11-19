@@ -9,12 +9,12 @@ import {
   closingSessionRoot,
   preparedRenewalArchiveRoot,
   publishingRenewalArchiveRoot,
-  renewalArchiveStagingRoot,
+  renewalArchivesRoot,
   resolveVibe64SessionPaths,
   sessionArchiveMetadataPath,
   sessionArchivePath,
-  sessionArchiveStagingRoot,
-  sessionCreationStagingRoot,
+  sessionArchivePackingRoot,
+  sessionCreatingRoot,
   sessionPathsFromRoot
 } from "./sessionStoreLayout.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -77,17 +77,17 @@ function createSessionStorePaths({ state }) {
         throw error;
       }
     };
-    const creationStagingRoot = sessionCreationStagingRoot(rootPaths);
-    const archiveStagingRoot = sessionArchiveStagingRoot(rootPaths);
+    const creatingRoot = sessionCreatingRoot(rootPaths);
+    const archivePackingRoot = sessionArchivePackingRoot(rootPaths);
     const directoryPaths = [
       state.normalizedStateRoot,
       rootPaths.sessionsRoot,
       rootPaths.activeSessionsRoot,
       rootPaths.closingSessionsRoot,
       rootPaths.archivedSessionsRoot,
-      creationStagingRoot,
-      archiveStagingRoot,
-      renewalArchiveStagingRoot(rootPaths),
+      creatingRoot,
+      archivePackingRoot,
+      renewalArchivesRoot(rootPaths),
       path.dirname(buildingRenewalArchiveRoot(rootPaths, normalizedSessionId)),
       path.dirname(publishingRenewalArchiveRoot(rootPaths, normalizedSessionId)),
       renewalStateRoot(),
@@ -115,16 +115,16 @@ function createSessionStorePaths({ state }) {
     for (const statePath of statePaths) {
       if (await readStatePath(statePath)) throw conflict(statePath);
     }
-    for (const [stagingRoot, prefix] of [
-      [creationStagingRoot, `${normalizedSessionId}.`],
-      [archiveStagingRoot, `${normalizedSessionId}-`]
+    for (const [pendingRoot, prefix] of [
+      [creatingRoot, `${normalizedSessionId}.`],
+      [archivePackingRoot, `${normalizedSessionId}-`]
     ]) {
-      const info = await readStatePath(stagingRoot);
+      const info = await readStatePath(pendingRoot);
       if (!info) continue;
-      if (!info.isDirectory()) throw conflict(stagingRoot);
-      const entries = await readdir(stagingRoot);
+      if (!info.isDirectory()) throw conflict(pendingRoot);
+      const entries = await readdir(pendingRoot);
       const existing = entries.find((name) => name.startsWith(prefix));
-      if (existing) throw conflict(path.join(stagingRoot, existing));
+      if (existing) throw conflict(path.join(pendingRoot, existing));
     }
   }
 

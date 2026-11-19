@@ -193,7 +193,7 @@ test("Playwright uses the direct managed-preview environment contract", async ()
 
   assert.match(configSource, /PLAYWRIGHT_BASE_URL/u);
   assert.match(configSource, /PLAYWRIGHT_STORAGE_STATE/u);
-  assert.match(configSource, /VIBE64_LIVE_E2E/u);
+  assert.match(configSource, /VIBE64_E2E_EXISTING_SERVER/u);
   assert.match(configSource, /browserTestConfig\(\{/u);
   assert.match(configSource, /server: "node \.\/tests\/e2e\/support\/start-web-server\.mjs"/u);
   assert.doesNotMatch(configSource, /node \.\/bin\/server\.js/u);

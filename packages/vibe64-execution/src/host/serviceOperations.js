@@ -1,5 +1,5 @@
 // Deployment and managed services: installing, inspecting, stopping and removing their units, their processes
-// without a unit, and a release service's start.
+// without a unit, and a staging service's start.
 
 import {
   closeSync,
@@ -14,12 +14,12 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  applicationReleaseServiceFiles,
-  applicationSandboxAllowances,
-  assertApplicationAreaNosuid,
-  assertReleaseServiceClaim,
-  registeredApplicationUser
-} from "./applicationAccounts.js";
+  stagingUnitFiles,
+  stagingSandboxAllowances,
+  assertStagingAreaNosuid,
+  assertStagingUnitClaim,
+  registeredStagingAccount
+} from "./stagingAccounts.js";
 import { helperCommandPath, readEnvironmentFile } from "./commandEnvironment.js";
 import {
   ensureGroup,
@@ -43,46 +43,46 @@ import {
 import { helperCommand, helperSystemdUnitRoot, SYSTEMD_UNIT_ROOT } from "./hostSettings.js";
 import {
   assertSafeManagedServicePath,
-  assertValidDeploymentUnitName,
+  assertValidStagingUnitName,
   assertValidManagedServiceProcessModel,
   assertValidManagedServiceUnitName,
-  deploymentServiceUnit,
+  stagingUnitFile,
   managedServiceUnit,
   managedSystemdUnitPath,
-  releaseServicePort,
+  stagingUnitPort,
   resolveAllowedManagedServicePath,
   systemdUnitPath
 } from "./systemdUnits.js";
 
 const PID_FILE_LIMIT_BYTES = 64;
 
-function handleDeploymentServiceOperation(payload = {}) {
+function handleStagingUnitOperation(payload = {}) {
   const owner = resolveOwnerUser();
   ensureGroup(VIBE64_GROUP);
   const action = String(payload.action || "").trim();
-  const unitName = assertValidDeploymentUnitName(payload.unitName, owner);
+  const unitName = assertValidStagingUnitName(payload.unitName, owner);
   if (action === "inspect") {
-    inspectDeploymentServiceUnit(unitName, owner);
+    inspectStagingUnit(unitName, owner);
     return;
   }
   if (action === "remove") {
-    removeDeploymentServiceUnit(unitName, owner);
+    removeStagingUnit(unitName, owner);
     return;
   }
   if (action !== "install-start") {
-    throw new Error("Vibe64 exec helper rejected an unknown deployment service action.");
+    throw new Error("Vibe64 exec helper rejected an unknown staging unit action.");
   }
-  // A release service runs as its project's own application account.
-  const user = registeredApplicationUser(owner, payload.applicationAccount);
-  const service = applicationReleaseServiceFiles(payload, user.application, { daemonUid: owner.uid, gid: user.gid });
-  const sandboxAllowances = applicationSandboxAllowances(payload.sandboxAllowances);
+  // A staging service runs as its project's own staging account.
+  const user = registeredStagingAccount(owner, payload.stagingAccount);
+  const service = stagingUnitFiles(payload, user.stagingAccount, { daemonUid: owner.uid, gid: user.gid });
+  const sandboxAllowances = stagingSandboxAllowances(payload.sandboxAllowances);
   const requiredUnits = [...new Set((Array.isArray(payload.requiredUnits) ? payload.requiredUnits : [])
     .map((requiredUnit) => assertValidManagedServiceUnitName(requiredUnit, owner)))];
-  const loopbackPort = releaseServicePort(payload.loopbackPort);
+  const loopbackPort = stagingUnitPort(payload.loopbackPort);
   const unitRoot = helperSystemdUnitRoot();
-  assertReleaseServiceClaim({ loopbackPort, owner, unitName, unitRoot, user });
+  assertStagingUnitClaim({ loopbackPort, owner, unitName, unitRoot, user });
   const unitPath = systemdUnitPath(unitName, owner, unitRoot);
-  const unit = deploymentServiceUnit({
+  const unit = stagingUnitFile({
     ...service,
     helperPath: helperCommand(),
     loopbackPort,
@@ -102,31 +102,31 @@ function handleDeploymentServiceOperation(payload = {}) {
   });
 }
 
-// How much of a release service's output a read takes: 80 lines unless the reader names how many (at most
+// How much of a staging service's output a read takes: 80 lines unless the reader names how many (at most
 // 5000), optionally from a time in a form journalctl's --since takes ("2026-11-11 08:00:00", "1 hour ago",
 // "today").
-const DEPLOYMENT_JOURNAL_DEFAULT_LINES = 80;
-const DEPLOYMENT_JOURNAL_MAX_LINES = 5000;
-const DEPLOYMENT_JOURNAL_SINCE_PATTERN = /^[0-9A-Za-z][0-9A-Za-z :.+-]{0,63}$/u;
+const STAGING_JOURNAL_DEFAULT_LINES = 80;
+const STAGING_JOURNAL_MAX_LINES = 5000;
+const STAGING_JOURNAL_SINCE_PATTERN = /^[0-9A-Za-z][0-9A-Za-z :.+-]{0,63}$/u;
 
-function deploymentServiceJournalWindow({ lines = DEPLOYMENT_JOURNAL_DEFAULT_LINES, since = "" } = {}) {
-  if (!Number.isSafeInteger(lines) || lines < 1 || lines > DEPLOYMENT_JOURNAL_MAX_LINES) {
-    throw new Error(`Vibe64 exec helper reads 1 to ${DEPLOYMENT_JOURNAL_MAX_LINES} lines of a service's output.`);
+function stagingJournalWindow({ lines = STAGING_JOURNAL_DEFAULT_LINES, since = "" } = {}) {
+  if (!Number.isSafeInteger(lines) || lines < 1 || lines > STAGING_JOURNAL_MAX_LINES) {
+    throw new Error(`Vibe64 exec helper reads 1 to ${STAGING_JOURNAL_MAX_LINES} lines of a service's output.`);
   }
-  if (since && !DEPLOYMENT_JOURNAL_SINCE_PATTERN.test(since)) {
+  if (since && !STAGING_JOURNAL_SINCE_PATTERN.test(since)) {
     throw new Error("Vibe64 exec helper rejected a service output start time.");
   }
   return { lines, since };
 }
 
-function inspectDeploymentServiceUnit(unitName = "", owner = {}) {
-  assertValidDeploymentUnitName(unitName, owner);
-  printDeploymentServiceUnit(unitName);
+function inspectStagingUnit(unitName = "", owner = {}) {
+  assertValidStagingUnitName(unitName, owner);
+  printStagingUnit(unitName);
 }
 
-// A release unit's state, then its newest output, for a unit its caller has checked is the caller's to read.
-function printDeploymentServiceUnit(unitName = "", {
-  lines = DEPLOYMENT_JOURNAL_DEFAULT_LINES,
+// A staging unit's state, then its newest output, for a unit its caller has checked is the caller's to read.
+function printStagingUnit(unitName = "", {
+  lines = STAGING_JOURNAL_DEFAULT_LINES,
   since = "",
   timestamps = false
 } = {}) {
@@ -190,7 +190,7 @@ function handleManagedServiceOperation(payload = {}) {
     pidFile,
     unitName
   });
-  // Started on demand only: a release service that Requires= it starts it at
+  // Started on demand only: a staging service that Requires= it starts it at
   // boot, and every other use starts it through this action again.
   installSystemdUnit({
     activation: "start",
@@ -203,7 +203,7 @@ function handleManagedServiceOperation(payload = {}) {
 }
 
 // Its owner found the service unused. Data stays in place, and install-start
-// starts it again. A running or starting unit that Requires= it (a release
+// starts it again. A running or starting unit that Requires= it (a staging
 // service) keeps it: systemd would stop that unit with it. A state that
 // cannot be read counts as running.
 function stopManagedServiceUnit(unitName = "", {
@@ -229,7 +229,7 @@ function stopManagedServiceUnit(unitName = "", {
 
 // Its owner restarts a service that hangs. systemd stops it, killing it when
 // it outlasts its stop time limit, and starts it again; a running unit that
-// Requires= it (a release service) is stopped and started with it, so the
+// Requires= it (a staging service) is stopped and started with it, so the
 // service is never pulled from under it. Data stays in place. A unit never
 // installed is "absent" and nothing runs.
 function restartManagedServiceUnit(unitName = "", {
@@ -486,8 +486,8 @@ function openUnitRoot(unitRoot = "", rootUid = 0) {
   }
 }
 
-function removeDeploymentServiceUnit(unitName = "", owner = {}, unitRoot = helperSystemdUnitRoot()) {
-  assertValidDeploymentUnitName(unitName, owner);
+function removeStagingUnit(unitName = "", owner = {}, unitRoot = helperSystemdUnitRoot()) {
+  assertValidStagingUnitName(unitName, owner);
   runRootCommandAllowFailure("systemctl", [
     "stop",
     unitName
@@ -516,8 +516,8 @@ function removeDeploymentServiceUnit(unitName = "", owner = {}, unitRoot = helpe
 
 // systemd's runtime folder starts empty at every boot, so a host whose units live in another folder runs the
 // root-only `vibe64-exec-helper relink-units` before its services start. Each release and managed service unit
-// root wrote there is linked again as it was installed: a release unit with its boot target, and started, as a
-// boot starts one from systemd's own folder; a managed one without, for the release unit that Requires= it to
+// root wrote there is linked again as it was installed: a staging unit with its boot target, and started, as a
+// boot starts one from systemd's own folder; a managed one without, for the staging unit that Requires= it to
 // start. Other files stay as they are. A unit root did not write, or one others may change, stays unlinked and
 // is reported once every other unit is linked and started.
 function relinkSystemdUnits({
@@ -533,11 +533,11 @@ function relinkSystemdUnits({
     problems.push(`${name}: ${String(result.stderr || result.stdout || `systemctl ${args[0]} failed.`).trim()}`);
     return false;
   };
-  const releaseUnits = [];
+  const stagingUnits = [];
   const directory = openUnitRoot(unitRoot, rootUid);
   try {
     for (const name of readdirSync(openedPath(directory)).sort()) {
-      const kind = /^vibe64-(release|managed)-[A-Za-z0-9_.@:-]+\.service$/u.exec(name)?.[1];
+      const kind = /^vibe64-(staging|managed)-[A-Za-z0-9_.@:-]+\.service$/u.exec(name)?.[1];
       if (!kind) continue;
       try {
         readOwnedFile(directory, name, { maxBytes: 64 * 1024, othersMayWrite: false, uid: rootUid });
@@ -545,44 +545,44 @@ function relinkSystemdUnits({
         problems.push(`${name}: not a unit file root wrote (${error.code || error.message})`);
         continue;
       }
-      const release = kind === "release";
-      if (systemctl([release ? "enable" : "link", "--runtime", path.join(unitRoot, name)], name) && release) {
-        releaseUnits.push(name);
+      const staging = kind === "staging";
+      if (systemctl([staging ? "enable" : "link", "--runtime", path.join(unitRoot, name)], name) && staging) {
+        stagingUnits.push(name);
       }
     }
   } finally {
     closeSync(directory);
   }
   systemctl(["daemon-reload"], "daemon-reload");
-  for (const name of releaseUnits) systemctl(["start", "--no-block", name], name);
+  for (const name of stagingUnits) systemctl(["start", "--no-block", name], name);
   if (problems.length > 0) {
     throw new Error(`Vibe64 exec helper could not relink every unit in ${unitRoot}:\n${problems.join("\n")}`);
   }
 }
 
-// A release service loads its environment as its own user at every start, so
+// A staging service loads its environment as its own user at every start, so
 // neither root nor systemd on root's behalf reads a file whose path that user
 // controls. The start script then replaces this process, so nothing else stays
 // running. Like every application's code it runs only while its area, where it
 // works, is mounted nosuid: at every start, boot included, whatever systemd
 // started first.
-function runReleaseService(environmentFile = "", startScript = "") {
+function runStagingUnit(environmentFile = "", startScript = "") {
   if (process.argv.length !== 5 || !path.isAbsolute(environmentFile) || !path.isAbsolute(startScript)) {
-    throw new Error("Usage: vibe64-exec-helper run-release-service <environment-file> <start-script>");
+    throw new Error("Usage: vibe64-exec-helper run-staging-unit <environment-file> <start-script>");
   }
-  assertApplicationAreaNosuid(process.cwd());
+  assertStagingAreaNosuid(process.cwd());
   process.execve(startScript, [startScript], { ...process.env, ...readEnvironmentFile(environmentFile) });
 }
 
 export {
-  deploymentServiceJournalWindow,
+  stagingJournalWindow,
   ensureManagedServiceProcessOwnership,
-  handleDeploymentServiceOperation,
+  handleStagingUnitOperation,
   handleManagedServiceOperation,
   installSystemdUnit,
-  printDeploymentServiceUnit,
+  printStagingUnit,
   relinkSystemdUnits,
   restartManagedServiceUnit,
-  runReleaseService,
+  runStagingUnit,
   stopManagedServiceUnit
 };

@@ -29,7 +29,7 @@ test("a project's prod Env values move to staging as saved, after check, with a 
   await mkdir(f.projectRoot("no-env"), { recursive: true });
   const before = await f.read("old-app");
   const untouched = await f.read("current-app");
-  await assert.rejects(readEnvUserValues({ projectRuntimeRoot: f.projectRoot("old-app") }), /prod\. It was renamed staging/u);
+  await assert.rejects(readEnvUserValues({ projectRuntimeRoot: f.projectRoot("old-app") }), /Invalid runtime config scope: prod/u);
 
   await f.run(false);
   assert.equal(await f.read("old-app"), before, "check changes nothing");

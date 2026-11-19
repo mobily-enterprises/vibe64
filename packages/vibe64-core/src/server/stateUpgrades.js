@@ -70,6 +70,7 @@ import workspacePreparedTree from "./stateUpgrades/20261112-workspace-prepared-t
 import workspacePreparedSteps from "./stateUpgrades/20261113-workspace-prepared-steps.js";
 import afterPlanPasses from "./stateUpgrades/20261114-after-plan-passes.js";
 import stagingEnvScope from "./stateUpgrades/20261114-staging-env-scope.js";
+import stagingFolders from "./stateUpgrades/20261119-staging-folders.js";
 
 const upgrades = [
   codexLoginId,
@@ -127,7 +128,8 @@ const upgrades = [
   workspacePreparedTree,
   workspacePreparedSteps,
   afterPlanPasses,
-  stagingEnvScope
+  stagingEnvScope,
+  stagingFolders
 ];
 
 async function readLedger(ledgerPath) {

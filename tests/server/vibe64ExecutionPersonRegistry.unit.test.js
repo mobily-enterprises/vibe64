@@ -214,11 +214,11 @@ test("a narrow command is recognised when sudo prints its program with links res
   }
 });
 
-test("application accounts are never people", () => {
-  assert.throws(() => registerPerson("shop", "v64a_shop", {
+test("staging accounts are never people", () => {
+  assert.throws(() => registerPerson("shop", "v64s_shop", {
     addToGroup: () => assert.fail("joined the shared group"),
     resolveUser: () => assert.fail("looked up the account")
-  }), /application accounts are never people/u);
+  }), /staging accounts are never people/u);
   const facts = { groups: ["vibe64"], loginUids: LOGIN_UIDS, sudoListing: notAllowed("v64ashop") };
   assert.equal(personAccountProblem({ uid: 1500, username: "v64ashop" }, facts), "");
 });

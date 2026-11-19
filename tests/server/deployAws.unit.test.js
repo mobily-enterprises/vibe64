@@ -221,7 +221,7 @@ test("changed counts and sizes: setInstances counts web's tasks and workers' mac
   assert.deepEqual([...new Set(live.map((one) => standIn.view().templates.find((template) => template.id === group.template.id).versions[Number(one.version) - 1].InstanceType))], ["m7i.2xlarge"]);
   // A Fargate size is refused for workers, which need machines of their own: by the Plan, and by the adapter itself.
   const refused = await run({ record: resized.record, commit: "c1", choices: { services: { workers: { size: "fargate-4x16" } } } }).catch((error) => error);
-  assert.equal(refused.code, "deployment_plan_refused");
+  assert.equal(refused.code, "production_deploy_plan_refused");
   const service = (item, app, size) => ({
     name: app, exposure: "internal", size, instances: 1, app, version: resized.record.run.services[item].version, settings: {}, secrets: {}, connections: [],
     labels: labelsFor(record, { kind: "service", name: `${item}-again` })

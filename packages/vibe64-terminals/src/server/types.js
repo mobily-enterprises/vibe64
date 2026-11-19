@@ -20,15 +20,15 @@
  * @typedef {object} StagingEnvironmentProvider
  * @property {(record: object | null) => boolean} isUserValueRecord
  * @property {(input: { projectSlug: string }) => Promise<object>} readRecords
- * @property {(input: { actor: object | null, projectSlug: string }) => Promise<object>} readDeployment the
- *   project's deployment for its coding assistant, never a value: { ok, deployment: { state, addresses, release,
- *   latestDeploy, records, blockers, notes, aiAccess: { enabled, reason } } } (agentDeploymentStatus.js), where
+ * @property {(input: { actor: object | null, projectSlug: string }) => Promise<object>} readStagingStatus the
+ *   project's Staging status for its coding assistant, never a value: { ok, staging: { state, addresses, release,
+ *   latestStagingPublish, records, blockers, notes, aiAccess: { enabled, reason } } } (agentStagingStatus.js), where
  *   aiAccess says whether the actor's session may use staging itself
  * @property {(input: StagingAccess & { keys: string[] }) => Promise<object>} readStagingValues the Env the
- *   live release runs with, secrets included, when the host allows the session: { ok, releaseId, variables:
+ *   staging release runs with, secrets included, when the host allows the session: { ok, releaseId, variables:
  *   [{ key, value }] }, only the named keys when keys is not empty; otherwise { ok: false, code, error }
  * @property {(input: StagingAccess & { command: string }) => Promise<object>} openStagingSsh the ssh
- *   configuration file whose `Host staging` logs in to the live release, when the host allows the session:
+ *   configuration file whose `Host staging` logs in to the staging release, when the host allows the session:
  *   { ok, configPath }; command is the ssh, scp or sftp command line, for the host's record
  * @property {(input: { actor: object | null, key: string, projectSlug: string }) => Promise<object>} removeVariable
  * @property {(input: { actor: object | null, key: string, projectSlug: string, secret: boolean, value: string }) => Promise<object>} setVariable

@@ -252,11 +252,11 @@ addPlacement({
   order: 500,
   props: {
     label: PACKAGES_PAGE,
-    guideId: "publish",
+    guideId: "packages",
     icon: "$package2",
     surface: "app",
-    scopedSuffix: "/project/[slug]/dashboard/publish",
-    unscopedSuffix: "/project/[slug]/dashboard/publish",
+    scopedSuffix: "/project/[slug]/dashboard/packages",
+    unscopedSuffix: "/project/[slug]/dashboard/packages",
     to: ""
   }
 });

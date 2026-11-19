@@ -220,10 +220,10 @@ the provider. Existing app-user identities must remain unchanged.
 ## Current editor boundary
 
 The implemented editor setup command uses the selected session and development
-Env. Staging execution must use deployed code and staging state and is not
-yet implemented by this route. Do not interpret a development Connected result
-as proof that staging is ready. Provider approval, real consent, deployed
-callback reachability and exported-app behavior require their own evidence.
+Env. Staging execution must use the staging release's code and staging state and
+is not yet implemented by this route. Do not interpret a development Connected result
+as proof that staging is ready. Provider approval, real consent, the staging
+app's callback reachability and exported-app behavior require their own evidence.
 
 
 ## Incomplete application settings
@@ -243,11 +243,11 @@ an editor payment gateway. The app owns the provider client, credentials,
 merchant mapping and transactional publication state. The editor owns the
 request/response contract below and requires workspace-owner access for payment
 management. When a host supplies Staging integrations, the same controls read
-the deployed configuration without editing it and send the current `releaseId`
-to that host. The host resolves the active deployed workspace and its release
+the staging configuration without editing it and send the current `stagingReleaseId`
+to that host. The host resolves the active staging workspace and its Staging
 Env under its publication lock, rejecting a stale release before execution. It
 must not substitute the selected development session or caller-supplied paths.
-`releaseId` is a host request field, not an application-command field: the app
+`stagingReleaseId` is a host request field, not an application-command field: the app
 receives the same payment operation envelope in either environment.
 
 The payment environment (`sandbox`/`live`) is separate from the editor's

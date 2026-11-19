@@ -1,12 +1,12 @@
 // A project's staging as its own AI sessions reach it over SSH, while the workspace owner allows it:
 // - the daemon's `staging-access` operation installs or removes the project's key (stagingAccess.js) and
 //   reads what those logins did;
-// - `staging-shell` is the forced command of every such login: as the application account, in its live
-//   release's folder, with the Env and runtimes that release runs with, never root;
-// - `staging-service`, which that login reaches through its own narrow sudo rule, reads its live release
+// - `staging-shell` is the forced command of every such login: as the staging account, in its running
+//   staging release's folder, with the Env and runtimes that release runs with, never root;
+// - `staging-service`, which that login reaches through its own narrow sudo rule, reads its staging
 //   service's output and state, restarts it, or enters it, and nothing else;
 // - `staging-enter`, which that last one starts, runs as the account where the running service runs.
-// The login runs outside the release service's sandbox, as the person's own login would, so mounts the service
+// The login runs outside the staging service's sandbox, as the person's own login would, so mounts the service
 // makes in namespaces of its own (its private /tmp, a FUSE volume) are there only through staging-enter.
 
 import { spawnSync } from "node:child_process";
@@ -16,11 +16,11 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  APPLICATION_USERNAME_PATTERN,
-  applicationIdentity,
-  installedReleaseUnits,
-  registeredApplicationUser
-} from "./applicationAccounts.js";
+  STAGING_ACCOUNT_USERNAME_PATTERN,
+  stagingAccountIdentity,
+  installedStagingUnits,
+  registeredStagingAccount
+} from "./stagingAccounts.js";
 import { readEnvironmentFile } from "./commandEnvironment.js";
 import {
   resolveOsUser,
@@ -32,11 +32,11 @@ import {
 } from "./hostAccounts.js";
 import { helperCommand } from "./hostSettings.js";
 import { installStagingAccess, removeStagingAccess, stagingAccessGranted } from "./stagingAccess.js";
-import { deploymentServiceJournalWindow, printDeploymentServiceUnit } from "./serviceOperations.js";
+import { stagingJournalWindow, printStagingUnit } from "./serviceOperations.js";
 
 // The one key Vibe64 makes per project: an Ed25519 public key in OpenSSH's one-line form.
 const STAGING_PUBLIC_KEY_PATTERN = /^ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI[A-Za-z0-9+/]{43}$/u;
-// What each login reports in the host's journal, as the application account: what it ran, from which session.
+// What each login reports in the host's journal, as the staging account: what it ran, from which session.
 // The login writes it itself, so it is only what the login says; the host's own record of each login is logind's.
 const STAGING_LOG_TAG = "vibe64-staging";
 // The newest records of each kind activity reads; older ones are said to be left out.
@@ -57,7 +57,7 @@ const STAGING_SHELL = Object.freeze(["/bin/bash", "--noprofile", "--norc"]);
 // command (releases published since staging logins exist).
 const START_SCRIPT_RUNS_ARGUMENTS = "[ \"$#\" -eq 0 ] || exec \"$@\"";
 const SFTP_SERVERS = Object.freeze(["/usr/lib/openssh/sftp-server", "/usr/libexec/openssh/sftp-server", "/usr/lib/sftp-server"]);
-const RUN_RELEASE_SERVICE_PATTERN = / run-release-service "((?:[^"\\]|\\.)*)" "((?:[^"\\]|\\.)*)"$/u;
+const RUN_STAGING_UNIT_PATTERN = / run-staging-unit "((?:[^"\\]|\\.)*)" "((?:[^"\\]|\\.)*)"$/u;
 const NSENTER = "/usr/bin/nsenter";
 
 function writeJson(value) {
@@ -66,19 +66,19 @@ function writeJson(value) {
 
 /**
  * The daemon's `staging-access` operation for one of its workspace's projects: grant installs the project's
- * public key for its application account, revoke takes it back and ends that account's open logins, and
+ * public key for its staging account, revoke takes it back and ends that account's open logins, and
  * activity reads what those logins recorded.
  */
 function handleStagingAccessOperation(payload = {}) {
   const owner = resolveOwnerUser();
   const action = String(payload.action || "").trim();
-  const identity = applicationIdentity(owner, payload.project);
+  const identity = stagingAccountIdentity(owner, payload.project);
   if (action === "grant") {
     const publicKey = String(payload.publicKey || "").trim();
     if (!STAGING_PUBLIC_KEY_PATTERN.test(publicKey)) {
       throw new Error("Vibe64 exec helper accepts one ssh-ed25519 public key for staging access.");
     }
-    installStagingAccess(registeredApplicationUser(owner, identity.username), publicKey, helperCommand());
+    installStagingAccess(registeredStagingAccount(owner, identity.username), publicKey, helperCommand());
     writeJson({ account: identity.username });
     return;
   }
@@ -137,7 +137,7 @@ function stagingActivity(user, { runRootAllowFailure = runRootCommandAllowFailur
   return { entries, olderOmitted: { host: host.olderOmitted, login: reported.olderOmitted } };
 }
 
-// A value as the release unit writes it, its backslash escapes undone.
+// A value as the staging unit writes it, its backslash escapes undone.
 function unitText(value = "") {
   return value.replace(/\\(.)/gu, "$1");
 }
@@ -148,20 +148,20 @@ function unitValue(lines = [], prefix = "") {
 }
 
 /**
- * The release unit root installed for the account: the running one, or the last of its own when none runs. It
+ * The staging unit root installed for the account: the running one, or the last of its own when none runs. It
  * names the release's folder, its Env file and start script, and the PATH its service starts with.
  * @param {string} username
  */
-function liveReleaseUnit(username, {
+function runningStagingUnit(username, {
   isActive = (name) => spawnSync("systemctl", ["is-active", "--quiet", name]).status === 0,
-  units = () => installedReleaseUnits()
+  units = () => installedStagingUnits()
 } = {}) {
   const own = units().filter(({ lines }) => lines.includes(`User=${username}`));
   const unit = own.find(({ name }) => isActive(name)) || own.at(-1);
   if (!unit) return null;
-  const started = RUN_RELEASE_SERVICE_PATTERN.exec(unit.lines.find((line) => line.startsWith("ExecStart=")) || "");
+  const started = RUN_STAGING_UNIT_PATTERN.exec(unit.lines.find((line) => line.startsWith("ExecStart=")) || "");
   if (!started) {
-    throw new Error(`Release unit ${unit.name} does not start a Vibe64 release service.`);
+    throw new Error(`Staging unit ${unit.name} does not start a Vibe64 staging service.`);
   }
   return {
     environmentFile: unitText(started[1]),
@@ -212,17 +212,17 @@ function recordStagingLogin(event = {}) {
 }
 
 /**
- * sshd's forced command for an application account's staging login, run as that account: it starts what the
- * client asked for in the live release's folder with that release's Env (its database connection included),
+ * sshd's forced command for a staging account's staging login, run as that account: it starts what the
+ * client asked for in the staging release's folder with that release's Env (its database connection included),
  * runtimes and PATH, plus staging-logs, staging-status, staging-restart and staging-enter, and
  * reports the login's command, session and end; logind records the login itself.
  */
 function runStagingShell({ env = process.env, helperPath = helperCommand() } = {}) {
   const username = os.userInfo().username;
-  if (!APPLICATION_USERNAME_PATTERN.test(username)) {
-    throw new Error("Only an application account's staging login starts here.");
+  if (!STAGING_ACCOUNT_USERNAME_PATTERN.test(username)) {
+    throw new Error("Only a staging account's staging login starts here.");
   }
-  const unit = liveReleaseUnit(username);
+  const unit = runningStagingUnit(username);
   if (!unit) {
     process.stderr.write("This project has no release installed on this host, so there is no staging to enter. Publish it first.\n");
     process.exit(1);
@@ -257,7 +257,7 @@ function runStagingShell({ env = process.env, helperPath = helperCommand() } = {
       PATH: unit.path || env.PATH || "",
       ...readEnvironmentFile(unit.environmentFile),
       ...stagingShellFunctions(helperPath),
-      VIBE64_RELEASE_UNIT: unit.name
+      VIBE64_STAGING_UNIT: unit.name
     },
     stdio: "inherit"
   });
@@ -269,7 +269,7 @@ function runStagingShell({ env = process.env, helperPath = helperCommand() } = {
 function stagingServiceUsage() {
   return new Error([
     "Usage, inside a staging login:",
-    "  staging-logs [--lines <n>] [--since <time>]   the live release service's newest output (200 lines)",
+    "  staging-logs [--lines <n>] [--since <time>]   the running staging service's newest output (200 lines)",
     "  staging-status                                its state and newest output",
     "  staging-restart                               restart it, then show its state",
     "  staging-enter [command...]                    run the command, or a shell, where the running service",
@@ -290,27 +290,27 @@ function stagingLogWindow(args = []) {
     given[name] = value;
   }
   if (given["--lines"] !== undefined && !/^\d{1,4}$/u.test(given["--lines"])) throw stagingServiceUsage();
-  return deploymentServiceJournalWindow({
+  return stagingJournalWindow({
     lines: given["--lines"] === undefined ? STAGING_LOGS_DEFAULT_LINES : Number(given["--lines"]),
     since: given["--since"] || ""
   });
 }
 
 /**
- * `staging-service`, which only an application account with staging access may run, through sudo: the
- * output, state or restart of its own live release service, found as root installed it, or a command where
+ * `staging-service`, which only a staging account with staging access may run, through sudo: the
+ * output, state or restart of its own running staging service, found as root installed it, or a command where
  * that service runs.
  * @param {string[]} args
  */
 function runStagingService(args = [], { env = process.env } = {}) {
   const caller = safeUsername(env.SUDO_USER || "");
-  if (!APPLICATION_USERNAME_PATTERN.test(caller) || String(resolveOsUser(caller).uid) !== String(env.SUDO_UID || "")) {
-    throw new Error("Only an application account's staging login may use staging-service.");
+  if (!STAGING_ACCOUNT_USERNAME_PATTERN.test(caller) || String(resolveOsUser(caller).uid) !== String(env.SUDO_UID || "")) {
+    throw new Error("Only a staging account's staging login may use staging-service.");
   }
   if (!stagingAccessGranted(caller)) {
     throw new Error("AI sessions may not use this staging now: the workspace owner has turned that off.");
   }
-  const unit = liveReleaseUnit(caller);
+  const unit = runningStagingUnit(caller);
   if (!unit) throw new Error("This project has no release installed on this host.");
   const [action = "", ...rest] = args;
   if (action === "enter") {
@@ -318,17 +318,17 @@ function runStagingService(args = [], { env = process.env } = {}) {
     return;
   }
   if (action === "logs") {
-    printDeploymentServiceUnit(unit.name, { ...stagingLogWindow(rest), timestamps: true });
+    printStagingUnit(unit.name, { ...stagingLogWindow(rest), timestamps: true });
     return;
   }
   if (rest.length > 0 || !["restart", "status"].includes(action)) throw stagingServiceUsage();
   if (action === "restart") runRootCommand("systemctl", ["restart", unit.name]);
-  printDeploymentServiceUnit(unit.name, { lines: 20, timestamps: true });
+  printStagingUnit(unit.name, { lines: 20, timestamps: true });
 }
 
 /**
  * How root starts `staging-enter`: nsenter enters the mount namespace of the running service's main process
- * and becomes the application account (its own group only, no supplementary ones) before anything there runs,
+ * and becomes the staging account (its own group only, no supplementary ones) before anything there runs,
  * since that namespace may be one the application made itself; there the helper's `staging-enter` checks it
  * is the namespace root found for the service and starts the command with the release's files. A main process in
  * a user namespace of the application's own is joined there too, as the ids the account has in it.
@@ -352,7 +352,7 @@ function stagingEnterCommand({
       SHELL: STAGING_SHELL[0],
       TERM: env.TERM || "dumb",
       USER: user.username,
-      VIBE64_RELEASE_UNIT: unit.name
+      VIBE64_STAGING_UNIT: unit.name
     },
     file: NSENTER
   };
@@ -380,7 +380,7 @@ function serviceUserNamespace(pid, user, {
   if (link(`/proc/${pid}/ns/user`) === link("/proc/self/ns/user")) return null;
   const ids = { gid: idInsideNamespace(read(`/proc/${pid}/gid_map`), user.gid), uid: idInsideNamespace(read(`/proc/${pid}/uid_map`), user.uid) };
   if (ids.uid === null || ids.gid === null) {
-    throw new Error("The live release service runs in a user namespace of its own that does not include its account, " +
+    throw new Error("The running staging service runs in a user namespace of its own that does not include its account, " +
       "so staging-enter cannot join it.");
   }
   return ids;
@@ -397,7 +397,7 @@ function processCgroup(pid, read) {
 }
 
 /**
- * Root enters the account's running release service: its main process, which must still be in the service's own
+ * Root enters the account's running staging service: its main process, which must still be in the service's own
  * cgroup when root reads its namespaces and after, since a main process that ended leaves its number to any
  * process the host starts next.
  */
@@ -412,14 +412,14 @@ function enterStagingService(unit = {}, user = {}, command = [], {
     .split("\n").map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]));
   const pid = Number(shown.MainPID);
   if (!Number.isSafeInteger(pid) || pid <= 0) {
-    throw new Error(`The live release service ${unit.name} is not running, so there is nothing to enter. ` +
+    throw new Error(`The running staging service ${unit.name} is not running, so there is nothing to enter. ` +
       "staging-status shows why; staging-restart starts it again.");
   }
   const inService = () => {
     const cgroup = processCgroup(pid, read);
     return Boolean(shown.ControlGroup) && (cgroup === shown.ControlGroup || cgroup.startsWith(`${shown.ControlGroup}/`));
   };
-  const changed = new Error(`The live release service ${unit.name} changed while staging-enter started; try again.`);
+  const changed = new Error(`The running staging service ${unit.name} changed while staging-enter started; try again.`);
   if (!inService()) throw changed;
   const mountNamespace = link(`/proc/${pid}/ns/mnt`);
   const userNamespace = serviceUserNamespace(pid, user, { link, read });
@@ -442,7 +442,7 @@ function stagingEnterArgv(command = [], startScript = "") {
 }
 
 /**
- * `staging-enter`'s second half, which root starts as the application account inside its running release
+ * `staging-enter`'s second half, which root starts as the staging account inside its running staging
  * service's mount namespace: the command in the release's folder with the release's Env, which the account
  * itself reads there, once it is in the namespace root found for that service.
  * @param {string[]} args the service's mount namespace, the release's Env file, start script and folder, then the
@@ -454,11 +454,11 @@ function runStagingEnter([mountNamespace = "", environmentFile = "", startScript
 } = {}) {
   // Root starts it already as the account; inside the application's own user namespace that may be uid 0 there.
   if (!/^mnt:\[\d+\]$/u.test(mountNamespace) || ![environmentFile, startScript, workingDirectory].every((value) => path.isAbsolute(value))) {
-    throw new Error("Only staging-enter, in an application account's staging login, starts here.");
+    throw new Error("Only staging-enter, in a staging account's staging login, starts here.");
   }
   // nsenter reached the main process by its number, which another process may have taken meanwhile.
   if (link("/proc/self/ns/mnt") !== mountNamespace) {
-    throw new Error("staging-enter did not reach the live release service: its main process changed meanwhile. Try again.");
+    throw new Error("staging-enter did not reach the running staging service: its main process changed meanwhile. Try again.");
   }
   process.chdir(workingDirectory);
   const [file, ...args] = stagingEnterArgv(command, startScriptRunsArguments(startScript) ? startScript : "");
@@ -468,7 +468,7 @@ function runStagingEnter([mountNamespace = "", environmentFile = "", startScript
 export {
   enterStagingService,
   handleStagingAccessOperation,
-  liveReleaseUnit,
+  runningStagingUnit,
   runStagingEnter,
   runStagingService,
   runStagingShell,

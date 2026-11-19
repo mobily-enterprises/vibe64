@@ -13,6 +13,8 @@ import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 const SOURCE_ID = /^[a-z][a-z0-9-]{0,63}$/u;
 const NAME = /^[a-z][A-Za-z0-9-]{0,63}$/u;
+const isWatchSourceId = id => typeof id === "string" && SOURCE_ID.test(id);
+const isWatchConditionName = name => typeof name === "string" && NAME.test(name);
 const MAX_INPUT = 512;
 
 function descriptions(value, what) {
@@ -26,7 +28,7 @@ function descriptions(value, what) {
 function createWatchSources() {
   const sources = new Map();
   function add(id, source) {
-    if (!SOURCE_ID.test(id) || sources.has(id)) throw new TypeError("A watch source needs a unique name.");
+    if (!isWatchSourceId(id) || sources.has(id)) throw new TypeError("A watch source needs a unique name.");
     sources.set(id, Object.freeze({ id, ...source }));
   }
 
@@ -142,4 +144,4 @@ function stateWatchUpdate(watch, observation) {
   return { cursor, reason: met && !wasMet ? watch.condition : "" };
 }
 
-export { createWatchSources, stateObservation, stateWatchInput, stateWatchUpdate };
+export { createWatchSources, isWatchConditionName, isWatchSourceId, stateObservation, stateWatchInput, stateWatchUpdate };

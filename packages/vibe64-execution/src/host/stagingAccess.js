@@ -1,9 +1,9 @@
 // What lets a project's own AI sessions reach its staging, while the workspace owner allows it: the
-// application account's root-owned SSH key file, in the folder the host's sshd reads application accounts' keys from,
+// staging account's root-owned SSH key file, in the folder the host's sshd reads staging accounts' keys from,
 // and the sudo rule for that account's own service log and restart. Root writes and removes both; the
 // account itself can never add a key or a rule. While they exist the account also has a login shell, since
 // sshd starts even its forced command through that shell: /bin/sh, which reads no file of the account's own
-// before that command (bash, started by sshd, would read the ~/.bashrc the application can write). sshd's PAM
+// before that command (bash, started by sshd, would read the ~/.bashrc the staging app can write). sshd's PAM
 // stack may still read an environment file of the account's (Ubuntu's reads ~/.pam_environment), so what a
 // login reports about itself stays only what it says; the host's record of each login is logind's.
 
@@ -12,9 +12,8 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  APPLICATION_SHELL,
+  STAGING_ACCOUNT_SHELL,
   changeLoginShell,
-  HOST_SETTINGS_ROOT,
   runRootCommand,
   runRootCommandAllowFailure
 } from "./hostAccounts.js";
@@ -23,17 +22,12 @@ import { helperAccountDatabase, helperStagingKeysRoot, helperSudoersRoot } from 
 
 const STAGING_LOGIN_SHELL = "/bin/sh";
 const ROOT_UID = 0;
-// Where root kept an account's key and sudo rule before production access was renamed staging access. Neither
-// sshd's policy nor sudo's rule for this helper names them any more, so an account that still has one is neither
-// granted nor revoked: the helper refuses it until root removes them.
-const PRE_RENAME_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "production-ssh");
-const PRE_RENAME_SUDOERS_PREFIX = "vibe64-production-";
 
 function stagingKeysPath(username = "", keysRoot = helperStagingKeysRoot()) {
   return path.join(keysRoot, username);
 }
 
-// sudo reads no file in an included folder whose name has a dot, and an application's name has none.
+// sudo reads no file in an included folder whose name has a dot, and a staging account's name has none.
 function stagingSudoersPath(username = "", sudoersRoot = helperSudoersRoot()) {
   return path.join(sudoersRoot, `vibe64-staging-${username}`);
 }
@@ -47,36 +41,6 @@ function filePresent(file = "") {
     if (error?.code === "ENOENT") return false;
     throw error;
   }
-}
-
-/**
- * The account's key and sudo rule files under their names from before the rename to staging access, where root
- * has not removed them.
- * @param {string} username
- */
-function preRenameStagingFiles(username = "", {
-  preRenameKeysRoot = PRE_RENAME_KEYS_ROOT,
-  sudoersRoot = helperSudoersRoot()
-} = {}) {
-  return [
-    path.join(preRenameKeysRoot, username),
-    path.join(sudoersRoot, `${PRE_RENAME_SUDOERS_PREFIX}${username}`)
-  ].filter((file) => filePresent(file));
-}
-
-/** Why the account's staging access cannot change while files from before the rename remain, or "". */
-function preRenameStagingProblem(username = "", options = {}) {
-  const files = preRenameStagingFiles(username, options);
-  return files.length > 0
-    ? `${username} still has ${files.join(" and ")} from before production access was renamed staging access. ` +
-      "Root removes them, takes staging access back (staging-access revoke) and grants it again where the " +
-      "workspace owner allows it."
-    : "";
-}
-
-function assertNoPreRenameStagingFiles(username = "", options = {}) {
-  const problem = preRenameStagingProblem(username, options);
-  if (problem) throw new Error(`Vibe64 exec helper refused to change staging access: ${problem}`);
 }
 
 /** Whether root installed the account's staging key: the workspace owner allows its AI sessions in. */
@@ -139,11 +103,11 @@ function removeIfPresent(file = "") {
 }
 
 /**
- * Installs the project's key for its application account, the sudo rule for its own service and its login shell.
+ * Installs the project's key for its staging account, the sudo rule for its own service and its login shell.
  * The key works only from this host's own loopback, with no forwarding, and names the forced command that starts
- * every login in the live release (staging-shell), so a host whose sshd has no policy of Vibe64's for application
+ * every login in the staging release (staging-shell), so a host whose sshd has no policy of Vibe64's for staging
  * accounts confines them too; where host setup's policy names the same command, sshd runs the policy's.
- * @param {{ username: string, shell: string }} user the registered application account
+ * @param {{ username: string, shell: string }} user the registered staging account
  * @param {string} publicKey one `ssh-ed25519 <key>` line
  * @param {string} helperPath the command that starts this helper (helperCommand), which the sudo rule names
  */
@@ -151,12 +115,10 @@ function installStagingAccess(user, publicKey, helperPath, {
   accountDatabase = helperAccountDatabase(),
   keysRoot = helperStagingKeysRoot(),
   prefixParent,
-  preRenameKeysRoot = PRE_RENAME_KEYS_ROOT,
   rootUid = ROOT_UID,
   runRoot = runRootCommand,
   sudoersRoot = helperSudoersRoot()
 } = {}) {
-  assertNoPreRenameStagingFiles(user.username, { preRenameKeysRoot, sudoersRoot });
   ensureStagingKeysRoot(keysRoot, rootUid);
   replaceRootFile(
     stagingKeysPath(user.username, keysRoot),
@@ -187,25 +149,23 @@ function removeAtJobs(username = "", runRootAllowFailure = runRootCommandAllowFa
 /**
  * Takes the account's staging access back: its key, its sudo rule and its login shell, then ends the
  * logins still open and removes what a login could leave to run later, outside any login: the account's
- * crontab, its at jobs and lingering. The account's release service runs outside any login and keeps running.
- * @param {{ username: string, shell?: string } | null} user the application account, if it still exists
+ * crontab, its at jobs and lingering. The account's staging service runs outside any login and keeps running.
+ * @param {{ username: string, shell?: string } | null} user the staging account, if it still exists
  * @param {string} username
  */
 function removeStagingAccess(user, username, {
   accountDatabase = helperAccountDatabase(),
   keysRoot = helperStagingKeysRoot(),
   prefixParent,
-  preRenameKeysRoot = PRE_RENAME_KEYS_ROOT,
   runRoot = runRootCommand,
   runRootAllowFailure = runRootCommandAllowFailure,
   sudoersRoot = helperSudoersRoot()
 } = {}) {
-  assertNoPreRenameStagingFiles(username, { preRenameKeysRoot, sudoersRoot });
   const removedKey = removeIfPresent(stagingKeysPath(username, keysRoot));
   const removedRule = removeIfPresent(stagingSudoersPath(username, sudoersRoot));
   if (!user) return removedKey || removedRule;
-  if (user.shell !== APPLICATION_SHELL) {
-    changeLoginShell(username, APPLICATION_SHELL, accountDatabase, { prefixParent, run: runRoot });
+  if (user.shell !== STAGING_ACCOUNT_SHELL) {
+    changeLoginShell(username, STAGING_ACCOUNT_SHELL, accountDatabase, { prefixParent, run: runRoot });
   }
   // Each of these reports a failure when there is nothing to end or remove.
   runRootAllowFailure("loginctl", ["disable-linger", username]);
@@ -217,7 +177,6 @@ function removeStagingAccess(user, username, {
 
 export {
   installStagingAccess,
-  preRenameStagingProblem,
   removeStagingAccess,
   STAGING_LOGIN_SHELL,
   stagingAccessGranted

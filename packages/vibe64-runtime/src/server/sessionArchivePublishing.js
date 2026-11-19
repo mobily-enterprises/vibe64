@@ -16,7 +16,7 @@ import {
   runCommand,
   sessionArchiveMetadataPath,
   sessionArchivePath,
-  sessionArchiveStagingRoot
+  sessionArchivePackingRoot
 } from "./sessionStoreLayout.js";
 import { enqueueSessionMutation } from "./sessionStoreLocks.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -230,7 +230,7 @@ function createSessionArchivePublishing({
       ]);
     }
 
-    const stagedRoot = path.join(sessionArchiveStagingRoot(rootPaths), `${sessionPaths.sessionId}-${randomUUID()}`);
+    const stagedRoot = path.join(sessionArchivePackingRoot(rootPaths), `${sessionPaths.sessionId}-${randomUUID()}`);
     const stagedArchivePath = path.join(stagedRoot, `${sessionPaths.sessionId}.tar.gz`);
     const stagedMetadataPath = path.join(stagedRoot, `${sessionPaths.sessionId}.json`);
     const archivedAt = state.now().toISOString();

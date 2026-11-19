@@ -13,7 +13,7 @@ const ACCOUNT_DATABASES = Object.freeze(["files", "extrausers"]);
 // systemd's folder for the system's own units, and sudo's for added rules.
 const SYSTEMD_UNIT_ROOT = "/etc/systemd/system";
 const SUDOERS_ROOT = "/etc/sudoers.d";
-// The folder host setup's SSH policy names for application accounts' keys.
+// The folder host setup's SSH policy names for staging accounts' keys.
 const STAGING_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "staging-ssh");
 // A command a sudo rule, a unit's ExecStart and a shell function each name as it is: an absolute path whose parts
 // hold no character any of them would read as more than a name.
@@ -93,7 +93,7 @@ function helperSudoersRoot(settings = helperSettings()) {
 }
 
 /**
- * The folder the helper writes application accounts' staging keys to, one file per account: the one host setup's
+ * The folder the helper writes staging accounts' staging keys to, one file per account: the one host setup's
  * SSH policy names, unless the host's helper settings name another (`VIBE64_STAGING_KEYS_ROOT`), one the host's
  * sshd reads each account's keys from by its name.
  * @param {Record<string, string>} [settings] the host's helper settings
@@ -104,7 +104,7 @@ function helperStagingKeysRoot(settings = helperSettings()) {
 
 /**
  * How the helper's later runs start it: the staging sudo rule and the staging shell's commands, staging-enter,
- * release units' ExecStart and managed runs. It is the file the helper runs from, unless the host's helper settings
+ * staging units' ExecStart and managed runs. It is the file the helper runs from, unless the host's helper settings
  * name the command the host starts it with (`VIBE64_EXEC_HELPER_COMMAND`): a host that starts it through a
  * launcher, which names the settings folder (`VIBE64_HOST_SETTINGS_ROOT`), names that launcher, so a later run
  * reads the same folder.

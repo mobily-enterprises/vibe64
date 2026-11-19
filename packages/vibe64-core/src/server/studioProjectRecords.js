@@ -26,7 +26,7 @@ import {
   normalizeProjectSlug,
   EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
   resolveProjectSessionsRoot,
-  resolveProjectDeploymentsRoot,
+  resolveProjectStagingRoot,
   resolveProjectRuntimeFilesRoot,
   resolveProjectRuntimeConfigRoot
 } from "./projectState.js";
@@ -288,8 +288,8 @@ function workspaceProjectRecord({
     canonicalRepositoryPath: repositoryStorage?.pathField === "canonicalRepositoryPath"
       ? repositoryStorage.path
       : "",
-    deploymentsRoot: projectRuntimeRoot
-      ? resolveProjectDeploymentsRoot({
+    stagingRoot: projectRuntimeRoot
+      ? resolveProjectStagingRoot({
         projectRuntimeRoot
       })
       : "",

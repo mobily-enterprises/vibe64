@@ -41,7 +41,7 @@ function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase
       needs: null,
       problem: {
         ...problem("production_deployment_invalid", `genesis/stack.md's Deployment section can't be used${Number.isInteger(line)
-          ? ` (line ${line} of the section)` : ""}: ${why} Fix it in genesis/stack.md (the coding agent can do this), Save, then deploy.`),
+          ? ` (line ${line} of the section)` : ""}: ${why} Fix it in genesis/stack.md (the coding agent can do this), Save, then deploy to production.`),
         ...(Number.isInteger(line) ? { line } : {})
       }
     };
@@ -66,7 +66,7 @@ function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase
         needs: null,
         problem: problem("production_resource_unsupported", `genesis/stack.md declares ${id} as a ${kind} database, which `
           + "Production can't share between its instances. Declare it as a mysql or postgresql resource in genesis/stack.md "
-          + "(the coding agent can do this), Save, then deploy.")
+          + "(the coding agent can do this), Save, then deploy to production.")
       };
     } else {
       // A resource Production does not make (an API account of the person's own, for example): its settings come

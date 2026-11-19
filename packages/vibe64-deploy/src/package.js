@@ -39,14 +39,14 @@ async function archiveProblem({ commit, git }) {
       code: "production_own_declaration",
       message: "The saved work has its own mobilynet.json, but Production makes the app's package from genesis/stack.md: say "
         + "what the app needs there (its Deployment section and ## Resources; the coding agent can do this), remove "
-        + "mobilynet.json, Save, then deploy."
+        + "mobilynet.json, Save, then deploy to production."
     };
   }
   if (scriptsFolderTaken) {
     return {
       code: "vibe64_production_folder_taken",
       message: `The saved work has its own ${APP_SCRIPTS_FOLDER}, where Vibe64 puts the build and service scripts of the `
-        + "package it makes. Rename it, Save, then deploy."
+        + "package it makes. Rename it, Save, then deploy to production."
     };
   }
   return null;
@@ -79,7 +79,7 @@ async function packArchive({ commit, git, scratch, scripts, maxBytes = PACKAGE_M
   if (bytes.length > maxBytes) {
     throw packageError(
       `The packed app is ${megabytes(bytes.length)} MiB; Production takes at most `
-      + `${megabytes(maxBytes)} MiB. Keep built files and large assets out of the repository, Save, then deploy.`,
+      + `${megabytes(maxBytes)} MiB. Keep built files and large assets out of the repository, Save, then deploy to production.`,
       "vibe64_production_package_too_large"
     );
   }
@@ -156,7 +156,7 @@ function settingsPerService(needs, envRecords = []) {
   const publicId = needs.services.find((service) => service.exposure === "public")?.id;
   for (const record of envRecords) {
     const problem = envEntryProblem(record, needs);
-    if (problem) throw packageError(`${problem} Remove it from the Production Env, then deploy.`, "vibe64_production_env_invalid");
+    if (problem) throw packageError(`${problem} Remove it from the Production Env, then deploy to production.`, "vibe64_production_env_invalid");
   }
   const declared = stackSettingsPerService(needs);
   return Object.fromEntries(needs.services.map((service) => {

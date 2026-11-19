@@ -115,7 +115,7 @@ function quotaOf(offer, needs, effective, thingOf, problems) {
     const short = line.used + line.adding - line.limit;
     if (line.adding > 0 && short > 0) {
       problems.push(problem("production_quota_short", `${offer.title}'s quota of ${line.unit} for this project is ${line.limit}, ${line.used} in use: this Deploy `
-        + `needs ${line.adding} more, ${short} more than is left. Ask ${offer.title} to raise it, or choose smaller sizes or fewer instances, then deploy.`, `quota.${line.quota}`));
+        + `needs ${line.adding} more, ${short} more than is left. Ask ${offer.title} to raise it, or choose smaller sizes or fewer instances, then deploy to production.`, `quota.${line.quota}`));
     }
   }
   return { checked: true, quotas: lines };
@@ -163,7 +163,7 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
       const decision = decisions[key] ?? null;
       if (!decision) {
         problems.push(problem("production_drift_undecided", `${item.name}: size ${thing.size} at ${offer.title}, ${item.size} in your choices. `
-          + `Keep ${offer.title}'s value or put yours back, then deploy.`, key));
+          + `Keep ${offer.title}'s value or put yours back, then deploy to production.`, key));
       }
       return { field, provider: thing[field], recorded: item[field], decision };
     });
@@ -254,7 +254,7 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
     } else if (thing.resourceKind && thing.resourceKind !== resource.kind) {
       problems.push(problem("production_resource_kind_changed", `${resource.id} is a ${thing.resourceKind} at ${offer.title} and genesis/stack.md now `
         + `says ${resource.kind}. A Deploy never replaces what holds data: keep ${resource.id} as it was (it is then disconnected, its data `
-        + "kept) and declare the new one under a new name in genesis/stack.md (the coding agent can do this), Save, then deploy.", key));
+        + "kept) and declare the new one under a new name in genesis/stack.md (the coding agent can do this), Save, then deploy to production.", key));
     } else if (thing.size !== choice.size) {
       verb = "changed";
       changes.push({ field: "size", from: thing.size, to: choice.size });

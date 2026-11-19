@@ -62,7 +62,7 @@ function commandCallerEnv(env = {}, options = {}) {
   rejectCallerEnvPolicy(callerEnv);
   const passthrough = Object.fromEntries(Object.entries(callerEnv)
     .filter(([key]) => !POLICY_OWNED_CALLER_ENV_NAMES.has(key)));
-  if (envPolicy === "deployment") {
+  if (envPolicy === "staging") {
     return passthrough;
   }
   return {

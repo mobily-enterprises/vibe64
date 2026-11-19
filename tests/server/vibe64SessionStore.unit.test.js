@@ -810,7 +810,7 @@ test("renewal discovery includes ordinary predecessor candidates after restart",
   });
 });
 
-test("renewal successor creation ignores and removes incomplete unpublished staging trees", async (t) => {
+test("renewal successor creation ignores and removes incomplete unpublished renewal trees", async (t) => {
   const crashBoundaries = [
     {
       name: "directory only",
@@ -2372,7 +2372,7 @@ test("session creation absence refuses every exact lifecycle and source residue 
     ["archive payload alone", "sessions/archived/reserved-session.tar.gz", "file"],
     ["creation directory stage", "sessions/active/.creating/reserved-session.123.crash"],
     ["creation file stage", "sessions/active/.creating/reserved-session.123.crash", "file"],
-    ["archive stage", "sessions/archived/.staging/reserved-session-crash"],
+    ["archive stage", "sessions/archived/.packing/reserved-session-crash"],
     ["prepared renewal", "sessions/archived/.renewals/reserved-session"],
     ["building renewal", "sessions/archived/.renewals/.building/reserved-session"],
     ["publishing renewal", "sessions/archived/.renewals/.publishing/reserved-session"],
@@ -2432,7 +2432,7 @@ test("session creation absence rejects malformed lifecycle containers but ignore
   }
   for (const relativePath of [
     "sessions", "sessions/active", "sessions/closing", "sessions/archived",
-    "sessions/active/.creating", "sessions/archived/.staging", "sessions/archived/.renewals",
+    "sessions/active/.creating", "sessions/archived/.packing", "sessions/archived/.renewals",
     "sessions/archived/.renewals/.building", "sessions/archived/.renewals/.publishing", "session-renewals"
   ]) {
     await t.test(relativePath, async () => {
@@ -2462,7 +2462,7 @@ test("session creation absence rejects malformed lifecycle containers but ignore
     const store = createStore(targetRoot);
     for (const relativePath of [
       "sessions/active/.creating/reserved-session-other.123.crash",
-      "sessions/archived/.staging/reserved-sessionother-crash"
+      "sessions/archived/.packing/reserved-sessionother-crash"
     ]) {
       await mkdir(path.join(projectRuntimeRoot(targetRoot), relativePath), { recursive: true });
     }

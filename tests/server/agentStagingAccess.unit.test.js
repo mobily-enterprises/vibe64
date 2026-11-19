@@ -48,9 +48,9 @@ function stagingHost({ enabled = true, configPath = "/srv/state/demo/staging-ssh
       state.opened.push(input);
       return refusal(input.actor) || { configPath, ok: true };
     },
-    async readDeployment({ actor }) {
+    async readStagingStatus({ actor }) {
       const refused = refusal(actor);
-      return { deployment: { aiAccess: { enabled: !refused, reason: refused?.error || "" }, state: "deployed" }, ok: true };
+      return { staging: { aiAccess: { enabled: !refused, reason: refused?.error || "" }, state: "on-staging" }, ok: true };
     },
     async readStagingValues(input) {
       state.reads.push(input);
@@ -75,7 +75,7 @@ function stagingHost({ enabled = true, configPath = "/srv/state/demo/staging-ssh
   };
 }
 
-async function boundCommand(staging, actor = OWNER, sessionId = "prod-session") {
+async function boundCommand(staging, actor = OWNER, sessionId = "owner-session") {
   const command = createAgentEnvCommandService({
     logger: silentLogger,
     stagingEnvironmentProvider: staging,
@@ -87,7 +87,7 @@ async function boundCommand(staging, actor = OWNER, sessionId = "prod-session") 
 }
 
 function run(command, args) {
-  return command.run({ args, sessionId: "prod-session" });
+  return command.run({ args, sessionId: "owner-session" });
 }
 
 function runProcess(file, args, env, cwd = undefined) {
@@ -102,7 +102,7 @@ function runProcess(file, args, env, cwd = undefined) {
   });
 }
 
-test("env get and export staging give the live release's values to a session the host allows, and say why not otherwise", async () => {
+test("env get and export staging give the staging release's values to a session the host allows, and say why not otherwise", async () => {
   const staging = stagingHost();
   const owner = await boundCommand(staging);
 
@@ -111,7 +111,7 @@ test("env get and export staging give the live release's values to a session the
   assert.equal(value.stdout, "s3cr'et value\n");
   // The host hears who asks, from which session, for which project and which key, so it can decide and record it.
   assert.deepEqual(staging.state.reads.at(-1),
-    { actor: OWNER, keys: ["DB_PASSWORD"], projectSlug: "demo", sessionId: "prod-session" });
+    { actor: OWNER, keys: ["DB_PASSWORD"], projectSlug: "demo", sessionId: "owner-session" });
 
   const exported = await run(owner, ["export", "staging"]);
   assert.equal(exported.exitCode, 0, exported.stderr);
@@ -124,7 +124,7 @@ test("env get and export staging give the live release's values to a session the
 
   const missing = await run(owner, ["get", "staging", "NOT_THERE"]);
   assert.equal(missing.exitCode, 1);
-  assert.match(missing.stderr, /The live release 20261111_080000z-ab12cd34 runs without NOT_THERE\./u);
+  assert.match(missing.stderr, /The staging release 20261111_080000z-ab12cd34 runs without NOT_THERE\./u);
 
   for (const args of [["get", "development", "DB_HOST"], ["get", "staging"], ["export", "staging", "DB_HOST"]]) {
     const wrong = await run(owner, args);
@@ -142,47 +142,47 @@ test("env get and export staging give the live release's values to a session the
   assert.doesNotMatch(String(off.stdout ?? ""), /s3cr/u);
 });
 
-test("deployment ssh-config answers with the host's configuration only for a session it allows, with the command line for its record", async () => {
+test("staging ssh-config answers with the host's configuration only for a session it allows, with the command line for its record", async () => {
   const staging = stagingHost();
   const owner = await boundCommand(staging);
 
-  const opened = await run(owner, ["deployment", "ssh-config", "--", "ssh", "staging", "ls", "-la"]);
+  const opened = await run(owner, ["staging", "ssh-config", "--", "ssh", "staging", "ls", "-la"]);
   assert.equal(opened.exitCode, 0, opened.stderr);
   assert.equal(opened.stdout, "/srv/state/demo/staging-ssh/config\n");
   assert.deepEqual(staging.state.opened.at(-1),
-    { actor: OWNER, command: "ssh staging ls -la", projectSlug: "demo", sessionId: "prod-session" });
+    { actor: OWNER, command: "ssh staging ls -la", projectSlug: "demo", sessionId: "owner-session" });
 
-  const status = await run(owner, ["deployment", "status"]);
+  const status = await run(owner, ["staging", "status"]);
   assert.match(status.stdout, /^AI access to staging: on for this session \(ssh staging; vibe64-helper env get\|export staging\)$/mu);
   // With how to treat real people's data there, and where its commands are listed.
   assert.match(status.stdout, /^ {2}It may hold real people's data: when possible read first, back up what you will change/mu);
-  assert.match(status.stdout, /vibe64-helper deployment --help lists what works there \(staging-logs, staging-enter, \.\.\.\)\.$/mu);
+  assert.match(status.stdout, /vibe64-helper staging --help lists what works there \(staging-logs, staging-enter, \.\.\.\)\.$/mu);
 
-  for (const args of [["deployment", "ssh-config", "--json"], ["deployment", "status", "--", "ls"], ["status", "--", "ls"]]) {
+  for (const args of [["staging", "ssh-config", "--json"], ["staging", "status", "--", "ls"], ["status", "--", "ls"]]) {
     assert.equal((await run(owner, args)).exitCode, 2, args.join(" "));
   }
 
   staging.state.enabled = false;
-  const off = await run(owner, ["deployment", "ssh-config", "--", "ssh", "staging"]);
+  const off = await run(owner, ["staging", "ssh-config", "--", "ssh", "staging"]);
   assert.equal(off.exitCode, 1);
   assert.equal(off.stderr, `${REFUSAL}\n`);
-  assert.match((await run(owner, ["deployment", "status"])).stdout,
+  assert.match((await run(owner, ["staging", "status"])).stdout,
     new RegExp(`^AI access to staging: off — ${REFUSAL.replace(/[.]/gu, "\\$&")}$`, "mu"));
 });
 
 test("an installation without staging refuses staging values and ssh, and installs no ssh wrapper", async () => {
   const command = await boundCommand(NO_STAGING_ENVIRONMENT);
-  for (const args of [["get", "staging", "DB_HOST"], ["export", "staging"], ["deployment", "ssh-config"]]) {
+  for (const args of [["get", "staging", "DB_HOST"], ["export", "staging"], ["staging", "ssh-config"]]) {
     const result = await run(command, args);
     assert.equal(result.exitCode, 1, args.join(" "));
     assert.equal(result.stderr, "This Vibe64 installation does not publish projects.\n");
   }
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-no-staging-"));
   try {
-    await prepareAgentEnvCommand({ commandService: command, sessionId: "prod-session", wrapperHostDir: root });
+    await prepareAgentEnvCommand({ commandService: command, sessionId: "owner-session", wrapperHostDir: root });
     await assert.rejects(access(path.join(root, "ssh")), { code: "ENOENT" });
   } finally {
-    await command.closeAllForSession("prod-session");
+    await command.closeAllForSession("owner-session");
     await rm(root, { force: true, recursive: true });
   }
 });
@@ -199,9 +199,9 @@ test("the session's ssh wrapper runs ssh with the host's staging configuration o
   const staging = stagingHost({ configPath });
   const command = await boundCommand(staging);
   try {
-    await writeFile(configPath, "Host staging\n  HostName 127.0.0.1\n  User v64a_0123456789ab\n", { mode: 0o600 });
+    await writeFile(configPath, "Host staging\n  HostName 127.0.0.1\n  User v64s_0123456789ab\n", { mode: 0o600 });
     const prepared = await runWithProjectRequestContext({ slug: "demo", vibe64User: OWNER },
-      () => prepareAgentEnvCommand({ commandService: command, sessionId: "prod-session", wrapperHostDir: root }));
+      () => prepareAgentEnvCommand({ commandService: command, sessionId: "owner-session", wrapperHostDir: root }));
     for (const name of ["ssh", "scp", "sftp"]) {
       assert.equal((await stat(path.join(root, name))).mode & 0o777, 0o755, name);
     }
@@ -211,7 +211,7 @@ test("the session's ssh wrapper runs ssh with the host's staging configuration o
     const resolved = await runProcess(path.join(root, "ssh"), ["-G", "staging"], env);
     assert.equal(resolved.code, 0, resolved.stderr);
     assert.match(resolved.stdout, /^hostname 127\.0\.0\.1$/mu);
-    assert.match(resolved.stdout, /^user v64a_0123456789ab$/mu);
+    assert.match(resolved.stdout, /^user v64s_0123456789ab$/mu);
     assert.equal(staging.state.opened.at(-1).command, "ssh -G staging");
 
     const elsewhere = await runProcess(path.join(root, "ssh"), ["-G", "example.test"], env);
@@ -225,7 +225,7 @@ test("the session's ssh wrapper runs ssh with the host's staging configuration o
     assert.equal(refused.stderr, `${REFUSAL}\n`);
     assert.equal(refused.stdout, "");
   } finally {
-    await command.closeAllForSession("prod-session");
+    await command.closeAllForSession("owner-session");
     await rm(root, { force: true, recursive: true });
   }
 });
@@ -233,7 +233,7 @@ test("the session's ssh wrapper runs ssh with the host's staging configuration o
 test("the ssh wrappers name the system command and quote the Env command's path", () => {
   const source = __testables.stagingSshWrapperSource("scp", "/srv/it's here/vibe64-env");
   assert.match(source, /^#!\/bin\/sh\n/u);
-  assert.match(source, /config="\$\('\/srv\/it'\\''s here\/vibe64-env' deployment ssh-config -- scp "\$@"\)" \|\| exit 255/u);
+  assert.match(source, /config="\$\('\/srv\/it'\\''s here\/vibe64-env' staging ssh-config -- scp "\$@"\)" \|\| exit 255/u);
   assert.match(source, /exec \/usr\/bin\/scp -F "\$config" "\$@"\nfi\n/u);
   assert.match(source, /\nexec \/usr\/bin\/scp "\$@"\n$/u);
 });

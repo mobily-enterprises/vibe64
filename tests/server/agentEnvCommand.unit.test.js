@@ -84,11 +84,11 @@ function createProjectService({
 }
 
 function createStagingProvider({
-  deployment = null,
+  staging = null,
   records = []
 } = {}) {
   const state = {
-    deploymentReads: [],
+    stagingStatusReads: [],
     reads: [],
     records: [...records],
     removes: [],
@@ -99,9 +99,9 @@ function createStagingProvider({
     isUserValueRecord(record = null) {
       return record?.source === "user_override";
     },
-    async readDeployment(input = {}) {
-      state.deploymentReads.push(input);
-      return { deployment, ok: true };
+    async readStagingStatus(input = {}) {
+      state.stagingStatusReads.push(input);
+      return { staging, ok: true };
     },
     async readRecords(input = {}) {
       state.reads.push(input);
@@ -189,7 +189,7 @@ test("agent Env status reports both scopes without exposing values", async () =>
       editable: true,
       key: "API_TOKEN",
       owner: "user",
-      requiredFor: ["deploy"],
+      requiredFor: ["staging-publish"],
       scope: "staging",
       secret: true,
       source: "user_override",
@@ -482,13 +482,14 @@ test("agent Env refuses system-managed values and unavailable staging writes", a
   assert.equal(staging.ok, false);
   assert.equal(staging.code, "vibe64_agent_env_command_staging_unavailable");
   assert.doesNotMatch(staging.stderr, /attempted-staging/u);
-  // The scope words from before production was renamed staging are refused, naming staging.
-  for (const [args, word] of [[["set", "production", "API_TOKEN"], "production"], [["status", "prod"], "prod"],
-    [["get", "production", "API_TOKEN"], "production"]]) {
-    const renamed = await command.run({ args, sessionId: "guard-session", stdin: "attempted-renamed" });
-    assert.equal(renamed.exitCode, 2);
-    assert.equal(renamed.code, "vibe64_agent_env_command_usage");
-    assert.match(renamed.stderr, new RegExp(`^The ${word} scope was renamed staging: use env ${args[0]} staging\\.\\n`, "u"));
+  // production and prod are no Env scope: refused as any unknown scope.
+  for (const [args, message] of [[["set", "production", "API_TOKEN"], "set requires an explicit development or staging scope."],
+    [["status", "prod"], "Status accepts only an optional development, staging, or all scope."],
+    [["get", "production", "API_TOKEN"], "get reads one staging value: env get staging <KEY>."]]) {
+    const refused = await command.run({ args, sessionId: "guard-session", stdin: "attempted-production" });
+    assert.equal(refused.exitCode, 2);
+    assert.equal(refused.code, "vibe64_agent_env_command_usage");
+    assert.equal(refused.stderr.split("\n")[0], message);
   }
   assert.deepEqual(project.state.saves, []);
 });
@@ -691,7 +692,7 @@ test("agent Env preparation repairs one missing cached socket and fences its old
 });
 
 // What a host could hand back, including fields and values the command must never pass on.
-function hostedDeployment() {
+function hostedStagingStatus() {
   return {
     addresses: [
       { label: "Vibe64 URL", url: "https://books.example.test" },
@@ -700,7 +701,7 @@ function hostedDeployment() {
     blockers: ["Secret 'Stripe' is not set for staging."],
     environmentValues: { SESSION_SECRET: "host-secret-value" },
     error: "npm ERR! host-build-output",
-    latestDeploy: { at: "2026-11-06T09:00:05.000Z", error: "host-failure-detail", status: "failed" },
+    latestStagingPublish: { at: "2026-11-06T09:00:05.000Z", error: "host-failure-detail", status: "failed" },
     notes: ["The project owner changes Staging Env on the project's Deploy page."],
     records: [
       { generated: true, key: "SESSION_SECRET", requiredFor: [], secret: true, source: "user_override",
@@ -711,7 +712,7 @@ function hostedDeployment() {
     ],
     release: {
       commit: "0123456789abcdef0123456789abcdef01234567",
-      deployedAt: "2026-11-06T09:00:00.000Z",
+      stagingPublishedAt: "2026-11-06T09:00:00.000Z",
       environment: { values: { PUBLIC_ORIGIN: "https://plain-host-value.example.test" } },
       id: "20261106_090000z-ab12cd34",
       serveEnvironment: [{ effect: "production (the host's default for Node apps)", key: "NODE_ENV", value: "production-value" }],
@@ -721,22 +722,22 @@ function hostedDeployment() {
         { command: "rm -rf /", label: "Injected", role: "restart" }
       ]
     },
-    state: "deployed"
+    state: "on-staging"
   };
 }
 
-test("agent deployment status shows the bound project's deployment and never a value", async () => {
+test("agent staging status shows the bound project's staging and never a value", async () => {
   const project = createProjectService();
-  const staging = createStagingProvider({ deployment: hostedDeployment() });
+  const staging = createStagingProvider({ staging: hostedStagingStatus() });
   const command = createAgentEnvCommandService({ logger: silentLogger,
     stagingEnvironmentProvider: staging,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project
   });
-  await command.bindSession("deployment-session");
+  await command.bindSession("staging-session");
 
-  const human = await command.run({ args: ["deployment", "status"], sessionId: "deployment-session" });
-  const json = await command.run({ args: ["deployment", "--json"], sessionId: "deployment-session" });
+  const human = await command.run({ args: ["staging", "status"], sessionId: "staging-session" });
+  const json = await command.run({ args: ["staging", "--json"], sessionId: "staging-session" });
   const payload = JSON.parse(json.stdout);
 
   assert.equal(human.ok, true);
@@ -760,7 +761,7 @@ test("agent deployment status shows the bound project's deployment and never a v
     }
   }
   assert.deepEqual(Object.keys(payload).sort(),
-    ["addresses", "aiAccess", "blockers", "latestDeploy", "notes", "ok", "records", "release", "state"]);
+    ["addresses", "aiAccess", "blockers", "latestStagingPublish", "notes", "ok", "records", "release", "state"]);
   // A host that says nothing about it does not let the session use staging itself.
   assert.deepEqual(payload.aiAccess, { enabled: false, reason: "" });
   assert.match(human.stdout, /^AI access to staging: off$/mu);
@@ -768,50 +769,50 @@ test("agent deployment status shows the bound project's deployment and never a v
     ["configured", "generated", "key", "requiredFor", "secret", "source", "sourceLabel"]);
   assert.deepEqual(payload.release.steps.map((step) => step.role), ["prepare", "serve"]);
   // Only the session's bound project is asked for.
-  assert.deepEqual(staging.state.deploymentReads,
+  assert.deepEqual(staging.state.stagingStatusReads,
     [{ actor: null, projectSlug: "demo" }, { actor: null, projectSlug: "demo" }]);
   assert.deepEqual(project.state.contexts, ["demo", "demo"]);
   assert.deepEqual(staging.state.sets, []);
   assert.deepEqual(staging.state.removes, []);
 
-  const help = await command.run({ args: ["deployment", "--help"], sessionId: "deployment-session" });
-  assert.match(help.stdout, /vibe64-helper deployment status \[--json\]/u);
+  const help = await command.run({ args: ["staging", "--help"], sessionId: "staging-session" });
+  assert.match(help.stdout, /vibe64-helper staging status \[--json\]/u);
   assert.match(help.stdout, /never shows a value and changes nothing/u);
-  const wrong = await command.run({ args: ["deployment", "restart"], sessionId: "deployment-session" });
+  const wrong = await command.run({ args: ["staging", "restart"], sessionId: "staging-session" });
   assert.equal(wrong.exitCode, 2);
-  assert.match(wrong.stderr, /deployment accepts only status and --json/u);
+  assert.match(wrong.stderr, /staging accepts only status and --json/u);
 });
 
-test("agent deployment status says plainly when the installation does not publish projects", async () => {
+test("agent staging status says plainly when the installation does not publish to staging", async () => {
   const command = createAgentEnvCommandService({ logger: silentLogger,
     stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project: createProjectService()
   });
   await command.bindSession("local-session");
-  const result = await command.run({ args: ["deployment", "status"], sessionId: "local-session" });
+  const result = await command.run({ args: ["staging", "status"], sessionId: "local-session" });
   assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_agent_deployment_unavailable");
+  assert.equal(result.code, "vibe64_agent_staging_status_unavailable");
   assert.equal(result.stderr, "This Vibe64 installation does not publish projects.\n");
 });
 
-test("vibe64-helper deployment status reaches the session's Env command socket", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-deployment-command-"));
-  const staging = createStagingProvider({ deployment: hostedDeployment() });
+test("vibe64-helper staging status reaches the session's Env command socket", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-staging-command-"));
+  const staging = createStagingProvider({ staging: hostedStagingStatus() });
   const command = createAgentEnvCommandService({ logger: silentLogger,
     stagingEnvironmentProvider: staging, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     project: createProjectService()
   });
-  const sessionId = "deployment-wrapper-session";
+  const sessionId = "staging-wrapper-session";
   try {
     const prepared = await prepareAgentEnvCommand({ commandService: command, sessionId, wrapperHostDir: root });
     await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: root });
-    const executed = await runWithInput(path.join(root, "vibe64-helper"), ["deployment", "status"], {
+    const executed = await runWithInput(path.join(root, "vibe64-helper"), ["staging", "status"], {
       env: { ...process.env, ...prepared.env }
     });
     assert.equal(executed.code, 0, executed.stderr);
     assert.match(executed.stdout, /^Staging: published$/mu);
     assert.doesNotMatch(executed.stdout, /host-secret-value/u);
-    assert.deepEqual(staging.state.deploymentReads, [{ actor: null, projectSlug: "demo" }]);
+    assert.deepEqual(staging.state.stagingStatusReads, [{ actor: null, projectSlug: "demo" }]);
   } finally {
     await command.closeAllForSession(sessionId);
     await rm(root, { force: true, recursive: true });

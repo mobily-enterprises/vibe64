@@ -220,7 +220,7 @@ async function runBuildStage({
     }
   }
   const home = await mkdtemp(path.join(os.tmpdir(), "vibe64-build-home-"));
-  const staging = `${directory}.partial-${randomUUID()}`;
+  const partial = `${directory}.partial-${randomUUID()}`;
   try {
     await mkdir(path.join(home, "tmp"), { recursive: true });
     const env = buildStageEnvironment({ baseEnvironment, declared: environment, home, cacheDirectory });
@@ -240,7 +240,7 @@ async function runBuildStage({
         );
       }
     }
-    const filesRoot = path.join(staging, "files");
+    const filesRoot = path.join(partial, "files");
     await mkdir(filesRoot, { recursive: true });
     for (const output of outputPaths) {
       const details = await stat(output).catch(() => null);
@@ -254,13 +254,13 @@ async function runBuildStage({
       await chmod(absoluteFile, 0o444);
     }
     const manifest = { contract: VIBE64_PUBLISH_ARTIFACTS_CONTRACT, planHash, package: packageId, files };
-    await writeFile(path.join(staging, "manifest.json"), canonicalJson(manifest), { mode: 0o444 });
+    await writeFile(path.join(partial, "manifest.json"), canonicalJson(manifest), { mode: 0o444 });
     await mkdir(path.dirname(directory), { recursive: true });
-    await rename(staging, directory);
+    await rename(partial, directory);
     return { directory, manifest, digest: artifactsDigest(manifest), reused: false };
   } finally {
     await rm(home, { recursive: true, force: true });
-    await rm(staging, { recursive: true, force: true });
+    await rm(partial, { recursive: true, force: true });
   }
 }
 

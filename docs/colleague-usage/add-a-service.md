@@ -6,9 +6,9 @@ that session's `genesis/stack.md`, then the AI connects your app to it in the sa
 session. Nothing is saved: review the work and **Save** it as usual.
 
 The dialog opens from the page where your editor offers **Add a service**, such as
-the page you deploy the project from. There, Colleague can show you the
-**Add a service** button and explain these steps, but it can't press **Add** for
-you.
+the host's **Deploy** page, where you publish to staging and deploy to production.
+There, Colleague can show you the **Add a service** button and explain these
+steps, but it can't press **Add** for you.
 
 ## Choose the session
 

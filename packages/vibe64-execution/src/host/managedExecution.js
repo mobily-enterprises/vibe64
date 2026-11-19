@@ -9,10 +9,10 @@ import { constants as osConstants } from "node:os";
 import process from "node:process";
 
 import {
-  applicationReleaseEnvironmentFile,
-  applicationSandboxAllowances,
-  resolveApplicationCwd
-} from "./applicationAccounts.js";
+  checkedStagingEnvironmentFile,
+  stagingSandboxAllowances,
+  resolveStagingAccountCwd
+} from "./stagingAccounts.js";
 import {
   ALLOWED_COMMANDS,
   helperChildEnv,
@@ -37,7 +37,7 @@ import {
   managedExecutionUnitName
 } from "./executionIdentity.js";
 import {
-  openApplicationExecutionReceipts,
+  openStagingExecutionReceipts,
   openWorkspaceExecutionReceipts,
   writeManagedExecutionResult
 } from "./executionReceipts.js";
@@ -116,15 +116,15 @@ function handleManagedExecutionOperation(payload = {}) {
     owner
   );
   const targetUser = managedExecutionTargetUser(payload, owner);
-  // A published application's commands (its build, release file work and
+  // A staging account's commands (its build, release file work and
   // staging database work) are finite and stay inside its own area.
-  const application = targetUser.application || null;
-  if (application && mode !== "capture") {
-    throw new Error("An application account runs only finite commands.");
+  const stagingAccount = targetUser.stagingAccount || null;
+  if (stagingAccount && mode !== "capture") {
+    throw new Error("A staging account runs only finite commands.");
   }
   const commandOperation = String(payload.commandOperation || "").trim();
-  const cwd = application
-    ? resolveApplicationCwd(payload.cwd || "", application)
+  const cwd = stagingAccount
+    ? resolveStagingAccountCwd(payload.cwd || "", stagingAccount)
     : resolveAllowedCwd(payload.cwd || "", owner.username, {
       operation: commandOperation,
       targetUser
@@ -133,34 +133,34 @@ function handleManagedExecutionOperation(payload = {}) {
   if (!command || /[\r\n]/u.test(command)) {
     throw new Error("Vibe64 exec helper rejected an invalid managed execution command.");
   }
-  if (!application && targetUser.username !== owner.username && !ALLOWED_COMMANDS.has(path.basename(command))) {
+  if (!stagingAccount && targetUser.username !== owner.username && !ALLOWED_COMMANDS.has(path.basename(command))) {
     throw new Error("Vibe64 exec helper rejected an unsupported real-user managed command.");
   }
   const args = Array.isArray(payload.args) ? payload.args.map((arg) => String(arg)) : [];
   const env = helperChildEnv(payload.env || {}, targetUser, owner.username, commandOperation);
   if (payload.usageRecordingPreload) {
-    if (application) {
-      throw new Error("An application account does not run the usage recorder.");
+    if (stagingAccount) {
+      throw new Error("A staging account does not run the usage recorder.");
     }
     env.NODE_OPTIONS = usageRecordingNodeOptions(payload.usageRecordingPreload);
   }
-  let releaseEnvironmentFile = "";
-  if (payload.releaseEnvironmentFile) {
-    if (!application) {
-      throw new Error("Release environment requires an application's own execution.");
+  let stagingEnvironmentFile = "";
+  if (payload.stagingEnvironmentFile) {
+    if (!stagingAccount) {
+      throw new Error("Staging environment requires a staging account's own execution.");
     }
-    releaseEnvironmentFile = applicationReleaseEnvironmentFile(payload.releaseEnvironmentFile, application, {
+    stagingEnvironmentFile = checkedStagingEnvironmentFile(payload.stagingEnvironmentFile, stagingAccount, {
       cwd,
       daemonUid: owner.uid,
       gid: targetUser.gid
     });
   }
-  // Only an application's own commands may run with what its release's
+  // Only a staging account's own commands may run with what its release's
   // Deployment section allows, and only what this host permits.
-  if (payload.sandboxAllowances !== undefined && !application) {
-    throw new Error("Sandbox allowances require an application's own execution.");
+  if (payload.sandboxAllowances !== undefined && !stagingAccount) {
+    throw new Error("Sandbox allowances require a staging account's own execution.");
   }
-  const sandboxAllowances = application ? applicationSandboxAllowances(payload.sandboxAllowances) : [];
+  const sandboxAllowances = stagingAccount ? stagingSandboxAllowances(payload.sandboxAllowances) : [];
   const memoryMaxBytes = managedExecutionInteger(
     payload.memoryMaxBytes,
     MANAGED_EXECUTION_MEMORY_MIN_BYTES,
@@ -205,11 +205,11 @@ function handleManagedExecutionOperation(payload = {}) {
       tasksMax: workTasksMax
     });
   }
-  const receipts = application
-    ? openApplicationExecutionReceipts(owner, { create: true })
+  const receipts = stagingAccount
+    ? openStagingExecutionReceipts(owner, { create: true })
     : openWorkspaceExecutionReceipts(owner, { create: true, gid: groupId });
   const receiptRoot = receipts.create(executionId, targetUser, {
-    ...(application ? { application: true } : {}),
+    ...(stagingAccount ? { stagingAccount: true } : {}),
     args,
     command,
     controllerLeaseName,
@@ -217,7 +217,7 @@ function handleManagedExecutionOperation(payload = {}) {
     env,
     inputBase64: String(payload.inputBase64 || ""),
     inputPresent: payload.inputPresent === true,
-    ...(releaseEnvironmentFile ? { releaseEnvironmentFile } : {}),
+    ...(stagingEnvironmentFile ? { stagingEnvironmentFile } : {}),
     executionId
   }, { privateDirectory: mode === "detached" });
   // The runner reads its command as the target user, with no privilege to lend.
@@ -231,9 +231,9 @@ function handleManagedExecutionOperation(payload = {}) {
     `--slice=${executionSlice}`,
     `--property=Description=Vibe64 ${kind} execution`,
     ...accountUnitLines(targetUser, { receiptRoot, sandboxAllowances }).map((line) => `--property=${line}`),
-    // The daemon's and a person's executions never see the daemon's private state; an application's sandbox has no
+    // The daemon's and a person's executions never see the daemon's private state; a staging account's sandbox has no
     // home at all.
-    ...(application ? [] : [`--property=${editorPrivateStateLine(owner)}`]),
+    ...(stagingAccount ? [] : [`--property=${editorPrivateStateLine(owner)}`]),
     `--property=WorkingDirectory=${cwd}`,
     "--property=KillMode=control-group",
     "--property=ExitType=cgroup",
@@ -293,8 +293,8 @@ async function runManagedExecutionPayload(payloadPath = "") {
   const controllerLease = controllerLeaseName
     ? await connectManagedExecutionController(controllerLeaseName)
     : null;
-  // As its unit's UMask= says: an application's files are its own alone.
-  process.umask(payload.application === true ? 0o077 : 0o007);
+  // As its unit's UMask= says: a staging account's files are its own alone.
+  process.umask(payload.stagingAccount === true ? 0o077 : 0o007);
   let child = null;
   let termination = null;
   let controllerLeaseClosed = false;
@@ -311,10 +311,10 @@ async function runManagedExecutionPayload(payloadPath = "") {
     child = spawn(command, Array.isArray(payload.args) ? payload.args.map(String) : [], {
       cwd: String(payload.cwd || "/"),
       detached: Boolean(controllerLease),
-      // The runner, as the execution's own user, loads the release environment.
-      env: payload.releaseEnvironmentFile
-        ? helperChildEnv({ ...process.env, ...readEnvironmentFile(payload.releaseEnvironmentFile), ...payload.env },
-          { application: payload.application === true, home: payload.env.HOME, username: payload.env.USER }, payload.env.USER)
+      // The runner, as the execution's own user, loads the staging environment.
+      env: payload.stagingEnvironmentFile
+        ? helperChildEnv({ ...process.env, ...readEnvironmentFile(payload.stagingEnvironmentFile), ...payload.env },
+          { stagingAccount: payload.stagingAccount === true, home: payload.env.HOME, username: payload.env.USER }, payload.env.USER)
         : payload.env && typeof payload.env === "object" && !Array.isArray(payload.env) ? payload.env : {},
       stdio: payload.inputPresent === true
         ? ["pipe", "inherit", "inherit"]
@@ -379,7 +379,7 @@ async function runManagedExecutionPayload(payloadPath = "") {
 
 // A managed service's controller lease is the socket its controller listens
 // on in the daemon's own runtime directory, where only the daemon adds
-// entries and no application can reach; an abstract socket name would be any
+// entries and no app can reach; an abstract socket name would be any
 // local account's to take first. Started for `owner`, it is exactly that
 // daemon's; the runner, given it by root, checks only its shape.
 function managedExecutionControllerLeaseName(value = "", lifecycle = "", owner = null) {

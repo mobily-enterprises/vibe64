@@ -396,7 +396,7 @@ function assistantModePrompt(mode, message, options = {}) {
     deslop: [
       "Perform Deslop directly using the project's Deslop guidance.",
       "You may edit code for behavior-preserving cleanup; earlier Auto planning restrictions do not apply.",
-      "Preserve existing behavior, unrelated work and staging.",
+      "Preserve existing behavior, unrelated work and staged changes.",
       "Use the user's selected commits or scope; otherwise clean up only the current task's changes.",
       "Do not implement features, fix behavior-changing defects, create an implementation plan, or delegate cleanup to another model.",
       "Report discovered defects separately without fixing them.",
@@ -406,19 +406,19 @@ function assistantModePrompt(mode, message, options = {}) {
     ui_pass: [
       "Perform the UI pass directly using the project's UI pass guidance, on the scope this request names.",
       "You may edit code to bring those screens in line with the project's UI guidance; earlier Auto planning restrictions do not apply.",
-      "Preserve each screen's behavior, unrelated work and staging.",
+      "Preserve each screen's behavior, unrelated work and staged changes.",
       "Do not implement features, fix behavior-changing defects, create an implementation plan, or delegate the pass to another model.",
       "Report discovered defects separately without fixing them.",
       "Check the screens you changed in the managed browser, run focused checks, then report what changed and what was verified.",
       "Do not commit, push or deploy."
     ].join(" "),
     // Any other pass Genesis offers: its composed prompt says what the pass does.
-    pass: "Perform the pass this request names directly, following the project's guidance for it. You may edit code for it; earlier Auto planning restrictions do not apply. Preserve unrelated work and staging. Do not implement features the pass does not call for, create an implementation plan, or delegate the pass to another model. Report discovered defects outside the pass separately without fixing them. Run focused checks, and check the screens you changed in the managed browser, then report what changed and what was verified. Do not commit, push or deploy.",
+    pass: "Perform the pass this request names directly, following the project's guidance for it. You may edit code for it; earlier Auto planning restrictions do not apply. Preserve unrelated work and staged changes. Do not implement features the pass does not call for, create an implementation plan, or delegate the pass to another model. Report discovered defects outside the pass separately without fixing them. Run focused checks, and check the screens you changed in the managed browser, then report what changed and what was verified. Do not commit, push or deploy.",
     review: [
       "Review the preceding coding work against the original request and accepted steering.",
       "Inspect actual files and relevant surrounding code. You may directly fix in-scope defects.",
       "Earlier Auto planning restrictions do not apply.",
-      "Preserve unrelated work and staging, and report out-of-scope defects without fixing them.",
+      "Preserve unrelated work and staged changes, and report out-of-scope defects without fixing them.",
       "For a cleanup-only request, apply the project's Deslop guidance and preserve behavior; report behavior-changing defects separately without fixing them.",
       "Perform the review yourself in this turn. Cleanup is optional and only runs when requested in this review's instructions.",
       "If implementation is missing or coding stopped for a decision, report that and preserve the decision for the user; do not start the original implementation from scratch.",

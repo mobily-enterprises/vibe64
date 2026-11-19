@@ -4,7 +4,7 @@ Open a project and select **Dashboard** beside **Preview**. The Dashboard provid
 the available session and project tools, including Files, Changes, Database,
 Architecture, AI Terminal, Project settings, Git log, Project files, Env, App access, Integrations, Packages, Issues
 and Pull requests. **Packages** turns the project into an app or package people install; see
-[Publish your project](publishing.md). Availability depends on the selected session, host and permissions.
+[Publish your project](packages.md). Availability depends on the selected session, host and permissions.
 On desktop the section list is grouped: tools under the **Project** label come first,
 then a **Session** label with the selected session's name and its tools. The
 highlighted pill marks the open section, and each page's header repeats that

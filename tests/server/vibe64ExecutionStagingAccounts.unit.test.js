@@ -8,38 +8,38 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
-  applicationIdentity,
-  applicationReleaseEnvironmentFile,
-  applicationReleaseServiceFiles,
-  applicationSandboxAllowances,
-  assertApplicationAreaNosuid,
-  assertReleaseServiceClaim,
-  ensureApplicationAccount,
-  readApplicationRegistration,
-  registeredApplicationUser,
-  resolveApplicationCwd,
-  retireApplicationAccount
-} from "../../packages/vibe64-execution/src/host/applicationAccounts.js";
+  stagingAccountIdentity,
+  checkedStagingEnvironmentFile,
+  stagingUnitFiles,
+  stagingSandboxAllowances,
+  assertStagingAreaNosuid,
+  assertStagingUnitClaim,
+  ensureStagingAccount,
+  readStagingAccountRegistration,
+  registeredStagingAccount,
+  resolveStagingAccountCwd,
+  retireStagingAccount
+} from "../../packages/vibe64-execution/src/host/stagingAccounts.js";
 import { helperChildEnv, helperSettings } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
 import { openManagedExecutionReceipts } from "../../packages/vibe64-execution/src/host/executionReceipts.js";
 import {
-  APPLICATION_USERNAME_PREFIX,
+  STAGING_ACCOUNT_USERNAME_PREFIX,
   DAEMON_USERNAME_PREFIX,
   HOST_SETTINGS_ROOT
 } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import { assertActablePerson, registerPerson } from "../../packages/vibe64-execution/src/host/personRegistry.js";
 import {
   accountUnitLines,
-  applicationSandboxLines,
-  assertValidDeploymentUnitName,
-  deploymentServiceUnit
+  stagingSandboxLines,
+  assertValidStagingUnitName,
+  stagingUnitFile
 } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
 import { execHelperSource } from "../fixtures/execHelperSource.js";
 
 const EXEC_HELPER = fileURLToPath(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url));
 
 const daemonUser = (workspace) => `${DAEMON_USERNAME_PREFIX}${workspace}`;
-const applicationUser = (suffix) => `${APPLICATION_USERNAME_PREFIX}${suffix}`;
+const stagingAccountUser = (suffix) => `${STAGING_ACCOUNT_USERNAME_PREFIX}${suffix}`;
 
 const UID = process.getuid();
 const GID = process.getgid();
@@ -50,10 +50,10 @@ const LOGIN_UIDS = { max: 60000, min: UID + 1 };
 const mountLine = (id, mountPoint, options) => `${id} 1 8:1 / ${mountPoint} ${options} shared:1 - ext4 /dev/vda1 rw`;
 
 // A host as root sees it, in a temporary directory: the test's own uid stands
-// in for root, the daemon and the application alike. Its application area
+// in for root, the daemon and the application alike. Its staging area
 // lies on a nosuid mount, as host setup mounts it.
-async function applicationHost(t) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "v64-application-accounts-"));
+async function stagingAccountHost(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-staging-accounts-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const mountInfo = [mountLine(1, "/", "rw,relatime"), mountLine(2, await realpath(root), "rw,nosuid,nodev,relatime")].join("\n");
   await mkdir(path.join(root, "var", "lib"), { recursive: true });
@@ -69,7 +69,7 @@ async function applicationHost(t) {
   const grants = [];
   const options = {
     areaGid: GID,
-    areaRoot: path.join(root, "var", "lib", "applications"),
+    areaRoot: path.join(root, "var", "lib", "staging"),
     areaUid: UID,
     createUser(identity) {
       created.push(identity.username);
@@ -86,7 +86,7 @@ async function applicationHost(t) {
     grantDaemonSearch: (descriptor) => grants.push(descriptor),
     managedRoot,
     mountInfo: () => mountInfo,
-    registryRoot: path.join(root, "etc", "vibe64", "applications"),
+    registryRoot: path.join(root, "etc", "vibe64", "staging-accounts"),
     registryUid: UID,
     resolveUser: (username) => accounts.get(username) || null,
     running: () => false,
@@ -95,8 +95,8 @@ async function applicationHost(t) {
   };
   return {
     accounts, created, deleted, ended, grants, options, owner, root,
-    ensure: (project, overrides = {}) => ensureApplicationAccount(owner, project, { ...options, ...overrides }),
-    retire: (project, overrides = {}) => retireApplicationAccount(owner, project, { ...options, ...overrides })
+    ensure: (project, overrides = {}) => ensureStagingAccount(owner, project, { ...options, ...overrides }),
+    retire: (project, overrides = {}) => retireStagingAccount(owner, project, { ...options, ...overrides })
   };
 }
 
@@ -106,10 +106,10 @@ async function directory(target) {
 }
 
 test("each project of a workspace gets its own registered account and area", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
-  const identity = applicationIdentity(host.owner, "shop", host.options);
-  assert.match(account.username, new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u"));
+  const identity = stagingAccountIdentity(host.owner, "shop", host.options);
+  assert.match(account.username, new RegExp(`^${STAGING_ACCOUNT_USERNAME_PREFIX}[a-f0-9]{12}$`, "u"));
   assert.deepEqual(account, {
     appRoot: path.join(host.options.areaRoot, "test", "shop", "app"),
     databaseRoot: path.join(host.options.areaRoot, "test", "shop", "database"),
@@ -118,7 +118,7 @@ test("each project of a workspace gets its own registered account and area", asy
     username: identity.username
   });
   assert.deepEqual(host.created, [account.username]);
-  assert.deepEqual(readApplicationRegistration("test", account.username, host.options),
+  assert.deepEqual(readStagingAccountRegistration("test", account.username, host.options),
     { gid: GID, project: "shop", uid: UID, username: account.username });
   const registration = path.join(host.options.registryRoot, "test", `${account.username}.json`);
   assert.equal((await stat(registration)).mode & 0o777, 0o644);
@@ -140,12 +140,12 @@ test("each project of a workspace gets its own registered account and area", asy
   // Another project, or the same project of another workspace, is another account.
   const other = host.ensure("blog");
   assert.notEqual(other.username, account.username);
-  assert.notEqual(applicationIdentity({ username: daemonUser("other") }, "shop", host.options).username, account.username);
-  assert.equal(applicationIdentity({ username: daemonUser("test") }, "shop", host.options).username, account.username);
+  assert.notEqual(stagingAccountIdentity({ username: daemonUser("other") }, "shop", host.options).username, account.username);
+  assert.equal(stagingAccountIdentity({ username: daemonUser("test") }, "shop", host.options).username, account.username);
 });
 
-test("an application account has a login shell only while root holds its staging key", async (t) => {
-  const host = await applicationHost(t);
+test("a staging account has a login shell only while root holds its staging key", async (t) => {
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
   const user = host.accounts.get(account.username);
   const withAccess = (stagingAccess) => ({
@@ -153,35 +153,28 @@ test("an application account has a login shell only while root holds its staging
     facts: (username) => ({ ...host.options.facts(username), stagingAccess })
   });
   user.shell = "/bin/sh";
-  assert.throws(() => registeredApplicationUser(host.owner, account.username, withAccess(false)),
+  assert.throws(() => registeredStagingAccount(host.owner, account.username, withAccess(false)),
     /does not have its application's home and no login/u);
-  assert.equal(registeredApplicationUser(host.owner, account.username, withAccess(true)).username, account.username);
+  assert.equal(registeredStagingAccount(host.owner, account.username, withAccess(true)).username, account.username);
   user.shell = "/bin/bash";
-  assert.throws(() => registeredApplicationUser(host.owner, account.username, withAccess(true)),
+  assert.throws(() => registeredStagingAccount(host.owner, account.username, withAccess(true)),
     /does not have its application's home and no login/u);
-  // Root's files from before the rename to staging access refuse the account and name the fix.
-  const preRename = `${account.username} still has its key file from before production access was renamed staging access.`;
-  user.shell = "/bin/sh";
-  assert.throws(() => registeredApplicationUser(host.owner, account.username, {
-    ...host.options,
-    facts: (username) => ({ ...host.options.facts(username), preRenameStaging: preRename, stagingAccess: false })
-  }), /v64a_[0-9a-f]{12} still has its key file from before production access was renamed staging access/u);
 });
 
 test("the daemon names only a project of its own workspace", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   for (const project of ["", "../shop", "Shop", "shop/app", ".", "a".repeat(49)]) {
     assert.throws(() => host.ensure(project), /invalid project name/u, project);
   }
-  for (const username of ["merc", applicationUser("0123456789ab"), "root"]) {
-    assert.throws(() => ensureApplicationAccount({ ...host.owner, username }, "shop", host.options),
+  for (const username of ["merc", stagingAccountUser("0123456789ab"), "root"]) {
+    assert.throws(() => ensureStagingAccount({ ...host.owner, username }, "shop", host.options),
       /Only a workspace daemon/u);
   }
   assert.deepEqual(host.created, []);
 });
 
-test("a new application account needs a real project of the workspace, and room under its limit", async (t) => {
-  const host = await applicationHost(t);
+test("a new staging account needs a real project of the workspace, and room under its limit", async (t) => {
+  const host = await stagingAccountHost(t);
   const projects = path.join(host.options.managedRoot, "test", "projects");
   assert.throws(() => host.ensure("missing"), /test has no project missing/u);
   await writeFile(path.join(projects, "file"), "not a project");
@@ -192,20 +185,20 @@ test("a new application account needs a real project of the workspace, and room 
   assert.deepEqual(host.created, []);
 
   host.ensure("shop");
-  assert.throws(() => host.ensure("blog", { applicationLimit: 1 }), /test already has 1, its limit/u);
-  assert.deepEqual(host.created, [applicationIdentity(host.owner, "shop", host.options).username]);
+  assert.throws(() => host.ensure("blog", { stagingAccountLimit: 1 }), /test already has 1, its limit/u);
+  assert.deepEqual(host.created, [stagingAccountIdentity(host.owner, "shop", host.options).username]);
   // A registered account is the same account, limit or not.
-  assert.equal(host.ensure("shop", { applicationLimit: 1 }).username, applicationIdentity(host.owner, "shop", host.options).username);
+  assert.equal(host.ensure("shop", { stagingAccountLimit: 1 }).username, stagingAccountIdentity(host.owner, "shop", host.options).username);
   host.ensure("blog");
   await mkdir(path.join(projects, "news"));
-  assert.throws(() => host.ensure("news", { applicationLimit: 2 }), /test already has 2, its limit/u);
+  assert.throws(() => host.ensure("news", { stagingAccountLimit: 2 }), /test already has 2, its limit/u);
   // A retired application, its staging database taken back, frees its place.
   host.retire("shop");
-  host.ensure("news", { applicationLimit: 2 });
+  host.ensure("news", { stagingAccountLimit: 2 });
 });
 
 test("a learner's practice project has its account, found by its folder below the workspace's projects", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   const projects = path.join(host.options.managedRoot, "test", "projects");
   const practice = (practiceId, learner = Buffer.from("1001").toString("base64url")) =>
     `.learning/${learner}/${practiceId}/training-${practiceId.replaceAll("-", "")}`;
@@ -217,7 +210,7 @@ test("a learner's practice project has its account, found by its folder below th
 
   // Its account and area are its slug's, as every project's are, and its
   // registration names it by that slug.
-  assert.equal(account.username, applicationIdentity(host.owner, slug, host.options).username);
+  assert.equal(account.username, stagingAccountIdentity(host.owner, slug, host.options).username);
   assert.equal(account.home, path.join(host.options.areaRoot, "test", slug, "app", "home"));
   assert.equal(host.ensure(slug).username, account.username);
   for (const wrong of [
@@ -239,8 +232,8 @@ test("a learner's practice project has its account, found by its folder below th
 });
 
 test("an account the helper did not make is never adopted as an application", async (t) => {
-  const host = await applicationHost(t);
-  const { home, username } = applicationIdentity(host.owner, "shop", host.options);
+  const host = await stagingAccountHost(t);
+  const { home, username } = stagingAccountIdentity(host.owner, "shop", host.options);
   const exact = { gid: GID, home, shell: "/usr/sbin/nologin", uid: UID, username };
   for (const [account, facts, problem] of [
     [{ ...exact, uid: UID + 1 }, {}, /not a system account/u],
@@ -255,14 +248,14 @@ test("an account the helper did not make is never adopted as an application", as
     assert.throws(() => host.ensure("shop", {
       facts: (name) => ({ groupGid: GID, groups: [name], loginUids: LOGIN_UIDS, ...facts })
     }), problem);
-    assert.equal(readApplicationRegistration("test", username, host.options), null);
+    assert.equal(readStagingAccountRegistration("test", username, host.options), null);
   }
   // The account an interrupted ensure left unregistered is exactly the one the
   // helper makes, so the next ensure registers it rather than making another.
   host.accounts.set(username, exact);
   assert.equal(host.ensure("shop").username, username);
   assert.deepEqual(host.created, []);
-  assert.equal(readApplicationRegistration("test", username, host.options).uid, UID);
+  assert.equal(readStagingAccountRegistration("test", username, host.options).uid, UID);
 
   // A registered account later replaced under the same name is refused.
   host.accounts.set(username, { ...exact, uid: UID - 1 });
@@ -272,42 +265,42 @@ test("an account the helper did not make is never adopted as an application", as
   assert.deepEqual(host.created, []);
 });
 
-test("application accounts and people never stand in for each other", async (t) => {
-  const host = await applicationHost(t);
+test("staging accounts and people never stand in for each other", async (t) => {
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
   const appUser = host.accounts.get(account.username);
   const people = path.join(host.root, "etc", "vibe64", "people");
-  // Not even root's own registration makes an application account a person.
+  // Not even root's own registration makes a staging account a person.
   assert.throws(() => registerPerson("test", account.username, {
     addToGroup: () => assert.fail("joined the shared group"),
     facts: () => ({ groups: [account.username], loginUids: LOGIN_UIDS }),
     registryRoot: people,
     registryUid: UID,
     resolveUser: (name) => (name === daemonUser("test") ? host.owner : { ...appUser, uid: UID + 500 })
-  }), /application accounts are never people/u);
+  }), /staging accounts are never people/u);
   assert.throws(() => assertActablePerson(host.owner, appUser, {
     facts: () => ({ groups: [account.username, "vibe64"], loginUids: LOGIN_UIDS }),
     registryRoot: people,
     registryUid: UID
-  }), /application accounts are never people/u);
+  }), /staging accounts are never people/u);
 
   // A person's registration is no application's, even in the application registry.
   const registry = path.join(host.options.registryRoot, "test");
   await writeFile(path.join(registry, "alice.json"),
     JSON.stringify({ schema: "vibe64.person-registration", schemaVersion: 1, uid: 1001, username: "alice" }), { mode: 0o644 });
-  assert.equal(readApplicationRegistration("test", "alice", host.options), null);
+  assert.equal(readStagingAccountRegistration("test", "alice", host.options), null);
   // Nor is any record for a name that is not an application's.
-  for (const username of ["alice", daemonUser("test"), "root", applicationUser("short")]) {
+  for (const username of ["alice", daemonUser("test"), "root", stagingAccountUser("short")]) {
     await writeFile(path.join(registry, `${username}.json`), JSON.stringify({
-      gid: GID, project: "shop", schema: "vibe64.application-account", schemaVersion: 1, uid: UID, username
+      gid: GID, project: "shop", schema: "vibe64.staging-account", schemaVersion: 1, uid: UID, username
     }), { mode: 0o644 });
-    assert.equal(readApplicationRegistration("test", username, host.options), null, username);
+    assert.equal(readStagingAccountRegistration("test", username, host.options), null, username);
   }
-  assert.equal(readApplicationRegistration("test", account.username, { ...host.options, registryRoot: people }), null);
+  assert.equal(readStagingAccountRegistration("test", account.username, { ...host.options, registryRoot: people }), null);
 });
 
 test("an area entry the helper did not make is refused, never followed or repaired", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
   const elsewhere = path.join(host.root, "elsewhere");
   await mkdir(elsewhere);
@@ -328,7 +321,7 @@ test("an area entry the helper did not make is refused, never followed or repair
 });
 
 test("retiring a project removes its application, its registration and its whole area", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
   await writeFile(path.join(account.handoverRoot, "environment"), "A=1\n");
   await mkdir(path.join(account.appRoot, "releases", "r1", "workspace"), { recursive: true });
@@ -339,19 +332,19 @@ test("retiring a project removes its application, its registration and its whole
   assert.throws(() => host.retire("shop"),
     /database directory still holds v64_test_shop_staging\.sqlite\. Give its staging database back/u);
   assert.equal(await readFile(left, "utf8"), "data");
-  assert.equal(readApplicationRegistration("test", account.username, host.options).username, account.username);
+  assert.equal(readStagingAccountRegistration("test", account.username, host.options).username, account.username);
   assert.deepEqual(host.deleted, []);
   await rm(left);
 
   // A refused retire leaves its AI sessions' staging access as it was.
   assert.throws(() => host.retire("shop", { running: () => true }),
-    /still runs: its release service, or a staging login of its AI sessions/u);
+    /still runs: its staging service, or a staging login of its AI sessions/u);
   assert.deepEqual(host.ended, []);
   assert.deepEqual(host.retire("shop"), { retired: true });
   // Its AI sessions' way into staging ends before it goes.
   assert.deepEqual(host.ended, [account.username]);
   assert.deepEqual(await readdir(path.join(host.options.areaRoot, "test")), []);
-  assert.equal(readApplicationRegistration("test", account.username, host.options), null);
+  assert.equal(readStagingAccountRegistration("test", account.username, host.options), null);
   assert.deepEqual(host.deleted, [account.username]);
   assert.deepEqual(host.retire("shop"), { retired: false });
 
@@ -362,16 +355,16 @@ test("retiring a project removes its application, its registration and its whole
   assert.deepEqual(host.created, [account.username, account.username]);
 });
 
-test("retiring waits for every release unit of the application to go, and admits no new execution meanwhile", async (t) => {
-  const host = await applicationHost(t);
+test("retiring waits for every staging unit of the application to go, and admits no new execution meanwhile", async (t) => {
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
-  const unitName = "vibe64-release-test-shop-0123456789ab.service";
+  const unitName = "vibe64-staging-test-shop-0123456789ab.service";
   await writeFile(path.join(host.options.unitRoot, unitName), `[Service]\nUser=${account.username}\nRestart=always\n`, { mode: 0o644 });
-  await writeFile(path.join(host.options.unitRoot, "vibe64-release-test-blog-0123456789ab.service"),
-    `[Service]\nUser=${applicationUser("ba9876543210")}\n`, { mode: 0o644 });
-  assert.throws(() => host.retire("shop"), new RegExp(`release service ${unitName} is still installed`, "u"),
+  await writeFile(path.join(host.options.unitRoot, "vibe64-staging-test-blog-0123456789ab.service"),
+    `[Service]\nUser=${stagingAccountUser("ba9876543210")}\n`, { mode: 0o644 });
+  assert.throws(() => host.retire("shop"), new RegExp(`staging service ${unitName} is still installed`, "u"),
     "an installed unit could start it again after the check");
-  assert.notEqual(readApplicationRegistration("test", account.username, host.options), null);
+  assert.notEqual(readStagingAccountRegistration("test", account.username, host.options), null);
   assert.equal((await stat(account.appRoot)).isDirectory(), true);
   await rm(path.join(host.options.unitRoot, unitName));
 
@@ -379,48 +372,48 @@ test("retiring waits for every release unit of the application to go, and admits
   // execution can start as it; a refused retire registers it again.
   const registeredWhileChecked = [];
   const running = () => {
-    registeredWhileChecked.push(readApplicationRegistration("test", account.username, host.options));
+    registeredWhileChecked.push(readStagingAccountRegistration("test", account.username, host.options));
     return true;
   };
   assert.throws(() => host.retire("shop", { running }), /still runs/u);
   assert.deepEqual(registeredWhileChecked, [null]);
-  assert.deepEqual(readApplicationRegistration("test", account.username, host.options),
+  assert.deepEqual(readStagingAccountRegistration("test", account.username, host.options),
     { gid: GID, project: "shop", uid: UID, username: account.username });
   assert.deepEqual(host.deleted, []);
 });
 
 test("an application command runs only as a registered application of the daemon's own workspace", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
   const options = { ...host.options, resolveUser: (name) => host.accounts.get(name) };
-  const user = registeredApplicationUser(host.owner, account.username, options);
+  const user = registeredStagingAccount(host.owner, account.username, options);
   assert.equal(user.uid, UID);
   assert.equal(user.home, account.home);
-  assert.equal(user.application.appRoot, account.appRoot);
+  assert.equal(user.stagingAccount.appRoot, account.appRoot);
 
   // A person, the daemon or root named as an application is no application.
-  for (const username of ["alice", daemonUser("test"), "root", applicationUser("000000000000")]) {
-    assert.throws(() => registeredApplicationUser(host.owner, username, options), /not an application account of this workspace/u);
+  for (const username of ["alice", daemonUser("test"), "root", stagingAccountUser("000000000000")]) {
+    assert.throws(() => registeredStagingAccount(host.owner, username, options), /not a staging account of this workspace/u);
   }
   // Another workspace's daemon cannot run as this workspace's application.
-  assert.throws(() => registeredApplicationUser({ ...host.owner, username: daemonUser("other") }, account.username, options),
-    /not an application account of this workspace/u);
+  assert.throws(() => registeredStagingAccount({ ...host.owner, username: daemonUser("other") }, account.username, options),
+    /not a staging account of this workspace/u);
   // The account changed since root registered it.
   host.accounts.set(account.username, { ...host.accounts.get(account.username), uid: UID - 1 });
-  assert.throws(() => registeredApplicationUser(host.owner, account.username, options), /not the registered account/u);
+  assert.throws(() => registeredStagingAccount(host.owner, account.username, options), /not the registered account/u);
   host.accounts.set(account.username, { ...host.accounts.get(account.username), uid: UID });
-  assert.throws(() => registeredApplicationUser(host.owner, account.username, {
+  assert.throws(() => registeredStagingAccount(host.owner, account.username, {
     ...options, facts: (name) => ({ groupGid: GID, groups: [name, "vibe64"], loginUids: LOGIN_UIDS })
   }), /group other than its own/u);
 });
 
 test("an application runs only while its area lies on a nosuid mount", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
   const area = await realpath(host.options.areaRoot);
-  const run = (...lines) => registeredApplicationUser(host.owner, account.username,
+  const run = (...lines) => registeredStagingAccount(host.owner, account.username,
     { ...host.options, mountInfo: () => `${lines.join("\n")}\n` });
-  const refused = /refused to run application code: this host's application area is not mounted nosuid at \//u;
+  const refused = /refused to run application code: this host's staging area is not mounted nosuid at \//u;
 
   assert.equal(run(mountLine(1, "/", "rw,relatime"), mountLine(2, area, "rw,nosuid,nodev,relatime")).username, account.username);
   // The host's own file system is the area's mount until host setup mounts it.
@@ -443,33 +436,33 @@ test("an application runs only while its area lies on a nosuid mount", async (t)
   await symlink(spaced, path.join(host.root, "linked"));
   const realRoot = await realpath(host.root);
   const spacedMount = (options) => () => [mountLine(1, "/", "rw"), mountLine(2, `${realRoot}/app\\040area`, options)].join("\n");
-  assertApplicationAreaNosuid(spaced, spacedMount("rw,nosuid"));
-  assertApplicationAreaNosuid(path.join(host.root, "linked"), spacedMount("rw,nosuid"));
-  assert.throws(() => assertApplicationAreaNosuid(spaced, spacedMount("rw")), refused);
+  assertStagingAreaNosuid(spaced, spacedMount("rw,nosuid"));
+  assertStagingAreaNosuid(path.join(host.root, "linked"), spacedMount("rw,nosuid"));
+  assert.throws(() => assertStagingAreaNosuid(spaced, spacedMount("rw")), refused);
 });
 
 test("an application command starts in its own area, whatever links it planted", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
   const other = host.ensure("blog");
-  const identity = applicationIdentity(host.owner, "shop", host.options);
+  const identity = stagingAccountIdentity(host.owner, "shop", host.options);
   const build = path.join(account.appRoot, "sources", "r1");
   await mkdir(build, { recursive: true });
-  assert.equal(resolveApplicationCwd("", identity), account.home);
-  assert.equal(resolveApplicationCwd(build, identity), build);
-  assert.equal(resolveApplicationCwd(account.databaseRoot, identity), account.databaseRoot);
+  assert.equal(resolveStagingAccountCwd("", identity), account.home);
+  assert.equal(resolveStagingAccountCwd(build, identity), build);
+  assert.equal(resolveStagingAccountCwd(account.databaseRoot, identity), account.databaseRoot);
   await symlink(other.appRoot, path.join(account.appRoot, "other"));
   await symlink(host.root, path.join(account.appRoot, "up"));
   for (const cwd of [path.join(account.appRoot, "other"), path.join(account.appRoot, "up"), account.handoverRoot,
     other.appRoot, host.root, "/"]) {
-    assert.throws(() => resolveApplicationCwd(cwd, identity), /outside its area/u, cwd);
+    assert.throws(() => resolveStagingAccountCwd(cwd, identity), /outside its area/u, cwd);
   }
 });
 
-test("an application's release environment is the daemon's file for the release it builds or runs", async (t) => {
-  const host = await applicationHost(t);
+test("an application's staging environment is the daemon's file for the release it builds or runs", async (t) => {
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
-  const identity = applicationIdentity(host.owner, "shop", host.options);
+  const identity = stagingAccountIdentity(host.owner, "shop", host.options);
   const environment = path.join(account.handoverRoot, "r1", "environment");
   await mkdir(path.dirname(environment));
   await writeFile(environment, "KEY=value\n", { mode: 0o640 });
@@ -478,7 +471,7 @@ test("an application's release environment is the daemon's file for the release 
   const workspace = path.join(account.appRoot, "releases", "r1", "workspace");
   const otherBuild = path.join(account.appRoot, "sources", "r2");
   for (const directory of [build, workspace, otherBuild]) await mkdir(directory, { recursive: true });
-  const check = (file, cwd, ids = {}) => applicationReleaseEnvironmentFile(file, identity,
+  const check = (file, cwd, ids = {}) => checkedStagingEnvironmentFile(file, identity,
     { cwd, daemonUid: UID, gid: GID, ...ids });
   assert.equal(check(environment, build), environment);
   assert.equal(check(environment, path.join(workspace)), environment);
@@ -506,9 +499,9 @@ test("an application's release environment is the daemon's file for the release 
 });
 
 test("an application's execution runs as itself in its sandbox, with its own temporary directory", async (t) => {
-  const host = await applicationHost(t);
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
-  const user = registeredApplicationUser(host.owner, account.username, host.options);
+  const user = registeredStagingAccount(host.owner, account.username, host.options);
   const receiptRoot = "/receipts/test/0b6c0a37-0f4f-4b61-9d5c-3f3f8a1d2e4f";
   const lines = accountUnitLines(user, { receiptRoot });
   assert.deepEqual(lines.slice(0, 3), [`User=${account.username}`, `Group=${account.username}`, "UMask=0077"]);
@@ -531,7 +524,7 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   assert.equal(env.HOME, account.home);
   assert.equal(env.TMPDIR, "/tmp");
 
-  // The runner loads the release environment as the application, keeping its
+  // The runner loads the staging environment as the application, keeping its
   // private temporary directory.
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-application-runner-"));
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -539,13 +532,13 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   await writeFile(environmentFile, "RELEASE_KEY=from-file\nTMPDIR=/from-file\n", { mode: 0o640 });
   const payloadPath = path.join(root, "command.json");
   await writeFile(payloadPath, JSON.stringify({
-    application: true,
+    stagingAccount: true,
     args: ["-e", "process.stdout.write(JSON.stringify({key:process.env.RELEASE_KEY,tmp:process.env.TMPDIR,umask:process.umask()}))"],
     command: process.execPath,
     cwd: root,
     env: { HOME: account.home, PATH: "/usr/bin:/bin", USER: account.username },
     executionId: randomUUID(),
-    releaseEnvironmentFile: environmentFile,
+    stagingEnvironmentFile: environmentFile,
     schema: "vibe64.managed-execution.command",
     schemaVersion: 1
   }));
@@ -556,13 +549,13 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   assert.deepEqual(JSON.parse(stdout), { key: "from-file", tmp: "/tmp", umask: 0o077 });
 });
 
-test("an application's execution is finite, and its receipt sits where only root adds receipts", async (t) => {
+test("a staging account's execution is finite, and its receipt sits where only root adds receipts", async (t) => {
   const source = await execHelperSource();
   const operation = source.slice(source.indexOf("function handleManagedExecutionOperation("),
     source.indexOf("function runManagedExecutionPayload("));
-  assert.match(operation, /if \(application && mode !== "capture"\) \{\n {4}throw new Error\("An application account runs only finite commands\."\);/u);
-  assert.match(operation, /if \(!application\) \{\n {6}throw new Error\("Release environment requires an application's own execution\."\);/u);
-  assert.match(operation, /\? openApplicationExecutionReceipts\(owner, \{ create: true \}\)/u);
+  assert.match(operation, /if \(stagingAccount && mode !== "capture"\) \{\n {4}throw new Error\("A staging account runs only finite commands\."\);/u);
+  assert.match(operation, /if \(!stagingAccount\) \{\n {6}throw new Error\("Staging environment requires a staging account's own execution\."\);/u);
+  assert.match(operation, /\? openStagingExecutionReceipts\(owner, \{ create: true \}\)/u);
   assert.match(operation, /\.\.\.accountUnitLines\(targetUser, \{ receiptRoot, sandboxAllowances \}\)\.map/u);
   // Inspecting, stopping and releasing find an application's receipt too.
   assert.equal(source.match(/openAllExecutionReceipts\(owner\)/gu).length, 3);
@@ -575,7 +568,7 @@ test("an application's execution is finite, and its receipt sits where only root
   assert.equal((await stat(directory)).mode & 0o7777, 0o711);
 });
 
-// A release service refused for its files or for its environment file.
+// A staging service refused for its files or for its environment file.
 const releaseRefused = /must (run its own release's workspace and start script|belong to the application's selected release)/u;
 
 async function releaseFiles(host, account, releaseId) {
@@ -594,13 +587,13 @@ async function releaseFiles(host, account, releaseId) {
   };
 }
 
-test("a release service runs its own release's workspace and the daemon's files for that release", async (t) => {
-  const host = await applicationHost(t);
+test("a staging service runs its own release's workspace and the daemon's files for that release", async (t) => {
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
-  const identity = applicationIdentity(host.owner, "shop", host.options);
+  const identity = stagingAccountIdentity(host.owner, "shop", host.options);
   const r1 = await releaseFiles(host, account, "r1");
   const r2 = await releaseFiles(host, account, "r2");
-  const check = (payload, ids = {}) => applicationReleaseServiceFiles(payload, identity, { daemonUid: UID, gid: GID, ...ids });
+  const check = (payload, ids = {}) => stagingUnitFiles(payload, identity, { daemonUid: UID, gid: GID, ...ids });
   assert.deepEqual(check(r1), r1);
 
   assert.throws(() => check({ ...r1, workingDirectory: r2.workingDirectory }), releaseRefused, "another release's workspace");
@@ -619,12 +612,12 @@ test("a release service runs its own release's workspace and the daemon's files 
   assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "releases", "r3", "workspace") }), releaseRefused);
 });
 
-test("a release service may run in a real folder inside its release's workspace, its Workdir", async (t) => {
-  const host = await applicationHost(t);
+test("a staging service may run in a real folder inside its release's workspace, its Workdir", async (t) => {
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
-  const identity = applicationIdentity(host.owner, "shop", host.options);
+  const identity = stagingAccountIdentity(host.owner, "shop", host.options);
   const r1 = await releaseFiles(host, account, "r1");
-  const check = (workingDirectory) => applicationReleaseServiceFiles({ ...r1, workingDirectory }, identity,
+  const check = (workingDirectory) => stagingUnitFiles({ ...r1, workingDirectory }, identity,
     { daemonUid: UID, gid: GID });
   const web = path.join(r1.workingDirectory, "apps", "web");
   await mkdir(web, { recursive: true });
@@ -646,17 +639,17 @@ test("a release service may run in a real folder inside its release's workspace,
   assert.throws(() => check("apps/web"), releaseRefused, "relative");
 });
 
-test("a release service unit runs as its application in its sandbox, listening only on its own port", () => {
-  const user = { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: applicationUser("0123456789ab") };
-  const unit = (loopbackPort) => deploymentServiceUnit({
+test("a staging service unit runs as its application in its sandbox, listening only on its own port", () => {
+  const user = { stagingAccount: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: stagingAccountUser("0123456789ab") };
+  const unit = (loopbackPort) => stagingUnitFile({
     environmentFile: "/area/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort,
     owner: { username: daemonUser("test") }, requiredUnits: ["vibe64-managed-test-mariadb.service"], servicePath: "/packs/bin:/usr/bin",
-    startScript: "/area/handover/r1/start.sh", unitName: "vibe64-release-test-shop-1.service", user,
+    startScript: "/area/handover/r1/start.sh", unitName: "vibe64-staging-test-shop-1.service", user,
     workingDirectory: "/area/app/releases/r1/workspace"
   });
   const lines = unit(4100).split("\n");
   for (const line of [
-    `User=${applicationUser("0123456789ab")}`, `Group=${applicationUser("0123456789ab")}`, "UMask=0077", "Slice=vibe64-test-work.slice",
+    `User=${stagingAccountUser("0123456789ab")}`, `Group=${stagingAccountUser("0123456789ab")}`, "UMask=0077", "Slice=vibe64-test-work.slice",
     "NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ReadWritePaths=/area/app /area/database",
     "ProtectHome=yes", "ProtectProc=invisible", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
     `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "SocketBindAllow=tcp:4100", "SocketBindAllow=udp", "SocketBindDeny=any",
@@ -665,27 +658,27 @@ test("a release service unit runs as its application in its sandbox, listening o
     "SystemCallFilter=@system-service", "SystemCallErrorNumber=EPERM",
     "WorkingDirectory=/area/app/releases/r1/workspace", "Requires=vibe64-managed-test-mariadb.service",
     "WantedBy=multi-user.target",
-    'ExecStart=/usr/bin/setpriv --no-new-privs -- /helper/vibe64-exec-helper run-release-service "/area/handover/r1/environment" "/area/handover/r1/start.sh"'
+    'ExecStart=/usr/bin/setpriv --no-new-privs -- /helper/vibe64-exec-helper run-staging-unit "/area/handover/r1/environment" "/area/handover/r1/start.sh"'
   ]) {
     assert.ok(lines.includes(line), line);
   }
   assert.equal(lines.some((line) => /^(SupplementaryGroups=|Group=vibe64$|EnvironmentFile=|RestrictSUIDSGID=)/u.test(line)), false);
   for (const port of [0, 80, 1023, 65536, "4100; rm", undefined]) {
-    assert.throws(() => unit(port), /release service port/u, String(port));
+    assert.throws(() => unit(port), /staging service port/u, String(port));
   }
 });
 
 test("a release's sandbox allowances add only what each names to its application's sandbox", () => {
   const identity = { appRoot: "/area/app", databaseRoot: "/area/database" };
-  const plain = applicationSandboxLines(identity, ["/receipt"]);
+  const plain = stagingSandboxLines(identity, ["/receipt"]);
   const changed = (allowances) => {
-    const lines = applicationSandboxLines(identity, ["/receipt"], allowances);
+    const lines = stagingSandboxLines(identity, ["/receipt"], allowances);
     return {
       added: lines.filter((line) => !plain.includes(line)),
       removed: plain.filter((line) => !lines.includes(line))
     };
   };
-  assert.deepEqual(applicationSandboxLines(identity, ["/receipt"], []), plain);
+  assert.deepEqual(stagingSandboxLines(identity, ["/receipt"], []), plain);
   assert.ok(plain.includes("RestrictNamespaces=yes") && plain.includes("SystemCallFilter=@system-service"));
   assert.equal(plain.some((line) => /^(DeviceAllow|BindPaths)=/u.test(line)), false);
   // gVisor's rootless runsc: its own namespaces (never a cgroup or time one),
@@ -704,24 +697,24 @@ test("a release's sandbox allowances add only what each names to its application
   const both = changed(["fuse", "gvisor"]);
   assert.deepEqual(both.added.filter((line) => !changed(["gvisor"]).added.includes(line)),
     ["DeviceAllow=/dev/fuse rw", "BindPaths=/dev/fuse"]);
-  assert.deepEqual(applicationSandboxLines(identity, ["/receipt"], ["gvisor", "fuse"]),
-    applicationSandboxLines(identity, ["/receipt"], ["fuse", "gvisor"]));
+  assert.deepEqual(stagingSandboxLines(identity, ["/receipt"], ["gvisor", "fuse"]),
+    stagingSandboxLines(identity, ["/receipt"], ["fuse", "gvisor"]));
   // Everything else holds: no privileges, no capabilities, the same writable
   // paths, closed devices but for /dev/fuse, the same files out of reach.
   for (const line of ["NoNewPrivileges=yes", "CapabilityBoundingSet=", "PrivateDevices=yes", "ProtectSystem=strict",
     "ReadWritePaths=/area/app /area/database /receipt", `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "ProtectHome=yes",
     "ProtectProc=invisible", "ProtectKernelTunables=yes", "ProtectKernelModules=yes", "ProtectControlGroups=yes",
     "SystemCallErrorNumber=EPERM", "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK"]) {
-    assert.ok(applicationSandboxLines(identity, ["/receipt"], ["fuse", "gvisor"]).includes(line), line);
+    assert.ok(stagingSandboxLines(identity, ["/receipt"], ["fuse", "gvisor"]).includes(line), line);
   }
-  assert.throws(() => applicationSandboxLines(identity, [], ["docker"]), /unknown application sandbox allowance/u);
+  assert.throws(() => stagingSandboxLines(identity, [], ["docker"]), /unknown staging sandbox allowance/u);
 
-  // The release unit and an execution's properties carry them.
-  const user = { application: identity, username: applicationUser("0123456789ab") };
-  const unit = deploymentServiceUnit({
+  // The staging unit and an execution's properties carry them.
+  const user = { stagingAccount: identity, username: stagingAccountUser("0123456789ab") };
+  const unit = stagingUnitFile({
     environmentFile: "/area/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort: 4100,
     owner: { username: daemonUser("test") }, sandboxAllowances: ["fuse", "gvisor"], servicePath: "/usr/bin",
-    startScript: "/area/handover/r1/start.sh", unitName: "vibe64-release-test-shop-1.service", user,
+    startScript: "/area/handover/r1/start.sh", unitName: "vibe64-staging-test-shop-1.service", user,
     workingDirectory: "/area/app/releases/r1/workspace"
   }).split("\n");
   for (const line of ["DeviceAllow=/dev/fuse rw", "BindPaths=/dev/fuse", "RestrictNamespaces=user mnt pid ipc uts net",
@@ -729,8 +722,8 @@ test("a release's sandbox allowances add only what each names to its application
     assert.ok(unit.includes(line), line);
   }
   assert.deepEqual(accountUnitLines(user, { receiptRoot: "/receipt", sandboxAllowances: ["gvisor"] }).slice(3),
-    applicationSandboxLines(identity, ["/receipt"], ["gvisor"]));
-  // A person's or the daemon's execution has no application sandbox to widen.
+    stagingSandboxLines(identity, ["/receipt"], ["gvisor"]));
+  // A person's or the daemon's execution has no staging sandbox to widen.
   assert.deepEqual(accountUnitLines({ username: "alice" }, { sandboxAllowances: ["gvisor"] }),
     ["User=alice", "Group=vibe64", "SupplementaryGroups=nix-users", "UMask=0007"]);
 });
@@ -743,86 +736,86 @@ test("the helper grants a sandbox allowance only where the host's owner lists it
     await writeFile(file, text, { mode: 0o644 });
     return helperSettings(file, UID);
   };
-  const refused = /does not permit it \(VIBE64_APPLICATION_SANDBOX_ALLOWANCES\)/u;
+  const refused = /does not permit it \(VIBE64_STAGING_SANDBOX_ALLOWANCES\)/u;
   const unknown = /sandbox allowance it does not know/u;
 
   // A host whose owner lists nothing grants nothing, though a release with no
   // allowances runs as ever.
-  const none = await settingsWith("VIBE64_APPLICATION_AREA_ROOT=/srv/applications\n");
-  assert.deepEqual(applicationSandboxAllowances(undefined, none), []);
-  assert.deepEqual(applicationSandboxAllowances([], none), []);
-  assert.throws(() => applicationSandboxAllowances(["gvisor"], none), refused);
+  const none = await settingsWith("VIBE64_STAGING_AREA_ROOT=/srv/staging\n");
+  assert.deepEqual(stagingSandboxAllowances(undefined, none), []);
+  assert.deepEqual(stagingSandboxAllowances([], none), []);
+  assert.throws(() => stagingSandboxAllowances(["gvisor"], none), refused);
 
-  const gvisorOnly = await settingsWith("VIBE64_APPLICATION_SANDBOX_ALLOWANCES=gvisor\n");
-  assert.deepEqual(applicationSandboxAllowances(["gvisor"], gvisorOnly), ["gvisor"]);
-  assert.throws(() => applicationSandboxAllowances(["fuse"], gvisorOnly), /refused application sandbox allowance fuse:/u);
-  assert.throws(() => applicationSandboxAllowances(["fuse", "gvisor"], gvisorOnly), refused);
+  const gvisorOnly = await settingsWith("VIBE64_STAGING_SANDBOX_ALLOWANCES=gvisor\n");
+  assert.deepEqual(stagingSandboxAllowances(["gvisor"], gvisorOnly), ["gvisor"]);
+  assert.throws(() => stagingSandboxAllowances(["fuse"], gvisorOnly), /refused staging sandbox allowance fuse:/u);
+  assert.throws(() => stagingSandboxAllowances(["fuse", "gvisor"], gvisorOnly), refused);
 
-  const both = await settingsWith("VIBE64_APPLICATION_SANDBOX_ALLOWANCES=\"gvisor fuse\"\n");
-  assert.deepEqual(applicationSandboxAllowances(["gvisor", "fuse"], both), ["fuse", "gvisor"]);
+  const both = await settingsWith("VIBE64_STAGING_SANDBOX_ALLOWANCES=\"gvisor fuse\"\n");
+  assert.deepEqual(stagingSandboxAllowances(["gvisor", "fuse"], both), ["fuse", "gvisor"]);
   for (const value of [["docker"], ["gvisor", "gvisor"], "gvisor", [1], { gvisor: true }, ["GVISOR"]]) {
-    assert.throws(() => applicationSandboxAllowances(value, both), unknown, JSON.stringify(value));
+    assert.throws(() => stagingSandboxAllowances(value, both), unknown, JSON.stringify(value));
   }
   // A setting that names an allowance the helper does not know is refused,
   // never read as a narrower or wider list.
-  const odd = await settingsWith("VIBE64_APPLICATION_SANDBOX_ALLOWANCES=gvisor docker\n");
-  assert.throws(() => applicationSandboxAllowances([], odd), /settings name an unknown application sandbox allowance/u);
+  const odd = await settingsWith("VIBE64_STAGING_SANDBOX_ALLOWANCES=gvisor docker\n");
+  assert.throws(() => stagingSandboxAllowances([], odd), /settings name an unknown staging sandbox allowance/u);
 });
 
-test("only the daemon's request for an application's own execution or release unit carries sandbox allowances", async () => {
+test("only the daemon's request for a staging account's own execution or staging unit carries sandbox allowances", async () => {
   const source = await execHelperSource();
   const execution = source.slice(source.indexOf("function handleManagedExecutionOperation("),
     source.indexOf("function runManagedExecutionPayload("));
-  assert.match(execution, /if \(payload\.sandboxAllowances !== undefined && !application\) \{\n {4}throw new Error\("Sandbox allowances require an application's own execution\."\);/u);
-  assert.match(execution, /const sandboxAllowances = application \? applicationSandboxAllowances\(payload\.sandboxAllowances\) : \[\];/u);
-  const service = source.slice(source.indexOf("function handleDeploymentServiceOperation("),
-    source.indexOf("function inspectDeploymentServiceUnit("));
-  assert.ok(service.indexOf("registeredApplicationUser(owner, payload.applicationAccount)") <
-    service.indexOf("applicationSandboxAllowances(payload.sandboxAllowances)"));
+  assert.match(execution, /if \(payload\.sandboxAllowances !== undefined && !stagingAccount\) \{\n {4}throw new Error\("Sandbox allowances require a staging account's own execution\."\);/u);
+  assert.match(execution, /const sandboxAllowances = stagingAccount \? stagingSandboxAllowances\(payload\.sandboxAllowances\) : \[\];/u);
+  const service = source.slice(source.indexOf("function handleStagingUnitOperation("),
+    source.indexOf("function inspectStagingUnit("));
+  assert.ok(service.indexOf("registeredStagingAccount(owner, payload.stagingAccount)") <
+    service.indexOf("stagingSandboxAllowances(payload.sandboxAllowances)"));
   // The host gate is read from root's settings alone: the default argument,
   // never a value from the payload.
-  assert.equal(source.match(/applicationSandboxAllowances\(/gu).length, 3, "the definition and its two callers");
-  assert.match(source, /function applicationSandboxAllowances\(value, settings = helperSettings\(\)\)/u);
+  assert.equal(source.match(/stagingSandboxAllowances\(/gu).length, 3, "the definition and its two callers");
+  assert.match(source, /function stagingSandboxAllowances\(value, settings = helperSettings\(\)\)/u);
   // Both operations act for the calling daemon: SUDO_USER, which only sudo
-  // sets, names it, and only a workspace daemon has release units.
+  // sets, names it, and only a workspace daemon has staging units.
   assert.match(source, /function resolveOwnerUser\(\) \{\n {2}const sudoUser = safeUsername\(process\.env\.SUDO_USER \|\| ""\);/u);
 });
 
-test("a daemon names, stops, removes and reads only its own workspace's release units", () => {
+test("a daemon names, stops, removes and reads only its own workspace's staging units", () => {
   const owner = { username: daemonUser("test") };
-  assert.equal(assertValidDeploymentUnitName("vibe64-release-test-shop-0123456789ab.service", owner),
-    "vibe64-release-test-shop-0123456789ab.service");
-  for (const unitName of ["vibe64-release-other-shop-0123456789ab.service", "vibe64-release-testx-shop-0123456789ab.service",
-    "vibe64-release-test.service", "vibe64-release-test-../x.service", "ssh.service"]) {
-    assert.throws(() => assertValidDeploymentUnitName(unitName, owner), /unsafe deployment service unit name/u, unitName);
+  assert.equal(assertValidStagingUnitName("vibe64-staging-test-shop-0123456789ab.service", owner),
+    "vibe64-staging-test-shop-0123456789ab.service");
+  for (const unitName of ["vibe64-staging-other-shop-0123456789ab.service", "vibe64-staging-testx-shop-0123456789ab.service",
+    "vibe64-staging-test.service", "vibe64-staging-test-../x.service", "ssh.service"]) {
+    assert.throws(() => assertValidStagingUnitName(unitName, owner), /unsafe staging unit name/u, unitName);
   }
-  assert.throws(() => assertValidDeploymentUnitName("vibe64-release-test-shop-0123456789ab.service", { username: "test" }),
-    /unsafe deployment service unit name/u, "only a workspace daemon has release units");
+  assert.throws(() => assertValidStagingUnitName("vibe64-staging-test-shop-0123456789ab.service", { username: "test" }),
+    /unsafe staging unit name/u, "only a workspace daemon has staging units");
 });
 
-test("a release unit is its application's own, named for its project, on a port no other release unit claims", async (t) => {
+test("a staging unit is its application's own, named for its project, on a port no other staging unit claims", async (t) => {
   const unitRoot = await mkdtemp(path.join(os.tmpdir(), "v64-release-units-"));
   t.after(() => rm(unitRoot, { force: true, recursive: true }));
   const owner = { username: daemonUser("test") };
-  const shop = { application: { project: "my_shop" }, username: applicationUser("0123456789ab") };
-  const books = { application: { project: "books" }, username: applicationUser("ba9876543210") };
+  const shop = { stagingAccount: { project: "my_shop" }, username: stagingAccountUser("0123456789ab") };
+  const books = { stagingAccount: { project: "books" }, username: stagingAccountUser("ba9876543210") };
   const unitFor = (user, port) => `[Service]\nUser=${user.username}\nSocketBindAllow=tcp:${port}\nSocketBindDeny=any\n`;
-  await writeFile(path.join(unitRoot, "vibe64-release-test-books-111111111111.service"), unitFor(books, 4100), { mode: 0o644 });
-  await writeFile(path.join(unitRoot, "vibe64-release-other-cafe-222222222222.service"), unitFor({ username: "v64a_other" }, 4200),
+  await writeFile(path.join(unitRoot, "vibe64-staging-test-books-111111111111.service"), unitFor(books, 4100), { mode: 0o644 });
+  await writeFile(path.join(unitRoot, "vibe64-staging-other-cafe-222222222222.service"), unitFor({ username: "v64s_other" }, 4200),
     { mode: 0o644 });
   await writeFile(path.join(unitRoot, "unrelated.service"), "SocketBindAllow=tcp:4300\n", { mode: 0o644 });
-  const claim = (user, unitName, loopbackPort) => assertReleaseServiceClaim({ loopbackPort, owner, unitName, unitRoot,
+  const claim = (user, unitName, loopbackPort) => assertStagingUnitClaim({ loopbackPort, owner, unitName, unitRoot,
     unitUid: UID, user });
-  const shopUnit = "vibe64-release-test-my-shop-333333333333.service";
+  const shopUnit = "vibe64-staging-test-my-shop-333333333333.service";
 
   claim(shop, shopUnit, 4101);
   claim(shop, shopUnit, 4300);
-  assert.throws(() => claim(shop, shopUnit, 4100), /Port 4100 belongs to another release service/u, "another application's");
-  assert.throws(() => claim(shop, shopUnit, 4200), /Port 4200 belongs to another release service/u, "another workspace's");
-  assert.throws(() => claim(shop, "vibe64-release-test-books-444444444444.service", 4101), /not named for application/u);
-  assert.throws(() => claim(shop, "vibe64-release-other-my-shop-444444444444.service", 4101), /not named for application/u);
+  assert.throws(() => claim(shop, shopUnit, 4100), /Port 4100 belongs to another staging service/u, "another application's");
+  assert.throws(() => claim(shop, shopUnit, 4200), /Port 4200 belongs to another staging service/u, "another workspace's");
+  assert.throws(() => claim(shop, "vibe64-staging-test-books-444444444444.service", 4101), /not named for application/u);
+  assert.throws(() => claim(shop, "vibe64-staging-other-my-shop-444444444444.service", 4101), /not named for application/u);
   // An installed unit is replaced only by its own application.
-  assert.throws(() => claim(shop, "vibe64-release-test-books-111111111111.service", 4100), /not named for application/u);
+  assert.throws(() => claim(shop, "vibe64-staging-test-books-111111111111.service", 4100), /not named for application/u);
   await writeFile(path.join(unitRoot, shopUnit), unitFor(books, 4101), { mode: 0o644 });
   assert.throws(() => claim(shop, shopUnit, 4101), /belongs to another account/u);
   await writeFile(path.join(unitRoot, shopUnit), unitFor(shop, 4101), { mode: 0o644 });
@@ -832,38 +825,38 @@ test("a release unit is its application's own, named for its project, on a port 
   assert.throws(() => claim(shop, shopUnit, 4101), { code: "EVIBE64UNSAFEFILE" });
 });
 
-test("another workspace's odd release unit never stops this one, and its own odd unit is refused by name", async (t) => {
-  const host = await applicationHost(t);
+test("another workspace's odd staging unit never stops this one, and its own odd unit is refused by name", async (t) => {
+  const host = await stagingAccountHost(t);
   const account = host.ensure("shop");
   const unitRoot = host.options.unitRoot;
-  const shopUnit = "vibe64-release-test-shop-333333333333.service";
-  const claim = (loopbackPort) => assertReleaseServiceClaim({ loopbackPort, owner: host.owner, unitName: shopUnit, unitRoot,
-    unitUid: UID, user: { application: { project: "shop" }, username: account.username } });
+  const shopUnit = "vibe64-staging-test-shop-333333333333.service";
+  const claim = (loopbackPort) => assertStagingUnitClaim({ loopbackPort, owner: host.owner, unitName: shopUnit, unitRoot,
+    unitUid: UID, user: { stagingAccount: { project: "shop" }, username: account.username } });
   // Another workspace's units that are no unit root wrote: a mask, an
   // oversized file and one others may change. None claims its port.
-  await symlink("/dev/null", path.join(unitRoot, "vibe64-release-other-cafe-111111111111.service"));
-  await writeFile(path.join(unitRoot, "vibe64-release-other-cafe-222222222222.service"), "x".repeat(65 * 1024), { mode: 0o644 });
-  await writeFile(path.join(unitRoot, "vibe64-release-other-cafe-333333333333.service"), "SocketBindAllow=tcp:4102\n");
-  await chmod(path.join(unitRoot, "vibe64-release-other-cafe-333333333333.service"), 0o666);
+  await symlink("/dev/null", path.join(unitRoot, "vibe64-staging-other-cafe-111111111111.service"));
+  await writeFile(path.join(unitRoot, "vibe64-staging-other-cafe-222222222222.service"), "x".repeat(65 * 1024), { mode: 0o644 });
+  await writeFile(path.join(unitRoot, "vibe64-staging-other-cafe-333333333333.service"), "SocketBindAllow=tcp:4102\n");
+  await chmod(path.join(unitRoot, "vibe64-staging-other-cafe-333333333333.service"), 0o666);
   claim(4101);
   claim(4102);
 
   // One of this workspace's own is refused, by name, as is retiring past it.
-  await symlink("/dev/null", path.join(unitRoot, "vibe64-release-test-blog-444444444444.service"));
-  const refused = /Release unit vibe64-release-test-blog-444444444444\.service of workspace test is not a unit file root wrote/u;
+  await symlink("/dev/null", path.join(unitRoot, "vibe64-staging-test-blog-444444444444.service"));
+  const refused = /Staging unit vibe64-staging-test-blog-444444444444\.service of workspace test is not a unit file root wrote/u;
   assert.throws(() => claim(4101), refused);
   assert.throws(() => host.retire("shop"), refused);
-  await rm(path.join(unitRoot, "vibe64-release-test-blog-444444444444.service"));
+  await rm(path.join(unitRoot, "vibe64-staging-test-blog-444444444444.service"));
   assert.equal(host.retire("shop").retired, true);
 });
 
-test("only an application's registered account installs a release service", async () => {
+test("only an application's registered account installs a staging service", async () => {
   const source = await execHelperSource();
-  const operation = source.slice(source.indexOf("function handleDeploymentServiceOperation("),
-    source.indexOf("function inspectDeploymentServiceUnit("));
-  assert.match(operation, /const user = registeredApplicationUser\(owner, payload\.applicationAccount\);/u);
-  assert.match(operation, /applicationReleaseServiceFiles\(payload, user\.application, \{ daemonUid: owner\.uid, gid: user\.gid \}\)/u);
+  const operation = source.slice(source.indexOf("function handleStagingUnitOperation("),
+    source.indexOf("function inspectStagingUnit("));
+  assert.match(operation, /const user = registeredStagingAccount\(owner, payload\.stagingAccount\);/u);
+  assert.match(operation, /stagingUnitFiles\(payload, user\.stagingAccount, \{ daemonUid: owner\.uid, gid: user\.gid \}\)/u);
   // The claim reads the same unit folder the unit then goes to.
-  assert.match(operation, /assertReleaseServiceClaim\(\{ loopbackPort, owner, unitName, unitRoot, user \}\);/u);
+  assert.match(operation, /assertStagingUnitClaim\(\{ loopbackPort, owner, unitName, unitRoot, user \}\);/u);
   assert.doesNotMatch(source, /upgrade-release-units|resolveAllowedDeploymentServicePath/u);
 });

@@ -84,7 +84,7 @@ async function createTarArchive({
     envPolicy: "project",
     maxBuffer: COMMAND_BUFFER_BYTES,
     mode: "capture",
-    purpose: "deployment",
+    purpose: "source",
     timeout: ARCHIVE_TIMEOUT_MS
   });
   if (result?.ok !== true) {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import fs, { existsSync, readlinkSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -11,13 +11,12 @@ import { promisify } from "node:util";
 
 import {
   installStagingAccess,
-  preRenameStagingProblem,
   removeStagingAccess,
   stagingAccessGranted
 } from "../../packages/vibe64-execution/src/host/stagingAccess.js";
 import {
   enterStagingService,
-  liveReleaseUnit,
+  runningStagingUnit,
   stagingActivity,
   stagingEnterArgv,
   stagingEnterCommand,
@@ -28,12 +27,12 @@ import {
   serviceUserNamespace,
   START_SCRIPT_RUNS_ARGUMENTS
 } from "../../packages/vibe64-execution/src/host/stagingLogin.js";
-import { deploymentServiceUnit } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
+import { stagingUnitFile } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
 import { assertDurablyReplaced, traceDurableWrites } from "./durableWriteTrace.js";
 
 const EXEC_HELPER = fileURLToPath(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url));
 const UID = process.getuid();
-const ACCOUNT = "v64a_0123456789ab";
+const ACCOUNT = "v64s_0123456789ab";
 const PUBLIC_KEY = `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI${"A".repeat(43)}`;
 const HELPER = "/usr/lib/vibe64/vibe64-exec-helper";
 
@@ -45,7 +44,6 @@ async function stagingHost(t) {
   const options = {
     accountDatabase: "files",
     keysRoot: path.join(root, "etc", "vibe64", "staging-ssh"),
-    preRenameKeysRoot: path.join(root, "etc", "vibe64", "production-ssh"),
     rootUid: UID,
     runRoot: (command, args) => {
       calls.push([command, ...args]);
@@ -54,7 +52,7 @@ async function stagingHost(t) {
     runRootAllowFailure: (command, args) => {
       calls.push([command, ...args]);
       if (command === "atq") {
-        return { status: 0, stderr: "", stdout: `7\tWed Nov 11 23:00:00 2026 a ${ACCOUNT}\n8\tWed Nov 11 23:00:00 2026 a v64a_ffffffffffff\n` };
+        return { status: 0, stderr: "", stdout: `7\tWed Nov 11 23:00:00 2026 a ${ACCOUNT}\n8\tWed Nov 11 23:00:00 2026 a v64s_ffffffffffff\n` };
       }
       return { status: 1, stderr: "not logged in", stdout: "" };
     },
@@ -153,7 +151,7 @@ test("a key file anyone but root may change, or one root did not write, grants n
   assert.equal(stagingAccessGranted(ACCOUNT, { ...host.options, rootUid: UID + 1 }), false);
   await chmod(path.join(host.options.keysRoot, ACCOUNT), 0o664);
   assert.equal(stagingAccessGranted(ACCOUNT, host.options), false);
-  assert.equal(stagingAccessGranted("v64a_ffffffffffff", host.options), false);
+  assert.equal(stagingAccessGranted("v64s_ffffffffffff", host.options), false);
 });
 
 test("revoking staging access removes the key, the rule and the login shell, ends the open logins and what they left to run", async (t) => {
@@ -220,33 +218,6 @@ test("a sudo rule a read-only folder still holds fails its revoke rather than st
   assert.deepEqual(host.calls, []);
 });
 
-test("an account with its key or sudo rule from before the rename to staging access is neither granted nor revoked until root removes them", async (t) => {
-  const host = await stagingHost(t);
-  const oldKey = path.join(host.options.preRenameKeysRoot, ACCOUNT);
-  const oldRule = path.join(host.options.sudoersRoot, `vibe64-production-${ACCOUNT}`);
-  await mkdir(host.options.preRenameKeysRoot, { recursive: true });
-  await writeFile(oldKey, `from="127.0.0.1,::1",restrict,pty ${PUBLIC_KEY} vibe64-production\n`);
-  await writeFile(oldRule, `${ACCOUNT} ALL=(root) NOPASSWD: ${HELPER} production-service *\n`);
-  const refusal = new RegExp(`refused to change staging access: ${ACCOUNT} still has ${oldKey} and ${oldRule} from before ` +
-    "production access was renamed staging access\\. Root removes them, takes staging access back \\(staging-access " +
-    "revoke\\) and grants it again", "u");
-
-  assert.throws(() => installStagingAccess({ shell: "/bin/sh", username: ACCOUNT }, PUBLIC_KEY, HELPER, host.options), refusal);
-  assert.throws(() => removeStagingAccess({ shell: "/bin/sh", username: ACCOUNT }, ACCOUNT, host.options), refusal);
-  // Nothing changed: no key or rule under the new names, no shell change, no login ended.
-  assert.equal(stagingAccessGranted(ACCOUNT, host.options), false);
-  assert.deepEqual(await readdir(host.options.sudoersRoot), [`vibe64-production-${ACCOUNT}`]);
-  assert.deepEqual(host.calls, []);
-
-  // Either file alone is refused, and the application account check names the same fix.
-  await rm(oldKey);
-  assert.match(preRenameStagingProblem(ACCOUNT, host.options), new RegExp(`^${ACCOUNT} still has ${oldRule} from before`, "u"));
-  await rm(oldRule);
-  assert.equal(preRenameStagingProblem(ACCOUNT, host.options), "");
-  installStagingAccess({ shell: "/usr/sbin/nologin", username: ACCOUNT }, PUBLIC_KEY, HELPER, host.options);
-  assert.equal(stagingAccessGranted(ACCOUNT, host.options), true);
-});
-
 test("on a host keeping accounts in the extra users database, the login shell changes there alone", async (t) => {
   const host = await stagingHost(t);
   const prefixParent = path.join(host.root, "run");
@@ -277,10 +248,10 @@ test("on a host keeping accounts in the extra users database, the login shell ch
   assert.deepEqual(await readdir(prefixParent), []);
 });
 
-function releaseUnitLines({ user = ACCOUNT, release = "20261111_080000z-ab12cd34", name = "vibe64-release-test-shop-0123456789ab.service" } = {}) {
-  const handover = `/var/lib/vibe64-apps/test/shop/handover/${release}`;
+function stagingUnitLines({ user = ACCOUNT, release = "20261111_080000z-ab12cd34", name = "vibe64-staging-test-shop-0123456789ab.service" } = {}) {
+  const handover = `/var/lib/vibe64-staging/test/shop/handover/${release}`;
   return {
-    lines: deploymentServiceUnit({
+    lines: stagingUnitFile({
       environmentFile: `${handover}/environment`,
       helperPath: HELPER,
       loopbackPort: 41000,
@@ -288,33 +259,33 @@ function releaseUnitLines({ user = ACCOUNT, release = "20261111_080000z-ab12cd34
       startScript: `${handover}/start.sh`,
       servicePath: "/opt/vibe64/runtime-packs/node26/bin:/usr/bin:/bin",
       unitName: name,
-      user: { application: { appRoot: "/var/lib/vibe64-apps/test/shop/app", databaseRoot: "/var/lib/vibe64-apps/test/shop/database" }, username: user },
-      workingDirectory: `/var/lib/vibe64-apps/test/shop/app/releases/${release}/workspace`
+      user: { stagingAccount: { appRoot: "/var/lib/vibe64-staging/test/shop/app", databaseRoot: "/var/lib/vibe64-staging/test/shop/database" }, username: user },
+      workingDirectory: `/var/lib/vibe64-staging/test/shop/app/releases/${release}/workspace`
     }).split("\n"),
     name
   };
 }
 
-test("a staging login finds the account's own release unit as root installed it, the running one first", () => {
-  const older = releaseUnitLines({ name: "vibe64-release-test-shop-aaaaaaaaaaaa.service", release: "r1" });
-  const live = releaseUnitLines({ name: "vibe64-release-test-shop-bbbbbbbbbbbb.service", release: "r2" });
-  const another = releaseUnitLines({ name: "vibe64-release-test-blog-cccccccccccc.service", user: "v64a_ffffffffffff" });
+test("a staging login finds the account's own staging unit as root installed it, the running one first", () => {
+  const older = stagingUnitLines({ name: "vibe64-staging-test-shop-aaaaaaaaaaaa.service", release: "r1" });
+  const live = stagingUnitLines({ name: "vibe64-staging-test-shop-bbbbbbbbbbbb.service", release: "r2" });
+  const another = stagingUnitLines({ name: "vibe64-staging-test-blog-cccccccccccc.service", user: "v64s_ffffffffffff" });
   const units = () => [older, live, another];
 
-  assert.deepEqual(liveReleaseUnit(ACCOUNT, { isActive: (name) => name === live.name, units }), {
-    environmentFile: "/var/lib/vibe64-apps/test/shop/handover/r2/environment",
+  assert.deepEqual(runningStagingUnit(ACCOUNT, { isActive: (name) => name === live.name, units }), {
+    environmentFile: "/var/lib/vibe64-staging/test/shop/handover/r2/environment",
     name: live.name,
     path: "/opt/vibe64/runtime-packs/node26/bin:/usr/bin:/bin",
-    startScript: "/var/lib/vibe64-apps/test/shop/handover/r2/start.sh",
-    workingDirectory: "/var/lib/vibe64-apps/test/shop/app/releases/r2/workspace"
+    startScript: "/var/lib/vibe64-staging/test/shop/handover/r2/start.sh",
+    workingDirectory: "/var/lib/vibe64-staging/test/shop/app/releases/r2/workspace"
   });
   // With none running, the last of its own; another account's unit is never its.
-  assert.equal(liveReleaseUnit(ACCOUNT, { isActive: () => false, units }).name, live.name);
-  assert.equal(liveReleaseUnit("v64a_ffffffffffff", { isActive: () => true, units }).name, another.name);
-  assert.equal(liveReleaseUnit("v64a_eeeeeeeeeeee", { isActive: () => true, units }), null);
-  const odd = { lines: [`User=${ACCOUNT}`, "ExecStart=/bin/sh -c true"], name: "vibe64-release-test-shop-dddddddddddd.service" };
-  assert.throws(() => liveReleaseUnit(ACCOUNT, { isActive: () => true, units: () => [odd] }),
-    /does not start a Vibe64 release service/u);
+  assert.equal(runningStagingUnit(ACCOUNT, { isActive: () => false, units }).name, live.name);
+  assert.equal(runningStagingUnit("v64s_ffffffffffff", { isActive: () => true, units }).name, another.name);
+  assert.equal(runningStagingUnit("v64s_eeeeeeeeeeee", { isActive: () => true, units }), null);
+  const odd = { lines: [`User=${ACCOUNT}`, "ExecStart=/bin/sh -c true"], name: "vibe64-staging-test-shop-dddddddddddd.service" };
+  assert.throws(() => runningStagingUnit(ACCOUNT, { isActive: () => true, units: () => [odd] }),
+    /does not start a Vibe64 staging service/u);
 });
 
 test("a staging login runs bash without profile or rc files, the client's command through it or an SFTP server", () => {
@@ -338,15 +309,15 @@ test("a staging login runs bash without profile or rc files, the client's comman
   });
 });
 
-test("staging-enter becomes the application account before anything in the service's mount namespace runs", () => {
+test("staging-enter becomes the staging account before anything in the service's mount namespace runs", () => {
   const unit = {
-    environmentFile: "/var/lib/vibe64-apps/test/shop/handover/r2/environment",
-    name: "vibe64-release-test-shop-bbbbbbbbbbbb.service",
+    environmentFile: "/var/lib/vibe64-staging/test/shop/handover/r2/environment",
+    name: "vibe64-staging-test-shop-bbbbbbbbbbbb.service",
     path: "/opt/vibe64/runtime-packs/node26/bin:/usr/bin:/bin",
-    startScript: "/var/lib/vibe64-apps/test/shop/handover/r2/start.sh",
-    workingDirectory: "/var/lib/vibe64-apps/test/shop/app/releases/r2/workspace"
+    startScript: "/var/lib/vibe64-staging/test/shop/handover/r2/start.sh",
+    workingDirectory: "/var/lib/vibe64-staging/test/shop/app/releases/r2/workspace"
   };
-  const user = { gid: 990, home: "/var/lib/vibe64-apps/test/shop/app/home", uid: 991, username: ACCOUNT };
+  const user = { gid: 990, home: "/var/lib/vibe64-staging/test/shop/app/home", uid: 991, username: ACCOUNT };
   // Root's own environment (sudo's) gives the terminal and language, nothing else.
   const entered = stagingEnterCommand({ command: ["ls", "-la"], env: { SECRET: "no", TERM: "xterm" }, helperPath: HELPER,
     mountNamespace: "mnt:[4026532800]", pid: 4242, unit, user });
@@ -361,7 +332,7 @@ test("staging-enter becomes the application account before anything in the servi
     SHELL: "/bin/bash",
     TERM: "xterm",
     USER: ACCOUNT,
-    VIBE64_RELEASE_UNIT: unit.name
+    VIBE64_STAGING_UNIT: unit.name
   });
   // A main process in a user namespace the application made itself (its FUSE volume) is joined there too, as
   // the ids the account has in it; one in the host's is not.
@@ -390,14 +361,14 @@ test("staging-enter becomes the application account before anything in the servi
 
 test("staging-enter enters only a main process that is in the service's own cgroup before and after root reads it", () => {
   const unit = {
-    environmentFile: "/var/lib/vibe64-apps/test/shop/handover/r2/environment",
-    name: "vibe64-release-test-shop-bbbbbbbbbbbb.service",
+    environmentFile: "/var/lib/vibe64-staging/test/shop/handover/r2/environment",
+    name: "vibe64-staging-test-shop-bbbbbbbbbbbb.service",
     path: "/usr/bin:/bin",
-    startScript: "/var/lib/vibe64-apps/test/shop/handover/r2/start.sh",
-    workingDirectory: "/var/lib/vibe64-apps/test/shop/app/releases/r2/workspace"
+    startScript: "/var/lib/vibe64-staging/test/shop/handover/r2/start.sh",
+    workingDirectory: "/var/lib/vibe64-staging/test/shop/app/releases/r2/workspace"
   };
   const user = { gid: 990, home: "/home/shop", uid: 991, username: ACCOUNT };
-  const service = "/system.slice/vibe64-release-test-shop-bbbbbbbbbbbb.service";
+  const service = "/system.slice/vibe64-staging-test-shop-bbbbbbbbbbbb.service";
   function enter(cgroups, { mainPid = "4242" } = {}) {
     const read = [];
     let executed = null;
@@ -429,7 +400,7 @@ test("staging-enter enters only a main process that is in the service's own cgro
   assert.throws(() => enter([], { mainPid: "0" }), /is not running, so there is nothing to enter/u);
   // Inside, before anything runs, staging-enter checks it is in the namespace root read for the service.
   assert.throws(() => runStagingEnter(["mnt:[4026532800]", unit.environmentFile, unit.startScript, unit.workingDirectory],
-    { link: () => "mnt:[4026531841]" }), /did not reach the live release service: its main process changed meanwhile/u);
+    { link: () => "mnt:[4026531841]" }), /did not reach the running staging service: its main process changed meanwhile/u);
 });
 
 test("staging-logs reads 200 lines unless told, from a time journalctl takes as one argument", () => {
@@ -445,8 +416,8 @@ test("staging-logs reads 200 lines unless told, from a time journalctl takes as 
 test("staging activity is logind's own record of each login and, apart, what each login reported, oldest first", () => {
   const asked = [];
   const journal = {
-    "USER_ID=v64a_0123456789ab": [
-      { MESSAGE: "New session 12 of user v64a_0123456789ab.", MESSAGE_ID: "8d45620c1a4348dbb17410da57c60c66", SESSION_ID: "12",
+    "USER_ID=v64s_0123456789ab": [
+      { MESSAGE: "New session 12 of user v64s_0123456789ab.", MESSAGE_ID: "8d45620c1a4348dbb17410da57c60c66", SESSION_ID: "12",
         __REALTIME_TIMESTAMP: "1762848000000000" },
       { MESSAGE: "Removed session 12.", MESSAGE_ID: "3354939424b4456d9802ca8333ed424a", SESSION_ID: "12",
         __REALTIME_TIMESTAMP: "1762848002000000" },
@@ -486,27 +457,26 @@ test("staging activity is logind's own record of each login and, apart, what eac
   assert.deepEqual(stagingActivity(null), { entries: [], olderOmitted: { host: false, login: false } });
 });
 
-test("only an application account's own staging login reaches staging-shell, staging-service and staging-enter", async () => {
+test("only a staging account's own staging login reaches staging-shell, staging-service and staging-enter", async () => {
   const run = (args, env) => promisify(execFile)(process.execPath, [EXEC_HELPER, ...args], { env }).then(
     () => ({ code: 0, stderr: "" }),
     (error) => ({ code: error.code, stderr: error.stderr })
   );
   const shell = await run(["staging-shell"], { ...process.env, SSH_ORIGINAL_COMMAND: "id" });
   assert.equal(shell.code, 2);
-  assert.match(shell.stderr, /Only an application account's staging login starts here\./u);
+  assert.match(shell.stderr, /Only a staging account's staging login starts here\./u);
   for (const action of ["restart", "enter"]) {
     const service = await run(["staging-service", action], { ...process.env, SUDO_UID: String(UID), SUDO_USER: os.userInfo().username });
     assert.equal(service.code, 2);
-    assert.match(service.stderr, /Only an application account's staging login may use staging-service\./u);
+    assert.match(service.stderr, /Only a staging account's staging login may use staging-service\./u);
   }
   const enter = await run(["staging-enter", "mnt:[4026531841]", "environment", "start.sh", "release", "id"], process.env);
   assert.equal(enter.code, 2);
-  assert.match(enter.stderr, /Only staging-enter, in an application account's staging login, starts here\./u);
-  // The names from before production access was renamed staging access are refused, naming the new one.
-  for (const [old, renamed] of [["production-shell", "staging-shell"], ["production-service", "staging-service"],
-    ["production-enter", "staging-enter"]]) {
+  assert.match(enter.stderr, /Only staging-enter, in a staging account's staging login, starts here\./u);
+  // Any other name, an old one included, is refused as an unknown command.
+  for (const old of ["production-shell", "production-service", "production-enter"]) {
     const refused = await run([old], process.env);
     assert.equal(refused.code, 2);
-    assert.match(refused.stderr, new RegExp(`has no ${old}: production access was renamed staging access, so use ${renamed}\\.`, "u"));
+    assert.match(refused.stderr, /^Usage: vibe64-exec-helper execute \[payload-json-file\]$/mu);
   }
 });

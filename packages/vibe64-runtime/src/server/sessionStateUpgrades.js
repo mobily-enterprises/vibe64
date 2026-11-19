@@ -24,7 +24,7 @@ import {
   metadataFilePath,
   readDirectoryEntries,
   readTextIfExists,
-  renewalArchiveStagingRoot,
+  renewalArchivesRoot,
   runCommand,
   sortedDirectoryNames
 } from "./sessionStoreLayout.js";
@@ -414,7 +414,7 @@ function createSessionStateUpgrades({
         }
       }
     }
-    await inspectArchives(preparedRenewalsOnly ? renewalArchiveStagingRoot(rootPaths) : rootPaths.archivedSessionsRoot);
+    await inspectArchives(preparedRenewalsOnly ? renewalArchivesRoot(rootPaths) : rootPaths.archivedSessionsRoot);
     return updates;
   }
 

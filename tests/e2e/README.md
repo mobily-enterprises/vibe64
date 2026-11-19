@@ -12,7 +12,7 @@ against its own server on port `PLAYWRIGHT_PORT + N` (`PLAYWRIGHT_PORT` defaults
 tests running at once share a server, and concurrent checkouts choose different `PLAYWRIGHT_PORT`s.
 Each server's output is in `test-results/browser-test-servers/worker-N.log`. With
 `PLAYWRIGHT_BASE_URL`, the tests use that running target instead, one worker at a time, with the login
-state its host supplies in `PLAYWRIGHT_STORAGE_STATE`; `VIBE64_LIVE_E2E=1` makes a Vibe64 server you
+state its host supplies in `PLAYWRIGHT_STORAGE_STATE`; `VIBE64_E2E_EXISTING_SERVER=1` makes a Vibe64 server you
 started on `PLAYWRIGHT_PORT` that target.
 
 Tests run in parallel, spread across the workers one test at a time (`fullyParallel`): no test

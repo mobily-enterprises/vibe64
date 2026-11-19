@@ -8,12 +8,12 @@
 // adds is needed: without any one of them, what it allows fails again.
 //
 // Opt-in, because it needs root through sudo and a gVisor binary:
-//   VIBE64_TEST_APPLICATION_SANDBOX=1
+//   VIBE64_TEST_STAGING_SANDBOX=1
 //   VIBE64_TEST_RUNSC=<gVisor's runsc binary, with its gvisor-bin folder beside it>
 // It also needs passwordless sudo, systemd, util-linux's unshare and mount,
 // /dev/fuse, a group named like the user running it, and a host that lets
 // unprivileged users make user namespaces, as Vibe64's hosts do. Units can't see
-// /home (ProtectHome=yes), so its application area is a folder under /srv,
+// /home (ProtectHome=yes), so its staging area is a folder under /srv,
 // made and removed through sudo.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -32,8 +32,8 @@ const USER = os.userInfo().username;
 const PATH_LINE = "Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 function skipReason() {
-  if (process.env.VIBE64_TEST_APPLICATION_SANDBOX !== "1") {
-    return "set VIBE64_TEST_APPLICATION_SANDBOX=1 and VIBE64_TEST_RUNSC to prove sandbox allowances on this host";
+  if (process.env.VIBE64_TEST_STAGING_SANDBOX !== "1") {
+    return "set VIBE64_TEST_STAGING_SANDBOX=1 and VIBE64_TEST_RUNSC to prove sandbox allowances on this host";
   }
   if (!RUNSC || !existsSync(RUNSC)) return "VIBE64_TEST_RUNSC must name gVisor's runsc binary";
   if (spawnSync("sudo", ["-n", "true"]).status !== 0) return "it needs passwordless sudo to start systemd units";
@@ -102,7 +102,7 @@ test("a Deployment's sandbox allowances on a real host", { skip: skipReason() },
    * line it prints as it prints it.
    */
   function inUnit(allowances, script, { change = (line) => line, onLine = () => {} } = {}) {
-    const lines = accountUnitLines({ username: USER, application: identity }, { receiptRoot, sandboxAllowances: allowances })
+    const lines = accountUnitLines({ username: USER, stagingAccount: identity }, { receiptRoot, sandboxAllowances: allowances })
       // A test host has no Vibe64 settings folder to hide; systemd refuses to hide a missing path.
       .map((line) => (line === `InaccessiblePaths=${HOST_SETTINGS_ROOT}` && !existsSync(HOST_SETTINGS_ROOT) ? `InaccessiblePaths=-${HOST_SETTINGS_ROOT}` : line))
       .map(change)

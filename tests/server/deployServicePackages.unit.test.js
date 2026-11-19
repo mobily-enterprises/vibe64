@@ -101,7 +101,7 @@ test("a service given more settings than mobilynet takes, or one by a name its r
     code: "vibe64_production_too_many_settings",
     message: "mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them, and service computers would "
       + "have 50: 39 of its own and 11 from its links. Remove Production Env entries it doesn't use, or give them only to the services that "
-      + "use them, then deploy."
+      + "use them, then deploy to production."
   });
   assert.throws(() => servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(29)) }),
     { code: "vibe64_production_too_many_settings", status: 422 });
@@ -116,14 +116,14 @@ test("a service given more settings than mobilynet takes, or one by a name its r
     assert.equal(reserved(key).code, "vibe64_production_setting_reserved", key);
   }
   assert.equal(reserved("PATH").message, "Service web would be given PATH, and mobilynet sets that name itself on every instance, so the app "
-    + "would lose it. Save its value in the Production Env under another name and remove PATH, then deploy.");
+    + "would lose it. Save its value in the Production Env under another name and remove PATH, then deploy to production.");
   assert.match(reserved("MOBILYNET_TOKEN", ["computers"]).message, /^Service computers would be given MOBILYNET_TOKEN, and mobilynet sets every name starting MOBILYNET_ itself/u);
   for (const key of ["PATHS", "HOMEPAGE", "GIT_CONFIG", "MOBILYNETX"]) assert.equal(reserved(key), null, key);
   const homeSecret = { ...DEPLOYMENT, generatedSecrets: [...DEPLOYMENT.generatedSecrets, "HOME"] };
   const { needs: homeNeeds } = needsOfStack(homeSecret, { preferredAlternative, resourceKindIsDatabase });
   assert.equal(servicePackagesProblem(homeSecret, settingsPerService(homeNeeds)).message, "Service web would be given HOME, and mobilynet sets "
     + "that name itself on every instance, so the app would lose it. Name it otherwise in genesis/stack.md (the coding agent can do this), "
-    + "Save, then deploy.");
+    + "Save, then deploy to production.");
 
   // Packages: the shared and a service's own together count against the 200, naming the service.
   const many = Array.from({ length: 200 - 87 - 10 + 1 }, (_, at) => `extra${at}`);
@@ -149,7 +149,7 @@ test("a service given more settings than mobilynet takes, or one by a name its r
     + "use a Staging, so Production never takes it: an app refuses to start with it there.");
   assert.throws(() => settingsPerService(NEEDS, [{ key: "STAGING_REACHES_REAL_PEOPLE", secret: false }]), {
     code: "vibe64_production_env_invalid",
-    message: /^STAGING_REACHES_REAL_PEOPLE says real people use a Staging, so Production never takes it: .* Remove it from the Production Env, then deploy\.$/u
+    message: /^STAGING_REACHES_REAL_PEOPLE says real people use a Staging, so Production never takes it: .* Remove it from the Production Env, then deploy to production\.$/u
   });
 });
 

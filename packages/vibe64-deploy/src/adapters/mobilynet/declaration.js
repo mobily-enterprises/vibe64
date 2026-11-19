@@ -458,7 +458,7 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
       return {
         code: "vibe64_app_package_packages_invalid",
         message: `genesis/stack.md's Deployment - Packages: for service ${service.id} can't be declared: ${packages} Fix it in `
-          + "genesis/stack.md (the coding agent can do this), Save, then deploy."
+          + "genesis/stack.md (the coding agent can do this), Save, then deploy to production."
       };
     }
     const names = Object.keys(settings[service.id] ?? {});
@@ -470,8 +470,8 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
         code: "vibe64_production_setting_reserved",
         message: `Service ${service.id} would be given ${reserved}, and mobilynet sets ${sets === reserved ? "that name" : `every name starting ${sets}`} `
           + "itself on every instance, so the app would lose it. "
-          + (stack.includes(reserved) ? "Name it otherwise in genesis/stack.md (the coding agent can do this), Save, then deploy."
-            : `Save its value in the Production Env under another name and remove ${reserved}, then deploy.`)
+          + (stack.includes(reserved) ? "Name it otherwise in genesis/stack.md (the coding agent can do this), Save, then deploy to production."
+            : `Save its value in the Production Env under another name and remove ${reserved}, then deploy to production.`)
       };
     }
     const count = names.length + linked;
@@ -480,7 +480,7 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
         code: "vibe64_production_too_many_settings",
         message: `mobilynet gives an App Service at most ${settingsMax} settings and secrets in all, its links' among them, `
           + `and service ${service.id} would have ${count}: ${names.length} of its own and ${linked} from its links. Remove Production Env `
-          + "entries it doesn't use, or give them only to the services that use them, then deploy."
+          + "entries it doesn't use, or give them only to the services that use them, then deploy to production."
       };
     }
   }

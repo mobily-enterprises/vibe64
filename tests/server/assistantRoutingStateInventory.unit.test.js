@@ -136,14 +136,14 @@ test("routing upgrade rejects corrupt owned state and unrelated metadata changes
 test("routing upgrade reports incomplete prepared archives without performing recovery", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createStore(targetRoot);
-    const stagingRoot = path.join(store.paths().archivedSessionsRoot, ".staging");
-    await mkdir(stagingRoot, { recursive: true });
-    const archivePath = path.join(stagingRoot, "pending.tar.gz");
+    const pendingRoot = path.join(store.paths().archivedSessionsRoot, ".packing");
+    await mkdir(pendingRoot, { recursive: true });
+    const archivePath = path.join(pendingRoot, "pending.tar.gz");
     await writeFile(archivePath, "unfinished archive");
     await assert.rejects(store.prepareAssistantRoutingStateUpgrade({
       temporaryRoot: scratchRoot(targetRoot), transform: () => ({})
     }), /Finish archive recovery/u);
     assert.equal(await readFile(archivePath, "utf8"), "unfinished archive");
-    assert.deepEqual(await readdir(stagingRoot), ["pending.tar.gz"]);
+    assert.deepEqual(await readdir(pendingRoot), ["pending.tar.gz"]);
   });
 });

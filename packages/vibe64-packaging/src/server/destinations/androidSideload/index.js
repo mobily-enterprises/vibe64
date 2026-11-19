@@ -224,16 +224,16 @@ async function upload({ target, version, artifacts, credentials, toolchains }) {
       versionCode: manifest.versionCode,
       targetSdk: manifest.targetSdk
     };
-    const staging = `${directory}.partial-${randomUUID()}`;
+    const partial = `${directory}.partial-${randomUUID()}`;
     try {
-      await mkdir(staging, { recursive: true });
-      await copyFile(signed, path.join(staging, name));
-      await chmod(path.join(staging, name), 0o444);
-      await writeFile(path.join(staging, "proof.json"), canonicalJson(proof), { mode: 0o444 });
+      await mkdir(partial, { recursive: true });
+      await copyFile(signed, path.join(partial, name));
+      await chmod(path.join(partial, name), 0o444);
+      await writeFile(path.join(partial, "proof.json"), canonicalJson(proof), { mode: 0o444 });
       await mkdir(path.dirname(directory), { recursive: true });
-      await rename(staging, directory);
+      await rename(partial, directory);
     } finally {
-      await rm(staging, { recursive: true, force: true });
+      await rm(partial, { recursive: true, force: true });
     }
     return { file: path.join(directory, name), sha256: `sha256:${signedSha256}`, certificateSha256 };
   });

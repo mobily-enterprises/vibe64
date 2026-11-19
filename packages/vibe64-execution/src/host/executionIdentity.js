@@ -3,7 +3,7 @@
 
 
 
-import { registeredApplicationUser } from "./applicationAccounts.js";
+import { registeredStagingAccount } from "./stagingAccounts.js";
 import {
   assertExpectedId,
   assertUserInGroup,
@@ -40,11 +40,11 @@ function managedExecutionTargetUser(payload = {}, owner = {}, {
   assertInGroup = assertUserInGroup,
   resolveUser = resolveOsUser
 } = {}) {
-  if (payload.applicationAccount === true) {
-    const application = registeredApplicationUser(owner, payload.username);
-    assertExpectedId("uid", payload.uid, application.uid);
-    assertExpectedId("gid", payload.gid, application.gid);
-    return application;
+  if (payload.stagingAccount === true) {
+    const stagingAccount = registeredStagingAccount(owner, payload.username);
+    assertExpectedId("uid", payload.uid, stagingAccount.uid);
+    assertExpectedId("gid", payload.gid, stagingAccount.gid);
+    return stagingAccount;
   }
   const username = safeUsername(payload.username || owner.username);
   // The daemon was resolved by this process moments ago; most executions run as it.

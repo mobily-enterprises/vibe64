@@ -29,32 +29,32 @@ import {
 } from "./hostFiles.js";
 
 const MANAGED_EXECUTION_RESULT_LIMIT_BYTES = 64 * 1024;
-const APPLICATION_RECEIPTS_ROOT = "/run/vibe64-applications";
+const STAGING_ACCOUNT_RECEIPTS_ROOT = "/run/vibe64-staging-accounts";
 
 // A workspace's application executions keep their receipts in root's own
 // runtime directory, which their accounts only traverse: they are in no group
 // that reaches the daemon's runtime directory. Only root writes in /run, so
 // root makes that directory itself, with no process.
-function openApplicationExecutionReceipts(owner = {}, { create = false } = {}) {
+function openStagingExecutionReceipts(owner = {}, { create = false } = {}) {
   if (create) {
-    makeDirectory(APPLICATION_RECEIPTS_ROOT);
-    chmodSync(APPLICATION_RECEIPTS_ROOT, 0o711);
+    makeDirectory(STAGING_ACCOUNT_RECEIPTS_ROOT);
+    chmodSync(STAGING_ACCOUNT_RECEIPTS_ROOT, 0o711);
   }
   const workspace = workspaceFromDaemonUsername(safeUsername(owner.username));
-  return openManagedExecutionReceipts(path.join(APPLICATION_RECEIPTS_ROOT, workspace), { create, mode: 0o711 });
+  return openManagedExecutionReceipts(path.join(STAGING_ACCOUNT_RECEIPTS_ROOT, workspace), { create, mode: 0o711 });
 }
 
 // Every receipt of a workspace: its daemon's and people's, and its applications'.
 function openAllExecutionReceipts(owner = {}) {
   const workspace = openWorkspaceExecutionReceipts(owner);
-  let applications;
+  let stagingAccounts;
   try {
-    applications = openApplicationExecutionReceipts(owner);
+    stagingAccounts = openStagingExecutionReceipts(owner);
   } catch (error) {
     workspace.close();
     throw error;
   }
-  const both = [workspace, applications];
+  const both = [workspace, stagingAccounts];
   return {
     close: () => both.forEach((receipts) => receipts.close()),
     entries: () => both.flatMap((receipts) => receipts.entries()),
@@ -247,7 +247,7 @@ function writeManagedExecutionResult(executionRoot = "", result = {}) {
 export {
   ensureWorkspaceRuntimeBase,
   openAllExecutionReceipts,
-  openApplicationExecutionReceipts,
+  openStagingExecutionReceipts,
   openManagedExecutionReceipts,
   openWorkspaceExecutionReceipts,
   readManagedExecutionResult,

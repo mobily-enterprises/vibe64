@@ -49,7 +49,7 @@ const integrationContext = computed(() => ({
     turnId: route.query.integrationTurn, requestId: route.query.integrationRequest
   }
 }));
-const { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, releaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard } =
+const { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, stagingReleaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard } =
   useVibe64Integrations(integrationContext, selectedId);
 const projectSlug = useVibe64ProjectSlug();
 // Staging Env lives on the page a host adds at /dashboard/deploy, named here as its Dashboard link names it.
@@ -155,7 +155,7 @@ function setCredentialLinked(key, linked) {
 }
 const callbackKey = computed(() => envReferenceKey(registration.value?.callbackUrlRef) || "");
 const callbackUrl = computed({
-  get: () => callbackOverride.value ?? integrationCallbackUrl(props.dashboardContext.applicationPublicUrl,
+  get: () => callbackOverride.value ?? integrationCallbackUrl(props.dashboardContext.stagingPublicUrl,
     provider.value?.setup?.callbackPath || `/integrations/${selected.value?.authentication.registrationRef}/callback`),
   set: (value) => { callbackOverride.value = value; }
 });
@@ -167,7 +167,7 @@ const clientRegistrationBody = computed(() => integrationRegistrationRequest({
 const clientMetadata = computed(() => integrationClientMetadata({
   callbackUrl: callbackUrl.value, integration: selected.value, provider: provider.value, registration: registration.value
 }));
-watch([selectedId, navigationKey, releaseId], () => {
+watch([selectedId, navigationKey, stagingReleaseId], () => {
   callbackOverride.value = null;
   setupCopyMessage.value = "";
   discardOpen.value = false;
@@ -239,7 +239,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
       <v-btn value="development">Development</v-btn><v-btn value="staging">Staging</v-btn>
     </v-btn-toggle>
     <v-alert v-if="staging" type="info" variant="tonal">
-      Published configuration{{ releaseId ? ` (${releaseId})` : '' }}. Make configuration changes in Development, then publish them.
+      Staging configuration{{ stagingReleaseId ? ` (${stagingReleaseId})` : '' }}. Make configuration changes in Development, then publish them to staging.
       <p v-if="!dashboardContext.owner">Only the workspace owner can manage staging connections.</p>
     </v-alert>
     <p v-if="!staging && !dashboardContext.sessionId">Open a session to configure its integrations.</p>
@@ -257,7 +257,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
       <div class="integrations-panel__layout">
         <aside class="integrations-panel__catalogue" aria-label="Integrations catalogue">
           <v-text-field v-model="search" label="Search integrations" hide-details clearable @click:clear="search = ''" />
-          <h2 class="text-title-medium mt-6 mb-2">{{ staging ? 'Configured in the published release' : 'Configured in this session' }}</h2>
+          <h2 class="text-title-medium mt-6 mb-2">{{ staging ? 'Configured in the staging release' : 'Configured in this session' }}</h2>
           <v-list v-if="filteredEntries.length" aria-label="Configured integrations" bg-color="transparent">
             <v-list-item
               v-for="[id, entry] in filteredEntries" :key="id" :active="selectedId === id" min-height="48"
@@ -374,7 +374,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             <p v-else>This provider's configuration is preserved. Edit its configuration in Files.</p>
             <GoogleAdsSearchPanel
               v-if="provider?.id === 'google-ads' && selected.accountMode === 'shared'" :key="navigationKey + selectedId" v-model="configuration"
-              :integration-id="selectedId" :disabled="staging || disabled" :application-public-url="dashboardContext.applicationPublicUrl"
+              :integration-id="selectedId" :disabled="staging || disabled" :staging-public-url="dashboardContext.stagingPublicUrl"
               :result="adsResult" :error="adsError" :loading="setupCommand.isRunning"
               :management-disabled="staging || dirty || disabled || dashboardContext.owner === false"
               :can-prepare="!staging && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDraftAvailable && dashboardContext.owner !== false"
@@ -382,9 +382,9 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             />
             <PaymentConfigurationPanel
               v-if="['stripe', 'paddle'].includes(provider?.id)" v-model="configuration"
-              :integration-id="selectedId" :disabled="staging || disabled" :application-public-url="dashboardContext.applicationPublicUrl"
+              :integration-id="selectedId" :disabled="staging || disabled" :staging-public-url="dashboardContext.stagingPublicUrl"
               @set-env="openPaymentEnv" :management="paymentResult" :management-error="paymentError" :management-loading="setupCommand.isRunning" :management-operation="paymentOperation"
-              :management-disabled="dirty || disabled || dashboardContext.owner === false || (staging && !releaseId)"
+              :management-disabled="dirty || disabled || dashboardContext.owner === false || (staging && !stagingReleaseId)"
               :can-prepare="!staging && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDraftAvailable && dashboardContext.owner !== false"
               @prepare="dashboardContext.requestAssistantDraft(setupPrompt)"
               @manage="runPaymentOperation"
@@ -485,7 +485,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             <v-expansion-panels v-if="provider?.setup" class="mt-4" static>
               <v-expansion-panel :title="`Set up ${provider.name}`">
                 <v-expansion-panel-text>
-                  <p v-if="staging">For the credential and callback Env steps below, use Open Staging Env. Save values in the published application's environment.</p>
+                  <p v-if="staging">For the credential and callback Env steps below, use Open Staging Env. Save values in Staging Env, the staging app's environment.</p>
                   <ol class="integrations-panel__instructions">
                     <li v-for="step in integrationSetupSteps(provider, selected)" :key="step">{{ step }}</li>
                   </ol>
@@ -517,7 +517,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               </v-expansion-panel>
             </v-expansion-panels>
           </template>
-          <template v-else><h2>{{ staging ? 'Select a published integration' : 'Add a service' }}</h2><p>Choose a service or an existing configuration to get started.</p></template>
+          <template v-else><h2>{{ staging ? 'Select a staging integration' : 'Add a service' }}</h2><p>Choose a service or an existing configuration to get started.</p></template>
         </main>
       </div>
       <footer v-if="!staging" class="integrations-panel__footer">

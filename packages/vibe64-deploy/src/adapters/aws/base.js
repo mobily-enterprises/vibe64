@@ -73,7 +73,7 @@ async function freshRole(call) {
 
 /** The refusal of a thing found under this deployment's name that isn't its own. */
 function notOurs(what, name) {
-  return adapterError("aws_not_ours", `${what} ${name} is in this AWS account but isn't tagged as this deployment's, so Vibe64 leaves it alone. Remove or rename it at AWS, then deploy again.`);
+  return adapterError("aws_not_ours", `${what} ${name} is in this AWS account but isn't tagged as this deployment's, so Vibe64 leaves it alone. Remove or rename it at AWS, then deploy to production again.`);
 }
 
 /** A trust policy for an AWS service. @param {string} service */

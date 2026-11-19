@@ -1,33 +1,33 @@
-// Words the agent's deployment status: the host's view of the session
-// project's deployment, copied field by field so no value can pass through.
+// Words the agent's staging status: the host's view of the session
+// project's staging, copied field by field so no value can pass through.
 
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
-const DEPLOYMENT_UNAVAILABLE_REASON = "This Vibe64 installation does not publish projects.";
-const DEPLOYMENT_STATES = new Set(["deployed", "deploying", "failed", "not-deployed", "offline"]);
+const STAGING_UNAVAILABLE_REASON = "This Vibe64 installation does not publish projects.";
+const STAGING_STATES = new Set(["on-staging", "publishing", "failed", "not-on-staging", "offline"]);
 // The words a person reads for each state: the feature is Publish, the place it runs Staging.
 const STAGING_STATE_WORDS = Object.freeze({
-  deployed: "published",
-  deploying: "publishing",
+  "on-staging": "published",
+  publishing: "publishing",
   failed: "failed",
-  "not-deployed": "not published",
+  "not-on-staging": "not published",
   offline: "offline"
 });
 const DEPLOYMENT_STEP_ROLES = Object.freeze(["prepare", "build", "migrate", "serve"]);
 
-function deploymentUsageText() {
+function stagingUsageText() {
   return [
     "Usage:",
-    "  vibe64-helper deployment status [--json]",
+    "  vibe64-helper staging status [--json]",
     "  ssh staging [command]             scp, sftp and rsync reach staging:<path> the same way",
     "",
-    "deployment status shows this session project's Staging: whether it is published, its public addresses,",
+    "staging status shows this session project's Staging: whether it is published, its public addresses,",
     "the current release (id, commit, when it was published and its recorded commands), its Staging Env variable",
     "names with their source, anything missing before the next publish, and whether this session may use staging",
     "itself. It never shows a value and changes nothing.",
     "",
     "Using staging itself, where the host offers it and allows this session:",
-    "- ssh staging logs in to the staging host as the live release's own application account, in its",
+    "- ssh staging logs in to the staging host as the staging release's own staging account, in its",
     "  folder, with the Env it runs with, its database connection included: its files, data folders, database",
     "  client (mariadb or mysql, psql, sqlite3) and its own scripts work there as the app's do. It is not root",
     "  and has no general sudo, since the same host may run Vibe64 and other projects. Inside it,",
@@ -35,10 +35,10 @@ function deploymentUsageText() {
     "  the app's own service, and staging-enter [command] runs the command, or a shell, where that running",
     "  service runs: the files it sees, its own mounts included (its private /tmp, a FUSE volume it mounted),",
     "  which the login itself does not see.",
-    "- vibe64-helper env get staging <KEY> prints one value the live release runs with, secrets included, and",
+    "- vibe64-helper env get staging <KEY> prints one value the staging release runs with, secrets included, and",
     "  vibe64-helper env export staging prints them all as export lines.",
     "The host records each login and Env read, and each login's commands word for word. Where it does not",
-    "allow this session, both say why and do nothing; deployment status says so too.",
+    "allow this session, both say why and do nothing; staging status says so too.",
     "",
     "Working on staging, when possible:",
     "- Read before you change anything: logs, status and read-only commands first. Staging may hold real",
@@ -60,7 +60,7 @@ function texts(value) {
   return list(value).map(toText).filter(Boolean);
 }
 
-function deploymentRecord(record = {}) {
+function stagingRecord(record = {}) {
   return {
     configured: record.valuePresent === true,
     generated: record.generated === true,
@@ -72,13 +72,13 @@ function deploymentRecord(record = {}) {
   };
 }
 
-function deploymentRelease(release = null) {
+function stagingRelease(release = null) {
   if (!release || typeof release !== "object") {
     return null;
   }
   return {
     commit: toText(release.commit),
-    deployedAt: toText(release.deployedAt),
+    stagingPublishedAt: toText(release.stagingPublishedAt),
     id: toText(release.id),
     serveEnvironment: list(release.serveEnvironment)
       .map((entry) => ({ effect: toText(entry?.effect), key: toText(entry?.key) }))
@@ -91,7 +91,7 @@ function deploymentRelease(release = null) {
 
 // Whether this session may use staging itself (ssh staging, staging Env values) and, if not, the
 // host's reason.
-function deploymentAiAccess(access = null) {
+function stagingAiAccess(access = null) {
   return {
     enabled: access?.enabled === true,
     reason: access?.enabled === true ? "" : toText(access?.reason)
@@ -99,29 +99,29 @@ function deploymentAiAccess(access = null) {
 }
 
 /**
- * The deployment a host reports, reduced to the fields this command shows.
- * @param {object} deployment
+ * The Staging status a host reports, reduced to the fields this command shows.
+ * @param {object} staging
  */
-function deploymentStatusPayload(deployment = {}) {
-  const state = toText(deployment.state);
-  const latest = deployment.latestDeploy;
+function stagingStatusPayload(staging = {}) {
+  const state = toText(staging.state);
+  const latest = staging.latestStagingPublish;
   return {
-    aiAccess: deploymentAiAccess(deployment.aiAccess),
-    addresses: list(deployment.addresses)
+    aiAccess: stagingAiAccess(staging.aiAccess),
+    addresses: list(staging.addresses)
       .map((address) => ({ label: toText(address?.label), url: toText(address?.url) }))
       .filter((address) => address.url),
-    blockers: texts(deployment.blockers),
-    latestDeploy: latest && toText(latest.status)
+    blockers: texts(staging.blockers),
+    latestStagingPublish: latest && toText(latest.status)
       ? { at: toText(latest.at), status: toText(latest.status) }
       : null,
-    notes: texts(deployment.notes),
+    notes: texts(staging.notes),
     ok: true,
-    records: list(deployment.records)
-      .map(deploymentRecord)
+    records: list(staging.records)
+      .map(stagingRecord)
       .filter((record) => record.key)
       .sort((left, right) => left.key.localeCompare(right.key)),
-    release: deploymentRelease(deployment.release),
-    state: DEPLOYMENT_STATES.has(state) ? state : "unknown"
+    release: stagingRelease(staging.release),
+    state: STAGING_STATES.has(state) ? state : "unknown"
   };
 }
 
@@ -133,7 +133,7 @@ function recordLine(record) {
   return `  ${record.key} — ${state}, ${record.secret ? "secret" : "plain"}${source ? ` (${source})` : ""}`;
 }
 
-function humanDeploymentStatus(payload) {
+function humanStagingStatus(payload) {
   const lines = [`Staging: ${STAGING_STATE_WORDS[payload.state] || payload.state}`];
   if (payload.addresses.length > 0) {
     lines.push("Addresses:", ...payload.addresses.map((address) => (
@@ -144,7 +144,7 @@ function humanDeploymentStatus(payload) {
   if (release) {
     lines.push(`Current release: ${release.id || "unknown"}`);
     if (release.commit) lines.push(`  Commit: ${release.commit}`);
-    if (release.deployedAt) lines.push(`  Published: ${release.deployedAt}`);
+    if (release.stagingPublishedAt) lines.push(`  Published: ${release.stagingPublishedAt}`);
     for (const step of release.steps) {
       const role = `${step.role[0].toUpperCase()}${step.role.slice(1)}`;
       lines.push(`  ${role}${step.label ? ` (${step.label})` : ""}: ${step.command}`);
@@ -159,13 +159,13 @@ function humanDeploymentStatus(payload) {
     lines.push(
       "AI access to staging: on for this session (ssh staging; vibe64-helper env get|export staging)",
       "  It may hold real people's data: when possible read first, back up what you will change and say what will",
-      "  change. vibe64-helper deployment --help lists what works there (staging-logs, staging-enter, ...)."
+      "  change. vibe64-helper staging --help lists what works there (staging-logs, staging-enter, ...)."
     );
   } else {
     lines.push(`AI access to staging: off${payload.aiAccess.reason ? ` — ${payload.aiAccess.reason}` : ""}`);
   }
-  if (payload.latestDeploy) {
-    lines.push(`Latest publish: ${payload.latestDeploy.status}${payload.latestDeploy.at ? ` at ${payload.latestDeploy.at}` : ""}`);
+  if (payload.latestStagingPublish) {
+    lines.push(`Latest publish: ${payload.latestStagingPublish.status}${payload.latestStagingPublish.at ? ` at ${payload.latestStagingPublish.at}` : ""}`);
   }
   lines.push("Staging Env (names only; values are never shown):");
   lines.push(...(payload.records.length > 0 ? payload.records.map(recordLine) : ["  no variables"]));
@@ -177,8 +177,8 @@ function humanDeploymentStatus(payload) {
 }
 
 export {
-  DEPLOYMENT_UNAVAILABLE_REASON,
-  deploymentStatusPayload,
-  deploymentUsageText,
-  humanDeploymentStatus
+  STAGING_UNAVAILABLE_REASON,
+  stagingStatusPayload,
+  stagingUsageText,
+  humanStagingStatus
 };

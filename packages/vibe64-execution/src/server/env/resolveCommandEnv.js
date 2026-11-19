@@ -75,10 +75,10 @@ const EDITOR_ONLY_ENV_NAMES = new Set(["APP_ENV", "NODE_ENV"]);
 
 // Everything a session runs (its commands, terminals, agents and Preview) is
 // Development, whatever the project's own Env says, so nothing it starts acts
-// for real; only a host's deployment Env names Staging or Production.
+// for real; only a host's staging Env names Staging or Production.
 function sessionAppEnv(request = {}) {
-  const deployment = request.envPolicy === "deployment" || request.purpose === "deployment" || request.applicationAccount;
-  return deployment ? {} : { APP_ENV: "development" };
+  const staging = request.envPolicy === "staging" || request.purpose === "staging" || request.stagingAccount;
+  return staging ? {} : { APP_ENV: "development" };
 }
 
 // Preview runs the application as a developer does. NODE_ENV only picks
@@ -101,10 +101,10 @@ function commandBaseEnv(baseEnv = {}) {
 }
 
 function projectEnvRecordsForPolicy(request = {}) {
-  if (request.envPolicy === "deployment") {
+  if (request.envPolicy === "staging") {
     return [
-      request.project?.deploymentEnv,
-      request.project?.deployment?.env
+      request.project?.stagingEnv,
+      request.project?.staging?.env
     ];
   }
   return [
@@ -115,7 +115,7 @@ function projectEnvRecordsForPolicy(request = {}) {
 
 function commandProjectEnv(request = {}) {
   return projectEnvRecordsForPolicy(request).reduce((env, record) => {
-    if (request.envPolicy === "deployment") {
+    if (request.envPolicy === "staging") {
       rejectCallerEnvPolicy(record);
       return {
         ...env,
@@ -130,7 +130,7 @@ function commandProjectEnv(request = {}) {
 }
 
 function databaseEnvRecordsForPolicy(baseEnv = {}, request = {}) {
-  if (request.envPolicy === "deployment") {
+  if (request.envPolicy === "staging") {
     return [];
   }
   if (request.envPolicy === "project") {
@@ -181,9 +181,9 @@ function commandEnvWithoutGitIdentity({
     ...sharedEnv,
     ...sessionAppEnv(request)
   };
-  // An application account's home is in its own area, where programs start;
+  // A staging account's home is in its own area, where programs start;
   // a person's and the daemon's may not be (vibe64Host().npmPrefixRoot).
-  const prefixRoot = actor.applicationAccount ? "" : vibe64Host().npmPrefixRoot;
+  const prefixRoot = actor.stagingAccount ? "" : vibe64Host().npmPrefixRoot;
   const finalEnv = {
     ...env,
     ...npmToolEnv({ env, prefixRoot }),

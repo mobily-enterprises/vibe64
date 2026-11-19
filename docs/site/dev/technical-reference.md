@@ -327,12 +327,12 @@ application users or changes their roles or data.
 
 Any internal endpoint used by that executable must remain disabled unless both
 the enable flag and per-run secret are present. This is a development-preview
-control, not a sign-in API of a published application.
+control, not a sign-in API of a staging or production app.
 
 ## Host runtime naming
 
 Runtime names and paths are deterministic, daemon-scoped, and project-scoped.
-For namespace `octocat` and project `beepollen`, the layout is:
+For namespace `octocat` and project `shop`, the layout is:
 
 ```text
 daemon runtime bucket    <systemRoot>/runtime/<namespace>

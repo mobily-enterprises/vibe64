@@ -48,21 +48,21 @@ import {
 import { usageRecordingNodeOptions } from "./usageRecordingPreload.js";
 
 /**
- * Release environments and application accounts exist only on a managed host,
+ * Staging environments and staging accounts exist only on a managed host,
  * whose helper loads the file and switches to the account.
  */
 function managedOnlyRequestError(request) {
-  if (request.releaseEnvironmentFile) {
+  if (request.stagingEnvironmentFile) {
     return commandErrorResult(
-      "Release environment execution requires a managed host.",
-      "vibe64_release_environment_unavailable",
+      "Staging environment execution requires a managed host.",
+      "vibe64_staging_environment_unavailable",
       { execution: request.execution }
     );
   }
-  if (request.applicationAccount) {
+  if (request.stagingAccount) {
     return commandErrorResult(
-      "Application account execution requires a managed host.",
-      "vibe64_application_account_unavailable",
+      "Staging account execution requires a managed host.",
+      "vibe64_staging_account_unavailable",
       { execution: request.execution }
     );
   }
@@ -176,7 +176,7 @@ async function runVibe64Command(input = {}) {
       actor,
       baseEnv,
       localPath,
-      request: request.releaseEnvironmentFile ? { ...request, project: {}, session: {} } : request
+      request: request.stagingEnvironmentFile ? { ...request, project: {}, session: {} } : request
     }));
     // A PTY env factory is called synchronously per terminal; it carries the
     // Git identity this command already resolved.
@@ -191,7 +191,7 @@ async function runVibe64Command(input = {}) {
     // an application command's working directory there and confines it.
     const cwd = assertCwdAllowed(request.cwd, {
       allowedRoots: request.allowedRoots,
-      resolveLinks: !request.applicationAccount
+      resolveLinks: !request.stagingAccount
     });
     assertManagedSourceFilesystemActor(actor, request, cwd);
     // readable-check: allow method-probe - input validation: arguments are a list or a function of the command input

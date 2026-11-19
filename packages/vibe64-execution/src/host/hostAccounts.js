@@ -45,9 +45,9 @@ function hostSettingsRoot(env = process.env) {
 
 // Read once, as the helper loads.
 const HOST_SETTINGS_ROOT = hostSettingsRoot();
-const APPLICATION_USERNAME_PREFIX = "v64a_";
-// An application account has no login, except while staging access gives it one (stagingAccess.js).
-const APPLICATION_SHELL = "/usr/sbin/nologin";
+const STAGING_ACCOUNT_USERNAME_PREFIX = "v64s_";
+// A staging account has no login, except while staging access gives it one (stagingAccess.js).
+const STAGING_ACCOUNT_SHELL = "/usr/sbin/nologin";
 
 function safeUsername(value = "") {
   const username = String(value || "").trim();
@@ -70,8 +70,8 @@ function assertHumanUsername(username = "") {
   }
   // Every person path starts here, before the helper makes, registers or acts
   // as an account, so a published project's account is never made a person.
-  if (username.startsWith(APPLICATION_USERNAME_PREFIX)) {
-    throw new Error("Vibe64 application accounts are never people.");
+  if (username.startsWith(STAGING_ACCOUNT_USERNAME_PREFIX)) {
+    throw new Error("Vibe64 staging accounts are never people.");
   }
   if (RESERVED_HUMAN_USERNAMES.has(username)) {
     throw new Error("Privileged Unix accounts cannot be managed as Vibe64 app users.");
@@ -287,8 +287,8 @@ function workspaceTempRoot(ownerUsername = "") {
 export {
   accountDatabaseOptions,
   addUserToGroup,
-  APPLICATION_SHELL,
-  APPLICATION_USERNAME_PREFIX,
+  STAGING_ACCOUNT_SHELL,
+  STAGING_ACCOUNT_USERNAME_PREFIX,
   assertEnabledForVibe64,
   assertExpectedId,
   assertHumanUsername,

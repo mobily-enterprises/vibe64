@@ -24,7 +24,7 @@ import { assertDurablyReplaced, traceDurableWrites } from "./durableWriteTrace.j
 
 const EXEC_HELPER = fileURLToPath(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url));
 const UID = process.getuid();
-const RELEASE_UNIT = "vibe64-release-test-blog-0123456789ab.service";
+const RELEASE_UNIT = "vibe64-staging-test-blog-0123456789ab.service";
 const MANAGED_UNIT = "vibe64-managed-test-db.service";
 
 async function temporaryFolder(t, prefix) {
@@ -79,7 +79,7 @@ test("the helper's settings folder is /etc/vibe64 unless VIBE64_HOST_SETTINGS_RO
 });
 
 // What the helper's modules make of the variable as they load, in a process of their own: the folder, the settings
-// file and people's sudo commands read from it, and the application sandbox that hides it.
+// file and people's sudo commands read from it, and the staging sandbox that hides it.
 function loadedSettingsFolder(value) {
   const env = { ...process.env };
   delete env.VIBE64_HOST_SETTINGS_ROOT;
@@ -91,13 +91,13 @@ function loadedSettingsFolder(value) {
     const { HOST_SETTINGS_ROOT } = await import(modules.hostAccounts);
     const { helperSettings } = await import(modules.commandEnvironment);
     const { personSudoCommands } = await import(modules.personRegistry);
-    const { applicationSandboxLines } = await import(modules.systemdUnits);
+    const { stagingSandboxLines } = await import(modules.systemdUnits);
     const uid = process.getuid();
     process.stdout.write(JSON.stringify({
       root: HOST_SETTINGS_ROOT,
       settings: HOST_SETTINGS_ROOT === "/etc/vibe64" ? null : helperSettings(undefined, uid),
       sudoCommands: HOST_SETTINGS_ROOT === "/etc/vibe64" ? null : personSudoCommands(undefined, uid),
-      hidden: applicationSandboxLines({ appRoot: "/area/app", databaseRoot: "/area/database" })
+      hidden: stagingSandboxLines({ appRoot: "/area/app", databaseRoot: "/area/database" })
         .filter((line) => line.startsWith("InaccessiblePaths="))
     }));
   `;
@@ -185,10 +185,10 @@ test("every later run of the helper starts it by the command the host's settings
   // from beside it.
   assert.equal(source.match(/process\.argv\[1\]/gu)?.length, 2);
   for (const [later, pattern] of [
-    ["the staging sudo rule", /installStagingAccess\(registeredApplicationUser\(owner, identity\.username\), publicKey, helperCommand\(\)\);/u],
+    ["the staging sudo rule", /installStagingAccess\(registeredStagingAccount\(owner, identity\.username\), publicKey, helperCommand\(\)\);/u],
     ["the staging shell's commands", /function runStagingShell\(\{ env = process\.env, helperPath = helperCommand\(\) \} = \{\}\)/u],
     ["staging-enter", /stagingEnterCommand\(\{ command, env, helperPath: helperCommand\(\), mountNamespace/u],
-    ["a release unit's ExecStart", /helperPath: helperCommand\(\),\n\s*loopbackPort,/u],
+    ["a staging unit's ExecStart", /helperPath: helperCommand\(\),\n\s*loopbackPort,/u],
     ["a managed run", /const helperPath = helperCommand\(\);\n\s*const systemdArgs = \[/u],
     ["registering a person, as the refusal says", /registers an existing account with: sudo \$\{helperCommand\(\)\} `/u]
   ]) {
@@ -247,7 +247,7 @@ test("memberships go to the account database the host names, which gets no perso
   ]);
 });
 
-test("the helper's people, memberships, application accounts, unit readers and sudo rules all follow the host's settings", async () => {
+test("the helper's people, memberships, staging accounts, unit readers and sudo rules all follow the host's settings", async () => {
   const source = await execHelperSource();
 
   assert.match(source,
@@ -261,19 +261,18 @@ test("the helper's people, memberships, application accounts, unit readers and s
   // Only the settings reader names systemd's and sudo's own folders; every reader and writer asks it.
   assert.equal(source.match(/"\/etc\/systemd\/system"/gu)?.length, 1);
   assert.equal(source.match(/"\/etc\/sudoers\.d"/gu)?.length, 1);
-  assert.equal(source.match(/sudoersRoot = helperSudoersRoot\(\)/gu)?.length, 4,
-    "the rule's path, the files from before the rename, grant and revoke");
+  assert.equal(source.match(/sudoersRoot = helperSudoersRoot\(\)/gu)?.length, 3, "the rule's path, grant and revoke");
   // Only the settings reader names the staging key folder; the key's path, the check that access is granted, the
   // folder's own check, grant and revoke ask it.
   assert.equal(source.match(/"staging-ssh"/gu)?.length, 1);
   assert.equal(source.match(/keysRoot = helperStagingKeysRoot\(\)/gu)?.length, 5,
     "the key's path, the granted check, the folder check, grant and revoke");
-  for (const reader of ["function installedReleaseUnits", "function assertReleaseServiceClaim", "function retireApplicationAccount"]) {
+  for (const reader of ["function installedStagingUnits", "function assertStagingUnitClaim", "function retireStagingAccount"]) {
     const start = source.indexOf(reader);
     assert.match(source.slice(start, source.indexOf(") {\n", start)), /unitRoot = helperSystemdUnitRoot\(\)/u, reader);
   }
-  assert.match(source, /assertReleaseServiceClaim\(\{ loopbackPort, owner, unitName, unitRoot, user \}\);\n\s*const unitPath = systemdUnitPath\(unitName, owner, unitRoot\);/u);
-  // Removing a release unit outside systemd's own folder takes its runtime link and boot target away.
+  assert.match(source, /assertStagingUnitClaim\(\{ loopbackPort, owner, unitName, unitRoot, user \}\);\n\s*const unitPath = systemdUnitPath\(unitName, owner, unitRoot\);/u);
+  // Removing a staging unit outside systemd's own folder takes its runtime link and boot target away.
   assert.match(source, /"disable",\n\s*\.\.\.\(unitRoot === SYSTEMD_UNIT_ROOT \? \[\] : \["--runtime"\]\),\n\s*unitName/u);
   assert.match(source, /unlinkSync\(systemdUnitPath\(unitName, owner, unitRoot\)\)/u);
 });
@@ -343,7 +342,7 @@ test("a unit in systemd's own folder is enabled by name; one in another folder i
     await chmod(folder, mode);
     host = unitHost();
     assert.throws(() => installSystemdUnit({ rootUid, run: host.run, runAllowFailure: host.runAllowFailure, unit: "[Service]\n",
-      unitName: "vibe64-release-test-shop-111111111111.service", unitPath: path.join(folder, "vibe64-release-test-shop-111111111111.service"),
+      unitName: "vibe64-staging-test-shop-111111111111.service", unitPath: path.join(folder, "vibe64-staging-test-shop-111111111111.service"),
       unitRoot: folder }), /refused unit folder .* only root can change/u);
     assert.deepEqual(host.commands, []);
   }
@@ -360,13 +359,13 @@ test("a unit reaches the disk before it is moved into place, and its folder afte
   assertDurablyReplaced(events, path.join(folder, RELEASE_UNIT));
 });
 
-test("relink-units links every unit root wrote outside systemd's folder again as it was installed and starts the release units", async (t) => {
+test("relink-units links every unit root wrote outside systemd's folder again as it was installed and starts the staging units", async (t) => {
   const folder = await temporaryFolder(t, "v64-relink-");
   const unrelated = path.join(await temporaryFolder(t, "v64-relink-other-"), "other.service");
   await writeFile(path.join(folder, RELEASE_UNIT), "[Service]\n[Install]\nWantedBy=multi-user.target\n", { mode: 0o644 });
   await writeFile(path.join(folder, MANAGED_UNIT), "[Service]\n", { mode: 0o644 });
-  await writeFile(path.join(folder, "vibe64-release-test-shop-111111111111.service"), "[Service]\n", { mode: 0o644 });
-  await chmod(path.join(folder, "vibe64-release-test-shop-111111111111.service"), 0o666);
+  await writeFile(path.join(folder, "vibe64-staging-test-shop-111111111111.service"), "[Service]\n", { mode: 0o644 });
+  await chmod(path.join(folder, "vibe64-staging-test-shop-111111111111.service"), 0o666);
   await writeFile(unrelated, "[Service]\n", { mode: 0o644 });
   await symlink(unrelated, path.join(folder, "vibe64-managed-test-cache.service"));
   await writeFile(path.join(folder, "unrelated.service"), "[Service]\n", { mode: 0o644 });
@@ -376,7 +375,7 @@ test("relink-units links every unit root wrote outside systemd's folder again as
   assert.throws(() => relinkSystemdUnits({ rootUid: UID, runAllowFailure: host.runAllowFailure, unitRoot: folder }), (error) => {
     assert.match(error.message, /could not relink every unit/u);
     assert.match(error.message, /vibe64-managed-test-cache\.service: not a unit file root wrote \(ELOOP\)/u);
-    assert.match(error.message, /vibe64-release-test-shop-111111111111\.service: not a unit file root wrote/u);
+    assert.match(error.message, /vibe64-staging-test-shop-111111111111\.service: not a unit file root wrote/u);
     assert.doesNotMatch(error.message, /unrelated|blog|test-db/u);
     return true;
   });
@@ -389,7 +388,7 @@ test("relink-units links every unit root wrote outside systemd's folder again as
   ]);
 
   await rm(path.join(folder, "vibe64-managed-test-cache.service"));
-  await rename(path.join(folder, "vibe64-release-test-shop-111111111111.service"), path.join(folder, "shop.removed"));
+  await rename(path.join(folder, "vibe64-staging-test-shop-111111111111.service"), path.join(folder, "shop.removed"));
   host = unitHost();
   relinkSystemdUnits({ rootUid: UID, runAllowFailure: host.runAllowFailure, unitRoot: folder });
   assert.equal(host.commands.length, 4);

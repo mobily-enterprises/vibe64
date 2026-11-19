@@ -82,7 +82,7 @@ async function ensureDomain(ctx, domain, { idempotencyKey }) {
     if (ctx.now() - ctx.cache.waits.get(idempotencyKey) < CERTIFICATE_WAIT_MS) {
       throw adapterError("aws_certificate_validating", `Waiting for AWS to issue ${domain}'s certificate, which it does once two DNS records are in place: ${records}.`, true);
     }
-    throw adapterError("aws_certificate_pending", `AWS issues ${domain}'s certificate once two DNS records are in place at the domain's DNS: ${records}. Add them, then deploy again.`);
+    throw adapterError("aws_certificate_pending", `AWS issues ${domain}'s certificate once two DNS records are in place at the domain's DNS: ${records}. Add them, then deploy to production again.`);
   }
   if (!balancer.http) {
     await client.query("elasticloadbalancing", "CreateListener", {

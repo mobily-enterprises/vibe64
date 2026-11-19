@@ -105,12 +105,12 @@ test("a fact reader answers for the learner; failures and missing readers answer
   assert.equal((await facts.read("never-registered", { actor: {} })).holds, false);
 });
 
-test("Publish is a built-in project place that opens its Dashboard section", () => {
+test("Packages is a built-in project place that opens its Dashboard section", () => {
   const vocabulary = createLearningVocabulary({ facts: [] });
-  assert.deepEqual(vocabulary.place("publish").steps.map(step => step.id), ["dashboard", "publish"]);
-  assert.deepEqual(trainingGuideCommand(trainingGuideRequest({ target: "publish", navigate: true, highlight: false }, vocabulary),
+  assert.deepEqual(vocabulary.place("packages").steps.map(step => step.id), ["dashboard", "packages"]);
+  assert.deepEqual(trainingGuideCommand(trainingGuideRequest({ target: "packages", navigate: true, highlight: false }, vocabulary),
     { id: "one", projectSlug: "alpha", sessionId: "s1" }, vocabulary),
-  { id: "one", projectSlug: "alpha", sessionId: "s1", conversationId: "", pane: "publish", status: "pending" });
+  { id: "one", projectSlug: "alpha", sessionId: "s1", conversationId: "", pane: "packages", status: "pending" });
 });
 
 test("Add a service is a place a host registers with the page that offers it, named as that page's Dashboard link", () => {

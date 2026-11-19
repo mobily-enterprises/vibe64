@@ -9,7 +9,7 @@ import {
   metadataFilePath,
   readDirectoryEntries,
   readTextIfExists,
-  renewalArchiveStagingRoot,
+  renewalArchivesRoot,
   sortedDirectoryNames
 } from "./sessionStoreLayout.js";
 
@@ -110,7 +110,7 @@ function createSessionTemporaryConversationRemoval({ storePaths, recordFiles, ar
   async function prepareTemporaryConversationRemoval({ temporaryRoot, select, allArchives = false }) {
     if (typeof select !== "function") throw new Error("Temporary conversation removal requires a selection.");
     const removedFolders = new Map();
-    const preparedRoot = renewalArchiveStagingRoot(storePaths.paths());
+    const preparedRoot = renewalArchivesRoot(storePaths.paths());
     return prepareSessionStateUpgrade({
       temporaryRoot,
       preparedRenewalsOnly: !allArchives,

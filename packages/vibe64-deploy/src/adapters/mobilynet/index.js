@@ -306,7 +306,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
       if (!declaration?.tasks?.migrate) return null;
       if (!releaseTasks) {
         throw Object.assign(new Error(`${declaration.name}'s release declares a migrate task, which mobilynet runs no `
-          + "release task for yet; its serve script must migrate (servicePackages with releaseTasks off)."), { code: "deployment_release_tasks_unsupported" });
+          + "release task for yet; its serve script must migrate (servicePackages with releaseTasks off)."), { code: "production_deploy_release_tasks_unsupported" });
       }
       return "migrate";
     },

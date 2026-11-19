@@ -39,14 +39,14 @@ test("the record file is kept only over the revision its writer read, one file p
   assert.equal(statSync(file).mode & 0o777, 0o600, "the editor's private state");
 
   const stale = await store.write({ ...where, record: { ...first, choices: { services: {}, resources: {} } }, expectedRevision: 0 }).catch((error) => error);
-  assert.deepEqual([stale.code, stale.details], ["deployment_record_stale", { expected: 0, current: 1 }]);
+  assert.deepEqual([stale.code, stale.details], ["production_deploy_record_stale", { expected: 0, current: 1 }]);
   assert.deepEqual(await store.read(where), first, "a stale write changes nothing");
   const second = await store.write({ ...where, record: { ...first, lastPlan: { hash: "h1" } }, expectedRevision: 1 });
   assert.deepEqual([second.revision, second.lastPlan], [2, { hash: "h1" }]);
 
   const racing = await Promise.allSettled([1, 2].map((attempt) => store.write({ ...where, record: { ...second, lastPlan: { hash: `race-${attempt}` } }, expectedRevision: 2 })));
   assert.deepEqual(racing.map((one) => one.status).sort(), ["fulfilled", "rejected"], "of two writers that read the same revision, one is refused");
-  assert.equal(racing.find((one) => one.status === "rejected").reason.code, "deployment_record_stale");
+  assert.equal(racing.find((one) => one.status === "rejected").reason.code, "production_deploy_record_stale");
   assert.equal((await store.read(where)).revision, 3);
 
   assert.equal(await store.read({ ...where, environment: "staging" }), null, "each environment its own");
@@ -56,11 +56,11 @@ test("the record file is kept only over the revision its writer read, one file p
 
   const twice = { ...second, items: { ...second.items, "resource.database": { kind: "resource", name: "database", id: "svc_1", providerName: "db", origin: "made", size: "small" } } };
   const sameThing = await store.write({ ...where, record: twice, expectedRevision: 3 }).catch((error) => error);
-  assert.deepEqual([sameThing.code, sameThing.message], ["deployment_record_invalid", "record.items.resource.database and record.items.service.web record the same thing, svc_1."]);
+  assert.deepEqual([sameThing.code, sameThing.message], ["production_deploy_record_invalid", "record.items.resource.database and record.items.service.web record the same thing, svc_1."]);
   const misfiled = { ...second, items: { "service.api": { ...second.items["service.web"] } } };
-  assert.equal((await store.write({ ...where, record: misfiled, expectedRevision: 3 }).catch((error) => error)).code, "deployment_record_invalid");
+  assert.equal((await store.write({ ...where, record: misfiled, expectedRevision: 3 }).catch((error) => error)).code, "production_deploy_record_invalid");
   const elsewhere = await store.write({ ...where, record: { ...second, environment: "staging" }, expectedRevision: 3 }).catch((error) => error);
-  assert.equal(elsewhere.code, "deployment_record_invalid");
+  assert.equal(elsewhere.code, "production_deploy_record_invalid");
   assert.equal((await store.read(where)).revision, 3, "nothing invalid is kept");
   assert.deepEqual(readdirSync(path.dirname(file)).sort(), ["production.json", "staging.json"], "no file is left half written");
   assert.throws(() => createRecordStore({ root: "relative" }), /absolute folder/u);
@@ -131,5 +131,5 @@ test("rebuildFromLabels makes the record again from the labels on what was made,
 
   await production.createHostedService({ app: "postgresql-18", labels: labelsFor(written, { kind: "resource", name: "database" }) }, { idempotencyKey: "hosted-copy" });
   const conflict = await rebuildFromLabels(adapter, projectId).catch((error) => error);
-  assert.deepEqual([conflict.code, conflict.details.item], ["deployment_labels_conflict", "resource.database"], "two things labelled as one item are refused, never guessed");
+  assert.deepEqual([conflict.code, conflict.details.item], ["production_deploy_labels_conflict", "resource.database"], "two things labelled as one item are refused, never guessed");
 });

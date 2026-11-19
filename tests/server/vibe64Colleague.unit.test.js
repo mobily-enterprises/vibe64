@@ -2307,13 +2307,13 @@ test("Colleague opens a host's studio pages through navigation.guide, owner page
   await assert.rejects(guide({ target: "colleague-test-users" }), { statusCode: 401 });
 });
 
-test("navigation.open opens Publish", async (t) => {
+test("navigation.open opens Packages", async (t) => {
   const f = await fixture(t, [], { watching: true });
   await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
   const context = { ...f.context, colleague: { clientId: "tab-a" } };
-  const pending = f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input: { projectSlug: "alpha", pane: "publish" }, context });
-  const navigation = await pendingNavigation(f, "tab-a", command => command.pane === "publish");
-  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: navigation.id, ok: true, focus: { projectSlug: "alpha", pane: "publish" } }, f.context);
+  const pending = f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input: { projectSlug: "alpha", pane: "packages" }, context });
+  const navigation = await pendingNavigation(f, "tab-a", command => command.pane === "packages");
+  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: navigation.id, ok: true, focus: { projectSlug: "alpha", pane: "packages" } }, f.context);
   assert.equal((await pending).ok, true);
 });
 
@@ -6185,8 +6185,8 @@ test("a composed host adds its own project views to navigation.open, each with i
   assert.equal(composed.input.schema.structure.pane.enum.at(-1), "extra-view");
   assert.match(composed.extensions.assistant.description, /extra-view means the host's extra view/u);
   assert.doesNotMatch(local.extensions.assistant.description, /extra-view/u);
-  // The Packages page keeps its pane id: Colleague reads which page publish opens.
-  assert.match(local.extensions.assistant.description, /publish means Packages,/u);
+  // The Packages page's pane is packages: Colleague reads which page it opens.
+  assert.match(local.extensions.assistant.description, /packages means Packages,/u);
   // Add a service sits on a page a host adds: navigation.guide offers its place where the installation registers it.
   const guide = createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes: NO_HOST_PANES })
     .find(({ id }) => id === "vibe64.colleague.navigation.guide");

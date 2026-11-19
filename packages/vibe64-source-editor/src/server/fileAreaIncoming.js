@@ -9,25 +9,25 @@ import { openedFileWithin } from "@local/vibe64-terminals/server/openedFileWithi
 import { absoluteSourceEditorPath, sourceEditorError, sourceEditorPathStats } from "./sourceFiles.js";
 import { changedError, existsError, pathExists, sameEntry } from "./fileAreaItems.js";
 
-// Files areas' folders and staging: a folder is held open while an item is
+// Files areas' folders and incoming: a folder is held open while an item is
 // named through it, and every incoming item is staged, then published.
-// Incoming files and folders are written into the area's staging folder and
+// Incoming files and folders are written into the area's incoming folder and
 // published by link or rename, so readers never see a partial item. Other
-// areas stage in STAGING_FOLDER at their root, which Files hides and refuses
-// as a name; Repo stages in REPO_STAGING_FOLDER inside its Git directory, which
+// areas stage in INCOMING_FOLDER at their root, which Files hides and refuses
+// as a name; Repo stages in REPO_INCOMING_FOLDER inside its Git directory, which
 // `git status` and a Save never see. A server stopped mid-write leaves its
-// item there; the area's next write removes it after STAGING_STALE_DAYS.
-const STAGING_FOLDER = ".vibe64-staging";
-const REPO_STAGING_FOLDER = "vibe64-file-staging";
-const STAGING_STALE_DAYS = 7;
+// item there; the area's next write removes it after INCOMING_STALE_DAYS.
+const INCOMING_FOLDER = ".vibe64-incoming";
+const REPO_INCOMING_FOLDER = "vibe64-file-incoming";
+const INCOMING_STALE_DAYS = 7;
 
 /**
  * When putting an item back fails, the error says where it is kept.
  */
 function keptError(context, keptAt) {
-  const where = `${context.staging}/${path.basename(keptAt)}`;
+  const where = `${context.incoming}/${path.basename(keptAt)}`;
   return sourceEditorError(
-    `This could not finish, and the item could not be put back. It is kept as “${where}” for ${STAGING_STALE_DAYS} days; move it back before then.`,
+    `This could not finish, and the item could not be put back. It is kept as “${where}” for ${INCOMING_STALE_DAYS} days; move it back before then.`,
     "vibe64_files_item_kept",
     { path: where },
     500
@@ -76,39 +76,39 @@ async function withAreaFolder(context, relativePath, perform) {
 }
 
 /**
- * The area's staging folder, created when missing and held open like any
+ * The area's incoming folder, created when missing and held open like any
  * other folder, so a link swapped into its path cannot divert a staged item.
  */
-async function withStaging(context, perform) {
-  const absolutePath = absoluteSourceEditorPath(context.sourceRoot, context.staging);
+async function withIncoming(context, perform) {
+  const absolutePath = absoluteSourceEditorPath(context.sourceRoot, context.incoming);
   await mkdir(absolutePath, { mode: vibe64SharedModes().directory }).catch((error) => {
     if (error.code !== "EEXIST") throw error;
   });
   if (!(await lstat(absolutePath)).isDirectory()) {
     throw sourceEditorError(
-      `Files keeps unfinished items in “${context.staging}”, which is not a folder here. Move that item away, then try again.`,
-      "vibe64_files_staging_unavailable",
-      { path: context.staging },
+      `Files keeps unfinished items in “${context.incoming}”, which is not a folder here. Move that item away, then try again.`,
+      "vibe64_files_incoming_unavailable",
+      { path: context.incoming },
       409
     );
   }
-  return withAreaFolder(context, context.staging, perform);
+  return withAreaFolder(context, context.incoming, perform);
 }
 
 /**
- * A new, unused name in the staging folder.
+ * A new, unused name in the incoming folder.
  */
-function stagedItem(staging) {
-  return staging.at(crypto.randomUUID());
+function incomingItem(incoming) {
+  return incoming.at(crypto.randomUUID());
 }
 
 /**
- * Repo's staging folder lives in the checkout's own Git directory, on the
+ * Repo's incoming folder lives in the checkout's own Git directory, on the
  * same filesystem, so a staged item publishes into the worktree by link or
  * rename. A Git directory outside the checkout is refused. Returns its path
  * inside the checkout.
  */
-async function repoStagingFolder(sourceRoot) {
+async function repoIncomingFolder(sourceRoot) {
   const result = await runVibe64Command({
     actor: "daemon",
     allowedRoots: [sourceRoot],
@@ -132,21 +132,21 @@ async function repoStagingFolder(sourceRoot) {
       409
     );
   }
-  return path.relative(realRoot, path.join(realGitDirectory, REPO_STAGING_FOLDER));
+  return path.relative(realRoot, path.join(realGitDirectory, REPO_INCOMING_FOLDER));
 }
 
 /**
- * Runs under the area's lock. Everything in the staging folder is Files' own;
+ * Runs under the area's lock. Everything in the incoming folder is Files' own;
  * writing or renaming an item in refreshes its change time, so only items
  * abandoned by a stopped server look old.
  */
-async function removeStaleStaging(context) {
-  const stats = await lstat(absoluteSourceEditorPath(context.sourceRoot, context.staging)).catch(() => null);
+async function removeStaleIncoming(context) {
+  const stats = await lstat(absoluteSourceEditorPath(context.sourceRoot, context.incoming)).catch(() => null);
   if (!stats?.isDirectory()) return;
-  const cutoff = Date.now() - STAGING_STALE_DAYS * 24 * 60 * 60 * 1000;
-  await withAreaFolder(context, context.staging, async (staging) => {
-    for (const name of await readdir(staging.at())) {
-      const item = staging.at(name);
+  const cutoff = Date.now() - INCOMING_STALE_DAYS * 24 * 60 * 60 * 1000;
+  await withAreaFolder(context, context.incoming, async (incoming) => {
+    for (const name of await readdir(incoming.at())) {
+      const item = incoming.at(name);
       if ((await lstat(item).catch(() => null))?.ctimeMs < cutoff) await rm(item, { recursive: true, force: true });
     }
   });
@@ -155,12 +155,12 @@ async function removeStaleStaging(context) {
 /**
  * Publishes a completely written staged item. Without replace it never
  * overwrites: a file publishes by hard link, which fails on a taken name (a
- * stopped server can leave the staged second link only in the staging
+ * stopped server can leave the staged second link only in the incoming
  * folder, which its sweep removes); a folder publishes by rename into a name
- * checked free. Replacing sets the old item aside in the staging folder until
+ * checked free. Replacing sets the old item aside in the incoming folder until
  * the new one is in place.
  */
-async function publishStaged(context, staging, staged, target, options = {}) {
+async function placeIncoming(context, incoming, staged, target, options = {}) {
   const { replace = false, directory = false } = options;
   if (!replace) {
     if (directory) {
@@ -185,7 +185,7 @@ async function publishStaged(context, staging, staged, target, options = {}) {
     await rename(staged, target);
     return;
   }
-  const aside = stagedItem(staging);
+  const aside = incomingItem(incoming);
   await rename(target, aside);
   try {
     await rename(staged, target);
@@ -199,13 +199,13 @@ async function publishStaged(context, staging, staged, target, options = {}) {
 }
 
 export {
-  STAGING_FOLDER,
-  publishStaged,
-  removeStaleStaging,
-  repoStagingFolder,
-  stagedItem,
+  INCOMING_FOLDER,
+  placeIncoming,
+  removeStaleIncoming,
+  repoIncomingFolder,
+  incomingItem,
   withAreaFolder,
   withOpenFolder,
-  withStaging,
+  withIncoming,
   keptError
 };

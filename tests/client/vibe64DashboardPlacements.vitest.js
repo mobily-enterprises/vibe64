@@ -101,7 +101,7 @@ describe("Vibe64 dashboard placements", () => {
         owner: "app-dashboard",
         props: {
           label: "Packages",
-          scopedSuffix: "/project/[slug]/dashboard/publish"
+          scopedSuffix: "/project/[slug]/dashboard/packages"
         },
         target: "page.section-nav"
       }

@@ -170,7 +170,7 @@ async function inspectApplicationIntegrationSetup(context, input) {
   }
   const setup = await inspectVibe64IntegrationSetup({
     projectRoot: context.sourceRoot,
-    rootMode: context.releaseEnvironmentFile ? "directory" : "repository"
+    rootMode: context.stagingEnvironmentFile ? "directory" : "repository"
   });
   if (setup.status !== "ready") {
     return { ok: true, status: "unconfigured", setupStatus: setup.status };
@@ -183,17 +183,17 @@ async function inspectApplicationIntegrationSetup(context, input) {
 /**
  * Called only with a source root and execution context selected by the host.
  * A host that runs the application under its own account reads the committed
- * configuration from sourceRoot and runs the command as applicationAccount in
+ * configuration from sourceRoot and runs the command as stagingAccount in
  * the application's executionRoot, with the sandbox allowances its release
  * declares.
  */
 async function runApplicationIntegrationSetup({
   sourceRoot,
   executionRoot = sourceRoot,
-  applicationAccount,
+  stagingAccount,
   sandboxAllowances = [],
   env,
-  releaseEnvironmentFile,
+  stagingEnvironmentFile,
   project,
   session,
   selection,
@@ -202,7 +202,7 @@ async function runApplicationIntegrationSetup({
   buildIntegrationSetupRequest(selection);
   const checked = await inspectApplicationIntegrationSetup({
     sourceRoot,
-    releaseEnvironmentFile,
+    stagingEnvironmentFile,
     policy: sourceEditorFilePolicy()
   }, selection);
   if (!checked.setup) return checked;
@@ -210,11 +210,11 @@ async function runApplicationIntegrationSetup({
     runCommand,
     command: checked.setup.command,
     sourceRoot: executionRoot,
-    applicationAccount,
+    stagingAccount,
     sandboxAllowances,
     runtimes: checked.runtime.runtimes,
     env,
-    releaseEnvironmentFile,
+    stagingEnvironmentFile,
     project,
     session,
     selection

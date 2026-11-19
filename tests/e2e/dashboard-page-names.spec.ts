@@ -25,7 +25,7 @@ const PUBLISHING_STATE = {
 
 // The page that publishes the project as phone apps and packages people install is Packages: the Dashboard's
 // section link (and, on a phone, its section list) and the page's own header name it so, where they said Publish.
-// Its address stays /dashboard/publish.
+// Its address is /dashboard/packages.
 for (const viewport of [{ name: "compact", width: 390, height: 844 }, { name: "expanded", width: 1280, height: 900 }]) {
   test(`${viewport.name} Dashboard names the page for phone apps and packages Packages`, async ({ page }, info) => {
     await mockProjectGateReady(page);
@@ -50,7 +50,7 @@ for (const viewport of [{ name: "compact", width: 390, height: 844 }, { name: "e
       await page.screenshot({ path: info.outputPath(`dashboard-sections-${viewport.width}.png`) });
       await navigation.getByRole("link", { name: "Packages", exact: true }).click();
     }
-    await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/publish$`, "u"));
+    await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/packages$`, "u"));
     await expect(page.getByRole("heading", { level: 2, name: "Packages", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Publish", exact: true })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);

@@ -3,7 +3,7 @@
 **Dashboard → Packages** is where a project becomes something people install: an
 app on your own phone, or a package on a registry. On a phone, open Dashboard,
 then choose **Packages** from the **Dashboard section** menu. The page's address
-stays `…/dashboard/publish`.
+is `…/dashboard/packages`.
 
 The page has four parts:
 
@@ -128,9 +128,9 @@ confirmation for the targets Colleague asked about. Only your **Publish** press 
 token, key, passphrase or file path, and cannot add accounts, unlock keys,
 accept a licence or confirm.
 
-After you press **Publish**, ask Colleague “Tell me when the release is live”
+After you press **Publish**, ask Colleague “Tell me when the release is published”
 or “Tell me if it fails”. It watches the project's latest release (not dry
-runs) and reports once every target is live, or when the release fails, reaches
+runs) and reports once it is published on every target, or when the release fails, reaches
 only some targets or stops before finishing; “Tell me if anything changes”
 reports each change. A watch only reports: it never publishes, retries or
 confirms. Manage it from **Watches and assignments** in Colleague.

@@ -12,6 +12,7 @@ export { upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstruction
 export { repairColleagueRetiredOperation } from "./retiredOperationUpgrade.js";
 export { retireColleagueLearningWatches } from "./learningWatchUpgrade.js";
 export { retireColleagueFreeModel } from "./freeModelUpgrade.js";
+export { renameColleagueWatchSource } from "./watchSourceRename.js";
 
 /** Offline conversion only. Native histories remain untouched and no work resumes. */
 export async function upgradeColleagueConversations({

@@ -5,9 +5,9 @@ application, separate from the AI accounts used to write its code. On mobile,
 reveal the project and use **Dashboard section**; scroll the selected integration's
 detail to its configuration and **Application connection** controls.
 
-1. Select **Development**, or **Staging** when the host provides a published
-   application. Staging uses its reviewed release and does not require a
-   development session; its configuration is read-only.
+1. Select **Development**, or **Staging** when the host publishes the project to
+   staging. Staging shows the staging release's configuration and does not
+   require a development session; its configuration is read-only.
 2. Select a configured integration, or use **Search integrations** and **Add**
    under an available service in Development. Fill its provider-specific fields
    and scopes, then save configuration before checking or connecting. The **AI**

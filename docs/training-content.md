@@ -576,8 +576,8 @@ empty destination, dirty source, symlink or directory alias is refused. Existing
 content is preserved. Check the exact source and pin before retrying; do not delete
 a learner's pinned revision or substitute a newer one as an automatic repair.
 
-Only the new invocation's UUID staging directory is removed on failure. A process
-killed during staging can leave `training/.install-<UUID>` behind; an operator may
+Only the new invocation's UUID install directory is removed on failure. A process
+killed during installation can leave `training/.install-<UUID>` behind; an operator may
 inspect and remove that particular abandoned stage after confirming its writer
 has stopped. It is not a published snapshot. Persistent files under
 `training/.install-locks/` are lock identities, not stale work indicators: do not

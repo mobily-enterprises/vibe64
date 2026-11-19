@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { applicationAreaRoot } from "../../packages/vibe64-execution/src/host/applicationAccounts.js";
+import { stagingAreaRoot } from "../../packages/vibe64-execution/src/host/stagingAccounts.js";
 import {
   helperChildEnv,
   helperCommandPath,
@@ -24,7 +24,7 @@ import {
 } from "../../packages/vibe64-execution/src/host/executionState.js";
 import { consumeManagedExecutionRequestPayload, INPUT_LIMIT_BYTES } from "../../packages/vibe64-execution/src/host/helperPayload.js";
 import {
-  APPLICATION_USERNAME_PREFIX,
+  STAGING_ACCOUNT_USERNAME_PREFIX,
   assertEnabledForVibe64,
   DAEMON_USERNAME_PREFIX
 } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
@@ -34,7 +34,7 @@ import {
   stopManagedServiceUnit
 } from "../../packages/vibe64-execution/src/host/serviceOperations.js";
 import { editorPrivateStateLine } from "../../packages/vibe64-execution/src/host/editorPrivateState.js";
-import { deploymentServiceUnit, managedServiceUnit } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
+import { stagingUnitFile, managedServiceUnit } from "../../packages/vibe64-execution/src/host/systemdUnits.js";
 import {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
@@ -202,9 +202,9 @@ test("execution helper source is the real host helper, not the package stub", as
   assert.match(source, /^ {2}"staging-access",$/mu);
   assert.match(source, /process\.argv\[2\] === "staging-shell" && process\.argv\.length === 3/u);
   assert.match(source, /process\.argv\[2\] === "staging-service"/u);
-  // The old names are refused with the new one, before the allowlist could call them unknown.
-  assert.match(source, /"production-access": "staging-access"/u);
-  assert.match(source, /refuseRenamed\(operation\);\n {2}if \(!ALLOWED_OPERATIONS\.has\(operation\)\)/u);
+  // An operation outside the allowlist is unknown, whatever it was once called: no old name is kept.
+  assert.doesNotMatch(source, /production-(?:access|shell|service|enter)/u);
+  assert.match(source, /const operation = String\(payload\.operation \|\| ""\)\.trim\(\);\n {2}if \(!ALLOWED_OPERATIONS\.has\(operation\)\)/u);
   assert.doesNotMatch(source, /has not been installed from this source package/u);
 });
 
@@ -370,7 +370,7 @@ test("a new execution never waits for another member of its work slice to stop",
   assert.match(configure.slice(check, start), /status !== 0/u);
 });
 
-test("the host's helper settings name the command PATH and the application area; without them only the system folders", async (t) => {
+test("the host's helper settings name the command PATH and the staging area; without them only the system folders", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-settings-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const file = path.join(root, "exec-helper.env");
@@ -379,21 +379,21 @@ test("the host's helper settings name the command PATH and the application area;
 
   assert.deepEqual(helperSettings(file, uid), {}, "a host without settings names nothing");
   assert.equal(helperCommandPath({}), systemPath);
-  assert.throws(() => applicationAreaRoot({}), /no application area/u);
-  await writeFile(file, "PATH=/packs/git/bin:/usr/bin\nVIBE64_APPLICATION_AREA_ROOT=/srv/applications\n", { mode: 0o600 });
+  assert.throws(() => stagingAreaRoot({}), /no staging area/u);
+  await writeFile(file, "PATH=/packs/git/bin:/usr/bin\nVIBE64_STAGING_AREA_ROOT=/srv/staging\n", { mode: 0o600 });
   const settings = helperSettings(file, uid);
   assert.equal(helperCommandPath(settings), "/packs/git/bin:/usr/bin");
-  assert.equal(applicationAreaRoot(settings), "/srv/applications");
+  assert.equal(stagingAreaRoot(settings), "/srv/staging");
   assert.equal(helperChildEnv({}, { home: "/home/member", username: "member" }, daemonUser("test"), "vibe64-command").PATH,
     helperCommandPath(), "a command whose caller names no PATH starts with the host's");
   assert.throws(() => helperCommandPath({ PATH: "packs/bin:/usr/bin" }), /not absolute/u);
-  for (const area of ["", "/", "srv/applications", "/srv/../applications"]) {
-    assert.throws(() => applicationAreaRoot({ VIBE64_APPLICATION_AREA_ROOT: area }), /no application area/u, area);
+  for (const area of ["", "/", "srv/staging", "/srv/../staging"]) {
+    assert.throws(() => stagingAreaRoot({ VIBE64_STAGING_AREA_ROOT: area }), /no staging area/u, area);
   }
   assert.throws(() => helperSettings(file, uid + 1), /not its owner's regular file|only root can change/u);
 });
 
-test("execution helper gives release services the host's command PATH", async () => {
+test("execution helper gives staging services the host's command PATH", async () => {
   const source = await helperSource();
 
   assert.match(source, /Environment=PATH=\$\{systemdUnitSafeValue\(servicePath\)\}/u);
@@ -404,12 +404,12 @@ test("execution helper gives release services the host's command PATH", async ()
   assert.match(source, /runRootCommandAllowFailure\("systemctl", \[\s*"reset-failed",\s*unitName/u);
 });
 
-test("execution helper gives daemon-owned services the shared primary group, and release services their application's", async () => {
+test("execution helper gives daemon-owned services the shared primary group, and staging services their application's", async () => {
   const source = await helperSource();
 
   assert.match(source, /function serviceAccountUnitLines\(owner = \{\}\)/u);
   assert.equal(source.match(/\.\.\.serviceAccountUnitLines\(owner\)/gu)?.length, 1, "managed services");
-  const release = source.slice(source.indexOf("function deploymentServiceUnit("), source.indexOf("function managedServiceUnit("));
+  const release = source.slice(source.indexOf("function stagingUnitFile("), source.indexOf("function managedServiceUnit("));
   assert.match(release, /\.\.\.accountUnitLines\(user, \{ sandboxAllowances \}\),/u);
   assert.match(source, /`Group=\$\{VIBE64_GROUP\}`/u);
   assert.match(source, /"SupplementaryGroups=nix-users"/u);
@@ -417,22 +417,22 @@ test("execution helper gives daemon-owned services the shared primary group, and
   assert.doesNotMatch(source, /`Group=\$\{systemdUnitSafeValue\(owner\.username\)\}`/u);
 });
 
-test("execution helper reports bounded release service diagnostics", async () => {
+test("execution helper reports bounded staging service diagnostics", async () => {
   const source = await helperSource();
 
   assert.match(source, /action === "inspect"/u);
-  assert.match(source, /function inspectDeploymentServiceUnit/u);
+  assert.match(source, /function inspectStagingUnit/u);
   assert.match(source, /ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,NRestarts/u);
   assert.match(source, /runRootCommandAllowFailure\("journalctl"/u);
   // 80 lines unless the reader names how many, never more than 5000, from a start time journalctl reads as a
   // single --since argument (no option can hide in it).
-  assert.match(source, /const DEPLOYMENT_JOURNAL_DEFAULT_LINES = 80;/u);
-  assert.match(source, /const DEPLOYMENT_JOURNAL_MAX_LINES = 5000;/u);
-  assert.match(source, /const DEPLOYMENT_JOURNAL_SINCE_PATTERN = \/\^\[0-9A-Za-z\]/u);
+  assert.match(source, /const STAGING_JOURNAL_DEFAULT_LINES = 80;/u);
+  assert.match(source, /const STAGING_JOURNAL_MAX_LINES = 5000;/u);
+  assert.match(source, /const STAGING_JOURNAL_SINCE_PATTERN = \/\^\[0-9A-Za-z\]/u);
   assert.match(source, /`--lines=\$\{lines\}`,\n {4}\.\.\.\(since \? \[`--since=\$\{since\}`\] : \[\]\)/u);
 });
 
-test("execution helper gives release services explicit managed-service dependencies", async () => {
+test("execution helper gives staging services explicit managed-service dependencies", async () => {
   const source = await helperSource();
 
   assert.match(source, /assertValidManagedServiceUnitName\(requiredUnit, owner\)/u);
@@ -459,9 +459,9 @@ test("execution helper manages provider-neutral simple and forking services", as
 });
 
 // A managed service runs only while its owner has a use for it: install-start
-// starts it without a boot target, a release service that Requires= it starts
+// starts it without a boot target, a staging service that Requires= it starts
 // it at boot, and Stop leaves it stopped and disabled with its data in place;
-// Restart restarts it with the release services that require it.
+// Restart restarts it with the staging services that require it.
 function managedServiceHost({ active = "active", enabled = "enabled", requiredBy = "", dependents = {}, loadState = "loaded",
   restartStatus = 0, restartError = "" } = {}) {
   const commands = [];
@@ -482,11 +482,11 @@ function managedServiceHost({ active = "active", enabled = "enabled", requiredBy
 }
 
 test("managed service Stop stops and disables an unused service without touching its data", () => {
-  const host = managedServiceHost({ requiredBy: "vibe64-release-a.service", dependents: { "vibe64-release-a.service": "inactive" } });
+  const host = managedServiceHost({ requiredBy: "vibe64-staging-a.service", dependents: { "vibe64-staging-a.service": "inactive" } });
   assert.deepEqual(stopManagedServiceUnit("db.service", host), { ok: true, requiredBy: [], state: "stopped" });
   assert.deepEqual(host.commands, [
     "show db.service --property=RequiredBy --value",
-    "is-active vibe64-release-a.service",
+    "is-active vibe64-staging-a.service",
     "is-active db.service",
     "stop db.service",
     "is-enabled db.service",
@@ -506,25 +506,25 @@ test("managed service Stop of a stopped, disabled service changes nothing", () =
 
 test("managed service Stop refuses while a running or unreadable unit requires the service", () => {
   for (const state of ["active", "activating", "deactivating", ""]) {
-    const host = managedServiceHost({ requiredBy: "vibe64-release-a.service vibe64-release-b.service",
-      dependents: { "vibe64-release-a.service": "failed", "vibe64-release-b.service": state } });
+    const host = managedServiceHost({ requiredBy: "vibe64-staging-a.service vibe64-staging-b.service",
+      dependents: { "vibe64-staging-a.service": "failed", "vibe64-staging-b.service": state } });
     assert.deepEqual(stopManagedServiceUnit("db.service", host),
-      { ok: true, requiredBy: ["vibe64-release-b.service"], state: "required" }, state);
+      { ok: true, requiredBy: ["vibe64-staging-b.service"], state: "required" }, state);
     assert.equal(host.commands.some((command) => /^(stop|disable) /u.test(command)), false,
       "systemd would stop the release with the service it requires");
   }
 });
 
 test("managed service Restart restarts the unit with the running units that require it, and keeps its data", () => {
-  const host = managedServiceHost({ requiredBy: "vibe64-release-a.service vibe64-release-b.service",
-    dependents: { "vibe64-release-a.service": "active", "vibe64-release-b.service": "inactive" } });
+  const host = managedServiceHost({ requiredBy: "vibe64-staging-a.service vibe64-staging-b.service",
+    dependents: { "vibe64-staging-a.service": "active", "vibe64-staging-b.service": "inactive" } });
   assert.deepEqual(restartManagedServiceUnit("db.service", host),
-    { ok: true, restarted: ["vibe64-release-a.service"], state: "restarted" });
+    { ok: true, restarted: ["vibe64-staging-a.service"], state: "restarted" });
   assert.deepEqual(host.commands, [
     "show db.service --property=LoadState --value",
     "show db.service --property=RequiredBy --value",
-    "is-active vibe64-release-a.service",
-    "is-active vibe64-release-b.service",
+    "is-active vibe64-staging-a.service",
+    "is-active vibe64-staging-b.service",
     "restart db.service"
   ]);
 });
@@ -548,8 +548,8 @@ test("managed services have no boot target; install-start does not enable them",
     source.indexOf("function ensureManagedServiceProcessOwnership("));
   assert.match(operation, /action === "stop"/u);
   assert.match(operation, /enable: false/u);
-  const release = source.slice(source.indexOf("function deploymentServiceUnit("), source.indexOf("function managedServiceUnit("));
-  assert.match(release, /WantedBy=multi-user\.target/u, "release services still start at boot and pull in their databases");
+  const release = source.slice(source.indexOf("function stagingUnitFile("), source.indexOf("function managedServiceUnit("));
+  assert.match(release, /WantedBy=multi-user\.target/u, "staging services still start at boot and pull in their databases");
 });
 
 test("execution helper rejects payloads that did not pass gateway normalization", async () => {
@@ -624,11 +624,11 @@ test("execution helper centrally assigns the shared workspace TMPDIR, and an app
   assert.match(source, /const MANAGED_ROOT = "\/var\/lib\/vibe64"/u);
   assert.match(source, /helperChildEnv\(payload\.env \|\| \{\}, targetUser, owner\.username, operation\)/u);
   assert.match(source, /helperChildEnv\(payload\.env \|\| \{\}, targetUser, owner\.username, commandOperation\)/u);
-  assert.match(source, /env\.TMPDIR = targetUser\.application \? "\/tmp" : workspaceTempRoot\(ownerUsername\)/u);
+  assert.match(source, /env\.TMPDIR = targetUser\.stagingAccount \? "\/tmp" : workspaceTempRoot\(ownerUsername\)/u);
   assert.equal(
     source.match(/Environment=TMPDIR=\$\{systemdUnitSafeValue\(workspaceTempRoot\(owner\.username\)\)\}/gu)?.length,
     1,
-    "managed services; a release service has its own private /tmp"
+    "managed services; a staging service has its own private /tmp"
   );
   assert.doesNotMatch(source, /actorTemp|FLOCK_PATH|mkdtemp/u);
 });
@@ -943,9 +943,9 @@ test("an execution's result is read only as its target user's regular file in it
   })()`, { directory, fifo, ids }).value, {});
 });
 
-// Release environment files keep systemd's EnvironmentFile= syntax, but the
+// Staging environment files keep systemd's EnvironmentFile= syntax, but the
 // service's own user loads them, so root never reads one.
-test("release environment files are parsed with systemd's EnvironmentFile= rules", () => {
+test("staging environment files are parsed with systemd's EnvironmentFile= rules", () => {
   const text = [
     "# comment", "; comment", "",
     'QUOTED="a\\"b\\\\c\\nd\\$e"',
@@ -962,18 +962,18 @@ test("release environment files are parsed with systemd's EnvironmentFile= rules
   });
 });
 
-test("a release service unit loads its environment as its user, then becomes its start script", async (t) => {
-  const unit = deploymentServiceUnit({
+test("a staging service unit loads its environment as its user, then becomes its start script", async (t) => {
+  const unit = stagingUnitFile({
     environmentFile: "/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort: 4100,
     owner: { username: daemonUser("test") }, requiredUnits: [], servicePath: "/usr/bin:/bin", startScript: "/handover/r1/start.sh",
-    unitName: "vibe64-release-test.service",
-    user: { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: `${APPLICATION_USERNAME_PREFIX}0123456789ab` },
+    unitName: "vibe64-staging-test.service",
+    user: { stagingAccount: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: `${STAGING_ACCOUNT_USERNAME_PREFIX}0123456789ab` },
     workingDirectory: "/area/app/releases/r1/workspace"
   });
   assert.doesNotMatch(unit, /^EnvironmentFile=/mu, "systemd does not read the environment file as root");
-  assert.match(unit, /^ExecStart=\/usr\/bin\/setpriv --no-new-privs -- \/helper\/vibe64-exec-helper run-release-service "\/handover\/r1\/environment" "\/handover\/r1\/start\.sh"$/mu);
+  assert.match(unit, /^ExecStart=\/usr\/bin\/setpriv --no-new-privs -- \/helper\/vibe64-exec-helper run-staging-unit "\/handover\/r1\/environment" "\/handover\/r1\/start\.sh"$/mu);
 
-  const root = await mkdtemp(path.join(os.tmpdir(), "v64-release-service-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-staging-service-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const environmentFile = path.join(root, "environment");
   const startScript = path.join(root, "start.sh");
@@ -982,7 +982,7 @@ test("a release service unit loads its environment as its user, then becomes its
   // Its working directory is in the application's area, which must be mounted nosuid: /dev/shm is, and the
   // host's root file system is not.
   const start = async (cwd) => {
-    const child = spawn(process.execPath, [new URL(HELPER_SOURCE_URL).pathname, "run-release-service", environmentFile, startScript], {
+    const child = spawn(process.execPath, [new URL(HELPER_SOURCE_URL).pathname, "run-staging-unit", environmentFile, startScript], {
       cwd, env: { KEPT: "unit-environment", PATH: "/usr/bin:/bin", PORT: "1" }, stdio: ["ignore", "pipe", "pipe"]
     });
     let output = "";
@@ -998,7 +998,7 @@ test("a release service unit loads its environment as its user, then becomes its
   const refused = await start("/");
   assert.notEqual(refused.status, 0);
   assert.equal(refused.output, "", "the start script never runs");
-  assert.match(refused.errors, /this host's application area is not mounted nosuid at \//u);
+  assert.match(refused.errors, /this host's staging area is not mounted nosuid at \//u);
 });
 
 
@@ -1014,7 +1014,7 @@ test("the daemon's and a person's executions and managed services never see the 
   assert.ok(unit.split("\n").includes(line), unit);
   const source = await helperSource();
   const args = source.slice(source.indexOf("const systemdArgs = ["), source.indexOf('const started = spawnSync("systemd-run"'));
-  assert.match(args, /\.\.\.\(application \? \[\] : \[`--property=\$\{editorPrivateStateLine\(owner\)\}`\]\),/u);
+  assert.match(args, /\.\.\.\(stagingAccount \? \[\] : \[`--property=\$\{editorPrivateStateLine\(owner\)\}`\]\),/u);
   // Without the daemon's home there is nothing to hide, so nothing starts.
   assert.throws(() => editorPrivateStateLine({ username: "daemon" }), /daemon's home/u);
   assert.throws(() => managedServiceUnit({ owner: { username: "daemon" }, servicePath: "/usr/bin", startScript: "/s",

@@ -26,7 +26,7 @@ import {
 } from "./writeExecutableFileIfChanged.js";
 import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
 import { offersStagingEnvironment } from "./stagingEnvironment.js";
-import { deploymentStatusPayload, humanDeploymentStatus } from "./agentDeploymentStatus.js";
+import { stagingStatusPayload, humanStagingStatus } from "./agentStagingStatus.js";
 import { offersSavedValueLinks } from "./savedEnvValueLinks.js";
 import {
   createSessionCommandServers,
@@ -260,26 +260,26 @@ function createAgentEnvCommandService({
   }
 
   // Read-only and names-only: the host answers for the bound project, and
-  // only the fields deploymentStatusPayload copies reach the agent.
-  async function deploymentResult(parsed = {}, binding = {}, sessionId = "") {
+  // only the fields stagingStatusPayload copies reach the agent.
+  async function stagingStatusResult(parsed = {}, binding = {}, sessionId = "") {
     if (toText(parsed.positionals[1]) === "ssh-config") {
       return sshConfigResult(parsed, binding, sessionId);
     }
-    const result = await stagingEnvironmentProvider.readDeployment({
+    const result = await stagingEnvironmentProvider.readStagingStatus({
       actor: binding.actor || null,
       projectSlug: toText(binding.projectSlug)
     });
     if (result?.ok === false) {
       return commandLineFailure(
-        toText(result.error) || "The deployment could not be read.",
-        toText(result.code) || "vibe64_agent_deployment_read_failed"
+        toText(result.error) || "Staging status could not be read.",
+        toText(result.code) || "vibe64_agent_staging_status_read_failed"
       );
     }
-    const payload = deploymentStatusPayload(result?.deployment);
+    const payload = stagingStatusPayload(result?.staging);
     return {
       exitCode: 0,
       ok: true,
-      stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : humanDeploymentStatus(payload)
+      stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : humanStagingStatus(payload)
     };
   }
 
@@ -323,7 +323,7 @@ function createAgentEnvCommandService({
     if (key) {
       const variable = variables[0];
       if (!variable) {
-        const release = releaseId ? `The live release ${releaseId}` : "The live release";
+        const release = releaseId ? `The staging release ${releaseId}` : "The staging release";
         return commandLineFailure(`${release} runs without ${key}.`, "vibe64_agent_staging_value_missing");
       }
       return {
@@ -472,8 +472,8 @@ function createAgentEnvCommandService({
     if (parsed.command === "status") {
       return statusResult(parsed, toText(input.sessionId), projectSlug);
     }
-    if (parsed.command === "deployment") {
-      return deploymentResult(parsed, binding, toText(input.sessionId));
+    if (parsed.command === "staging") {
+      return stagingStatusResult(parsed, binding, toText(input.sessionId));
     }
     if (parsed.command === "get" || parsed.command === "export") {
       return stagingValuesResult(parsed, binding, toText(input.sessionId));
@@ -601,7 +601,7 @@ function stagingSshWrapperSource(name = "", envCommandPath = "") {
     ...(firstOperandOnly ? ["  break"] : []),
     "done",
     "if [ -n \"$staging\" ]; then",
-    `  config="$(${shellQuote(envCommandPath)} deployment ssh-config -- ${name} "$@")" || exit 255`,
+    `  config="$(${shellQuote(envCommandPath)} staging ssh-config -- ${name} "$@")" || exit 255`,
     `  exec ${system} -F "$config" "$@"`,
     "fi",
     `exec ${system} "$@"`,

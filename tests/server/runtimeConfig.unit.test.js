@@ -52,12 +52,12 @@ test("runtime config records normalize technology-neutral metadata", () => {
   assert.equal(Object.hasOwn(record, "materialize"), false);
 });
 
-test("runtime config refuses the prod scope, naming staging, which replaced it", () => {
+test("runtime config refuses the prod scope as any unknown scope", () => {
   assert.equal(RUNTIME_CONFIG_SCOPES.STAGING, "staging");
   assert.equal(Object.values(RUNTIME_CONFIG_SCOPES).includes("prod"), false);
   assert.throws(() => normalizeRuntimeConfigRecord({ key: "API_KEY", owner: RUNTIME_CONFIG_OWNERS.USER, scope: "prod", source: "user", value: "x" }), {
     code: "vibe64_runtime_config_scope_invalid",
-    message: "Invalid runtime config scope: prod. It was renamed staging."
+    message: "Invalid runtime config scope: prod"
   });
 });
 

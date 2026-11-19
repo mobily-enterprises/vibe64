@@ -178,7 +178,7 @@ test("changed counts and sizes: setInstances changes Cloud Run's count in place,
   assert.deepEqual([...new Set(machines.map((machine) => standIn.compute.part(`projects/${standIn.project}/regions/${standIn.region}/instanceTemplates/${machine.template}`).properties.machineType))], ["e2-highmem-4"]);
   // A Cloud Run size is refused for workers, which need machines of their own.
   const refused = await run({ record: resized.record, commit: "c1", choices: { services: { workers: { size: "run-4-16" } } } }).catch((error) => error);
-  assert.equal(refused.code, "deployment_plan_refused");
+  assert.equal(refused.code, "production_deploy_plan_refused");
 });
 
 test("taking the app offline removes the services and their parts; the resources stay until deleted, then go with their keys", async () => {

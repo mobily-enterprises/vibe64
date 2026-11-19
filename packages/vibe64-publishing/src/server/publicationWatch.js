@@ -11,7 +11,7 @@ function summary(release) {
   if (!release) return "Nothing has been released from this project yet.";
   const name = releaseName(release);
   if (release.status === "running") return `${name} is being released.`;
-  if (release.status === "succeeded") return `${name} is live on every target.`;
+  if (release.status === "succeeded") return `${name} is published on every target.`;
   if (release.status === "partial") return `${name} reached only some of its targets.`;
   if (release.status === "interrupted") return `${name} stopped before it finished.`;
   return `${name} failed.`;
@@ -45,10 +45,10 @@ function publicationWatchSource({ actionCatalogue }) {
   return Object.freeze({
     id: "publication",
     label: "Publication",
-    description: `A project's latest release from its ${PACKAGES_PAGE} page: whether it is live on every target, still running, or failed.`,
+    description: `A project's latest release from its ${PACKAGES_PAGE} page: whether it is published on every target, still running, or failed.`,
     input: { projectSlug: "The exact project slug." },
     conditions: {
-      live: "The latest release is live on every target (reported at once if it already is).",
+      live: "The latest release is published on every target (reported at once if it already is).",
       failed: "The latest release failed, reached only some targets, or stopped before it finished.",
       changed: "Anything about the latest release changed: a release started, finished or failed."
     },

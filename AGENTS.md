@@ -163,18 +163,29 @@ verification.
 | Banner on every page | "Development" | "Staging" | none |
 | Development shortcuts (development sign-in, relaxed cookies, test databases) | allowed | refused | refused |
 
-- The Publish feature is product functionality that publishes the selected
-  user's project to its Staging from its Vibe64-owned Deployment contract.
-  A person reads Publish for that action (**Publish to staging**) and Staging
-  for the environment, never for a page: the host's page that holds the
-  action is **Deploy**, and the editor's page for phone apps and installable
+- The Publish feature publishes the selected user's project to its Staging
+  (**Publish to staging**) from its Vibe64-owned Deployment contract;
+  Production is a host's **Deploy to production**, run by this repository's
+  Deploy engine (`@local/vibe64-deploy`). A person reads Staging and Production
+  for the environments, never for a page: the host's page that holds both
+  actions is **Deploy**, and the editor's page for phone apps and installable
   packages is **Packages**. Each page's name lives in one constant
   (`@local/vibe64-core/shared/pageNames` for Packages; the host's own for
-  Deploy), and text naming a host's page reads its Dashboard link. Internal
-  identifiers, routes (`/dashboard/deploy`, `/dashboard/publish`), Colleague
-  panes and stored state keep their deployment and publish names.
-  Genesis composes and returns that Stack section as opaque text; it does not
-  define deployment.
+  Deploy), and text naming a host's page reads its Dashboard link. Genesis
+  composes and returns that Stack section as opaque text; it does not define
+  deployment.
+- Names follow the environments, in code, routes, panes, stored state and text
+  alike: Staging's are `staging` (accounts `v64s_`, helper ops
+  `staging-account` and `staging-unit`, `vibe64-helper staging`,
+  `stagingAccount`, `stagingEnvironmentFile`, envPolicy `staging`,
+  `RUNTIME_CONFIG_PHASES.STAGING_PUBLISH`, `projects/<slug>/staging`),
+  Production's `production_deploy_*`; folders that only hold work in progress
+  are `incoming`, `.packing`, `.unpacking-*` or `.partial-*`, never `staging`.
+  Nothing keeps an old name or answers to one. Kept on purpose: the
+  `## Deployment` Stack section (it declares how the app runs, on Staging and
+  Production alike), the package `@local/vibe64-deploy`, the route
+  `/dashboard/deploy`, Save's `publishing` stage, Pages' publish and Packages'
+  releases ("publish" there is a package's own word).
 - This repository's `## Deployment` section describes only how this public
   Vibe64 application itself may run as a managed application. Its schema is
   interpreted mechanically by `@local/vibe64-genesis`, not by Genesis.

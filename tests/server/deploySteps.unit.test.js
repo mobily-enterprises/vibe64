@@ -250,8 +250,8 @@ test("a dropped resource is unlinked and kept, a dropped service deleted; a coun
 
   // Deleting a resource and its data is its own action: refused while the Stack names it or the name isn't typed.
   const adapter = setupAdapterOf(standIn);
-  await assert.rejects(deleteResource(adapter, offline, dropped.needs, { name: "database", typed: "database" }), { code: "deployment_resource_in_use" });
-  await assert.rejects(deleteResource(adapter, offline, dropped.needs, { name: "files", typed: "file" }), { code: "deployment_confirmation_wrong" });
+  await assert.rejects(deleteResource(adapter, offline, dropped.needs, { name: "database", typed: "database" }), { code: "production_deploy_resource_in_use" });
+  await assert.rejects(deleteResource(adapter, offline, dropped.needs, { name: "files", typed: "file" }), { code: "production_deploy_confirmation_wrong" });
   const left = await deleteResource(adapter, offline, dropped.needs, { name: "files", typed: "files" });
   assert.equal("resource.files" in left.items, false);
   assert.equal(standIn.hosted.service(items["resource.files"].id).state, "deleted");
@@ -367,9 +367,9 @@ test("a Deploy cut short between a create or a link and keeping its record is ma
 
 test("a Deploy is refused when its plan is stale, and while another Vibe64 holds its lease, naming who", async () => {
   const { standIn, client, run, record } = setup();
-  await assert.rejects(run({ record, commit: "c1", planHash: "sha256:old" }), { code: "deployment_plan_stale" });
+  await assert.rejects(run({ record, commit: "c1", planHash: "sha256:old" }), { code: "production_deploy_plan_stale" });
   const { lease } = await client.takeLease({ name: `deploy:${record.deploymentId}`, holder: "Vibe64 on my-workstation", seconds: 600 });
-  await assert.rejects(run({ record, commit: "c1" }), (error) => error.code === "deployment_lease_held"
+  await assert.rejects(run({ record, commit: "c1" }), (error) => error.code === "production_deploy_lease_held"
     && /^Another Vibe64 on my-workstation is deploying this since \d\d:\d\d UTC; try again when it finishes\.$/u.test(error.message));
   assert.deepEqual(standIn.requests().filter((request) => request.method === "POST" && /\/(services|hosted-services)$/u.test(request.path)), [], "nothing was made");
   await client.releaseLease(lease.id);
@@ -378,9 +378,9 @@ test("a Deploy is refused when its plan is stale, and while another Vibe64 holds
   // is made. Two a-2 webs, two a-8 computers and two m-1 hosted services take 22 vCPU.
   standIn.setQuota(standIn.projectId, { vcpus: 12 });
   const short = await run({ record, commit: "c1" }).catch((error) => error);
-  assert.equal(short.code, "deployment_plan_refused");
+  assert.equal(short.code, "production_deploy_plan_refused");
   assert.equal(short.message, "mobilynet's quota of vCPU for this project is 12, 0 in use: this Deploy needs 22 more, 10 more than is left. "
-    + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy.");
+    + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy to production.");
   assert.deepEqual(standIn.requests().filter((request) => request.method === "POST" && /\/(services|hosted-services)$/u.test(request.path)), [], "nothing was made");
 
   // A provider's refusal fails the Deploy with its reason, the record kept as far as it got, the lease given up: the
@@ -419,13 +419,13 @@ test("setInstances sets a running service's count at mobilynet at once, within t
   const at = standIn.requests().length;
   for (const instances of [0, 21, 2.5, "3"]) {
     await assert.rejects(setInstances(adapter, first.record, stack.needs, { service: "computers", instances }), {
-      code: "deployment_instances_outside", status: 422, message: "computers runs 1 to 20 instances, as genesis/stack.md's - Instances: says."
+      code: "production_deploy_instances_outside", status: 422, message: "computers runs 1 to 20 instances, as genesis/stack.md's - Instances: says."
     });
   }
-  await assert.rejects(setInstances(adapter, first.record, stack.needs, { service: "worker", instances: 2 }), { code: "deployment_item_unknown", status: 404 });
+  await assert.rejects(setInstances(adapter, first.record, stack.needs, { service: "worker", instances: 2 }), { code: "production_deploy_item_unknown", status: 404 });
   const unmade = structuredClone(first.record);
   delete unmade.items["service.web"];
-  await assert.rejects(setInstances(adapter, unmade, stack.needs, { service: "web", instances: 2 }), { code: "deployment_item_unknown" });
+  await assert.rejects(setInstances(adapter, unmade, stack.needs, { service: "web", instances: 2 }), { code: "production_deploy_item_unknown" });
   assert.deepEqual(sentAfter(at), []);
 
   // Raised to 3: one PATCH of its count, no release, no settings, no refresh; it places one more beside its two.
@@ -483,11 +483,11 @@ test("moveDomain routes the running public App Service to another domain at once
   const at = standIn.requests().length;
   const unmade = structuredClone(first.record);
   delete unmade.items["service.web"];
-  await assert.rejects(moveDomain(adapter, unmade, stack.needs, { domain: "app.example.com" }), { code: "deployment_item_unknown", status: 404 });
+  await assert.rejects(moveDomain(adapter, unmade, stack.needs, { domain: "app.example.com" }), { code: "production_deploy_item_unknown", status: 404 });
   const unmovable = { ...adapter, title: "a provider" };
   delete unmovable.takeDomain;
   await assert.rejects(moveDomain(unmovable, first.record, stack.needs, { domain: "app.example.com" }), {
-    code: "deployment_domain_move_unsupported", status: 409, message: "a provider can't move a running service to another domain."
+    code: "production_deploy_domain_move_unsupported", status: 409, message: "a provider can't move a running service to another domain."
   });
   assert.deepEqual(writesAfter(standIn, at), []);
 
@@ -719,7 +719,7 @@ test("a setting a service requires that the Production Env has no value for fail
   const second = await run({ stack, record: first.record, commit: "c2" });
   assert.equal(second.outcome, "failed");
   assert.equal(second.message, "web requires MEMOBOT_SIGNING_KEY, which the Production Env has no value for: give it a value in the "
-    + "Production Env, then deploy.");
+    + "Production Env, then deploy to production.");
   assert.deepEqual(writesAfter(standIn, at), [], "no write but the lease");
   // Its first Deploy alike: nothing is made.
   const fresh = setup();
@@ -1002,7 +1002,7 @@ test("a release declaring a migrate task is refused by an adapter whose provider
   const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer() });
   await assert.rejects(deploy({
     adapter, needs: stack.needs, record, planHash: plan.hash, release: releaseOf("c1", stack, { releaseTasks: true }), holder: HOLDER, pause: () => standIn.advance()
-  }), { code: "deployment_release_tasks_unsupported" });
+  }), { code: "production_deploy_release_tasks_unsupported" });
   assert.deepEqual(standIn.leases(), []);
 });
 
@@ -1048,7 +1048,7 @@ test("take offline returns once the provider removed the services, or names thos
   const adapter = setupAdapterOf(standIn);
   let kept = null;
   const slow = await takeOffline(adapter, first.record, { save: (next) => (kept = next), pause: () => {}, maxReads: 3 }).catch((error) => error);
-  assert.equal(slow.code, "deployment_offline_unfinished");
+  assert.equal(slow.code, "production_deploy_offline_unfinished");
   assert.equal(slow.message, "web and computers are still being removed at mobilynet; they take no new requests, and it finishes removing them by itself.");
   assert.deepEqual(slow.details, { removing: ["web", "computers"] });
   assert.deepEqual(Object.keys(kept.items).sort(), ["resource.database", "resource.files"]);

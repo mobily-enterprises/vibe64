@@ -25,9 +25,9 @@ vi.mock("@/components/common/Vibe64AsyncModuleState.vue", () => ({ default: {} }
 vi.mock("@/components/studio/GoogleAdsSearchPanel.vue", () => ({ default: {} }));
 vi.mock("@/components/studio/PaymentConfigurationPanel.vue", () => ({ default: {} }));
 vi.mock("@/lib/browserLocalStorage.js", () => ({ readLocalStorageJson: (_key, fallback) => fallback, writeLocalStorageJson() {} }));
-vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ref("dogandgroom") }));
+vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ref("shop") }));
 vi.mock("@/composables/useVibe64Integrations.js", () => ({ useVibe64Integrations: () => ({
-  releaseId: ref(""), connection: ref(null), verificationInput: ref({}), dirty: ref(false),
+  stagingReleaseId: ref(""), connection: ref(null), verificationInput: ref({}), dirty: ref(false),
   refreshConnection: vi.fn(),
   configuration: ref({ registrations: { google: { callbackUrlRef: "env:GOOGLE_CALLBACK" } }, integrations: {
     calendar: { provider: "google-calendar", authentication: { method: "oauth2", registrationRef: "google" } }
@@ -45,7 +45,7 @@ it("does not replay URL selection when unrelated dashboard context refreshes", a
     expect(form.environment.value).toBe("staging");
     form.selectIntegration("calendar", "development");
     await nextTick();
-    props.dashboardContext = { ...props.dashboardContext, applicationPublicUrl: "https://fixture.example" };
+    props.dashboardContext = { ...props.dashboardContext, stagingPublicUrl: "https://fixture.example" };
     await nextTick();
     expect(form.environment.value).toBe("development");
     expect(form.selectedId.value).toBe("calendar");
@@ -123,20 +123,20 @@ it("defers reveal while inactive and cancels it when the session, environment or
 
 it("updates the application callback suggestion without changing an explicit override or saved Env reference", async () => {
   const scope = effectScope();
-  const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://person-dogandgroom.apps.example.test" } });
+  const props = reactive({ dashboardContext: { sessionId: "session-1", stagingPublicUrl: "https://person-shop.apps.example.test" } });
   const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
-    expect(form.callbackUrl.value).toBe("https://person-dogandgroom.apps.example.test/integrations/google/callback");
-    props.dashboardContext.applicationPublicUrl = "https://dogandgroom.example";
+    expect(form.callbackUrl.value).toBe("https://person-shop.apps.example.test/integrations/google/callback");
+    props.dashboardContext.stagingPublicUrl = "https://shop.example";
     await nextTick();
-    expect(form.callbackUrl.value).toBe("https://dogandgroom.example/integrations/google/callback");
+    expect(form.callbackUrl.value).toBe("https://shop.example/integrations/google/callback");
     form.callbackUrl.value = "https://explicit.example/custom-callback";
-    props.dashboardContext.applicationPublicUrl = "https://another.example";
+    props.dashboardContext.stagingPublicUrl = "https://another.example";
     await nextTick();
     expect(form.callbackUrl.value).toBe("https://explicit.example/custom-callback");
     expect(form.registration.value.callbackUrlRef).toBe("env:GOOGLE_CALLBACK");
     form.callbackOverride.value = null;
-    props.dashboardContext.applicationPublicUrl = "";
+    props.dashboardContext.stagingPublicUrl = "";
     await nextTick();
     expect(form.callbackUrl.value).toBe("");
     expect(form.registration.value.callbackUrlRef).toBe("env:GOOGLE_CALLBACK");
@@ -145,7 +145,7 @@ it("updates the application callback suggestion without changing an explicit ove
 
 it("prepares MCP registration from the current project callback, region and permissions before credentials exist", async () => {
   const scope = effectScope();
-  const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://person-dogandgroom.apps.example.test" } });
+  const props = reactive({ dashboardContext: { sessionId: "session-1", stagingPublicUrl: "https://person-shop.apps.example.test" } });
   const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.clientRegistrationBody.value).toBe("");
@@ -155,8 +155,8 @@ it("prepares MCP registration from the current project callback, region and perm
     expect(form.clientRegistrationEndpoint.value).toBe("https://mcp.amplitude.com/register");
     const request = JSON.parse(form.clientRegistrationBody.value);
     expect(request).toEqual({
-      client_name: "dogandgroom — Amplitude",
-      redirect_uris: ["https://person-dogandgroom.apps.example.test/integrations/amplitude/callback"],
+      client_name: "shop — Amplitude",
+      redirect_uris: ["https://person-shop.apps.example.test/integrations/amplitude/callback"],
       token_endpoint_auth_method: "client_secret_post",
       grant_types: ["authorization_code", "refresh_token"], response_types: ["code"],
       scope: "mcp:read offline_access"
@@ -174,7 +174,7 @@ it("prepares MCP registration from the current project callback, region and perm
     await nextTick();
     expect(form.clientRegistrationEndpoint.value).toBe("https://auth.atlassian.com/VCeDsk8ZHncYF1g234fKtc4lNipbBhu3/dcr/register");
     const atlassian = JSON.parse(form.clientRegistrationBody.value);
-    expect(atlassian.redirect_uris).toEqual(["https://person-dogandgroom.apps.example.test/integrations/atlassian/callback"]);
+    expect(atlassian.redirect_uris).toEqual(["https://person-shop.apps.example.test/integrations/atlassian/callback"]);
     expect(atlassian.scope.split(" ")).toEqual(form.selected.value.scopes);
     expect(atlassian).not.toHaveProperty("client_secret");
     expect(form.registration.value.clientId).toBe("");
@@ -183,17 +183,17 @@ it("prepares MCP registration from the current project callback, region and perm
 
 it("prepares Canva metadata from current fields without publishing it or including secrets", async () => {
   const scope = effectScope();
-  const props = reactive({ dashboardContext: { sessionId: "session-1", applicationPublicUrl: "https://dogandgroom.example" } });
+  const props = reactive({ dashboardContext: { sessionId: "session-1", stagingPublicUrl: "https://shop.example" } });
   const form = runInShellContext(() => scope.run(() => IntegrationsPanel.setup(props, { expose() {} }))).result;
   try {
     expect(form.clientMetadata.value).toBeNull();
     form.add(form.providers.find((provider) => provider.id === "canva"));
     await nextTick();
     expect(form.clientMetadata.value.json).toBe("");
-    form.registration.value.clientId = "https://dogandgroom.example/oauth/canva.json";
+    form.registration.value.clientId = "https://shop.example/oauth/canva.json";
     expect(JSON.parse(form.clientMetadata.value.json)).toEqual({
-      client_id: "https://dogandgroom.example/oauth/canva.json", client_name: "Canva",
-      redirect_uris: ["https://dogandgroom.example/integrations/canva/callback"],
+      client_id: "https://shop.example/oauth/canva.json", client_name: "Canva",
+      redirect_uris: ["https://shop.example/integrations/canva/callback"],
       grant_types: ["authorization_code", "refresh_token"], response_types: ["code"],
       token_endpoint_auth_method: "none"
     });

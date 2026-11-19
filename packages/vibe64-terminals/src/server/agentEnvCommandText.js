@@ -4,13 +4,11 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/server/savedEnvValues";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandLineFailure } from "./commandFailure.js";
-import { deploymentUsageText } from "./agentDeploymentStatus.js";
+import { stagingUsageText } from "./agentStagingStatus.js";
 
 const ENV_SCOPE_DEVELOPMENT = "development";
 const ENV_SCOPE_STAGING = "staging";
 const ENV_SCOPE_ALL = "all";
-// The scope words env took before production was renamed staging: refused, naming the new word.
-const RENAMED_SCOPES = Object.freeze(["prod", "production"]);
 
 function usageText() {
   return [
@@ -23,7 +21,7 @@ function usageText() {
     "  vibe64-helper env unlink <development|staging> <KEY> [--json]",
     "  vibe64-helper env get staging <KEY> [--json]",
     "  vibe64-helper env export staging [--json]",
-    "  vibe64-helper deployment status [--json]   this project's Staging, names only (--help: ssh staging)",
+    "  vibe64-helper staging status [--json]   this project's Staging, names only (--help: ssh staging)",
     "",
     "Values are accepted only on stdin and are never printed by set, remove, status, saved, link or unlink.",
     "One final line ending on stdin (\\n or \\r\\n, which echo, openssl rand and heredocs add) is dropped, so",
@@ -38,7 +36,7 @@ function usageText() {
     "When the host offers saved values, env saved lists their names, descriptions and fields (* marks a secret), never",
     "their values. env link fills the variable the application already reads from one field of a saved value; a linked",
     "row is not editable, and env unlink returns it to an ordinary empty row.",
-    "env get staging prints one value the live release runs with, secrets included, and env export staging",
+    "env get staging prints one value the staging release runs with, secrets included, and env export staging",
     "prints them all as shell export lines (eval \"$(vibe64-helper env export staging)\"), where the host allows",
     "this session to use staging; otherwise they say why. The host records each read. Use these values in",
     "commands and keep them out of source, messages and summaries: they are staging's secrets."
@@ -75,7 +73,7 @@ function normalizeScope(value = "", options = {}) {
 
 function parseCommandArgs(args = []) {
   const all = Array.isArray(args) ? args.map((arg) => String(arg || "")) : [];
-  // `deployment ssh-config -- <ssh command line>`: what follows -- is the ssh, scp or sftp command line the
+  // `staging ssh-config -- <ssh command line>`: what follows -- is the ssh, scp or sftp command line the
   // session's ssh wrapper is about to run, for the host's record.
   const separator = all.indexOf("--");
   const values = separator < 0 ? all : all.slice(0, separator);
@@ -96,7 +94,6 @@ function parseCommandArgs(args = []) {
     key: toText(positionals[2]),
     passthrough: separator < 0 ? null : all.slice(separator + 1),
     positionals,
-    renamedScope: RENAMED_SCOPES.includes(toText(positionals[1]).toLowerCase()),
     scope,
     secret: flags.includes("--secret"),
     unsupportedFlags
@@ -118,26 +115,23 @@ function validateParsedCommand(parsed = {}) {
     return {
       exitCode: 0,
       ok: true,
-      stdout: parsed.command === "deployment" ? deploymentUsageText() : usageText()
+      stdout: parsed.command === "staging" ? stagingUsageText() : usageText()
     };
   }
-  if (parsed.command !== "deployment" && parsed.renamedScope) {
-    return syntaxFailure(`The ${parsed.positionals[1]} scope was renamed staging: use env ${parsed.command} staging.`);
-  }
-  if (parsed.command === "deployment") {
+  if (parsed.command === "staging") {
     const subcommand = toText(parsed.positionals[1]);
     const sshConfig = subcommand === "ssh-config" && !parsed.json;
     if (parsed.positionals.length > 2 || !(["", "status"].includes(subcommand) || sshConfig) || parsed.secret ||
         (parsed.passthrough !== null && !sshConfig)) {
-      return commandLineFailure("deployment accepts only status and --json.", "vibe64_agent_env_command_usage", {
+      return commandLineFailure("staging accepts only status and --json.", "vibe64_agent_env_command_usage", {
         exitCode: 2,
-        stderr: `deployment accepts only status and --json.\n\n${deploymentUsageText()}`
+        stderr: `staging accepts only status and --json.\n\n${stagingUsageText()}`
       });
     }
     return null;
   }
   if (parsed.passthrough !== null) {
-    return syntaxFailure("Only deployment ssh-config takes arguments after --.");
+    return syntaxFailure("Only staging ssh-config takes arguments after --.");
   }
   if (parsed.command === "get" || parsed.command === "export") {
     const keyCount = parsed.command === "get" ? 1 : 0;

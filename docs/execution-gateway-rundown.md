@@ -84,9 +84,9 @@ await runVibe64Command({
   mode: "capture",
   command: "git",
   args: ["ls-remote", "origin", "refs/heads/main"],
-  cwd: "/home/merc/projects/compas-next",
-  allowedRoots: ["/home/merc/projects/compas-next"],
-  gitSafeDirectories: ["/home/merc/projects/compas-next"],
+  cwd: "/home/merc/projects/shop",
+  allowedRoots: ["/home/merc/projects/shop"],
+  gitSafeDirectories: ["/home/merc/projects/shop"],
   gitTransport: "github-https",
   runtimes: ["git", "gh"],
   envPolicy: "auth",
@@ -146,14 +146,14 @@ A host whose profile declares a helper is a managed host: it routes every
 real-user command through the helper, even one for the process's own user, and
 never adds the launching shell's `PATH`.
 
-On a managed host, an `app` capture may also name `applicationAccount`: the OS
-account of a published application, which the host helper made and registered
-for the daemon's workspace. The command then runs as that account, in its own
-area and sandbox, never as a person; `releaseEnvironmentFile` is accepted only
-for such a command, and so is `sandboxAllowances`, the allowances its release's
-Deployment section declares, which the helper grants only where the host's
-owner permits them. A person's own computer has no application accounts and
-refuses the fields.
+On a managed host, an `app` capture may also name `stagingAccount`: a staging
+account, the OS account of a project's staging app, which the host helper made
+and registered for the daemon's workspace. The command then runs as that
+account, in its own area and sandbox, never as a person;
+`stagingEnvironmentFile` is accepted only for such a command, and so is
+`sandboxAllowances`, the allowances its staging release's Deployment section
+declares, which the helper grants only where the host's owner permits them. A
+person's own computer has no staging accounts and refuses the fields.
 
 ### `purpose`
 
@@ -166,7 +166,7 @@ refuses the fields.
 "github"
 "source-editor"
 "preview"
-"deployment"
+"staging"
 "health"
 "source"
 ```
@@ -240,7 +240,7 @@ interpreted.
 "project"    // project config/runtime config/database env
 "preview"    // preview launch context
 "auth"       // GitHub/Codex/account credential commands
-"deployment" // publish/deployment env
+"staging"    // Staging publish env
 ```
 
 For example, project commands receive project config and database env:
@@ -255,27 +255,24 @@ For example, project commands receive project config and database env:
     runtimeConfigEnv: {
       DB_HOST: "127.0.0.1",
       DB_PORT: "24712",
-      DB_NAME: "sas_compas_next"
+      DB_NAME: "alice_shop"
     }
   }
 }
 ```
 
-Deployment commands use deployment-specific env, the deployment's Env
-values exactly. The gateway adds no framework mode such as `NODE_ENV` and
-never passes on the editor's own (see Environment Ownership); a host may give
-the Serve step alone its runtime's conventional production setting, and a
-project that needs a specific mode declares it on its Deployment Serve step,
-which wins.
+Staging commands use their Staging Env values exactly. The gateway adds no
+framework mode such as `NODE_ENV` and never passes on the editor's own (see
+Environment Ownership); a host may give the Serve step alone its runtime's
+conventional production setting, and a project that needs a specific mode
+declares it on its Deployment Serve step, which wins.
 
 ```js
 {
-  envPolicy: "deployment",
+  envPolicy: "staging",
   project: {
-    deploymentEnv: {
-      APP_PUBLIC_URL: "https://example.com"
-    },
-    deploymentDatabaseEnv: {
+    stagingEnv: {
+      APP_PUBLIC_URL: "https://example.com",
       DATABASE_URL: "mysql://..."
     }
   }
@@ -364,7 +361,7 @@ A command starts from the editor's environment (`inheritProcessEnv`) or the
 caller's `baseEnv`, but never takes `NODE_ENV` from it: a framework mode
 belongs to the project. A command's `NODE_ENV` comes only from the project's
 Env (Stack defaults and Development Env), a launch's or terminal's own env,
-its Staging Env for deployment commands, or its own command line
+its Staging Env for staging commands, or its own command line
 (`env NODE_ENV=test npm test`). An editor a host serves with
 `NODE_ENV=production` therefore still installs devDependencies in Workspace
 setup, and its Previews, terminals, tests and agents run as the project
@@ -373,11 +370,11 @@ threads, which are built with it, follow the same rule.
 
 `APP_ENV` says where the application runs, and the gateway owns it. It never
 takes the editor's own either, since the editor is itself a production
-application, and gives every command that is not a deployment's (no
-`envPolicy: "deployment"`, `purpose: "deployment"` or application account)
+application, and gives every command that is not a staging command (no
+`envPolicy: "staging"`, `purpose: "staging"` or staging account)
 `APP_ENV=development`, last, over the project's Env and the caller's own env:
-everything a session runs is Development. A deployment command gets only what
-its host's deployment Env says. A Preview command (`purpose: "preview"`) also
+everything a session runs is Development. A staging command gets only what its
+Staging Env says. A Preview command (`purpose: "preview"`) also
 starts with `NODE_ENV=development`, which the project's Env or launch may still
 change. Development Env refuses to save `APP_ENV`.
 
@@ -427,7 +424,7 @@ Its `bin` takes `~/.local/bin`'s place on PATH: no login's `~/.local/bin`
 is on the command's PATH, not even one the server's own PATH inherited from a
 login shell's profile, since a program found there would refuse to start.
 
-An application account keeps `~/.local`: its home is in its own area, where
+A staging account keeps `~/.local`: its home is in its own area, where
 programs start.
 
 ## Database Env
@@ -440,7 +437,7 @@ Input:
 {
   DB_HOST: "127.0.0.1",
   DB_PORT: "24712",
-  DB_NAME: "sas_compas_next",
+  DB_NAME: "alice_shop",
   DB_USER: "vibe64_dev_app",
   DB_PASSWORD: "secret"
 }
@@ -452,7 +449,7 @@ Output also includes:
 {
   MYSQL_HOST: "127.0.0.1",
   MYSQL_TCP_PORT: "24712",
-  MYSQL_DATABASE: "sas_compas_next",
+  MYSQL_DATABASE: "alice_shop",
   VIBE64_MYSQL_USER: "vibe64_dev_app",
   MYSQL_PWD: "secret"
 }
@@ -479,8 +476,8 @@ Git safe directories are passed explicitly:
 ```js
 {
   gitSafeDirectories: [
-    "/home/merc/projects/compas-next",
-    "/home/merc/projects/compas-next/sessions/active/..."
+    "/home/merc/projects/shop",
+    "/home/merc/projects/shop/sessions/active/..."
   ]
 }
 ```
@@ -705,13 +702,13 @@ For managed source operations:
 }
 ```
 
-For deployment:
+For a staging command:
 
 ```js
 {
   actor: "app",
-  purpose: "deployment",
-  envPolicy: "deployment",
+  purpose: "staging",
+  envPolicy: "staging",
   gitTransport: "github-https",
   runtimes: ["node26", "git"]
 }
@@ -721,7 +718,7 @@ For deployment:
 
 Feature code should not decide how tools are launched. Feature code should say:
 
-> "Run this command, for this actor, in this project/session/deployment context,
+> "Run this command, for this actor, in this project/session/staging context,
 > with these runtimes and this policy."
 
 The execution gateway decides:

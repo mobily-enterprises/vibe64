@@ -311,7 +311,7 @@ function createGoogleServices(g) {
     if (change.size !== undefined) {
       const machine = MACHINE_SIZES.has(change.size);
       if (machine !== (kindOf(id) === "group")) {
-        throw failed(`${name} now needs ${machine ? "whole machines of its own" : "no machine of its own"}, so it can't be resized in place: take the app offline, then deploy.`, "service_runs_elsewhere");
+        throw failed(`${name} now needs ${machine ? "whole machines of its own" : "no machine of its own"}, so it can't be resized in place: take the app offline, then deploy to production.`, "service_runs_elsewhere");
       }
       if (machine) await changeGroup(id, (now) => ({ ...now, size: change.size }));
       else {

@@ -189,14 +189,14 @@ The resolver never takes `NODE_ENV` from the editor's environment or a caller's
 base env: a command's framework mode comes only from the project's Env, the
 launch's or caller's own env, its Staging Env or its own command line, so a
 host may serve the editor itself in production mode. Nor does it take the
-editor's `APP_ENV`: every command but a deployment's or an application
+editor's `APP_ENV`: every command but a staging command or a staging
 account's gets `APP_ENV=development` over the project's Env and its own env,
 and a Preview command also starts with `NODE_ENV=development`, which the
 project's Env or launch may change.
 On a host whose homes cannot start programs (the host profile's
 `npmPrefixRoot`), a person's or the daemon's command gets `NPM_CONFIG_PREFIX`
 `<npmPrefixRoot>/<login>` with its `bin` on PATH, and no login's
-`~/.local/bin`, not even one the editor's own PATH inherited; an application
+`~/.local/bin`, not even one the editor's own PATH inherited; a staging
 account keeps its home's.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
@@ -227,7 +227,7 @@ symlinks. A link inside an allowed directory cannot grant access outside that ro
 The helper's settings folder holds `exec-helper.env`, its people's sudo
 commands (`person-sudo-commands`), the people and applications it registered
 and the staging keys; every one of those paths derives from it, and the
-application sandbox hides it. It is the system's own Vibe64 settings folder
+staging sandbox hides it. It is the system's own Vibe64 settings folder
 unless `VIBE64_HOST_SETTINGS_ROOT`, read once as the helper loads
 (`hostSettingsRoot` in `hostAccounts.js`), names another, which must be an
 absolute, normalized path other than `/`; anything else stops the helper
@@ -243,7 +243,7 @@ folders and how its accounts are numbered (`hostSettings.js`); a host that
 names none keeps the system's own account files, ranges and folders, as before:
 
 - `VIBE64_ACCOUNT_DATABASE`, `files` (the default) or `extrausers`: the account
-  database application accounts and group memberships are added to. With
+  database staging accounts and group memberships are added to. With
   `extrausers` (libnss-extrausers), for a host whose system's own account files
   cannot be written, `useradd`, `userdel` and, for group membership, `gpasswd`
   get `--extrausers`, since `usermod -a -G` leaves such a group unchanged. A
@@ -255,7 +255,7 @@ names none keeps the system's own account files, ranges and folders, as before:
   `create-system-user` is refused before any account changes, while a person
   the host made is registered and re-enabled as anywhere else.
 - `VIBE64_SYSTEM_ID_BAND` and `VIBE64_PERSON_ID_BAND`, each `FIRST-LAST`: the
-  numbers the helper gives new application accounts and their groups, and new
+  numbers the helper gives new staging accounts and their groups, and new
   people and theirs, as `useradd -K` keys. A host names them when its system's
   own accounts can change without seeing the helper's (an image-based system
   updated by replacing its image), so the two never share a number; a host that
@@ -263,15 +263,15 @@ names none keeps the system's own account files, ranges and folders, as before:
 - `VIBE64_SYSTEMD_UNIT_ROOT`: an absolute folder for release and managed
   service units in place of systemd's own, which must be a folder only root can
   change. Like systemd's own folder and the settings file, every account may
-  read it: a staging login finds its release unit as its application
+  read it: a staging login finds its staging unit as its staging
   account. systemd does not read it, so the helper links each unit it installs
-  into systemd's runtime folder, a release unit with its boot target
+  into systemd's runtime folder, a staging unit with its boot target
   (`systemctl enable --runtime`), a managed one without (`systemctl link
-  --runtime`), and removing a release unit takes both away (`systemctl disable
+  --runtime`), and removing a staging unit takes both away (`systemctl disable
   --runtime`). Those links last until the host restarts: at every start, before
   its services, the host runs the root-only `vibe64-exec-helper relink-units`,
   which links every release and managed service unit root wrote there again as
-  it was installed and starts the release units, as a boot starts them from
+  it was installed and starts the staging units, as a boot starts them from
   systemd's own folder. A unit root did not write, or one others may change, it
   leaves unlinked and reports. Every reader of the installed units (a release's
   port claim, retiring an application, a staging login) reads the same folder.
@@ -285,7 +285,7 @@ names none keeps the system's own account files, ranges and folders, as before:
   host starts it through a launcher rather than by the file it runs from
   (`helperCommand` in `hostSettings.js`). The helper's later runs start it
   so: the staging sudo rule and the staging shell's commands, `staging-enter`,
-  a release unit's `ExecStart`, a managed run, and the command the refusal of
+  a staging unit's `ExecStart`, a managed run, and the command the refusal of
   an unregistered person tells an administrator to run. Without it they name
   the file the helper runs from, as before. It is written into a sudo rule, a
   unit and a shell function as it is, so it must be an absolute, normalized
@@ -307,7 +307,7 @@ the new one, never an empty one.
 The helper's `managed-service` operation serves the daemon's own long-running
 services below the workspace service root. `install-start` writes the unit and
 starts it without a boot target, so it runs only while used: its owner starts it
-again through the same action, and a release service whose unit `Requires=` it
+again through the same action, and a staging service whose unit `Requires=` it
 starts it at boot. `stop` stops and disables it and leaves its data in place.
 It refuses, reporting `required` and the units, while a running, starting or
 unreadable unit still requires the service, because systemd would stop that
@@ -315,7 +315,7 @@ unit with it. `restart` serves the owner of a service that hangs: systemd
 stops it, killing it when it outlasts its stop time limit, and starts it again,
 stopping and starting with it each running unit that `Requires=` it, and
 reports those units; a unit never installed is `absent` and nothing runs.
-Release services keep their boot target.
+Staging services keep their boot target.
 `tests/server/vibe64ExecutionHelperSource.unit.test.js` covers the three actions.
 
 Where the daemon or a target user can rearrange a directory, the helper reads a
@@ -347,7 +347,7 @@ administer the host or reach root without sudo (`adm`, `admin`, `disk`,
 rule other than the host's own narrow commands for its people. The host lists
 those exact commands, one per line as sudo prints them, in a root-only file;
 each allowed rule runs one of them as root without a password, and any other
-rule, or an answer sudo never gives, refuses. An application account (`v64a_`)
+rule, or an answer sudo never gives, refuses. A staging account (`v64s_`)
 is never a person. The root-only `check-person <username>` exits 0 for an
 account the helper may act as and 3 with the reason otherwise, so host setup can
 hand an owner's administration to a separate account first and SSH access can
@@ -374,23 +374,23 @@ it.
 `tests/server/vibe64ExecutionPersonRegistry.unit.test.js` covers the registry
 and its refusals.
 
-Each published project runs as its own application account, which the helper's
-`application-account` operation makes and retires; the daemon names only the
+Each project published to staging runs as its own staging account, which the
+helper's `staging-account` operation makes and retires; the daemon names only the
 project, by its folder below the workspace's `projects`: a catalogue project's
 own folder, or a learner's practice project's,
 `.learning/<learner>/<practice>/training-<practice>`, the shape
-`learningSpace.js` gives it. The helper derives the account, `v64a_` and twelve
+`learningSpace.js` gives it. The helper derives the account, `v64s_` and twelve
 hex digits of a hash of the workspace and the project's slug, and its area, a
-folder per workspace and slug below the application area the host's helper
-settings name (`VIBE64_APPLICATION_AREA_ROOT`), from the calling daemon; a host
-that names none refuses every application account. Catalogue projects may not take a practice slug, so every
-slug, and with it every account, area and release unit name, belongs to one
+folder per workspace and slug below the staging area the host's helper
+settings name (`VIBE64_STAGING_AREA_ROOT`), from the calling daemon; a host
+that names none refuses every staging account. Catalogue projects may not take a practice slug, so every
+slug, and with it every account, area and staging unit name, belongs to one
 project of its workspace. The account
 is a system account with only its own group: no login, no home outside its
 area, never in `vibe64` or `nix-users`. Root registers it in its own registry,
 one root-owned file per account in a root-only folder for the workspace, apart
 from the people's. A person
-operation refuses any `v64a_` name, and an application is acted as only through
+operation refuses any `v64s_` name, and an application is acted as only through
 that registry, so neither ever stands in for the other. `ensure` makes the
 account on first use and adopts an account an interrupted `ensure` left
 unregistered only when it is exactly the account the helper makes. A new
@@ -403,7 +403,7 @@ directories down to the project's (`0711`), the daemon's `handover/` the
 application's group may read (`2750`), and the application's own `app/` with
 its `home/` and `database/` (`0700`), which the daemon may search for a database
 by name but never list. An existing directory must still have the owner it was
-given; nothing is repaired. `retire` refuses while a release unit of the
+given; nothing is repaired. `retire` refuses while a staging unit of the
 account is still installed (it could start it again), while its `database/`
 still holds anything (root never removes a database), or while anything runs
 as it.
@@ -419,7 +419,7 @@ kept.
 
 While a host lets a project's AI sessions use its staging, the helper's
 `staging-access` operation (`stagingLogin.js`, `stagingAccess.js`)
-gives the project's application account a way in for them: `grant` writes the
+gives the project's staging account a way in for them: `grant` writes the
 project's one `ssh-ed25519` public key as a root-owned key file for the
 account in the key folder its settings name (loopback only, no forwarding, and
 the login's forced command, `staging-shell`, named in the key itself, so sshd
@@ -440,9 +440,9 @@ revoke. It turns off lingering, ends the account's open logins (`loginctl
 terminate-user`) and removes the account's crontab and at jobs, which a login
 could leave to run later; `retire` refuses while anything of the account still
 runs (a staging login included) and only then revokes. The host's SSH
-policy, not the helper, admits application accounts from loopback alone, with
+policy, not the helper, admits staging accounts from loopback alone, with
 that key file and `vibe64-exec-helper staging-shell` as their forced
-command. That command runs as the account, finds the release unit root
+command. That command runs as the account, finds the staging unit root
 installed for it (the running one), and starts the client's command, bash
 (`--noprofile --norc`, and no `BASH_ENV` or `ENV` from the login's
 environment) or an SFTP server in that release's folder with its Env file, the
@@ -459,12 +459,12 @@ word, the session id the client sent, its logind session, exit status and
 duration). The account could write those lines too, and sshd's PAM stack may
 set a login's environment from a file of the account's (Ubuntu's reads
 `~/.pam_environment`, which could name a library every program of the login
-loads), so they are only what the login says. Such a login runs outside the release service's sandbox, as a
+loads), so they are only what the login says. Such a login runs outside the staging service's sandbox, as a
 person's own login would, so mounts the service makes in namespaces of its own
 (its private `/tmp`, a FUSE volume) are not there.
-`staging-service`, through sudo, accepts only an application account with
+`staging-service`, through sudo, accepts only a staging account with
 its key installed, and reads, restarts or enters only that account's own
-release unit. `enter` refuses a unit with no running main process, or one
+staging unit. `enter` refuses a unit with no running main process, or one
 whose main process is not in the unit's own cgroup when root reads its
 namespaces or after (a main process that ended leaves its number to any
 process); otherwise root runs `nsenter`, which enters that process's mount
@@ -478,19 +478,11 @@ the mount namespace root read, then reads the release's Env file and starts the
 command, or the shell, in the release's folder through its start script, as
 the login does.
 
-Staging access was called production access until 14 November 2026. The
-helper refuses the old names (`production-access`, `production-shell`,
-`production-service`, `production-enter`), naming the new one, so a caller or
-host policy still using one fails rather than meeting "unknown". Root's files
-under the old names (`production-ssh/<account>` in the helper's settings folder
-and `sudoers.d/vibe64-production-<account>`) are no access at all: while either
-remains, `grant`, `revoke` and the application account check refuse the account
-and name the fix (root removes them, revokes and grants again where the
-workspace owner allows it). Old login reports stay in the journal under
-`vibe64-production`; `activity` reads only `vibe64-staging`.
+The helper answers to no other name: any other command or operation is refused
+as unknown, and `activity` reads only the journal tag `vibe64-staging`.
 
 A managed execution runs as an application only when the daemon asks for its
-registered account by name (`applicationAccount`), and only as a finite capture.
+registered account by name (`stagingAccount`), and only as a finite capture.
 Any command may run there, from the application's own area (`app/` or
 `database/`, its home by default), with a link it planted resolved before the
 check. The editor cannot enter that area, so it checks such a directory against
@@ -505,11 +497,11 @@ namespaces or capabilities; only internet, local and netlink
 sockets (Node's `os.networkInterfaces()` needs netlink); and only an ordinary
 service's system calls (`@system-service`), any other failing with `EPERM`.
 A set-user-ID or set-group-ID file it makes does nothing: the host mounts the
-application area `nosuid,nodev`, so the kernel ignores those bits there for
+staging area `nosuid,nodev`, so the kernel ignores those bits there for
 every process on the host, sandboxed or not, and the helper requires it. Before
-it runs an application's command or installs its release service, the mount
+it runs an application's command or installs its staging service, the mount
 covering the area (the last listed with the longest mount point holding it in
-`/proc/self/mountinfo`) must be `nosuid`, and so must the one covering a release
+`/proc/self/mountinfo`) must be `nosuid`, and so must the one covering a staging
 service's working directory before its start script runs, at every start, boot
 included. Otherwise the helper refuses with a message naming the area, and no
 application code runs. Everything else an application may write, its private
@@ -518,15 +510,15 @@ too. The sandbox has
 no `RestrictSUIDSGID=`: under it systemd refuses `openat2()` with `ENOSYS`,
 since it cannot see the mode inside `struct open_how`, and GNU tar creates
 every file and folder it unpacks with `openat2()`, so tar and dpkg-deb could
-unpack nothing. A person's own computer has no application accounts, so it
+unpack nothing. A person's own computer has no staging accounts, so it
 needs no such mount.
 Builds with Node, npm, esbuild, Python, tar, dpkg-deb and SQLite run unchanged in it.
 A release whose Deployment section says `- Sandbox allows:` asks for more, and
 the daemon passes what its release record holds (`sandboxAllowances`) with
-each of the application's executions and its release unit. The helper accepts
-it only for an application's own execution or release unit, and only for
+each of the application's executions and its staging unit. The helper accepts
+it only for an application's own execution or staging unit, and only for
 allowances the host's owner lists in its root-owned helper settings
-(`VIBE64_APPLICATION_SANDBOX_ALLOWANCES`, for example `gvisor fuse`); anything
+(`VIBE64_STAGING_SANDBOX_ALLOWANCES`, for example `gvisor fuse`); anything
 else, or a setting naming an allowance the helper does not know, refuses the
 command rather than run it with less. `gvisor` (gVisor's rootless `runsc`)
 turns `RestrictNamespaces=yes` into `user mnt pid ipc uts net` and adds
@@ -537,8 +529,8 @@ else changes: inside a user namespace its processes hold capabilities only over
 what that namespace owns, the mounts it inherits stay locked, so the read-only
 file system, the inaccessible paths and the writable area hold, its files keep
 their real owner outside, and it may trace only its own processes. An opt-in
-real-host test (`tests/server/vibe64ApplicationSandboxAllowances.integration.test.js`,
-`VIBE64_TEST_APPLICATION_SANDBOX=1` with `VIBE64_TEST_RUNSC`) runs these exact
+real-host test (`tests/server/vibe64StagingSandboxAllowances.integration.test.js`,
+`VIBE64_TEST_STAGING_SANDBOX=1` with `VIBE64_TEST_RUNSC`) runs these exact
 lines as systemd units through sudo: without an allowance no namespace,
 `/dev/fuse` or gVisor; with `fuse` a FUSE mount the host and the rest of the
 unit never see; with `gvisor` a rootless `runsc` sandbox; and without any one
@@ -546,23 +538,23 @@ namespace, system call group or device an allowance adds, what it allows fails
 again. Only the
 daemon reaches the helper (its sudo rule names the daemon alone, and an
 application's sandbox gives no new privileges), and the release and service
-records live in the daemon's deployment state, outside every application's
+records live in the daemon's staging state, outside every application's
 writable area.
 Its receipt sits in
 root's own runtime directory for the workspace's applications (`0711`), which
 the account can traverse but not list, because it is in no group that reaches
 the daemon's runtime directory. Inspect, stop and release-ended find receipts
-in both. A release environment is accepted only for an application's command:
+in both. A staging environment is accepted only for an application's command:
 the daemon's file `handover/<release>/environment`, readable by the
 application's group alone, for a command in that release's build or workspace.
-`tests/server/vibe64ExecutionApplicationAccounts.unit.test.js` covers the
+`tests/server/vibe64ExecutionStagingAccounts.unit.test.js` covers the
 accounts, their area, their executions and their refusals.
 
 Root never reads a release's environment file, and no unit makes systemd read
-one on root's behalf. A release service's unit runs the helper as the service's
+one on root's behalf. A staging service's unit runs the helper as the service's
 own user, which loads the file at every start, restarts included, and then
 becomes the service's start script, so no extra process stays running. A
-finite execution given a release environment has its runner load the file as
+finite execution given a staging environment has its runner load the file as
 the application. The file keeps systemd's `EnvironmentFile=` syntax.
 
 A managed service's runner stays connected to the controller that admitted it
@@ -573,8 +565,8 @@ starts a service only with exactly that daemon's socket
 (`managedExecutionControllerLeaseName()`), so no other local account can take
 the lease first, as it could an abstract socket name.
 
-`deployment-service install-start` installs a release service only for an
-application account root registered for the calling daemon's workspace. Its
+`staging-unit install-start` installs a staging service only for an
+staging account root registered for the calling daemon's workspace. Its
 working directory must be `app/releases/<release>/workspace` in that
 application's area, or a folder inside it (the release's Workdir) that root
 reaches through real directories, never a link the application planted; and
@@ -589,27 +581,27 @@ other TCP port, port 0 included, so it can never take over another service's
 port while that service is down. UDP binds stay allowed: a UDP client (Node's
 `dgram`, for StatsD or syslog) binds before it sends, usually to port 0, which
 no port rule can name, and no host service listens on an unprivileged UDP
-port. The release service still starts at boot and requires its managed
+port. The staging service still starts at boot and requires its managed
 databases.
 
 Known, accepted limit: a finite execution as an application (Prepare, Build,
 Migrate, release file work) has no bind limits, so it may listen on any TCP
-port that is free, including a stopped release service's. Builds and tests
+port that is free, including a stopped staging service's. Builds and tests
 legitimately listen: a headless browser's debugging port (Puppeteer's default
 `--remote-debugging-port=0`) and test servers on port 0, which no
 `SocketBindAllow=` rule can name alone. Such a listener lasts only as long as
 its finite execution.
 
-Every `deployment-service` action (install-start, remove, inspect) names a
-unit of the calling daemon's own workspace, `vibe64-release-<workspace>-…`, so
-no daemon replaces, stops or reads another workspace's release service.
+Every `staging-unit` action (install-start, remove, inspect) names a
+unit of the calling daemon's own workspace, `vibe64-staging-<workspace>-…`, so
+no daemon replaces, stops or reads another workspace's staging service.
 install-start also requires the name of the application's own project
-(`vibe64-release-<workspace>-<project>-<hash>.service`), refuses a unit file
-already installed for another account, and refuses a port that another release
+(`vibe64-staging-<workspace>-<project>-<hash>.service`), refuses a unit file
+already installed for another account, and refuses a port that another staging
 unit's `SocketBindAllow=` claims; root reads only unit files it wrote. A unit of
 the calling workspace that is not one (a link or mask, another owner's, one
 others may change, or an oversized one) is refused by name; another
-workspace's claims nothing and never stops this one. `assertReleaseServiceClaim()`
+workspace's claims nothing and never stops this one. `assertStagingUnitClaim()`
 holds these checks.
 
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and

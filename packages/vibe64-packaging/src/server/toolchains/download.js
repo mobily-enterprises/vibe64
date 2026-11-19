@@ -1,6 +1,6 @@
 // Verified toolchain downloads: a pinned URL, a pinned checksum, a size cap, and
-// an atomic rename only after the bytes match. Archives are unpacked into a
-// staging folder that is renamed into place: tarballs with the system `tar`,
+// an atomic rename only after the bytes match. Archives are unpacked into an
+// unpacking folder that is renamed into place: tarballs with the system `tar`,
 // zips here in Node, since many hosts have no `unzip`.
 import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
@@ -157,21 +157,21 @@ async function extractZip(archiveFile, directory) {
 async function unpackInto(archiveFile, destination, options) {
   const { inner, kind, baseEnvironment, runCommand } = options;
   if (await exists(destination)) return destination;
-  const staging = `${destination}.staging-${randomUUID()}`;
-  await mkdir(staging, { recursive: true });
+  const unpacking = `${destination}.unpacking-${randomUUID()}`;
+  await mkdir(unpacking, { recursive: true });
   try {
     if (kind === "zip") {
-      await extractZip(archiveFile, staging);
+      await extractZip(archiveFile, unpacking);
     } else {
-      const env = toolchainEnvironment(baseEnvironment, { HOME: staging });
-      await runOrFail(["tar", "-xzf", archiveFile, "-C", staging, "--no-same-owner"], {
-        cwd: staging,
+      const env = toolchainEnvironment(baseEnvironment, { HOME: unpacking });
+      await runOrFail(["tar", "-xzf", archiveFile, "-C", unpacking, "--no-same-owner"], {
+        cwd: unpacking,
         env,
         label: `Unpacking ${path.basename(archiveFile)}`,
         runCommand
       });
     }
-    const source = path.join(staging, inner);
+    const source = path.join(unpacking, inner);
     if (!await exists(source)) {
       throw publishError("VIBE64_PUBLISH_TOOLCHAIN_ARCHIVE_FOLDER_ABSENT", `${path.basename(archiveFile)} has no ${inner} folder.`);
     }
@@ -179,7 +179,7 @@ async function unpackInto(archiveFile, destination, options) {
     await rename(source, destination);
     return destination;
   } finally {
-    await rm(staging, { recursive: true, force: true });
+    await rm(unpacking, { recursive: true, force: true });
   }
 }
 

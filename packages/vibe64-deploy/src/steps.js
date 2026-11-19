@@ -216,7 +216,7 @@ function nextStep({ plan, needs, record, observed, release }) {
     const missing = requiredWithoutValue(release.settings[service.id], release.env, service.reaches.map((reach) => reach.setting));
     if (missing.length > 0) {
       return { kind: "failed", message: `${service.id} requires ${missing.join(", ")}, which the Production Env has no value for: `
-        + `give ${missing.length === 1 ? "it a value" : "each a value"} in the Production Env, then deploy.` };
+        + `give ${missing.length === 1 ? "it a value" : "each a value"} in the Production Env, then deploy to production.` };
     }
   }
 
@@ -539,7 +539,7 @@ async function takeDeployLease(adapter, record, holder) {
     if (error?.code !== "lease_held") throw error;
     const held = error.details ?? {};
     const since = held.since ? new Date(held.since).toISOString().slice(11, 16) : "a moment ago";
-    throw deployError("deployment_lease_held", `Another ${held.holder ?? "Vibe64"} is deploying this since ${since} UTC; try again when it finishes.`, 409, held);
+    throw deployError("production_deploy_lease_held", `Another ${held.holder ?? "Vibe64"} is deploying this since ${since} UTC; try again when it finishes.`, 409, held);
   }
 }
 
@@ -572,8 +572,8 @@ async function deploy({
   const tell = reporterOf(report);
   const [offer, observed] = await Promise.all([adapter.offer(), adapter.inventory()]);
   const plan = planOf({ needs, record: start, observed, offer, choices, decisions });
-  if (plan.hash !== planHash) throw deployError("deployment_plan_stale", "What this Deploy would do changed since the plan was read: read the plan again, then deploy.");
-  if (plan.problems.length > 0) throw deployError("deployment_plan_refused", plan.problems[0].message, 422, { problems: plan.problems });
+  if (plan.hash !== planHash) throw deployError("production_deploy_plan_stale", "What this Deploy would do changed since the plan was read: read the plan again, then deploy to production.");
+  if (plan.problems.length > 0) throw deployError("production_deploy_plan_refused", plan.problems[0].message, 422, { problems: plan.problems });
   const digests = Object.fromEntries(needs.services.map((service) => {
     const declaration = release.declarations[service.id];
     return [service.id, releaseDigest(adapter.serviceUpload(release.archive, declaration), declaration)];
@@ -647,7 +647,7 @@ async function deploy({
       }
       await pause();
     }
-    throw deployError("deployment_unfinished", `The Deploy took more than ${maxSteps} steps; its record keeps where it stopped.`, 500);
+    throw deployError("production_deploy_unfinished", `The Deploy took more than ${maxSteps} steps; its record keeps where it stopped.`, 500);
   } finally {
     if (lease) await adapter.lease.release(lease.id);
   }
@@ -657,7 +657,7 @@ async function deploy({
  * Takes the environment's services down, the public one first: their services go, every resource and its data stay.
  * Once each delete is asked the record without them is kept (`save`); then the provider is read again (`pause` between
  * reads) until it lists none of them, each instance having drained, and the record is answered. A provider still
- * removing some after `maxReads` reads is refused `deployment_offline_unfinished`, naming them: the record kept says
+ * removing some after `maxReads` reads is refused `production_deploy_offline_unfinished`, naming them: the record kept says
  * they are gone, and the provider finishes removing them by itself.
  * @param {any} adapter @param {any} record
  * @param {{ save?: (record: any) => Promise<any> | any, pause?: () => Promise<void> | void, maxReads?: number, report?: (event: any) => unknown }} [options]
@@ -708,7 +708,7 @@ async function takeOffline(adapter, record, {
     waiting = words;
     await pause();
   }
-  throw deployError("deployment_offline_unfinished", `${left.join(" and ")} ${left.length === 1 ? "is" : "are"} still being removed at ${adapter.title}; `
+  throw deployError("production_deploy_offline_unfinished", `${left.join(" and ")} ${left.length === 1 ? "is" : "are"} still being removed at ${adapter.title}; `
     + "they take no new requests, and it finishes removing them by itself.", 504, { removing: left });
 }
 
@@ -719,9 +719,9 @@ async function takeOffline(adapter, record, {
  */
 async function deleteResource(adapter, record, needs, { name, typed }) {
   const item = record.items[`resource.${name}`];
-  if (!item) throw deployError("deployment_item_unknown", `${name} isn't a resource this deployment made.`, 404);
-  if (needs.resources.some((one) => one.id === name)) throw deployError("deployment_resource_in_use", `genesis/stack.md still names ${name}: remove it there first.`);
-  if (typed !== name) throw deployError("deployment_confirmation_wrong", `Type ${name} to delete it and its data.`, 422);
+  if (!item) throw deployError("production_deploy_item_unknown", `${name} isn't a resource this deployment made.`, 404);
+  if (needs.resources.some((one) => one.id === name)) throw deployError("production_deploy_resource_in_use", `genesis/stack.md still names ${name}: remove it there first.`);
+  if (typed !== name) throw deployError("production_deploy_confirmation_wrong", `Type ${name} to delete it and its data.`, 422);
   await adapter.deleteResource(item.id);
   const kept = structuredClone(record);
   delete kept.items[`resource.${name}`];

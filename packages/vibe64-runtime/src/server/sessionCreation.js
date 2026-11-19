@@ -18,7 +18,7 @@ import {
   createAvailableSessionId,
   metadataFilePath,
   removeStaleSessionCreationStages,
-  sessionCreationStagingRoot,
+  sessionCreatingRoot,
   sessionRecordExists,
   toDate
 } from "./sessionStoreLayout.js";
@@ -98,9 +98,9 @@ function createSessionCreation({
     }
     try {
       const session = await enqueueSessionMutation(sessionPaths.sessionRoot, async () => {
-        const stagingRoot = sessionCreationStagingRoot(rootPaths);
+        const pendingRoot = sessionCreatingRoot(rootPaths);
         const stagedSessionRoot = path.join(
-          stagingRoot,
+          pendingRoot,
           `${resolvedSessionId}.${process.pid}.${randomUUID()}`
         );
         const stagedPaths = storePaths.pathsForSessionRoot(resolvedSessionId, stagedSessionRoot);

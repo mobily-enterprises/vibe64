@@ -20,9 +20,9 @@ import { deployError } from "./steps.js";
 async function moveDomain(adapter, record, needs, { domain }) {
   const service = needs.services.find((one) => one.exposure === "public")?.id;
   const item = service ? record?.items?.[`service.${service}`] : null;
-  if (!item?.id) throw deployError("deployment_item_unknown", "This deployment runs no public App Service to move.", 404);
+  if (!item?.id) throw deployError("production_deploy_item_unknown", "This deployment runs no public App Service to move.", 404);
   if (typeof adapter.takeDomain !== "function") {
-    throw deployError("deployment_domain_move_unsupported", `${adapter.title} can't move a running service to another domain.`, 409);
+    throw deployError("production_deploy_domain_move_unsupported", `${adapter.title} can't move a running service to another domain.`, 409);
   }
   const key = [record.deploymentId, "takeDomain", service, domain, randomBytes(6).toString("hex")].join("-");
   await adapter.ensureDomain(domain, { idempotencyKey: `${key}-domain` });

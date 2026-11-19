@@ -108,7 +108,7 @@ test("the plan counts what a Deploy adds against the provider project's quotas a
   assert.deepEqual(first.problems, [{
     code: "production_quota_short", item: "quota.vcpus",
     message: "mobilynet's quota of vCPU for this project is 20, 0 in use: this Deploy needs 22 more, 2 more than is left. "
-      + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy."
+      + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy to production."
   }]);
   // One computer fits: 14 vCPU and 24 GiB.
   assert.deepEqual(planOf({ needs: NEEDS, record: null, observed: [], offer: await adapter.offer(), choices: { services: { computers: { instances: 1 } } } }).problems, []);
@@ -126,7 +126,7 @@ test("the plan counts what a Deploy adds against the provider project's quotas a
   assert.deepEqual(larger.quota.quotas.map(({ quota, adding }) => [quota, adding]), [["machines", 0], ["vcpus", 4], ["memoryGib", 12], ["diskGib", 0]]);
   assert.deepEqual(larger.problems.map((one) => one.message), [
     "mobilynet's quota of vCPU for this project is 24, 22 in use: this Deploy needs 4 more, 2 more than is left. "
-      + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy."
+      + "Ask mobilynet to raise it, or choose smaller sizes or fewer instances, then deploy to production."
   ]);
   const passed = await at(running, { vcpus: 10, memoryGib: 10 });
   const raised = observed.map((thing) => (thing.id === "svc_cmp" ? { ...thing, instances: 3 } : thing));
@@ -227,7 +227,7 @@ test("drift: a size changed by hand asks keep or put back, a count changed there
   assert.deepEqual(asked.items.find((item) => item.name === "web").drift, [{ field: "size", provider: "a-4", recorded: "a-2", decision: null }]);
   assert.deepEqual(asked.problems.map(({ code, item, message }) => ({ code, item, message })), [{
     code: "production_drift_undecided", item: "service.web.size",
-    message: "web: size a-4 at mobilynet, a-2 in your choices. Keep mobilynet's value or put yours back, then deploy."
+    message: "web: size a-4 at mobilynet, a-2 in your choices. Keep mobilynet's value or put yours back, then deploy to production."
   }]);
   // Keep a-4: the choice becomes a-4 and nothing changes; put back a-2: the Deploy changes a-4 to a-2.
   const keep = planOf({ needs: NEEDS, record, observed: resized, offer, decisions: { "service.web.size": "keep" } });

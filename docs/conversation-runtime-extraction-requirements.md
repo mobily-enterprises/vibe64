@@ -20,7 +20,7 @@ apply; this extraction must also meet all seven requirements below.
 5. Retain genuinely new direct-API, local-execution, file-storage, application-tool
    and storage-contract facilities that have no Vibe64 counterpart.
 6. Verify the frozen baseline and WIP local Git references before extraction.
-   Preserve unrelated work and staging; do not reset or publish the WIP refs.
+   Preserve unrelated work and staged changes; do not reset or publish the WIP refs.
 7. Compare original and moved behavior for shared reuse, independent stop,
    account refresh, restart and recovery. Move original tests for the other cases;
    do not weaken their assertions or duplicate the full suite.

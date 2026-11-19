@@ -19,13 +19,13 @@ function actorUsernameFromRequest(request = {}) {
 
 async function resolveVibe64CommandActor(request = {}) {
   const actor = normalizeText(request.actor) || "daemon";
-  if (actor === "app" && request.applicationAccount) {
+  if (actor === "app" && request.stagingAccount) {
     return {
       actor,
-      applicationAccount: true,
+      stagingAccount: true,
       credentialScope: actor,
       requiresRealUser: false,
-      user: await resolvedActorUser(request.applicationAccount)
+      user: await resolvedActorUser(request.stagingAccount)
     };
   }
   if (actor === "daemon" || actor === "app") {

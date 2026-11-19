@@ -242,7 +242,7 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
   assert.equal(env.committerEmail, "vibe64@sas.users.vibe64.invalid");
 });
 
-test("a host whose homes cannot start programs gives each login its own npm prefix, never ~/.local, and an application account keeps its home's", async (t) => {
+test("a host whose homes cannot start programs gives each login its own npm prefix, never ~/.local, and a staging account keeps its home's", async (t) => {
   const npmPrefixRoot = path.join(HOST_ROOT, "npm-prefixes");
   useHost(t, { ...PACK_HOST, npmPrefixRoot });
   const currentUser = os.userInfo();
@@ -267,9 +267,9 @@ test("a host whose homes cannot start programs gives each login its own npm pref
   assert.ok(pathParts.includes(path.join(npmPrefixRoot, currentUser.username, "bin")), env.path);
   assert.ok(!pathParts.includes(path.join(currentUser.homedir, ".local", "bin")), env.path);
 
-  const application = { username: "v64a_app", home: path.join(HOST_ROOT, "apps", "app", "home") };
+  const application = { username: "v64s_app", home: path.join(HOST_ROOT, "apps", "app", "home") };
   const applicationEnv = resolveCommandEnv({
-    actor: { actor: "app", applicationAccount: true, user: application },
+    actor: { actor: "app", stagingAccount: true, user: application },
     baseEnv: { PATH: "/usr/bin" },
     request: { actor: "app", purpose: "source" },
     resolvedGitIdentityEnv: {}
@@ -742,13 +742,13 @@ test("commands never get the server's own NODE_ENV, and the project's own NODE_E
   }
   // Inherited from the server, or handed over as a caller's base env.
   assert.equal(await nodeEnv({}), "NODE_ENV:unset");
-  assert.equal(await nodeEnv({ purpose: "deployment" }), "NODE_ENV:unset");
+  assert.equal(await nodeEnv({ purpose: "staging" }), "NODE_ENV:unset");
   assert.equal(await nodeEnv({ inheritProcessEnv: false, baseEnv: { NODE_ENV: "production" } }), "NODE_ENV:unset");
   // What the project sets: its Env (Stack defaults and Development Env), a
   // launch's or terminal's own env, and its Staging Env.
   assert.equal(await nodeEnv({ envPolicy: "project", project: { runtimeConfigEnv: { NODE_ENV: "development" } } }), "NODE_ENV:development");
   assert.equal(await nodeEnv({ env: { NODE_ENV: "test" } }), "NODE_ENV:test");
-  assert.equal(await nodeEnv({ envPolicy: "deployment", purpose: "deployment", project: { deploymentEnv: { NODE_ENV: "staging" } } }), "NODE_ENV:staging");
+  assert.equal(await nodeEnv({ envPolicy: "staging", purpose: "staging", project: { stagingEnv: { NODE_ENV: "staging" } } }), "NODE_ENV:staging");
   // A terminal or Preview (PTY) starts from the same env.
   const namespace = `gateway-pty-node-env-${Date.now()}`;
   const terminal = await runVibe64Command({ command: process.execPath, args: ["-e", print], mode: "pty", runtimes: [], terminal: { namespace } });
@@ -761,7 +761,7 @@ test("commands never get the server's own NODE_ENV, and the project's own NODE_E
   }
 });
 
-test("everything a session runs gets APP_ENV=development, Preview NODE_ENV=development by default, and a deployment only its host's", async (t) => {
+test("everything a session runs gets APP_ENV=development, Preview NODE_ENV=development by default, and a staging command only its host's", async (t) => {
   // A host that serves the editor itself as a production application.
   const saved = process.env.APP_ENV;
   process.env.APP_ENV = "production";
@@ -782,10 +782,10 @@ test("everything a session runs gets APP_ENV=development, Preview NODE_ENV=devel
   assert.deepEqual(await modes({ purpose: "preview", envPolicy: "preview",
     project: { runtimeConfigEnv: { APP_ENV: "production", NODE_ENV: "production" } } }), ["development", "production"]);
   assert.deepEqual(await modes({ purpose: "preview", env: { APP_ENV: "staging", NODE_ENV: "test" } }), ["development", "test"]);
-  // A deployment gets only what its host's deployment Env says, never the editor's own.
-  assert.deepEqual(await modes({ envPolicy: "deployment", purpose: "deployment" }), ["unset", "unset"]);
-  assert.deepEqual(await modes({ envPolicy: "deployment", purpose: "deployment",
-    project: { deploymentEnv: { APP_ENV: "staging", NODE_ENV: "production" } } }), ["staging", "production"]);
+  // A staging command gets only what its Staging Env says, never the editor's own.
+  assert.deepEqual(await modes({ envPolicy: "staging", purpose: "staging" }), ["unset", "unset"]);
+  assert.deepEqual(await modes({ envPolicy: "staging", purpose: "staging",
+    project: { stagingEnv: { APP_ENV: "staging", NODE_ENV: "production" } } }), ["staging", "production"]);
 });
 
 test("PTY env factories see the execution id like every other gateway command", async () => {
@@ -938,7 +938,7 @@ test("execution gateway preserves database env names without projecting aliases"
   });
 });
 
-test("execution gateway transports exact trusted deployment names without a database registry", async () => {
+test("execution gateway transports exact trusted staging names without a database registry", async () => {
   const dbProbeArgs = [
     "-e",
     [
@@ -967,26 +967,26 @@ test("execution gateway transports exact trusted deployment names without a data
     },
     purpose: "preview"
   });
-  const deployment = await runVibe64Command({
+  const staging = await runVibe64Command({
     args: dbProbeArgs,
     command: process.execPath,
-    envPolicy: "deployment",
+    envPolicy: "staging",
     project: {
-      deploymentEnv: {
+      stagingEnv: {
         APPLICATION_DATABASE_NAME: "catalogue",
         DB_CLIENT: "mysql2",
-        DB_DATABASE: "deployment_database",
-        DB_NAME: "deployment_db",
-        DB_PASSWORD: "deployment-secret",
+        DB_DATABASE: "staging_database",
+        DB_NAME: "staging_db",
+        DB_PASSWORD: "staging-secret",
         DB_PORT: "3306",
-        DB_USERNAME: "deployment_writer"
+        DB_USERNAME: "staging_writer"
       }
     },
-    purpose: "deployment"
+    purpose: "staging"
   });
 
   assert.equal(preview.ok, true, preview.output);
-  assert.equal(deployment.ok, true, deployment.output);
+  assert.equal(staging.ok, true, staging.output);
   assert.deepEqual(JSON.parse(preview.stdout), {
     applicationDatabase: "",
     db: "preview_db",
@@ -996,18 +996,18 @@ test("execution gateway transports exact trusted deployment names without a data
     port: "",
     username: ""
   });
-  assert.deepEqual(JSON.parse(deployment.stdout), {
+  assert.deepEqual(JSON.parse(staging.stdout), {
     applicationDatabase: "catalogue",
-    db: "deployment_db",
-    database: "deployment_database",
+    db: "staging_db",
+    database: "staging_database",
     mysql: "",
     password: "",
     port: "",
-    username: "deployment_writer"
+    username: "staging_writer"
   });
 });
 
-test("execution gateway env policies keep deployment commands away from session-only DB secrets", async () => {
+test("execution gateway env policies keep staging commands away from session-only DB secrets", async () => {
   const result = await runVibe64Command({
     args: [
       "-e",
@@ -1028,15 +1028,15 @@ test("execution gateway env policies keep deployment commands away from session-
       DB_NAME: "caller_session_db",
       DB_PASSWORD: "caller-session-secret"
     },
-    envPolicy: "deployment",
+    envPolicy: "staging",
     project: {
-      deploymentEnv: {
+      stagingEnv: {
         DB_CLIENT: "mysql2",
         DB_NAME: "staging_db",
         DB_PASSWORD: "staging-secret"
       }
     },
-    purpose: "deployment"
+    purpose: "staging"
   });
 
   assert.equal(result.ok, true, result.output);
@@ -1047,7 +1047,7 @@ test("execution gateway env policies keep deployment commands away from session-
   });
 });
 
-test("execution gateway gives deployment commands staging DB env, Git identity, shared cache, and GitHub transport", async () => {
+test("execution gateway gives staging commands staging DB env, Git identity, shared cache, and GitHub transport", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
     env: NO_PERSON_GIT_CONFIG_ENV,
@@ -1073,10 +1073,10 @@ test("execution gateway gives deployment commands staging DB env, Git identity, 
       ].join("")
     ],
     command: process.execPath,
-    envPolicy: "deployment",
+    envPolicy: "staging",
     gitTransport: "github-https",
     project: {
-      deploymentEnv: {
+      stagingEnv: {
         DB_CLIENT: "mysql2",
         DB_HOST: "127.0.0.1",
         DB_NAME: "prod_sas_app",
@@ -1086,7 +1086,7 @@ test("execution gateway gives deployment commands staging DB env, Git identity, 
       },
       workspace: "sas"
     },
-    purpose: "deployment",
+    purpose: "staging",
     runtimes: ["git", "gh", "playwright"],
     userKey: currentUser.username
   });
@@ -1108,14 +1108,14 @@ test("execution gateway gives deployment commands staging DB env, Git identity, 
   ]);
 });
 
-test("execution gateway gives deployment commands shared runtimes by default", async () => {
+test("execution gateway gives staging commands shared runtimes by default", async () => {
   const result = await runVibe64Command({
     args: [
       "-e",
       "console.log(process.env.PATH)"
     ],
     command: process.execPath,
-    purpose: "deployment"
+    purpose: "staging"
   });
 
   assert.equal(result.ok, true, result.output);
@@ -1137,7 +1137,7 @@ test("execution gateway streams capture output through onOutput", async () => {
     onOutput: (chunk) => {
       chunks.push(String(chunk || ""));
     },
-    purpose: "deployment"
+    purpose: "staging"
   });
 
   assert.equal(result.ok, true, result.output);
@@ -1696,7 +1696,7 @@ test("execution gateway owns token-backed GitHub git transport without gh helper
       "/srv/host-data/sas/projects/compas-next"
     ],
     gitTransport: "github-token",
-    purpose: "deployment",
+    purpose: "staging",
     runtimes: ["git"]
   });
 
@@ -1748,7 +1748,7 @@ test("execution gateway rejects token-backed GitHub git transport without a toke
       "console.log('should not run')"
     ],
     gitTransport: "github-token",
-    purpose: "deployment",
+    purpose: "staging",
     runtimes: ["git"]
   });
 
@@ -2199,13 +2199,13 @@ test("execution gateway rejects caller-owned identity and temp policy", async ()
   }
 });
 
-test("execution gateway rejects reserved policy names in trusted deployment env", async () => {
+test("execution gateway rejects reserved policy names in trusted staging env", async () => {
   const result = await runVibe64Command({
     args: ["-e", ""],
     command: process.execPath,
-    envPolicy: "deployment",
+    envPolicy: "staging",
     project: {
-      deploymentEnv: {
+      stagingEnv: {
         HOME: "/tmp/not-allowed"
       }
     }

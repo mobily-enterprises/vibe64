@@ -12,7 +12,7 @@ import {
   playwrightServerStartOptions
 } from "../e2e/support/start-web-server.mjs";
 
-const TARGET_VARIABLES = ["VIBE64_LIVE_E2E", "PLAYWRIGHT_BASE_URL", "PLAYWRIGHT_PORT", "PLAYWRIGHT_STORAGE_STATE", "PLAYWRIGHT_WORKERS"];
+const TARGET_VARIABLES = ["VIBE64_E2E_EXISTING_SERVER", "PLAYWRIGHT_BASE_URL", "PLAYWRIGHT_PORT", "PLAYWRIGHT_STORAGE_STATE", "PLAYWRIGHT_WORKERS"];
 
 // The config as Playwright's main process reads it with only these of its
 // variables set; the process's own are restored afterwards.
@@ -73,7 +73,7 @@ test("a running target, or a server the person started, is tested with one worke
   assert.equal(managed.workers, 1);
   assert.equal(managed.webServer, undefined);
 
-  const live = await configWith({ VIBE64_LIVE_E2E: "1", PLAYWRIGHT_PORT: "4200" });
+  const live = await configWith({ VIBE64_E2E_EXISTING_SERVER: "1", PLAYWRIGHT_PORT: "4200" });
   assert.equal(live.use.baseURL, "http://127.0.0.1:4200");
   assert.equal(live.workers, 1);
   assert.equal(live.webServer, undefined);

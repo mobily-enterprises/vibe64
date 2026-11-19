@@ -9,9 +9,9 @@ import { loadTimeBudgets } from "./tooling/test-time-budgets.mjs";
 // with its own throwaway state, so tests running at once never share a server.
 // With PLAYWRIGHT_BASE_URL, the tests use that running target instead, one
 // worker at a time, with the login state its host supplies in
-// PLAYWRIGHT_STORAGE_STATE. VIBE64_LIVE_E2E=1 makes a Vibe64 server the person
+// PLAYWRIGHT_STORAGE_STATE. VIBE64_E2E_EXISTING_SERVER=1 makes a Vibe64 server the person
 // started on PLAYWRIGHT_PORT that target.
-if (process.env.VIBE64_LIVE_E2E === "1" && !String(process.env.PLAYWRIGHT_BASE_URL || "").trim()) {
+if (process.env.VIBE64_E2E_EXISTING_SERVER === "1" && !String(process.env.PLAYWRIGHT_BASE_URL || "").trim()) {
   process.env.PLAYWRIGHT_BASE_URL = `http://127.0.0.1:${String(process.env.PLAYWRIGHT_PORT || "").trim() || 4173}`;
 }
 

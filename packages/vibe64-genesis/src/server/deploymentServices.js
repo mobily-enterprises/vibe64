@@ -12,6 +12,7 @@ import {
   DEPLOYMENT_STEP_ROLES,
   ENVIRONMENT_NAME,
   ERROR_CODE,
+  HOST_OWNED_ENVIRONMENT,
   INSTANCES_MAX,
   INSTANCES_PREFIX,
   PACKAGES_PREFIX,
@@ -50,7 +51,7 @@ const RESOURCE_DEVELOPMENT_MODES = Object.freeze(["local folder", "own bucket"])
 // The settings a host gives every service itself, and its instance facts (V64_*): no service's Reaches or Setting
 // names one. Nor does one name STAGING_REACHES_REAL_PEOPLE, which a host gives a Staging only while its owner marks
 // that real people use it.
-const HOST_OWNED_SETTINGS = Object.freeze(["APP_ENV", "SIDE_EFFECTS", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"]);
+const HOST_OWNED_SETTINGS = Object.freeze(["APP_ENV", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"]);
 const HOST_OWNED_SETTING_PREFIX = "V64_";
 const STAGING_REAL_PEOPLE_SETTING = "STAGING_REACHES_REAL_PEOPLE";
 
@@ -223,6 +224,8 @@ function parseServiceLine(service, source, deploymentPath, line) {
 function settingName(service, name, deploymentPath, line) {
   const fail = (message) => invalid(deploymentPath, `Service \`${service.id}\`: ${message}`, line);
   if (!ENVIRONMENT_NAME.test(name)) fail(`${JSON.stringify(name)} isn't a setting's name: use capitals, digits and _, such as \`API_URL\`.`);
+  // SIDE_EFFECTS, which APP_ENV replaced, is no setting at all: a JSKIT app refuses to start while it is set.
+  if (name === "SIDE_EFFECTS") fail(HOST_OWNED_ENVIRONMENT.SIDE_EFFECTS);
   const hostOwned = hostOwnedSetting(name);
   if (hostOwned) fail(`${hostOwned}; give the setting another name.`);
   if (Object.hasOwn(service.settings, name) || service.reaches.some((reach) => reach.setting === name && reach.line !== line)) {

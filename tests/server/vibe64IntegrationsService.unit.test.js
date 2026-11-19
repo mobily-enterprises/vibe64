@@ -396,15 +396,15 @@ test("release setup uses its artifact declaration and Env reference without Git 
   const environmentFile = path.join(source, "../service/environment");
   let called = false;
   const result = await runApplicationIntegrationSetup({
-    sourceRoot: source, releaseEnvironmentFile: environmentFile,
+    sourceRoot: source, stagingEnvironmentFile: environmentFile,
     project: { slug: "example" },
     selection: { operation: "status", integrationId: "calendar" },
     runCommand: async (command) => {
       called = true;
       assert.equal(command.cwd, source);
       assert.deepEqual(command.args, ["scripts/integrations.js"]);
-      assert.equal(command.releaseEnvironmentFile, environmentFile);
-      assert.equal(command.envPolicy, "deployment");
+      assert.equal(command.stagingEnvironmentFile, environmentFile);
+      assert.equal(command.envPolicy, "staging");
       assert.equal(command.env, undefined);
       assert.equal(command.session, undefined);
       const request = JSON.parse(command.input);
@@ -417,12 +417,12 @@ test("release setup uses its artifact declaration and Env reference without Git 
   // copy and runs the command there, as that account.
   const executionRoot = path.join(source, "../application-workspace");
   const asAccount = await runApplicationIntegrationSetup({
-    sourceRoot: source, executionRoot, applicationAccount: "v64a_0123456789ab", releaseEnvironmentFile: environmentFile,
+    sourceRoot: source, executionRoot, stagingAccount: "v64s_0123456789ab", stagingEnvironmentFile: environmentFile,
     project: { slug: "example" },
     selection: { operation: "status", integrationId: "calendar" },
     runCommand: async (command) => {
       assert.equal(command.actor, "app");
-      assert.equal(command.applicationAccount, "v64a_0123456789ab");
+      assert.equal(command.stagingAccount, "v64s_0123456789ab");
       assert.equal(command.cwd, executionRoot);
       assert.deepEqual(command.allowedRoots, [executionRoot]);
       const request = JSON.parse(command.input);
@@ -431,7 +431,7 @@ test("release setup uses its artifact declaration and Env reference without Git 
   });
   assert.equal(asAccount.status, "connected");
   await assert.rejects(runApplicationIntegrationSetup({
-    sourceRoot: source, releaseEnvironmentFile: environmentFile,
+    sourceRoot: source, stagingEnvironmentFile: environmentFile,
     selection: { operation: "connect", integrationId: "missing" },
     runCommand: async () => assert.fail("Missing slot cannot execute")
   }), { code: "vibe64_integration_missing" });

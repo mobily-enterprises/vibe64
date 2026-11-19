@@ -3,7 +3,7 @@ import { readLocalStorageJson, writeLocalStorageJson } from "@/lib/browserLocalS
 
 /**
  * Keeps the Integrations panel where the person left it in this browser: the environment shown for each project, and
- * the integration selected and the search typed for each project, session (or the deployed release) and environment.
+ * the integration selected and the search typed for each project, session (or the staging release) and environment.
  * @param {{
  *   dashboardContext: () => import("@/composables/useVibe64SessionToolPane.js").Vibe64DashboardContext,
  *   environment: import("vue").Ref<string>,
@@ -21,7 +21,7 @@ function useIntegrationsPanelNavigation({ dashboardContext, environment, project
     writeLocalStorageJson(`vibe64:integrations:environment:${projectSlug.value}`, value);
   });
   const search = ref("");
-  const navigationKey = computed(() => `vibe64:integrations:${encodeURIComponent(projectSlug.value)}:${staging.value ? 'published' : encodeURIComponent(dashboardContext().sessionId || "")}:${environment.value}`);
+  const navigationKey = computed(() => `vibe64:integrations:${encodeURIComponent(projectSlug.value)}:${staging.value ? 'staging' : encodeURIComponent(dashboardContext().sessionId || "")}:${environment.value}`);
   watch(navigationKey, (key) => {
     const saved = readLocalStorageJson(key, {});
     selectedId.value = typeof saved?.selectedId === "string" ? saved.selectedId : "";

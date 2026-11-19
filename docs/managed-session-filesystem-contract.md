@@ -30,8 +30,7 @@ deployment. It was the filesystem creation contract.
 
 ## Emergency host repair
 
-The live project trees for `sas/dogandgroom`, `sas/compas-next`, and `pass/whs2`
-were repaired by:
+The live project trees of three projects in two workspaces were repaired by:
 
 1. assigning the shared `vibe64` group recursively;
 2. making existing files group-writable;
@@ -82,12 +81,12 @@ second Unix identity being able to race a live writer. A missing group, missing
 ACL tools, wrong ownership, wrong mode, absent default ACL, or missing group
 membership is a startup failure. It is never repaired after a command.
 
-A published application never joins `vibe64`. Its build, release service and
-staging databases run as its own application account, in an area of its own
-in root's system folder for applications, outside every managed project/session
-source namespace. The daemon hands it a release's source and Env
-through that area's handover directory, which only the application's group may
-read.
+A staging app never joins `vibe64`. Its build, staging service and staging
+databases run as its own staging account, in an area of its own in root's
+system folder for staging apps, outside every managed project/session source
+namespace. The daemon hands it a staging release's source and Staging Env
+through that area's handover directory, which only the staging account's group
+may read.
 
 The ACL contract must survive or be re-established before exposing a path
 created by clone, copy, atomic replacement, checkout, reset, move, archive

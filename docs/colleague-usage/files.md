@@ -189,7 +189,7 @@ folder's path so you can paste it into a message, for example "Read the CSV in
 <path> and import it". Files refreshes the open folder when the agent finishes
 a turn; **Refresh** reloads it at any time. Session Dropzone, Project Dropzone and Project
 Backups each keep unfinished uploads, copies and moves in a hidden
-`.vibe64-staging` folder, which Files never shows and which nothing should
+`.vibe64-incoming` folder, which Files never shows and which nothing should
 change; Files clears what is left there after 7 days.
 
 ## On a phone

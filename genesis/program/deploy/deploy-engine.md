@@ -138,7 +138,7 @@ script, then migrates in the work folder; the serve script then only serves.
 An app with no Migrate step has no task. mobilynet runs no such task yet
 (`RELEASE_TASKS` is off), so today every serve script still migrates as its
 instance starts, and an adapter that would run no task refuses a release that
-declares one (`deployment_release_tasks_unsupported`) rather than never
+declares one (`production_deploy_release_tasks_unsupported`) rather than never
 migrating.
 
 `V64_WORK_DIR` is `/srv/<login>`, the work area mobilynet makes for each
@@ -243,9 +243,9 @@ Reaches setting is then that address.
 ## The steps
 
 `deploy()` reads the Plan again and refuses a Deploy whose hash is not the one
-the owner confirmed (`deployment_plan_stale`) or whose plan has problems, takes
+the owner confirmed (`production_deploy_plan_stale`) or whose plan has problems, takes
 the lease `deploy:<deployment id>` for 600 seconds where the adapter takes
-leases (refused `deployment_lease_held`, naming the holder and since when),
+leases (refused `production_deploy_lease_held`, naming the holder and since when),
 then does one step at a time (`nextStep`, `applyStep`), keeping the record after
 each and renewing the lease, until the deployment is live or failed, and gives
 the lease up either way. Every call carries an idempotency key naming this
@@ -465,7 +465,7 @@ target, so the next Deploy's public service takes it): it keeps the record witho
 them (`save`) once each delete is asked, then reads the provider again
 (`pause` between reads, 5 seconds unless given) until it lists none of them,
 and returns. A provider still removing some after `maxReads` reads (120 unless
-given) is refused `deployment_offline_unfinished`, naming them; they take no
+given) is refused `production_deploy_offline_unfinished`, naming them; they take no
 new requests by then, and the provider finishes by itself. `deleteResource()`
 deletes a disconnected resource and its data only when the owner typed its
 name.
@@ -544,8 +544,8 @@ service, instances })`, the owner's scale action, by the provider's own
 controls, or by an app scaling its own service with a key of its own (at
 mobilynet, a project key with `services:deploy`). `setInstances()` refuses a
 service the record holds no item for, or the Stack doesn't name,
-`deployment_item_unknown` (404), and a count that isn't a whole number within
-the Stack's `- Instances:` range `deployment_instances_outside` (422), naming the
+`production_deploy_item_unknown` (404), and a count that isn't a whole number within
+the Stack's `- Instances:` range `production_deploy_instances_outside` (422), naming the
 range ("computers runs 1 to 20 instances, as genesis/stack.md's - Instances:
 says."), before it asks the provider anything. Then it is one call of the
 adapter's `changeService(id, { instances })`, with an idempotency key of its own
@@ -576,9 +576,9 @@ record's. A Deploy routes its release's `domain` to the
 public service (above: made with it, or step 7 once the service serves the
 release). A running public service also moves to another domain at once, with
 no release, by its owner's own action: `moveDomain(adapter, record, needs, {
-domain })` (`domain.js`) is refused `deployment_item_unknown` (404) when the
+domain })` (`domain.js`) is refused `production_deploy_item_unknown` (404) when the
 record holds no item for the Stack's public service, and
-`deployment_domain_move_unsupported` (409) by an adapter without
+`production_deploy_domain_move_unsupported` (409) by an adapter without
 `takeDomain()` (Google Cloud's, AWS's), before the provider is asked anything;
 then the adapter's `ensureDomain()` (the provider project's domain covering it,
 added when none does) and `takeDomain(id, domain, { take: false })`, the same
@@ -700,7 +700,7 @@ credential is a token, or a source whose `token()` gives the token now and
   default is none), and Cloud Run drains its own. A new release, setting or
   machine type is a new template, and the group replaces its machines, the new
   ones first. A service can't move between Cloud Run and machines in place:
-  take the app offline, then deploy. A rollout is the refresh the steps wait
+  take the app offline, then deploy to production. A rollout is the refresh the steps wait
   for: its id is the release it moves to, and it is `rolling` from the start,
   as Cloud Build built the image before it began, so a service is linked to its
   resources while it rolls (their credentials are in its settings already).

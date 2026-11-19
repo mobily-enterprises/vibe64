@@ -1088,8 +1088,9 @@ Its confirmation explains that provider permissions, configuration and Env
 credentials remain, and that provider-side revocation may affect other apps.
 Changing the selected account or session dismisses outstanding confirmations.
 When a host supplies Staging integration management, people can switch
-between Development and Staging. Staging shows the published configuration
-read-only and labels its release; changes are made in Development and published.
+between Development and Staging. Staging shows the staging release's configuration
+read-only and labels its release; changes are made in Development and published
+to staging.
 Development drafts survive the switch. The workspace owner can manage Staging
 connections, and a changed release dismisses outstanding confirmations. The
 selected environment and connection are restored when returning to the page.
@@ -1232,7 +1233,7 @@ that local identity across restarts and token refreshes, and retires earlier
 helper work when the person signs in again. It never invents an OpenAI account
 identifier or rewrites the native credentials.
 Existing installations receive historical metadata repairs through numbered
-deployment upgrades with read-only preflight, warnings, backups and a record of
+state upgrades with read-only preflight, warnings, backups and a record of
 completion. Errors block activation. Ordinary account reads do not repair old
 formats, and the Codex identity upgrade does not rewrite project source.
 An overdue AI-settings upgrade reports the administrator's stop, upgrade and
@@ -1375,7 +1376,7 @@ repository/branch; ordinary sessions no longer repeat that line above the chat.
 Update uses a branch-sync icon; Create/View PR uses a distinct pull-request icon.
 The server rejects an outdated destination
 review. Working files, recovery checkpoints, project versions, database rows,
-conversation history and application publishing have separate effects.
+conversation history and publishing to staging have separate effects.
 
 Every project has exactly one source authority. For a GitHub-connected project,
 the configured GitHub branch is authoritative. For a Vibe64-only catalogue
@@ -1701,7 +1702,7 @@ It also includes the portable payment schema, semantics and expected test outcom
 for the chosen framework, without requiring non-JavaScript apps to run JSKIT.
 
 Payment readiness is a separate read-only app report. The editor shows credential,
-merchant, charge/payout, catalogue, webhook, checkout, website and deployment
+merchant, charge/payout, catalogue, webhook, checkout, website and running-app
 checks individually. Unknown/manual checks remain visible; no single badge
 claims provider approval or launch readiness from a valid API key.
 
@@ -1711,7 +1712,7 @@ The application verifies the current review and provider object before updating
 its own mapping. The editor never clears uncertainty solely on a claim that no
 provider object was created.
 
-Payment management also works against a host-selected published release, while
+Payment management also works against a host-selected staging release, while
 its configuration stays read-only. The owner reviews its catalogue using that
 release's environment; a release change discards previous reviews and results.
 

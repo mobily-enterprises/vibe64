@@ -20,11 +20,11 @@ example: “Send this to new owners jobs.” The coding assistant first lists th
 project's sessions:
 
 ```sh
-vibe64-helper session list-project compas
+vibe64-helper session list-project shop
 ```
 
 ```text
-2026-10-13_23-38-44  Geoff  (your session, selected)
+2026-10-13_23-38-44  Main  (your session, selected)
 2026-10-21_06-04-48  new owners jobs
 ```
 
@@ -38,7 +38,7 @@ that no other session can receive a message.
 The assistant then addresses the session by its ID or its name:
 
 ```sh
-vibe64-helper session message-project compas --session "new owners jobs" "Please pick up the owners jobs."
+vibe64-helper session message-project shop --session "new owners jobs" "Please pick up the owners jobs."
 ```
 
 An exact session ID always wins. Otherwise the name must match exactly one active
@@ -145,16 +145,16 @@ selection. Pinning does not change message permissions or acknowledgement rules.
 
 A coding assistant can open another project's running Preview, for example to
 review an app built in a sibling project. Ask it to look, for example: “Check
-the shell in mercbot's Preview.” It uses:
+the shell in storefront's Preview.” It uses:
 
 ```sh
-vibe64-helper session project-preview mercbot
+vibe64-helper session project-preview storefront
 ```
 
 The command prints that project's current Preview address, which the assistant
 opens in its managed browser. Add `--session <id-or-name>` to choose a session
 other than the selected one; it is resolved exactly as for messages, and
-`vibe64-helper session list-project mercbot` lists the choices. Access follows
+`vibe64-helper session list-project storefront` lists the choices. Access follows
 the same rule as messages: you must be able to use that project, and it must be
 open with an active session.
 

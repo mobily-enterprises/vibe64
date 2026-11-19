@@ -54,7 +54,7 @@ async function listProjectRuntimeRoots(systemRoot) {
 const PROJECT_STATE_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
 const PROJECT_RECORD_FILE = "project.json";
 const PROJECT_SESSIONS_DIR = "sessions";
-const PROJECT_DEPLOYMENTS_DIR = "deployments";
+const PROJECT_STAGING_DIR = "staging";
 const PROJECT_CANONICAL_REPOSITORY_DIR = "canonical-repository";
 const PROJECT_GITHUB_MIRROR_DIR = "github-mirror";
 const PROJECT_REPOSITORY_DIR = "repository.git";
@@ -105,12 +105,12 @@ function resolveProjectSessionsRoot({
   }), PROJECT_SESSIONS_DIR);
 }
 
-function resolveProjectDeploymentsRoot({
+function resolveProjectStagingRoot({
   projectRuntimeRoot = ""
 } = {}) {
   return path.join(resolveProjectRuntimeRoot({
     projectRuntimeRoot
-  }), PROJECT_DEPLOYMENTS_DIR);
+  }), PROJECT_STAGING_DIR);
 }
 
 function resolveProjectRepositoryStoragePath(projectRuntimeRoot = "", storageDirectory = "") {
@@ -161,7 +161,7 @@ export {
   PROJECT_GITHUB_MIRROR_DIR,
   normalizeProjectStateSlug,
   resolveProjectRecordPath,
-  resolveProjectDeploymentsRoot,
+  resolveProjectStagingRoot,
   resolveProjectCanonicalRepositoryPath,
   resolveProjectGithubMirrorPath,
   resolveProjectRuntimeConfigRoot,

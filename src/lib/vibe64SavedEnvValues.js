@@ -20,8 +20,8 @@ export function recordIsSavedEnvValue(record = {}) {
 
 export function savedEnvValueEnvironment(environmentLabel = "") {
   const label = String(environmentLabel).toLowerCase();
-  // The published application's Env was Production Env before it was renamed Staging Env.
-  if (label === "production") throw new Error("Saved values have no production environment: the published application's Env is Staging Env.");
+  // Saved values fill only Development and Staging; Production's values belong to its Deploy.
+  if (label === "production") throw new Error("Saved values have no production environment: they fill Development Env and Staging Env.");
   return label === "staging" ? "staging" : "development";
 }
 

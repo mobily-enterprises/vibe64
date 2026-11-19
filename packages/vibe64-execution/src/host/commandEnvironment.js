@@ -45,8 +45,8 @@ const BLOCKED_ENV_NAMES = new Set([
 // neither its caller nor the host's helper settings name one.
 const SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 // The host's settings for this helper, in EnvironmentFile syntax and in a file only root can change: PATH, the
-// folders commands and services start with when their caller names none, VIBE64_APPLICATION_AREA_ROOT, the
-// folder application accounts have their areas below, the account database and numbers the helper's accounts get,
+// folders commands and services start with when their caller names none, VIBE64_STAGING_AREA_ROOT, the
+// folder staging accounts have their areas below, the account database and numbers the helper's accounts get,
 // and where its service units and sudo rules go (hostSettings.js). A missing file names none of them.
 const HELPER_SETTINGS_FILE = path.join(HOST_SETTINGS_ROOT, "exec-helper.env");
 const HELPER_SETTINGS_LIMIT_BYTES = 16384;
@@ -132,7 +132,7 @@ function helperCommandPath(settings = helperSettings()) {
   return configured;
 }
 
-// Release environment files keep systemd's EnvironmentFile= syntax: comment
+// Staging environment files keep systemd's EnvironmentFile= syntax: comment
 // lines, NAME=value with surrounding blanks trimmed, single quotes taken
 // literally, double quotes in which a backslash escapes only " \ ` $ and a line
 // end, and outside quotes a backslash escaping the next character. Quoted and
@@ -390,7 +390,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   env.USER = targetUser.username;
   // An application has its own private temporary directory, and no access to
   // the workspace's.
-  env.TMPDIR = targetUser.application ? "/tmp" : workspaceTempRoot(ownerUsername);
+  env.TMPDIR = targetUser.stagingAccount ? "/tmp" : workspaceTempRoot(ownerUsername);
   return env;
 }
 

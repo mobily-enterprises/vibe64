@@ -67,10 +67,10 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard/history/[sessionId]'
       | '/app/project/[slug]/dashboard/integrations/'
       | '/app/project/[slug]/dashboard/issues/'
+      | '/app/project/[slug]/dashboard/packages/'
       | '/app/project/[slug]/dashboard/pages/'
       | '/app/project/[slug]/dashboard/pages/[pageId]'
       | '/app/project/[slug]/dashboard/project-files/'
-      | '/app/project/[slug]/dashboard/publish/'
       | '/app/project/[slug]/dashboard/pull-requests/'
       | '/app/project/[slug]/dashboard/repository/'
       | '/app/project/[slug]/dashboard/session/'
@@ -90,10 +90,10 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard/history/[sessionId]'
       | '/app/project/[slug]/dashboard/integrations/'
       | '/app/project/[slug]/dashboard/issues/'
+      | '/app/project/[slug]/dashboard/packages/'
       | '/app/project/[slug]/dashboard/pages/'
       | '/app/project/[slug]/dashboard/pages/[pageId]'
       | '/app/project/[slug]/dashboard/project-files/'
-      | '/app/project/[slug]/dashboard/publish/'
       | '/app/project/[slug]/dashboard/pull-requests/'
       | '/app/project/[slug]/dashboard/repository/'
       | '/app/project/[slug]/dashboard/session/'
@@ -162,6 +162,13 @@ declare module 'vue-router/auto-routes' {
       { slug: ParamValue<false> },
       | never
     >,
+    '/app/project/[slug]/dashboard/packages/': RouteRecordInfo<
+      '/app/project/[slug]/dashboard/packages/',
+      '/app/project/:slug/dashboard/packages',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
+      | never
+    >,
     '/app/project/[slug]/dashboard/pages/': RouteRecordInfo<
       '/app/project/[slug]/dashboard/pages/',
       '/app/project/:slug/dashboard/pages',
@@ -179,13 +186,6 @@ declare module 'vue-router/auto-routes' {
     '/app/project/[slug]/dashboard/project-files/': RouteRecordInfo<
       '/app/project/[slug]/dashboard/project-files/',
       '/app/project/:slug/dashboard/project-files',
-      { slug: ParamValue<true> },
-      { slug: ParamValue<false> },
-      | never
-    >,
-    '/app/project/[slug]/dashboard/publish/': RouteRecordInfo<
-      '/app/project/[slug]/dashboard/publish/',
-      '/app/project/:slug/dashboard/publish',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | never
@@ -268,10 +268,10 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/history/[sessionId]'
         | '/app/project/[slug]/dashboard/integrations/'
         | '/app/project/[slug]/dashboard/issues/'
+        | '/app/project/[slug]/dashboard/packages/'
         | '/app/project/[slug]/dashboard/pages/'
         | '/app/project/[slug]/dashboard/pages/[pageId]'
         | '/app/project/[slug]/dashboard/project-files/'
-        | '/app/project/[slug]/dashboard/publish/'
         | '/app/project/[slug]/dashboard/pull-requests/'
         | '/app/project/[slug]/dashboard/repository/'
         | '/app/project/[slug]/dashboard/session/'
@@ -293,10 +293,10 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/history/[sessionId]'
         | '/app/project/[slug]/dashboard/integrations/'
         | '/app/project/[slug]/dashboard/issues/'
+        | '/app/project/[slug]/dashboard/packages/'
         | '/app/project/[slug]/dashboard/pages/'
         | '/app/project/[slug]/dashboard/pages/[pageId]'
         | '/app/project/[slug]/dashboard/project-files/'
-        | '/app/project/[slug]/dashboard/publish/'
         | '/app/project/[slug]/dashboard/pull-requests/'
         | '/app/project/[slug]/dashboard/repository/'
         | '/app/project/[slug]/dashboard/session/'
@@ -378,6 +378,14 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | never
     }
+    'src/pages/app/project/[slug]/dashboard/packages/index.vue': {
+      routes:
+        | '/app/project/[slug]/dashboard/packages/'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
     'src/pages/app/project/[slug]/dashboard/pages/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/pages/'
@@ -397,14 +405,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/project/[slug]/dashboard/project-files/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/project-files/'
-      views:
-        | never
-      pathParamNames:
-        | never
-    }
-    'src/pages/app/project/[slug]/dashboard/publish/index.vue': {
-      routes:
-        | '/app/project/[slug]/dashboard/publish/'
       views:
         | never
       pathParamNames:

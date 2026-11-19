@@ -47,7 +47,7 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-source-editor/src/server/sourceFiles.js`
 - `packages/vibe64-source-editor/src/server/filePolicy.js`
 - `packages/vibe64-source-editor/src/server/fileAreas.js`
-- `packages/vibe64-source-editor/src/server/fileAreaStaging.js`
+- `packages/vibe64-source-editor/src/server/fileAreaIncoming.js`
 - `packages/vibe64-source-editor/src/server/fileAreaTransfer.js`
 - `packages/vibe64-source-editor/src/server/integrations.js`
 - `packages/vibe64-source-editor/src/server/explanations.js`
@@ -190,13 +190,13 @@ semantics and require the user's intended operation, with browser consent in
 Integrations and a status check after cancellation or consent.
 
 The package exports the shared integration setup input fields and bounded
-assistant projections for hosts that select a published application. A host can
+assistant projections for hosts that select a staging release. A host can
 restrict available operations while reusing the same public command semantics;
 source/release selection, Staging Env and host permissions remain with that
 host. Staging projections retain the actual release ID and environment,
 require the reviewed release on subsequent calls, and preserve the human consent
 handoff. Saved Configure requests and advertising operations remain development
-controls. Published configuration is read-only here; changes go through a coding
+controls. Staging configuration is read-only here; changes go through a coding
 conversation and the requested Save/publication workflow.
 
 Payment and Ads result records pass through their existing protocol parser rather
@@ -232,17 +232,17 @@ chosen; the source editor offers these only when Files hosts it. The docked list
 shows per-file bytes and percent, a batch total, Cancel for anything unfinished,
 Cancel all, the reason a file failed with Retry, and Remove. Cancelling aborts
 the request. The server streams every upload, text file and copy into the
-area's staging folder and publishes it by link or rename, so readers never see
+area's incoming folder and publishes it by link or rename, so readers never see
 a partial item and an aborted, failed or malformed upload leaves nothing behind,
 including when the multipart parser closes the file stream before copying
 starts. A file publishes by hard link, which never overwrites a name taken
 meanwhile, then its staged link is removed; a folder publishes by rename into a
-name checked free. Other areas stage in `.vibe64-staging` at their root, which
+name checked free. Other areas stage in `.vibe64-incoming` at their root, which
 Files hides and refuses as a name in every operation. Repo stages in
-`vibe64-file-staging` inside the checkout's own Git directory (resolved with
+`vibe64-file-incoming` inside the checkout's own Git directory (resolved with
 `git rev-parse --absolute-git-dir` and refused when outside the checkout), so
 `git status`, an assistant's `git add` and Save work never see a staged item;
-a replaced item is also set aside in the staging folder. The staging folder is
+a replaced item is also set aside in the incoming folder. The incoming folder is
 created when needed, held open and checked like the destination folder below,
 and refused with a clear conflict when something else sits at its path. A Repo
 upload streams in without the exclusive source write and takes it only to check
@@ -252,11 +252,11 @@ after 1.5 seconds of waiting with every byte sent, its row says it is waiting
 for Save or another change to Repo. Project Dropzone and Project Backups writes
 each hold their area's lock (Backups' is shared with retention) and refuse as
 busy; uploads there also stream in first and lock only to publish. Each area's
-next write removes, under its lock, items in its staging folder whose change
+next write removes, under its lock, items in its incoming folder whose change
 time is over 7 days old; writing or renaming an item refreshes that time, so
 only items a stopped server abandoned age, and nothing outside the staging
 folder is ever swept. When a failed move cannot put its item back, the error
-names where in the staging folder it is kept. Uploads refuse the paths the
+names where in the incoming folder it is kept. Uploads refuse the paths the
 destination protects; the built-in `.git` and `.vibe64` names match in any
 letter case. Uploads and new files publish through their destination folder
 held open, as below.
@@ -1240,7 +1240,7 @@ It does not select a deployment, read session state or prepare development Env.
 The calling application owns release selection and coordination for the entire call.
 `readApplicationIntegrations` supplies the same validated file snapshot to a
 release reader and the development form. An absent file yields an empty
-configuration; malformed or unsafe source is still rejected. A published deployment
+configuration; malformed or unsafe source is still rejected. A staging release
 may expose that snapshot through its own project routes.
 
 A host-supplied staging API path (`stagingIntegrationsApiPath`) enables the
@@ -1257,7 +1257,7 @@ a release that removes that slot clears its displayed connection without probing
 Staging Env links lead to the host's page at `/dashboard/deploy` with no
 development prefill; the panel names that page as its Dashboard link does
 (`dashboardSectionLabel`) and explains that Env changes must be published to
-affect the running release.
+staging to affect the running staging release.
 
 The Integrations panel checks saved shared-account configuration through this
 route and displays application-reported state. Unsaved configuration cannot
@@ -1334,7 +1334,7 @@ uses the source service for configuration persistence. This does not prove
 application command implementation, live authorization or staging execution.
 
 
-Callback setup consumes optional `dashboardContext.applicationPublicUrl` from the
+Callback setup consumes optional `dashboardContext.stagingPublicUrl` from the
 host. `src/lib/integrationCallbackUrl.js` accepts an application origin and the
 provider's suggested callback path, or the registration-specific convention.
 It does not derive an origin from the editor location. A user may edit the
@@ -1361,7 +1361,7 @@ masked secret field; users explicitly save through the existing development Env
 operation. Secret navigation never accepts a credential value from query input.
 Unsaved integration configuration must be saved before this handoff.
 Staging setup guidance explicitly maps credential/callback Env steps to
-Open Staging Env and the published application's environment.
+Open Staging Env, the staging app's environment.
 
 
 The editor remembers integration selection and catalogue search separately for
@@ -1628,7 +1628,7 @@ verify evidence and return a fresh review; the UI does not save provider mapping
 itself. The public operation guide includes both JSKIT composition and native
 Laravel requirements for this same recovery contract.
 
-Payment management also works against a host-selected published release, while
+Payment management also works against a host-selected staging release, while
 its configuration stays read-only. The owner reviews its catalogue using that
 release's environment; a release change discards previous reviews and results.
 

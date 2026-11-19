@@ -2169,7 +2169,7 @@ chat mode. A standalone `deslop` command uses the configured Senior model in nam
 modes and the exact selected model in Custom, bypassing classification. Auto's
 semantic classifier defaults cleanup to Senior but honors an explicit Junior
 request. Saving a commit does not offer a Deslop banner. Cleanup applies the
-project's behavior-preserving guidance, preserves unrelated work and staging,
+project's behavior-preserving guidance, preserves unrelated work and staged changes,
 and never schedules another review. Dispatch validates the chosen connection
 and tool capability through the normal role resolver. Preferences stay unchanged.
 A direct Deslop command cannot steer an active turn or change an unfinished goal.
@@ -2604,7 +2604,7 @@ session executables for Codex and OpenCode. Its fixed groups are `preview`,
 comes from the existing command owner. The dispatcher replaces itself with
 the matching sibling executable, preserving stdin, argv, environment, cwd,
 exit status and signal handling; `deployment` is the Env executable asked for
-`deployment`, the read-only deployment status of the session's project and, where a host allows the session,
+`deployment`, the read-only staging status of the session's project and, where a host allows the session,
 how it reaches staging itself (`ssh staging`). Missing groups fail without searching PATH
 for a substitute. Each underlying command retains its session binding and
 authorization. The individual executables stay installed for existing

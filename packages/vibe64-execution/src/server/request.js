@@ -21,7 +21,7 @@ const VIBE64_COMMAND_ACTORS = Object.freeze([
 ]);
 // A host may run an application under its own registered OS account instead of
 // the editor's account; only that host's privileged helper can switch to it.
-const APPLICATION_ACCOUNT_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/u;
+const STAGING_ACCOUNT_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/u;
 const VIBE64_COMMAND_PURPOSES = Object.freeze([
   "account",
   "assistant",
@@ -32,7 +32,7 @@ const VIBE64_COMMAND_PURPOSES = Object.freeze([
   "source-editor",
   "preview",
   "output",
-  "deployment",
+  "staging",
   "health",
   "workspace-cache",
   "source"
@@ -51,7 +51,7 @@ const VIBE64_COMMAND_ENV_POLICIES = Object.freeze([
   "project",
   "preview",
   "auth",
-  "deployment"
+  "staging"
 ]);
 const VIBE64_COMMAND_GIT_TRANSPORTS = Object.freeze([
   "none",
@@ -76,7 +76,7 @@ const DEFAULT_COMMAND_MAX_BUFFER_BYTES = 1000 * 1000 * 100;
 const DEFAULT_INTERACTIVE_RUNTIME_PURPOSES = new Set([
   "assistant",
   "codex",
-  "deployment",
+  "staging",
   "output",
   "preview",
   "source",
@@ -345,14 +345,14 @@ function normalizeVibe64CommandRequest(input = {}) {
   }
   const project = recordValue(request.project);
   const session = recordValue(request.session);
-  const releaseEnvironmentFile = request.releaseEnvironmentFile ?? "";
-  if (typeof releaseEnvironmentFile !== "string" || (releaseEnvironmentFile && (!releaseEnvironmentFile.startsWith("/") ||
-      /[\r\n\0]/u.test(releaseEnvironmentFile) ||
-      mode !== "capture" || request.actor !== "app" || request.envPolicy !== "deployment" ||
+  const stagingEnvironmentFile = request.stagingEnvironmentFile ?? "";
+  if (typeof stagingEnvironmentFile !== "string" || (stagingEnvironmentFile && (!stagingEnvironmentFile.startsWith("/") ||
+      /[\r\n\0]/u.test(stagingEnvironmentFile) ||
+      mode !== "capture" || request.actor !== "app" || request.envPolicy !== "staging" ||
       Object.keys(normalizedEnv.env).length || normalizedEnv.envFactory || Object.keys(baseEnv).length))) {
     throw commandRequestError(
-      "Release environment files require a finite application deployment command without caller Env.",
-      "vibe64_command_release_environment_invalid"
+      "Staging environment files require a finite staging command without caller Env.",
+      "vibe64_command_staging_environment_invalid"
     );
   }
   // A usage recording launch names the recorder's Node preload; Vibe64 or its
@@ -366,10 +366,10 @@ function normalizeVibe64CommandRequest(input = {}) {
       "vibe64_command_usage_recording_preload_invalid"
     );
   }
-  const applicationAccount = request.applicationAccount ?? "";
-  if (typeof applicationAccount !== "string" || (applicationAccount &&
-      (!APPLICATION_ACCOUNT_PATTERN.test(applicationAccount) || request.actor !== "app" || mode !== "capture"))) {
-    throw commandRequestError("Application accounts run only finite application commands.", "vibe64_command_application_account_invalid");
+  const stagingAccount = request.stagingAccount ?? "";
+  if (typeof stagingAccount !== "string" || (stagingAccount &&
+      (!STAGING_ACCOUNT_PATTERN.test(stagingAccount) || request.actor !== "app" || mode !== "capture"))) {
+    throw commandRequestError("Staging accounts run only finite application commands.", "vibe64_command_staging_account_invalid");
   }
   // What the application's release allows its sandbox; the host helper grants
   // each allowance only where the host's owner permits it.
@@ -377,15 +377,15 @@ function normalizeVibe64CommandRequest(input = {}) {
   if (!Array.isArray(sandboxAllowances) ||
       sandboxAllowances.some((name) => typeof name !== "string" || !/^[a-z][a-z0-9-]*$/u.test(name)) ||
       new Set(sandboxAllowances).size !== sandboxAllowances.length ||
-      (sandboxAllowances.length > 0 && !applicationAccount)) {
+      (sandboxAllowances.length > 0 && !stagingAccount)) {
     throw commandRequestError(
-      "Sandbox allowances belong only to an application account's own commands.",
+      "Sandbox allowances belong only to a staging account's own commands.",
       "vibe64_command_sandbox_allowances_invalid"
     );
   }
   return {
     actor: normalizeEnum(request.actor, VIBE64_COMMAND_ACTORS, "daemon", "actor"),
-    applicationAccount,
+    stagingAccount,
     allowedRoots: normalizeAbsolutePaths(request.allowedRoots),
     args: normalizeCommandArgs(request.args, {
       mode
@@ -396,7 +396,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     env: normalizedEnv.env,
     envFactory: normalizedEnv.envFactory,
     envPolicy: normalizeEnum(request.envPolicy, VIBE64_COMMAND_ENV_POLICIES, "session", "env_policy"),
-    releaseEnvironmentFile,
+    stagingEnvironmentFile,
     sandboxAllowances: [...sandboxAllowances],
     execution: normalizeExecutionDescriptor(request.execution, {
       mode,
@@ -412,7 +412,7 @@ function normalizeVibe64CommandRequest(input = {}) {
       name: normalizeText(request.personGitIdentity?.name)
     },
     gitTransport: normalizeEnum(request.gitTransport, VIBE64_COMMAND_GIT_TRANSPORTS, "none", "git_transport"),
-    inheritProcessEnv: !releaseEnvironmentFile && request.inheritProcessEnv !== false,
+    inheritProcessEnv: !stagingEnvironmentFile && request.inheritProcessEnv !== false,
     input: request.input,
     logPath: normalizeAbsolutePath(request.logPath),
     maxBuffer: Number.isSafeInteger(Number(request.maxBuffer)) && Number(request.maxBuffer) > 0

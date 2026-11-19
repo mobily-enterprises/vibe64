@@ -20,17 +20,18 @@ const SERVICES_MAX = 8;
 const SERVICE_ID = /^[a-z][a-z0-9-]{0,15}$/u;
 const SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
 // The settings Production gives every service itself, and the instance facts (V64_*): no service sets one. Nor does
-// one set SIDE_EFFECTS, which APP_ENV replaced, or STAGING_REACHES_REAL_PEOPLE, which only a host's Staging that real
-// people use is given.
+// one set STAGING_REACHES_REAL_PEOPLE, which only a host's Staging that real people use is given.
 const HOST_SETTINGS = Object.freeze([
-  "APP_ENV", "SIDE_EFFECTS", "STAGING_REACHES_REAL_PEOPLE", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"
+  "APP_ENV", "STAGING_REACHES_REAL_PEOPLE", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"
 ]);
+// Nor SIDE_EFFECTS, which APP_ENV replaced: a JSKIT app refuses to start while it is set.
+const RETIRED_SETTINGS = Object.freeze(["SIDE_EFFECTS"]);
 const RESOURCES_MAX = 8;
 const SECRETS_MAX = 20;
 const RESOURCE_ID = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/u;
 const SETTING_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/u;
 // The fix every refusal of the Stack names: the coding agent can make it.
-const STACK_FIX = "Declare it in genesis/stack.md (the coding agent can do this), Save, then deploy.";
+const STACK_FIX = "Declare it in genesis/stack.md (the coding agent can do this), Save, then deploy to production.";
 
 /**
  * Why `needs` is not Production's needs shape, or "": `{ services: [{ id, exposure, reached, instances: { min, max,
@@ -117,7 +118,7 @@ function servicesProblem(services, bound, given) {
     const names = new Set();
     const own = (name) => {
       const ok = SETTING_NAME.test(String(name || "")) && !names.has(name) && !bound.has(name) && !given.has(name)
-        && !HOST_SETTINGS.includes(name) && !String(name).startsWith("V64_");
+        && !HOST_SETTINGS.includes(name) && !RETIRED_SETTINGS.includes(name) && !String(name).startsWith("V64_");
       names.add(name);
       return ok;
     };

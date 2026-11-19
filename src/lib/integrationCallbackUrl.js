@@ -1,8 +1,8 @@
 // The host supplies the assigned application origin. Never derive it from the
 // editor location, project slug, preview port or a custom-domain preference.
-export function integrationCallbackUrl(applicationPublicUrl, callbackPath) {
+export function integrationCallbackUrl(stagingPublicUrl, callbackPath) {
   try {
-    const origin = new URL(applicationPublicUrl);
+    const origin = new URL(stagingPublicUrl);
     const local = origin.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
     if ((origin.protocol !== "https:" && !local) || origin.username || origin.password ||
         origin.search || origin.hash || origin.pathname !== "/" ||

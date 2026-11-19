@@ -160,6 +160,10 @@ test("each wrong service or resource line is refused at its line, saying what is
   refused(parse(memobotWith({ 19: "- Reaches: `computers` as `MEMOBOT_COMPUTERS_SECRET`" })), 19, /Deployment's generated secret/u);
   refused(parse(memobotWith({ 31: ["- Setting `X`: `1`", "- Setting `X`: `2`"] })), 32, /names the setting X twice/u);
   refused(parse(memobotWith({ 31: "- Setting `APP_PUBLIC_URL`: `x`" })), 31, /APP_PUBLIC_URL is a setting the host gives/u);
+  // SIDE_EFFECTS, which APP_ENV replaced, is no setting the host gives but no setting at all.
+  refused(parse(memobotWith({ 31: "- Setting `SIDE_EFFECTS`: `live`" })), 31,
+    /SIDE_EFFECTS was replaced by APP_ENV, which the host gives every step\. Remove SIDE_EFFECTS from Deployment\./u);
+  refused(parse(memobotWith({ 19: "- Reaches: `computers` as `SIDE_EFFECTS`" })), 19, /SIDE_EFFECTS was replaced by APP_ENV/u);
   refused(parse(memobotWith({ 31: "- Setting `lower`: `x`" })), 31, /isn't a setting's name/u);
   // Sandbox allowances from the closed set; shared lines stay above the headings; service lines below them.
   refused(parse(memobotWith({ 20: "- Sandbox allows: `docker`" })), 20, /Sandbox allows takes only `fuse` and `gvisor`/u);

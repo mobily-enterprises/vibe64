@@ -105,9 +105,9 @@ test("Drop Zone navigation, uploads, edits and deletes cannot escape their root"
   assert.equal((await call("delete", { path: "nested" }, "member")).ok, true);
   assert.equal((await call("delete", { path: "" }, "member")).ok, false);
   assert.equal(await readFile(path.join(root, "one-state/sessions/active/shared-id/private.txt"), "utf8"), "one private");
-  // Uploads leave only Files' hidden staging folder, empty, beside what they published.
-  assert.deepEqual((await readdir(zone)).sort(), [".vibe64-staging", "escape", "shared.txt"]);
-  assert.deepEqual(await readdir(path.join(zone, ".vibe64-staging")), []);
+  // Uploads leave only Files' hidden incoming folder, empty, beside what they published.
+  assert.deepEqual((await readdir(zone)).sort(), [".vibe64-incoming", "escape", "shared.txt"]);
+  assert.deepEqual(await readdir(path.join(zone, ".vibe64-incoming")), []);
   await rm(zone, { recursive: true });
   await symlink(path.dirname(zone), zone);
   assert.equal((await call("file", { path: "private.txt" }, "member")).statusCode, 403);
@@ -121,8 +121,8 @@ test("archival preserves Drop Zone on failure, removes it on success, and keeps 
   assert.equal((await call("delete", { path: "shared.txt" }, "member")).statusCode, 409);
   assert.equal((await call("file", { path: "shared.txt" }, "member")).file.text, "one exchange");
   await store.writeStatus("shared-id", "archived");
-  // A regular file where the staging directory must be makes publication fail.
-  const archiveStage = path.join(paths.archivedSessionsRoot, ".staging");
+  // A regular file where the incoming folder must be makes publication fail.
+  const archiveStage = path.join(paths.archivedSessionsRoot, ".packing");
   await mkdir(paths.archivedSessionsRoot, { recursive: true });
   await writeFile(archiveStage, "blocked");
   await assert.rejects(store.publishSessionArchive("shared-id"));
@@ -200,8 +200,8 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
     assert.ok((await fetch(`${base}/drop-zone/download?path=${invalidPart}.bin`)).status >= 400, invalidPart);
   }
   const dropZone = stores.get("one").paths("shared-id").dropZoneRoot;
-  assert.deepEqual((await readdir(dropZone)).sort(), [".vibe64-staging", "file.bin", "shared.txt"]);
-  assert.deepEqual(await readdir(path.join(dropZone, ".vibe64-staging")), []);
+  assert.deepEqual((await readdir(dropZone)).sort(), [".vibe64-incoming", "file.bin", "shared.txt"]);
+  assert.deepEqual(await readdir(path.join(dropZone, ".vibe64-incoming")), []);
   // A real peer disconnect must release the writer, not leave an incomplete
   // multipart stream holding the session mutation lock indefinitely.
   const interrupted = httpRequest(`${base}/drop-zone/upload?path=interrupted.bin`, {
@@ -210,9 +210,9 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
   interrupted.on("error", () => {});
   interrupted.write('--interrupted-upload\r\nContent-Disposition: form-data; name="file"; filename="interrupted.bin"\r\nContent-Type: application/octet-stream\r\n\r\n');
   interrupted.write(Buffer.alloc(64 * 1024, 0x33));
-  const stagedFiles = async () => readdir(path.join(dropZone, ".vibe64-staging"));
+  const stagedFiles = async () => readdir(path.join(dropZone, ".vibe64-incoming"));
   for (let attempt = 0; attempt < 100 && !(await stagedFiles()).length; attempt++) await delay(10);
-  assert.equal((await stagedFiles()).length, 1, "interrupted upload reached its staging writer");
+  assert.equal((await stagedFiles()).length, 1, "interrupted upload reached its incoming writer");
   interrupted.destroy();
   for (let attempt = 0; attempt < 100 && (await stagedFiles()).length; attempt++) await delay(10);
   assert.deepEqual(await stagedFiles(), [], "peer disconnect removes incomplete upload");

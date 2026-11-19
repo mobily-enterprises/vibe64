@@ -22,7 +22,7 @@ import {
   sameEntry,
   sameFile
 } from "./fileAreaItems.js";
-import { keptError, publishStaged, stagedItem, withAreaFolder, withOpenFolder, withStaging } from "./fileAreaStaging.js";
+import { keptError, placeIncoming, incomingItem, withAreaFolder, withOpenFolder, withIncoming } from "./fileAreaIncoming.js";
 
 // Server-side move and copy between Files areas, and the conflict rule an
 // incoming upload or transfer applies at its destination.
@@ -232,7 +232,7 @@ async function transferItem(from, to, { input, mode, sourcePath, folder, origin,
     const arriving = joinRelative(target.relativePath, entry.relative);
     if (sourceEditorPathExcluded(to.policy, arriving)) throw protectedError(arriving);
   }
-  return withStaging(to, (staging) => carryItem(from, to, {
+  return withIncoming(to, (incoming) => carryItem(from, to, {
     mode,
     sourcePath,
     sourceAt,
@@ -240,7 +240,7 @@ async function transferItem(from, to, { input, mode, sourcePath, folder, origin,
     entries,
     target,
     destination,
-    staging
+    incoming
   }));
 }
 
@@ -248,8 +248,8 @@ async function transferItem(from, to, { input, mode, sourcePath, folder, origin,
  * A move renames when both areas share a filesystem; otherwise it copies and
  * removes the source only after the copy is published.
  */
-async function carryItem(from, to, { mode, sourcePath, sourceAt, sourceStats, entries, target, destination, staging }) {
-  const staged = stagedItem(staging);
+async function carryItem(from, to, { mode, sourcePath, sourceAt, sourceStats, entries, target, destination, incoming }) {
+  const staged = incomingItem(incoming);
   let renamed = false;
   try {
     if (mode === "move") {
@@ -272,7 +272,7 @@ async function carryItem(from, to, { mode, sourcePath, sourceAt, sourceStats, en
       for (const { relative, stats } of entries) await lutimes(path.join(staged, relative), stats.atimeMs / 1000, stats.mtimeMs / 1000);
     }
     await destination.check();
-    await publishStaged(to, staging, staged, destination.at(path.posix.basename(target.relativePath)), {
+    await placeIncoming(to, incoming, staged, destination.at(path.posix.basename(target.relativePath)), {
       replace: target.replace,
       directory: sourceStats.isDirectory()
     });

@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { upgradeColleagueConversations, upgradeColleagueConversationHistory, retireColleagueLearningWatches, retireColleagueFreeModel } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationHistory, retireColleagueLearningWatches, retireColleagueFreeModel,
+  renameColleagueWatchSource } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-upgrade-"));
@@ -237,4 +238,125 @@ test("a chat on the retired free model is kept as a previous conversation and th
   assert.equal(await readFile(path.join(backupRoot, "before/colleague/42/conversation.json"), "utf8"), before);
   await run(true);
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")), upgraded, "retry changes nothing more");
+});
+
+// A watch source renamed by its owner: the Develop record and Learn threads of each person, read with their owner keys.
+const ATTEMPT = "0b6c2a8e-4f1d-4c3a-9e7b-1a2b3c4d5e6f";
+function sourceRename(f, { from = "deployment", to = "staging", conditions = { live: "running" }, backup = "20261119-rename" } = {}) {
+  const backupRoot = path.join(f.systemRoot, `upgrades/backups/${backup}/colleague`);
+  return { backupRoot, run: apply => renameColleagueWatchSource({ systemRoot: f.systemRoot, backupRoot, apply, from, to, conditions,
+    report: (level, message) => f.reports.push({ level, message }) }) };
+}
+function chat(runtimeId, scopeId, watches = [], observations = []) {
+  return { schemaVersion: 3, scopeId, runtimeId, previousConversations: [],
+    conversationLog: [{ turnId: "turn-1", messages: [{ role: "user", text: "Keep this history." }] }], watches, observations };
+}
+async function writeLearn(f, person, name, value) {
+  const file = path.join(f.systemRoot, "colleague", person, "learn", `${name}.json`);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, typeof value === "string" ? value : JSON.stringify(value));
+  return file;
+}
+const shopWatch = { watchId: "shop-live", source: "deployment", input: { projectSlug: "shop" }, projectSlug: "shop",
+  condition: "live", question: "Tell me when it is live.", once: true, status: "pending", error: "",
+  cursor: { fingerprint: "release-1", conditionsMet: ["live"] } };
+
+test("a renamed watch source moves every matching watch, its renamed conditions and its observations, in Develop records and Learn threads", async t => {
+  const f = await fixture(t);
+  const { backupRoot, run } = sourceRename(f);
+  // Another source's watch keeps its "live", and a condition the map leaves out is kept.
+  const publication = { ...shopWatch, watchId: "shop-published", source: "publication" };
+  const changed = { ...shopWatch, watchId: "shop-changed", condition: "changed", cursor: { fingerprint: "release-1", conditionsMet: [] } };
+  const record = chat("42", "colleague_42", [shopWatch, changed, publication],
+    [{ id: "observation-1", watchId: "shop-live", source: "deployment", reason: "live" },
+      { id: "observation-2", watchId: "shop-published", source: "publication", reason: "live" }]);
+  const develop = await f.write("42", record);
+  const lobby = await writeLearn(f, "42", "lobby", chat("42:learn", "colleague_lobby",
+    [{ ...shopWatch, watchId: "practice-live", input: { projectSlug: "practice" }, projectSlug: "practice" }]));
+  const attempt = await writeLearn(f, "42", ATTEMPT, chat(`42:learn:${ATTEMPT}`, "colleague_attempt", [publication]));
+  await mkdir(path.join(f.systemRoot, "colleague/42/learn", ATTEMPT), { recursive: true });
+  const before = await readFile(develop, "utf8");
+  const untouched = await readFile(attempt, "utf8");
+  assert.deepEqual(await run(false), { watches: 3 }, "a check counts what an apply renames");
+  assert.equal(await readFile(develop, "utf8"), before, "check writes nothing");
+  await assert.rejects(stat(backupRoot), { code: "ENOENT" });
+  assert.deepEqual(f.reports.map(({ message }) => message), [
+    "Project practice: 1 watch(es) on deployment now watch staging, 1 with a renamed condition.",
+    "Project shop: 2 watch(es) on deployment now watch staging, 1 with a renamed condition.", "2 state file(s) to change."]);
+  assert.deepEqual(await run(true), { watches: 3 });
+  const upgraded = JSON.parse(await readFile(develop, "utf8"));
+  assert.deepEqual(upgraded.watches, [
+    { ...shopWatch, source: "staging", condition: "running", cursor: { fingerprint: "release-1", conditionsMet: ["running"] } },
+    { ...changed, source: "staging" }, publication]);
+  assert.deepEqual(upgraded.observations, [{ ...record.observations[0], source: "staging", reason: "running" }, record.observations[1]]);
+  assert.deepEqual({ ...upgraded, watches: record.watches, observations: record.observations }, record, "the rest is kept");
+  assert.deepEqual(JSON.parse(await readFile(lobby, "utf8")).watches.map(watch => [watch.source, watch.condition]), [["staging", "running"]]);
+  assert.equal(await readFile(attempt, "utf8"), untouched, "a thread with no such watch is unchanged");
+  assert.equal(await readFile(path.join(backupRoot, "before/colleague/42/conversation.json"), "utf8"), before);
+});
+
+test("renaming a watch source no record uses changes nothing and leaves no backup", async t => {
+  const f = await fixture(t);
+  const { backupRoot, run } = sourceRename(f);
+  await run(true);
+  await assert.rejects(stat(f.systemRoot), { code: "ENOENT" }, "a new installation has nothing to rename");
+  f.reports.length = 0;
+  const file = await f.write("42", chat("42", "colleague_42", [{ ...shopWatch, source: "publication" }]));
+  const before = await readFile(file, "utf8");
+  assert.deepEqual(await run(true), { watches: 0 });
+  assert.equal(await readFile(file, "utf8"), before);
+  assert.deepEqual(f.reports.map(({ message }) => message), ["0 state file(s) to change."]);
+  await assert.rejects(stat(backupRoot), { code: "ENOENT" });
+});
+
+test("a Colleague record of the wrong shape refuses the rename, naming its file, before any record changes", async t => {
+  for (const [name, value, refusal] of [
+    ["invalid JSON", "{not json", /colleague\/43\/conversation\.json: Colleague conversation state is invalid/u],
+    ["an unknown schema", { ...chat("43", "colleague_43"), schemaVersion: 9 }, /colleague\/43\/conversation\.json: Colleague history has an unsupported shape/u],
+    ["another owner's record", chat("44", "colleague_43"), /colleague\/43\/conversation\.json: Colleague history has an unsupported shape/u],
+    ["watches that are no list", { ...chat("43", "colleague_43"), watches: { shopWatch } }, /colleague\/43\/conversation\.json: Colleague history has an unsupported shape/u]
+  ]) {
+    await t.test(name, async st => {
+      const f = await fixture(st);
+      const { backupRoot, run } = sourceRename(f);
+      const good = await f.write("42", chat("42", "colleague_42", [shopWatch]));
+      const before = await readFile(good, "utf8");
+      await f.write("43", value);
+      await assert.rejects(run(true), refusal);
+      assert.equal(await readFile(good, "utf8"), before);
+      await assert.rejects(stat(backupRoot), { code: "ENOENT" });
+    });
+  }
+  const f = await fixture(t);
+  await writeLearn(f, "42", "lobby", chat("42", "colleague_lobby"));
+  await assert.rejects(sourceRename(f).run(false), /colleague\/42\/learn\/lobby\.json: Colleague history has an unsupported shape/u,
+    "a Learn thread is checked against its own owner key");
+  // Each source name follows the watch source rule, and the two differ.
+  for (const [from, to] of [["", "staging"], ["deployment", ""], ["Deployment", "staging"], ["deployment", "staging area"],
+    ["deployment", "deployment"], [null, "staging"]]) {
+    await assert.rejects(sourceRename(f, { from, to }).run(false), /takes two different source names/u, `${from} -> ${to}`);
+  }
+  // The condition renames are a plain map of condition names, each new name once.
+  for (const conditions of [null, "live", ["live", "running"], new Map([["live", "running"]]), { live: "" }, { "": "running" },
+    { live: "Running now" }, { live: 1 }, { live: "running", up: "running" }]) {
+    await assert.rejects(sourceRename(f, { conditions }).run(false), /takes its condition renames as old name -> new name, each new name once/u,
+      JSON.stringify(conditions) ?? String(conditions));
+  }
+});
+
+test("a second rename of the same watch source changes nothing", async t => {
+  const f = await fixture(t);
+  const first = sourceRename(f);
+  const file = await f.write("42", chat("42", "colleague_42", [shopWatch]));
+  await first.run(true);
+  const upgraded = await readFile(file, "utf8");
+  const manifest = await readFile(path.join(first.backupRoot, "manifest.json"), "utf8");
+  assert.deepEqual(await first.run(true), { watches: 0 }, "a retry finds none left to rename");
+  assert.equal(await readFile(path.join(first.backupRoot, "manifest.json"), "utf8"), manifest, "a retry resumes the same backup");
+  f.reports.length = 0;
+  const second = sourceRename(f, { backup: "later" });
+  assert.deepEqual(await second.run(true), { watches: 0 });
+  assert.equal(await readFile(file, "utf8"), upgraded);
+  assert.deepEqual(f.reports.map(({ message }) => message), ["0 state file(s) to change."]);
+  await assert.rejects(stat(second.backupRoot), { code: "ENOENT" });
 });

@@ -35,20 +35,20 @@ import {
   protectedError
 } from "./fileAreaItems.js";
 import {
-  STAGING_FOLDER,
-  publishStaged,
-  removeStaleStaging,
-  repoStagingFolder,
-  stagedItem,
+  INCOMING_FOLDER,
+  placeIncoming,
+  removeStaleIncoming,
+  repoIncomingFolder,
+  incomingItem,
   withAreaFolder,
-  withStaging
-} from "./fileAreaStaging.js";
+  withIncoming
+} from "./fileAreaIncoming.js";
 import { resolveTarget, transferEntry } from "./fileAreaTransfer.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 // Files areas: authorization, area-to-root resolution, locking and the
-// per-operation file actions. Staging is in fileAreaStaging.js and server-side
+// per-operation file actions. Staging is in fileAreaIncoming.js and server-side
 // move and copy between areas in fileAreaTransfer.js.
 // Repo's own browsing and editing belong to the source editor; Files reaches
 // Repo only to list destination folders, upload, and move or copy items.
@@ -96,7 +96,7 @@ function createFileArea(project, { repoChanged }) {
     const key = definition.scope === "session" ? `${area}:${session.sessionId}` : area;
     const policy = area === "repo" ? sourceEditorFilePolicy() : {
       ...sourceEditorFilePolicy(),
-      exclude: [`${STAGING_FOLDER}/**`],
+      exclude: [`${INCOMING_FOLDER}/**`],
       protectSourceContract: false,
       maxTreeDepth: Infinity,
       maxTreeEntries: Infinity
@@ -123,11 +123,11 @@ function createFileArea(project, { repoChanged }) {
        */
       if (!write) return { key, session, run: (perform) => perform(context(root, { location: root, missing: !rootStats })) };
       await mkdir(root, { recursive: true, mode: vibe64SharedModes().directory });
-      const writeContext = context(root, { location: root, staging: STAGING_FOLDER });
+      const writeContext = context(root, { location: root, incoming: INCOMING_FOLDER });
       // Each project area's writes share one lock; Backups' also covers retention.
       const lock = area === "backups" ? withProjectBackupsLock : withProjectDropZoneLock;
       const run = (perform) => lock(stateRoot, async () => {
-        await removeStaleStaging(writeContext);
+        await removeStaleIncoming(writeContext);
         return perform(writeContext);
       });
       /**
@@ -142,7 +142,7 @@ function createFileArea(project, { repoChanged }) {
         throw sourceEditorError("This session has no Repo files.", "vibe64_files_repo_unavailable", {}, 409);
       }
       if (!write) return { key, session, run: (perform) => perform(context(root)) };
-      const writeContext = context(root, { staging: await repoStagingFolder(root) });
+      const writeContext = context(root, { incoming: await repoIncomingFolder(root) });
       /**
        * Repo writes take the same exclusive source write as the source editor;
        * a move or copy refuses rather than waits while it is held.
@@ -150,7 +150,7 @@ function createFileArea(project, { repoChanged }) {
       const run = async (perform, options = {}) => {
         const { waitMs = 0 } = options;
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-          await removeStaleStaging(writeContext);
+          await removeStaleIncoming(writeContext);
           try {
             return await perform(writeContext);
           } finally {
@@ -211,8 +211,8 @@ function createFileArea(project, { repoChanged }) {
             throw sourceEditorError("The Drop Zone is unavailable while this session closes.", "vibe64_files_drop_zone_closing", {}, 409);
           }
           await mkdir(sessionPaths.dropZoneRoot, { recursive: true });
-          const dropZone = context(sessionPaths.dropZoneRoot, { location: sessionPaths.dropZoneRoot, staging: STAGING_FOLDER });
-          if (write) await removeStaleStaging(dropZone);
+          const dropZone = context(sessionPaths.dropZoneRoot, { location: sessionPaths.dropZoneRoot, incoming: INCOMING_FOLDER });
+          if (write) await removeStaleIncoming(dropZone);
           return perform(dropZone);
         });
       }
@@ -506,11 +506,11 @@ async function createAreaTextFile(context, input) {
       messageCode: "vibe64_files_new_file_binary"
     });
   }
-  await withAreaFolder(context, folderOf(relativePath), (destination) => withStaging(context, async (staging) => {
-    const staged = stagedItem(staging);
+  await withAreaFolder(context, folderOf(relativePath), (destination) => withIncoming(context, async (incoming) => {
+    const staged = incomingItem(incoming);
     try {
       await writeFile(staged, content, { flag: "wx", mode: vibe64SharedModes().file });
-      await publishStaged(context, staging, staged, destination.at(path.posix.basename(relativePath)));
+      await placeIncoming(context, incoming, staged, destination.at(path.posix.basename(relativePath)));
     } finally {
       await rm(staged, { force: true });
     }
@@ -526,12 +526,12 @@ async function uploadIntoArea(context, input, readUpload) {
   if (!(await sourceEditorPathStats(context.sourceRoot, folder)).isDirectory()) {
     throw sourceEditorError("Choose a folder to upload into.", "vibe64_invalid_source_editor_upload_folder");
   }
-  return withStaging(context, (staging) => receiveUpload(context, staging, input, readUpload, requested));
+  return withIncoming(context, (incoming) => receiveUpload(context, incoming, input, readUpload, requested));
 }
 
-async function receiveUpload(context, staging, input, readUpload, requested) {
+async function receiveUpload(context, incoming, input, readUpload, requested) {
   const folder = folderOf(requested);
-  const staged = stagedItem(staging);
+  const staged = incomingItem(incoming);
   try {
     let count = 0;
     for await (const part of readUpload()) {
@@ -554,7 +554,7 @@ async function receiveUpload(context, staging, input, readUpload, requested) {
     const publish = context.publish || ((perform) => perform(context));
     return await publish((current) => withAreaFolder(current, folder, async (destination) => {
       const target = await resolveTarget(current, destination, folder, path.posix.basename(requested), input.conflict);
-      await publishStaged(current, staging, staged, destination.at(path.posix.basename(target.relativePath)), { replace: target.replace });
+      await placeIncoming(current, incoming, staged, destination.at(path.posix.basename(target.relativePath)), { replace: target.replace });
       return { ok: true, path: target.relativePath };
     }));
   } catch (error) {

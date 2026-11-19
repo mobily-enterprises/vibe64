@@ -312,24 +312,24 @@ function sessionArchiveMetadataPath(rootPaths = {}, sessionId = "") {
   return path.join(rootPaths.archivedSessionsRoot, `${assertValidVibe64SessionId(sessionId)}.json`);
 }
 
-function sessionArchiveStagingRoot(rootPaths = {}) {
-  return path.join(rootPaths.archivedSessionsRoot, ".staging");
+function sessionArchivePackingRoot(rootPaths = {}) {
+  return path.join(rootPaths.archivedSessionsRoot, ".packing");
 }
 
-function renewalArchiveStagingRoot(rootPaths = {}) {
+function renewalArchivesRoot(rootPaths = {}) {
   return path.join(rootPaths.archivedSessionsRoot, ".renewals");
 }
 
 function preparedRenewalArchiveRoot(rootPaths = {}, sessionId = "") {
   return path.join(
-    renewalArchiveStagingRoot(rootPaths),
+    renewalArchivesRoot(rootPaths),
     assertValidVibe64SessionId(sessionId)
   );
 }
 
 function buildingRenewalArchiveRoot(rootPaths = {}, sessionId = "") {
   return path.join(
-    renewalArchiveStagingRoot(rootPaths),
+    renewalArchivesRoot(rootPaths),
     ".building",
     assertValidVibe64SessionId(sessionId)
   );
@@ -337,7 +337,7 @@ function buildingRenewalArchiveRoot(rootPaths = {}, sessionId = "") {
 
 function publishingRenewalArchiveRoot(rootPaths = {}, sessionId = "") {
   return path.join(
-    renewalArchiveStagingRoot(rootPaths),
+    renewalArchivesRoot(rootPaths),
     ".publishing",
     assertValidVibe64SessionId(sessionId)
   );
@@ -363,17 +363,17 @@ function closingSessionRoot(rootPaths = {}, sessionId = "") {
   return path.join(rootPaths.closingSessionsRoot, assertValidVibe64SessionId(sessionId));
 }
 
-function sessionCreationStagingRoot(rootPaths = {}) {
+function sessionCreatingRoot(rootPaths = {}) {
   return path.join(rootPaths.activeSessionsRoot, ".creating");
 }
 
 async function removeStaleSessionCreationStages(rootPaths = {}, sessionId = "") {
   const normalizedSessionId = assertValidVibe64SessionId(sessionId);
-  const stagingRoot = sessionCreationStagingRoot(rootPaths);
-  const entries = await readDirectoryEntries(stagingRoot);
+  const pendingRoot = sessionCreatingRoot(rootPaths);
+  const entries = await readDirectoryEntries(pendingRoot);
   await Promise.all(entries
     .filter((entry) => entry.isDirectory() && entry.name.startsWith(`${normalizedSessionId}.`))
-    .map((entry) => rm(path.join(stagingRoot, entry.name), {
+    .map((entry) => rm(path.join(pendingRoot, entry.name), {
       force: true,
       recursive: true
     })));
@@ -464,15 +464,15 @@ export {
   readDirectoryEntries,
   readTextIfExists,
   removeStaleSessionCreationStages,
-  renewalArchiveStagingRoot,
+  renewalArchivesRoot,
   resolveVibe64SessionPaths,
   revisionNumber,
   runCommand,
   sessionArchiveMetadataPath,
   sessionArchivePath,
   sessionArchiveRecordExists,
-  sessionArchiveStagingRoot,
-  sessionCreationStagingRoot,
+  sessionArchivePackingRoot,
+  sessionCreatingRoot,
   sessionPathsFromRoot,
   sessionRecordExists,
   sortedDirectoryNames,

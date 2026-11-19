@@ -2016,3 +2016,32 @@ lazy backfill. The exec helper's root-owned staging access files, and a host's
 own deployment records, belong to the host and are not part of this upgrade.
 Focused evidence: `stagingEnvScopeUpgrade.unit.test.js` and
 `stateUpgrades.unit.test.js`.
+
+## Staging folder names (`20261119-staging-folders`)
+
+Staging names only the app a host runs on the workspace's own server, so the
+folders whose names said "deployment" or "staging" for something else were
+renamed. In each project state directory (`projects/<slug>`) the script moves:
+`deployments`, the project's Staging records, to `staging`; Files' unfinished
+items from `.vibe64-staging` to `.vibe64-incoming` in `drop-zone`, `backups` and
+each active or closing session's `drop-zone`; and the archive packing folder
+`sessions/archived/.staging` to `sessions/archived/.packing`. Each folder moves
+whole with what it holds, by one rename, so nothing is copied or backed up.
+Writers are stopped, so an item an upload or an archive left there moves as it
+was: Files removes unfinished items after seven days and the session store
+still refuses a session id whose packing leftover remains, as before.
+
+A folder already moved is skipped, so a retry changes nothing. A project that
+holds both names, an old name that is not a folder, or a symbolic link on the
+way stops the upgrade before any folder moves. Files inside session archives
+keep the names they were packed with, and Repo's unfinished items in a
+checkout's Git directory (`vibe64-file-staging`) are not moved; neither is read
+again. A host's own files inside `staging` are the host's, and move with it.
+
+The same release stops naming staging when it refuses an old scope word:
+runtime config refuses `prod`, and `vibe64-helper env` refuses `prod` and
+`production`, as it refuses any unknown scope, because Production is now a
+host's own Deploy to production and never another name for Staging. Env values
+that missed `20261114-staging-env-scope` still fail to read.
+Focused evidence: `stagingFoldersUpgrade.unit.test.js` and
+`stateUpgrades.unit.test.js`.

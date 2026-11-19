@@ -43,7 +43,7 @@ export function useVibe64Integrations(context, selectedId) {
   const configuration = ref(null);
   const baseline = ref("");
   const baseHash = ref(null);
-  const releaseId = ref("");
+  const stagingReleaseId = ref("");
   const staging = computed(() => context.value.integrationEnvironment === "staging");
   const fieldErrors = ref({});
   const error = ref("");
@@ -68,7 +68,7 @@ export function useVibe64Integrations(context, selectedId) {
     configuration.value = draft ? JSON.parse(JSON.stringify(draft.configuration)) : null;
     baseline.value = draft?.baseline || "";
     baseHash.value = draft?.baseHash ?? null;
-    releaseId.value = "";
+    stagingReleaseId.value = "";
     fieldErrors.value = {};
     error.value = "";
     changedElsewhere.value = false;
@@ -179,7 +179,7 @@ export function useVibe64Integrations(context, selectedId) {
     return { turnId: request.turnId, requestId: request.requestId, configurationHash: baseHash.value };
   });
   const connectionRefresh = ref(0);
-  const connectionKey = computed(() => `${path.value}/${selectedId.value || ""}/${baseHash.value || ""}/${releaseId.value}/${setupRequest.value?.turnId || ""}/${setupRequest.value?.requestId || ""}/${connectionRefresh.value}`);
+  const connectionKey = computed(() => `${path.value}/${selectedId.value || ""}/${baseHash.value || ""}/${stagingReleaseId.value}/${setupRequest.value?.turnId || ""}/${setupRequest.value?.requestId || ""}/${connectionRefresh.value}`);
   function refreshConnection() {
     connectionRefresh.value += 1;
   }
@@ -188,7 +188,7 @@ export function useVibe64Integrations(context, selectedId) {
   const paymentOperation = ref("");
   watch([connectionKey, dirty, active], () => { paymentResult.value = null; paymentError.value = ""; paymentOperation.value = ""; });
   async function runPaymentOperation({ operation, paymentEnvironment, reviewId, providerId, subjectId, collection, after }) {
-    if ((staging.value && (!releaseId.value || context.value.owner !== true)) || context.value.owner === false || !active.value || dirty.value || changedElsewhere.value ||
+    if ((staging.value && (!stagingReleaseId.value || context.value.owner !== true)) || context.value.owner === false || !active.value || dirty.value || changedElsewhere.value ||
         setupCommand.isRunning || command.isRunning || (!staging.value && context.value.sourceOperationsSuspended)) return;
     const binding = configuration.value?.extensions?.payments?.environments?.[paymentEnvironment];
     if (!binding || binding.integrationId !== selectedId.value) return;
@@ -204,7 +204,7 @@ export function useVibe64Integrations(context, selectedId) {
     paymentResult.value = null;
     try {
       const result = await setupCommand.run({ path: `${path.value}/${encodeURIComponent(selectedId.value)}/setup`,
-        body: { operation, paymentEnvironment, ...(operation === "payments-history" ? { subjectId, collection, after: after ?? null } : {}), ...(staging.value ? { releaseId: releaseId.value } : {}), ...(["payments-publish", "payments-recover"].includes(operation) ? { reviewId } : {}), ...(operation === "payments-recover" ? { providerId } : {}) } });
+        body: { operation, paymentEnvironment, ...(operation === "payments-history" ? { subjectId, collection, after: after ?? null } : {}), ...(staging.value ? { stagingReleaseId: stagingReleaseId.value } : {}), ...(["payments-publish", "payments-recover"].includes(operation) ? { reviewId } : {}), ...(operation === "payments-recover" ? { providerId } : {}) } });
       if (!disposed && key === connectionKey.value && !dirty.value) paymentResult.value = result;
     } catch {
       if (!disposed && key === connectionKey.value) {
@@ -234,17 +234,17 @@ export function useVibe64Integrations(context, selectedId) {
   }
   // Whether the open session's conversation can be refreshed after a setup step.
   function conversationRefreshable() {
-    // readable-check: allow method-probe - optional operation: the Dashboard without an open session (a deployed release's integrations) has no conversation to refresh
+    // readable-check: allow method-probe - optional operation: the Dashboard without an open session (the staging release's integrations) has no conversation to refresh
     return typeof context.value.refreshConversation === "function";
   }
   async function runSetup(operation = "status") {
     const selected = configuration.value?.integrations[selectedId.value];
     if (connectorDefinitions.some((provider) => provider.id === selected?.provider && integrationConfigurationOnly(provider, selected?.settings || {}))) return;
-    if ((staging.value && (!releaseId.value || context.value.owner !== true)) || !active.value || !Object.hasOwn(configuration.value?.integrations || {}, selectedId.value) || dirty.value || changedElsewhere.value ||
+    if ((staging.value && (!stagingReleaseId.value || context.value.owner !== true)) || !active.value || !Object.hasOwn(configuration.value?.integrations || {}, selectedId.value) || dirty.value || changedElsewhere.value ||
         setupCommand.isRunning || command.isRunning || (!staging.value && context.value.sourceOperationsSuspended)) return;
     const key = connectionKey.value;
     const endpoint = `${path.value}/${encodeURIComponent(selectedId.value)}/setup`;
-    const releaseSelection = staging.value ? { releaseId: releaseId.value } : {};
+    const releaseSelection = staging.value ? { stagingReleaseId: stagingReleaseId.value } : {};
     connectionError.value = "";
     try {
       const result = await setupCommand.run({ path: endpoint, body: {
@@ -330,7 +330,7 @@ export function useVibe64Integrations(context, selectedId) {
     configuration.value = JSON.parse(JSON.stringify(payload.configuration));
     baseline.value = JSON.stringify(payload.configuration);
     baseHash.value = payload.baseHash;
-    releaseId.value = staging.value ? payload.releaseId || "" : "";
+    stagingReleaseId.value = staging.value ? payload.stagingReleaseId || "" : "";
     changedElsewhere.value = false;
     error.value = "";
     fieldErrors.value = {};
@@ -385,5 +385,5 @@ export function useVibe64Integrations(context, selectedId) {
     if (result?.data?.configuration && !result.isError && !disposed && path.value === requestPath) apply(result.data);
   }
 
-  return { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, releaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard };
+  return { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, stagingReleaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard };
 }

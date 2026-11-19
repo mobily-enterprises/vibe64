@@ -34,8 +34,8 @@ test("release commands reject caller Env and non-application execution", () => {
   const request = {
     command: process.execPath,
     actor: "app",
-    envPolicy: "deployment",
-    releaseEnvironmentFile: "/release/artifact/service/environment",
+    envPolicy: "staging",
+    stagingEnvironmentFile: "/release/artifact/service/environment",
     runtimes: []
   };
   for (const change of [
@@ -44,11 +44,11 @@ test("release commands reject caller Env and non-application execution", () => {
     { envPolicy: "session" },
     { env: { API_KEY: "session-value" } },
     { baseEnv: { API_KEY: "host-value" } },
-    { releaseEnvironmentFile: "relative/environment" },
-    { releaseEnvironmentFile: 123 }
+    { stagingEnvironmentFile: "relative/environment" },
+    { stagingEnvironmentFile: 123 }
   ]) {
     assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...change }),
-      { code: "vibe64_command_release_environment_invalid" });
+      { code: "vibe64_command_staging_environment_invalid" });
   }
   assert.equal(normalizeVibe64CommandRequest(request).inheritProcessEnv, false);
 });
@@ -58,10 +58,10 @@ test("release commands exclude editable Env and cannot fall back to local execut
     command: process.execPath,
     args: ["-e", "throw new Error('must not execute locally')"],
     actor: "app",
-    envPolicy: "deployment",
-    releaseEnvironmentFile: "/release/artifact/service/environment",
+    envPolicy: "staging",
+    stagingEnvironmentFile: "/release/artifact/service/environment",
     runtimes: [],
-    project: { deploymentEnv: { RELEASE_TEST_KEY: "edited-value" } },
+    project: { stagingEnv: { RELEASE_TEST_KEY: "edited-value" } },
     session: { databaseEnv: { RELEASE_TEST_KEY: "session-value" } }
   };
   const previous = process.env.RELEASE_TEST_KEY;
@@ -72,13 +72,13 @@ test("release commands exclude editable Env and cannot fall back to local execut
   });
   const unavailable = await runVibe64Command(request);
   assert.equal(unavailable.ok, false);
-  assert.equal(unavailable.code, "vibe64_release_environment_unavailable");
+  assert.equal(unavailable.code, "vibe64_staging_environment_unavailable");
   let called = false;
   const release = installVibe64ManagedExecutionProvider({
     async stopExecution() { throw new Error("Unexpected stop"); },
     async runCommand(normalized, context) {
       called = true;
-      assert.equal(normalized.releaseEnvironmentFile, request.releaseEnvironmentFile);
+      assert.equal(normalized.stagingEnvironmentFile, request.stagingEnvironmentFile);
       assert.equal(context.env.RELEASE_TEST_KEY, undefined);
       assert.ok(context.env.HOME);
       assert.ok(context.env.PATH);
@@ -89,24 +89,24 @@ test("release commands exclude editable Env and cannot fall back to local execut
   const fallback = await runVibe64Command(request);
   assert.equal(called, true);
   assert.equal(fallback.ok, false);
-  assert.equal(fallback.code, "vibe64_release_environment_unavailable");
+  assert.equal(fallback.code, "vibe64_staging_environment_unavailable");
 });
 
-test("application accounts are only for finite application commands", () => {
-  const request = { command: process.execPath, actor: "app", applicationAccount: "v64a_0123456789ab", runtimes: [] };
-  assert.equal(normalizeVibe64CommandRequest(request).applicationAccount, "v64a_0123456789ab");
-  assert.equal(normalizeVibe64CommandRequest({ ...request, applicationAccount: undefined }).applicationAccount, "");
+test("staging accounts are only for finite application commands", () => {
+  const request = { command: process.execPath, actor: "app", stagingAccount: "v64s_0123456789ab", runtimes: [] };
+  assert.equal(normalizeVibe64CommandRequest(request).stagingAccount, "v64s_0123456789ab");
+  assert.equal(normalizeVibe64CommandRequest({ ...request, stagingAccount: undefined }).stagingAccount, "");
   for (const change of [
     { actor: "daemon" },
     { actor: "named-user" },
     { mode: "detached" },
     { mode: "pty" },
-    { applicationAccount: "Root" },
-    { applicationAccount: "../v64a" },
-    { applicationAccount: 1000 }
+    { stagingAccount: "Root" },
+    { stagingAccount: "../v64a" },
+    { stagingAccount: 1000 }
   ]) {
     assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...change }),
-      { code: "vibe64_command_application_account_invalid" });
+      { code: "vibe64_command_staging_account_invalid" });
   }
   // What its release allows the application's sandbox travels only with the
   // application's own command; the host helper decides what it grants.
@@ -114,7 +114,7 @@ test("application accounts are only for finite application commands", () => {
   assert.deepEqual(normalizeVibe64CommandRequest({ ...request, sandboxAllowances: ["fuse", "gvisor"] }).sandboxAllowances,
     ["fuse", "gvisor"]);
   for (const change of [
-    { applicationAccount: undefined, sandboxAllowances: ["gvisor"] },
+    { stagingAccount: undefined, sandboxAllowances: ["gvisor"] },
     { sandboxAllowances: "gvisor" },
     { sandboxAllowances: ["gvisor", "gvisor"] },
     { sandboxAllowances: ["G Visor"] },
@@ -125,26 +125,26 @@ test("application accounts are only for finite application commands", () => {
   }
 });
 
-test("application account commands run as that account and never fall back to local execution", async (t) => {
+test("staging account commands run as that account and never fall back to local execution", async (t) => {
   const account = os.userInfo();
   const request = {
     command: process.execPath,
     args: ["-e", "throw new Error('must not execute locally')"],
     actor: "app",
-    applicationAccount: account.username,
-    envPolicy: "deployment",
+    stagingAccount: account.username,
+    envPolicy: "staging",
     runtimes: []
   };
   const unavailable = await runVibe64Command(request);
   assert.equal(unavailable.ok, false);
-  assert.equal(unavailable.code, "vibe64_application_account_unavailable");
+  assert.equal(unavailable.code, "vibe64_staging_account_unavailable");
   let called = false;
   const release = installVibe64ManagedExecutionProvider({
     async stopExecution() { throw new Error("Unexpected stop"); },
     async runCommand(normalized, context) {
       called = true;
-      assert.equal(normalized.applicationAccount, account.username);
-      assert.equal(context.actor.applicationAccount, true);
+      assert.equal(normalized.stagingAccount, account.username);
+      assert.equal(context.actor.stagingAccount, true);
       assert.equal(context.actor.requiresRealUser, false);
       assert.equal(context.actor.user.username, account.username);
       assert.equal(context.actor.user.uid, account.uid);
@@ -156,7 +156,7 @@ test("application account commands run as that account and never fall back to lo
   const fallback = await runVibe64Command(request);
   assert.equal(called, true);
   assert.equal(fallback.ok, false);
-  assert.equal(fallback.code, "vibe64_application_account_unavailable");
+  assert.equal(fallback.code, "vibe64_staging_account_unavailable");
 });
 
 // The editor cannot enter an application's area; the host helper resolves and
@@ -180,8 +180,8 @@ test("an application command's working directory reaches the host as given, insi
   });
   t.after(release);
   const request = {
-    command: process.execPath, actor: "app", applicationAccount: os.userInfo().username, allowedRoots: [path.join(area, "app")],
-    cwd: path.join(area, "app", "home"), envPolicy: "deployment", runtimes: []
+    command: process.execPath, actor: "app", stagingAccount: os.userInfo().username, allowedRoots: [path.join(area, "app")],
+    cwd: path.join(area, "app", "home"), envPolicy: "staging", runtimes: []
   };
   assert.equal((await runVibe64Command(request)).ok, true);
   assert.deepEqual(seen, [path.join(area, "app", "home")]);
@@ -190,9 +190,9 @@ test("an application command's working directory reaches the host as given, insi
   assert.equal(seen.length, 1);
 });
 
-// The runner loads the release environment file itself, as the execution's own
+// The runner loads the staging environment file itself, as the execution's own
 // user: no unit property makes root read it.
-test("managed release runner loads its release environment file as its user, with host-owned identity", async (t) => {
+test("managed release runner loads its staging environment file as its user, with host-owned identity", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-release-env-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const payloadPath = path.join(root, "command.json");
@@ -203,7 +203,7 @@ test("managed release runner loads its release environment file as its user, wit
     args: ["-e", "process.stdout.write(JSON.stringify({key:process.env.RELEASE_TEST_KEY,home:process.env.HOME,user:process.env.USER,path:process.env.PATH}))"],
     cwd: root,
     env: { HOME: root, USER: "fixture", PATH: "/host/runtime/bin" },
-    releaseEnvironmentFile: environmentFile,
+    stagingEnvironmentFile: environmentFile,
     executionId: randomUUID(),
     schema: "vibe64.managed-execution.command",
     schemaVersion: 1
@@ -239,7 +239,7 @@ test("managed release runner consumes input and records child failure without pe
     `],
     cwd: root,
     env: { HOME: root, USER: "fixture", PATH: "/host/runtime/bin" },
-    releaseEnvironmentFile: environmentFile,
+    stagingEnvironmentFile: environmentFile,
     inputPresent: true,
     inputBase64: Buffer.from(input).toString("base64"),
     executionId,

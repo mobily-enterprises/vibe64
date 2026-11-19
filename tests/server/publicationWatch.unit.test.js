@@ -25,7 +25,7 @@ const live = { ok: true, releases: [release("1.0.0", "succeeded"), dryRun] };
 const failed = { ok: true, releases: [release("1.0.1", "failed"), release("1.0.0", "succeeded")] };
 const partial = { ok: true, releases: [release("1.0.2", "partial")] };
 
-test("the publication watch source registers with Colleague and reports live once the release is live", async () => {
+test("the publication watch source registers with Colleague and reports live once the release is published on every target", async () => {
   const actions = stateActions([none, running, live, live]);
   const registry = createWatchSources();
   registry.register(publicationWatchSource({ actionCatalogue: actions }));
@@ -44,7 +44,7 @@ test("the publication watch source registers with Colleague and reports live onc
     reasons.push([observation.summary, update.reason]);
   }
   assert.deepEqual(reasons, [["Nothing has been released from this project yet.", ""], ["v1.0.0 is being released.", ""],
-    ["v1.0.0 is live on every target.", "live"], ["v1.0.0 is live on every target.", ""]]);
+    ["v1.0.0 is published on every target.", "live"], ["v1.0.0 is published on every target.", ""]]);
   assert.ok(actions.calls.every(call => call.actionId === "vibe64.publication.state.read" && call.projectSlug === "books" &&
     call.channel === "automation"), "every reading names the watched project under the watcher's own context");
 });

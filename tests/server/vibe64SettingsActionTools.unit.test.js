@@ -439,6 +439,6 @@ test("settings tool descriptions describe the project, not any host's product", 
     const { description = "" } = settingsTool(operation);
     assert.doesNotMatch(description, /\bhosted\b/iu, operation);
   }
-  assert.match(settingsTool("env.read").description, /not a published application's Staging Env/u);
-  assert.match(settingsTool("env.user-values.save").description, /does not manage a published application's Env/u);
+  assert.match(settingsTool("env.read").description, /not the staging app's Staging Env/u);
+  assert.match(settingsTool("env.user-values.save").description, /does not manage the staging app's Env/u);
 });

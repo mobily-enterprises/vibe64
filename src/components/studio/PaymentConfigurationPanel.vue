@@ -4,7 +4,7 @@ import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
 import { validatePaymentConfiguration } from "@jskit-ai/payments-core/shared";
 import { integrationCallbackUrl } from "@/lib/integrationCallbackUrl.js";
 
-const props = defineProps({ modelValue: { type: Object, required: true }, integrationId: { type: String, required: true }, disabled: Boolean, applicationPublicUrl: { type: String, default: "" }, management: { type: Object, default: null }, managementError: { type: String, default: "" }, managementOperation: { type: String, default: "" }, managementLoading: Boolean, managementDisabled: Boolean, canPrepare: Boolean });
+const props = defineProps({ modelValue: { type: Object, required: true }, integrationId: { type: String, required: true }, disabled: Boolean, stagingPublicUrl: { type: String, default: "" }, management: { type: Object, default: null }, managementError: { type: String, default: "" }, managementOperation: { type: String, default: "" }, managementLoading: Boolean, managementDisabled: Boolean, canPrepare: Boolean });
 const emit = defineEmits(["update:modelValue", "set-env", "manage", "prepare"]);
 const paymentSetups = Object.fromEntries(connectorDefinitions.filter((provider) => provider.paymentSetup).map((provider) => [provider.id, provider.paymentSetup]));
 const payments = computed(() => props.modelValue.extensions?.payments);
@@ -40,8 +40,8 @@ const validation = computed(() => {
 const connections = computed(() => Object.entries(props.modelValue.integrations).filter(([, value]) => ["stripe", "paddle"].includes(value.provider) && value.accountMode === "shared" && value.authentication.method === "api-key").map(([value, slot]) => ({ value, title: `${slot.displayName || slot.provider} (${value})` })));
 // A field shows one message (Vuetify's default maxErrors), so each binding gets the first one itself, not a new array.
 const errors = (path) => validation.value.find((error) => error.path === `extensions.payments/${path}`)?.message || "";
-const webhookUrl = (integrationId) => integrationCallbackUrl(props.applicationPublicUrl, `/integrations/${integrationId}/webhook`);
-const returnUrl = computed(() => integrationCallbackUrl(props.applicationPublicUrl, "/billing"));
+const webhookUrl = (integrationId) => integrationCallbackUrl(props.stagingPublicUrl, `/integrations/${integrationId}/webhook`);
+const returnUrl = computed(() => integrationCallbackUrl(props.stagingPublicUrl, "/billing"));
 function update(value) {
   if (!props.disabled) emit("update:modelValue", { ...props.modelValue, extensions: { ...props.modelValue.extensions, payments: value } });
 }
@@ -120,7 +120,7 @@ function setEnv(reference, value, secret) {
           <p>This report is not provider approval. Unknown and manual checks still need evidence before launch.</p>
           <dl>
             <template v-for="check in management.checks" :key="check.id">
-              <dt class="font-weight-bold mt-3">{{ ({ credentials: 'Credentials', account: 'Merchant identity', charges: 'Payment acceptance', payouts: 'Payouts', catalogue: 'Products and prices', webhook: 'Payment events', checkout: 'Checkout and billing portal', site: 'Website and provider approval', deployment: 'Published application' })[check.id] }} · {{ ({ passed: 'Passed', failed: 'Needs attention', unknown: 'Not verified', manual: 'Manual check required' })[check.status] }}</dt>
+              <dt class="font-weight-bold mt-3">{{ ({ credentials: 'Credentials', account: 'Merchant identity', charges: 'Payment acceptance', payouts: 'Payouts', catalogue: 'Products and prices', webhook: 'Payment events', checkout: 'Checkout and billing portal', site: 'Website and provider approval', deployment: 'Running app' })[check.id] }} · {{ ({ passed: 'Passed', failed: 'Needs attention', unknown: 'Not verified', manual: 'Manual check required' })[check.status] }}</dt>
               <dd class="ml-0">{{ check.detail }}</dd>
             </template>
           </dl>

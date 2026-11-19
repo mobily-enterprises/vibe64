@@ -29,24 +29,24 @@ Commands are exact argument arrays with no placeholder expansion; `{host}` and
 listen address in the `HOST` and `PORT` environment variables and probes the
 Ready when path there. A host may also give Serve, and only Serve, its
 runtime's conventional production setting such as `NODE_ENV=production`; a
-value the project sets on the Serve step or in the deployment's Env wins.
+value the project sets on the Serve step or in the environment's Env wins.
 No step inherits the editor's own `NODE_ENV` or `APP_ENV`.
 
 `- Generated secrets:` names secrets the application needs as a
 stable random value. The host stores one strong random value per name once,
-when the deployment's Env has no entry with that name; it never replaces
+when the environment's Env has no entry with that name; it never replaces
 a value someone set.
 
-`- Setup code:` names the one secret of the deployment the application asks for when
-its first account registers on the deployment's empty database, so that only the
-project owner can create that account. The host generates it like a generated
+`- Setup code:` names the one secret of each environment the application asks
+for when its first account registers on that environment's empty database, so
+that only the project owner can create that account. The host generates it like a generated
 secret, which is why a name may not be in both entries, and shows its value
 only to the project owner. It never prints the value or gives it to an
 assistant. A project declares it only when its application reads that variable.
 
 `- Sandbox allows:` names, from the closed set `fuse` and `gvisor`, what the
-application's own commands and release service may do beyond the ordinary
-sandbox of a deployed application; the result lists them sorted, each at most once. `gvisor`
+application's own commands and staging service may do beyond the ordinary
+sandbox of an app a host runs; the result lists them sorted, each at most once. `gvisor`
 lets them start gVisor's rootless `runsc`; `fuse` lets them mount a FUSE file
 system inside a user and mount namespace of their own. A host grants each only
 where its owner permits it and refuses a deploy that needs one it does not grant;
@@ -57,10 +57,10 @@ each adds to the sandbox.
 and service need beyond its runtimes, by their nixpkgs names: an attribute such
 as `git` or `python313Packages.pip`, or one output of it after `^`, such as
 `gcc-unwrapped^lib`; at most 200, each once, kept in the order given. A host that
-builds the deployment's machine from a package collection installs exactly these
+builds the app's machine from a package collection installs exactly these
 beside its runtimes and refuses a name it doesn't have; a host that runs the
-deployment on a machine it does not build, such as a workspace's own release
-service, ignores the line.
+app on a machine it does not build, such as a workspace's own staging service,
+ignores the line.
 
 `- Instances: up to` names, in backticks, how many identical copies of the
 application a host may run at once behind one address, from 1 to 100; the
@@ -68,7 +68,7 @@ result is `instances: { max }`, 1 without the entry. An application declares
 more only when no copy keeps anything a later request needs (files on its own
 disk, sign-ins in memory or files, a job that must run once): such state
 belongs in a declared resource. A host that runs one copy, such as a
-workspace's own release service, ignores it; a host never guesses it.
+workspace's own staging service, ignores it; a host never guesses it.
 
 ## Services and resources
 
@@ -120,13 +120,15 @@ sentence.
 `APP_ENV` belongs to the host: it gives every step the environment it deploys
 to, `staging` or `production`. The parser refuses a step argument that sets it
 (`APP_ENV=...`) and a Generated secrets or Setup code entry naming it, and
-refuses `SIDE_EFFECTS`, which `APP_ENV` replaced, in the same places; each
-refusal names the fix. `STAGING_REACHES_REAL_PEOPLE` is the host's too: a host
-gives it to a Staging only while the project's owner marks that real people use
-it, so the same places refuse it, as do a service's Setting and Reaches, project
-Env (`vibe64_env_staging_reaches_real_people_reserved`, removal still allowed)
-and a Production Env entry at deploy. The Deployment guidance asks the application to follow
-`APP_ENV` at run time through one helper, never `NODE_ENV`, which only picks
+refuses `SIDE_EFFECTS`, which `APP_ENV` replaced, in the same places and as a
+service's Reaches or Setting (no host gives it: a JSKIT app refuses to start
+while it is set); each refusal names the fix. `STAGING_REACHES_REAL_PEOPLE` is
+the host's too: a host gives it to a Staging only while the project's owner
+marks that real people use it, so the same places refuse it, as do a service's
+Setting and Reaches, project Env (`vibe64_env_staging_reaches_real_people_reserved`,
+removal still allowed) and a Production Env entry at deploy. The Deployment
+guidance asks the application to follow `APP_ENV` at run time through one
+helper, never `NODE_ENV`, which only picks
 optimised builds: in `development` and `test`, email, SMS, push notifications,
 webhooks and connector writes are logged; in `staging`, email and SMS go only
 to `STAGING_EMAIL_TO` and `STAGING_SMS_TO` (logged when unset), or to the

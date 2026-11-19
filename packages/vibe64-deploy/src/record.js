@@ -10,7 +10,7 @@ import path from "node:path";
 // `vibe64-environment` and `vibe64-item=<kind>.<name>`), so `rebuildFromLabels` makes it again on another machine or
 // after a reinstall, and every Plan refreshes from the provider first. The file is its cache, in the editor's private
 // state: one per project and environment (`<root>/<project>/<environment>.json`), written only over the revision the
-// writer read (`expectedRevision`), so a writer that read an older one is refused `deployment_record_stale` rather than
+// writer read (`expectedRevision`), so a writer that read an older one is refused `production_deploy_record_stale` rather than
 // putting back what another wrote since. What labels cannot carry (approvals, the last plan, values kept write-only at
 // the provider, the release each service was last handed) is the file's alone: a record made again from labels hands
 // each service its release again at the next Deploy. Each resource's links (`links`, the link's id by service) are the
@@ -150,7 +150,7 @@ function createRecordStore({ root, now = () => new Date() }) {
 
   /**
    * Keeps a project's environment's record over the revision the writer read (`expectedRevision`, 0 when there was
-   * none): refused `deployment_record_stale` when the file holds another, else written whole as the next revision.
+   * none): refused `production_deploy_record_stale` when the file holds another, else written whole as the next revision.
    * The check and the write run with nothing between them, and the file is replaced at once, never half written.
    * @param {{ project: string, environment: string, record: any, expectedRevision: number }} write
    * @returns {Promise<any>} the record as kept, with its new revision
@@ -159,12 +159,12 @@ function createRecordStore({ root, now = () => new Date() }) {
     const file = fileOf(project, environment);
     if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new TypeError("expectedRevision is the revision read, 0 when there was none.");
     const problem = recordProblem(record);
-    if (problem) throw new RecordError("deployment_record_invalid", problem);
-    if (record.environment !== environment) throw new RecordError("deployment_record_invalid", `The record is ${record.environment}'s, not ${environment}'s.`);
+    if (problem) throw new RecordError("production_deploy_record_invalid", problem);
+    if (record.environment !== environment) throw new RecordError("production_deploy_record_invalid", `The record is ${record.environment}'s, not ${environment}'s.`);
     const current = readFile(file)?.revision ?? 0;
     if (current !== expectedRevision) {
       throw new RecordError(
-        "deployment_record_stale",
+        "production_deploy_record_stale",
         `The ${environment} record changed since it was read (revision ${current}, not ${expectedRevision}): read it again, then decide again.`,
         { expected: expectedRevision, current }
       );
@@ -188,7 +188,7 @@ function createRecordStore({ root, now = () => new Date() }) {
  * The records of a provider project made again from the labels Vibe64 wrote on what it made: one per deployment id,
  * each item from the thing labelled with it (its id, name and size), the choices from those sizes. Things without
  * Vibe64's labels are not Vibe64's and are left out. Two things labelled as the same item of one deployment, or one
- * deployment's things naming two apps or environments, are refused `deployment_labels_conflict`: the labels were
+ * deployment's things naming two apps or environments, are refused `production_deploy_labels_conflict`: the labels were
  * changed outside Vibe64.
  * @param {{ provider: string, inventory: (where: { project: string }) => Promise<Array<{ id: string, name: string, labels: Record<string, string>, size?: string | null }>> }} adapter
  *   `inventory` answers every thing of the provider project with its labels
@@ -210,12 +210,12 @@ async function rebuildFromLabels(adapter, project, { app, environment, organisat
     };
     records.set(deploymentId, record);
     if (record.app !== labels[LABEL.app] || record.environment !== labels[LABEL.environment]) {
-      throw new RecordError("deployment_labels_conflict", `${thing.id} is labelled ${labels[LABEL.app]} ${labels[LABEL.environment]} in ${deploymentId}, which is ${record.app} ${record.environment}.`, { deploymentId, id: thing.id });
+      throw new RecordError("production_deploy_labels_conflict", `${thing.id} is labelled ${labels[LABEL.app]} ${labels[LABEL.environment]} in ${deploymentId}, which is ${record.app} ${record.environment}.`, { deploymentId, id: thing.id });
     }
     const [, kind, name] = item;
     const key = itemKey(kind, name);
     if (record.items[key]) {
-      throw new RecordError("deployment_labels_conflict", `${record.items[key].id} and ${thing.id} are both labelled ${key} of ${deploymentId}.`, { deploymentId, item: key, ids: [record.items[key].id, thing.id] });
+      throw new RecordError("production_deploy_labels_conflict", `${record.items[key].id} and ${thing.id} are both labelled ${key} of ${deploymentId}.`, { deploymentId, item: key, ids: [record.items[key].id, thing.id] });
     }
     const size = thing.size ?? null;
     record.items[key] = { kind, name, id: thing.id, providerName: thing.name, origin: "made", size };
