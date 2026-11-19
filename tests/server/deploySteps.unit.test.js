@@ -433,6 +433,74 @@ test("a count change alone hands no service a release, so none of its instances 
     [`/v1/services/${computers}/releases`, `/v1/services/${web}/releases`]);
 });
 
+/** Each write sent to the provider after `count` requests, but the Deploy's lease: `[method, path]`. */
+const writesAfter = (standIn, count) => requestsAfter(standIn, count).filter((request) => isWrite(request) && !request.path.startsWith("/v1/leases"))
+  .map((request) => [request.method, request.path]);
+/** Each resource's links as mobilynet holds them now: `{ item: [[link id, consumer, state]] }`, ids naming the credentials. */
+const linksHeld = (standIn, kept) => Object.fromEntries(["resource.database", "resource.files"].map((item) => [item,
+  standIn.hosted.service(kept.items[item].id).links.map((link) => [link.id, link.consumer.id, link.state]).sort()]));
+
+test("a redeploy of unchanged code and Stack sends the provider nothing but its lease: every hosted service, link and App Service stays as it was", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  const { items } = first.record;
+  const refreshesOf = () => [items["service.web"].id, items["service.computers"].id].map((id) => standIn.services.refreshes(id).map((one) => one.id));
+  const [links, refreshes, instances] = [linksHeld(standIn, first.record), refreshesOf(), standIn.services.instances(items["service.computers"].id).map((one) => one.id)];
+  const at = standIn.requests().length;
+  const again = await run({ record: first.record, commit: "c1" });
+  assert.equal(again.outcome, "live", again.message);
+  assert.deepEqual(writesAfter(standIn, at), [], "no write but the lease");
+  assert.ok(requestsAfter(standIn, at).some((request) => request.method === "POST" && request.path === "/v1/leases"), "the Deploy held its lease");
+  assert.deepEqual(again.steps.filter((step) => !step.startsWith("wait")), ["ensureDomain", "keepRelease computers", "keepRelease web"]);
+  assert.deepEqual([linksHeld(standIn, again.record), refreshesOf()], [links, refreshes], "the same links (the same logins), no refresh");
+  assert.deepEqual(standIn.services.instances(items["service.computers"].id).map((one) => one.id), instances, "the same machines");
+});
+
+test("a redeploy where one of two services changed hands that one alone its release: no hosted service, link or other service is touched", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  const { items } = first.record;
+  const [web, computers] = [items["service.web"].id, items["service.computers"].id];
+  const links = linksHeld(standIn, first.record);
+  const webInstances = standIn.services.instances(web).map((one) => one.id);
+  // The same commit, with one more package for computers alone: only computers' declaration changes.
+  const changed = stackOf((lines) => lines.map((line) => (line.startsWith("- Packages: `tint2`") ? `${line} \`htop\`` : line)));
+  const at = standIn.requests().length;
+  const second = await run({ stack: changed, record: first.record, commit: "c1" });
+  assert.equal(second.outcome, "live", second.message);
+  assert.deepEqual(writesAfter(standIn, at), [["POST", `/v1/services/${computers}/releases`]], "computers' release, and nothing else");
+  assert.deepEqual(second.steps.filter((step) => !step.startsWith("wait")), ["ensureDomain", "releaseService computers", "checkRefresh computers", "keepRelease web"]);
+  assert.deepEqual(standIn.services.refreshes(web).map((one) => one.kind), ["create"], "no refresh of web");
+  assert.deepEqual(standIn.services.instances(web).map((one) => one.id), webInstances, "web's machines run on");
+  assert.deepEqual(linksHeld(standIn, second.record), links, "the same links (the same logins)");
+});
+
+test("a service whose release failed is handed it again on the next Deploy, while every hosted service and link stays as it was", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  const { items } = first.record;
+  const [web, computers] = [items["service.web"].id, items["service.computers"].id];
+  const links = linksHeld(standIn, first.record);
+  // c2's instances of computers never get healthy: computers keeps c1 and the Deploy fails before web moves.
+  standIn.faults.instancesUnhealthy = true;
+  const failed = await run({ record: first.record, commit: "c2" });
+  standIn.faults.instancesUnhealthy = false;
+  assert.equal(failed.outcome, "failed");
+  settle(standIn);
+  const at = standIn.requests().length;
+  const again = await run({ record: failed.record, commit: "c2" });
+  assert.equal(again.outcome, "live", again.message);
+  assert.deepEqual(writesAfter(standIn, at), [["POST", `/v1/services/${computers}/releases`], ["POST", `/v1/services/${web}/releases`]],
+    "computers handed c2 again and web its first c2: no hosted-service write, no link");
+  assert.deepEqual(linksHeld(standIn, again.record), links, "the same links (the same logins) through the failure and the Deploy after it");
+});
+
 test("a count changed with a new release goes with it: the release starts as many instances as chosen, and one that fails leaves the version before on the chosen count, which the record and the next plan keep", async () => {
   const { standIn, run, record } = setup();
   standIn.setQuota(standIn.projectId, { vcpus: 200, memoryGib: 400 });
