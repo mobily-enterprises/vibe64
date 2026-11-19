@@ -1,5 +1,5 @@
 // Where the helper keeps what it makes outside its own folders: the accounts it adds and how they are numbered,
-// the service units it installs and the staging sudo rules it writes. Each goes to the system's own place unless
+// the service units it installs and the staging keys and sudo rules it writes. Each goes to the system's own place unless
 // the host's helper settings (exec-helper.env) name another, for a host whose system files are not where it keeps
 // them or cannot be written. The same settings may name the command its later runs start it with.
 
@@ -7,11 +7,14 @@ import path from "node:path";
 import process from "node:process";
 
 import { helperSettings } from "./commandEnvironment.js";
+import { HOST_SETTINGS_ROOT } from "./hostAccounts.js";
 
 const ACCOUNT_DATABASES = Object.freeze(["files", "extrausers"]);
 // systemd's folder for the system's own units, and sudo's for added rules.
 const SYSTEMD_UNIT_ROOT = "/etc/systemd/system";
 const SUDOERS_ROOT = "/etc/sudoers.d";
+// The folder host setup's SSH policy names for application accounts' keys.
+const STAGING_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "staging-ssh");
 // A command a sudo rule, a unit's ExecStart and a shell function each name as it is: an absolute path whose parts
 // hold no character any of them would read as more than a name.
 const COMMAND_PATH_PATTERN = /^(?:\/[A-Za-z0-9._+-]+)+$/u;
@@ -90,6 +93,16 @@ function helperSudoersRoot(settings = helperSettings()) {
 }
 
 /**
+ * The folder the helper writes application accounts' staging keys to, one file per account: the one host setup's
+ * SSH policy names, unless the host's helper settings name another (`VIBE64_STAGING_KEYS_ROOT`), one the host's
+ * sshd reads each account's keys from by its name.
+ * @param {Record<string, string>} [settings] the host's helper settings
+ */
+function helperStagingKeysRoot(settings = helperSettings()) {
+  return settingsFolder(settings, "VIBE64_STAGING_KEYS_ROOT", STAGING_KEYS_ROOT);
+}
+
+/**
  * How the helper's later runs start it: the staging sudo rule and the staging shell's commands, staging-enter,
  * release units' ExecStart and managed runs. It is the file the helper runs from, unless the host's helper settings
  * name the command the host starts it with (`VIBE64_EXEC_HELPER_COMMAND`): a host that starts it through a
@@ -112,6 +125,7 @@ export {
   helperAccountDatabase,
   helperAccountNumberOptions,
   helperCommand,
+  helperStagingKeysRoot,
   helperSudoersRoot,
   helperSystemdUnitRoot,
   SYSTEMD_UNIT_ROOT

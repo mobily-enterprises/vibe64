@@ -277,6 +277,10 @@ names none keeps the system's own account files, ranges and folders, as before:
   port claim, retiring an application, a staging login) reads the same folder.
 - `VIBE64_SUDOERS_ROOT`: an absolute folder for the staging sudo rules in
   place of sudo's own, which the host's sudo configuration includes.
+- `VIBE64_STAGING_KEYS_ROOT`: an absolute folder for the application
+  accounts' staging key files in place of `staging-ssh` in the helper's
+  settings folder, which host setup's SSH policy names; the host's sshd reads
+  each account's keys there by its name (`helperStagingKeysRoot`).
 - `VIBE64_EXEC_HELPER_COMMAND`: the command that starts the helper, when the
   host starts it through a launcher rather than by the file it runs from
   (`helperCommand` in `hostSettings.js`). The helper's later runs start it
@@ -417,7 +421,10 @@ While a host lets a project's AI sessions use its staging, the helper's
 `staging-access` operation (`stagingLogin.js`, `stagingAccess.js`)
 gives the project's application account a way in for them: `grant` writes the
 project's one `ssh-ed25519` public key as a root-owned key file for the
-account in the helper's settings folder (loopback only, no forwarding), a
+account in the key folder its settings name (loopback only, no forwarding, and
+the login's forced command, `staging-shell`, named in the key itself, so sshd
+confines the account on a host without host setup's SSH policy; where that
+policy names the same command, sshd runs the policy's), a
 `visudo`-checked sudoers rule of its own (`stagingSudoersPath`, in the sudo rule folder its settings name) that lets
 the account run exactly `vibe64-exec-helper staging-service *` (by the command
 its settings name), and the

@@ -1,6 +1,6 @@
 // What lets a project's own AI sessions reach its staging, while the workspace owner allows it: the
-// application account's root-owned SSH key file, which host setup's SSH policy names for application accounts
-// alone, and the sudo rule for that account's own service log and restart. Root writes and removes both; the
+// application account's root-owned SSH key file, in the folder the host's sshd reads application accounts' keys from,
+// and the sudo rule for that account's own service log and restart. Root writes and removes both; the
 // account itself can never add a key or a rule. While they exist the account also has a login shell, since
 // sshd starts even its forced command through that shell: /bin/sh, which reads no file of the account's own
 // before that command (bash, started by sshd, would read the ~/.bashrc the application can write). sshd's PAM
@@ -19,9 +19,8 @@ import {
   runRootCommandAllowFailure
 } from "./hostAccounts.js";
 import { fsyncDirectory } from "./hostFiles.js";
-import { helperAccountDatabase, helperSudoersRoot } from "./hostSettings.js";
+import { helperAccountDatabase, helperStagingKeysRoot, helperSudoersRoot } from "./hostSettings.js";
 
-const STAGING_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "staging-ssh");
 const STAGING_LOGIN_SHELL = "/bin/sh";
 const ROOT_UID = 0;
 // Where root kept an account's key and sudo rule before production access was renamed staging access. Neither
@@ -30,7 +29,7 @@ const ROOT_UID = 0;
 const PRE_RENAME_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "production-ssh");
 const PRE_RENAME_SUDOERS_PREFIX = "vibe64-production-";
 
-function stagingKeysPath(username = "", keysRoot = STAGING_KEYS_ROOT) {
+function stagingKeysPath(username = "", keysRoot = helperStagingKeysRoot()) {
   return path.join(keysRoot, username);
 }
 
@@ -81,7 +80,7 @@ function assertNoPreRenameStagingFiles(username = "", options = {}) {
 }
 
 /** Whether root installed the account's staging key: the workspace owner allows its AI sessions in. */
-function stagingAccessGranted(username = "", { keysRoot = STAGING_KEYS_ROOT, rootUid = ROOT_UID } = {}) {
+function stagingAccessGranted(username = "", { keysRoot = helperStagingKeysRoot(), rootUid = ROOT_UID } = {}) {
   try {
     const stats = lstatSync(stagingKeysPath(username, keysRoot));
     return stats.isFile() && stats.uid === rootUid && (stats.mode & 0o022) === 0;
@@ -91,7 +90,7 @@ function stagingAccessGranted(username = "", { keysRoot = STAGING_KEYS_ROOT, roo
 }
 
 // Root's own folder for the keys: sshd reads a key file only through folders no one else may change.
-function ensureStagingKeysRoot(keysRoot = STAGING_KEYS_ROOT, rootUid = ROOT_UID) {
+function ensureStagingKeysRoot(keysRoot = helperStagingKeysRoot(), rootUid = ROOT_UID) {
   mkdirSync(keysRoot, { mode: 0o755, recursive: true });
   const stats = lstatSync(keysRoot);
   if (!stats.isDirectory() || stats.uid !== rootUid || (stats.mode & 0o022) !== 0) {
@@ -141,15 +140,16 @@ function removeIfPresent(file = "") {
 
 /**
  * Installs the project's key for its application account, the sudo rule for its own service and its login shell.
- * The key works only from this host's own loopback, with no forwarding; sshd's policy for application accounts
- * adds the forced command that starts every login in the live release.
+ * The key works only from this host's own loopback, with no forwarding, and names the forced command that starts
+ * every login in the live release (staging-shell), so a host whose sshd has no policy of Vibe64's for application
+ * accounts confines them too; where host setup's policy names the same command, sshd runs the policy's.
  * @param {{ username: string, shell: string }} user the registered application account
  * @param {string} publicKey one `ssh-ed25519 <key>` line
  * @param {string} helperPath the command that starts this helper (helperCommand), which the sudo rule names
  */
 function installStagingAccess(user, publicKey, helperPath, {
   accountDatabase = helperAccountDatabase(),
-  keysRoot = STAGING_KEYS_ROOT,
+  keysRoot = helperStagingKeysRoot(),
   prefixParent,
   preRenameKeysRoot = PRE_RENAME_KEYS_ROOT,
   rootUid = ROOT_UID,
@@ -160,7 +160,7 @@ function installStagingAccess(user, publicKey, helperPath, {
   ensureStagingKeysRoot(keysRoot, rootUid);
   replaceRootFile(
     stagingKeysPath(user.username, keysRoot),
-    `from="127.0.0.1,::1",restrict,pty ${publicKey} vibe64-staging\n`,
+    `command="${helperPath} staging-shell",restrict,pty,from="127.0.0.1,::1" ${publicKey} vibe64-staging\n`,
     0o644
   );
   replaceRootFile(
@@ -193,7 +193,7 @@ function removeAtJobs(username = "", runRootAllowFailure = runRootCommandAllowFa
  */
 function removeStagingAccess(user, username, {
   accountDatabase = helperAccountDatabase(),
-  keysRoot = STAGING_KEYS_ROOT,
+  keysRoot = helperStagingKeysRoot(),
   prefixParent,
   preRenameKeysRoot = PRE_RENAME_KEYS_ROOT,
   runRoot = runRootCommand,

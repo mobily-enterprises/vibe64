@@ -110,7 +110,10 @@ test("granting staging access installs the key as root's file, the account's own
   installStagingAccess({ shell: "/usr/sbin/nologin", username: ACCOUNT }, PUBLIC_KEY, HELPER, host.options);
 
   const keys = path.join(host.options.keysRoot, ACCOUNT);
-  assert.equal(await readFile(keys, "utf8"), `from="127.0.0.1,::1",restrict,pty ${PUBLIC_KEY} vibe64-staging\n`);
+  // The key names the login's forced command itself, so sshd confines the account where the host has no policy of
+  // Vibe64's for application accounts; only from this host's own loopback, with nothing but a terminal.
+  assert.equal(await readFile(keys, "utf8"),
+    `command="${HELPER} staging-shell",restrict,pty,from="127.0.0.1,::1" ${PUBLIC_KEY} vibe64-staging\n`);
   assert.equal((await stat(keys)).mode & 0o777, 0o644);
   assert.equal((await stat(host.options.keysRoot)).mode & 0o777, 0o755);
   const rule = path.join(host.options.sudoersRoot, `vibe64-staging-${ACCOUNT}`);

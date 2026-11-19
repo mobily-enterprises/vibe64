@@ -14,6 +14,7 @@ import {
   helperAccountDatabase,
   helperAccountNumberOptions,
   helperCommand,
+  helperStagingKeysRoot,
   helperSudoersRoot,
   helperSystemdUnitRoot
 } from "../../packages/vibe64-execution/src/host/hostSettings.js";
@@ -32,19 +33,23 @@ async function temporaryFolder(t, prefix) {
   return folder;
 }
 
-test("the host's helper settings name the account database and the unit and sudo rule folders; without them the system's own", async (t) => {
+test("the host's helper settings name the account database and the unit, sudo rule and staging key folders; without them the system's own", async (t) => {
   assert.equal(helperAccountDatabase({}), "files");
   assert.equal(helperSystemdUnitRoot({}), "/etc/systemd/system");
   assert.equal(helperSudoersRoot({}), "/etc/sudoers.d");
+  // The one host setup's SSH policy names for application accounts' keys.
+  assert.equal(helperStagingKeysRoot({}), "/etc/vibe64/staging-ssh");
 
   const file = path.join(await temporaryFolder(t, "v64-host-settings-"), "exec-helper.env");
   await writeFile(file, "VIBE64_ACCOUNT_DATABASE=extrausers\nVIBE64_SYSTEM_ID_BAND=400-899\n" +
-    "VIBE64_SYSTEMD_UNIT_ROOT=/srv/host/units\nVIBE64_SUDOERS_ROOT=/srv/host/sudoers\n", { mode: 0o600 });
+    "VIBE64_SYSTEMD_UNIT_ROOT=/srv/host/units\nVIBE64_SUDOERS_ROOT=/srv/host/sudoers\n" +
+    "VIBE64_STAGING_KEYS_ROOT=/srv/host/ssh-keys\n", { mode: 0o600 });
   const settings = helperSettings(file, UID);
   assert.equal(helperAccountDatabase(settings), "extrausers");
   assert.deepEqual(helperAccountNumberOptions(settings).slice(0, 2), ["-K", "SYS_UID_MIN=400"]);
   assert.equal(helperSystemdUnitRoot(settings), "/srv/host/units");
   assert.equal(helperSudoersRoot(settings), "/srv/host/sudoers");
+  assert.equal(helperStagingKeysRoot(settings), "/srv/host/ssh-keys");
   assert.equal(helperAccountDatabase({ VIBE64_ACCOUNT_DATABASE: "files" }), "files");
 
   for (const database of ["ldap", "Files", "files extrausers"]) {
@@ -56,6 +61,8 @@ test("the host's helper settings name the account database and the unit and sudo
       /folder \(VIBE64_SYSTEMD_UNIT_ROOT\) that is not an absolute path other than \//u, folder);
     assert.throws(() => helperSudoersRoot({ VIBE64_SUDOERS_ROOT: folder }),
       /folder \(VIBE64_SUDOERS_ROOT\) that is not an absolute path other than \//u, folder);
+    assert.throws(() => helperStagingKeysRoot({ VIBE64_STAGING_KEYS_ROOT: folder }),
+      /folder \(VIBE64_STAGING_KEYS_ROOT\) that is not an absolute path other than \//u, folder);
   }
   // A host's own server reads the unit folder through the package.
   assert.equal(exportedSystemdUnitRoot, helperSystemdUnitRoot);
@@ -256,6 +263,11 @@ test("the helper's people, memberships, application accounts, unit readers and s
   assert.equal(source.match(/"\/etc\/sudoers\.d"/gu)?.length, 1);
   assert.equal(source.match(/sudoersRoot = helperSudoersRoot\(\)/gu)?.length, 4,
     "the rule's path, the files from before the rename, grant and revoke");
+  // Only the settings reader names the staging key folder; the key's path, the check that access is granted, the
+  // folder's own check, grant and revoke ask it.
+  assert.equal(source.match(/"staging-ssh"/gu)?.length, 1);
+  assert.equal(source.match(/keysRoot = helperStagingKeysRoot\(\)/gu)?.length, 5,
+    "the key's path, the granted check, the folder check, grant and revoke");
   for (const reader of ["function installedReleaseUnits", "function assertReleaseServiceClaim", "function retireApplicationAccount"]) {
     const start = source.indexOf(reader);
     assert.match(source.slice(start, source.indexOf(") {\n", start)), /unitRoot = helperSystemdUnitRoot\(\)/u, reader);
