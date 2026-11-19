@@ -21,10 +21,10 @@
 //      release under way): its adapter refuses them SETTINGS_NEED_RELEASE. Those, and settings that didn't go live on
 //      the version it runs, follow the release (6), as a kept release's do;
 //      its release is uploaded, then its service made (internal: no routes; public: routed at the domain, with a
-//      connection to each service it reaches) or handed the release and, while that refresh is open, set to the count
-//      chosen (a provider's refresh may roll to the count the service has as it rolls, as mobilynet's does, so it starts
-//      as many new instances as the plan says, and one that fails leaves the version before on that count); then each
-//      resource it is still not linked to is linked the moment that refresh is open, and the refresh waited for.
+//      connection to each service it reaches), with the count the plan chose for a service it makes, or handed the
+//      release, which rolls to the count the service runs (a provider's refresh rolls to the count the service has as
+//      it rolls, as mobilynet's does); then each resource it is still not linked to is linked the moment that refresh
+//      is open, and the refresh waited for.
 //      A service still running the release it was last handed, made from the same upload (the archive and its
 //      declaration: releaseDigest), keeps it and is handed none, so none of its instances is replaced for nothing (a
 //      provider refreshes onto every release it is handed, even the one it runs). A provider may take a link only
@@ -43,14 +43,18 @@
 //   6. each service's settings (package.js settingValues) when they differ from those it was given (one that kept its
 //      release gets them here, so a change of the Production Env alone is a settings refresh of the release it runs;
 //      one handed a release got them before it, in 4, unless they had to follow it), the services it reaches, then its
-//      size and (when it was handed no release) its count as the plan's choices say: after every move ended, since a
-//      provider may refuse a settings replace while a link made ahead of a refresh is open (mobilynet does). A count or
-//      size change alone is only that, and the record's choices follow each, so the next plan starts from what runs. A
-//      settings refresh that fails lets go of the settings the record says the service was given (the provider kept
-//      those before), so the next Deploy gives them again;
+//      size as the plan's choices say: after every move ended, since a provider may refuse a settings replace while a
+//      link made ahead of a refresh is open (mobilynet does). A size change alone is only that, and the record's
+//      choices follow it, so the next plan starts from what runs. A settings refresh that fails lets go of the settings
+//      the record says the service was given (the provider kept those before), so the next Deploy gives them again;
 //   7. a service the Stack no longer names is deleted (its links end with it);
-//   8. live, once every service runs its release with as many healthy instances as chosen and its last refresh did
-//      not fail.
+//   8. live, once every service runs its release with as many healthy instances as it runs at the provider and its
+//      last refresh did not fail.
+//
+// A service's count is a running setting, never part of a Deploy: the Deploy makes a service with the count the plan
+// chose for it and never sets, puts back or keeps a count after that. The provider holds it, set by `setInstances` (the
+// owner's scale action, instances.js: at once, within the Stack's `- Instances:` range), the provider's own controls or
+// an app scaling its own service with its key, and the record keeps no copy (a count an older record holds is ignored).
 //
 // The record names each link the engine made, and a link counts only while the provider holds it: where the adapter
 // lists a resource's links (mobilynet's inventory does), one the provider ended is none, so the next step makes it
@@ -82,7 +86,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { MIGRATED_NOTE, migrationDue, migrationsOf, noteHandOver, noteTask } from "./migrations.js";
 import { planOf, stableJson } from "./plan.js";
-import { LABEL, labelsFor } from "./record.js";
+import { LABEL, keptChoices, labelsFor } from "./record.js";
 import { reporterOf, sentence, stepEvent, stepWords } from "./report.js";
 import { requiredWithoutValue, settingValues } from "./package.js";
 
@@ -302,11 +306,6 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (!values) return { kind: "wait", words: `Waiting for the services ${service.id} reaches` };
       return { kind: "createService", service: service.id, values, ...migrateTask(service.id) };
     }
-    // The count chosen goes with the release, set while its refresh is open: mobilynet's refresh rolls to the count the
-    // service has as it rolls, so it starts as many new instances as chosen and, if it fails, the version before serves
-    // on that count. With no release handed, the count changes after the moves (6).
-    const { instances } = plan.choices.services[service.id];
-    if (state.refreshId && thing.instances !== instances) return { kind: "changeService", service: service.id, id: thing.id, change: { instances } };
     // A service runs one refresh at a time, the rest queued behind it, and shows the one under way, else the next: this
     // Deploy's has ended once none is. A resource it is still not linked to (a new service, one that runs no release,
     // a release naming a new resource) is linked the moment that refresh is open (against the release it moves to),
@@ -329,7 +328,7 @@ function nextStep({ plan, needs, record, observed, release }) {
     if (linkId) return { kind: "unlink", resource: item.name, id: item.id, service, linkId };
   }
 
-  // 6. Settings, the services each reaches, then size and count, as chosen.
+  // 6. Settings, the services each reaches, then size, as chosen.
   for (const service of servicesInOrder(needs)) {
     const item = itemOf("service", service.id);
     const thing = thingOf(item);
@@ -339,7 +338,6 @@ function nextStep({ plan, needs, record, observed, release }) {
     if (stableJson(connections) !== stableJson(thing.connections ?? [])) return { kind: "changeService", service: service.id, id: thing.id, change: { connections } };
     const choice = plan.choices.services[service.id];
     if (thing.size !== choice.size) return { kind: "changeService", service: service.id, id: thing.id, change: { size: choice.size } };
-    if (thing.instances !== choice.instances) return { kind: "changeService", service: service.id, id: thing.id, change: { instances: choice.instances } };
   }
 
   // 7. A service the Stack no longer names.
@@ -350,11 +348,12 @@ function nextStep({ plan, needs, record, observed, release }) {
   }
 
   // 8. Live once every service runs its release, healthy, its last refresh (a link's or a change's) not failed: a
-  // provider clears a service's last error when a refresh succeeds, and this Deploy's release refresh did.
+  // provider clears a service's last error when a refresh succeeds, and this Deploy's release refresh did. It waits
+  // for as many healthy instances as the provider runs now, whatever set that count.
   for (const service of servicesInOrder(needs)) {
     const thing = thingOf(itemOf("service", service.id));
     const { version } = run.services[service.id];
-    const wanted = plan.choices.services[service.id].instances;
+    const wanted = Number.isInteger(thing.instances) ? thing.instances : 1;
     if (!thing.refresh && thing.lastError) {
       return { kind: "failed", message: `${service.id}: ${thing.lastError.message ?? thing.lastError}` };
     }
@@ -433,7 +432,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
         ...(step.task ? { task: step.task } : {})
       }, { idempotencyKey: keyOf(record, "service", service.id, name) });
       record.items[`service.${service.id}`] = {
-        kind: "service", name: service.id, id: made.id, providerName: name, origin: "made", size: choice.size, instances: choice.instances,
+        kind: "service", name: service.id, id: made.id, providerName: name, origin: "made", size: choice.size,
         exposure: service.exposure, settingsHash: values.hash, release: { digest: release.digests[service.id], version: state.version }
       };
       state.refreshId = made.refreshId;
@@ -466,7 +465,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     case "adopt": {
       const { thing } = step;
       record.items[`${step.item}.${step.name}`] = step.item === "service"
-        ? { kind: "service", name: step.name, id: thing.id, providerName: thing.name, origin: "made", size: thing.size, instances: thing.instances, exposure: thing.exposure }
+        ? { kind: "service", name: step.name, id: thing.id, providerName: thing.name, origin: "made", size: thing.size, exposure: thing.exposure }
         : { kind: "resource", name: step.name, id: thing.id, providerName: thing.name, origin: "made", size: thing.size, resourceKind: thing.resourceKind, links: {} };
       // A service adopted is handed this Deploy's release like any other.
       if (step.item === "service") delete run.services[step.name];
@@ -524,10 +523,8 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     case "changeService": {
       const refreshId = await adapter.changeService(step.id, step.change, { idempotencyKey: keyOf(record, "change", step.service, step.change) });
       const item = Object.assign(record.items[`service.${step.service}`], step.change);
-      // The next plan starts from what the service runs now: a Deploy that fails after this keeps the count or size it set.
-      if (step.change.instances !== undefined || step.change.size) {
-        record.choices = { ...record.choices, services: { ...record.choices?.services, [step.service]: { size: item.size, instances: item.instances } } };
-      }
+      // The next plan starts from what the service runs now: a Deploy that fails after this keeps the size it set.
+      if (step.change.size) record.choices = { ...record.choices, services: { ...record.choices?.services, [step.service]: { size: item.size } } };
       if (refreshId) stateOf(step.service).refreshId = refreshId;
       break;
     }
@@ -619,7 +616,7 @@ async function deploy({
       const step = nextStep({ plan, needs, record, observed, release: full });
       if (step.kind === "live" || step.kind === "failed") {
         const ended = { ...structuredClone(record), run: { ...record.run, state: step.kind, failure: step.message ?? null } };
-        if (step.kind === "live") Object.assign(ended, { choices: structuredClone(plan.choices), lastPlan: { hash: plan.hash } });
+        if (step.kind === "live") Object.assign(ended, { choices: keptChoices(plan.choices), lastPlan: { hash: plan.hash } });
         record = await save(ended);
         // Whether this Deploy's migrations ran, failed or were skipped (no release handed, or one the database ran); none
         // where they run as each instance starts.
@@ -741,4 +738,4 @@ async function deleteResource(adapter, record, needs, { name, typed }) {
   return kept;
 }
 
-export { LEASE_SECONDS, LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE, applyStep, deleteResource, deploy, nextStep, releaseDigest, stepWords, takeDeployLease, takeOffline };
+export { LEASE_SECONDS, LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE, applyStep, deleteResource, deploy, deployError, nextStep, releaseDigest, stepWords, takeDeployLease, takeOffline };

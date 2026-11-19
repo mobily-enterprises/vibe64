@@ -20,8 +20,8 @@ function storeFor(t) {
 /** A record of the shop's Production with one service made. */
 function shopRecord() {
   const record = newRecord({ app: "shop", environment: "production", provider: { id: "mobilynet", project: "prj_1" } });
-  record.items["service.web"] = { kind: "service", name: "web", id: "svc_1", providerName: "web", origin: "made", size: "a-2", instances: 2 };
-  record.choices.services.web = { size: "a-2", instances: 2 };
+  record.items["service.web"] = { kind: "service", name: "web", id: "svc_1", providerName: "web", origin: "made", size: "a-2" };
+  record.choices.services.web = { size: "a-2" };
   return record;
 }
 
@@ -78,8 +78,8 @@ async function deployShop(parts, record) {
   ];
   for (const [name, spec] of services) {
     const { service } = await production.createService({ ...spec, labels: labelsFor(record, { kind: "service", name }) }, { idempotencyKey: `service-${name}` });
-    record.items[`service.${name}`] = { kind: "service", name, id: service.id, providerName: service.name, origin: "made", size: spec.size, instances: spec.instances };
-    record.choices.services[name] = { size: spec.size, instances: spec.instances };
+    record.items[`service.${name}`] = { kind: "service", name, id: service.id, providerName: service.name, origin: "made", size: spec.size };
+    record.choices.services[name] = { size: spec.size };
   }
   for (const [name, app, size] of [["database", "postgresql-18", "small"], ["files", "garage-2", "medium"]]) {
     const { hostedService } = await production.createHostedService({ app, size, labels: labelsFor(record, { kind: "resource", name }) }, { idempotencyKey: `hosted-${name}` });
@@ -121,7 +121,7 @@ test("rebuildFromLabels makes the record again from the labels on what was made,
   assert.deepEqual(rebuilt.map((one) => one.deploymentId), [written.deploymentId, blog.deploymentId].sort());
   const shop = rebuilt.find((one) => one.deploymentId === written.deploymentId);
   const facts = ({ format, app, environment, deploymentId, provider, items, choices }) => ({ format, app, environment, deploymentId, provider, items, choices });
-  assert.deepEqual(facts(shop), facts(written), "the record rebuilt equals the record written");
+  assert.deepEqual(facts(shop), facts(written), "the record rebuilt equals the record written: sizes, never a count, which mobilynet holds");
   assert.deepEqual([shop.revision, shop.approvals, shop.lastPlan], [0, {}, null], "what labels can't carry starts empty");
   const other = rebuilt.find((one) => one.deploymentId === blog.deploymentId);
   assert.deepEqual([other.app, Object.keys(other.items), other.items["resource.cache"].id, other.choices], ["blog", ["resource.cache"], cache.id, { services: {}, resources: { cache: { size: "small" } } }]);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { specPlaceOf } from "../../packages/vibe64-deploy/src/adapters/aws/machine.js";
+import { setInstances } from "../../packages/vibe64-deploy/src/instances.js";
 import { LABEL, labelsFor } from "../../packages/vibe64-deploy/src/record.js";
 import { deleteResource, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
 import { WORKERS_RESOURCES, workersStack } from "../fixtures/deployWorkersApp.js";
@@ -197,13 +198,17 @@ test("a second deploy rolls web onto a new revision and workers onto new machine
   }
 });
 
-test("changed counts and sizes: web's task count changes in place; workers' bigger machines roll in by a refresh", async () => {
+test("changed counts and sizes: setInstances counts web's tasks and workers' machines in place, at once; workers' bigger machines roll in by a Deploy's refresh", async () => {
   const { standIn, adapter, run, record } = awsWorld();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   const name = `v64-${shortOf(record)}-service-workers`;
   const revisions = standIn.requests().filter((request) => request.action === "RegisterTaskDefinition").length;
-  const resized = await run({ record: first.record, commit: "c1", choices: { services: { web: { instances: 3 }, workers: { instances: 4, size: "m7i.2xlarge" } } } });
+  const { needs } = workersStack();
+  for (const [service, instances] of [["web", 3], ["workers", 4]]) {
+    assert.deepEqual(await setInstances(adapter, first.record, needs, { service, instances }), { service, instances, refreshId: null });
+  }
+  const resized = await run({ record: first.record, commit: "c1", choices: { services: { workers: { size: "m7i.2xlarge" } } } });
   assert.equal(resized.outcome, "live", resized.message);
   // The same commit hands neither service a release: web keeps its revision, its tasks only counted up.
   assert.deepEqual(resized.steps.filter((step) => step.startsWith("releaseService")), []);

@@ -10,6 +10,7 @@ import { preferredAlternative, resourceKindIsDatabase } from "../../packages/vib
 import { createMobilynetClient } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
 import { servicePackages, serviceUpload } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
 import { DRAIN_SECONDS, createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapters/mobilynet/index.js";
+import { setInstances } from "../../packages/vibe64-deploy/src/instances.js";
 import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
 import { settingsPerService, withRootFile } from "../../packages/vibe64-deploy/src/package.js";
 import { planOf } from "../../packages/vibe64-deploy/src/plan.js";
@@ -200,26 +201,24 @@ test("a new commit moves computers then web; a failing computers build fails wit
   assert.deepEqual(standIn.leases(), [], "the lease is given up when a Deploy fails too");
 });
 
-test("a dropped resource is unlinked and kept, a dropped service deleted; a count changed by hand is put back; take offline keeps the data; deleting a resource is its own action", async () => {
+test("a dropped resource is unlinked and kept, a dropped service deleted; a count an app set itself is kept; take offline keeps the data; deleting a resource is its own action", async () => {
   const { standIn, client, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   const { items } = first.record;
 
-  // computers raised to 3 by hand: the plan asks; put back, the Deploy sets 2 again.
-  await client.changeService(items["service.computers"].id, { instances: 3 });
-  const undecided = await run({ record: first.record, commit: "c2" }).catch((error) => error);
-  assert.equal(undecided.code, "deployment_plan_refused");
-  assert.match(undecided.message, /^computers: 3 instances at mobilynet, 2 in your choices\./u);
-  const putBack = await run({ record: first.record, commit: "c2", decisions: { "service.computers.instances": "putBack" } });
-  assert.equal(putBack.outcome, "live", putBack.message);
-  assert.equal(standIn.services.service(items["service.computers"].id).instances.wanted, 2);
-  // Raised by hand again and put back again by a Deploy of the same commit: the same change asked again is made
-  // again, not answered with the first Deploy's answer.
-  await client.changeService(items["service.computers"].id, { instances: 3 });
-  const back = await run({ record: putBack.record, commit: "c2", decisions: { "service.computers.instances": "putBack" } });
+  // The app raises computers to 3 with its own key: the next Deploy hands it its release on the 3 it runs, asks
+  // mobilynet nothing of its count and is live once 3 run healthy; the record keeps no count.
+  const computers = items["service.computers"].id;
+  await client.changeService(computers, { instances: 3 });
+  const scaledAt = standIn.requests().length;
+  const back = await run({ record: first.record, commit: "c2" });
   assert.equal(back.outcome, "live", back.message);
-  assert.equal(standIn.services.service(items["service.computers"].id).instances.wanted, 2);
+  assert.equal(back.plan.services.find((service) => service.id === "computers").instances.live, 3);
+  assert.deepEqual(requestsAfter(standIn, scaledAt).filter((request) => request.method === "PATCH" && request.path === `/v1/services/${computers}`), []);
+  const { instances } = standIn.services.service(computers);
+  assert.ok(instances.wanted === 3 && instances.healthy >= 3, JSON.stringify(instances));
+  assert.deepEqual(["instances" in back.record.items["service.computers"], back.record.choices.services.computers], [false, { size: "a-8" }]);
 
   // The Stack drops computers and renames files to uploads: computers deleted, files unlinked and kept running.
   const dropped = stackOf((lines) => lines.slice(0, lines.indexOf("### Service `computers`: bots' computers, each desktop in its own gVisor sandbox"))
@@ -290,6 +289,11 @@ test("a resource is linked once this Deploy's refresh builds; a service whose la
   const observed = await adapter.inventory();
   const next = (things) => nextStep({ plan: first.plan, needs: stack.needs, record: first.record, observed: things, release });
   assert.deepEqual(next(observed), { kind: "live" });
+  // The count it waits for is the one computers runs, never the Plan's: raised to 3 at mobilynet as the Deploy ends,
+  // it waits until 3 are healthy, and asks nothing of the count.
+  const raised = (healthy) => observed.map((thing) => (thing.id === first.record.items["service.computers"].id ? { ...thing, instances: 3, healthy } : thing));
+  assert.deepEqual(next(raised(2)), { kind: "wait", words: "Waiting for computers's instances" });
+  assert.deepEqual(next(raised(3)), { kind: "live" });
   // computers runs this Deploy's release, but the refresh its link's settings started failed, so mobilynet kept its
   // instances before: not live, and the Deploy fails naming it.
   const failed = observed.map((thing) => (thing.id === first.record.items["service.computers"].id
@@ -392,9 +396,10 @@ test("a Deploy is refused when its plan is stale, and while another Vibe64 holds
   assert.equal((await run({ record: refused.record, commit: "c1" })).outcome, "live", "a Deploy run again goes on from its record");
 });
 
-test("a count change alone hands no service a release, so none of its instances is replaced; each service drains for mobilynet's 30 seconds", async () => {
-  const { standIn, run, record } = setup();
-  const first = await run({ record, commit: "c1" });
+test("setInstances sets a running service's count at mobilynet at once, within the Stack's range: one PATCH, no release, no refresh, no instance replaced, the record unchanged; a lowered count drains for mobilynet's 30 seconds", async () => {
+  const { standIn, adapter, run, record } = setup();
+  const stack = stackOf();
+  const first = await run({ stack, record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   const { items } = first.record;
   const [web, computers] = [items["service.web"].id, items["service.computers"].id];
@@ -405,38 +410,57 @@ test("a count change alone hands no service a release, so none of its instances 
   assert.deepEqual([standIn.services.service(web).drainSeconds, standIn.services.service(computers).drainSeconds, DRAIN_SECONDS], [30, 30, 30]);
   const serving = (id) => standIn.services.instances(id).filter((one) => !one.removedReason).map((one) => one.id).sort();
   const [webBefore, computersBefore] = [serving(web), serving(computers)];
+  const sentAfter = (count) => requestsAfter(standIn, count).filter((request) => isWrite(request) && !request.path.startsWith("/v1/leases"));
 
-  // The same commit with computers raised to 3: one PATCH of its count, no release, no settings, no refresh.
+  // Outside the Stack's - Instances: range (computers runs 1 to 20), not a whole number, or a service this deployment
+  // doesn't run: refused, naming the range, and mobilynet asked nothing.
   const at = standIn.requests().length;
-  const raised = await run({ record: first.record, commit: "c1", choices: { services: { computers: { instances: 3 } } } });
-  assert.equal(raised.outcome, "live", raised.message);
-  const writes = requestsAfter(standIn, at).filter((request) => isWrite(request) && !request.path.startsWith("/v1/leases"));
-  assert.deepEqual(writes.map((request) => [request.method, request.path, request.body]), [["PATCH", `/v1/services/${computers}`, { instances: 3 }]]);
+  for (const instances of [0, 21, 2.5, "3"]) {
+    await assert.rejects(setInstances(adapter, first.record, stack.needs, { service: "computers", instances }), {
+      code: "deployment_instances_outside", status: 422, message: "computers runs 1 to 20 instances, as genesis/stack.md's - Instances: says."
+    });
+  }
+  await assert.rejects(setInstances(adapter, first.record, stack.needs, { service: "worker", instances: 2 }), { code: "deployment_item_unknown", status: 404 });
+  const unmade = structuredClone(first.record);
+  delete unmade.items["service.web"];
+  await assert.rejects(setInstances(adapter, unmade, stack.needs, { service: "web", instances: 2 }), { code: "deployment_item_unknown" });
+  assert.deepEqual(sentAfter(at), []);
+
+  // Raised to 3: one PATCH of its count, no release, no settings, no refresh; it places one more beside its two.
+  const kept = structuredClone(first.record);
+  assert.deepEqual(await setInstances(adapter, first.record, stack.needs, { service: "computers", instances: 3 }), { service: "computers", instances: 3, refreshId: null });
+  assert.deepEqual(first.record, kept, "the record keeps no count");
+  const raisedWrites = sentAfter(at);
+  assert.deepEqual(raisedWrites.map((request) => [request.method, request.path, request.body]), [["PATCH", `/v1/services/${computers}`, { instances: 3 }]]);
+  settle(standIn);
   for (const id of [web, computers]) assert.deepEqual(standIn.services.refreshes(id).map((one) => one.kind), ["create"]);
   assert.deepEqual(serving(web), webBefore, "web runs the same instances");
   assert.ok(computersBefore.every((id) => serving(computers).includes(id)) && serving(computers).length === 3, "computers kept its two and started one");
-  const versions = (done) => Object.fromEntries(Object.entries(done.record.run.services).map(([name, state]) => [name, state.version]));
-  assert.deepEqual(versions(raised), versions(first), "both run the versions they ran");
 
-  // Lowered back to 2, the instance the count removes leaves the rotation first, so it takes no new requests, then goes.
-  let draining = null;
-  const watch = () => {
-    standIn.advance();
-    draining ??= standIn.services.instances(computers).find((one) => one.rotation === "draining" && !one.removedReason)?.id ?? null;
-  };
-  const back = await run({ record: raised.record, commit: "c1", choices: { services: { computers: { instances: 2 } } }, pause: watch });
-  assert.equal(back.outcome, "live", back.message);
-  settle(standIn);
-  assert.ok(draining, "an instance drained");
-  assert.equal(standIn.services.instances(computers).find((one) => one.id === draining).removedReason, "count_lowered");
-  assert.equal(serving(computers).length, 2);
+  // A Deploy of the same commit hands no release and asks nothing of the count: computers stays on its 3.
+  const same = standIn.requests().length;
+  const again = await run({ stack, record: first.record, commit: "c1" });
+  assert.equal(again.outcome, "live", again.message);
+  assert.deepEqual(sentAfter(same), []);
+  assert.equal(standIn.services.service(computers).instances.wanted, 3);
 
-  // A new commit is a release again, to each service.
-  const at2 = standIn.requests().length;
-  const moved = await run({ record: back.record, commit: "c2" });
-  assert.equal(moved.outcome, "live", moved.message);
-  assert.deepEqual(requestsAfter(standIn, at2).filter((request) => request.method === "POST" && /\/services\/[^/]+\/releases$/u.test(request.path)).map((request) => request.path),
-    [`/v1/services/${computers}/releases`, `/v1/services/${web}/releases`]);
+  // Lowered back to 2, the instance the count removes leaves the rotation first, so it takes no new requests, then
+  // goes. Set to 2 again after an app raised it to 3: asked again with a key of its own, not answered with the first.
+  for (const raise of [false, true]) {
+    if (raise) await adapter.changeService(computers, { instances: 3 }, { idempotencyKey: "the-app" });
+    let draining = null;
+    await setInstances(adapter, again.record, stack.needs, { service: "computers", instances: 2 });
+    for (let step = 0; step < 40 && serving(computers).length > 2; step += 1) {
+      standIn.advance();
+      draining ??= standIn.services.instances(computers).find((one) => one.rotation === "draining" && !one.removedReason)?.id ?? null;
+    }
+    assert.ok(draining, "an instance drained");
+    assert.equal(standIn.services.instances(computers).find((one) => one.id === draining).removedReason, "count_lowered");
+    assert.equal(serving(computers).length, 2);
+  }
+  const keys = standIn.requests().filter((request) => request.method === "PATCH" && request.path === `/v1/services/${computers}` && request.body?.instances === 2)
+    .map((request) => request.idempotencyKey);
+  assert.equal(new Set(keys).size, keys.length, "each set has its own key");
 });
 
 /** Each write sent to the provider after `count` requests, but the Deploy's lease: `[method, path]`. */
@@ -925,57 +949,39 @@ test("a release declaring a migrate task is refused by an adapter whose provider
   assert.deepEqual(standIn.leases(), []);
 });
 
-test("a count changed with a new release goes with it: the release starts as many instances as chosen, and one that fails leaves the version before on the chosen count, which the record and the next plan keep", async () => {
-  const { standIn, run, record } = setup();
+test("a release rolls to the count the service runs: set to 4, a release that fails leaves the version before on 4, and the next starts 4; no Deploy asks mobilynet for a count", async () => {
+  const { standIn, adapter, run, record } = setup();
   standIn.setQuota(standIn.projectId, { vcpus: 200, memoryGib: 400 });
-  const first = await run({ record, commit: "c1" });
+  const stack = stackOf();
+  const first = await run({ stack, record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   const computers = first.record.items["service.computers"].id;
   const releaseRefresh = () => standIn.services.refreshes(computers).filter((one) => one.kind === "release").at(-1);
   const startedBy = (refresh) => standIn.services.instances(computers).filter((one) => one.refreshId === refresh.id).length;
   const serving = () => standIn.services.instances(computers).filter((one) => !one.removedReason).length;
-  const four = await run({ record: first.record, commit: "c1", choices: { services: { computers: { instances: 4 } } } });
-  assert.equal(four.outcome, "live", four.message);
+  await setInstances(adapter, first.record, stack.needs, { service: "computers", instances: 4 });
+  settle(standIn);
+  const at = standIn.requests().length;
 
   // Its next release fails (instance_never_healthy): computers serves c1 on four instances.
   standIn.faults.instancesUnhealthy = true;
-  const broken = await run({ record: four.record, commit: "c2" });
+  const broken = await run({ stack, record: first.record, commit: "c2" });
   assert.equal(broken.outcome, "failed");
   assert.match(broken.message, /^computers: the release did not go live: A new instance never became healthy/u);
-
-  // Lowered to 1 with another release that fails as well: the count goes with the release while its refresh is open,
-  // so mobilynet's refresh rolls to one instance and, when it fails, the version before serves on one.
-  const at = standIn.requests().length;
-  const lowered = await run({ record: broken.record, commit: "c3", choices: { services: { computers: { instances: 1 } } } });
-  assert.equal(lowered.outcome, "failed");
-  assert.equal(lowered.plan.items.find((item) => item.name === "computers").verb, "changed");
-  const writes = requestsAfter(standIn, at).filter((request) => isWrite(request) && request.path.startsWith(`/v1/services/${computers}`));
-  assert.deepEqual(writes.map((request) => [request.method, request.path]), [["POST", `/v1/services/${computers}/releases`], ["PATCH", `/v1/services/${computers}`]]);
-  assert.deepEqual(writes[1].body, { instances: 1 });
   standIn.faults.instancesUnhealthy = false;
   settle(standIn);
-  assert.deepEqual(standIn.services.service(computers).instances, { wanted: 1, running: 1, inRotation: 1, healthy: 1 });
-  assert.equal(serving(), 1);
-  assert.equal(lowered.record.items["service.computers"].instances, 1);
-  assert.deepEqual(lowered.record.choices.services.computers, { size: "a-8", instances: 1 }, "the record keeps the count computers runs");
+  assert.deepEqual(standIn.services.service(computers).instances, { wanted: 4, running: 4, inRotation: 4, healthy: 4 });
 
-  // The next plan starts from what runs, one instance, kept; its Deploy starts one new instance and goes live.
-  const again = await run({ record: lowered.record, commit: "c3" });
-  assert.equal(again.outcome, "live", again.message);
-  assert.deepEqual(again.plan.choices.services.computers, { size: "a-8", instances: 1 });
-  assert.equal(again.plan.items.find((item) => item.name === "computers").verb, "kept");
-  settle(standIn);
-  assert.equal(startedBy(releaseRefresh()), 1);
-  assert.equal(serving(), 1);
-
-  // Raised to 3 with a new commit: the release refresh starts the three, and no instance starts on the version it leaves.
+  // The next release starts the four, and no instance starts on the version it leaves.
   const startedBefore = standIn.services.instances(computers).length;
-  const raised = await run({ record: again.record, commit: "c4", choices: { services: { computers: { instances: 3 } } } });
-  assert.equal(raised.outcome, "live", raised.message);
+  const fixed = await run({ stack, record: broken.record, commit: "c3" });
+  assert.equal(fixed.outcome, "live", fixed.message);
   settle(standIn);
-  assert.equal(startedBy(releaseRefresh()), 3);
-  assert.equal(standIn.services.instances(computers).length - startedBefore, 3, "no instance started beside the release's own");
-  assert.equal(serving(), 3);
+  assert.equal(startedBy(releaseRefresh()), 4);
+  assert.equal(standIn.services.instances(computers).length - startedBefore, 4, "no instance started beside the release's own");
+  assert.equal(serving(), 4);
+  assert.deepEqual(requestsAfter(standIn, at).filter((request) => request.method === "PATCH" && request.path === `/v1/services/${computers}`), [], "no Deploy set a count");
+  assert.deepEqual([fixed.plan.choices.services.computers, fixed.record.choices.services.computers], [{ size: "a-8", instances: 4 }, { size: "a-8" }]);
 });
 
 test("take offline returns once the provider removed the services, or names those it is still removing, the record kept without them", async () => {

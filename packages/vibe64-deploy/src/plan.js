@@ -1,15 +1,19 @@
 // The Plan: what a Deploy of a project's environment will do to each item, like `terraform plan`, from the Stack's
 // needs (the desired state), the record (what Vibe64 made) and what the provider reports now (refreshed first: the
 // adapter's inventory of every thing of the provider project). Each service is offered the provider's sizes that meet
-// its `- Needs at least`, cheapest first; each item gets its verb (new, kept, changed, replaced, removed,
-// disconnected, missing) and the drift between the record and the provider (a count or size changed by hand), which
-// the owner decides, per difference, to keep or to put back; things of the provider project that are not this
-// deployment's are listed and left alone. The quote is at list price. The hash covers the needs, the choices in
-// effect, the decisions and a digest of the observed state, so a Deploy whose plan was read before anything moved
-// (a size, a price, a thing gone or changed by hand) is refused and the plan read again. Where the provider's offer
-// says its project's quotas and what is used of them, the Plan counts what the Deploy adds to each and names any it
-// would pass, before anything is made (quotaOf); where it doesn't, the Plan says they aren't checked. The hash leaves
-// the quotas out: their use moves with the rest of the provider project, and the Deploy counts them again as it starts.
+// its `- Needs at least`, cheapest first; each item gets its verb (new, kept, changed, replaced, removed, disconnected,
+// missing) and the drift between the record and the provider (a size changed by hand), which the owner decides, per
+// difference, to keep or to put back; things of the provider project that are not this deployment's are listed and left
+// alone. An App Service's count is a running setting, not part of a Deploy: a service the Deploy makes (new, or gone at
+// the provider) starts with the count chosen or the Stack's `- Production:`, and one the provider runs keeps the count
+// it runs there, which the Plan shows and prices (`instances.live`) and the Deploy never changes; only `setInstances`
+// (steps.js) does. The record keeps no count, and one an older record holds is ignored. The quote is at list price. The
+// hash covers the needs, the choices in effect, the decisions and a digest of the observed state, so a Deploy whose
+// plan was read before anything moved (a size, a count, a price, a thing gone or changed by hand) is refused and the
+// plan read again. Where the provider's offer says its project's quotas and what is used of them, the Plan counts what
+// the Deploy adds to each and names any it would pass, before anything is made (quotaOf); where it doesn't, the Plan
+// says they aren't checked. The hash leaves the quotas out: their use moves with the rest of the provider project, and
+// the Deploy counts them again as it starts.
 //
 // Nothing here calls a provider: the adapter's `offer()` and `inventory()` answer what the plan reads.
 import { createHash } from "node:crypto";
@@ -132,7 +136,8 @@ function quotaOf(offer, needs, effective, thingOf, problems) {
  *   refusal carries; `quota`, the provider project's quotas (`quotas: [{ quota, unit, limit, used }]`, and `counts`:
  *   which of them a service's instance and a resource's machine count against), or `unchecked`, why it doesn't say
  * @param {{ services?: Record<string, { size?: string, instances?: number }>, resources?: Record<string, { size?: string }> }} [input.choices]
- *   the owner's choices now, over those the record keeps
+ *   the owner's choices now, over those the record keeps: a service's `instances` only for one the Deploy makes (a
+ *   service the provider runs keeps its count, and another count for it is refused)
  * @param {Record<string, "keep" | "putBack">} [input.decisions] for each drift (`<kind>.<name>.<field>`), keep the
  *   provider's value or put the recorded one back
  */
@@ -145,18 +150,20 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
   const kept = record?.choices ?? { services: {}, resources: {} };
   const items = [];
   const effective = { services: {}, resources: {} };
+  // Each service's count at the provider, null for one the Deploy makes: shown, never a choice.
+  const running = {};
   const lines = [];
 
-  // Drift on a recorded thing the provider still has: its size and count as the record left them, against what the
-  // provider reports. Each needs a decision; keeping one sets the choice in effect to the provider's value.
+  // Drift on a recorded thing the provider still has: its size as the record left it, against what the provider
+  // reports. Each needs a decision; keeping one sets the choice in effect to the provider's value.
   const driftOf = (item, thing, fields) => fields
     .filter((field) => thing[field] !== undefined && item[field] !== undefined && thing[field] !== item[field])
     .map((field) => {
       const key = `${itemKey(item.kind, item.name)}.${field}`;
       const decision = decisions[key] ?? null;
       if (!decision) {
-        problems.push(problem("production_drift_undecided", `${item.name}: ${field === "instances" ? `${thing.instances} instances` : `size ${thing.size}`} `
-          + `at ${offer.title}, ${field === "instances" ? item.instances : item.size} in your choices. Keep ${offer.title}'s value or put yours back, then deploy.`, key));
+        problems.push(problem("production_drift_undecided", `${item.name}: size ${thing.size} at ${offer.title}, ${item.size} in your choices. `
+          + `Keep ${offer.title}'s value or put yours back, then deploy.`, key));
       }
       return { field, provider: thing[field], recorded: item[field], decision };
     });
@@ -175,22 +182,29 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
       problems.push(problem("production_size_unavailable", `${offer.title} offers no size with at least ${atLeast.vcpus} vCPU and `
         + `${atLeast.memoryGib} GiB right now, which ${service.id} needs.`, key));
     }
-    const drift = item && thing ? driftOf(item, thing, ["size", "instances"]) : [];
+    const drift = item && thing ? driftOf(item, thing, ["size"]) : [];
     const before = kept.services?.[service.id] ?? {};
     const asked = choices.services?.[service.id] ?? {};
     const current = sizes.some((size) => size.name === before.size) ? before.size : sizes[0]?.name ?? null;
+    // The count the provider runs, which the Deploy keeps (a service made again for its exposure starts with it too);
+    // a service the Deploy makes new starts with the count chosen, else the Stack's.
+    const live = thing ? thing.instances ?? null : null;
     const choice = {
       size: asked.size ?? decided(drift, "size", current),
-      instances: asked.instances ?? decided(drift, "instances", before.instances ?? service.instances.start)
+      instances: thing ? live : asked.instances ?? service.instances.start
     };
     if (choice.size !== null && !sizes.some((size) => size.name === choice.size)) {
       problems.push(problem("production_choice_invalid", `choices.services.${service.id}.size is one of ${sizes.map((size) => size.name).join(", ") || "none"}.`, key));
     }
-    if (!Number.isInteger(choice.instances) || choice.instances < service.instances.min || choice.instances > service.instances.max) {
+    if (thing && asked.instances !== undefined && asked.instances !== live) {
+      problems.push(problem("production_instances_running", `${service.id} runs ${live} instance${live === 1 ? "" : "s"} at ${offer.title}: a Deploy leaves `
+        + "the count of an App Service that runs as it is. Set its instances to change it.", key));
+    } else if (!thing && (!Number.isInteger(choice.instances) || choice.instances < service.instances.min || choice.instances > service.instances.max)) {
       problems.push(problem("production_choice_invalid", `choices.services.${service.id}.instances is ${service.instances.min} to ${service.instances.max}, `
         + `as genesis/stack.md's - Instances: says.`, key));
     }
     effective.services[service.id] = choice;
+    running[service.id] = live;
     let verb = "kept";
     const changes = [];
     if (!item) verb = "new";
@@ -199,11 +213,11 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
       verb = "replaced";
       changes.push({ field: "exposure", from: thing.exposure, to: service.exposure });
     } else {
-      // What the Deploy changes at the provider: whatever the choice in effect differs from there.
-      for (const field of ["size", "instances"]) {
-        if (thing[field] !== choice[field]) changes.push({ field, from: thing[field], to: choice[field] });
+      // What the Deploy changes at the provider: its size, where the choice in effect differs from it there.
+      if (thing.size !== choice.size) {
+        changes.push({ field: "size", from: thing.size, to: choice.size });
+        verb = "changed";
       }
-      if (changes.length > 0) verb = "changed";
     }
     items.push({ kind: "service", name: service.id, verb, id: thing?.id ?? null, changes, drift });
     const price = sizes.find((size) => size.name === choice.size);
@@ -283,7 +297,9 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
       exposure: service.exposure,
       sizes,
       defaultSize: effective.services[service.id].size,
-      instances: { min: service.instances.min, max: service.instances.max, default: service.instances.start },
+      // The range a count is chosen or set in, the Stack's starting count, and the count the provider runs (null for a
+      // service the Deploy makes), which a Deploy never changes: `setInstances` does.
+      instances: { min: service.instances.min, max: service.instances.max, default: service.instances.start, live: running[service.id] },
       balancer: service.exposure === "public" ? offer.balancer : null
     };
   });

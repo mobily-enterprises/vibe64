@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 
+import { setInstances } from "../../packages/vibe64-deploy/src/instances.js";
 import { LABEL, labelsFor } from "../../packages/vibe64-deploy/src/record.js";
 import { deleteResource, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
 import { WORKERS_RESOURCES, workersStack } from "../fixtures/deployWorkersApp.js";
@@ -155,13 +156,17 @@ test("a second deploy rolls each service onto its new image; its old machines an
   assert.match(standIn.compute.metadataOf("shop-workers")["startup-script"], new RegExp(`docker pull \\S+/shop-workers:${second.record.run.services.workers.version}\\n`, "u"));
 });
 
-test("changed counts and sizes: Cloud Run's count changes in place, no revision and no new image; the group is resized, a bigger machine rolls it", async () => {
-  const { standIn, run, record } = googleWorld();
+test("changed counts and sizes: setInstances changes Cloud Run's count in place, no revision and no new image, and resizes the group at once; a bigger machine rolls it in a Deploy", async () => {
+  const { standIn, adapter, run, record } = googleWorld();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   const revision = standIn.run.service("shop-web").latestCreatedRevision;
   const builds = standIn.requests().filter((request) => request.method === "POST" && request.path.includes("/builds")).length;
-  const resized = await run({ record: first.record, commit: "c1", choices: { services: { web: { instances: 3 }, workers: { instances: 4, size: "e2-highmem-4" } } } });
+  const { needs } = workersStack();
+  for (const [service, instances] of [["web", 3], ["workers", 4]]) {
+    assert.deepEqual(await setInstances(adapter, first.record, needs, { service, instances }), { service, instances, refreshId: null });
+  }
+  const resized = await run({ record: first.record, commit: "c1", choices: { services: { workers: { size: "e2-highmem-4" } } } });
   assert.equal(resized.outcome, "live", resized.message);
   assert.deepEqual(standIn.run.service("shop-web").scaling, { minInstanceCount: 3, maxInstanceCount: 3 });
   assert.equal(standIn.run.service("shop-web").latestCreatedRevision, revision, "web runs the revision it ran");

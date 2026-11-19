@@ -6,3 +6,4 @@ export { archiveProblem, envEntryProblem, packArchive, settingValues, settingsPe
 export { planOf } from "./plan.js";
 export { FORMAT as RECORD_FORMAT, createRecordStore, labelsFor, newRecord, rebuildFromLabels } from "./record.js";
 export { LEASE_SECONDS, deleteResource, deploy, takeOffline } from "./steps.js";
+export { setInstances } from "./instances.js";

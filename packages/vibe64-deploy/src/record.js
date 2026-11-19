@@ -3,18 +3,19 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import path from "node:path";
 
 // The record: what the engine made for one project's environment, keyed by (environment, kind, name), each item with
-// the provider's id and name for it, how it came to be, and the size and count it was made or left at; beside them the
-// deployment's id, the provider and its project, the environment's choices, approvals and the last plan. The provider
-// is its source: everything the engine makes carries Vibe64's labels (`labelsFor`: `vibe64-deployment`, `vibe64-app`,
+// the provider's id and name for it, how it came to be, and the size it was made or left at (never a service's count,
+// which the provider holds: one a record written before 19 Nov 2026 holds is ignored); beside them the deployment's id,
+// the provider and its project, the environment's choices, approvals and the last plan. The provider is its source:
+// everything the engine makes carries Vibe64's labels (`labelsFor`: `vibe64-deployment`, `vibe64-app`,
 // `vibe64-environment` and `vibe64-item=<kind>.<name>`), so `rebuildFromLabels` makes it again on another machine or
 // after a reinstall, and every Plan refreshes from the provider first. The file is its cache, in the editor's private
 // state: one per project and environment (`<root>/<project>/<environment>.json`), written only over the revision the
 // writer read (`expectedRevision`), so a writer that read an older one is refused `deployment_record_stale` rather than
 // putting back what another wrote since. What labels cannot carry (approvals, the last plan, values kept write-only at
 // the provider, the release each service was last handed) is the file's alone: a record made again from labels hands
-// each service its release again at the next Deploy. Each resource's links (`links`, the link's id by service) are
-// the file's too, believed only while the provider holds them (steps.js): one it ended is made again, and a record
-// made again from labels, which holds none, takes up each the provider holds as the next Deploy asks for it again.
+// each service its release again at the next Deploy. Each resource's links (`links`, the link's id by service) are the
+// file's too, believed only while the provider holds them (steps.js): one it ended is made again, and a record made
+// again from labels, which holds none, takes up each the provider holds as the next Deploy asks for it again.
 
 const FORMAT = "vibe64.deploy-record.v1";
 const KINDS = Object.freeze(["service", "resource"]);
@@ -79,6 +80,17 @@ function labelsFor(record, { kind, name }) {
     [LABEL.app]: record.app,
     [LABEL.environment]: record.environment,
     [LABEL.item]: itemKey(kind, name)
+  };
+}
+
+/**
+ * The choices a record keeps of a plan's: each service's size and each resource's, never a count, which the provider
+ * holds. @param {{ services: Record<string, { size: string }>, resources: Record<string, { size: string }> }} choices
+ */
+function keptChoices(choices) {
+  return {
+    services: Object.fromEntries(Object.entries(choices.services).map(([id, { size }]) => [id, { size }])),
+    resources: structuredClone(choices.resources)
   };
 }
 
@@ -174,11 +186,11 @@ function createRecordStore({ root, now = () => new Date() }) {
 
 /**
  * The records of a provider project made again from the labels Vibe64 wrote on what it made: one per deployment id,
- * each item from the thing labelled with it (its id, name, size and, for a service, its count), the choices from those
- * sizes and counts. Things without Vibe64's labels are not Vibe64's and are left out. Two things labelled as the same
- * item of one deployment, or one deployment's things naming two apps or environments, are refused
- * `deployment_labels_conflict`: the labels were changed outside Vibe64.
- * @param {{ provider: string, inventory: (where: { project: string }) => Promise<Array<{ id: string, name: string, labels: Record<string, string>, size?: string | null, instances?: number | null }>> }} adapter
+ * each item from the thing labelled with it (its id, name and size), the choices from those sizes. Things without
+ * Vibe64's labels are not Vibe64's and are left out. Two things labelled as the same item of one deployment, or one
+ * deployment's things naming two apps or environments, are refused `deployment_labels_conflict`: the labels were
+ * changed outside Vibe64.
+ * @param {{ provider: string, inventory: (where: { project: string }) => Promise<Array<{ id: string, name: string, labels: Record<string, string>, size?: string | null }>> }} adapter
  *   `inventory` answers every thing of the provider project with its labels
  * @param {string} project the provider's project
  * @param {{ app?: string, environment?: string, organisation?: string | null }} [only] keeps the records of this app or environment alone
@@ -206,16 +218,10 @@ async function rebuildFromLabels(adapter, project, { app, environment, organisat
       throw new RecordError("deployment_labels_conflict", `${record.items[key].id} and ${thing.id} are both labelled ${key} of ${deploymentId}.`, { deploymentId, item: key, ids: [record.items[key].id, thing.id] });
     }
     const size = thing.size ?? null;
-    if (kind === "service") {
-      const instances = thing.instances ?? null;
-      record.items[key] = { kind, name, id: thing.id, providerName: thing.name, origin: "made", size, instances };
-      record.choices.services[name] = { size, instances };
-    } else {
-      record.items[key] = { kind, name, id: thing.id, providerName: thing.name, origin: "made", size };
-      record.choices.resources[name] = { size };
-    }
+    record.items[key] = { kind, name, id: thing.id, providerName: thing.name, origin: "made", size };
+    record.choices[kind === "service" ? "services" : "resources"][name] = { size };
   }
   return [...records.values()].sort((one, other) => (one.deploymentId < other.deploymentId ? -1 : 1));
 }
 
-export { FORMAT, LABEL, RecordError, createRecordStore, itemKey, labelsFor, newDeploymentId, newRecord, rebuildFromLabels, recordProblem };
+export { FORMAT, LABEL, RecordError, createRecordStore, itemKey, keptChoices, labelsFor, newDeploymentId, newRecord, rebuildFromLabels, recordProblem };

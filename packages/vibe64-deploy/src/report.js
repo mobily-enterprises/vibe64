@@ -27,8 +27,7 @@ function stepWords(step, { needs, release } = {}) {
     case "changeService": {
       const { change } = step;
       if (change.connections) return `Updating the services ${step.service} reaches`;
-      if (change.size) return `Resizing App Service ${step.service} to ${change.size}`;
-      return `Setting App Service ${step.service} to ${change.instances} instance${change.instances === 1 ? "" : "s"}`;
+      return `Resizing App Service ${step.service} to ${change.size}`;
     }
     case "deleteService": return step.replaced
       ? `Deleting App Service ${step.service}, to make it again: its exposure changed`

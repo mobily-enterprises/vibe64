@@ -15,6 +15,7 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/image.js`
 - `packages/vibe64-deploy/src/plan.js`
 - `packages/vibe64-deploy/src/steps.js`
+- `packages/vibe64-deploy/src/instances.js`
 - `packages/vibe64-deploy/src/report.js`
 - `packages/vibe64-deploy/src/migrations.js`
 - `packages/vibe64-deploy/src/record.js`
@@ -167,13 +168,31 @@ removed (a service the Stack dropped), disconnected (a resource the Stack
 dropped: unlinked, kept with its data, still priced) or missing (gone at the
 provider; a missing resource stops the Deploy). A resource whose kind changed
 is refused with the fix: keep the old name and declare a new one. Drift (a size
-or count changed at the provider by hand) is listed per difference and must be
-decided, keep the provider's value or put the recorded one back; a kept value
-outside the Stack's range is refused like any choice. Things of the provider
+changed at the provider by hand) is listed per difference and must be decided,
+keep the provider's value or put the recorded one back. Things of the provider
 project that are not this deployment's are listed and left alone, never priced.
 The quote's lines are at list price; the hash covers the needs, the choices in
 effect, the decisions, the items, the lines and a digest of the observed state,
 so a Deploy held to a plan read before anything moved is refused.
+
+An App Service's count is a running setting, not part of a Deploy (see
+[An App Service's count](#an-app-services-count)). A service the Deploy makes
+(new, or gone at the provider) starts with the count chosen for it
+(`choices.services.<id>.instances`, within the Stack's `- Instances:` range,
+else `production_choice_invalid`) or the Stack's `- Production:`. A service the
+provider runs keeps the count it runs there, whatever set it: the Plan shows it
+in `services[].instances.live` (null for a service the Deploy makes), prices
+it and counts it as used against the quotas, puts it in its choices in effect
+so the quote adds up, and never changes it. A count asked for such a service
+that differs from it is refused `production_instances_running` ("computers
+runs 4 instances at mobilynet: a Deploy leaves the count of an App Service that
+runs as it is. Set its instances to change it."), and a count set there beyond
+the Stack's range is the provider's: shown, never refused by the Plan. A count
+differs from the record by no drift and needs no decision. A service made
+again because its exposure changed starts with the count it ran. The live count
+is in the observed digest and the quote, so a count that moved between reading
+the Plan and confirming the Deploy refuses the Deploy as a stale plan, like any
+other move.
 
 Where the offer says the provider project's quotas (`quota.quotas`: each
 quota's unit, limit and use, and `quota.counts`: which of them a service's
@@ -242,12 +261,12 @@ making it twice. In order:
    instances start with them; the version it runs restarts with the new values
    first. Then its release is uploaded and its App Service made (labelled,
    internal ones with no routes, the public one routed at the domain with a
-   connection to each service it reaches), or it is handed the release and,
-   while that refresh is open, set to the count chosen. Each resource it is still not linked to is linked the
-   moment that refresh is open, and the refresh is waited for.
+   connection to each service it reaches) with the count the Plan chose for
+   it, or it is handed the release. Each resource it is still not linked to is
+   linked the moment that refresh is open, and the refresh is waited for.
    mobilynet's refresh rolls to the count the service has as it rolls, so a
-   release starts as many new instances as the Plan says, and one that fails
-   leaves the version before serving on the chosen count.
+   release starts as many new instances as the service runs, and one that fails
+   leaves the version before serving on that count.
    - A provider may take a link only with the service's new release under way:
      the release the service runs doesn't name the resource, it runs none yet,
      or the refresh moving it hasn't read its release. Its adapter then refuses
@@ -330,8 +349,8 @@ making it twice. In order:
    upload's SHA-256 and its declaration (`releaseDigest`) and the version. A
    service still running that version with no error, for the same upload, keeps
    it and is handed no release, since a provider refreshes onto every release it
-   is handed, even the one it runs; so a Deploy that changes only a count or a
-   size replaces no instance for nothing. One whose release failed, or whose
+   is handed, even the one it runs; so a Deploy that changes only a size
+   replaces no instance for nothing. One whose release failed, or whose
    record was made again from labels, is handed its release again.
    Where the adapter runs a release's task, the first release this Deploy
    hands (a new App Service's or a release of one) carries the migrations
@@ -355,18 +374,20 @@ making it twice. In order:
    for the names it is given) where they differ from those it was given: a
    service that kept its release, so that a change of the Production Env alone
    is a settings refresh of the release it runs, or one whose settings had to
-   follow its release (4). Then the services it reaches, its size and (when it
-   was handed no release) its count, only once every move ended: mobilynet refuses a
-   settings replace while a link made ahead of an open refresh stands. The
-   record's choices follow each count or size the Deploy sets, so a Deploy that
-   fails after one leaves the next Plan starting from what runs. A settings
+   follow its release (4). Then the services it reaches and its size, only once
+   every move ended: mobilynet refuses a settings replace while a link made
+   ahead of an open refresh stands. The record's choices follow each size the
+   Deploy sets, so a Deploy that fails after one leaves the next Plan starting
+   from what runs. A settings
    refresh that fails lets go of the settings the record says the service was
    given, since the provider kept those before, so the next Deploy gives them
    again. After a Deploy that stopped while one ran, the next gives them again
    unless it reads that it succeeded: one still running may yet fail;
 7. a service the Stack no longer names is deleted;
 8. live, once every service runs its release on as many healthy instances as
-   chosen and its last refresh (a link's or a change's) did not fail.
+   the provider runs it on now (its live count, whatever set it; 1 where the
+   provider reports none) and its last refresh (a link's or a change's) did not
+   fail.
 
 So a Deploy changes only what changed. A hosted service is made once and then
 only resized when its chosen size changes, and is never made again, restarted or
@@ -475,7 +496,46 @@ with the provider's id and name; everything the engine makes carries the labels
 `rebuildFromLabels()` makes the record again from the provider. Its file, in
 the editor's private state, is written only over the revision its writer read.
 The links it names are believed only while the provider holds them, where the
-adapter lists them (The steps, 4).
+adapter lists them (The steps, 4). It keeps each service's size and no count:
+the provider holds the count (An App Service's count). A record written before
+19 Nov 2026 holds a count in each service's item and choices; the Plan, the
+steps and `setInstances()` ignore it, nothing reads or upgrades it, and the next
+Deploy that goes live or changes a size writes choices without it.
+
+## An App Service's count
+
+How many instances an App Service runs is a running setting the provider holds,
+never part of a Deploy, which makes a service with the count its Plan chose and
+then never sets, puts back, keeps or waits on a stored one (`instances.js`). It
+is set at the provider, at once, by `setInstances(adapter, record, needs, {
+service, instances })`, the owner's scale action, by the provider's own
+controls, or by an app scaling its own service with a key of its own (at
+mobilynet, a project key with `services:deploy`). `setInstances()` refuses a
+service the record holds no item for, or the Stack doesn't name,
+`deployment_item_unknown` (404), and a count that isn't a whole number within
+the Stack's `- Instances:` range `deployment_instances_outside` (422), naming the
+range ("computers runs 1 to 20 instances, as genesis/stack.md's - Instances:
+says."), before it asks the provider anything. Then it is one call of the
+adapter's `changeService(id, { instances })`, with an idempotency key of its own
+each time, so a count set again after an app or the provider changed it is asked
+again, not answered with the first answer. The provider may still refuse it (its
+own limits, a quota, no room for more), with its reason. It answers `{ service,
+instances, refreshId }` and leaves the record unchanged:
+
+- mobilynet: `PATCH /v1/services/{id}` with `instances` (`services:deploy`),
+  which places or drains instances at once and starts no refresh; mobilynet
+  takes 1 to 100 and refuses a count its project's quota or the region can't
+  place, the count staying as it was. Its stand-in does the same, keeping each
+  key's first answer.
+- AWS: a Fargate service's `desiredCount` (ECS `UpdateService`), or a machine
+  service's Auto Scaling group (`MinSize` and `DesiredCapacity` the count,
+  `MaxSize` twice it), in place, no refresh.
+- Google Cloud: a Cloud Run service's scaling (`minInstanceCount` and
+  `maxInstanceCount` the count, no new revision), or a managed instance group's
+  resize, in place, no refresh.
+
+A later Deploy hands each release onto the count the service runs then, and is
+live once that many are healthy.
 
 ## The mobilynet adapter
 
@@ -706,6 +766,7 @@ request's signature (or the gateway's token), for the engine's tests.
 - `imagePackages()`, `imageUpload()` — the image per service, for container providers.
 - `planOf()` — the Plan with verbs, drift, the quote, the quotas and its hash.
 - `deploy()` — a whole Deploy, step by step, under the lease.
+- `setInstances()` — how many instances a running App Service runs, set at its provider at once.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
 - `createGoogleAdapter()` — the same for Google Cloud; `createGoogleClient()` its REST client.
 - `createAwsAdapter()` — the same for AWS; `createAwsClient()` its client.
