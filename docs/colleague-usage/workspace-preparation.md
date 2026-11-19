@@ -259,7 +259,15 @@ WSL, or macOS with Homebrew); its link opens the Databases step of the setup
 guide, which also has the Fedora and Arch lines ([Linux](set-up-linux.md#databases),
 [macOS](set-up-macos.md#databases)). **Create a login and
 database** shows one command that creates a project user, its database and,
-for PostgreSQL, the right to create test databases. **Suggest a user and
+for PostgreSQL, the right to create test databases. For MariaDB it also gives
+the user its test database (the declared one, else `test_<database>` and
+`<database>_test`) and that test database's numbered copies,
+`<test database>_1` to `_99`: a JSKIT app's database tests
+(`jskit test --databases`) run several files at once, each on its own copy, as
+many as the computer's test budget (`V64_TEST_CONCURRENCY`, else half its
+CPUs). A user created with an older command keeps running them one at a time
+("jskit test: 1 test file(s) at a time"); running the command again with its
+current password adds the copies and keeps its databases and data. **Suggest a user and
 password** fills in a project user and a strong password first; the command
 shows the password as dots but copies the real one. The person runs these
 commands in their own terminal; Vibe64 never starts a database server or runs

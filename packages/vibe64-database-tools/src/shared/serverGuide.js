@@ -49,13 +49,28 @@ const SERVERS = Object.freeze({
 const { quoteIdentifier: mysqlName, stringLiteral: mysqlString } = SQL_QUOTING.mysql;
 const { quoteIdentifier: pgName, stringLiteral: pgString } = SQL_QUOTING.postgresql;
 
+// The longest database name a GRANT takes, each escaping \ counted.
+const GRANT_NAME_LENGTH = 64;
+
+/**
+ * The GRANT names of a test database's numbered copies, which a JSKIT test run makes for each test file or browser
+ * worker running at once (`<name>_1`, `<name>_2`, ...). In a GRANT's database name `_` matches any one character, `%`
+ * any characters, and `\_` and `\%` only themselves, so `<name>\__` and `<name>\___` are the name, a literal `_` and
+ * one or two characters: copies 1 to 99. None when the escaped name is too long for a GRANT.
+ */
+function copyGrantNames(name) {
+  const escaped = name.replace(/[\\_%]/gu, "\\$&");
+  return [...escaped].length + 4 > GRANT_NAME_LENGTH ? [] : [`${escaped}\\__`, `${escaped}\\___`];
+}
+
 function mysqlStatements({ database, username, password, testDatabases }) {
   const user = `${mysqlString(username)}@'%'`;
   return [
     `CREATE DATABASE IF NOT EXISTS ${mysqlName(database)} CHARACTER SET utf8mb4;`,
     `CREATE USER IF NOT EXISTS ${user} IDENTIFIED BY ${mysqlString(password)};`,
     `ALTER USER ${user} IDENTIFIED BY ${mysqlString(password)};`,
-    ...[database, ...testDatabases].map((name) => `GRANT ALL PRIVILEGES ON ${mysqlName(name)}.* TO ${user};`)
+    ...[database, ...testDatabases, ...testDatabases.flatMap(copyGrantNames)]
+      .map((name) => `GRANT ALL PRIVILEGES ON ${mysqlName(name)}.* TO ${user};`)
   ];
 }
 
@@ -106,7 +121,7 @@ function databaseServerGuide({ kind, family = "", database = "", username = "", 
   };
 }
 
-const __testables = Object.freeze({ testDatabaseNames });
+const __testables = Object.freeze({ copyGrantNames, testDatabaseNames });
 
 export {
   databaseServerGuide,

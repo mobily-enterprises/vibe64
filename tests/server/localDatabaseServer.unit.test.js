@@ -12,7 +12,7 @@ import { __testables as serverGuideTestables, databaseServerGuide, isAdminUser }
 import { sourceMetadata, sourcePath, withTemporaryRoot, projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const { describeFailure } = serverCheckTestables;
-const { testDatabaseNames } = serverGuideTestables;
+const { copyGrantNames, testDatabaseNames } = serverGuideTestables;
 
 const DJANGO_MYSQL = {
   component: "django-mysql",
@@ -179,4 +179,24 @@ test("commands: per computer, never for an administrator, quoted safely", () => 
   assert.match(pg, /^sudo -u postgres psql <<'SQL'\n/u);
   assert.match(pg, /ALTER ROLE "app" LOGIN CREATEDB PASSWORD 'it''s';/u);
   assert.match(pg, /\\gexec\nSQL$/u);
+});
+
+test("the MariaDB command grants each test database's numbered copies, so a JSKIT run takes several test files at once", () => {
+  const command = databaseServerGuide({ kind: "mysql", family: "apt", database: "shop", username: "shop", password: "pw",
+    testDatabase: "shop_test" }).create.command;
+  // The database and its test database as before, then the test database's copies shop_test_1 to shop_test_99: an
+  // escaped _ (a literal one in a GRANT) and one or two characters.
+  assert.match(command, /\nGRANT ALL PRIVILEGES ON `shop`\.\* TO 'shop'@'%';\nGRANT ALL PRIVILEGES ON `shop_test`\.\* TO 'shop'@'%';\n/u);
+  assert.match(command, /\nGRANT ALL PRIVILEGES ON `shop\\_test\\__`\.\* TO 'shop'@'%';\nGRANT ALL PRIVILEGES ON `shop\\_test\\___`\.\* TO 'shop'@'%';\nSQL$/u);
+  assert.equal(command.match(/GRANT/gu).length, 4);
+  // Both usual names when none is declared.
+  assert.deepEqual(databaseServerGuide({ kind: "mysql", family: "apt", database: "dj", username: "dj", password: "pw" }).create.command
+    .match(/ON `[^`]*\\__`/gu), ["ON `test\\_dj\\__`", "ON `dj\\_test\\__`"]);
+  // A % or \ in the name is literal too, and a name too long for a GRANT once escaped gets no copies.
+  assert.deepEqual(copyGrantNames("a%b\\c"), ["a\\%b\\\\c\\__", "a\\%b\\\\c\\___"]);
+  assert.deepEqual(copyGrantNames("x".repeat(60)), [`${"x".repeat(60)}\\__`, `${"x".repeat(60)}\\___`]);
+  assert.deepEqual(copyGrantNames("x".repeat(61)), []);
+  assert.deepEqual(copyGrantNames("a_".repeat(25)), []);
+  assert.doesNotMatch(databaseServerGuide({ kind: "postgresql", family: "apt", database: "app", username: "app", password: "pw" })
+    .create.command, /GRANT/u, "PostgreSQL's CREATEDB already covers the copies");
 });
