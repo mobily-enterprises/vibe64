@@ -177,6 +177,16 @@ test("mobilynet's count is the names a service is sent with its links' fields, e
   assert.equal(sent(next), 39);
   assert.match(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next)).message,
     /^mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them, and service web would have 50: 39 of its own and 11 from its links\./u);
+
+  // In fact both new entries hold no value (the card's "Secret, not set"): the Production Env gives a Deploy no value
+  // for them, so none is sent, and neither is counted nor checked. web comes to 48, MOBILYNET_API_KEY kept or not.
+  const unset = (key) => ({ key, secret: true, services: ["web"], valuePresent: false });
+  const saved = [...entries(), unset("STRIPE_WEBHOOK_SECRET"), unset("MOBILYNET_API_KEY")];
+  assert.equal(Object.keys(settingsPerService(NEEDS, saved).web).length, 37);
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, saved)), null);
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, [...entries(), unset("STRIPE_WEBHOOK_SECRET")])), null);
+  // An entry with no value by a name Production sets itself is still refused.
+  assert.throws(() => settingsPerService(NEEDS, [{ key: "PORT", secret: false, valuePresent: false }]), { code: "vibe64_production_env_invalid" });
 });
 
 test("each service's script exports its settings, its resources' names, the instance facts from _mobilynet and its own settings, then migrates and serves", async (t) => {

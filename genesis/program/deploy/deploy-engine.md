@@ -91,8 +91,11 @@ secrets), and none by a name mobilynet's runtime sets on every instance
 settings would lose. The engine counts the names a Deploy sends a service, each
 once (a generated secret or the setup code the Production Env holds too is
 one), with its links' fields: a production web holding 48 matched it on 19 Nov.
-It may count one name it doesn't send, the setup code once the first account
-removed it from the Env, since a first Deploy makes and sends it.
+An Env entry that holds no value (a secret not set, `valuePresent: false`) is
+given to no service, so it is neither sent, counted nor checked against
+mobilynet's names. It may count one name it doesn't send, the setup code once
+the first account removed it from the Env, since a first Deploy makes and
+sends it.
 `servicePackagesProblem` refuses either before anything
 is made, naming the service, the setting or the count, and the fix
 (`vibe64_production_setting_reserved`: another name in the Production Env, or

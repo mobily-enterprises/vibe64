@@ -143,8 +143,11 @@ function stackSettingsPerService(needs) {
  * What each service is given: the settings its release declares (stackSettingsPerService) and each Production Env
  * entry the services it names (the public one when it names none), an entry `{ secret, required: false }`. Values are
  * the deploy's; a Deploy gives a service all of them in a settings replace, whether or not its release declares them.
+ * An entry that holds no value (`valuePresent: false`, a secret not set) is checked but given to no service: a Deploy
+ * has no value to send for it, so a provider's limits (mobilynet's count and names) don't meet it.
  * @param {object} needs needsOfStack's needs
- * @param {Array<{ key: string, secret?: boolean, services?: string[] }>} [envRecords] the Production Env's entries
+ * @param {Array<{ key: string, secret?: boolean, services?: string[], valuePresent?: boolean }>} [envRecords] the
+ *   Production Env's entries
  * @returns {Record<string, Record<string, { secret: boolean, required: boolean }>>}
  */
 function settingsPerService(needs, envRecords = []) {
@@ -156,7 +159,7 @@ function settingsPerService(needs, envRecords = []) {
   const declared = stackSettingsPerService(needs);
   return Object.fromEntries(needs.services.map((service) => {
     const settings = { ...declared[service.id] };
-    for (const record of envRecords) {
+    for (const record of envRecords.filter((one) => one.valuePresent !== false)) {
       if ((record.services ?? [publicId]).includes(service.id)) settings[record.key] ??= { secret: record.secret === true, required: false };
     }
     return [service.id, settings];
