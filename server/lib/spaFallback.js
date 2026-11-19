@@ -79,13 +79,15 @@ function canServeStaticFile(distRoot, relativePath) {
   return existsSync(resolvedPath);
 }
 
-// The index each build root last served, kept while its file is unchanged.
+// The index each build root last served, kept while its file is unchanged: by its change time too, which every write
+// moves and no tool sets back, since an update's page may have the old one's size and the Nix store's 1970 date, and a
+// filesystem may give it the deleted page's inode.
 const spaDocuments = new Map();
 
 async function readSpaDocument(distRoot) {
   const file = path.resolve(distRoot, SPA_INDEX_FILE);
   const stats = await stat(file, { bigint: true });
-  const identity = `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`;
+  const identity = `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}`;
   const cached = spaDocuments.get(file);
   if (cached?.identity === identity) {
     return cached.document;

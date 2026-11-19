@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -130,4 +130,22 @@ test("the page and every file outside assets/ are fetched again on each use; a m
   const missing = await app.inject({ url: "/assets/page-DDDDDDDD.js", headers: { "accept-encoding": "br" } });
   assert.equal(missing.statusCode, 404);
   assert.equal(missing.headers["cache-control"], undefined);
+});
+
+test("a page replaced by one of the same size, inode and date is served new", async (t) => {
+  const { app, distRoot } = await builtClient(t);
+  const page = path.join(distRoot, "index.html");
+  // Dated as the Nix store dates a release's files.
+  const nixStoreTime = new Date(1000);
+  await utimes(page, nixStoreTime, nixStoreTime);
+  const read = async () => (await app.inject({ url: "/projects" })).body;
+  assert.equal(await read(), FILES["index.html"]);
+  // Written over in place, as a filesystem that gives a new file the deleted one's inode makes it, and dated back.
+  const before = await stat(page, { bigint: true });
+  const updated = FILES["index.html"].replace("AbCd_-12", "WxYz_-34");
+  await writeFile(page, updated);
+  await utimes(page, nixStoreTime, nixStoreTime);
+  const after = await stat(page, { bigint: true });
+  assert.deepEqual([after.ino, after.size, after.mtimeNs], [before.ino, before.size, before.mtimeNs]);
+  assert.equal(await read(), updated);
 });
