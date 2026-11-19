@@ -1,3 +1,4 @@
+import os from "node:os";
 import path from "node:path";
 import { processMatchesActor } from "../policy/permissionPolicy.js";
 import {
@@ -143,6 +144,17 @@ function databaseEnvRecordsForPolicy(baseEnv = {}, request = {}) {
   ];
 }
 
+/**
+ * A PATH without the ~/.local/bin of these homes: where homes cannot start programs, a program found there would be
+ * found first and refuse to start, so no login's ~/.local/bin is on a command's PATH, not even one the server's own
+ * PATH inherited from a login shell's profile.
+ * @param {string} value @param {string[]} homes
+ */
+function withoutHomeLocalBins(value, homes) {
+  const gone = new Set(homes.filter((home) => path.isAbsolute(String(home || ""))).map((home) => path.join(home, ".local", "bin")));
+  return value.split(":").filter((part) => !gone.has(part.replace(/(.)\/+$/u, "$1"))).join(":");
+}
+
 function commandEnvWithoutGitIdentity({
   actor = {},
   baseEnv,
@@ -177,7 +189,7 @@ function commandEnvWithoutGitIdentity({
     ...npmToolEnv({ env, prefixRoot }),
     VIBE64_DECLARED_RUNTIMES: declaredRuntimes
   };
-  const PATH = resolveRuntimePath({
+  const runtimePath = resolveRuntimePath({
     env: finalEnv,
     existingPath: [
       ...npmToolBinDirs({ env: finalEnv, prefixRoot }),
@@ -187,6 +199,8 @@ function commandEnvWithoutGitIdentity({
     runtimes: request.runtimes,
     shimDirs: request.shimDirs || []
   });
+  // The npm prefix's bin takes ~/.local/bin's place: the command's login's, and the server's own login's.
+  const PATH = prefixRoot ? withoutHomeLocalBins(runtimePath, [finalEnv.HOME, os.homedir()]) : runtimePath;
   // A login shell (Launch runs `bash -lc`) may reorder PATH; with the person's
   // own tools its script restores this one, so Launch finds what setup found.
   return { ...finalEnv, PATH, ...(runtimePackRoot() ? {} : { VIBE64_TOOL_PATH: PATH }) };

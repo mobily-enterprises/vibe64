@@ -246,6 +246,13 @@ test("a host whose homes cannot start programs gives each login its own npm pref
   const npmPrefixRoot = path.join(HOST_ROOT, "npm-prefixes");
   useHost(t, { ...PACK_HOST, npmPrefixRoot });
   const currentUser = os.userInfo();
+  // The server's own PATH may carry the login's ~/.local/bin (a login shell's profile adds it, as GitHub's runners
+  // have it): a program found there could not start, so the command never gets it.
+  const serverPath = process.env.PATH;
+  process.env.PATH = [path.join(currentUser.homedir, ".local", "bin"), serverPath].join(path.delimiter);
+  t.after(() => {
+    process.env.PATH = serverPath;
+  });
   const result = await runVibe64Command({
     env: NO_PERSON_GIT_CONFIG_ENV,
     command: process.execPath,

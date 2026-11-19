@@ -423,6 +423,10 @@ makes and keeps that login's alone, so a CLI installed with `npm -g` starts:
 }
 ```
 
+Its `bin` takes `~/.local/bin`'s place on PATH: no login's `~/.local/bin`
+is on the command's PATH, not even one the server's own PATH inherited from a
+login shell's profile, since a program found there would refuse to start.
+
 An application account keeps `~/.local`: its home is in its own area, where
 programs start.
 

@@ -193,6 +193,11 @@ editor's `APP_ENV`: every command but a deployment's or an application
 account's gets `APP_ENV=development` over the project's Env and its own env,
 and a Preview command also starts with `NODE_ENV=development`, which the
 project's Env or launch may change.
+On a host whose homes cannot start programs (the host profile's
+`npmPrefixRoot`), a person's or the daemon's command gets `NPM_CONFIG_PREFIX`
+`<npmPrefixRoot>/<login>` with its `bin` on PATH, and no login's
+`~/.local/bin`, not even one the editor's own PATH inherited; an application
+account keeps its home's.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
 account home. Relative directories are rejected before starting a process.
