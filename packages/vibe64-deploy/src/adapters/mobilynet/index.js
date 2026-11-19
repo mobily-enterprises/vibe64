@@ -12,7 +12,7 @@
 // `leases: true` takes none, which is safe only while one editor deploys a project's environment (Managed today:
 // the workspace's own editor is the only writer).
 import { LABEL } from "../../record.js";
-import { LINK_NEEDS_RELEASE } from "../../steps.js";
+import { LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE } from "../../steps.js";
 import { MOBILYNET_INTERFACES, RELEASE_TASKS, needAs, serviceUpload } from "./declaration.js";
 
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
@@ -45,6 +45,22 @@ function linkRefusal(error) {
   const waits = /declares no need/u.test(fields.need ?? "") || /release/u.test(fields.consumer ?? "");
   if (!waits) return error;
   return Object.assign(new Error(error.message), { code: LINK_NEEDS_RELEASE, retryable: error.retryable, details: error.details, cause: error });
+}
+
+/**
+ * A replace of a service's settings mobilynet takes only with its new release, as the engine's own refusal
+ * (SETTINGS_NEED_RELEASE): mobilynet checks a replace against the release the service runs (serviceFields.js
+ * checkSettings), so it refuses `422 validation_failed` one naming a setting only the new release declares (or declares
+ * otherwise), `422 settings_missing` one lacking a setting only the release it runs requires, and `409 invalid_state`
+ * one asked while the service's first release is still under way. The engine then gives them after the release, which
+ * is also where a value that fits no release is refused again, as mobilynet refused it. One tried again later (a
+ * service busy) is mobilynet's, as it gave it.
+ * @param {any} error
+ */
+function settingsRefusal(error) {
+  const waits = !error?.retryable && ["validation_failed", "settings_missing", "invalid_state"].includes(error?.code);
+  if (!waits) return error;
+  return Object.assign(new Error(error.message), { code: SETTINGS_NEED_RELEASE, retryable: false, status: error.status, details: error.details, cause: error });
 }
 
 /**
@@ -273,7 +289,14 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
      * last lines of output) where it ran one.
      */
     readRefresh: (id, refreshId) => client.readServiceRefresh(id, refreshId),
-    putSettings: async (id, { settings, secrets }, { idempotencyKey }) => (await client.putServiceSettings(id, { settings, secrets }, { idempotencyKey })).refresh?.id ?? null,
+    /** Replaces an App Service's own settings and secrets: its refresh's id, null when mobilynet took them at once. */
+    async putSettings(id, { settings, secrets }, { idempotencyKey }) {
+      try {
+        return (await client.putServiceSettings(id, { settings, secrets }, { idempotencyKey })).refresh?.id ?? null;
+      } catch (error) {
+        throw settingsRefusal(error);
+      }
+    },
     changeService: async (id, change, { idempotencyKey }) => (await client.changeService(id, change, { idempotencyKey })).refresh?.id ?? null,
     deleteService: (id) => client.deleteService(id),
     /** The port a service reaches another on: every service listens on 3000. */

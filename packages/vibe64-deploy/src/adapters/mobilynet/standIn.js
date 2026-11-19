@@ -26,7 +26,9 @@ import { createStandInServices } from "./standIn/services.js";
 // build, refreshes take a step, hosted services boot, links turn active. Faults, each a switch on `faults`:
 //   down               every request fails with no answer, as fetch fails
 //   noCapacity         a hosted service's create and a service's count raise answer no_capacity
-//   instancesUnhealthy an App Service's new instances never get healthy: its refresh fails instance_never_healthy
+//   instancesUnhealthy an App Service's new instances never get healthy: its refresh fails instance_never_healthy;
+//                      `true`, every one; a function of the instance (its version, settings and secrets), those it
+//                      answers true for, as an app that refuses a setting's value as it boots
 //   neverBoots         new hosted services stay `creating`
 //   releaseBuildFails  a release's build fails, and a refresh onto it fails app_build_failed: `true`, its build
 //                      command exited; `{ code, message }`, that failure, the refresh naming its message too

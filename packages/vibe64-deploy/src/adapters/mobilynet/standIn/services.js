@@ -14,8 +14,8 @@ import { createStandInServiceLogs } from "./serviceLogs.js";
 // settings refresh, which only the link sets or takes out (hosted.js). Labels (engine-support M2) are set at create and
 // replaced whole by a PATCH, which starts no refresh; a list filters by them. A create, a count raised or a size made
 // larger is admitted by the project's spending cap and its vCPU and memory quotas, instances times size (M12, M13).
-// Faults: `instancesUnhealthy` (a refresh's new instances never get healthy: it fails `instance_never_healthy`),
-// `noCapacity` (a count raise answers `409 no_capacity`) and `releaseBuildFails`.
+// Faults: `instancesUnhealthy` (a refresh's new instances never get healthy, every one or those its function picks:
+// it fails `instance_never_healthy`), `noCapacity` (a count raise answers `409 no_capacity`) and `releaseBuildFails`.
 // STAND-IN ONLY: ids are the stand-in's own (`svc_s000123`), a connection makes no allow rule (`ruleId` null), a
 // release's settings are checked only for the required ones its declaration declares (a replace also for names it
 // doesn't declare), unlinking a link made ahead queues a settings refresh rather than changing its refresh ahead, and a

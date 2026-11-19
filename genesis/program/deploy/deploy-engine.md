@@ -15,6 +15,7 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/image.js`
 - `packages/vibe64-deploy/src/plan.js`
 - `packages/vibe64-deploy/src/steps.js`
+- `packages/vibe64-deploy/src/report.js`
 - `packages/vibe64-deploy/src/migrations.js`
 - `packages/vibe64-deploy/src/record.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/declaration.js`
@@ -206,11 +207,14 @@ making it twice. In order:
    however soon the provider starts them: a provider that reuses a build starts
    a refresh's instances as the refresh starts (mobilynet's reconcile does
    both in one transaction; a production Deploy on 18 Nov handed a service a
-   release at 23:42:09, and its first instance started at 23:42:10). Then its
-   release is uploaded and its App Service made (labelled, internal ones with no
-   routes, the public one routed at the domain with a connection to each service
-   it reaches), or it is handed the release and, while that refresh is open, set
-   to the count chosen. Each resource it is still not linked to is linked the
+   release at 23:42:09, and its first instance started at 23:42:10). A service
+   about to be handed a release is then given its settings, where they differ
+   from those it was given, and that refresh is waited for, so the release's
+   instances start with them; the version it runs restarts with the new values
+   first. Then its release is uploaded and its App Service made (labelled,
+   internal ones with no routes, the public one routed at the domain with a
+   connection to each service it reaches), or it is handed the release and,
+   while that refresh is open, set to the count chosen. Each resource it is still not linked to is linked the
    moment that refresh is open, and the refresh is waited for.
    mobilynet's refresh rolls to the count the service has as it rolls, so a
    release starts as many new instances as the Plan says, and one that fails
@@ -237,6 +241,30 @@ making it twice. In order:
      Linked after the release instead, as the engine did until 19 Nov, mobilynet
      queued the link's settings behind the move, and every instance of the new
      release started without the resource.
+   - Settings before the release let a Deploy put right a release that fails
+     for a setting's value: an app that refuses a value as it boots fails the
+     release, and the owner changes the value and deploys again. Until 19 Nov
+     the engine handed the release first and gave settings only after every
+     move (6), so that release failed again with the old value at every Deploy
+     and the new value was never sent (a production Deploy, 19 Nov: a setup
+     code too short for a newer framework, deployed again four times). A
+     release whose new code needs a value its running version refuses still
+     fails: that value would have to go in the release's own refresh, which
+     mobilynet has no call for.
+   - A provider may refuse settings the release the service runs doesn't take.
+     mobilynet checks a replace against that release's declaration: it refuses
+     a setting only the new release declares (or declares otherwise) `422
+     validation_failed`, one lacking a setting only the release it runs
+     requires `422 settings_missing`, and any replace while the service's first
+     release is still under way `409 invalid_state`. The mobilynet adapter
+     answers those with the engine's own code, `settings_need_release`, and the
+     settings then follow the release, as before. Settings whose refresh fails
+     on the version the service runs (the old code refuses a value the new
+     code takes) follow the release too, and the Deploy goes on. A value no
+     release takes is refused again after the release, where the Deploy fails
+     with the provider's reason. A provider that takes settings at once (a
+     service whose first release failed) starts no refresh, and the release
+     starts with them.
    - A refresh that fails ends the links mobilynet made against the release it
      moved to, which the record lets go so the next Deploy makes them again,
      and fails the Deploy with the service's reason. Services not yet moved keep
@@ -279,30 +307,40 @@ making it twice. In order:
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
    setting the reached service's private address, the Production Env's values
-   for the names it declares), the services it reaches, its size and (when it
-   was handed no release) its count, only once every move ended: mobilynet
-   refuses a settings replace while a link made ahead of an open refresh
-   stands. The record's choices follow each count or size the Deploy sets, so
-   a Deploy that fails after one leaves the next Plan starting from what runs;
+   for the names it declares) where they differ from those it was given: a
+   service that kept its release, or one whose settings had to follow its
+   release (4). Then the services it reaches, its size and (when it was handed
+   no release) its count, only once every move ended: mobilynet refuses a
+   settings replace while a link made ahead of an open refresh stands. The
+   record's choices follow each count or size the Deploy sets, so a Deploy that
+   fails after one leaves the next Plan starting from what runs. A settings
+   refresh that fails lets go of the settings the record says the service was
+   given, since the provider kept those before, so the next Deploy gives them
+   again. After a Deploy that stopped while one ran, the next gives them again
+   unless it reads that it succeeded: one still running may yet fail;
 7. a service the Stack no longer names is deleted;
 8. live, once every service runs its release on as many healthy instances as
    chosen and its last refresh (a link's or a change's) did not fail.
 
 So a Deploy changes only what changed. A hosted service is made once and then
-only resized when its chosen size changes, and is never made again, restarted
-or given a new setting; a link is made once and kept while the provider holds
-it, so the same server keeps the same login, and a Deploy makes one again only
-for a link the provider ended. Only an App Service whose release changed (its
-code, its declaration) or whose last release failed is handed a release, and so
-gets new machines; the others keep theirs. A Deploy of unchanged code and Stack
-sends the provider nothing but its lease. The migrations run at most once per
-Deploy, and not at all when no release is handed or the database already ran
-this code's. The engine's tests hold the provider to these exact writes
-(deploySteps: an unchanged redeploy, one of two services changed, a failed
-release handed again, the migrations run, skipped and failing). Two parts rest
-on mobilynet: a link made ahead of a failed refresh ends with it (M14), so the
-next Deploy makes it again with a new login; and the migrations run once only
-where the provider runs a release's task.
+only resized when its chosen size changes, and is never made again, restarted or
+given a new setting; a link is made once and kept while the provider holds it,
+so the same server keeps the same login, and a Deploy makes one again only for a
+link the provider ended. Only an App Service whose release changed (its code,
+its declaration) or whose last release failed is handed a release, and so gets
+new machines; the others keep theirs. One whose settings changed with its
+release gets them twice: the version it runs restarts with the new values, then
+the release starts. A Deploy of unchanged code and Stack sends the provider
+nothing but its lease. The migrations run at most once per Deploy, and not at
+all when no release is handed or the database already ran this code's. The
+engine's tests hold the provider to these exact writes (deploySteps: an
+unchanged redeploy, one of two services changed, a failed release handed again,
+the migrations run, skipped and failing, a secret's new value given before the
+release it fixes, settings that follow the release when the release a service
+runs refuses them or fails with them, and a Deploy resumed after such settings
+failed or while they still ran). Two parts rest on mobilynet: a link made ahead of a failed refresh ends
+with it (M14), so the next Deploy makes it again with a new login; and the
+migrations run once only where the provider runs a release's task.
 
 A refusal from the provider (a quota, the spending cap) fails the Deploy with
 its reason, the record kept as far as it got; an answer the provider may give
@@ -330,10 +368,16 @@ name.
 Both say what they do as they do it, through the caller's `report(event)`:
 each step as it starts and ends (`{ kind: "step", phase: "start" | "done" |
 "refused", step, words, service?, resource?, refresh? }`) in the engine's own
-words (`stepWords`: "Making the hosted service for database", "Uploading the
-release of web", "Making App Service web, public behind the load balancer at
-app.example.com", "Linking web to database", "Reading how the update of web
-ended", "Deleting App Service web"), each wait when its words change, each call
+words (`stepWords`, in `report.js`: "Making the hosted service for database",
+"Uploading the release of web", "Making App Service web, public behind the
+load balancer at app.example.com", "Updating the settings of web", "Handing App
+Service web the new release", "Linking web to database", "Reading how the
+update of web ended", "Deleting App Service web"), each wait when its words
+change (settings given ahead of a release: "Updating the settings of web on the
+version it runs"; their `message` when they follow the release instead: "The
+release web runs doesn't take its new settings: it gets them after its new
+release.", or "Its new settings did not go live on the version it runs: … web
+gets its new release first, and its settings after it."), each call
 tried again (`{ kind: "retry", words, message }`), each service gone at Take
 offline and the end (`{ kind: "end", outcome, migrations? }`). Where the
 provider runs the migrations as a release's task, the step that hands them says

@@ -139,6 +139,9 @@ test("a second deploy rolls each service onto its new image; its old machines an
   const second = await run({ record: first.record, commit: "c2", env: { SESSION_SECRET: "session-1", SETUP_CODE: "setup-1", MAIL_PASSWORD: "mail-2", MAX_JOBS: "8" } });
   assert.equal(second.outcome, "live", second.message);
   assert.deepEqual(second.plan.items.map((item) => item.verb), ["kept", "kept", "kept", "kept"]);
+  // web's new mail password goes first, on the version it runs, once, then its release (a step tried again is listed again).
+  const webSteps = second.steps.filter((step) => /^(putSettings|releaseService) web$/u.test(step));
+  assert.deepEqual([webSteps[0], webSteps.at(-1), webSteps.filter((step) => step === "putSettings web").length], ["putSettings web", "releaseService web", 1]);
   assert.notEqual(standIn.run.service("shop-web").template.containers[0].image, image);
   assert.equal(standIn.run.service("shop-web").latestReadyRevision, standIn.run.service("shop-web").latestCreatedRevision);
   assert.equal(standIn.environmentOf("shop-web").MAIL_PASSWORD, "mail-2");

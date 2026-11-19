@@ -9,6 +9,14 @@
 //   4. each internal service, then each public one: a service that runs a release is first linked to each resource
 //      it isn't linked to at the provider, so the instances its next release starts have them however soon the
 //      provider starts them (one that reuses a build starts them as the refresh starts: a production Deploy, 18 Nov);
+//      a service to be handed a release is then given its settings where they differ from those it was given, and
+//      that refresh waited for, so the release's instances start with them (the version it runs restarts with them
+//      first). Handed the release first, a release that failed for a setting's value (an app refusing it as it boots)
+//      failed again at each Deploy with the value changed, which never reached the settings (a production Deploy, 19
+//      Nov). A provider may refuse settings the release the service runs doesn't take (a setting only the new release
+//      declares, one only the release it runs requires, a first release still under way): its adapter refuses them
+//      SETTINGS_NEED_RELEASE. Those, and settings that didn't go live on the version it runs, follow the release (6),
+//      as a kept release's do;
 //      its release is uploaded, then its service made (internal: no routes; public: routed at the domain, with a
 //      connection to each service it reaches) or handed the release and, while that refresh is open, set to the count
 //      chosen (a provider's refresh may roll to the count the service has as it rolls, as mobilynet's does, so it starts
@@ -29,11 +37,13 @@
 //      carries the migrations, once, unless the database ran that code's (the record's `migrated`);
 //   5. a resource the Stack no longer names is unlinked from every service that stays, now that none runs a release
 //      naming it, and kept running with its data;
-//   6. each service's settings (package.js settingValues) when they differ from those it was given, the services it
-//      reaches, then its size and (when it was handed no release) its count as the plan's choices say: after every
-//      move ended, since a provider may refuse a settings replace while a link made ahead of a refresh is open (mobilynet
-//      does). A count or size change alone is only that, and the record's choices follow each, so the next plan starts
-//      from what runs;
+//   6. each service's settings (package.js settingValues) when they differ from those it was given (a service handed
+//      a release got them before it, in 4, unless they had to follow it), the services it reaches, then its size and
+//      (when it was handed no release) its count as the plan's choices say: after every move ended, since a provider
+//      may refuse a settings replace while a link made ahead of a refresh is open (mobilynet does). A count or size
+//      change alone is only that, and the record's choices follow each, so the next plan starts from what runs. A
+//      settings refresh that fails lets go of the settings the record says the service was given (the provider kept
+//      those before), so the next Deploy gives them again;
 //   7. a service the Stack no longer names is deleted (its links end with it);
 //   8. live, once every service runs its release with as many healthy instances as chosen and its last refresh did
 //      not fail.
@@ -50,14 +60,15 @@
 // `deleteResource`, and taking the services down `takeOffline`, which returns once they are gone, each its own call. A
 // Deploy holds the lease `deploy:<deployment id>` while it runs, renewed at each step, where the adapter takes leases.
 //
-// A Deploy and a Take offline say what they do as they do it, through the caller's `report`: each step as it starts and
-// ends, in the engine's own words (`stepWords`), each wait when its words change, each call tried again (a step's, or a
-// read of the provider that got no answer, a 5xx or its rate limit, which a Deploy waiting for a long build may meet)
-// and the end. A report names the step, the service or resource and the refresh it started, never a setting's value,
-// and one that throws or rejects never stops the run. A read of the provider that may answer later is tried again,
-// waiting one pause, then two, four and at most six, so a Deploy waiting for a build lives until it is live or fails.
-// A Deploy first reads how the refreshes a Deploy before it started and never read ended (that one stopped in its
-// wait), letting go of a failed one's links and release as that Deploy would have (settleLastRun).
+// A Deploy and a Take offline say what they do as they do it, through the caller's `report` (report.js): each step as
+// it starts and ends, in the engine's own words (`stepWords`), each wait when its words change, each call tried again
+// (a step's, or a read of the provider that got no answer, a 5xx or its rate limit, which a Deploy waiting for a long
+// build may meet) and the end. A report names the step, the service or resource and the refresh it started, never a
+// setting's value, and one that throws or rejects never stops the run. A read of the provider that may answer later is
+// tried again, waiting one pause, then two, four and at most six, so a Deploy waiting for a build lives until it is
+// live or fails. A Deploy first reads how the refreshes a Deploy before it started and never read ended (that one
+// stopped in its wait), letting go of a failed one's links and release as that Deploy would have, and of settings
+// whose refresh didn't succeed (settleLastRun).
 //
 // Each call's idempotency key names this Deploy's run, so a call tried again within it gets the first answer, and a
 // later Deploy asking the same again (a count put back, a service made again after it was taken offline) is not
@@ -65,15 +76,19 @@
 // keeping its record is made whole by the labels: the next one finds the thing labelled as that item and adopts it.
 import { createHash, randomBytes } from "node:crypto";
 
-import { MIGRATED_NOTE, MIGRATING, migrationDue, migrationsOf, noteHandOver, noteTask } from "./migrations.js";
+import { MIGRATED_NOTE, migrationDue, migrationsOf, noteHandOver, noteTask } from "./migrations.js";
 import { planOf, stableJson } from "./plan.js";
 import { LABEL, labelsFor } from "./record.js";
+import { reporterOf, sentence, stepEvent, stepWords } from "./report.js";
 import { settingValues } from "./package.js";
 
 const LEASE_SECONDS = 600;
 // An adapter's refusal of a link its provider takes only with the service's new release under way: the release the
 // service runs doesn't name the resource, it runs none yet, or the refresh moving it hasn't read its release yet.
 const LINK_NEEDS_RELEASE = "link_needs_release";
+// An adapter's refusal of settings its provider takes only with the service's new release: the release the service
+// runs doesn't declare one of them (or declares it otherwise), requires one they lack, or is still under way.
+const SETTINGS_NEED_RELEASE = "settings_need_release";
 // How long takeOffline waits between reads of the provider while the services go, and how many reads it makes: an
 // instance leaving drains first (mobilynet's 30 seconds and its stop signal's as long again; AWS's load balancer its
 // 300), so ten minutes in all.
@@ -138,72 +153,8 @@ function connectionsOf(service, record, port) {
   return service.reaches.map((reach) => ({ to: record.items[`service.${reach.service}`]?.id ?? null, port }));
 }
 
-/**
- * What a step does, in the words a person reads in a Deploy's log: the step and the service or resource it is for.
- * @param {any} step nextStep's step @param {{ needs?: any, release?: { domain?: string } }} [context]
- */
-function stepWords(step, { needs, release } = {}) {
-  const exposure = needs?.services.find((one) => one.id === step.service)?.exposure;
-  switch (step.kind) {
-    case "createResource": return `Making the hosted service for ${step.resource}`;
-    case "resizeResource": return `Resizing the hosted service of ${step.resource} to ${step.size}`;
-    case "adopt": return `Taking up ${step.item === "service" ? "App Service" : "the hosted service of"} ${step.name}, made by a Deploy cut short`;
-    case "ensureDomain": return `Adding the domain ${step.domain}`;
-    case "uploadRelease": return `Uploading the release of ${step.service}`;
-    case "keepRelease": return `${step.service} keeps the release it runs: the same commit, Stack and engine`;
-    case "releaseService": return `Handing App Service ${step.service} the new release${step.task ? MIGRATING : ""}`;
-    case "createService": return (exposure === "public"
-      ? `Making App Service ${step.service}, public behind the load balancer at ${release?.domain ?? "its domain"}`
-      : `Making App Service ${step.service}, internal: only the app's other services reach it`) + (step.task ? MIGRATING : "");
-    case "link": return `Linking ${step.service} to ${step.resource}`;
-    case "checkRefresh": return `Reading how the update of ${step.service} ended`;
-    case "unlink": return `Unlinking ${step.resource}, no longer in genesis/stack.md, from ${step.service}`;
-    case "putSettings": return `Updating the settings of ${step.service}`;
-    case "changeService": {
-      const { change } = step;
-      if (change.connections) return `Updating the services ${step.service} reaches`;
-      if (change.size) return `Resizing App Service ${step.service} to ${change.size}`;
-      return `Setting App Service ${step.service} to ${change.instances} instance${change.instances === 1 ? "" : "s"}`;
-    }
-    case "deleteService": return step.replaced
-      ? `Deleting App Service ${step.service}, to make it again: its exposure changed`
-      : `Deleting App Service ${step.service}, no longer in genesis/stack.md`;
-    default: return step.kind;
-  }
-}
-
-/**
- * The caller's report, stamped with the time, never failing the run: a report that throws or rejects is ignored.
- * @param {(event: any) => unknown} report
- */
-function reporterOf(report) {
-  return (event) => {
-    try {
-      const answered = report({ at: new Date().toISOString(), ...event });
-      if (typeof answered?.catch === "function") answered.catch(() => {});
-    } catch {
-      // A report is the caller's: it never stops the run it reports on.
-    }
-  };
-}
-
-/**
- * What a report says of a step: its kind, the service or resource it is for, its words, and the refresh it started or
- * read (`{ serviceId, refreshId }`); never its values.
- * @param {any} step @param {string} words @param {any} [record] the record after the step, for the refresh it started
- */
-function stepEvent(step, words, record = null) {
-  const event = { kind: "step", step: step.kind, words, ...(step.service ? { service: step.service } : {}), ...(step.resource ? { resource: step.resource } : {}) };
-  if (step.kind === "checkRefresh") return { ...event, refresh: { serviceId: step.id, refreshId: step.refreshId } };
-  const refreshId = step.service ? record?.run.services[step.service]?.refreshId : null;
-  const serviceId = step.service ? record?.items[`service.${step.service}`]?.id : null;
-  return refreshId && serviceId ? { ...event, refresh: { serviceId, refreshId } } : event;
-}
-
 /** A read of the provider that may answer later: no answer, a 5xx, its rate limit, a thing busy. @param {any} error */
 const retryable = (error) => error?.retryable === true;
-/** Text ending as a sentence ends, its own full stop kept. @param {string} text */
-const sentence = (text) => (/[.!?]$/u.test(text.trim()) ? text.trim() : `${text.trim()}.`);
 // A read tried again waits one pause, then two, four and at most six (5, 10, 20 and 30 seconds at the caller's 5).
 const BACKOFF_PAUSES_MAX = 6;
 /** The pauses before the provider is read again after this many failed reads in a row. @param {number} failures */
@@ -215,7 +166,8 @@ const backoffPauses = (failures) => Math.min(2 ** (failures - 1), BACKOFF_PAUSES
  * go, its links made ahead dropped (they ended with it) and its service handed its release again, so the next Deploy
  * makes them again and nothing it holds is stale. A refresh still open is waited for by the next Deploy as it reads
  * the service; should it then fail, the links it ends are made again as the provider no longer holds them (nextStep).
- * Answers the record with the reason of each that failed.
+ * A settings refresh that didn't succeed, open or ended, gives its settings again. Answers the record with the reason
+ * of each that failed.
  * @param {any} adapter @param {any} record @param {(event: any) => void} tell
  */
 async function settleLastRun(adapter, record, tell) {
@@ -227,11 +179,14 @@ async function settleLastRun(adapter, record, tell) {
     tell({ kind: "step", phase: "start", step: "settleRefresh", service, words, refresh: { serviceId: id, refreshId: state.refreshId } });
     const refresh = await adapter.readRefresh(id, state.refreshId);
     noteTask(kept, state, refresh);
+    // A settings refresh not known to have succeeded (failed, or still open and may yet fail): the provider may keep the
+    // settings the service had, so this Deploy gives them again.
+    if (state.settingsRefresh && refresh?.state !== "succeeded") delete kept.items[`service.${service}`].settingsHash;
     if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
       for (const resource of state.linkedAhead ?? []) delete kept.items[`resource.${resource}`]?.links?.[service];
       delete kept.items[`service.${service}`].release;
-      tell({ kind: "step", phase: "done", step: "settleRefresh", service, words,
-        message: `It ${refresh.state}: ${sentence(refresh.error?.message ?? "the provider gave no reason")} This Deploy hands ${service} its release again.` });
+      tell({ kind: "step", phase: "done", step: "settleRefresh", service, words, message: `It ${refresh.state}: `
+        + `${sentence(refresh.error?.message ?? "the provider gave no reason")} This Deploy hands ${service} its ${state.settingsRefresh ? "settings and " : ""}release again.` });
     } else tell({ kind: "step", phase: "done", step: "settleRefresh", service, words, message: `It is ${refresh?.state ?? "gone"}.` });
   }
   return kept;
@@ -302,6 +257,11 @@ function nextStep({ plan, needs, record, observed, release }) {
     }
     const unlinked = (resource) => !linked(resource.id, service.id);
     if (!state.version) {
+      // The settings given ahead of its release go live on the version it runs before the release is handed.
+      if (state.refreshId && thing) {
+        if (thing.refresh) return { kind: "wait", words: `Updating the settings of ${service.id} on the version it runs` };
+        return { kind: "checkRefresh", service: service.id, id: thing.id, refreshId: state.refreshId };
+      }
       // Before its release, a service that runs one is linked to each resource it isn't linked to, so its next
       // instances start with them however soon the provider starts them (a build it reuses starts them at once). A
       // link the provider takes only with the new release under way (LINK_NEEDS_RELEASE) waits for that release.
@@ -312,8 +272,12 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (thing && live?.digest === release.digests[service.id] && thing.version === live.version && !thing.lastError) {
         return { kind: "keepRelease", service: service.id };
       }
-      if (thing) return { kind: "releaseService", service: service.id, id: thing.id, ...migrateTask(service.id) };
-      return { kind: "uploadRelease", service: service.id, id: null };
+      if (!thing) return { kind: "uploadRelease", service: service.id, id: null };
+      // Its settings before its release, where they changed, so the release's instances start with them; those the
+      // release it runs doesn't take, or that didn't go live on it, follow the release (6).
+      const values = state.settingsAfterRelease ? null : valuesOf(service, { record, release }, byId);
+      if (values && values.hash !== item.settingsHash) return { kind: "putSettings", service: service.id, id: thing.id, values, beforeRelease: true };
+      return { kind: "releaseService", service: service.id, id: thing.id, ...migrateTask(service.id) };
     }
     if (!thing) {
       const name = release.declarations[service.id].name;
@@ -502,20 +466,44 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
         // The links made against it ended with it, and the release it moved to may not run: the next Deploy makes them
         // and hands it that release again.
         for (const resource of state.linkedAhead ?? []) delete record.items[`resource.${resource}`]?.links?.[step.service];
-        if (record.items[`service.${step.service}`]) delete record.items[`service.${step.service}`].release;
-        const what = task?.state === "failed" ? "the migrations failed, so no instance of the new release started"
-          : ["create", "release"].includes(refresh.kind) ? "the release did not go live" : `its ${refresh.kind} change did not go live`;
-        run.failure = `${step.service}: ${what}: ${refresh.error?.message ?? `its refresh ${refresh.state}`}`
-          + (refresh.fromVersion ? ` The version before (${refresh.fromVersion}) still serves.` : "")
-          + (run.migration?.state === "ran" ? MIGRATED_NOTE : "");
+        const item = record.items[`service.${step.service}`];
+        // A settings refresh's: the provider kept the settings the service had, so they are given again.
+        if (state.settingsRefresh && item) delete item.settingsHash;
+        const why = refresh.error?.message ?? `its refresh ${refresh.state}`;
+        if (state.settingsRefresh && !state.version) {
+          // Given ahead of its release, they didn't go live on the version it runs: they follow the release (6), which
+          // may be what takes them.
+          state.settingsAfterRelease = true;
+          message = `Its new settings did not go live on the version it runs: ${sentence(why)} ${step.service} gets its new release first, and its settings after it.`;
+        } else {
+          if (item) delete item.release;
+          const what = task?.state === "failed" ? "the migrations failed, so no instance of the new release started"
+            : ["create", "release"].includes(refresh.kind) ? "the release did not go live" : `its ${refresh.kind} change did not go live`;
+          run.failure = `${step.service}: ${what}: ${why}`
+            + (refresh.fromVersion ? ` The version before (${refresh.fromVersion}) still serves.` : "")
+            + (run.migration?.state === "ran" ? MIGRATED_NOTE : "");
+        }
       }
-      Object.assign(state, { refreshId: null, linkedAhead: [] });
+      Object.assign(state, { refreshId: null, linkedAhead: [], settingsRefresh: false });
       break;
     }
     case "putSettings": {
-      const refreshId = await adapter.putSettings(step.id, step.values, { idempotencyKey: keyOf(record, "settings", step.service, step.values.hash) });
+      const state = stateOf(step.service);
+      let refreshId;
+      try {
+        // Its own key ahead of the release: the same values given again after it are another ask.
+        const asked = step.beforeRelease ? { ahead: step.values.hash } : step.values.hash;
+        refreshId = await adapter.putSettings(step.id, step.values, { idempotencyKey: keyOf(record, "settings", step.service, asked) });
+      } catch (error) {
+        // Taken only with the service's new release: asked before it, they follow it (6).
+        if (error?.code !== SETTINGS_NEED_RELEASE || !step.beforeRelease) throw error;
+        state.settingsAfterRelease = true;
+        message = `The release ${step.service} runs doesn't take its new settings: it gets them after its new release.`;
+        break;
+      }
       record.items[`service.${step.service}`].settingsHash = step.values.hash;
-      stateOf(step.service).refreshId = refreshId;
+      // A provider that takes them at once (a service whose first release failed) starts no refresh.
+      Object.assign(state, { refreshId, settingsRefresh: Boolean(refreshId) });
       break;
     }
     case "changeService": {
@@ -738,4 +726,4 @@ async function deleteResource(adapter, record, needs, { name, typed }) {
   return kept;
 }
 
-export { LEASE_SECONDS, LINK_NEEDS_RELEASE, applyStep, deleteResource, deploy, nextStep, releaseDigest, stepWords, takeDeployLease, takeOffline };
+export { LEASE_SECONDS, LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE, applyStep, deleteResource, deploy, nextStep, releaseDigest, stepWords, takeDeployLease, takeOffline };

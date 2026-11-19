@@ -187,6 +187,10 @@ function createStandInServiceEngine(world, parts) {
   const { faults, nextId, at, now } = world;
   let placed = 0;
 
+  /** Whether an instance never gets healthy: every one, or those `instancesUnhealthy`'s function picks. @param {any} instance */
+  const unhealthy = (instance) => (typeof faults.instancesUnhealthy === "function"
+    ? faults.instancesUnhealthy(instance) === true : Boolean(faults.instancesUnhealthy));
+
   /** Starts one instance of a service with what it runs (`spec`) and its own `_mobilynet`, pending until healthy. */
   function startInstance(service, spec, refreshId) {
     const index = placed++;
@@ -357,8 +361,9 @@ function createStandInServiceEngine(world, parts) {
     const old = () => liveOf(service.id).filter((one) => one.refreshId !== refresh.id);
     const pending = fresh().filter((one) => one.rotation === "pending");
     if (pending.length > 0) {
-      if (faults.instancesUnhealthy) {
-        for (const instance of pending) refresh.steps.push(stepOf("instance_never_healthy", instance.id), stepOf("instance_draining", instance.id));
+      const sick = pending.filter(unhealthy);
+      if (sick.length > 0) {
+        for (const instance of sick) refresh.steps.push(stepOf("instance_never_healthy", instance.id), stepOf("instance_draining", instance.id));
         failRefresh(service, refresh, { code: "instance_never_healthy", message: "A new instance never became healthy; the previous version kept serving." }, null);
         return;
       }
@@ -394,12 +399,12 @@ function createStandInServiceEngine(world, parts) {
 
   /**
    * A service with no refresh under way, running a release: drained instances go, pending ones join once healthy
-   * (never, with `instancesUnhealthy`), a missing one starts, and one past its count drains.
+   * (never, those `instancesUnhealthy` picks), a missing one starts, and one past its count drains.
    */
   function steady(service) {
     if (!service.version || service.state !== "running") return;
     for (const instance of liveOf(service.id).filter((one) => one.rotation === "draining")) removed(instance, "count_lowered");
-    if (!faults.instancesUnhealthy) for (const instance of liveOf(service.id).filter((one) => one.rotation === "pending")) joined(instance);
+    for (const instance of liveOf(service.id).filter((one) => one.rotation === "pending" && !unhealthy(one))) joined(instance);
     const serving = liveOf(service.id);
     for (let made = serving.length; made < service.instances; made += 1) startInstance(service, specOf(service), null);
     const inRotation = serving.filter((one) => one.rotation === "in");
