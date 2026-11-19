@@ -157,7 +157,7 @@ verification.
 | `NODE_ENV` | `development` in Preview | `production` | `production` |
 | Settings | Development Env | Staging Env | Production Env |
 | Databases | development | staging | production |
-| Email and SMS | logged, not sent | sent only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`; logged when unset | sent |
+| Email and SMS | logged, not sent | sent only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`; logged when unset; to the people they are for when the host gives `STAGING_REACHES_REAL_PEOPLE=true` (real people use it) | sent |
 | Push notifications, webhooks, connector writes | logged | logged | real |
 | Payments | the provider's sandbox | the provider's sandbox | live |
 | Banner on every page | "Development" | "Staging" | none |

@@ -179,6 +179,10 @@ test("needs whose services break a rule of the Stack are refused, naming the ser
     assert.match(withServices([{ ...web, reaches: [{ service: "computers", setting }] }, computers]), /reaches other services/u, setting);
   }
   assert.match(withServices([web, { ...computers, settings: { MEMOBOT_FILES_BUCKET: "x" } }]), /needs\.services computers settings are its own/u);
+  // Nor one only a host's Staging is given.
+  assert.match(withServices([web, { ...computers, settings: { STAGING_REACHES_REAL_PEOPLE: "true" } }]), /settings are its own/u);
+  assert.match(withServices([{ ...web, reaches: [{ service: "computers", setting: "STAGING_REACHES_REAL_PEOPLE" }] }, computers]),
+    /reaches other services/u);
   assert.match(withServices([web, { ...computers, settings: { APP_PUBLIC_URL: "x" } }]), /settings are its own/u);
   assert.match(withServices([{ ...web, settings: { MEMOBOT_COMPUTERS_URL: "x" } }, computers]), /settings are its own/u);
   assert.match(withServices([web, { ...computers, sandbox: ["docker"] }]), /needs\.services computers sandbox allows only fuse and gvisor/u);

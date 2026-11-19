@@ -465,6 +465,23 @@ test("Deployment leaves APP_ENV to the host and refuses SIDE_EFFECTS, which it r
   }
 });
 
+test("Deployment leaves STAGING_REACHES_REAL_PEOPLE to the host, in a step, generated secret or setup code", () => {
+  const refusal = /^Deployment never sets STAGING_REACHES_REAL_PEOPLE: the host gives it to a Staging only while the project's owner marks that real people use that Staging\. Remove STAGING_REACHES_REAL_PEOPLE from Deployment\./u;
+  const name = "STAGING_REACHES_REAL_PEOPLE";
+  for (const lines of [
+    deploymentLines({ steps: [`- Serve \`Start\`: \`env\` \`${name}=true\` \`node\` \`server.js\``] }),
+    deploymentLines({ steps: [`- Migrate \`Seed\`: \`env\` \`${name}=true\` \`npm\` \`run\` \`seed\``, "- Serve `Start`: `npm` `start`"] }),
+    [`- Generated secrets: \`${name}\``, ...deploymentLines()],
+    [`- Setup code: \`${name}\``, ...deploymentLines()]
+  ]) {
+    assert.throws(() => parseVibe64DeploymentLines(lines), (error) => {
+      assert.equal(error?.code, "VIBE64_DEPLOYMENT_INVALID", lines.join("\n"));
+      assert.match(error.message, refusal, lines.join("\n"));
+      return true;
+    });
+  }
+});
+
 test("all Vibe64 operation parsers reject the retired JSON representation", () => {
   const json = ["```json vibe64.retired.v1", "{\"version\":1}", "```"];
   for (const [parse, code] of [

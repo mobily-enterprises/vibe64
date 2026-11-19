@@ -30,10 +30,13 @@ const INSTANCES_MAX = 100;
 const VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
 const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
 // The host gives every step APP_ENV, the environment it deploys to; no step, Generated secret or Setup code sets
-// it, nor SIDE_EFFECTS, which APP_ENV replaced.
+// it, nor SIDE_EFFECTS, which APP_ENV replaced, nor STAGING_REACHES_REAL_PEOPLE, which a host gives a Staging only
+// while its owner marks that real people use it.
 const HOST_OWNED_ENVIRONMENT = Object.freeze({
   APP_ENV: "Deployment never sets APP_ENV: the host gives every step the environment it deploys to. Remove APP_ENV from Deployment.",
-  SIDE_EFFECTS: "SIDE_EFFECTS was replaced by APP_ENV, which the host gives every step. Remove SIDE_EFFECTS from Deployment."
+  SIDE_EFFECTS: "SIDE_EFFECTS was replaced by APP_ENV, which the host gives every step. Remove SIDE_EFFECTS from Deployment.",
+  STAGING_REACHES_REAL_PEOPLE: "Deployment never sets STAGING_REACHES_REAL_PEOPLE: the host gives it to a Staging only "
+    + "while the project's owner marks that real people use that Staging. Remove STAGING_REACHES_REAL_PEOPLE from Deployment."
 });
 const STEP_ROLE_ORDER = Object.freeze({
   prepare: 0,

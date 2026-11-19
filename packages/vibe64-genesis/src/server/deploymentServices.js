@@ -48,9 +48,11 @@ const RESOURCE_DEVELOPMENT = ONE_VALUE("Development");
 // settings (the default).
 const RESOURCE_DEVELOPMENT_MODES = Object.freeze(["local folder", "own bucket"]);
 // The settings a host gives every service itself, and its instance facts (V64_*): no service's Reaches or Setting
-// names one.
+// names one. Nor does one name STAGING_REACHES_REAL_PEOPLE, which a host gives a Staging only while its owner marks
+// that real people use it.
 const HOST_OWNED_SETTINGS = Object.freeze(["APP_ENV", "SIDE_EFFECTS", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"]);
 const HOST_OWNED_SETTING_PREFIX = "V64_";
+const STAGING_REAL_PEOPLE_SETTING = "STAGING_REACHES_REAL_PEOPLE";
 
 const DEPLOYMENT_HEADING_FORMS = Object.freeze(["### Service `id`: summary", "### Resource `id`"]);
 const DEPLOYMENT_SERVICE_ENTRY_FORMS = Object.freeze([
@@ -78,6 +80,9 @@ const SHARED_ENTRY_FORMS = Object.freeze(DEPLOYMENT_ENTRY_FORMS.filter((form) =>
 /** Why a setting's name can't be a service's own, or "". @param {string} name */
 function hostOwnedSetting(name) {
   if (HOST_OWNED_SETTINGS.includes(name)) return `${name} is a setting the host gives every service itself`;
+  if (name === STAGING_REAL_PEOPLE_SETTING) {
+    return `${name} is the host's, given to a Staging only while the project's owner marks that real people use it`;
+  }
   if (name.startsWith(HOST_OWNED_SETTING_PREFIX)) {
     return `${name} starts with ${HOST_OWNED_SETTING_PREFIX}, which names the facts the host gives each instance`;
   }

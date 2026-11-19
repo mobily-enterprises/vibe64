@@ -403,6 +403,15 @@ function createProjectEnvironment({
           "vibe64_env_side_effects_replaced"
         );
       }
+      // Nor STAGING_REACHES_REAL_PEOPLE: a host gives it to a Staging only while the project's owner marks that real
+      // people use it, and a development server refuses to start with it.
+      if (normalizedKey === "STAGING_REACHES_REAL_PEOPLE" && values[key]?.remove !== true) {
+        throw vibe64Error(
+          "STAGING_REACHES_REAL_PEOPLE is not an Env value: a host gives it to a Staging only while the project's owner "
+            + "marks that real people use that Staging.",
+          "vibe64_env_staging_reaches_real_people_reserved"
+        );
+      }
       if (record?.source === SAVED_ENV_VALUE_SOURCE) {
         throw vibe64Error(
           `${normalizedKey} is linked to a saved value. Unlink it before entering a value here.`,

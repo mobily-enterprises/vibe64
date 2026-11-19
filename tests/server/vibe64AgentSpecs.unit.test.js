@@ -135,6 +135,9 @@ test("the Deployment spec states the APP_ENV contract and keeps Prepare and Buil
   assert.match(deployment, /`development` and `test`: no email, SMS, push notification, webhook or connector write leaves the application/u);
   assert.match(deployment, /`staging`: email goes only to `STAGING_EMAIL_TO` and SMS only to `STAGING_SMS_TO`, and each is logged instead when its variable is unset/u);
   assert.match(deployment, /`production`: everything is real\./u);
+  assert.match(deployment, /Nor does one set `STAGING_REACHES_REAL_PEOPLE`, which a host gives a Staging only while the project's owner marks that real people use it\./u);
+  assert.match(deployment, /When the host also gives `STAGING_REACHES_REAL_PEOPLE=true` \(real people use that Staging\), email and SMS go to the people they are for instead, and everything else stays as `staging` has it/u);
+  assert.match(deployment, /`TRUSTED_PROXIES`, `STAGING_REACHES_REAL_PEOPLE`, any `V64_` name\)/u);
   assert.match(deployment, /Vibe64 runs a session's commands and Preview with `development`, and automated test runs use `test`\./u);
   assert.match(deployment, /Read it when the application runs, never at build time\./u);
   assert.doesNotMatch(deployment, /Test copy|SIDE_EFFECTS ===/u);

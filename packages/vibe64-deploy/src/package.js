@@ -17,6 +17,8 @@ const PACKAGE_MAX_BYTES = Math.floor((64 * 1024 * 1024 - 64 * 1024) * 3 / 4);
 // The settings Production gives every service itself: the environment, where it listens, its public address and the
 // proxies it believes.
 const PRODUCTION_SETTINGS = Object.freeze(["APP_ENV", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"]);
+// A host gives it to a Staging that real people use; a production server refuses to start with it.
+const STAGING_REAL_PEOPLE_SETTING = "STAGING_REACHES_REAL_PEOPLE";
 const TAR_BLOCK = 512;
 
 /** A refusal a caller shows as it is, with its code and HTTP status. */
@@ -207,7 +209,8 @@ function sortedObject(value) {
 
 /**
  * Why a Production Env entry can't be given to the services it names, or "": it names a service there isn't, or it is
- * a setting Production gives itself, a resource binds, or a service's own `- Setting` or Reaches sets.
+ * a setting Production gives itself, a resource binds, or a service's own `- Setting` or Reaches sets, or
+ * STAGING_REACHES_REAL_PEOPLE, which only a Staging takes.
  * @param {{ key: string, services?: string[] }} record @param {object} needs needsOfStack's needs
  */
 function envEntryProblem(record, needs) {
@@ -215,6 +218,9 @@ function envEntryProblem(record, needs) {
   const unknown = (record.services ?? []).filter((id) => !ids.includes(id));
   if (unknown.length > 0) {
     return `${record.key} is given to ${unknown.join(", ")}, which this Deployment doesn't have: its services are ${ids.join(", ")}.`;
+  }
+  if (record.key === STAGING_REAL_PEOPLE_SETTING) {
+    return `${record.key} says real people use a Staging, so Production never takes it: an app refuses to start with it there.`;
   }
   const own = needs.services.flatMap((service) => [...Object.keys(service.settings), ...service.reaches.map((reach) => reach.setting)]);
   if (PRODUCTION_SETTINGS.includes(record.key) || record.key.startsWith("V64_") || boundSettings(needs).has(record.key) || own.includes(record.key)) {

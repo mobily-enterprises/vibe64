@@ -157,7 +157,16 @@ Development Env.", and a value saved before can only be removed: choose
 **Remove** on its row, or ask the coding agent to run `vibe64-helper env remove
 development SIDE_EFFECTS`. A host
 that publishes projects gives Staging `APP_ENV=staging`, where email and SMS go
-only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`. Colleague can explain this.
+only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`. A host may also let the
+project's owner mark that real people use a Staging, while the project has no
+Production; it then gives that Staging `STAGING_REACHES_REAL_PEOPLE=true`, and
+its email and SMS go to the people they are for. Only the host gives it: Env
+refuses it, with "STAGING_REACHES_REAL_PEOPLE is not an Env value: a host gives
+it to a Staging only while the project's owner marks that real people use that
+Staging.", a value saved before can only be removed, and a Deployment step,
+Generated secret, Setup code or a service's Setting or Reaches cannot name it.
+An application on JSKIT refuses to start with it anywhere but Staging.
+Colleague can explain this.
 
 The three environments, as Colleague explains them:
 
@@ -168,10 +177,10 @@ The three environments, as Colleague explains them:
 | `NODE_ENV` | `development` in Preview | `production` | `production` |
 | Settings | Development Env | Staging Env | Production Env |
 | Databases | development | staging | production |
-| Email and SMS | logged, not sent | sent only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`; logged when unset | sent |
+| Email and SMS | logged, not sent | sent only to `STAGING_EMAIL_TO` and `STAGING_SMS_TO`; logged when unset; sent to the people they are for when real people use it (`STAGING_REACHES_REAL_PEOPLE=true`, which only the host gives) | sent |
 | Push notifications, webhooks, connector writes | logged | logged | real |
 | Payments | the provider's sandbox | the provider's sandbox | live |
-| Banner on every page | "Development" | "Staging" | none |
+| Banner on every page | "Development" | "Staging" ("Staging · real people" when real people use it) | none |
 | Development shortcuts (development sign-in, relaxed cookies, test databases) | allowed | refused | refused |
 
 For a long-running shell task, the coding agent can request its native tool's

@@ -19,8 +19,12 @@ const INSTANCES_LIMIT = 100;
 const SERVICES_MAX = 8;
 const SERVICE_ID = /^[a-z][a-z0-9-]{0,15}$/u;
 const SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
-// The settings Production gives every service itself, and the instance facts (V64_*): no service sets one.
-const HOST_SETTINGS = Object.freeze(["APP_ENV", "SIDE_EFFECTS", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"]);
+// The settings Production gives every service itself, and the instance facts (V64_*): no service sets one. Nor does
+// one set SIDE_EFFECTS, which APP_ENV replaced, or STAGING_REACHES_REAL_PEOPLE, which only a host's Staging that real
+// people use is given.
+const HOST_SETTINGS = Object.freeze([
+  "APP_ENV", "SIDE_EFFECTS", "STAGING_REACHES_REAL_PEOPLE", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"
+]);
 const RESOURCES_MAX = 8;
 const SECRETS_MAX = 20;
 const RESOURCE_ID = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/u;

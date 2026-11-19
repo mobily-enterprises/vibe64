@@ -121,12 +121,17 @@ sentence.
 to, `staging` or `production`. The parser refuses a step argument that sets it
 (`APP_ENV=...`) and a Generated secrets or Setup code entry naming it, and
 refuses `SIDE_EFFECTS`, which `APP_ENV` replaced, in the same places; each
-refusal names the fix. The Deployment guidance asks the application to follow
+refusal names the fix. `STAGING_REACHES_REAL_PEOPLE` is the host's too: a host
+gives it to a Staging only while the project's owner marks that real people use
+it, so the same places refuse it, as do a service's Setting and Reaches, project
+Env (`vibe64_env_staging_reaches_real_people_reserved`, removal still allowed)
+and a Production Env entry at deploy. The Deployment guidance asks the application to follow
 `APP_ENV` at run time through one helper, never `NODE_ENV`, which only picks
 optimised builds: in `development` and `test`, email, SMS, push notifications,
 webhooks and connector writes are logged; in `staging`, email and SMS go only
-to `STAGING_EMAIL_TO` and `STAGING_SMS_TO` (logged when unset), the rest is
-logged and payments use the provider's sandbox; only `production` is real, and
+to `STAGING_EMAIL_TO` and `STAGING_SMS_TO` (logged when unset), or to the
+people they are for when the host gives `STAGING_REACHES_REAL_PEOPLE=true`, the
+rest is logged and payments use the provider's sandbox; only `production` is real, and
 every other environment shows a banner naming it. Prepare and Build never need
 the database or another managed service, so a host may run them alone, without
 those credentials, to check a revision builds.

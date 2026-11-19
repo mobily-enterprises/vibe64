@@ -144,6 +144,13 @@ test("a service given more settings than mobilynet takes, or one by a name its r
   assert.match(envEntryProblem({ key: "WORKER_SECRET", services: ["worker"] }, NEEDS),
     /^WORKER_SECRET is given to worker, which this Deployment doesn't have: its services are web, computers\.$/u);
   assert.equal(envEntryProblem({ key: "OPENAI_API_KEY", services: ["web", "computers"] }, NEEDS), "");
+  // STAGING_REACHES_REAL_PEOPLE is a Staging's alone: a production app refuses to start with it.
+  assert.equal(envEntryProblem({ key: "STAGING_REACHES_REAL_PEOPLE" }, NEEDS), "STAGING_REACHES_REAL_PEOPLE says real people "
+    + "use a Staging, so Production never takes it: an app refuses to start with it there.");
+  assert.throws(() => settingsPerService(NEEDS, [{ key: "STAGING_REACHES_REAL_PEOPLE", secret: false }]), {
+    code: "vibe64_production_env_invalid",
+    message: /^STAGING_REACHES_REAL_PEOPLE says real people use a Staging, so Production never takes it: .* Remove it from the Production Env, then deploy\.$/u
+  });
 });
 
 test("mobilynet's count is the names a service is sent with its links' fields, each once: a production web holding 48 is taken, and the 50 its next Deploy would send are taken where its region holds 199, refused where it holds 49", () => {

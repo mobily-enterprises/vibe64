@@ -1662,6 +1662,21 @@ test("SIDE_EFFECTS, which APP_ENV replaced, is refused as an Env value naming it
   });
 });
 
+test("STAGING_REACHES_REAL_PEOPLE is refused as an Env value in every scope, naming who gives it, while an old one can still be removed", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = project(targetRoot);
+    for (const environment of ["dev", "staging"]) {
+      const response = await service.saveEnvUserValues({ environment, values: { STAGING_REACHES_REAL_PEOPLE: "true" } });
+      assert.equal(response.ok, false);
+      assert.equal(response.errors[0].code, "vibe64_env_staging_reaches_real_people_reserved");
+      assert.equal(response.errors[0].message, "STAGING_REACHES_REAL_PEOPLE is not an Env value: a host gives it to a "
+        + "Staging only while the project's owner marks that real people use that Staging.");
+    }
+    const removed = await service.saveEnvUserValues({ environment: "dev", values: { STAGING_REACHES_REAL_PEOPLE: { remove: true } } });
+    assert.equal(removed.ok, true);
+  });
+});
+
 test("Genesis Stack resources define expected Env names without technology checks in Vibe64", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = project(targetRoot, {

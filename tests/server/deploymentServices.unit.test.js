@@ -175,6 +175,13 @@ test("each wrong service or resource line is refused at its line, saying what is
   refused(parse([...MEMOBOT_DEPLOYMENT_LINES, "### Resource `files`"]), 38, /second ### Resource `files`/u);
 });
 
+test("no service's Setting or Reaches names STAGING_REACHES_REAL_PEOPLE, which only the host gives a Staging", () => {
+  const parse = (lines) => () => parseVibe64DeploymentLines(lines);
+  const refusal = /Service `(web|computers)`: STAGING_REACHES_REAL_PEOPLE is the host's, given to a Staging only while the project's owner marks that real people use it; give the setting another name\./u;
+  refused(parse(memobotWith({ 19: "- Reaches: `computers` as `STAGING_REACHES_REAL_PEOPLE`" })), 19, refusal);
+  refused(parse(memobotWith({ 31: "- Setting `STAGING_REACHES_REAL_PEOPLE`: `true`" })), 31, refusal);
+});
+
 test("what needs ## Resources is checked by the inspection, at its line", () => {
   // A ### Resource names a declared resource, and Development is a bucket's.
   refused(() => inspect(memobotWith({ 35: "### Resource `uploads`" })), 35, /## Resources declares no resource `uploads`; its resources are `database`, `files`/u);
