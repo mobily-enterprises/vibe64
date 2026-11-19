@@ -12,6 +12,7 @@
 // `leases: true` takes none, which is safe only while one editor deploys a project's environment (Managed today:
 // the workspace's own editor is the only writer).
 import { LABEL } from "../../record.js";
+import { LINK_NEEDS_RELEASE } from "../../steps.js";
 import { MOBILYNET_INTERFACES, needAs, serviceUpload } from "./declaration.js";
 
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
@@ -29,6 +30,22 @@ const DRAIN_SECONDS = 30;
 // or ended with a refresh of its consumer that failed or was aborted, which ends every link the release the consumer
 // still runs doesn't name (engine-support M14), whichever Deploy made it.
 const HELD_LINK_STATES = Object.freeze(["issuing", "active", "failed"]);
+
+/**
+ * A link mobilynet takes only with the service's new release under way, as the engine's own refusal
+ * (LINK_NEEDS_RELEASE): mobilynet checks a link of an App Service against the release it runs, else against the one
+ * its refresh in progress moves it to (engine-support M14), so it refuses `422 validation_failed` one the release it
+ * runs doesn't name (`need`: "declares no need"), one of a service that runs no release yet, and one asked while that
+ * refresh is queued or hasn't read its release (`consumer`: "no release built yet", "isn't read yet", which the client
+ * marks to be tried again). Any other refusal is mobilynet's, as it gave it.
+ * @param {any} error
+ */
+function linkRefusal(error) {
+  const fields = error?.code === "validation_failed" ? error.details?.fieldErrors ?? {} : {};
+  const waits = /declares no need/u.test(fields.need ?? "") || /release/u.test(fields.consumer ?? "");
+  if (!waits) return error;
+  return Object.assign(new Error(error.message), { code: LINK_NEEDS_RELEASE, retryable: error.retryable, details: error.details, cause: error });
+}
 
 /**
  * @param {object} options
@@ -159,7 +176,13 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
       return (await calls.createHostedService({ app, name, size, region, labels }, { idempotencyKey })).hostedService;
     },
     resizeResource: (id, size, { idempotencyKey }) => client.changeHostedService(id, { size }, { idempotencyKey }),
-    linkResource: async (id, serviceId, need, { idempotencyKey }) => (await client.linkHostedService(id, { consumer: { service: serviceId }, need }, { idempotencyKey })).link,
+    linkResource: async (id, serviceId, need, { idempotencyKey }) => {
+      try {
+        return (await client.linkHostedService(id, { consumer: { service: serviceId }, need }, { idempotencyKey })).link;
+      } catch (error) {
+        throw linkRefusal(error);
+      }
+    },
     listLinks: (id) => client.listHostedLinks(id),
     /**
      * A resource's backups as an owner reads them (`hosted:read`): its point-in-time window (`from`, and `to`, null

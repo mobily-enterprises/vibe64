@@ -701,11 +701,71 @@ test("a link mobilynet ended while the record still holds it is made again by th
     assert.equal(standIn.hosted.service(items[item].id).links.find((link) => link.id === items[item].links.computers).state, "revoked");
   }
 
-  // Linked again while its new release builds: the release it runs names both needs, so each link's settings go in a
-  // settings refresh queued behind that release (M14), which runs on the release that one brought.
+  // Linked again before its new release: the release it runs names both needs, so mobilynet takes each link against it,
+  // and the release's refresh, queued behind the links' settings refresh, starts every instance with them.
   const second = await run({ record: first.record, commit: "c2" });
   assert.equal(second.outcome, "live", second.message);
   assertLinkedAndServing(standIn, second.record);
+});
+
+test("a service that runs a release is linked to a resource it lost before it is handed its next release, so even a build mobilynet reuses at once starts no instance without it", async () => {
+  const { standIn, client, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const { items } = first.record;
+  const computersId = items["service.computers"].id;
+  const databaseId = items["resource.database"].id;
+  // computers' database link ends (removed by hand) while computers runs c1, whose release names the database.
+  await client.unlinkHostedService(databaseId, items["resource.database"].links.computers);
+  settle(standIn);
+  // A refresh whose build is done starts its instances in the step it starts, as mobilynet's reconcile does with a
+  // reused build: no step ever shows it building (a production Deploy, 18 Nov 23:42:10).
+  standIn.faults.instantBuilds = true;
+  const before = standIn.requests().length;
+  const second = await run({ record: first.record, commit: "c2" });
+  standIn.faults.instantBuilds = false;
+  assert.equal(second.outcome, "live", second.message);
+  const rolled = standIn.services.refreshes(computersId).find((one) => one.kind === "release" && one.toVersion === second.record.run.services.computers.version);
+  assert.equal(rolled.state, "succeeded");
+  const started = standIn.services.instances(computersId).filter((one) => one.refreshId === rolled.id);
+  assert.ok(started.length >= 2, "c2's refresh started computers' instances");
+  assert.deepEqual(started.filter((one) => !withResources(one)).map((one) => one.id), [], "no instance of c2 started without its database");
+  assert.deepEqual(started.filter((one) => one.removedReason === "link_changed").map((one) => one.id), [], "none was replaced for a late link");
+  assertLinkedAndServing(standIn, second.record);
+
+  // The link was asked for before computers' release, so mobilynet checked it against the release computers runs and
+  // the release's refresh started from settings that already had it.
+  const asked = requestsAfter(standIn, before).filter(isWrite);
+  const linkAt = asked.findIndex((request) => request.path === `/v1/hosted-services/${databaseId}/links` && request.body?.consumer?.service === computersId);
+  const releaseAt = asked.findIndex((request) => request.path === `/v1/services/${computersId}/releases`);
+  assert.ok(linkAt >= 0 && releaseAt > linkAt, "computers is linked to its database before it is handed c2");
+  assert.equal(asked[linkAt].status, 202);
+  // A link made against the release computers runs is no link made ahead: a failed refresh never ends it.
+  assert.deepEqual(second.record.run.services.computers.linkedAhead ?? [], []);
+});
+
+test("a service whose first release failed is linked the moment its next refresh opens; with a build mobilynet reuses at once, mobilynet replaces the instances it started first", async () => {
+  const { standIn, run, record } = setup();
+  standIn.faults.releaseBuildFails = true;
+  const failed = await run({ record, commit: "c1" });
+  standIn.faults.releaseBuildFails = false;
+  assert.equal(failed.outcome, "failed");
+  const computersId = failed.record.items["service.computers"].id;
+  // computers runs no release, so mobilynet takes a link of it only ahead of a refresh under way (engine-support M14):
+  // with a build done at once, that refresh started its instances in the step it started.
+  standIn.faults.instantBuilds = true;
+  const second = await run({ record: failed.record, commit: "c2" });
+  standIn.faults.instantBuilds = false;
+  assert.equal(second.outcome, "live", second.message);
+  assertLinkedAndServing(standIn, second.record);
+  // Linked at the first step its refresh was open, with no wait between.
+  const handed = second.steps.indexOf("releaseService computers");
+  assert.deepEqual(second.steps.slice(handed, handed + 3), ["releaseService computers", "link computers", "link computers"]);
+  // mobilynet drained the instances it had started without them (link_changed) and started them again with both.
+  const rolled = standIn.services.refreshes(computersId).find((one) => one.kind === "release" && one.toVersion === second.record.run.services.computers.version);
+  const started = standIn.services.instances(computersId).filter((one) => one.refreshId === rolled.id);
+  assert.ok(started.some((one) => one.removedReason === "link_changed"), "the instances started before the links were replaced");
+  assert.ok(started.filter((one) => !one.removedReason).every(withResources));
 });
 
 test("links mobilynet ended with a build no Deploy read are made again: the run that made them stopped, and the next started while that build still ran", async () => {

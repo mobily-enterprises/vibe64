@@ -289,7 +289,8 @@ function createStandInServiceEngine(world, parts) {
     if (refresh.state === "queued") {
       Object.assign(refresh, { state: "building", startedAt: at(), buildId: release?.buildId ?? null });
       refresh.steps.push(stepOf("build_started", null, refresh.buildId));
-      return;
+      // A build done already passes in the same step (`instantBuilds`), as mobilynet's reconcile passes a reused one.
+      if (!faults.instantBuilds) return;
     }
     if (!release || release.build === "building") return;
     if (release.build === "failed") {
@@ -392,8 +393,11 @@ function createStandInServiceEngine(world, parts) {
       }
       const refresh = currentRefresh(service.id);
       if (!refresh) steady(service);
-      else if (refresh.state === "queued" || refresh.state === "building") build(service, refresh);
-      else if (refresh.state === "rolling") roll(service, refresh);
+      else if (refresh.state === "queued" || refresh.state === "building") {
+        build(service, refresh);
+        // mobilynet's reconcile rolls a refresh in the pass its build passed, starting its first instances then.
+        if (faults.instantBuilds && refresh.state === "rolling") roll(service, refresh);
+      } else if (refresh.state === "rolling") roll(service, refresh);
     }
   }
 

@@ -188,38 +188,57 @@ making it twice. In order:
 1. a service whose exposure changed is deleted, to be made again;
 2. each resource's hosted service is made, labelled, or resized, and waited for;
 3. the domain is added to the provider project when none covers it;
-4. each internal service, then the public one: its release uploaded, its App
-   Service made (labelled, internal ones with no routes, the public one routed
-   at the domain with a connection to each service it reaches) or handed the
-   release and, while that refresh is open, set to the count chosen, linked to
-   every resource once that refresh is building, then the refresh waited for.
+4. each internal service, then the public one. A service that runs a release
+   is first linked to each resource it isn't linked to at the provider, before
+   it is handed its next release, so that release's instances start with them
+   however soon the provider starts them: a provider that reuses a build starts
+   a refresh's instances as the refresh starts (mobilynet's reconcile does
+   both in one transaction; a production Deploy on 18 Nov handed a service a
+   release at 23:42:09, and its first instance started at 23:42:10). Then its
+   release is uploaded and its App Service made (labelled, internal ones with no
+   routes, the public one routed at the domain with a connection to each service
+   it reaches), or it is handed the release and, while that refresh is open, set
+   to the count chosen. Each resource it is still not linked to is linked the
+   moment that refresh is open, and the refresh is waited for.
    mobilynet's refresh rolls to the count the service has as it rolls, so a
    release starts as many new instances as the Plan says, and one that fails
-   leaves the version before serving on the chosen count. mobilynet checks a link against the release a service
-   runs or, when that names no such need, the release its refresh in progress
-   (building or rolling) moves it to, and that refresh's instances start with
-   the link's settings; so a new service's first instances, and a release
-   naming a new resource, start with their resources, and linked while the
-   build runs, no instance restarts. A link asked while that release isn't read
-   yet is refused with a `422` the client marks to try again, and the next step
-   asks again. A refresh that fails ends the links made against it, which the
-   record lets go so the next Deploy makes them again, and fails the Deploy
-   with the service's reason; services not yet moved keep serving their version.
-   The record names each link the engine made, but a link counts only while the
-   provider holds it: the mobilynet adapter's inventory lists, for each hosted
-   service Vibe64 made, the links mobilynet holds (issuing, active or failed),
-   and a link the record names that mobilynet ended counts as none, so the next
-   step makes it again. mobilynet ends every link the release a service still
-   runs doesn't name when a refresh of it fails or is aborted, whichever run
-   made the link and even when no Deploy reads that refresh (the run that made
-   it stopped first, and the next began while it was still open), and an owner
-   may remove a link by hand; a record that kept such a link would start the
-   service's next release without that resource's settings. A service that runs
-   no release yet (its first failed) is linked again ahead of the release the
-   Deploy hands it, whose instances start with the resource; one whose running
-   release names the need gets the link's settings in a settings refresh queued
-   behind that release, so its instances serve with the resource once the Deploy
-   is live. A link mobilynet still holds that a record made again from labels
+   leaves the version before serving on the chosen count.
+   - A provider may take a link only with the service's new release under way:
+     the release the service runs doesn't name the resource, it runs none yet,
+     or the refresh moving it hasn't read its release. Its adapter then refuses
+     the link with the engine's own code, `link_needs_release`; the mobilynet
+     adapter answers mobilynet's `422 validation_failed` for those cases so. A
+     link asked before the release is then made once its refresh is open. One
+     asked while the refresh is open is asked again at the next step.
+   - mobilynet checks a link against the release a service runs or, when that
+     names no such need, against the release its refresh in progress (building
+     or rolling) moves it to. Made against that release, the link's settings go
+     into the refresh, and mobilynet replaces any instance the refresh started
+     without them (`link_changed`). So a new service, one whose first release
+     failed and a release naming a new resource are linked as soon as their
+     refresh is open, and with a reused build mobilynet replaces the instances
+     it started first. Starting none without the link needs mobilynet to take
+     links before a refresh starts.
+   - Linked first, a service whose running release names the resource gets the
+     link's settings before its release's refresh starts. Its refresh starts
+     every instance with them, and a failed refresh never ends that link.
+     Linked after the release instead, as the engine did until 19 Nov, mobilynet
+     queued the link's settings behind the move, and every instance of the new
+     release started without the resource.
+   - A refresh that fails ends the links mobilynet made against the release it
+     moved to, which the record lets go so the next Deploy makes them again,
+     and fails the Deploy with the service's reason. Services not yet moved keep
+     serving their version.
+   - The record names each link the engine made, but a link counts only while
+     the provider holds it. The mobilynet adapter's inventory lists, for each
+     hosted service Vibe64 made, the links mobilynet holds (issuing, active or
+     failed), and a link the record names that mobilynet ended counts as none,
+     so the next step makes it again. mobilynet ends every link the release a
+     service still runs doesn't name when a refresh of it fails or is aborted,
+     whichever run made the link and even when no Deploy reads that refresh
+     (the run that made it stopped first, and the next began while it was
+     still open). An owner may also remove a link by hand.
+   A link mobilynet still holds that a record made again from labels
    lacks is taken up when the link is asked again (`need_linked`). Adapters that
    list no links (Google Cloud, AWS) are taken at the record's word.
    The record keeps, with each service, the release it was last handed: its
@@ -294,7 +313,10 @@ and its settings leave the changes queued. A link a service's running release
 and its release ahead both name is not made ahead: its settings refresh queues
 behind the move, and starts, as mobilynet's does, on the release that move
 brought (a settings or size refresh runs on the release its service runs as it
-starts, never the one it ran when queued). Until mobilynet runs M14, mobilynet links only against the
+starts, never the one it ran when queued). That is why the engine links such a
+service before handing it its release. The stand-in's `instantBuilds` switch
+starts a refresh whose build is done, and its first instances, in the step it
+starts, as mobilynet does with a reused build. Until mobilynet runs M14, mobilynet links only against the
 release a service runs, and the first Deploy of an application whose serve
 script needs its database there fails.
 

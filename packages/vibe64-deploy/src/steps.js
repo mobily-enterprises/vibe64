@@ -6,27 +6,32 @@
 //   1. a service whose exposure changed is deleted first (it holds no data), to be made again;
 //   2. each resource's hosted service is made (labelled) or resized, and waited for;
 //   3. the public service's domain is added to the provider project when none covers it;
-//   4. each internal service, then each public one: its release is uploaded, then its service made (internal: no
-//      routes; public: routed at the domain, with a connection to each service it reaches) or handed the release and,
-//      while that refresh is open, set to the count chosen (mobilynet's refresh rolls to the count the service has as
-//      it rolls, so it starts as many new instances as the plan says, and one that fails leaves the version before on
-//      that count), then, once that refresh is building, linked to every resource it isn't linked to at the provider,
-//      then the refresh waited for.
+//   4. each internal service, then each public one: a service that runs a release is first linked to each resource
+//      it isn't linked to at the provider, so the instances its next release starts have them however soon the
+//      provider starts them (one that reuses a build starts them as the refresh starts: a production Deploy, 18 Nov);
+//      its release is uploaded, then its service made (internal: no routes; public: routed at the domain, with a
+//      connection to each service it reaches) or handed the release and, while that refresh is open, set to the count
+//      chosen (a provider's refresh may roll to the count the service has as it rolls, as mobilynet's does, so it starts
+//      as many new instances as the plan says, and one that fails leaves the version before on that count); then each
+//      resource it is still not linked to is linked the moment that refresh is open, and the refresh waited for.
 //      A service still running the release it was last handed, made from the same upload (the archive and its
 //      declaration: releaseDigest), keeps it and is handed none, so none of its instances is replaced for nothing (a
-//      provider refreshes onto every release it is handed, even the one it runs). mobilynet checks a link against the release the service runs or, when that names no such need, the release its
-//      refresh in progress moves it to, whose instances then start with the link's settings (engine-support M14): so
-//      a new service's first instances, and a release naming a new resource, start with their resources, and none
-//      restarts while the build runs. Asked while it can't check that release yet, mobilynet answers a refusal the
-//      client marks to be tried again (client.js). A refresh that fails ends the links made against it, which the
-//      record lets go so the next Deploy makes them again, and fails the deployment with that service's reason; the
-//      services not yet moved keep serving their version;
+//      provider refreshes onto every release it is handed, even the one it runs). A provider may take a link only
+//      with the service's new release under way (the release the service runs doesn't name the resource, it runs none
+//      yet, or the refresh moving it hasn't read its release): its adapter refuses it LINK_NEEDS_RELEASE, and a link
+//      asked before the release is then made once its refresh is open. mobilynet takes such a link against the release
+//      the refresh moves to, putting its settings in that refresh and replacing any instance it started without them
+//      (engine-support M14); a link it checks against the release the service runs gives the refresh's instances its
+//      settings as the refresh starts, which is why the engine links first. A refresh that fails ends, at mobilynet,
+//      the links made against the release it moved to, which the record lets go so the next Deploy makes them again,
+//      and fails the deployment with that service's reason; the services not yet moved keep serving their version;
 //   5. a resource the Stack no longer names is unlinked from every service that stays, now that none runs a release
 //      naming it, and kept running with its data;
 //   6. each service's settings (package.js settingValues) when they differ from those it was given, the services it
 //      reaches, then its size and (when it was handed no release) its count as the plan's choices say: after every
-//      move ended, since mobilynet refuses a settings replace while a link made ahead of its refresh is open. A count
-//      or size change alone is only that, and the record's choices follow each, so the next plan starts from what runs;
+//      move ended, since a provider may refuse a settings replace while a link made ahead of a refresh is open (mobilynet
+//      does). A count or size change alone is only that, and the record's choices follow each, so the next plan starts
+//      from what runs;
 //   7. a service the Stack no longer names is deleted (its links end with it);
 //   8. live, once every service runs its release with as many healthy instances as chosen and its last refresh did
 //      not fail.
@@ -63,6 +68,9 @@ import { LABEL, labelsFor } from "./record.js";
 import { settingValues } from "./package.js";
 
 const LEASE_SECONDS = 600;
+// An adapter's refusal of a link its provider takes only with the service's new release under way: the release the
+// service runs doesn't name the resource, it runs none yet, or the refresh moving it hasn't read its release yet.
+const LINK_NEEDS_RELEASE = "link_needs_release";
 // How long takeOffline waits between reads of the provider while the services go, and how many reads it makes: an
 // instance leaving drains first (mobilynet's 30 seconds and its stop signal's as long again; AWS's load balancer its
 // 300), so ten minutes in all.
@@ -286,7 +294,13 @@ function nextStep({ plan, needs, record, observed, release }) {
       const made = labelledAs(observed, record, "service", service.id);
       if (made && !item) return { kind: "adopt", item: "service", name: service.id, thing: made };
     }
+    const unlinked = (resource) => !linked(resource.id, service.id);
     if (!state.version) {
+      // Before its release, a service that runs one is linked to each resource it isn't linked to, so its next
+      // instances start with them however soon the provider starts them (a build it reuses starts them at once). A
+      // link the provider takes only with the new release under way (LINK_NEEDS_RELEASE) waits for that release.
+      const first = thing?.version ? needs.resources.find((resource) => unlinked(resource) && !(state.afterRelease ?? []).includes(resource.id)) : null;
+      if (first) return { kind: "link", resource: first.id, id: itemOf("resource", first.id).id, service: service.id, serviceId: thing.id, beforeRelease: true };
       // Kept only while the provider runs it with no error: one that failed since is handed it again.
       const live = item?.release;
       if (thing && live?.digest === release.digests[service.id] && thing.version === live.version && !thing.lastError) {
@@ -308,15 +322,16 @@ function nextStep({ plan, needs, record, observed, release }) {
     const { instances } = plan.choices.services[service.id];
     if (state.refreshId && thing.instances !== instances) return { kind: "changeService", service: service.id, id: thing.id, change: { instances } };
     // A service runs one refresh at a time, the rest queued behind it, and shows the one under way, else the next: this
-    // Deploy's has ended once none is. Its resources are linked once that refresh builds (against the release it moves
-    // to, read as its build starts, before any instance started), or once none of its is open.
-    const unlinked = needs.resources.find((resource) => !linked(resource.id, service.id));
+    // Deploy's has ended once none is. A resource it is still not linked to (a new service, one that runs no release,
+    // a release naming a new resource) is linked the moment that refresh is open (against the release it moves to),
+    // or once none of its is open.
+    const late = needs.resources.find(unlinked);
     const ours = state.refreshId && thing.refresh?.id === state.refreshId ? thing.refresh.state : null;
-    if (unlinked && (["building", "rolling"].includes(ours) || !state.refreshId)) {
-      return { kind: "link", resource: unlinked.id, id: itemOf("resource", unlinked.id).id, service: service.id, serviceId: thing.id };
+    if (late && (["building", "rolling"].includes(ours) || !state.refreshId)) {
+      return { kind: "link", resource: late.id, id: itemOf("resource", late.id).id, service: service.id, serviceId: thing.id };
     }
     if (state.refreshId) {
-      if (thing.refresh) return { kind: "wait", words: unlinked && (!ours || ours === "queued") ? `Waiting for ${service.id} to start building` : `Updating ${service.id}` };
+      if (thing.refresh) return { kind: "wait", words: late && (!ours || ours === "queued") ? `Waiting for ${service.id} to start building` : `Updating ${service.id}` };
       return { kind: "checkRefresh", service: service.id, id: thing.id, refreshId: state.refreshId };
     }
   }
@@ -439,9 +454,14 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       try {
         linkId = (await adapter.linkResource(step.id, step.serviceId, adapter.needOf(step.resource), { idempotencyKey: keyOf(record, "link", step.resource, step.service) })).id;
       } catch (error) {
-        // Refused while this Deploy's refresh is open: mobilynet can't check the release it moves to yet, or that
-        // refresh ended first. The next step links again in a moment, or reads how it ended and links after it.
-        if (error?.code === "validation_failed" && state.refreshId) break;
+        // Taken only with the service's new release under way: asked before its release, it is linked once that
+        // release's refresh is open; asked while this Deploy's refresh is open (not yet under way, or ended first),
+        // the next step links again in a moment, or reads how it ended and links after it.
+        if (error?.code === LINK_NEEDS_RELEASE && step.beforeRelease) {
+          state.afterRelease = [...(state.afterRelease ?? []), step.resource];
+          break;
+        }
+        if (error?.code === LINK_NEEDS_RELEASE && state.refreshId) break;
         // Linked by a Deploy cut short before its record kept the link, or known only to the provider (a record made
         // again from labels holds no links): the link stands, and is kept now.
         if (error?.code !== "need_linked" || !error.details?.linkId) throw error;
@@ -694,4 +714,4 @@ async function deleteResource(adapter, record, needs, { name, typed }) {
   return kept;
 }
 
-export { LEASE_SECONDS, applyStep, deleteResource, deploy, nextStep, releaseDigest, stepWords, takeDeployLease, takeOffline };
+export { LEASE_SECONDS, LINK_NEEDS_RELEASE, applyStep, deleteResource, deploy, nextStep, releaseDigest, stepWords, takeDeployLease, takeOffline };

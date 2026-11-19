@@ -30,6 +30,11 @@ import { createStandInServices } from "./standIn/services.js";
 //   neverBoots         new hosted services stay `creating`
 //   releaseBuildFails  a release's build fails, and a refresh onto it fails app_build_failed: `true`, its build
 //                      command exited; `{ code, message }`, that failure, the refresh naming its message too
+//   instantBuilds      a refresh whose release is built already passes its build and starts its first instances in
+//                      the step it starts, as mobilynet's reconcile does with a reused build (one transaction:
+//                      currentRefresh, advanceBuild, roll), so it is never seen building: a production Deploy handed
+//                      a service a release at 23:42:09 and its refresh's build_started, build_passed and first
+//                      instance_started were all at 23:42:10 (18 Nov)
 //
 // Every request is kept in order (`requests()`: its method, path, query, Idempotency-Key, JSON body or upload's
 // SHA-256, and the status and error code it got), so a test can see what was asked and of what.
@@ -50,7 +55,7 @@ const DEFAULT_LIMITS = Object.freeze({ machines: 10, vcpus: 20, memoryGib: 40, d
 const QUOTAS = Object.freeze(Object.keys(DEFAULT_LIMITS));
 // Each quota's unit, as mobilynet's machines.js QUOTAS name them.
 const QUOTA_UNITS = Object.freeze({ machines: "machines", vcpus: "vCPU", memoryGib: "GiB of RAM", diskGib: "GiB of data disk" });
-const FAULTS = Object.freeze(["down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails"]);
+const FAULTS = Object.freeze(["down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails", "instantBuilds"]);
 const LEASE_MAX_SECONDS = 3600;
 const LEASE_TEXT = 200;
 // mobilynet's Idempotency-Key: 1 to 128 printable characters (its idempotency.js).
