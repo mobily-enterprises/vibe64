@@ -143,6 +143,23 @@ async function exactProcessIdentity(pid, runtimeToken, commandHash) {
   };
 }
 
+/**
+ * Resolves once Node reaped this test's own detached child, and rejects after 10 s. A runtime the shutdown stopped is
+ * proved gone when its group has no live member, but a child of the test process stays a zombie until libuv reaps it
+ * on SIGCHLD, a loop turn later on a busy host, and its group answers `kill(-pgid, 0)` until then.
+ * @param {import("node:child_process").ChildProcess} child
+ */
+function reapedChild(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  let timer;
+  return Promise.race([
+    once(child, "exit"),
+    new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(`process ${child.pid} was never reaped`)), 10_000);
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
 function createProvider(calls, subscribers, captures, providerOptions = {}) {
   captures.providerOptions.push(providerOptions);
   return {
@@ -8086,6 +8103,7 @@ test("server shutdown serializes with an owned runtime before metadata is publis
     assert.equal(shutdown.providerCount, 1);
     assert.equal(shutdown.stopped, 1);
     assert.equal(stopRuntimeCalls, 1);
+    await reapedChild(child);
     assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
   } finally {
     preMetadata.release();
@@ -8225,6 +8243,7 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
     assert.equal(shutdown.ok, true, JSON.stringify(shutdown));
     assert.equal(shutdown.providerCount, 1);
     assert.equal(shutdown.stopped, 1);
+    await reapedChild(child);
     assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
   } finally {
     if (runtimeDir) {
