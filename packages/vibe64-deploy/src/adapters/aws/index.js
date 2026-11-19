@@ -23,6 +23,9 @@ import { readOffer } from "./offer.js";
 import { createResource, deleteResource, resizeResource, resourcesNow } from "./resources.js";
 import { changeService, createService, deleteService, linkResource, putSettings, readRefresh, releaseService, servicesNow, unlinkResource } from "./services.js";
 
+// Settings: a service's travel in its spec in the releases bucket (services.js keepSpec), not in its task definition or
+// its machines' user data, so neither ECS's nor EC2's size limits bound them. No limit on their count or their names is
+// known here, and the adapter checks none.
 // AWS's list prices change rarely: the offer is read again after this long.
 const OFFER_MS = 15 * 60_000;
 

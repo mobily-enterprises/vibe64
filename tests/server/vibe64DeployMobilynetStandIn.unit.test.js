@@ -119,27 +119,38 @@ test("an App Service made from a release runs once its instances are healthy, ea
   assert.equal((await production.createService(webSpec(release.version, { name: "api", routes: [] }), { idempotencyKey: "k".repeat(128) })).service.name, "api");
 });
 
-test("a settings replace takes a name its release doesn't declare as a plain setting or a secret, text of up to 4096 characters, but never a V64_ name", async () => {
+test("a settings replace takes a name its release doesn't declare as a plain setting or a secret, text of up to 4096 characters, but not one mobilynet's runtime sets, and at most 49 in all", async () => {
   const { standIn, client, serviceId } = await runningShop();
-  // The shop's release declares mode and sessionKey alone: GREETING and API_KEY are new to it.
-  const taken = await client.putServiceSettings(serviceId, { settings: { mode: "web", GREETING: "x".repeat(4096) }, secrets: { sessionKey: "session-1", API_KEY: "key-1" } });
+  // The shop's release declares mode and sessionKey alone: GREETING, API_KEY and V64_INSTANCE_ID are new to it, and V64_*
+  // names are Vibe64's own, which mobilynet leaves open.
+  const taken = await client.putServiceSettings(serviceId, {
+    settings: { mode: "web", GREETING: "x".repeat(4096) }, secrets: { sessionKey: "session-1", API_KEY: "key-1", V64_INSTANCE_ID: "i-1" }
+  });
   assert.equal(taken.refresh.kind, "settings");
   settle(standIn);
   const service = await client.readService(serviceId);
-  assert.deepEqual([service.settings, service.secrets], [["GREETING", "mode"], ["API_KEY", "sessionKey"]]);
+  assert.deepEqual([service.settings, service.secrets], [["GREETING", "mode"], ["API_KEY", "V64_INSTANCE_ID", "sessionKey"]]);
   const serving = standIn.services.instances(serviceId).filter((one) => one.rotation !== "gone");
   assert.ok(serving.length === 2 && serving.every((one) => one.settings.GREETING.length === 4096 && one.secrets.API_KEY === "key-1"), "onto new instances with both");
-  // Such a name's value is text of up to 4096 characters; a name mobilynet sets itself for a Vibe64 app (V64_*), a
-  // need's or an instance's, is refused as a plain setting or a secret. A link's own names are refused below.
-  const long = await refused(client.putServiceSettings(serviceId, { settings: { mode: "web", GREETING: "x".repeat(4097) }, secrets: { sessionKey: "session-1" } }));
-  assert.deepEqual(refusal(long), { status: 422, code: "validation_failed", fields: ["settings.GREETING"] });
-  const number = await refused(client.putServiceSettings(serviceId, { settings: { mode: "web", RETRIES: 3 }, secrets: { sessionKey: "session-1" } }));
-  assert.deepEqual(refusal(number), { status: 422, code: "validation_failed", fields: ["settings.RETRIES"] });
-  const own = await refused(client.putServiceSettings(serviceId, {
-    settings: { mode: "web", V64_DATABASE_HOST: "elsewhere" }, secrets: { sessionKey: "session-1", V64_INSTANCE_ID: "i-1" }
-  }));
-  assert.deepEqual(refusal(own), { status: 422, code: "validation_failed", fields: ["secrets.V64_INSTANCE_ID", "settings.V64_DATABASE_HOST"] });
-  assert.deepEqual(standIn.services.refreshes(serviceId).map((one) => one.kind), ["create", "settings"], "a refused replace starts no refresh");
+  // Such a name's value is text of up to 4096 characters, by a name mobilynet's runtime doesn't set on every instance,
+  // as a plain setting or a secret. A link's own names are refused below.
+  const given = (settings, secrets = {}) => refused(client.putServiceSettings(serviceId, { settings: { mode: "web", ...settings }, secrets: { sessionKey: "session-1", ...secrets } }));
+  assert.deepEqual(refusal(await given({ GREETING: "x".repeat(4097) })), { status: 422, code: "validation_failed", fields: ["settings.GREETING"] });
+  assert.deepEqual(refusal(await given({ RETRIES: 3 })), { status: 422, code: "validation_failed", fields: ["settings.RETRIES"] });
+  const runtime = await given({ PATH: "/bin", HOME: "/root", LANG: "C", GIT_CONFIG_COUNT: "1" }, { GIT_CONFIG_KEY_0: "k", GIT_CONFIG_VALUE_0: "v", MOBILYNET_TOKEN: "t" });
+  assert.deepEqual(refusal(runtime), { status: 422, code: "validation_failed", fields: [
+    "secrets.GIT_CONFIG_KEY_0", "secrets.GIT_CONFIG_VALUE_0", "secrets.MOBILYNET_TOKEN", "settings.GIT_CONFIG_COUNT", "settings.HOME", "settings.LANG", "settings.PATH"
+  ] });
+  assert.equal(runtime.details.fieldErrors["settings.PATH"], "MobilyNet sets PATH itself on every instance: name it otherwise.");
+  assert.equal(runtime.details.fieldErrors["secrets.MOBILYNET_TOKEN"], "MobilyNet's own names start with MOBILYNET_, which it sets on every instance: name it otherwise.");
+  // 49 settings and secrets in all: mode and sessionKey with 47 more are taken, 48 more are refused.
+  const more = (count) => Object.fromEntries(Array.from({ length: count }, (_, at) => [`EXTRA_${at}`, "x"]));
+  assert.equal((await client.putServiceSettings(serviceId, { settings: { mode: "web", ...more(47) }, secrets: { sessionKey: "session-1" } })).refresh.kind, "settings");
+  settle(standIn);
+  const crowded = await given(more(48));
+  assert.deepEqual(refusal(crowded), { status: 422, code: "validation_failed", fields: ["settings"] });
+  assert.equal(crowded.details.fieldErrors.settings, "At most 49 settings and secrets in all, its links' among them, as an instance takes no more: these would be 50.");
+  assert.deepEqual(standIn.services.refreshes(serviceId).map((one) => one.kind), ["create", "settings", "settings"], "a refused replace starts no refresh");
 });
 
 test("an internal service has no routes and is reached by another's connection on its port", async () => {

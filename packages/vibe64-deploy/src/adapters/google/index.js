@@ -35,6 +35,12 @@ import { createGoogleServices } from "./services.js";
 // engine's link step then finds the credential made and answers it. Google has no leases: an adapter takes none, safe
 // while one editor deploys an environment.
 //
+// Settings: Cloud Run takes at most 1000 environment variables per container, each up to 32 KB, and refuses the names
+// its container contract sets (PORT, K_SERVICE, K_REVISION, K_CONFIGURATION) and any starting X_GOOGLE_ (Cloud Run's
+// documentation, read 19 Nov 2026). The engine checks none of these yet. Production's own PORT is among the settings a
+// Cloud Run service is given, which Cloud Run's documentation says it refuses: unproven, as the stand-in takes it. What
+// a group of machines takes in its instance metadata is not known here.
+//
 // Its parts: base.js (each API's calls, Google's operations, what the project's deployments share, accounts and
 // secrets), releases.js (builds), resources.js (Cloud SQL, Cloud Storage and their credentials), frontends.js (firewall
 // rules, load balancers, the domain) and services.js (Cloud Run services and groups of machines).

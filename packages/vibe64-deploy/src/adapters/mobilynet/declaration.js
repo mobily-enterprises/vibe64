@@ -29,11 +29,18 @@ const BUILD_SCRIPT = `${APP_SCRIPTS_FOLDER}/build.sh`;
 const DECLARATION_FILE = "mobilynet.json";
 // The port every service listens on, which a service it reaches and the load balancer ask.
 const SERVICE_PORT = 3000;
-// mobilynet's own limits: at most 100 settings in one declaration (its limit since 17 Nov 2026, where it was 50), to
-// which the engine also holds all a service is given, its Production Env entries with those its release declares, and
-// app names (logins too) of at most 32 characters.
-const MAX_DECLARED_SETTINGS = 100;
+// mobilynet's own limits: app names (logins too) of at most 32 characters, and the settings of an App Service (its open
+// settings, 19 Nov 2026). An App Service holds at most SERVICE_SETTINGS_MAX settings and secrets in all, its links'
+// among them, since an instance's host takes 50 entries for its app, one of them mobilynet's own: the engine counts all
+// a service is given (the Stack's, its Production Env entries) with its links' (LINK_FIELDS). Raising it at mobilynet
+// is this line and its test (deployServicePackages). No setting may take a name mobilynet's runtime sets on every
+// instance (RUNTIME_NAMES, RUNTIME_PREFIXES), which an app exporting its settings would lose; mobilynet refuses one the
+// release doesn't declare, and the engine refuses each before anything changes. V64_* names are Vibe64's own, which
+// mobilynet leaves open and the engine keeps out of the Production Env (package.js envEntryProblem).
 const APP_NAME_MAX = 32;
+const SERVICE_SETTINGS_MAX = 49;
+const RUNTIME_NAMES = Object.freeze(["PATH", "HOME", "LANG", "GIT_CONFIG_COUNT"]);
+const RUNTIME_PREFIXES = Object.freeze(["MOBILYNET_", "GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"]);
 // The Stack's runtimes by the runtime packs below; a runtime not here can't be declared.
 const STACK_RUNTIME_PACKS = Object.freeze({
   composer: "composer", cpp: "cpp", git: "git", mariadb: "mariadb", nodejs: "node26", php: "php", playwright: "playwright",
@@ -311,6 +318,14 @@ function appPackage({
 
 /** mobilynet's interface for each resource kind Production runs. */
 const MOBILYNET_INTERFACES = Object.freeze({ mysql: "mysql", postgresql: "postgresql", redis: "redis", bucket: "s3" });
+/** The fields a link of each interface gives a service, each a setting `<AS>_<FIELD>` (mobilynet's interface registry). */
+const DATABASE_FIELDS = Object.freeze(["host", "port", "database", "user", "password", "sslmode"]);
+const LINK_FIELDS = Object.freeze({
+  mysql: DATABASE_FIELDS,
+  postgresql: DATABASE_FIELDS,
+  redis: Object.freeze(["host", "port", "username", "password", "db"]),
+  s3: Object.freeze(["endpoint", "region", "bucket", "accessKeyId", "secretAccessKey"])
+});
 const AS_MAX = 24;
 
 /**
@@ -387,10 +402,19 @@ function declarationError({ code, message }) {
 }
 
 /**
+ * Whether mobilynet's runtime sets a name on every instance: the prefix it starts with or the name itself, else "".
+ * @param {string} name
+ */
+function runtimeSets(name) {
+  return RUNTIME_PREFIXES.find((prefix) => name.startsWith(prefix)) ?? (RUNTIME_NAMES.includes(name) ? name : "");
+}
+
+/**
  * Why mobilynet can't take a package for these services, as `{ code, message }`, or null: a Deployment that isn't
  * ready, a runtime or sandbox allowance no package can declare yet, a health path check can't ask, a service's
- * packages mobilynet can't take, or a service given more settings than mobilynet's limit, its Production Env entries
- * counted with those its release declares. Each names the service.
+ * packages mobilynet can't take, a setting a service would be given by a name mobilynet's runtime sets, or a service
+ * given more settings than mobilynet's limit, its Production Env entries and its links' counted with the Stack's. Each
+ * names the service and the fix.
  * @param {any} deployment the Stack's Deployment section as public Vibe64 inspected it (v2)
  * @param {Record<string, Record<string, object>>} [settings] each service's settings (package.js settingsPerService)
  */
@@ -410,6 +434,8 @@ function servicePackagesProblem(deployment, settings = {}) {
         + "Remove it from the Stack's - Runtimes: line, Save, then try again."
     };
   }
+  // Every service is linked to each resource Production makes, whose link's fields are among its settings.
+  const linked = (deployment.resources ?? []).reduce((sum, declared) => sum + (LINK_FIELDS[MOBILYNET_INTERFACES[declared?.resource?.kind]]?.length ?? 0), 0);
   for (const service of deployment.services) {
     const allowances = unsupportedSandboxAllowances(service.sandboxAllowances);
     if (allowances.length > 0) {
@@ -428,12 +454,26 @@ function servicePackagesProblem(deployment, settings = {}) {
           + "genesis/stack.md (the coding agent can do this), Save, then deploy."
       };
     }
-    const count = Object.keys(settings[service.id] ?? {}).length;
-    if (count > MAX_DECLARED_SETTINGS) {
+    const names = Object.keys(settings[service.id] ?? {});
+    const reserved = names.find((name) => runtimeSets(name));
+    if (reserved) {
+      const sets = runtimeSets(reserved);
+      const stack = [...(deployment.generatedSecrets ?? []), deployment.setupCode, ...(service.reaches ?? []).map((reach) => reach.setting)];
+      return {
+        code: "vibe64_production_setting_reserved",
+        message: `Service ${service.id} would be given ${reserved}, and mobilynet sets ${sets === reserved ? "that name" : `every name starting ${sets}`} `
+          + "itself on every instance, so the app would lose it. "
+          + (stack.includes(reserved) ? "Name it otherwise in genesis/stack.md (the coding agent can do this), Save, then deploy."
+            : `Save its value in the Production Env under another name and remove ${reserved}, then deploy.`)
+      };
+    }
+    const count = names.length + linked;
+    if (count > SERVICE_SETTINGS_MAX) {
       return {
         code: "vibe64_production_too_many_settings",
-        message: `mobilynet takes at most ${MAX_DECLARED_SETTINGS} settings for a service and service ${service.id} would `
-          + `need ${count}. Remove Production Env entries it doesn't use, or give them only to the services that use them.`
+        message: `mobilynet gives an App Service at most ${SERVICE_SETTINGS_MAX} settings and secrets in all, its links' among them, `
+          + `and service ${service.id} would have ${count}: ${names.length} of its own and ${linked} from its links. Remove Production Env `
+          + "entries it doesn't use, or give them only to the services that use them, then deploy."
       };
     }
   }
@@ -517,10 +557,10 @@ function serviceUpload(archive, declaration) {
 
 export {
   APP_SCRIPTS_FOLDER,
-  MAX_DECLARED_SETTINGS,
   MOBILYNET_INTERFACES,
   RELEASE_TASKS,
   SERVICE_PORT,
+  SERVICE_SETTINGS_MAX,
   STACK_RUNTIME_PACKS,
   appHome,
   appPackage,
@@ -535,6 +575,7 @@ export {
   needSetting,
   packagesProblem,
   requiredPackagesOf,
+  runtimeSets,
   serviceAppName,
   servicePackages,
   servicePackagesProblem,

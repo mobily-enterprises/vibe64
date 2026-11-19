@@ -1,5 +1,5 @@
 import { INSTANCE_SIZES, isRecord, labelsMatch, labelsOf, needSettings, pageOf, projectLabel, thingName } from "./catalogue.js";
-import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, undeclaredErrors, valuesOf } from "./serviceEngine.js";
+import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, tooManySettings, undeclaredErrors, valuesOf } from "./serviceEngine.js";
 import { createStandInServiceLogs } from "./serviceLogs.js";
 
 // mobilynet's App Services as its stand-in answers them (openApiServices.js, and its machines package's services.js,
@@ -17,7 +17,8 @@ import { createStandInServiceLogs } from "./serviceLogs.js";
 // Faults: `instancesUnhealthy` (a refresh's new instances never get healthy, every one or those its function picks:
 // it fails `instance_never_healthy`), `noCapacity` (a count raise answers `409 no_capacity`) and `releaseBuildFails`.
 // A replace takes a name the release the service runs doesn't declare as a plain setting or a secret, text of up to
-// 4096 characters, but never one mobilynet sets itself (V64_*) or a need's link sets (undeclaredErrors).
+// 4096 characters, but never one mobilynet's runtime sets or a need's link sets (undeclaredErrors), and leaves the
+// service at most the adapter's SERVICE_SETTINGS_MAX settings and secrets in all, its links' among them.
 // STAND-IN ONLY: ids are the stand-in's own (`svc_s000123`), a connection makes no allow rule (`ruleId` null), a
 // release's settings are checked only for the required ones its declaration declares (a replace also for the names it
 // doesn't declare), unlinking a link made ahead queues a settings refresh rather than changing its refresh ahead, and a
@@ -411,6 +412,8 @@ function createStandInServices(world, { releases, network }) {
     const ahead = settingsAhead(service);
     const picked = (from) => Object.fromEntries(Object.entries(from).filter(([name]) => linked.includes(name)));
     const target = { settings: { ...values.values.settings, ...picked(ahead.settings) }, secrets: { ...values.values.secrets, ...picked(ahead.secrets) } };
+    const crowded = tooManySettings(target);
+    if (crowded) return invalid(crowded);
     if (service.version) {
       const declared = [...Object.keys(isRecord(declaration.settings) ? declaration.settings : {}), ...linkedNames(declaration)];
       const errors = undeclaredErrors(declared, linked, target);

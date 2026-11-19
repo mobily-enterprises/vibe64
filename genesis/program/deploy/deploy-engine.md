@@ -79,9 +79,20 @@ own and the generated secrets every service, the setup code the public one, and
 each Reaches setting the service that reaches. A Production Env entry is never
 declared. Each service is given its declared settings and each Production Env
 entry the services it names (the public one when it names none;
-`settingsPerService`), at most 100 in all per service, mobilynet's own limit
-for a declaration; mobilynet takes an entry no release declares in a settings
-replace, as a plain setting or a secret (decided 19 Nov). So a release is made
+`settingsPerService`); mobilynet takes an entry no release declares in a
+settings replace, as a plain setting or a secret (decided 19 Nov). mobilynet's
+limits are the adapter's own (`declaration.js`): an App Service holds at most
+49 settings and secrets in all, its links' among them (`SERVICE_SETTINGS_MAX`,
+one line to raise; each link gives a database's 6 fields, Redis's or a
+bucket's 5), and none by a name mobilynet's runtime sets on every instance
+(`PATH`, `HOME`, `LANG`, `GIT_CONFIG_COUNT` and any starting `GIT_CONFIG_KEY_`,
+`GIT_CONFIG_VALUE_` or `MOBILYNET_`, `runtimeSets`), which an app exporting its
+settings would lose. `servicePackagesProblem` refuses either before anything
+is made, naming the service, the setting or the count, and the fix
+(`vibe64_production_setting_reserved`: another name in the Production Env, or
+in genesis/stack.md where the Stack names it; `vibe64_production_too_many_settings`),
+which the editor's Plan shows. `V64_*` names are Vibe64's own: mobilynet leaves
+them open, and `envEntryProblem` keeps them out of the Production Env. So a release is made
 of the code and the Stack alone (`releaseDigest`), and adding, changing or
 removing a Production Env entry is a settings change of the release a service
 runs, never a new release or build: until 19 Nov every entry was declared, and
@@ -263,7 +274,7 @@ making it twice. In order:
    - mobilynet checks a settings replace against the release a service runs
      and takes a name that release doesn't declare as a plain setting or a
      secret, text of up to 4096 characters, but never one a need's link sets
-     (decided 19 Nov). It refuses a setting the release declares otherwise (a
+     or its runtime sets, and at most 49 in all (decided 19 Nov). It refuses a setting the release declares otherwise (a
      secret given as a plain setting) `422 validation_failed`, one lacking a
      setting it requires `422 settings_missing`, and any replace while the
      service's first release is still under way `409 invalid_state`. A release
@@ -582,6 +593,13 @@ credential is a token, or a source whose `token()` gives the token now and
   minimum; an internal group's load balancer and Cloud Storage's use are not in
   the Plan's price.
 
+Cloud Run takes at most 1000 environment variables per container, each up to
+32 KB, and refuses the names its container contract sets (`PORT`, `K_SERVICE`,
+`K_REVISION`, `K_CONFIGURATION`) and any starting `X_GOOGLE_`, as its
+documentation says (read 19 Nov 2026). The engine checks none of these yet, and
+Production's own `PORT` is among a Cloud Run service's settings: unproven
+against Google, since the stand-in takes it.
+
 Google Cloud has no leases: the adapter takes none, safe only while one editor
 deploys an environment. Its stand-in (`standIn.js`) answers every call the
 adapter makes in Google's shapes, in memory, for the engine's tests.
@@ -662,6 +680,10 @@ refreshed once.
   with their 40 GiB root disk, a public IPv4 address for each, databases with
   their first 20 GiB, the load balancer by the hour. A price it needs that the
   Price List lacks refuses the offer, naming it.
+
+A service's settings travel in its spec in the releases bucket, not in its task
+definition or its machines' user data, so neither ECS's nor EC2's size limits
+bound them; no limit on their count or names is known, and none is checked.
 
 AWS has no leases: the adapter takes none, safe only while one editor deploys an
 environment. Its stand-in (`standIn.js` and `standIn/`) answers every call the

@@ -88,19 +88,42 @@ test("each service is its own declaration: its name, its serve script, its packa
   assert.deepEqual([long.declarations.web.name, long.declarations.computers.name], ["a-very-long-project-name-for-web", "a-very-long-project-na-computers"]);
 });
 
-test("a service given more settings than mobilynet takes, packages it can't take, or an Env entry Production sets itself is refused, naming the service", () => {
-  // 100 settings is mobilynet's own limit per declaration, which a service's settings are held to with its Env entries:
-  // computers has 10 without them, so 90 of its own fit (100 settings, packaged, its declaration the Stack's 10) and 91
-  // don't, naming the limit.
+test("a service given more settings than mobilynet takes, or one by a name its runtime sets, packages it can't take, or an Env entry Production sets itself is refused, naming the service and the fix", () => {
+  // mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them: computers has 10 of
+  // the Stack's and 11 from its links (database, PostgreSQL: 6; files, S3: 5), so 28 Env entries of its own fit (49,
+  // packaged, its declaration the Stack's 10) and 29 don't, naming the count.
   const extra = (count) => Array.from({ length: count }, (_, at) => ({ key: `COMPUTERS_${at}`, secret: false, services: ["computers"] }));
-  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(90))), null);
-  const hundred = servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(90)) });
-  assert.equal(Object.keys(hundred.declarations.computers.settings).length, 10);
-  const over = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(91)));
-  assert.equal(over.code, "vibe64_production_too_many_settings");
-  assert.match(over.message, /^mobilynet takes at most 100 settings for a service and service computers would need 101\./u);
-  assert.throws(() => servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(91)) }),
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(28))), null);
+  const full = servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(28)) });
+  assert.equal(Object.keys(full.declarations.computers.settings).length, 10);
+  const over = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(29)));
+  assert.deepEqual(over, {
+    code: "vibe64_production_too_many_settings",
+    message: "mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them, and service computers would "
+      + "have 50: 39 of its own and 11 from its links. Remove Production Env entries it doesn't use, or give them only to the services that "
+      + "use them, then deploy."
+  });
+  assert.throws(() => servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(29)) }),
     { code: "vibe64_production_too_many_settings", status: 422 });
+  // Without the database, its 6 link settings are free for Env entries: 34 fit.
+  const bucketOnly = { ...DEPLOYMENT, resources: DEPLOYMENT.resources.filter((one) => one.resource.id === "files") };
+  assert.equal(servicePackagesProblem(bucketOnly, settingsPerService(NEEDS, extra(34))), null);
+  assert.equal(servicePackagesProblem(bucketOnly, settingsPerService(NEEDS, extra(35))).code, "vibe64_production_too_many_settings");
+
+  // A name mobilynet's runtime sets on every instance, given by the Production Env or named by the Stack, each fix its own.
+  const reserved = (key, services = ["web"]) => servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, [{ key, secret: true, services }]));
+  for (const key of ["PATH", "HOME", "LANG", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0", "MOBILYNET_TOKEN"]) {
+    assert.equal(reserved(key).code, "vibe64_production_setting_reserved", key);
+  }
+  assert.equal(reserved("PATH").message, "Service web would be given PATH, and mobilynet sets that name itself on every instance, so the app "
+    + "would lose it. Save its value in the Production Env under another name and remove PATH, then deploy.");
+  assert.match(reserved("MOBILYNET_TOKEN", ["computers"]).message, /^Service computers would be given MOBILYNET_TOKEN, and mobilynet sets every name starting MOBILYNET_ itself/u);
+  for (const key of ["PATHS", "HOMEPAGE", "GIT_CONFIG", "MOBILYNETX"]) assert.equal(reserved(key), null, key);
+  const homeSecret = { ...DEPLOYMENT, generatedSecrets: [...DEPLOYMENT.generatedSecrets, "HOME"] };
+  const { needs: homeNeeds } = needsOfStack(homeSecret, { preferredAlternative, resourceKindIsDatabase });
+  assert.equal(servicePackagesProblem(homeSecret, settingsPerService(homeNeeds)).message, "Service web would be given HOME, and mobilynet sets "
+    + "that name itself on every instance, so the app would lose it. Name it otherwise in genesis/stack.md (the coding agent can do this), "
+    + "Save, then deploy.");
 
   // Packages: the shared and a service's own together count against the 200, naming the service.
   const many = Array.from({ length: 200 - 87 - 10 + 1 }, (_, at) => `extra${at}`);
