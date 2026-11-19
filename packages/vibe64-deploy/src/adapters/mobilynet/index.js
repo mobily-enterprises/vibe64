@@ -13,7 +13,7 @@
 // the workspace's own editor is the only writer).
 import { LABEL } from "../../record.js";
 import { LINK_NEEDS_RELEASE } from "../../steps.js";
-import { MOBILYNET_INTERFACES, needAs, serviceUpload } from "./declaration.js";
+import { MOBILYNET_INTERFACES, RELEASE_TASKS, needAs, serviceUpload } from "./declaration.js";
 
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
 // mobilynet's names for an App Service and a hosted service: 1 to 64 lowercase letters, digits and hyphens.
@@ -53,8 +53,10 @@ function linkRefusal(error) {
  * @param {string} options.project the mobilynet project's id
  * @param {string} [options.region]
  * @param {boolean} [options.leases] whether mobilynet takes leases (its stand-in does; mobilynet not yet)
+ * @param {boolean} [options.releaseTasks] whether mobilynet runs a release's task once per refresh (its stand-in does;
+ *   mobilynet not yet: RELEASE_TASKS)
  */
-function createMobilynetAdapter({ client, project, region = "us", leases = false }) {
+function createMobilynetAdapter({ client, project, region = "us", leases = false, releaseTasks = RELEASE_TASKS }) {
   const calls = client.project(project);
 
   /** Each resource kind's hosted app of the catalogue, its default size and its sizes. */
@@ -223,13 +225,32 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     },
     /** A release of a service's app from its upload: `{ version }`. */
     uploadRelease: async (app, upload) => (await calls.createRelease(app, { archive: upload.bytes, sha256: upload.sha256 })).release,
-    /** Hands an App Service a new release: `{ version, refreshId }`. */
-    async releaseService(id, upload) {
-      const answer = await client.createServiceRelease(id, { archive: upload.bytes, sha256: upload.sha256 });
+    /**
+     * Whether a refresh runs a release's task once before any instance starts (a capability the engine reads): mobilynet
+     * has no such task yet (the engine's ask M-C), so the adapter runs none unless made with `releaseTasks: true`, as its
+     * stand-in is; its declarations then carry the task and their serve scripts no Migrate (declaration.js).
+     */
+    releaseTasks,
+    /**
+     * The task a service's declaration runs once per refresh asked to, before its instances: `migrate`, or null. A
+     * declaration with a migrate task its serve script no longer runs is refused where mobilynet runs no task: its
+     * migrations would never run.
+     */
+    taskOf(declaration) {
+      if (!declaration?.tasks?.migrate) return null;
+      if (!releaseTasks) {
+        throw Object.assign(new Error(`${declaration.name}'s release declares a migrate task, which mobilynet runs no `
+          + "release task for yet; its serve script must migrate (servicePackages with releaseTasks off)."), { code: "deployment_release_tasks_unsupported" });
+      }
+      return "migrate";
+    },
+    /** Hands an App Service a new release, its refresh running `task` first when given: `{ version, refreshId }`. */
+    async releaseService(id, upload, { task = null } = {}) {
+      const answer = await client.createServiceRelease(id, { archive: upload.bytes, sha256: upload.sha256 }, { task });
       return { version: answer.release.version, refreshId: answer.refresh?.id ?? null };
     },
     /** Makes an App Service, labelled, with mobilynet's drain: internal ones with no routes, public ones routed at the domain. */
-    async createService({ name, exposure, size, instances, app, version, settings, secrets, domain, connections, labels }, { idempotencyKey }) {
+    async createService({ name, exposure, size, instances, app, version, settings, secrets, domain, connections, labels, task = null }, { idempotencyKey }) {
       const { service, refresh } = await calls.createService({
         name,
         region,
@@ -242,10 +263,15 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         secrets,
         ...(exposure === "public" ? { routes: [{ host: domain, tls: "edge" }] } : {}),
         ...(connections.length > 0 ? { connections } : {}),
-        labels
+        labels,
+        ...(task ? { task } : {})
       }, { idempotencyKey });
       return { id: service.id, refreshId: refresh?.id ?? null };
     },
+    /**
+     * How a refresh went, as mobilynet answers it, with its task's (`task: { name, state, exitCode, output }`, its
+     * last lines of output) where it ran one.
+     */
     readRefresh: (id, refreshId) => client.readServiceRefresh(id, refreshId),
     putSettings: async (id, { settings, secrets }, { idempotencyKey }) => (await client.putServiceSettings(id, { settings, secrets }, { idempotencyKey })).refresh?.id ?? null,
     changeService: async (id, change, { idempotencyKey }) => (await client.changeService(id, change, { idempotencyKey })).refresh?.id ?? null,

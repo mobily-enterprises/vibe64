@@ -12,7 +12,18 @@
 
 import { withRootFile } from "../../package.js";
 
-/** Where in the release the app's scripts go: `build.sh` (the build VM runs it) and `serve-<service>.sh` (a service). */
+// Whether mobilynet runs a release's task once per refresh, after its build passed and before any instance starts (the
+// engine's ask of mobilynet, M-C: a declaration's `tasks`, a refresh asked with `task`). mobilynet has none yet, so a
+// service's serve script still migrates as it starts; with it, Migrate is the release's `migrate` task and every serve
+// script only serves (the adapter's `releaseTasks` capability).
+const RELEASE_TASKS = false;
+// The migrate task's time limit: past it, the task fails and so does its refresh, with nothing rolled out.
+const MIGRATE_TIMEOUT_SECONDS = 900;
+
+/**
+ * Where in the release the app's scripts go: `build.sh` (the build VM runs it), `serve-<service>.sh` (a service) and,
+ * with release tasks, `migrate-<service>.sh` (that service's migrate task).
+ */
 const APP_SCRIPTS_FOLDER = "vibe64-app";
 const BUILD_SCRIPT = `${APP_SCRIPTS_FOLDER}/build.sh`;
 const DECLARATION_FILE = "mobilynet.json";
@@ -126,6 +137,11 @@ function serveScriptOf(service) {
   return `${APP_SCRIPTS_FOLDER}/serve-${service}.sh`;
 }
 
+/** The migrate task's script of a service. @param {string} service */
+function migrateScriptOf(service) {
+  return `${APP_SCRIPTS_FOLDER}/migrate-${service}.sh`;
+}
+
 /**
  * A service's app at mobilynet: the app's name and the service's id, the app's part shortened to fit 32 characters.
  * @param {string} app productionAppName's name @param {string} service
@@ -207,9 +223,11 @@ function stepLines(role, step) {
  */
 function appPackage({
   name, login, port, healthPath, runtimes, settings, workdir = ".", steps, needs = [], bindingLines = [], packages = [], sandboxAllowances = [],
-  service = "web", reached = "any", serviceSettings = {}
+  service = "web", reached = "any", serviceSettings = {}, releaseTasks = false
 }) {
   const serveScript = serveScriptOf(service);
+  // With release tasks, Migrate runs once per Deploy as the release's task, never as an instance starts.
+  const migrateTask = releaseTasks && steps.migrate ? migrateScriptOf(service) : null;
   const machineFeatures = machineFeaturesOf(sandboxAllowances);
   const declaration = {
     name,
@@ -227,7 +245,8 @@ function appPackage({
     logins: [{ name: login }],
     settings,
     ...(machineFeatures.length > 0 ? { machineFeatures } : {}),
-    ...(needs.length > 0 ? { needs } : {})
+    ...(needs.length > 0 ? { needs } : {}),
+    ...(migrateTask ? { tasks: { migrate: { command: `bash ${migrateTask}`, user: login, timeoutSeconds: MIGRATE_TIMEOUT_SECONDS } } } : {})
   };
   const intoWorkdir = workdir === "." ? [] : [`cd -- ${shellWord(workdir)}`];
   const build = [
@@ -239,10 +258,9 @@ function appPackage({
     ...stepLines("Build", steps.build),
     ""
   ];
-  const serve = [
-    "#!/usr/bin/env bash",
-    `# Made by Vibe64: the app's service ${service}. It exports the settings start left for this login and the instance's `
-      + "facts, then migrates and serves.",
+  // What the serve script and the migrate task both do first: export the settings start left for this login, the
+  // resources' names, the instance's facts and the service's own.
+  const prologue = [
     "set -euo pipefail",
     `settings=${shellWord(settingsFileForLogin(name))}`,
     `if [ ! -r "$settings" ]; then echo "No settings at $settings: the app's start step writes them." >&2; exit 1; fi`,
@@ -256,12 +274,32 @@ function appPackage({
     ...Object.entries(serviceSettings).map(([key, value]) => `export ${key}=${shellWord(value)}`),
     ...Object.entries(steps.serve.defaults ?? {})
       .map(([key, value]) => `if [ -z "\${${key}+set}" ]; then export ${key}=${shellWord(value)}; fi`),
-    ...intoWorkdir,
-    ...stepLines("Migrate", steps.migrate),
+    ...intoWorkdir
+  ];
+  const serve = [
+    "#!/usr/bin/env bash",
+    migrateTask
+      ? `# Made by Vibe64: the app's service ${service}. It exports the settings start left for this login and the instance's `
+        + "facts, then serves; the release's migrate task migrates, once per Deploy."
+      : `# Made by Vibe64: the app's service ${service}. It exports the settings start left for this login and the instance's `
+        + "facts, then migrates and serves.",
+    ...prologue,
+    ...(migrateTask ? [] : stepLines("Migrate", steps.migrate)),
     steps.serve.command,
     ""
   ];
-  return { declaration, scripts: { [BUILD_SCRIPT]: build.join("\n"), [serveScript]: serve.join("\n") } };
+  const scripts = { [BUILD_SCRIPT]: build.join("\n"), [serveScript]: serve.join("\n") };
+  if (migrateTask) {
+    scripts[migrateTask] = [
+      "#!/usr/bin/env bash",
+      `# Made by Vibe64: the release's migrate task for service ${service}, run once by a Deploy on a temporary machine of `
+        + "the new release, before any of its instances starts. It exports what the service's start does, then migrates.",
+      ...prologue,
+      ...stepLines("Migrate", steps.migrate),
+      ""
+    ].join("\n");
+  }
+  return { declaration, scripts };
 }
 
 // How Production's neutral needs (needs.js) become mobilynet's. A resource kind is one of mobilynet's interfaces, which a
@@ -412,9 +450,11 @@ function servicePackagesProblem(deployment, settings = {}) {
  *   settings (package.js settingsPerService)
  * @param {Record<string, string>} [options.defaults] Serve's own defaults beside the runtime's (the Stack's Environment
  *   defaults), which a setting overrides
+ * @param {boolean} [options.releaseTasks] whether Migrate is each release's `migrate` task (the adapter's capability)
+ *   rather than a line of every serve script
  * @returns {{ declarations: Record<string, object>, scripts: Record<string, string> }}
  */
-function servicePackages({ app, deployment, needs, settings, defaults = {} }) {
+function servicePackages({ app, deployment, needs, settings, defaults = {}, releaseTasks = RELEASE_TASKS }) {
   const problem = servicePackagesProblem(deployment, settings);
   if (problem) throw declarationError(problem);
   const runtimes = deployment.runtimeRequirements.map((runtime) => STACK_RUNTIME_PACKS[runtime]);
@@ -450,7 +490,8 @@ function servicePackages({ app, deployment, needs, settings, defaults = {} }) {
       bindingLines: bindingExportLines(needs),
       packages: [...deployment.packages, ...service.packages],
       sandboxAllowances: service.sandboxAllowances,
-      serviceSettings: service.settings
+      serviceSettings: service.settings,
+      releaseTasks
     });
     declarations[service.id] = made.declaration;
     Object.assign(scripts, made.scripts);
@@ -471,6 +512,7 @@ export {
   APP_SCRIPTS_FOLDER,
   MAX_DECLARED_SETTINGS,
   MOBILYNET_INTERFACES,
+  RELEASE_TASKS,
   SERVICE_PORT,
   STACK_RUNTIME_PACKS,
   appHome,

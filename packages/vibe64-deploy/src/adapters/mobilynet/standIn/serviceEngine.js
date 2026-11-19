@@ -279,6 +279,38 @@ function createStandInServiceEngine(world, parts) {
     event(service, "service.refresh_succeeded", { refreshId: refresh.id, kind: refresh.kind, version: refresh.toVersion });
   }
 
+  /**
+   * A refresh's task, run once on a temporary instance of what the refresh moves to (its release, settings, secrets and
+   * links' settings), never in rotation, before any instance starts (STAND-IN ONLY: the engine's ask of mobilynet, its
+   * M-C). The task keeps the names of the settings it ran with. A failure (`releaseTaskFails`: `true`, exit 1; `{
+   * exitCode, output }`, those) fails the refresh `release_task_failed` with nothing rolled out. Answers whether it passed.
+   */
+  function runTask(service, refresh, release) {
+    const { task } = refresh;
+    const spec = specOf(service, refresh);
+    const machine = nextId("vps");
+    const declared = release.declaration.tasks?.[task.name] ?? {};
+    Object.assign(task, { state: "running", machine, command: declared.command, settings: [...Object.keys(spec.settings), ...Object.keys(spec.secrets)].sort(), startedAt: at() });
+    refresh.steps.push(stepOf("task_started", machine, task.name));
+    const fault = faults.releaseTaskFails;
+    if (fault) {
+      const exitCode = fault === true ? 1 : Number(fault.exitCode ?? 1);
+      const output = fault === true ? ["Migration failed."] : [...(fault.output ?? [])];
+      Object.assign(task, { state: "failed", exitCode, output, finishedAt: at() });
+      refresh.steps.push(stepOf("task_failed", machine, `exit ${exitCode}`));
+      const last = output.at(-1);
+      failRefresh(service, refresh, {
+        code: "release_task_failed",
+        message: `The release's task ${task.name} exited ${exitCode}${last ? `: ${last}` : "."}`,
+        details: { task: task.name, exitCode, output }
+      }, null);
+      return false;
+    }
+    Object.assign(task, { state: "succeeded", exitCode: 0, output: [`${task.name}: done`], finishedAt: at() });
+    refresh.steps.push(stepOf("task_succeeded", machine, task.name));
+    return true;
+  }
+
   /** A building refresh's next step: its release built, or failed, or still building. */
   function build(service, refresh) {
     // A change of settings or size starts on the release the service runs as it starts (serviceEngine.js
@@ -304,6 +336,7 @@ function createStandInServiceEngine(world, parts) {
       return;
     }
     refresh.steps.push(stepOf("build_passed", null, release.buildId));
+    if (refresh.task && !runTask(service, refresh, release)) return;
     refresh.state = "rolling";
     const served = servedOf(release.declaration);
     patch(service, { state: service.version ? "refreshing" : "creating", port: served?.port ?? null, healthPath: served?.healthPath ?? null });

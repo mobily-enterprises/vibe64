@@ -15,6 +15,7 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/image.js`
 - `packages/vibe64-deploy/src/plan.js`
 - `packages/vibe64-deploy/src/steps.js`
+- `packages/vibe64-deploy/src/migrations.js`
 - `packages/vibe64-deploy/src/record.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/declaration.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/index.js`
@@ -88,6 +89,17 @@ naming why. mobilynet leaves an app's settings to its `start` step, as root, in
 `/run/mobilynet/apps/<app>/settings.json`; `start` copies them for the
 service's login to `/run/app-settings/<app>/settings.json` (mode `0400`), which
 the serve script reads.
+
+Where the adapter runs a release's task (`releaseTasks`, below), Migrate is
+instead each release's `migrate` task: the declaration's `tasks.migrate` runs
+`vibe64-app/migrate-<service>.sh` as the service's login, with a 900-second
+limit, and that script exports the same settings and facts as the serve
+script, then migrates in the work folder; the serve script then only serves.
+An app with no Migrate step has no task. mobilynet runs no such task yet
+(`RELEASE_TASKS` is off), so today every serve script still migrates as its
+instance starts, and an adapter that would run no task refuses a release that
+declares one (`deployment_release_tasks_unsupported`) rather than never
+migrating.
 
 `V64_WORK_DIR` is `/srv/<login>`, the work area mobilynet makes for each
 declared login on the machine's data disk (owned by the login, mounted without
@@ -247,7 +259,22 @@ making it twice. In order:
    it and is handed no release, since a provider refreshes onto every release it
    is handed, even the one it runs; so a Deploy that changes only a count or a
    size replaces no instance for nothing. One whose release failed, or whose
-   record was made again from labels, is handed its release again;
+   record was made again from labels, is handed its release again.
+   Where the adapter runs a release's task, the first release this Deploy
+   hands (a new App Service's or a release of one) carries the migrations
+   (`task: "migrate"`, `migrations.js`), unless the database already ran this code's: the
+   record keeps, once they ran, the fingerprint of the archive they migrated
+   (`migrated`, `{ fingerprint, release, at }` for the last 50, newest first).
+   So an earlier version deployed again runs none, and its log says it runs on
+   the later release's schema: deploying an earlier version returns its code,
+   never its schema. The provider runs them once, on
+   a temporary machine of the new release with its settings and links, after
+   its build passed and before any of its instances starts; a later release in
+   the same Deploy carries none. Migrations that fail fail that refresh with
+   nothing rolled out and the Deploy with their exit and last line, the version
+   before still serving, and the next Deploy runs them again. A release that
+   fails after its migrations ran says that the version before serves on the
+   migrated database, and the next Deploy doesn't run them again;
 5. a resource the Stack no longer names is unlinked from the services that
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
@@ -260,6 +287,22 @@ making it twice. In order:
 7. a service the Stack no longer names is deleted;
 8. live, once every service runs its release on as many healthy instances as
    chosen and its last refresh (a link's or a change's) did not fail.
+
+So a Deploy changes only what changed. A hosted service is made once and then
+only resized when its chosen size changes, and is never made again, restarted
+or given a new setting; a link is made once and kept while the provider holds
+it, so the same server keeps the same login, and a Deploy makes one again only
+for a link the provider ended. Only an App Service whose release changed (its
+code, its declaration) or whose last release failed is handed a release, and so
+gets new machines; the others keep theirs. A Deploy of unchanged code and Stack
+sends the provider nothing but its lease. The migrations run at most once per
+Deploy, and not at all when no release is handed or the database already ran
+this code's. The engine's tests hold the provider to these exact writes
+(deploySteps: an unchanged redeploy, one of two services changed, a failed
+release handed again, the migrations run, skipped and failing). Two parts rest
+on mobilynet: a link made ahead of a failed refresh ends with it (M14), so the
+next Deploy makes it again with a new login; and the migrations run once only
+where the provider runs a release's task.
 
 A refusal from the provider (a quota, the spending cap) fails the Deploy with
 its reason, the record kept as far as it got; an answer the provider may give
@@ -292,7 +335,15 @@ release of web", "Making App Service web, public behind the load balancer at
 app.example.com", "Linking web to database", "Reading how the update of web
 ended", "Deleting App Service web"), each wait when its words change, each call
 tried again (`{ kind: "retry", words, message }`), each service gone at Take
-offline and the end (`{ kind: "end", outcome }`). A step that starts a refresh,
+offline and the end (`{ kind: "end", outcome, migrations? }`). Where the
+provider runs the migrations as a release's task, the step that hands them says
+so ("…, which first runs the migrations once"; its `message`: "Its refresh runs
+the migrations once, on a temporary machine of the new release, before any
+instance starts."), the first hand-over that needs none says "Migrations
+skipped: the database already ran this code's migrations.", the step reading
+the refresh says how they went ("The migrations ran once (exit 0).") with their
+last 20 lines of output (`output`), and the end says `migrations`: `ran`,
+`failed`, `asked` or `skipped`. A step that starts a refresh,
 or reads how one ended, names it (`refresh: { serviceId, refreshId }`), so the
 caller can follow what the provider does in it. No event carries a setting's
 value, and a report that throws or rejects never stops the run. Every event has
@@ -340,7 +391,18 @@ hosted service Vibe64 made with the links mobilynet holds of it (one `GET
 /v1/hosted-services/{id}/links`, `hosted:read`, per such hosted service at
 each read), and the calls the steps make. mobilynet has no leases yet: an
 adapter made without `leases: true` takes none, which is safe only while one
-editor deploys an environment.
+editor deploys an environment. Nor does it run a release's task yet: an adapter
+made without `releaseTasks: true` (`RELEASE_TASKS`) runs none, and its
+declarations keep Migrate in each serve script. The task is the engine's ask of
+mobilynet, in the shape its stand-in answers (STAND-IN ONLY, like leases): a
+declaration's `tasks` (`{ <name>: { command, user?, timeoutSeconds? } }`); a
+create's `task` or a release upload's `?task=` naming one, which that refresh
+runs once on a temporary instance of what it moves to (release, settings,
+secrets and links' settings), after `build_passed` and before any instance
+(steps `task_started`, then `task_succeeded` or `task_failed`); a task that
+fails fails the refresh `release_task_failed` with nothing rolled out; and the
+refresh's `task` (`{ name, state, exitCode, output }`). The stand-in's
+`releaseTaskFails` fault fails it.
 
 Its client also reads what mobilynet did, for a caller that shows it: a
 refresh with its steps (`readServiceRefresh`: build started, passed or failed,

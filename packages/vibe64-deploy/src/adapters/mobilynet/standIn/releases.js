@@ -20,8 +20,28 @@ const UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
 const DECLARATION_FILE = "mobilynet.json";
 const FIELDS = Object.freeze([
   "name", "services", "start", "check", "settings", "logins", "rootCommands", "groups", "dataPaths", "ports",
-  "machineFeatures", "logs", "requiredPackages", "build", "backup", "layout", "needs"
+  "machineFeatures", "logs", "requiredPackages", "build", "backup", "layout", "needs", "tasks"
 ]);
+// STAND-IN ONLY: a release's tasks are the shape the engine asks mobilynet for (its design note's M-C), which mobilynet
+// has not built yet: `{ <name>: { command, user?, timeoutSeconds? } }`, each run once by a refresh that asks for it,
+// after its build passed and before any instance starts.
+const TASK_NAME = /^[a-z][a-z0-9-]{0,31}$/u;
+const TASK_MAX_SECONDS = 3600;
+
+/** The field errors of a declaration's `tasks`. @param {unknown} tasks */
+function tasksErrors(tasks) {
+  if (tasks === undefined) return {};
+  if (!isRecord(tasks)) return { "declaration.tasks": "An object of task names, each { command, user?, timeoutSeconds? }." };
+  const errors = {};
+  for (const [name, task] of Object.entries(tasks)) {
+    if (!TASK_NAME.test(name)) errors[`declaration.tasks.${name}`] = "A task's name: a lowercase letter, then up to 31 lowercase letters, digits and hyphens.";
+    else if (!isRecord(task) || typeof task.command !== "string" || task.command.length === 0) errors[`declaration.tasks.${name}.command`] = "Required: the command the task runs.";
+    else if (task.timeoutSeconds !== undefined && (!Number.isInteger(task.timeoutSeconds) || task.timeoutSeconds < 1 || task.timeoutSeconds > TASK_MAX_SECONDS)) {
+      errors[`declaration.tasks.${name}.timeoutSeconds`] = `A whole number of seconds from 1 to ${TASK_MAX_SECONDS}.`;
+    }
+  }
+  return errors;
+}
 const GONE_FIELDS = Object.freeze({
   testApps: "Gone: a build never runs the app. Put your tests in build.command, such as npm ci && npm test && npm run build.",
   testSettings: "Gone: a build never runs the app, so it takes no test settings. Name the settings the build needs in build.settings.",
@@ -127,7 +147,7 @@ function declarationOf(archive, appName) {
   } else if (!Array.isArray(raw.build.output) || raw.build.output.length === 0) {
     errors["declaration.build.output"] = "Required: the paths the build keeps as the app's output, such as [\"dist\", \"node_modules\", \"package.json\"], or [\".\"].";
   }
-  Object.assign(errors, needsErrors(raw.needs, raw.settings));
+  Object.assign(errors, needsErrors(raw.needs, raw.settings), tasksErrors(raw.tasks));
   if (Object.keys(errors).length > 0) return { errors };
   return { declaration: { ...raw, needs: (raw.needs ?? []).map((need) => ({ interface: need.interface, as: need.as })) } };
 }

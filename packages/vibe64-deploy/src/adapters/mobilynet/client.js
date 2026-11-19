@@ -267,8 +267,9 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
        * services (`409 name_taken`); a route's name needs a domain of the project covering it; an internal one has no
        * routes and is reached as `<name>.<project label>.internal`; `connections` open a port of another service of
        * the project to its instances. Its instances times its size count against the project's vCPU and memory quotas
-       * (`429 quota_exceeded`), and a project at its spending cap makes none (`409 spending_cap_reached`).
-       * @param {{ name: string, region: string, exposure?: "public" | "internal", size: string, instances: number, app: { name?: string, version: string }, settings?: Record<string, unknown>, secrets?: Record<string, string>, routes?: Array<{ host: string, tls?: "edge" }>, connections?: Array<{ to: string, port: number }>, healthCheck?: object, drainSeconds?: number, labels?: Record<string, string> }} spec
+       * (`429 quota_exceeded`), and a project at its spending cap makes none (`409 spending_cap_reached`). `task` names a
+       * task of the release's declaration its first refresh runs once before any instance starts (M-C, as a release's).
+       * @param {{ name: string, region: string, exposure?: "public" | "internal", size: string, instances: number, app: { name?: string, version: string }, settings?: Record<string, unknown>, secrets?: Record<string, string>, routes?: Array<{ host: string, tls?: "edge" }>, connections?: Array<{ to: string, port: number }>, healthCheck?: object, drainSeconds?: number, labels?: Record<string, string>, task?: string }} spec
        * @param {{ idempotencyKey: string }} context
        */
       createService: (spec, { idempotencyKey }) => call("POST", `${projectAt}/services`, { body: spec, idempotencyKey }),
@@ -353,10 +354,13 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
     /**
      * A new release of an App Service's app, uploaded as its tarball (`services:deploy`): `{ release, build, service,
      * refresh }`, a refresh of kind `release` onto it once it built; a refresh that fails leaves the version before
-     * serving.
-     * @param {string} serviceId @param {{ archive: Buffer, sha256: string }} upload
+     * serving. `task` names a task of the release's declaration its refresh runs once, after its build passed and
+     * before any instance starts (`?task=`; the shape the engine asks mobilynet for, its M-C: mobilynet has none yet).
+     * @param {string} serviceId @param {{ archive: Buffer, sha256: string }} upload @param {{ task?: string | null }} [asked]
      */
-    createServiceRelease: (serviceId, { archive, sha256 }) => call("POST", `${servicePath(serviceId)}/releases`, { body: archive, contentSha256: sha256 }),
+    createServiceRelease: (serviceId, { archive, sha256 }, { task = null } = {}) => call("POST", `${servicePath(serviceId)}/releases`, {
+      body: archive, contentSha256: sha256, ...(task ? { query: { task } } : {})
+    }),
     /**
      * Rolls an App Service back to the version it ran before (`services:deploy`): `{ service, refresh }`, kind
      * `rollback`; `409 no_previous_version` when it has none.

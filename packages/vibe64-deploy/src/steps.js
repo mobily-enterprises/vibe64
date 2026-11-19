@@ -19,12 +19,14 @@
 //      provider refreshes onto every release it is handed, even the one it runs). A provider may take a link only
 //      with the service's new release under way (the release the service runs doesn't name the resource, it runs none
 //      yet, or the refresh moving it hasn't read its release): its adapter refuses it LINK_NEEDS_RELEASE, and a link
-//      asked before the release is then made once its refresh is open. mobilynet takes such a link against the release
-//      the refresh moves to, putting its settings in that refresh and replacing any instance it started without them
-//      (engine-support M14); a link it checks against the release the service runs gives the refresh's instances its
-//      settings as the refresh starts, which is why the engine links first. A refresh that fails ends, at mobilynet,
-//      the links made against the release it moved to, which the record lets go so the next Deploy makes them again,
-//      and fails the deployment with that service's reason; the services not yet moved keep serving their version;
+//      asked before the release is then made once its refresh is open. A provider may take such a link against the
+//      release the refresh moves to, putting its settings in that refresh and replacing any instance it started
+//      without them (mobilynet does, its engine-support M14); a link taken against the release the service runs gives
+//      the refresh's instances its settings as the refresh starts, which is why the engine links first. A refresh
+//      that fails may end the links made against the release it moved to (mobilynet's do), which the record lets go so
+//      the next Deploy makes them again, and fails the deployment with that service's reason; the services not yet
+//      moved keep serving their version. Where the adapter runs a release's task, the first release a Deploy hands
+//      carries the migrations, once, unless the database ran that code's (the record's `migrated`);
 //   5. a resource the Stack no longer names is unlinked from every service that stays, now that none runs a release
 //      naming it, and kept running with its data;
 //   6. each service's settings (package.js settingValues) when they differ from those it was given, the services it
@@ -38,10 +40,10 @@
 //
 // The record names each link the engine made, and a link counts only while the provider holds it: where the adapter
 // lists a resource's links (mobilynet's inventory does), one the provider ended is none, so the next step makes it
-// again, whichever run made it and however it ended. A refresh that fails or is aborted ends every link the release its
-// service still runs doesn't name, even when no Deploy reads that refresh (the run that made the links stopped first,
-// and the next began while it was still open), and an owner may remove a link by hand. An adapter that lists none is
-// taken at the record's word.
+// again, whichever run made it and however it ended. A provider may end, when a refresh fails or is aborted (mobilynet
+// does), every link the release its service still runs doesn't name, even when no Deploy reads that refresh (the run
+// that made the links stopped first, and the next began while it was still open), and an owner may remove a link by
+// hand. An adapter that lists none is taken at the record's word.
 //
 // What the record does not hold is never touched: every call names a thing the engine made and labelled (record.js
 // labelsFor). A Deploy never deletes or makes again a thing that holds data; deleting a disconnected resource is
@@ -63,6 +65,7 @@
 // keeping its record is made whole by the labels: the next one finds the thing labelled as that item and adopts it.
 import { createHash, randomBytes } from "node:crypto";
 
+import { MIGRATED_NOTE, MIGRATING, migrationDue, migrationsOf, noteHandOver, noteTask } from "./migrations.js";
 import { planOf, stableJson } from "./plan.js";
 import { LABEL, labelsFor } from "./record.js";
 import { settingValues } from "./package.js";
@@ -148,10 +151,10 @@ function stepWords(step, { needs, release } = {}) {
     case "ensureDomain": return `Adding the domain ${step.domain}`;
     case "uploadRelease": return `Uploading the release of ${step.service}`;
     case "keepRelease": return `${step.service} keeps the release it runs: the same commit, Stack and engine`;
-    case "releaseService": return `Handing App Service ${step.service} the new release`;
-    case "createService": return exposure === "public"
+    case "releaseService": return `Handing App Service ${step.service} the new release${step.task ? MIGRATING : ""}`;
+    case "createService": return (exposure === "public"
       ? `Making App Service ${step.service}, public behind the load balancer at ${release?.domain ?? "its domain"}`
-      : `Making App Service ${step.service}, internal: only the app's other services reach it`;
+      : `Making App Service ${step.service}, internal: only the app's other services reach it`) + (step.task ? MIGRATING : "");
     case "link": return `Linking ${step.service} to ${step.resource}`;
     case "checkRefresh": return `Reading how the update of ${step.service} ended`;
     case "unlink": return `Unlinking ${step.resource}, no longer in genesis/stack.md, from ${step.service}`;
@@ -223,6 +226,7 @@ async function settleLastRun(adapter, record, tell) {
     const words = `Reading how the last Deploy's update of ${service} ended`;
     tell({ kind: "step", phase: "start", step: "settleRefresh", service, words, refresh: { serviceId: id, refreshId: state.refreshId } });
     const refresh = await adapter.readRefresh(id, state.refreshId);
+    noteTask(kept, state, refresh);
     if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
       for (const resource of state.linkedAhead ?? []) delete kept.items[`resource.${resource}`]?.links?.[service];
       delete kept.items[`service.${service}`].release;
@@ -250,6 +254,8 @@ function nextStep({ plan, needs, record, observed, release }) {
   const byId = new Map(observed.map((thing) => [thing.id, thing]));
   const itemOf = (kind, name) => record.items[`${kind}.${name}`];
   const thingOf = (item) => (item?.id ? byId.get(item.id) : undefined);
+  // The migrations run once, with the first release this Deploy hands, when the database hasn't run this code's.
+  const migrateTask = (serviceId) => (migrationDue(release.migrations, record, serviceId) ? { task: "migrate" } : {});
   // A service is linked to a resource while the provider holds the link the record names: where the adapter lists the
   // links a resource's thing holds (`links`), one it ended counts as none, so it is made again whichever run made it.
   const linked = (resourceId, serviceId) => {
@@ -306,7 +312,8 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (thing && live?.digest === release.digests[service.id] && thing.version === live.version && !thing.lastError) {
         return { kind: "keepRelease", service: service.id };
       }
-      return { kind: thing ? "releaseService" : "uploadRelease", service: service.id, id: thing?.id ?? null };
+      if (thing) return { kind: "releaseService", service: service.id, id: thing.id, ...migrateTask(service.id) };
+      return { kind: "uploadRelease", service: service.id, id: null };
     }
     if (!thing) {
       const name = release.declarations[service.id].name;
@@ -314,7 +321,7 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (leaving) return { kind: "wait", words: `Waiting for the old ${service.id} to go` };
       const values = valuesOf(service, { record, release }, byId);
       if (!values) return { kind: "wait", words: `Waiting for the services ${service.id} reaches` };
-      return { kind: "createService", service: service.id, values };
+      return { kind: "createService", service: service.id, values, ...migrateTask(service.id) };
     }
     // The count chosen goes with the release, set while its refresh is open: mobilynet's refresh rolls to the count the
     // service has as it rolls, so it starts as many new instances as chosen and, if it fails, the version before serves
@@ -388,6 +395,9 @@ function nextStep({ plan, needs, record, observed, release }) {
 async function applyStep(adapter, step, { record: given, needs, plan, release }) {
   const record = structuredClone(given);
   const run = record.run;
+  // What the step's report says beside its words, and a migration's output.
+  let message = null;
+  let output = null;
   const serviceOf = (id) => needs.services.find((one) => one.id === id);
   const stateOf = (id) => {
     run.services[id] ??= {};
@@ -425,9 +435,10 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       stateOf(step.service).version = record.items[`service.${step.service}`].release.version;
       break;
     case "releaseService": {
-      const answer = await adapter.releaseService(step.id, upload(step.service));
+      const answer = await adapter.releaseService(step.id, upload(step.service), ...(step.task ? [{ task: step.task }] : []));
       Object.assign(stateOf(step.service), { version: answer.version, refreshId: answer.refreshId });
       record.items[`service.${step.service}`].release = { digest: release.digests[step.service], version: answer.version };
+      message = noteHandOver(record, release.migrations, step);
       break;
     }
     case "createService": {
@@ -439,13 +450,15 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       const state = stateOf(service.id);
       const made = await adapter.createService({
         name, exposure: service.exposure, size: choice.size, instances: choice.instances, app: name, version: state.version,
-        settings: values.settings, secrets: values.secrets, domain: release.domain, connections, labels: labelsFor(record, { kind: "service", name: service.id })
+        settings: values.settings, secrets: values.secrets, domain: release.domain, connections, labels: labelsFor(record, { kind: "service", name: service.id }),
+        ...(step.task ? { task: step.task } : {})
       }, { idempotencyKey: keyOf(record, "service", service.id, name) });
       record.items[`service.${service.id}`] = {
         kind: "service", name: service.id, id: made.id, providerName: name, origin: "made", size: choice.size, instances: choice.instances,
         exposure: service.exposure, settingsHash: values.hash, release: { digest: release.digests[service.id], version: state.version }
       };
       state.refreshId = made.refreshId;
+      message = noteHandOver(record, release.migrations, step);
       break;
     }
     case "link": {
@@ -483,14 +496,18 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     case "checkRefresh": {
       const refresh = await adapter.readRefresh(step.id, step.refreshId);
       const state = stateOf(step.service);
+      const { task, ...said } = noteTask(record, state, refresh);
+      if (task) ({ message, output } = said);
       if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
         // The links made against it ended with it, and the release it moved to may not run: the next Deploy makes them
         // and hands it that release again.
         for (const resource of state.linkedAhead ?? []) delete record.items[`resource.${resource}`]?.links?.[step.service];
         if (record.items[`service.${step.service}`]) delete record.items[`service.${step.service}`].release;
-        const what = ["create", "release"].includes(refresh.kind) ? "the release did not go live" : `its ${refresh.kind} change did not go live`;
+        const what = task?.state === "failed" ? "the migrations failed, so no instance of the new release started"
+          : ["create", "release"].includes(refresh.kind) ? "the release did not go live" : `its ${refresh.kind} change did not go live`;
         run.failure = `${step.service}: ${what}: ${refresh.error?.message ?? `its refresh ${refresh.state}`}`
-          + (refresh.fromVersion ? ` The version before (${refresh.fromVersion}) still serves.` : "");
+          + (refresh.fromVersion ? ` The version before (${refresh.fromVersion}) still serves.` : "")
+          + (run.migration?.state === "ran" ? MIGRATED_NOTE : "");
       }
       Object.assign(state, { refreshId: null, linkedAhead: [] });
       break;
@@ -520,7 +537,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     default:
       throw new TypeError(`No step ${step.kind}.`);
   }
-  return { record };
+  return { record, ...(message ? { message } : {}), ...(output ? { output } : {}) };
 }
 
 /**
@@ -556,7 +573,9 @@ async function takeDeployLease(adapter, record, holder) {
  * @param {(event: any) => unknown} [options.report] told each step as it starts and ends (`{ at, kind: "step", phase:
  *   "start" | "done" | "refused", step, words, service?, resource?, refresh?, message? }`), each wait when its words
  *   change (`{ kind: "wait", words }`), each call tried again (`{ kind: "retry", words, message }`) and the end (`{ kind:
- *   "end", outcome, message? }`)
+ *   "end", outcome, message?, migrations? }`, `migrations` "ran", "failed", "asked" or "skipped" where the provider runs
+ *   them once as a release's task). A step that hands the migrations, or reads how they went, says so in its `message`,
+ *   the last lines of their output in `output`.
  * @param {number} [options.maxSteps]
  * @returns {Promise<{ outcome: "live" | "failed", message?: string, record: any, steps: string[] }>}
  */
@@ -568,12 +587,13 @@ async function deploy({
   const plan = planOf({ needs, record: start, observed, offer, choices, decisions });
   if (plan.hash !== planHash) throw deployError("deployment_plan_stale", "What this Deploy would do changed since the plan was read: read the plan again, then deploy.");
   if (plan.problems.length > 0) throw deployError("deployment_plan_refused", plan.problems[0].message, 422, { problems: plan.problems });
-  const lease = await takeDeployLease(adapter, start, holder);
   const digests = Object.fromEntries(needs.services.map((service) => {
     const declaration = release.declarations[service.id];
     return [service.id, releaseDigest(adapter.serviceUpload(release.archive, declaration), declaration)];
   }));
-  const full = { ...release, digests, port: adapter.servicePort, trustedProxies: await adapter.trustedProxies() };
+  const full = { ...release, digests, port: adapter.servicePort, trustedProxies: await adapter.trustedProxies(), migrations: migrationsOf(adapter, needs, release) };
+  // Taken once the release is read, so a release refused gives up no lease it holds.
+  const lease = await takeDeployLease(adapter, start, holder);
   const run = { id: `run_${randomBytes(6).toString("hex")}`, release: release.id, planHash, state: "deploying", domain: null, services: {}, failure: null };
   let record = await save({ ...(await settleLastRun(adapter, start, tell)), run });
   const steps = [];
@@ -598,7 +618,10 @@ async function deploy({
         const ended = { ...structuredClone(record), run: { ...record.run, state: step.kind, failure: step.message ?? null } };
         if (step.kind === "live") Object.assign(ended, { choices: structuredClone(plan.choices), lastPlan: { hash: plan.hash } });
         record = await save(ended);
-        tell({ kind: "end", outcome: step.kind, ...(step.message ? { message: step.message } : {}) });
+        // Whether this Deploy's migrations ran, failed or were skipped (no release handed, or one the database ran); none
+        // where they run as each instance starts.
+        const migrations = full.migrations ? (record.run.migration?.state ?? "skipped") : null;
+        tell({ kind: "end", outcome: step.kind, ...(step.message ? { message: step.message } : {}), ...(migrations ? { migrations } : {}) });
         return { outcome: step.kind, ...(step.message ? { message: step.message } : {}), record, steps };
       }
       steps.push(step.kind === "wait" ? `wait: ${step.words}` : `${step.kind}${step.service ? ` ${step.service}` : step.resource ? ` ${step.resource}` : ""}`);
@@ -610,8 +633,9 @@ async function deploy({
         const words = stepWords(step, { needs, release: full });
         tell({ ...stepEvent(step, words), phase: "start" });
         try {
-          record = await save((await applyStep(adapter, step, { record, needs, plan, release: full })).record);
-          tell({ ...stepEvent(step, words, record), phase: "done" });
+          const done = await applyStep(adapter, step, { record, needs, plan, release: full });
+          record = await save(done.record);
+          tell({ ...stepEvent(step, words, record), phase: "done", ...(done.message ? { message: done.message } : {}), ...(done.output ? { output: done.output } : {}) });
         } catch (error) {
           // A refusal waits for a person: the Deploy fails with it, its record kept as far as it got. Anything the
           // provider may answer later (no answer, its rate limit, a thing busy) is tried again at the next step.

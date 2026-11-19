@@ -43,23 +43,29 @@ const ENV = {
   STRIPE_SECRET_KEY: "sk_test_1", MEMOBOT_OWNERS: "owner@example.com", MEMOBOT_MAX_COMPUTERS: "4"
 };
 
-/** A release of a commit: the archive (one file naming the commit) and each service's declaration and settings. */
-function releaseOf(commit, { deployment, needs }) {
+/**
+ * A release of a commit: the archive (one file naming the commit) and each service's declaration and settings, its
+ * Migrate the release's migrate task where `releaseTasks`.
+ */
+function releaseOf(commit, { deployment, needs }, { releaseTasks = false } = {}) {
   const settings = settingsPerService(needs, ENV_RECORDS.filter((record) => needs.services.some((one) => (record.services ?? ["web"]).includes(one.id))));
-  const { declarations } = servicePackages({ app: "memobot", deployment, needs, settings });
+  const { declarations } = servicePackages({ app: "memobot", deployment, needs, settings, releaseTasks });
   return { id: commit, archive: withRootFile(gzipSync(Buffer.alloc(1024)), "commit.txt", commit).bytes, declarations, settings, env: ENV, domain: DOMAIN };
 }
 
-/** The stand-in with a verified-later domain, the adapter over it (leases on), and a Deploy helper that plans first. */
-function setup() {
+/**
+ * The stand-in with a verified-later domain, the adapter over it (leases on; release tasks where `releaseTasks`, which
+ * mobilynet has not built yet), and a Deploy helper that plans first.
+ */
+function setup({ releaseTasks = false } = {}) {
   const parts = world();
   // Room for two a-8 computers (three when raised by hand), two a-2 webs and their rolling replacements.
   parts.standIn.setQuota(parts.projectId, { vcpus: 96, memoryGib: 192 });
-  const adapter = createMobilynetAdapter({ client: parts.client, project: parts.projectId, leases: true });
+  const adapter = createMobilynetAdapter({ client: parts.client, project: parts.projectId, leases: true, releaseTasks });
   const run = async ({ stack = stackOf(), record, commit, choices = {}, decisions = {}, planHash, save, report, pause = () => parts.standIn.advance() }) => {
     const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer(), choices, decisions });
     const result = await deploy({
-      adapter, needs: stack.needs, record, choices, decisions, planHash: planHash ?? plan.hash, release: releaseOf(commit, stack), holder: HOLDER,
+      adapter, needs: stack.needs, record, choices, decisions, planHash: planHash ?? plan.hash, release: releaseOf(commit, stack, { releaseTasks }), holder: HOLDER,
       pause, ...(save ? { save } : {}), ...(report ? { report } : {})
     });
     return { ...result, plan };
@@ -499,6 +505,163 @@ test("a service whose release failed is handed it again on the next Deploy, whil
   assert.deepEqual(writesAfter(standIn, at), [["POST", `/v1/services/${computers}/releases`], ["POST", `/v1/services/${web}/releases`]],
     "computers handed c2 again and web its first c2: no hosted-service write, no link");
   assert.deepEqual(linksHeld(standIn, again.record), links, "the same links (the same logins) through the failure and the Deploy after it");
+});
+
+/** Each refresh of the two services that ran a task: `[service, refresh kind, task, its state]`. */
+const tasksRun = (standIn, record) => ["computers", "web"].flatMap((service) => standIn.services.refreshes(record.items[`service.${service}`].id)
+  .filter((refresh) => refresh.task).map((refresh) => [service, refresh.kind, refresh.task.name, refresh.task.state]));
+/** What a Deploy's reports said: its steps' messages, and the end's migrations. */
+function reports() {
+  const events = [];
+  return { events, report: (event) => events.push(event), said: () => events.filter((event) => event.message).map((event) => event.message),
+    migrations: () => events.find((event) => event.kind === "end")?.migrations };
+}
+
+test("with release tasks, the migrations run once per Deploy as the first release's task, before any of its instances, never as instances start", async () => {
+  const { standIn, run, record } = setup({ releaseTasks: true });
+  const first = reports();
+  const made = await run({ record, commit: "c1", report: first.report });
+  assert.equal(made.outcome, "live", made.message);
+  // The first Deploy: once, by the first service made, its database linked by then; neither serve script migrates.
+  assert.deepEqual(tasksRun(standIn, made.record), [["computers", "create", "migrate", "succeeded"]]);
+  const computers = made.record.items["service.computers"].id;
+  const [refresh] = standIn.services.refreshes(computers);
+  assert.ok(refresh.task.settings.some((name) => name.startsWith("V64_DATABASE_")), "the task ran with the database's settings");
+  const stepsOf = refresh.steps.map((step) => step.step);
+  assert.ok(stepsOf.indexOf("task_succeeded") < stepsOf.indexOf("instance_started"), "the task finished before any instance started");
+  assert.equal(first.migrations(), "ran");
+  assert.ok(first.said().includes("The migrations ran once (exit 0)."), first.said().join(" | "));
+  for (const service of ["computers", "web"]) {
+    const declaration = releaseOf("c1", stackOf(), { releaseTasks: true }).declarations[service];
+    assert.deepEqual(declaration.tasks.migrate.command, `bash vibe64-app/migrate-${service}.sh`);
+  }
+  assert.deepEqual(made.record.migrated.map((one) => one.release), ["c1"]);
+
+  // Unchanged code: no release, no migrations, the database untouched.
+  settle(standIn);
+  const same = reports();
+  const kept = await run({ record: made.record, commit: "c1", report: same.report });
+  assert.equal(kept.outcome, "live", kept.message);
+  assert.deepEqual(tasksRun(standIn, kept.record).length, 1);
+  assert.equal(same.migrations(), "skipped");
+
+  // One service's declaration changed and the code didn't: its release is handed with no migrations.
+  settle(standIn);
+  const changed = stackOf((lines) => lines.map((line) => (line.startsWith("- Packages: `tint2`") ? `${line} \`htop\`` : line)));
+  const packages = reports();
+  const repacked = await run({ stack: changed, record: kept.record, commit: "c1", report: packages.report });
+  assert.equal(repacked.outcome, "live", repacked.message);
+  assert.deepEqual(repacked.steps.filter((step) => !step.startsWith("wait")), ["ensureDomain", "releaseService computers", "checkRefresh computers", "keepRelease web"]);
+  assert.deepEqual(tasksRun(standIn, repacked.record).length, 1, "no task with it");
+  assert.ok(packages.said().includes("Migrations skipped: the database already ran this code's migrations."), packages.said().join(" | "));
+  assert.equal(packages.migrations(), "skipped");
+
+  // New code: once again, with the first release handed (computers'), never with web's.
+  settle(standIn);
+  const next = reports();
+  const moved = await run({ stack: changed, record: repacked.record, commit: "c2", report: next.report });
+  assert.equal(moved.outcome, "live", moved.message);
+  assert.deepEqual(tasksRun(standIn, moved.record), [["computers", "create", "migrate", "succeeded"], ["computers", "release", "migrate", "succeeded"]]);
+  assert.equal(next.migrations(), "ran");
+  assert.deepEqual(moved.record.migrated.map((one) => one.release), ["c2", "c1"]);
+
+  // An earlier version deployed again: its migrations ran before, so none run, and the log says it runs on c2's schema.
+  settle(standIn);
+  const back = reports();
+  const returned = await run({ stack: changed, record: moved.record, commit: "c1", report: back.report });
+  assert.equal(returned.outcome, "live", returned.message);
+  assert.equal(tasksRun(standIn, returned.record).length, 2, "no task with c1 again");
+  assert.ok(back.said().includes("Migrations skipped: the database already ran this code's migrations, and those of a later release (c2), so this "
+    + "code runs on the later schema: deploying an earlier version returns its code, never its schema."), back.said().join(" | "));
+  assert.equal(back.migrations(), "skipped");
+  assert.deepEqual(returned.record.migrated.map((one) => one.release), ["c2", "c1"]);
+});
+
+test("with release tasks, migrations that fail stop the Deploy before any instance of the new release starts, the version before serving; the next Deploy runs them again", async () => {
+  const { standIn, run, record } = setup({ releaseTasks: true });
+  const made = await run({ record, commit: "c1" });
+  assert.equal(made.outcome, "live", made.message);
+  settle(standIn);
+  const computers = made.record.items["service.computers"].id;
+  const before = standIn.services.instances(computers).filter((one) => !one.removedReason).map((one) => one.id);
+  standIn.faults.releaseTaskFails = { exitCode: 3, output: ["Running 20261119_add_column", "column \"x\" already exists"] };
+  const told = reports();
+  const failed = await run({ record: made.record, commit: "c2", report: told.report });
+  standIn.faults.releaseTaskFails = false;
+  assert.equal(failed.outcome, "failed");
+  assert.match(failed.message, /^computers: the migrations failed, so no instance of the new release started: The release's task migrate exited 3: column "x" already exists The version before \(\S+\) still serves\.$/u);
+  const release = standIn.services.refreshes(computers).at(-1);
+  assert.deepEqual([release.kind, release.state, release.error.code], ["release", "failed", "release_task_failed"]);
+  assert.deepEqual(standIn.services.instances(computers).filter((one) => one.refreshId === release.id), [], "no instance of c2 started");
+  assert.deepEqual(standIn.services.instances(computers).filter((one) => !one.removedReason).map((one) => one.id), before, "c1 serves on");
+  assert.deepEqual(told.events.find((event) => event.step === "checkRefresh" && event.output)?.output, ["Running 20261119_add_column", "column \"x\" already exists"]);
+  assert.equal(told.migrations(), "failed");
+  assert.deepEqual(failed.record.migrated.map((one) => one.release), ["c1"], "the database still ran c1's migrations alone");
+  assert.equal(standIn.services.refreshes(failed.record.items["service.web"].id).length, 1, "web was never handed c2");
+
+  settle(standIn);
+  const again = await run({ record: failed.record, commit: "c2" });
+  assert.equal(again.outcome, "live", again.message);
+  assert.deepEqual(tasksRun(standIn, again.record).map(([, kind, , state]) => `${kind} ${state}`), ["create succeeded", "release failed", "release succeeded"]);
+});
+
+test("with release tasks, a release that fails after its migrations ran says the version before serves on the migrated database, and the next Deploy doesn't run them again", async () => {
+  const { standIn, run, record } = setup({ releaseTasks: true });
+  const made = await run({ record, commit: "c1" });
+  assert.equal(made.outcome, "live", made.message);
+  settle(standIn);
+  standIn.faults.instancesUnhealthy = true;
+  const failed = await run({ record: made.record, commit: "c2" });
+  standIn.faults.instancesUnhealthy = false;
+  assert.equal(failed.outcome, "failed");
+  assert.match(failed.message, /The version before \(\S+\) still serves\. Its migrations ran, so the version before serves on the migrated database: an app's migrations must work with the version before them \(add first, remove in a later release\)\.$/u);
+  assert.deepEqual(failed.record.migrated.map((one) => one.release), ["c2", "c1"]);
+  settle(standIn);
+  const told = reports();
+  const again = await run({ record: failed.record, commit: "c2", report: told.report });
+  assert.equal(again.outcome, "live", again.message);
+  assert.equal(tasksRun(standIn, again.record).length, 2, "c1's and c2's, once each");
+  assert.equal(told.migrations(), "skipped");
+});
+
+test("with release tasks, migrations a stopped Deploy asked for and mobilynet then ran are kept by the next Deploy, which doesn't run them again", async () => {
+  const { standIn, run, record } = setup({ releaseTasks: true });
+  const made = await run({ record, commit: "c1" });
+  assert.equal(made.outcome, "live", made.message);
+  settle(standIn);
+  // The Deploy of c2 stops in its wait once computers' release, and its migrations, are asked for.
+  let kept = null;
+  const stopped = await run({
+    record: made.record, commit: "c2",
+    save: (one) => {
+      kept = structuredClone(one);
+      return one;
+    },
+    pause: () => {
+      if (kept?.run.services.computers?.migrating) throw new TypeError("mobilynet did not answer: fetch failed");
+      standIn.advance();
+    }
+  }).catch((error) => error);
+  assert.equal(stopped.message, "mobilynet did not answer: fetch failed");
+  assert.deepEqual(kept.migrated.map((one) => one.release), ["c1"]);
+  settle(standIn);
+  const told = reports();
+  const resumed = await run({ record: kept, commit: "c2", report: told.report });
+  assert.equal(resumed.outcome, "live", resumed.message);
+  assert.deepEqual(resumed.record.migrated.map((one) => one.release), ["c2", "c1"]);
+  assert.deepEqual(tasksRun(standIn, resumed.record), [["computers", "create", "migrate", "succeeded"], ["computers", "release", "migrate", "succeeded"]]);
+  assert.ok(told.said().includes("Migrations skipped: the database already ran this code's migrations."), told.said().join(" | "));
+});
+
+test("a release declaring a migrate task is refused by an adapter whose provider runs none, rather than never migrating", async () => {
+  const { standIn, adapter, record } = setup();
+  const stack = stackOf();
+  assert.equal(releaseOf("c1", stack).declarations.web.tasks, undefined, "with no release tasks, the serve scripts migrate");
+  const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer() });
+  await assert.rejects(deploy({
+    adapter, needs: stack.needs, record, planHash: plan.hash, release: releaseOf("c1", stack, { releaseTasks: true }), holder: HOLDER, pause: () => standIn.advance()
+  }), { code: "deployment_release_tasks_unsupported" });
+  assert.deepEqual(standIn.leases(), []);
 });
 
 test("a count changed with a new release goes with it: the release starts as many instances as chosen, and one that fails leaves the version before on the chosen count, which the record and the next plan keep", async () => {

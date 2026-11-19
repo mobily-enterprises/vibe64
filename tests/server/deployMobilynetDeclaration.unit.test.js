@@ -110,6 +110,39 @@ test("the build script runs Prepare then Build, and the service exports its sett
   assert.match(scripts["vibe64-app/serve-web.sh"], /^if \[ -z "\$\{TRUSTED_PROXIES\+set\}" \]; then export TRUSTED_PROXIES='loopback'; fi$/mu);
 });
 
+test("with release tasks, the service only serves and the release's migrate task exports the same settings, then migrates in the work folder", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-published-app-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const record = (role) => ({ command: `printf '%s %s %s\\n' ${role} "\${NODE_ENV-unset}" "$(basename "$PWD")" >> ${root}/steps` });
+  const settingsFile = path.join(root, "settings.json");
+  const { declaration, scripts } = appPackage({
+    ...SHOP,
+    workdir: "app",
+    releaseTasks: true,
+    steps: { prepare: record("prepare"), build: record("build"), migrate: record("migrate"), serve: { ...record("serve"), defaults: SHOP.steps.serve.defaults } }
+  });
+  assert.deepEqual(declaration.tasks, { migrate: { command: "bash vibe64-app/migrate-web.sh", user: "shop", timeoutSeconds: 900 } });
+  assert.deepEqual(Object.keys(scripts).sort(), ["vibe64-app/build.sh", "vibe64-app/migrate-web.sh", "vibe64-app/serve-web.sh"]);
+  await mkdir(path.join(root, "release/app"), { recursive: true });
+  for (const [file, text] of Object.entries(scripts)) {
+    await mkdir(path.dirname(path.join(root, "release", file)), { recursive: true });
+    await writeFile(path.join(root, "release", file), text.replace("/run/app-settings/shop/settings.json", settingsFile));
+  }
+  const run = (file) => exec("bash", [file], { cwd: path.join(root, "release"), env: { PATH: process.env.PATH } });
+  await writeFile(settingsFile, JSON.stringify({ NODE_ENV: "staging" }));
+  await run("vibe64-app/serve-web.sh");
+  assert.equal(await readFile(path.join(root, "steps"), "utf8"), "serve staging app\n", "the service migrates nothing");
+  await run("vibe64-app/migrate-web.sh");
+  assert.equal(await readFile(path.join(root, "steps"), "utf8"), "serve staging app\nmigrate staging app\n");
+
+  // An app with no Migrate step has no task; without release tasks the service migrates as it starts, as before.
+  assert.equal(appPackage({ ...SHOP, releaseTasks: true, steps: { ...SHOP.steps, migrate: null } }).declaration.tasks, undefined);
+  const plain = appPackage(SHOP);
+  assert.equal(plain.declaration.tasks, undefined);
+  assert.deepEqual(Object.keys(plain.scripts).sort(), ["vibe64-app/build.sh", "vibe64-app/serve-web.sh"]);
+  assert.match(plain.scripts["vibe64-app/serve-web.sh"], /npm run db:migrate/u);
+});
+
 test("each binding reads the link field it is given, and a URL or a bucket's driver none, so an owner sees which field fills which name", () => {
   assert.deepEqual(
     ["host", "port", "database", "username", "password", "url", "sslmode"].map((semantic) => bindingField("postgresql", semantic)),

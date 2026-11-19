@@ -31,6 +31,19 @@ const MOVING_KINDS = Object.freeze(["create", "release", "rollback"]);
 const COVER_WORDS = "No domain of this project covers this name: add the domain first.";
 
 /**
+ * The task a create or a release asks its refresh to run once, before any instance starts: one its release declares
+ * (STAND-IN ONLY: the shape the engine asks mobilynet for, its M-C), or none.
+ * @param {(fieldErrors: Record<string, string>) => any} invalid @param {any} release @param {unknown} name
+ */
+function taskOf(invalid, release, name) {
+  if (name === undefined || name === null || name === "") return { task: null };
+  if (typeof name !== "string" || !Object.hasOwn(release.declaration?.tasks ?? {}, name)) {
+    return { refusal: invalid({ task: `The release declares no task ${JSON.stringify(name)}: name one of its tasks.` }) };
+  }
+  return { task: { name, state: "pending", exitCode: null, output: [] } };
+}
+
+/**
  * @param {any} world the stand-in's world
  * @param {object} parts
  * @param {ReturnType<typeof import("./releases.js").createStandInReleases>} parts.releases a project's releases
@@ -134,6 +147,7 @@ function createStandInServices(world, { releases, network }) {
     toVersion: refresh.toVersion,
     buildId: refresh.buildId,
     steps: structuredClone(refresh.steps),
+    ...(refresh.task ? { task: { name: refresh.task.name, state: refresh.task.state, exitCode: refresh.task.exitCode ?? null, output: [...(refresh.task.output ?? [])] } } : {}),
     error: refresh.error ? structuredClone(refresh.error) : null,
     createdAt: refresh.createdAt,
     startedAt: refresh.startedAt,
@@ -239,11 +253,12 @@ function createStandInServices(world, { releases, network }) {
   }
 
   /** Queues a refresh of a service (design 9.4); it runs once those before it ended. */
-  function queueRefresh(service, { kind, toVersion, target = {} }) {
+  function queueRefresh(service, { kind, toVersion, target = {}, task = null }) {
     const refresh = {
       id: nextId("rfr"),
       serviceId: service.id,
       kind,
+      task,
       state: "queued",
       fromVersion: service.version,
       toVersion,
@@ -323,8 +338,10 @@ function createStandInServices(world, { releases, network }) {
       changedAt: at(),
       deletedAt: null
     };
+    const task = taskOf(invalid, release, input.task);
+    if (task.refusal) return task.refusal;
     services.set(service.id, service);
-    const refresh = queueRefresh(service, { kind: "create", toVersion: release.version });
+    const refresh = queueRefresh(service, { kind: "create", toVersion: release.version, task: task.task });
     event(service, "service.created", { name: service.name, exposure: service.exposure, instances: service.instances, version: release.version });
     return answer(202, { service: view(service), refresh: refreshView(refresh) });
   }
@@ -402,12 +419,14 @@ function createStandInServices(world, { releases, network }) {
   }
 
   /** `POST /v1/services/{id}/releases` (createServiceRelease): an upload, built, then a refresh onto it. */
-  function release(service, body, contentSha256) {
+  function release(service, body, contentSha256, taskName) {
     const refused = unchangeable(service);
     if (refused) return refused;
     const made = releases.upload(service.projectId, service.app, body, contentSha256);
     if (made.refusal) return made.refusal;
-    const refresh = queueRefresh(service, { kind: "release", toVersion: made.release.version });
+    const task = taskOf(invalid, made.release, taskName);
+    if (task.refusal) return task.refusal;
+    const refresh = queueRefresh(service, { kind: "release", toVersion: made.release.version, task: task.task });
     return answer(202, {
       release: releases.view(made.release),
       build: made.started ? { id: made.release.buildId, state: "queued" } : null,
@@ -474,7 +493,7 @@ function createStandInServices(world, { releases, network }) {
     if (route === "PATCH ") return idempotent(idempotencyKey, `${service.id} change ${JSON.stringify(body)}`, () => change(service, body));
     if (route === "DELETE ") return remove(service);
     if (route === "PUT /settings") return idempotent(idempotencyKey, `${service.id} settings ${JSON.stringify(body)}`, () => putSettings(service, body));
-    if (route === "POST /releases") return release(service, body, contentSha256);
+    if (route === "POST /releases") return release(service, body, contentSha256, params.get("task"));
     if (route === "POST /actions/rollback") return idempotent(idempotencyKey, `${service.id} rollback`, () => rollBack(service));
     if (route === "GET /instances") {
       const withRemoved = params.get("removed") === "true";
@@ -593,7 +612,7 @@ function createStandInServices(world, { releases, network }) {
      */
     setLogs: (instanceId, text) => logs.set(instanceId, text),
     /** A service's refreshes, oldest first, each with its target. @param {string} id */
-    refreshes: (id) => refreshesOf(id).map((one) => ({ ...refreshView(one), target: structuredClone(one.target) })),
+    refreshes: (id) => refreshesOf(id).map((one) => ({ ...refreshView(one), target: structuredClone(one.target), ...(one.task ? { task: structuredClone(one.task) } : {}) })),
     /** Whether one service's instances reach another's on a port: a connection of the first to the second. */
     reaches: (fromId, toId, port) => {
       const from = services.get(fromId);
