@@ -10,7 +10,7 @@ import { vibe64DeploymentInspection } from "../../packages/vibe64-genesis/src/se
 import { preferredAlternative, resourceKindIsDatabase } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
 import { servicePackages, servicePackagesProblem } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
 import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
-import { envEntryProblem, settingsPerService, stackSettingsPerService } from "../../packages/vibe64-deploy/src/package.js";
+import { envEntryProblem, settingValues, settingsPerService, stackSettingsPerService } from "../../packages/vibe64-deploy/src/package.js";
 import { MEMOBOT_COMPUTERS_PACKAGES, MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploymentServices.js";
 
 // The package of a two-service app: one declaration per service at mobilynet, the settings each service is given, and
@@ -144,6 +144,39 @@ test("a service given more settings than mobilynet takes, or one by a name its r
   assert.match(envEntryProblem({ key: "WORKER_SECRET", services: ["worker"] }, NEEDS),
     /^WORKER_SECRET is given to worker, which this Deployment doesn't have: its services are web, computers\.$/u);
   assert.equal(envEntryProblem({ key: "OPENAI_API_KEY", services: ["web", "computers"] }, NEEDS), "");
+});
+
+test("mobilynet's count is the names a service is sent with its links' fields, each once: a production web holding 48 is taken, and the 50 its next Deploy would send are refused", () => {
+  // A production app's web on 19 Nov, by name only: the Production Env holds 33 entries for it, the Stack's generated
+  // secrets and setup code among them (Vibe64 makes those into the Env), and its service at mobilynet holds 48 settings
+  // and secrets in all, its links' 11 among them, from a Deploy before the last two entries were saved.
+  const secrets = ["AUTH_LOCAL_SESSION_SECRET", "MEMOBOT_VAULT_KEY", "AUTH_LOCAL_SECOND_FACTOR_KEY", "MEMOBOT_FILES_PASSPHRASE",
+    "MEMOBOT_COMPUTERS_SECRET", "AUTH_LOCAL_SETUP_CODE", "AI_PREMIUM_API_KEY", "AI_ECONOMY_API_KEY", "AI_IMAGES_API_KEY", "MAIL_URL",
+    "STRIPE_SECRET_KEY", "AUTH_GOOGLE_CLIENT_SECRET", "AUTH_GITHUB_CLIENT_SECRET", "AUTH_MICROSOFT_CLIENT_SECRET", "GOOGLE_CLIENT_SECRET",
+    "MICROSOFT_CLIENT_SECRET", "GITHUB_CLIENT_SECRET", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"];
+  const plain = ["MEMOBOT_OWNERS", "AI_PREMIUM_PROVIDER", "AI_ECONOMY_PROVIDER", "AI_IMAGES_PROVIDER", "MAIL_FROM", "AUTH_GOOGLE_CLIENT_ID",
+    "AUTH_GITHUB_CLIENT_ID", "AUTH_MICROSOFT_CLIENT_ID", "GOOGLE_CLIENT_ID", "MICROSOFT_CLIENT_ID", "GITHUB_CLIENT_ID", "REDIRECT_WWW"];
+  const entries = (...more) => [...secrets.map((key) => ({ key, secret: true, services: ["web"] })),
+    ...plain.map((key) => ({ key, secret: false, services: ["web"] })), ...more.map((key) => ({ key, secret: true, services: ["web"] }))];
+  // What a Deploy sends web (settingValues, every entry with a value) is what the count counts: Production's own 5, its
+  // Reaches 1 and its 31 entries, 37, with its links' 11 (database 6, files 5): 48, the service's own count.
+  const sent = (records) => {
+    const values = settingValues({ declared: settingsPerService(NEEDS, records).web, env: Object.fromEntries(records.map((one) => [one.key, "x"])),
+      domain: "app.example.com", trustedProxies: "10.0.0.0/8", port: 3000, reached: { MEMOBOT_COMPUTERS_URL: "http://computers:3000" } });
+    return Object.keys(values.settings).length + Object.keys(values.secrets).length;
+  };
+  assert.equal(sent(entries()), 37);
+  assert.equal(Object.keys(settingsPerService(NEEDS, entries()).web).length, 37, "each generated secret and the setup code once, though the Env holds them too");
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, entries())), null, "48 is taken");
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, entries("STRIPE_WEBHOOK_SECRET"))), null, "49 is taken");
+  // Its next Deploy sends both new entries, 50: one of them by a name mobilynet's runtime sets is refused first, and
+  // the 50 under another name are refused by the count.
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, entries("STRIPE_WEBHOOK_SECRET", "MOBILYNET_API_KEY"))).code,
+    "vibe64_production_setting_reserved");
+  const next = entries("STRIPE_WEBHOOK_SECRET", "MEMOBOT_MOBILYNET_API_KEY");
+  assert.equal(sent(next), 39);
+  assert.match(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next)).message,
+    /^mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them, and service web would have 50: 39 of its own and 11 from its links\./u);
 });
 
 test("each service's script exports its settings, its resources' names, the instance facts from _mobilynet and its own settings, then migrates and serves", async (t) => {

@@ -84,10 +84,16 @@ settings replace, as a plain setting or a secret (decided 19 Nov). mobilynet's
 limits are the adapter's own (`declaration.js`): an App Service holds at most
 49 settings and secrets in all, its links' among them (`SERVICE_SETTINGS_MAX`,
 one line to raise; each link gives a database's 6 fields, Redis's or a
-bucket's 5), and none by a name mobilynet's runtime sets on every instance
+bucket's 5, which mobilynet writes into the service's own settings and
+secrets), and none by a name mobilynet's runtime sets on every instance
 (`PATH`, `HOME`, `LANG`, `GIT_CONFIG_COUNT` and any starting `GIT_CONFIG_KEY_`,
 `GIT_CONFIG_VALUE_` or `MOBILYNET_`, `runtimeSets`), which an app exporting its
-settings would lose. `servicePackagesProblem` refuses either before anything
+settings would lose. The engine counts the names a Deploy sends a service, each
+once (a generated secret or the setup code the Production Env holds too is
+one), with its links' fields: a production web holding 48 matched it on 19 Nov.
+It may count one name it doesn't send, the setup code once the first account
+removed it from the Env, since a first Deploy makes and sends it.
+`servicePackagesProblem` refuses either before anything
 is made, naming the service, the setting or the count, and the fix
 (`vibe64_production_setting_reserved`: another name in the Production Env, or
 in genesis/stack.md where the Stack names it; `vibe64_production_too_many_settings`),

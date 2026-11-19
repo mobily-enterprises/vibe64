@@ -434,7 +434,10 @@ function servicePackagesProblem(deployment, settings = {}) {
         + "Remove it from the Stack's - Runtimes: line, Save, then try again."
     };
   }
-  // Every service is linked to each resource Production makes, whose link's fields are among its settings.
+  // Every service is linked to each resource Production makes, whose link's fields mobilynet writes into its settings
+  // and secrets. A service's names are each counted once (settingsPerService's keys: a generated secret or the setup
+  // code the Env holds too is one); the setup code is counted even once the first account removed it from the Env, as
+  // a first Deploy makes and sends it.
   const linked = (deployment.resources ?? []).reduce((sum, declared) => sum + (LINK_FIELDS[MOBILYNET_INTERFACES[declared?.resource?.kind]]?.length ?? 0), 0);
   for (const service of deployment.services) {
     const allowances = unsupportedSandboxAllowances(service.sandboxAllowances);
