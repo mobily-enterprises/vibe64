@@ -259,7 +259,7 @@ test("runtime release relocates, runs native and browser services, and packs wit
     const hostProfile = await import(pathToFileURL(createRequire(path.join(installed, "bin/upgrade-state.js"))
       .resolve("@local/vibe64-execution/server/hostProfile")).href);
     assert.equal(typeof hostProfile.configureVibe64Host, "function");
-    // A host's VPS agent loads the working-turns reader by its package export from the app (Online's collectReport.js).
+    // A host's own tools load the working-turns reader by its package export from the app, outside its bundle.
     const workingTurns = await import(pathToFileURL(createRequire(path.join(installed, "package.json"))
       .resolve("@local/vibe64-runtime/server/workingTurns")).href);
     assert.deepEqual(await workingTurns.readVibe64WorkingTurns({ systemRoot: root }), []);
