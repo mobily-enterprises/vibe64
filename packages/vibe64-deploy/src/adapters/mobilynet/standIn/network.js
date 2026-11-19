@@ -29,7 +29,7 @@ const DOMAIN_WORDS = Object.freeze({
 });
 const ROUTE_WAITING_WORDS = Object.freeze({
   domain: "Its domain to be verified",
-  target: "Nothing to send it to: an App Service asking for its name takes it, or give it a VPS, a group or an App Service",
+  target: "Nothing to send it to: an App Service asking for its name takes it, or give it a machine, a group or an App Service",
   machines: "A machine of its group with a place"
 });
 const NO_MACHINES = "The stand-in has no machines: a route sends to an App Service of the project, or to nothing.";

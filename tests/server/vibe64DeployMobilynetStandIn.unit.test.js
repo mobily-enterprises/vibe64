@@ -493,7 +493,7 @@ test("a route outlives its App Service: kept sending to nothing, taken with its 
   await client.changeService(site.id, { routes: [] });
   let route = await production.readRoute(first.id);
   assert.deepEqual([route.serviceId, route.target, route.live, route.waitingFor, route.waitingWords],
-    [null, first.target, false, "target", "Nothing to send it to: an App Service asking for its name takes it, or give it a VPS, a group or an App Service"]);
+    [null, first.target, false, "target", "Nothing to send it to: an App Service asking for its name takes it, or give it a machine, a group or an App Service"]);
   await client.changeService(serviceId, { routes: [{ host: HOST }] });
   route = await production.readRoute(first.id);
   assert.deepEqual([route.serviceId, route.target, route.live], [serviceId, first.target, true]);

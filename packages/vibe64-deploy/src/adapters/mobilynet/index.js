@@ -353,7 +353,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     changeService: async (id, change, { idempotencyKey }) => (await client.changeService(id, change, { idempotencyKey })).refresh?.id ?? null,
     /**
      * Routes the domain to a public App Service: its route made or taken, and with `take` moved from the service that
-     * has it, in one call; mobilynet refuses a name a VPS, a group or another service has, without `take`, `409
+     * has it, in one call; mobilynet refuses a name a machine, a group or another service has, without `take`, `409
      * name_taken`.
      */
     takeDomain: async (id, domain, { take, idempotencyKey }) => {
