@@ -1,6 +1,6 @@
 {
   "name": "vibe64",
-  "version": "0.1.72",
+  "version": "0.1.73",
   "private": false,
   "type": "module",
   "workspaces": [
