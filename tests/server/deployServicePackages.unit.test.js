@@ -146,7 +146,7 @@ test("a service given more settings than mobilynet takes, or one by a name its r
   assert.equal(envEntryProblem({ key: "OPENAI_API_KEY", services: ["web", "computers"] }, NEEDS), "");
 });
 
-test("mobilynet's count is the names a service is sent with its links' fields, each once: a production web holding 48 is taken, and the 50 its next Deploy would send are refused", () => {
+test("mobilynet's count is the names a service is sent with its links' fields, each once: a production web holding 48 is taken, and the 50 its next Deploy would send are taken where its region holds 199, refused where it holds 49", () => {
   // A production app's web on 19 Nov, by name only: the Production Env holds 33 entries for it, the Stack's generated
   // secrets and setup code among them (Vibe64 makes those into the Env), and its service at mobilynet holds 48 settings
   // and secrets in all, its links' 11 among them, from a Deploy before the last two entries were saved.
@@ -177,6 +177,21 @@ test("mobilynet's count is the names a service is sent with its links' fields, e
   assert.equal(sent(next), 39);
   assert.match(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next)).message,
     /^mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them, and service web would have 50: 39 of its own and 11 from its links\./u);
+  // 49 is what a region holds while one of its hosts runs an agent before 2.9.0, and the count's figure where mobilynet
+  // doesn't say. A region whose hosts all run 2.9.0 or later holds 199 (the adapter's serviceSettingsMax), which takes
+  // the 50, packaged; past 199 it refuses, naming 199, the service and the count.
+  const region = { settingsMax: 199 };
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next), region), null, "50 is taken where the region holds 199");
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next), { settingsMax: 49 }).code, "vibe64_production_too_many_settings");
+  const packaged = servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, next), settingsMax: 199 });
+  assert.equal(packaged.declarations.web.name, "shop-web");
+  assert.throws(() => servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, next) }),
+    { code: "vibe64_production_too_many_settings", status: 422 });
+  const plenty = (count) => [...next, ...Array.from({ length: count }, (_, at) => ({ key: `WEB_${at}`, secret: false, services: ["web"] }))];
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, plenty(149)), region), null, "199 is taken");
+  const past = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, plenty(150)), region);
+  assert.equal(past.code, "vibe64_production_too_many_settings");
+  assert.match(past.message, /^mobilynet gives an App Service at most 199 settings and secrets in all, its links' among them, and service web would have 200: 189 of its own and 11 from its links\. Remove Production Env entries it doesn't use/u);
 
   // In fact both new entries hold no value (the card's "Secret, not set"): the Production Env gives a Deploy no value
   // for them, so none is sent, and neither is counted nor checked. web comes to 48, MOBILYNET_API_KEY kept or not.

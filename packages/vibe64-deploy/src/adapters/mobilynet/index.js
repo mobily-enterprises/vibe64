@@ -13,7 +13,7 @@
 // the workspace's own editor is the only writer).
 import { LABEL } from "../../record.js";
 import { LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE } from "../../steps.js";
-import { MOBILYNET_INTERFACES, RELEASE_TASKS, needAs, serviceUpload } from "./declaration.js";
+import { MOBILYNET_INTERFACES, RELEASE_TASKS, SERVICE_SETTINGS_FALLBACK, needAs, serviceUpload } from "./declaration.js";
 
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
 // mobilynet's names for an App Service and a hosted service: 1 to 64 lowercase letters, digits and hyphens.
@@ -76,6 +76,11 @@ function settingsRefusal(error) {
  */
 function createMobilynetAdapter({ client, project, region = "us", leases = false, releaseTasks = RELEASE_TASKS }) {
   const calls = client.project(project);
+
+  /** The adapter's region as mobilynet lists it now, or null when it lists none of that id. */
+  async function regionRead() {
+    return (await client.listRegions()).find((one) => one.id === region) ?? null;
+  }
 
   /** Each resource kind's hosted app of the catalogue, its default size and its sizes. */
   async function resourcesOffered() {
@@ -183,8 +188,18 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     inventory,
     /** The proxies an app believes: the edge's addresses in the region, before it. */
     async trustedProxies() {
-      const found = (await client.listRegions()).find((one) => one.id === region);
+      const found = await regionRead();
       return ["loopback", ...(found?.edge?.addresses ?? [])].join(",");
+    },
+    /**
+     * How many settings and secrets an App Service of the region holds now, its links' among them, which a service's
+     * settings are counted against (declaration.js servicePackagesProblem): the region's `serviceSettingsMax`, 199
+     * where every host of the region runs agent 2.9.0 or later and 49 while one runs an earlier agent; where mobilynet
+     * doesn't say, SERVICE_SETTINGS_FALLBACK, what such a host holds.
+     */
+    async serviceSettingsMax() {
+      const held = (await regionRead())?.serviceSettingsMax;
+      return Number.isSafeInteger(held) && held > 0 ? held : SERVICE_SETTINGS_FALLBACK;
     },
     /** A resource's hosted service's name, made once: the app's and the resource's. */
     hostedName: (app, resource) => `${app}-${resource}`.toLowerCase().replace(/[^a-z0-9-]/gu, "-").slice(0, HOSTED_NAME_MAX).replace(/-+$/u, ""),

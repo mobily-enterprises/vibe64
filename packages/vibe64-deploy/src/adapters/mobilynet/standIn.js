@@ -1,3 +1,4 @@
+import { HOST_REGIONS, SERVICE_SETTINGS } from "./standIn/catalogue.js";
 import { createStandInHosted } from "./standIn/hosted.js";
 import { createStandInNetwork } from "./standIn/network.js";
 import { prices } from "./standIn/prices.js";
@@ -39,6 +40,8 @@ import { createStandInServices } from "./standIn/services.js";
 //                      instance_started were all at 23:42:10 (18 Nov)
 //   releaseTaskFails   a release's task a refresh runs (STAND-IN ONLY, the engine's ask M-C) fails, and so does the
 //                      refresh, release_task_failed, before any instance starts: `true`, exit 1; `{ exitCode, output }`
+//   olderHost          a host of each region with hosts runs an agent before 2.9.0, which takes 50 entries for an
+//                      app: an App Service there holds 49 settings and secrets in all, as its region says, not 199
 //
 // Every request is kept in order (`requests()`: its method, path, query, Idempotency-Key, JSON body or upload's
 // SHA-256, and the status and error code it got), so a test can see what was asked and of what.
@@ -60,7 +63,9 @@ const DEFAULT_LIMITS = Object.freeze({ machines: 10, vcpus: 20, memoryGib: 40, d
 const QUOTAS = Object.freeze(Object.keys(DEFAULT_LIMITS));
 // Each quota's unit, as mobilynet's machines.js QUOTAS name them.
 const QUOTA_UNITS = Object.freeze({ machines: "machines", vcpus: "vCPU", memoryGib: "GiB of RAM", diskGib: "GiB of data disk" });
-const FAULTS = Object.freeze(["down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails", "instantBuilds", "releaseTaskFails"]);
+const FAULTS = Object.freeze([
+  "down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails", "instantBuilds", "releaseTaskFails", "olderHost"
+]);
 const LEASE_MAX_SECONDS = 3600;
 const LEASE_TEXT = 200;
 // mobilynet's Idempotency-Key: 1 to 128 printable characters (its idempotency.js).
@@ -139,6 +144,8 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     faults: Object.fromEntries(FAULTS.map((name) => [name, false])),
     /** Every route, the App Services' (services.js makes them, network.js answers them). */
     routes: [],
+    /** How many settings and secrets an App Service of a region holds now, its links' among them. @param {string} region */
+    settingsMax: (region) => (world.faults.olderHost && HOST_REGIONS.includes(region) ? SERVICE_SETTINGS.earlier : SERVICE_SETTINGS.current),
     /** mobilynet's `404 not_found`, `No such <resource>.` @param {string} resource */
     notFound: (resource) => failure(404, "not_found", `No such ${resource}.`),
     /** Whether a caller's key reaches a mobilynet project: its own, or any with an organisation key. */

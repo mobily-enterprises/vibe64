@@ -1,4 +1,4 @@
-import { SERVICE_SETTINGS_MAX, runtimeSets } from "../declaration.js";
+import { runtimeSets } from "../declaration.js";
 import { EDGE_ADDRESSES, INSTANCE_SIZES, REGIONS, isRecord, randomText } from "./catalogue.js";
 
 // The App Services stand-in's fields and engine (services.js), as mobilynet's machines package checks a service's
@@ -164,13 +164,14 @@ function undeclaredErrors(declared, linked, target) {
 }
 
 /**
- * A replace's refusal when the service would hold more than mobilynet's limit of settings and secrets in all, its
+ * A replace's refusal when the service would hold more than its region's limit of settings and secrets in all, its
  * links' among them (serviceFields.js checkSettings), or null.
  * @param {{ settings: Record<string, unknown>, secrets: Record<string, unknown> }} target the settings and secrets replaced
+ * @param {number} most how many an App Service of its region holds now (the stand-in's settingsMax)
  */
-function tooManySettings(target) {
+function tooManySettings(target, most) {
   const held = Object.keys(target.settings).length + Object.keys(target.secrets).length;
-  return held > SERVICE_SETTINGS_MAX ? { settings: `At most ${SERVICE_SETTINGS_MAX} settings and secrets in all, its links' among them, `
+  return held > most ? { settings: `At most ${most} settings and secrets in all, its links' among them, `
     + `as an instance takes no more: these would be ${held}.` } : null;
 }
 

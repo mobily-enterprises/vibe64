@@ -30,15 +30,17 @@ const DECLARATION_FILE = "mobilynet.json";
 // The port every service listens on, which a service it reaches and the load balancer ask.
 const SERVICE_PORT = 3000;
 // mobilynet's own limits: app names (logins too) of at most 32 characters, and the settings of an App Service (its open
-// settings, 19 Nov 2026). An App Service holds at most SERVICE_SETTINGS_MAX settings and secrets in all, its links'
-// among them, since an instance's host takes 50 entries for its app, one of them mobilynet's own: the engine counts all
-// a service is given (the Stack's, its Production Env entries) with its links' (LINK_FIELDS). Raising it at mobilynet
-// is this line and its test (deployServicePackages). No setting may take a name mobilynet's runtime sets on every
-// instance (RUNTIME_NAMES, RUNTIME_PREFIXES), which an app exporting its settings would lose; mobilynet refuses one the
-// release doesn't declare, and the engine refuses each before anything changes. V64_* names are Vibe64's own, which
-// mobilynet leaves open and the engine keeps out of the Production Env (package.js envEntryProblem).
+// settings, 19 Nov 2026). An App Service holds at most as many settings and secrets in all, its links' among them, as
+// its region says now (`GET /v1/regions`, `serviceSettingsMax`): one fewer than the entries the region's hosts take for
+// an instance's app, one of them mobilynet's own, so 199 where every host runs agent 2.9.0 or later and 49 while one
+// runs an earlier agent, which takes 50. The adapter reads it (serviceSettingsMax), and the engine counts all a service
+// is given (the Stack's, its Production Env entries) with its links' (LINK_FIELDS) against it; where mobilynet doesn't
+// say, against SERVICE_SETTINGS_FALLBACK, what an earlier host holds. No setting may take a name mobilynet's runtime
+// sets on every instance (RUNTIME_NAMES, RUNTIME_PREFIXES), which an app exporting its settings would lose; mobilynet
+// refuses one the release doesn't declare, and the engine refuses each before anything changes. V64_* names are
+// Vibe64's own, which mobilynet leaves open and the engine keeps out of the Production Env (package.js envEntryProblem).
 const APP_NAME_MAX = 32;
-const SERVICE_SETTINGS_MAX = 49;
+const SERVICE_SETTINGS_FALLBACK = 49;
 const RUNTIME_NAMES = Object.freeze(["PATH", "HOME", "LANG", "GIT_CONFIG_COUNT"]);
 const RUNTIME_PREFIXES = Object.freeze(["MOBILYNET_", "GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"]);
 // The Stack's runtimes by the runtime packs below; a runtime not here can't be declared.
@@ -413,12 +415,14 @@ function runtimeSets(name) {
  * Why mobilynet can't take a package for these services, as `{ code, message }`, or null: a Deployment that isn't
  * ready, a runtime or sandbox allowance no package can declare yet, a health path check can't ask, a service's
  * packages mobilynet can't take, a setting a service would be given by a name mobilynet's runtime sets, or a service
- * given more settings than mobilynet's limit, its Production Env entries and its links' counted with the Stack's. Each
+ * given more settings than its region holds, its Production Env entries and its links' counted with the Stack's. Each
  * names the service and the fix.
  * @param {any} deployment the Stack's Deployment section as public Vibe64 inspected it (v2)
  * @param {Record<string, Record<string, object>>} [settings] each service's settings (package.js settingsPerService)
+ * @param {{ settingsMax?: number }} [limits] how many settings and secrets an App Service of the region holds now (the
+ *   adapter's serviceSettingsMax), SERVICE_SETTINGS_FALLBACK when not given
  */
-function servicePackagesProblem(deployment, settings = {}) {
+function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVICE_SETTINGS_FALLBACK } = {}) {
   if (deployment?.status !== "ready" || !Array.isArray(deployment.services) || deployment.services.length === 0) {
     return {
       code: "vibe64_app_package_deployment_unready",
@@ -471,10 +475,10 @@ function servicePackagesProblem(deployment, settings = {}) {
       };
     }
     const count = names.length + linked;
-    if (count > SERVICE_SETTINGS_MAX) {
+    if (count > settingsMax) {
       return {
         code: "vibe64_production_too_many_settings",
-        message: `mobilynet gives an App Service at most ${SERVICE_SETTINGS_MAX} settings and secrets in all, its links' among them, `
+        message: `mobilynet gives an App Service at most ${settingsMax} settings and secrets in all, its links' among them, `
           + `and service ${service.id} would have ${count}: ${names.length} of its own and ${linked} from its links. Remove Production Env `
           + "entries it doesn't use, or give them only to the services that use them, then deploy."
       };
@@ -497,14 +501,16 @@ function servicePackagesProblem(deployment, settings = {}) {
  * @param {object} options.needs needsOfStack's needs
  * @param {Record<string, Record<string, { secret: boolean, required: boolean }>>} options.settings each service's
  *   settings (package.js settingsPerService), counted against mobilynet's limit
+ * @param {number} [options.settingsMax] how many settings and secrets an App Service of the region holds now (the
+ *   adapter's serviceSettingsMax), SERVICE_SETTINGS_FALLBACK when not given
  * @param {Record<string, string>} [options.defaults] Serve's own defaults beside the runtime's (the Stack's Environment
  *   defaults), which a setting overrides
  * @param {boolean} [options.releaseTasks] whether Migrate is each release's `migrate` task (the adapter's capability)
  *   rather than a line of every serve script
  * @returns {{ declarations: Record<string, object>, scripts: Record<string, string> }}
  */
-function servicePackages({ app, deployment, needs, settings, defaults = {}, releaseTasks = RELEASE_TASKS }) {
-  const problem = servicePackagesProblem(deployment, settings);
+function servicePackages({ app, deployment, needs, settings, settingsMax, defaults = {}, releaseTasks = RELEASE_TASKS }) {
+  const problem = servicePackagesProblem(deployment, settings, { settingsMax });
   if (problem) throw declarationError(problem);
   const runtimes = deployment.runtimeRequirements.map((runtime) => STACK_RUNTIME_PACKS[runtime]);
   const step = (role) => {
@@ -563,7 +569,7 @@ export {
   MOBILYNET_INTERFACES,
   RELEASE_TASKS,
   SERVICE_PORT,
-  SERVICE_SETTINGS_MAX,
+  SERVICE_SETTINGS_FALLBACK,
   STACK_RUNTIME_PACKS,
   appHome,
   appPackage,

@@ -25,9 +25,6 @@ const DOMAIN_WORDS = Object.freeze({
 });
 const ROUTE_WAITING_WORDS = Object.freeze({ domain: "Its domain to be verified", machines: "A machine of its group with a place" });
 const CHALLENGE_ZONE = "acme.mobilynet.standin";
-const REGION_LIST = Object.freeze(REGIONS.map((id) => Object.freeze({
-  id, name: REGION_NAMES[id], state: "open", edge: { addresses: HOST_REGIONS.includes(id) ? [...EDGE_ADDRESSES] : [] }
-})));
 
 /**
  * @param {any} world the stand-in's world
@@ -42,6 +39,11 @@ function createStandInNetwork(world, services) {
   const invalid = (fieldErrors) => failure(422, "validation_failed", `Check ${Object.keys(fieldErrors).join(", ")}.`, { fieldErrors });
   const later = (ms) => new Date(now().getTime() + ms).toISOString();
   const shown = (item) => structuredClone(item);
+  /** Every region, with its edge's addresses and how many settings and secrets an App Service there holds now. */
+  const regionList = () => REGIONS.map((id) => ({
+    id, name: REGION_NAMES[id], state: "open", serviceSettingsMax: world.settingsMax(id),
+    edge: { addresses: HOST_REGIONS.includes(id) ? [...EDGE_ADDRESSES] : [] }
+  }));
 
   /** The mobilynet project's domain covering a name: the name itself, or a wildcard one level up. @param {string} projectId @param {string} host */
   function coveringDomain(projectId, host) {
@@ -137,7 +139,7 @@ function createStandInNetwork(world, services) {
    * @param {{ method: string, path: string, params: URLSearchParams, body: any, idempotencyKey?: string, caller: any }} request
    */
   function request({ method, path, body, idempotencyKey, caller }) {
-    if (path === "/v1/regions") return method === "GET" ? answer(200, { items: structuredClone(REGION_LIST) }) : null;
+    if (path === "/v1/regions") return method === "GET" ? answer(200, { items: regionList() }) : null;
     const network = /^\/v1\/projects\/([^/]+)\/(domains|routes)(?:\/([^/]+)(\/.*)?)?$/u.exec(path);
     if (!network) return null;
     const [, rawProject, kind, rawId, rest = ""] = network;

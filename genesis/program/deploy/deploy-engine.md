@@ -83,15 +83,21 @@ entry the services it names (the public one when it names none;
 `settingsPerService`); mobilynet takes an entry no release declares in a
 settings replace, as a plain setting or a secret (decided 19 Nov). mobilynet's
 limits are the adapter's own (`declaration.js`): an App Service holds at most
-49 settings and secrets in all, its links' among them (`SERVICE_SETTINGS_MAX`,
-one line to raise; each link gives a database's 6 fields, Redis's or a
+as many settings and secrets in all, its links' among them, as its region says
+now (`GET /v1/regions`, `serviceSettingsMax`: 199 where every host of the
+region runs agent 2.9.0 or later, 49 while one runs an earlier agent). The
+adapter reads it at each ask (`serviceSettingsMax()`; 49,
+`SERVICE_SETTINGS_FALLBACK`, where mobilynet doesn't say), and the editor
+passes it to `servicePackagesProblem` and `servicePackages` as `settingsMax`
+(49 when not given). Each link gives a database's 6 fields, Redis's or a
 bucket's 5, which mobilynet writes into the service's own settings and
-secrets), and none by a name mobilynet's runtime sets on every instance
+secrets. No setting may take a name mobilynet's runtime sets on every instance
 (`PATH`, `HOME`, `LANG`, `GIT_CONFIG_COUNT` and any starting `GIT_CONFIG_KEY_`,
 `GIT_CONFIG_VALUE_` or `MOBILYNET_`, `runtimeSets`), which an app exporting its
 settings would lose. The engine counts the names a Deploy sends a service, each
 once (a generated secret or the setup code the Production Env holds too is
-one), with its links' fields: a production web holding 48 matched it on 19 Nov.
+one), with its links' fields: a production web holding 48 matched it on 19 Nov,
+and its next Deploy's 50 fit a region that holds 199.
 An Env entry that holds no value (a secret not set, `valuePresent: false`) is
 given to no service, so it is neither sent, counted nor checked against
 mobilynet's names. It may count one name it doesn't send, the setup code once
@@ -302,7 +308,8 @@ making it twice. In order:
    - mobilynet checks a settings replace against the release a service runs
      and takes a name that release doesn't declare as a plain setting or a
      secret, text of up to 4096 characters, but never one a need's link sets
-     or its runtime sets, and at most 49 in all (decided 19 Nov). It refuses a setting the release declares otherwise (a
+     or its runtime sets, and at most as many in all as its region holds
+     (199, or 49 while a host of the region runs an agent before 2.9.0). It refuses a setting the release declares otherwise (a
      secret given as a plain setting) `422 validation_failed`, one lacking a
      setting it requires `422 settings_missing`, and any replace while the
      service's first release is still under way `409 invalid_state`. A release
@@ -545,7 +552,12 @@ list prices, the load balancer's, each resource kind's hosted app and sizes),
 its inventory of App Services and hosted services with their labels, each
 hosted service Vibe64 made with the links mobilynet holds of it (one `GET
 /v1/hosted-services/{id}/links`, `hosted:read`, per such hosted service at
-each read), and the calls the steps make. mobilynet has no leases yet: an
+each read), the calls the steps make, and, from its region in `GET
+/v1/regions` (any key), the edge's addresses an app trusts (`trustedProxies()`)
+and how many settings and secrets an App Service there holds now
+(`serviceSettingsMax()`). The stand-in's regions say 199 each, and 49 for a
+region with a host while its `olderHost` fault is on, which its settings
+replace enforces too. mobilynet has no leases yet: an
 adapter made without `leases: true` takes none, which is safe only while one
 editor deploys an environment. Nor does it run a release's task yet: an adapter
 made without `releaseTasks: true` (`RELEASE_TASKS`) runs none, and its

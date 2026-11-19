@@ -28,6 +28,13 @@ const INSTANCE_SIZES = Object.freeze({
 const REGIONS = Object.freeze(["us", "eu"]);
 const REGION_NAMES = Object.freeze({ us: "United States", eu: "Europe" });
 const HOST_REGIONS = Object.freeze(["us"]);
+/**
+ * How many settings and secrets an App Service of a region holds, its links' among them, as mobilynet's regions list
+ * says (`serviceSettingsMax`, its regions.js): one fewer than the entries the region's hosts take for an instance's app,
+ * 199 where every one runs agent 2.9.0 or later, 49 while one runs an earlier agent (the `olderHost` fault). A region
+ * with no host takes the protocol's most.
+ */
+const SERVICE_SETTINGS = Object.freeze({ current: 199, earlier: 49 });
 /** The addresses a region's edge answers from. */
 const EDGE_ADDRESSES = Object.freeze(["203.0.113.40", "203.0.113.41"]);
 /** The stand-in's apps domain, which every thing's own name is under. */
@@ -339,6 +346,7 @@ export {
   NEED_NAME,
   REGIONS,
   REGION_NAMES,
+  SERVICE_SETTINGS,
   catalogueApp,
   interfaceNamed,
   isRecord,

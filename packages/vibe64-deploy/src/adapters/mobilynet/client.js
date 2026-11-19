@@ -317,7 +317,10 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
     project,
     /** mobilynet's price table in force and those scheduled, and every offered size with its price (any key). */
     readPrices: () => call("GET", "/v1/prices"),
-    /** Every region with its edge's addresses. */
+    /**
+     * Every region with its edge's addresses and how many settings and secrets an App Service there holds now
+     * (`serviceSettingsMax`, its links' among them).
+     */
     listRegions: async () => (await call("GET", "/v1/regions")).items,
     /** The apps that run as hosted services (any key): `{ currency, items }`, each its interface, sizes and prices. */
     readHostedCatalogue: () => call("GET", "/v1/hosted-services/catalogue"),

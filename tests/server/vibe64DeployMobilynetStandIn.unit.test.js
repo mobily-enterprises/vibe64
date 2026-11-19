@@ -119,7 +119,7 @@ test("an App Service made from a release runs once its instances are healthy, ea
   assert.equal((await production.createService(webSpec(release.version, { name: "api", routes: [] }), { idempotencyKey: "k".repeat(128) })).service.name, "api");
 });
 
-test("a settings replace takes a name its release doesn't declare as a plain setting or a secret, text of up to 4096 characters, but not one mobilynet's runtime sets, and at most 49 in all", async () => {
+test("a settings replace takes a name its release doesn't declare as a plain setting or a secret, text of up to 4096 characters, but not one mobilynet's runtime sets, and at most as many in all as its region holds", async () => {
   const { standIn, client, serviceId } = await runningShop();
   // The shop's release declares mode and sessionKey alone: GREETING, API_KEY and V64_INSTANCE_ID are new to it, and V64_*
   // names are Vibe64's own, which mobilynet leaves open.
@@ -143,13 +143,19 @@ test("a settings replace takes a name its release doesn't declare as a plain set
   ] });
   assert.equal(runtime.details.fieldErrors["settings.PATH"], "MobilyNet sets PATH itself on every instance: name it otherwise.");
   assert.equal(runtime.details.fieldErrors["secrets.MOBILYNET_TOKEN"], "MobilyNet's own names start with MOBILYNET_, which it sets on every instance: name it otherwise.");
-  // 49 settings and secrets in all: mode and sessionKey with 47 more are taken, 48 more are refused.
+  // As many settings and secrets in all as the region holds, 199 where every host runs agent 2.9.0 or later: mode and
+  // sessionKey with 197 more are taken, 198 more are refused. While a host of the region runs an earlier agent, it holds
+  // 49: 48 more are refused, naming that.
   const more = (count) => Object.fromEntries(Array.from({ length: count }, (_, at) => [`EXTRA_${at}`, "x"]));
-  assert.equal((await client.putServiceSettings(serviceId, { settings: { mode: "web", ...more(47) }, secrets: { sessionKey: "session-1" } })).refresh.kind, "settings");
+  assert.equal((await client.putServiceSettings(serviceId, { settings: { mode: "web", ...more(197) }, secrets: { sessionKey: "session-1" } })).refresh.kind, "settings");
   settle(standIn);
-  const crowded = await given(more(48));
+  const crowded = await given(more(198));
   assert.deepEqual(refusal(crowded), { status: 422, code: "validation_failed", fields: ["settings"] });
-  assert.equal(crowded.details.fieldErrors.settings, "At most 49 settings and secrets in all, its links' among them, as an instance takes no more: these would be 50.");
+  assert.equal(crowded.details.fieldErrors.settings, "At most 199 settings and secrets in all, its links' among them, as an instance takes no more: these would be 200.");
+  standIn.faults.olderHost = true;
+  const older = await given(more(48));
+  assert.deepEqual(refusal(older), { status: 422, code: "validation_failed", fields: ["settings"] });
+  assert.equal(older.details.fieldErrors.settings, "At most 49 settings and secrets in all, its links' among them, as an instance takes no more: these would be 50.");
   assert.deepEqual(standIn.services.refreshes(serviceId).map((one) => one.kind), ["create", "settings", "settings"], "a refused replace starts no refresh");
 });
 
@@ -477,6 +483,33 @@ test("prices list instances, the load balancer and the disk, and the catalogue p
   assert.deepEqual(postgresql.settings, [{ name: "database", title: "Database name", type: "string", required: false, default: "app" }]);
   const regions = await client.listRegions();
   assert.deepEqual(regions.map((region) => [region.id, region.edge.addresses.length]), [["us", 2], ["eu", 0]]);
+});
+
+test("each region says how many settings and secrets an App Service there holds now, and the adapter counts against its own region's, 49 where mobilynet doesn't say", async () => {
+  const { standIn, client, projectId } = world();
+  const held = async () => (await client.listRegions()).map((region) => [region.id, region.serviceSettingsMax]);
+  const adapter = createMobilynetAdapter({ client, project: projectId });
+  // Every host runs agent 2.9.0 or later: 199, its links' among them. A region with no host holds the same.
+  assert.deepEqual(await held(), [["us", 199], ["eu", 199]]);
+  assert.equal(await adapter.serviceSettingsMax(), 199);
+  assert.equal(standIn.requests().at(-1).path, "/v1/regions", "read from mobilynet each time it is asked");
+  // A host of us runs an earlier agent, which takes 50 entries for an app: us holds 49, eu still 199.
+  standIn.faults.olderHost = true;
+  assert.deepEqual(await held(), [["us", 49], ["eu", 199]]);
+  assert.equal(await adapter.serviceSettingsMax(), 49);
+  assert.equal(await createMobilynetAdapter({ client, project: projectId, region: "eu" }).serviceSettingsMax(), 199);
+  standIn.faults.olderHost = false;
+  assert.equal(await adapter.serviceSettingsMax(), 199, "and 199 again once it is updated");
+  // A mobilynet that doesn't say (before its regions list gave the figure), or lists no such region: 49, what a host
+  // on an earlier agent holds.
+  const listing = (items) => ({ project: () => ({}), listRegions: async () => items });
+  const unsaid = createMobilynetAdapter({ client: listing([{ id: "us", name: "United States", state: "open", edge: { addresses: [] } }]), project: projectId });
+  assert.equal(await unsaid.serviceSettingsMax(), 49);
+  assert.equal(await createMobilynetAdapter({ client: listing([]), project: projectId }).serviceSettingsMax(), 49);
+  for (const figure of [null, 0, -1, 1.5, "199"]) {
+    const odd = createMobilynetAdapter({ client: listing([{ id: "us", serviceSettingsMax: figure }]), project: projectId });
+    assert.equal(await odd.serviceSettingsMax(), 49, String(figure));
+  }
 });
 
 test("labels: set at create, answered in reads and lists, a list filtered by them, replaced whole by a PATCH that starts no refresh", async () => {
