@@ -307,8 +307,12 @@ again through the same action, and a release service whose unit `Requires=` it
 starts it at boot. `stop` stops and disables it and leaves its data in place.
 It refuses, reporting `required` and the units, while a running, starting or
 unreadable unit still requires the service, because systemd would stop that
-unit with it. Release services keep their boot target.
-`tests/server/vibe64ExecutionHelperSource.unit.test.js` covers both actions.
+unit with it. `restart` serves the owner of a service that hangs: systemd
+stops it, killing it when it outlasts its stop time limit, and starts it again,
+stopping and starting with it each running unit that `Requires=` it, and
+reports those units; a unit never installed is `absent` and nothing runs.
+Release services keep their boot target.
+`tests/server/vibe64ExecutionHelperSource.unit.test.js` covers the three actions.
 
 Where the daemon or a target user can rearrange a directory, the helper reads a
 file there only through that directory opened without following links, and

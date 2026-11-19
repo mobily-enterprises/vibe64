@@ -30,6 +30,7 @@ import {
 } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import {
   ensureManagedServiceProcessOwnership,
+  restartManagedServiceUnit,
   stopManagedServiceUnit
 } from "../../packages/vibe64-execution/src/host/serviceOperations.js";
 import { editorPrivateStateLine } from "../../packages/vibe64-execution/src/host/editorPrivateState.js";
@@ -459,14 +460,17 @@ test("execution helper manages provider-neutral simple and forking services", as
 
 // A managed service runs only while its owner has a use for it: install-start
 // starts it without a boot target, a release service that Requires= it starts
-// it at boot, and Stop leaves it stopped and disabled with its data in place.
-function managedServiceHost({ active = "active", enabled = "enabled", requiredBy = "", dependents = {} } = {}) {
+// it at boot, and Stop leaves it stopped and disabled with its data in place;
+// Restart restarts it with the release services that require it.
+function managedServiceHost({ active = "active", enabled = "enabled", requiredBy = "", dependents = {}, loadState = "loaded",
+  restartStatus = 0, restartError = "" } = {}) {
   const commands = [];
   return {
     commands,
     query: (command, args) => {
       commands.push(args.join(" "));
-      if (args[0] === "show") return { status: 0, stdout: `${requiredBy}\n` };
+      if (args[0] === "show") return { status: 0, stdout: `${args[2] === "--property=LoadState" ? loadState : requiredBy}\n` };
+      if (args[0] === "restart") return { status: restartStatus, stdout: "", stderr: restartError };
       if (args[0] === "is-active") {
         const state = args[1] === "db.service" ? active : dependents[args[1]] ?? "";
         return { status: state === "active" ? 0 : 3, stdout: `${state}\n` };
@@ -509,6 +513,31 @@ test("managed service Stop refuses while a running or unreadable unit requires t
     assert.equal(host.commands.some((command) => /^(stop|disable) /u.test(command)), false,
       "systemd would stop the release with the service it requires");
   }
+});
+
+test("managed service Restart restarts the unit with the running units that require it, and keeps its data", () => {
+  const host = managedServiceHost({ requiredBy: "vibe64-release-a.service vibe64-release-b.service",
+    dependents: { "vibe64-release-a.service": "active", "vibe64-release-b.service": "inactive" } });
+  assert.deepEqual(restartManagedServiceUnit("db.service", host),
+    { ok: true, restarted: ["vibe64-release-a.service"], state: "restarted" });
+  assert.deepEqual(host.commands, [
+    "show db.service --property=LoadState --value",
+    "show db.service --property=RequiredBy --value",
+    "is-active vibe64-release-a.service",
+    "is-active vibe64-release-b.service",
+    "restart db.service"
+  ]);
+});
+
+test("managed service Restart of a unit never installed runs nothing", () => {
+  const host = managedServiceHost({ loadState: "not-found" });
+  assert.deepEqual(restartManagedServiceUnit("db.service", host), { ok: true, restarted: [], state: "absent" });
+  assert.deepEqual(host.commands, ["show db.service --property=LoadState --value"]);
+});
+
+test("managed service Restart reports systemd's refusal", () => {
+  const host = managedServiceHost({ restartStatus: 1, restartError: "Job for db.service failed." });
+  assert.throws(() => restartManagedServiceUnit("db.service", host), /Job for db\.service failed\./u);
 });
 
 test("managed services have no boot target; install-start does not enable them", async () => {

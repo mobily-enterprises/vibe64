@@ -161,6 +161,10 @@ function handleManagedServiceOperation(payload = {}) {
     process.stdout.write(`${JSON.stringify(stopManagedServiceUnit(unitName))}\n`);
     return;
   }
+  if (action === "restart") {
+    process.stdout.write(`${JSON.stringify(restartManagedServiceUnit(unitName))}\n`);
+    return;
+  }
   if (action !== "install-start") {
     throw new Error("Vibe64 exec helper rejected an unknown managed service action.");
   }
@@ -221,6 +225,25 @@ function stopManagedServiceUnit(unitName = "", {
     runSystemctl(query, ["disable", unitName]);
   }
   return { ok: true, requiredBy: [], state: active ? "stopped" : "inactive" };
+}
+
+// Its owner restarts a service that hangs. systemd stops it, killing it when
+// it outlasts its stop time limit, and starts it again; a running unit that
+// Requires= it (a release service) is stopped and started with it, so the
+// service is never pulled from under it. Data stays in place. A unit never
+// installed is "absent" and nothing runs.
+function restartManagedServiceUnit(unitName = "", {
+  query = runRootCommandAllowFailure
+} = {}) {
+  if (String(query("systemctl", ["show", unitName, "--property=LoadState", "--value"]).stdout || "").trim() !== "loaded") {
+    return { ok: true, restarted: [], state: "absent" };
+  }
+  const stopped = (value) => value === "inactive" || value === "failed";
+  const restarted = String(query("systemctl", ["show", unitName, "--property=RequiredBy", "--value"]).stdout || "")
+    .split(/\s+/u).filter(Boolean)
+    .filter((dependent) => !stopped(String(query("systemctl", ["is-active", dependent]).stdout || "").trim()));
+  runSystemctl(query, ["restart", unitName]);
+  return { ok: true, restarted, state: "restarted" };
 }
 
 function runSystemctl(query, args = []) {
@@ -559,6 +582,7 @@ export {
   installSystemdUnit,
   printDeploymentServiceUnit,
   relinkSystemdUnits,
+  restartManagedServiceUnit,
   runReleaseService,
   stopManagedServiceUnit
 };
