@@ -11,6 +11,7 @@ import { domainHolder, domainStep } from "../../packages/vibe64-deploy/src/addre
 import { createMobilynetClient } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
 import { servicePackages, serviceUpload } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
 import { DRAIN_SECONDS, createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapters/mobilynet/index.js";
+import { moveDomain } from "../../packages/vibe64-deploy/src/domain.js";
 import { setInstances } from "../../packages/vibe64-deploy/src/instances.js";
 import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
 import { settingsPerService, withRootFile } from "../../packages/vibe64-deploy/src/package.js";
@@ -18,7 +19,7 @@ import { planOf } from "../../packages/vibe64-deploy/src/plan.js";
 import { LABEL, createRecordStore, newRecord, rebuildFromLabels } from "../../packages/vibe64-deploy/src/record.js";
 import { applyStep, deleteResource, deploy, nextStep, releaseDigest, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
 import { MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploymentServices.js";
-import { runningShop, settle, world } from "./vibe64DeployStandInHelpers.js";
+import { HOST, runningShop, settle, world } from "./vibe64DeployStandInHelpers.js";
 
 // A two-service app deployed through the engine alone, against mobilynet's stand-in, with no database: the record is
 // the steps' own, the stand-in's request log what mobilynet was asked.
@@ -462,6 +463,61 @@ test("setInstances sets a running service's count at mobilynet at once, within t
   const keys = standIn.requests().filter((request) => request.method === "PATCH" && request.path === `/v1/services/${computers}` && request.body?.instances === 2)
     .map((request) => request.idempotencyKey);
   assert.equal(new Set(keys).size, keys.length, "each set has its own key");
+});
+
+test("moveDomain routes the running public App Service to another domain at once through takeDomain: the domain added where none covers it, the old name's route kept with its DNS target, no release or refresh, the record unchanged, and a name another service answers at refused", async () => {
+  const parts = setup();
+  const { standIn, adapter, run, record } = parts;
+  const stack = stackOf();
+  const first = await run({ stack, record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  standIn.verifyDomain(DOMAIN);
+  const web = first.record.items["service.web"].id;
+  const hosts = () => standIn.routes().filter((route) => route.serviceId === web).map((route) => route.host).sort();
+  assert.deepEqual(hosts(), [DOMAIN]);
+  const [memobot] = standIn.routes();
+  const kept = structuredClone(first.record);
+
+  // A record without its public service, or a provider that can't route one: refused, and mobilynet asked nothing.
+  const at = standIn.requests().length;
+  const unmade = structuredClone(first.record);
+  delete unmade.items["service.web"];
+  await assert.rejects(moveDomain(adapter, unmade, stack.needs, { domain: "app.example.com" }), { code: "deployment_item_unknown", status: 404 });
+  const unmovable = { ...adapter, title: "a provider" };
+  delete unmovable.takeDomain;
+  await assert.rejects(moveDomain(unmovable, first.record, stack.needs, { domain: "app.example.com" }), {
+    code: "deployment_domain_move_unsupported", status: 409, message: "a provider can't move a running service to another domain."
+  });
+  assert.deepEqual(writesAfter(standIn, at), []);
+
+  // To a domain the project has no domain for: it is added, then web answers there alone, with no release or refresh;
+  // the old name's route stays, sending to nothing, with its id and DNS target.
+  assert.deepEqual(await moveDomain(adapter, first.record, stack.needs, { domain: "app.example.com" }), { service: "web", domain: "app.example.com" });
+  assert.deepEqual(writesAfter(standIn, at), [["POST", `/v1/projects/${standIn.projectId}/domains`], ["PATCH", `/v1/services/${web}`]]);
+  assert.deepEqual(requestsAfter(standIn, at).find((request) => request.method === "PATCH").body, { routes: [{ host: "app.example.com", tls: "edge" }] });
+  assert.deepEqual(hosts(), ["app.example.com"]);
+  assert.deepEqual(standIn.routes().filter((route) => route.host === DOMAIN).map((one) => [one.id, one.serviceId, one.target, one.waitingFor]),
+    [[memobot.id, null, memobot.target, "target"]]);
+  assert.deepEqual(standIn.services.refreshes(web).map((one) => one.kind), ["create"]);
+  assert.deepEqual(first.record, kept, "the record keeps no domain");
+
+  // Back to the domain the project covers already: no domain is added, one PATCH under a key of its own, and web takes
+  // the old name's kept route, so its DNS target is the one its owner added.
+  const back = standIn.requests().length;
+  await moveDomain(adapter, first.record, stack.needs, { domain: DOMAIN });
+  assert.deepEqual(writesAfter(standIn, back), [["PATCH", `/v1/services/${web}`]]);
+  assert.deepEqual(hosts(), [DOMAIN]);
+  assert.deepEqual(standIn.routes().filter((route) => route.host === DOMAIN).map((one) => [one.id, one.serviceId, one.target]), [[memobot.id, web, memobot.target]]);
+  const keys = standIn.requests().filter((request) => request.method === "PATCH" && request.path === `/v1/services/${web}`).map((request) => request.idempotencyKey);
+  assert.equal(new Set(keys).size, keys.length, "each move has its own key");
+
+  // A name an App Service someone made by hand answers at: never taken from it; mobilynet refuses, and web keeps its own.
+  const { serviceId: hand } = await runningShop(parts);
+  const taken = await moveDomain(adapter, first.record, stack.needs, { domain: HOST }).catch((error) => error);
+  assert.deepEqual([taken.status, taken.code, taken.details?.host], [409, "name_taken", HOST]);
+  assert.deepEqual(standIn.routes().filter((route) => route.host === HOST).map((one) => one.serviceId), [hand]);
+  assert.deepEqual(hosts(), [DOMAIN]);
 });
 
 /** Each write sent to the provider after `count` requests, but the Deploy's lease: `[method, path]`. */

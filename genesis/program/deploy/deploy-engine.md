@@ -18,6 +18,7 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/address.js`
 - `packages/vibe64-deploy/src/lastRun.js`
 - `packages/vibe64-deploy/src/instances.js`
+- `packages/vibe64-deploy/src/domain.js`
 - `packages/vibe64-deploy/src/report.js`
 - `packages/vibe64-deploy/src/migrations.js`
 - `packages/vibe64-deploy/src/record.js`
@@ -567,6 +568,27 @@ instances, refreshId }` and leaves the record unchanged:
 
 A later Deploy hands each release onto the count the service runs then, and is
 live once that many are healthy.
+
+## A running service's domain
+
+Which domain a deployment serves is its caller's configuration, never the
+record's. A Deploy routes its release's `domain` to the
+public service (above: made with it, or step 7 once the service serves the
+release). A running public service also moves to another domain at once, with
+no release, by its owner's own action: `moveDomain(adapter, record, needs, {
+domain })` (`domain.js`) is refused `deployment_item_unknown` (404) when the
+record holds no item for the Stack's public service, and
+`deployment_domain_move_unsupported` (409) by an adapter without
+`takeDomain()` (Google Cloud's, AWS's), before the provider is asked anything;
+then the adapter's `ensureDomain()` (the provider project's domain covering it,
+added when none does) and `takeDomain(id, domain, { take: false })`, the same
+call step 7 makes, each under an idempotency key of its own each time. It
+answers `{ service, domain }` and leaves the record unchanged. Never with
+`take`: a name another App Service, a machine or a group of the project answers at
+stays theirs, and mobilynet refuses it `409 name_taken`. On mobilynet the
+service's routes become the new name's alone, with no refresh; the old name's
+route is kept, sending to nothing, with its DNS target, and a move back takes
+it again.
 
 ## The mobilynet adapter
 
