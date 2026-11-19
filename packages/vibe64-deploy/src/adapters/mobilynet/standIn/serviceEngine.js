@@ -47,12 +47,13 @@ function routesOf(given, exposure) {
   const hosts = given.map((route, index) => {
     if (!isRecord(route) || typeof route.host !== "string" || !HOSTNAME.test(route.host)) errors[`routes.${index}.host`] = "A hostname, such as shop.example.com.";
     else if ((route.tls ?? "edge") !== "edge") errors[`routes.${index}.tls`] = "A service's routes end TLS at the edge: edge.";
+    else if (![undefined, true, false].includes(route.take)) errors[`routes.${index}.take`] = "true to move the name's route from what it sends to now, or false.";
     return isRecord(route) ? route.host : null;
   });
   hosts.forEach((host, index) => {
     if (host && hosts.indexOf(host) !== index) errors[`routes.${index}.host`] = "Named twice.";
   });
-  return Object.keys(errors).length > 0 ? { errors } : { routes: given.map((route) => ({ host: route.host, tls: "edge" })) };
+  return Object.keys(errors).length > 0 ? { errors } : { routes: given.map((route) => ({ host: route.host, tls: "edge", take: route.take === true })) };
 }
 
 /** A service's connections as given, or their field errors. @param {unknown} given */

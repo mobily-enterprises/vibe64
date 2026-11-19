@@ -51,8 +51,11 @@ test("an App Service made from a release runs once its instances are healthy, ea
   assert.deepEqual(created.service.instances, { wanted: 2, running: 0, inRotation: 0, healthy: 0 });
   assert.deepEqual([created.service.settings, created.service.secrets], [["mode"], ["sessionKey"]], "named, never shown");
   assert.equal(created.service.internalName, `web.${projectId.replace("_", "-")}.internal`);
+  // The service's own name is the service's; its route's DNS target is the route's own name, region-free.
   const own = `${created.service.id.replace("_", "-")}.us.mobilynet.standin`;
-  assert.deepEqual([created.service.target, created.service.routes.map((one) => one.target)], [own, [own]]);
+  const [asked] = created.service.routes;
+  const routeName = `${asked.id.replace("_", "-")}.routes.mobilynet.standin`;
+  assert.deepEqual([created.service.target, created.service.routes.map((one) => [one.host, one.target])], [own, [[HOST, routeName]]]);
   assert.deepEqual(
     { kind: created.refresh.kind, state: created.refresh.state, fromVersion: created.refresh.fromVersion, toVersion: created.refresh.toVersion },
     { kind: "create", state: "queued", fromVersion: null, toVersion: release.version }
@@ -71,11 +74,11 @@ test("an App Service made from a release runs once its instances are healthy, ea
   standIn.verifyDomain(HOST, projectId);
   service = await client.readService(created.service.id);
   const [route] = service.routes;
-  assert.deepEqual({ host: route.host, tls: route.tls, target: route.target, live: route.live }, { host: HOST, tls: "edge", target: own, live: true });
+  assert.deepEqual({ id: route.id, host: route.host, tls: route.tls, target: route.target, live: route.live }, { id: asked.id, host: HOST, tls: "edge", target: routeName, live: true });
   const listed = (await production.listRoutes()).find((one) => one.id === route.id);
   assert.deepEqual(
-    { group: listed.group, port: listed.port, target: listed.target, live: listed.live },
-    { group: { label: { key: "mobilynet-service", value: service.id } }, port: 3000, target: own, live: true }
+    { serviceId: listed.serviceId, vpsId: listed.vpsId, group: listed.group, port: listed.port, target: listed.target, live: listed.live },
+    { serviceId: service.id, vpsId: null, group: null, port: 3000, target: routeName, live: true }
   );
   const kept = await refused(client.project(projectId).deleteDomain(listed.domainId));
   assert.deepEqual([kept.status, kept.code], [409, "domain_in_use"]);
@@ -433,7 +436,7 @@ test("a release whose build fails, or whose new instances never get healthy, lea
   assert.deepEqual([none.status, none.code], [409, "no_previous_version"]);
 });
 
-test("deletes: a linked hosted service stays until its links go with it, and a deleted service's routes and instances go", async () => {
+test("deletes: a linked hosted service stays until its links go with it, and a deleted service's instances go while its route is kept", async () => {
   const { standIn, client, production, serviceId } = await runningShop();
   const { hostedService: db, links: [dbLink] } = await production.createHostedService({ app: "postgresql-18", links: [{ consumer: { service: serviceId } }] }, { idempotencyKey: "hosted-db" });
   settle(standIn);
@@ -449,15 +452,104 @@ test("deletes: a linked hosted service stays until its links go with it, and a d
   const { hostedService: files } = await production.createHostedService({ app: "garage-2" }, { idempotencyKey: "hosted-files" });
   assert.deepEqual(files.connection, { endpoint: `http://${files.name}.${files.projectId.replace("_", "-")}.internal:3900`, region: "us", bucket: "files" });
   const [route] = (await client.readService(serviceId)).routes;
-  const ownRoute = await standIn.fetch(`${standIn.baseUrl}/v1/projects/${standIn.projectId}/routes/${route.id}`, { method: "DELETE", headers: { authorization: `Bearer ${standIn.key}` } });
-  assert.deepEqual([ownRoute.status, (await ownRoute.json()).error.code], [409, "made_by_service"], "a service's route goes with the service only");
   assert.equal((await client.deleteService(serviceId)).service.state, "deleting");
   settle(standIn);
   assert.equal(await client.readService(serviceId), null);
-  assert.equal(standIn.routes().some((one) => one.id === route.id), false, "its routes went with it");
-  assert.ok(standIn.services.instances(serviceId).every((one) => one.rotation === "gone"), "its instances with them");
+  const kept = standIn.routes().find((one) => one.id === route.id);
+  assert.deepEqual({ serviceId: kept.serviceId, target: kept.target, live: kept.live, waitingFor: kept.waitingFor }, { serviceId: null, target: route.target, live: false, waitingFor: "target" },
+    "its route is kept, sending to nothing, its name the same");
+  assert.ok(standIn.services.instances(serviceId).every((one) => one.rotation === "gone"), "its instances go");
   assert.deepEqual(await client.deleteService(serviceId), { removed: true });
   assert.deepEqual(await production.listServices(), []);
+});
+
+let routesCalls = 0;
+/** A call of the stand-in's routes API with its key and a key of its own, answered as `{ status, body }`. */
+async function routesCall(standIn, method, suffix = "", body = undefined) {
+  routesCalls += 1;
+  const response = await standIn.fetch(`${standIn.baseUrl}/v1/projects/${standIn.projectId}/routes${suffix}`, {
+    method,
+    headers: { authorization: `Bearer ${standIn.key}`, "content-type": "application/json", "idempotency-key": `routes-${routesCalls}` },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  return { status: response.status, body: await response.json() };
+}
+
+test("a route outlives its App Service: kept sending to nothing, taken with its name by the next service asking for it; a name another service holds is refused naming its route unless take moves it; the routes API moves or deletes any route", async () => {
+  const { standIn, client, production, release, serviceId } = await runningShop();
+  const [first] = (await client.readService(serviceId)).routes;
+  const asking = await refused(production.createService(webSpec(release.version, { name: "site" }), { idempotencyKey: "service-site" }));
+  assert.deepEqual([asking.status, asking.code, asking.details], [409, "name_taken", { host: HOST, routeId: first.id }]);
+  // Made with no route, a service takes the name once healthy with `take`: the same route and name, now sending to it.
+  const site = (await production.createService(webSpec(release.version, { name: "site", routes: [] }), { idempotencyKey: "service-site-2" })).service;
+  settle(standIn);
+  const took = await client.changeService(site.id, { routes: [{ host: HOST, tls: "edge", take: true }] });
+  assert.deepEqual(took.service.routes.map((one) => [one.id, one.host, one.target, one.live]), [[first.id, HOST, first.target, true]]);
+  assert.deepEqual((await client.readService(serviceId)).routes, [], "the service it was taken from no longer lists it");
+  const badTake = await refused(client.changeService(site.id, { routes: [{ host: HOST, take: "yes" }] }));
+  assert.deepEqual(refusal(badTake), { status: 422, code: "validation_failed", fields: ["routes.0.take"] });
+
+  // A name a service no longer asks for keeps its route, sending to nothing; the next service asking for it takes it.
+  await client.changeService(site.id, { routes: [] });
+  let route = await production.readRoute(first.id);
+  assert.deepEqual([route.serviceId, route.target, route.live, route.waitingFor, route.waitingWords],
+    [null, first.target, false, "target", "Nothing to send it to: an App Service asking for its name takes it, or give it a VPS, a group or an App Service"]);
+  await client.changeService(serviceId, { routes: [{ host: HOST }] });
+  route = await production.readRoute(first.id);
+  assert.deepEqual([route.serviceId, route.target, route.live], [serviceId, first.target, true]);
+
+  // Any route is moved to a public service of the project or deleted through the routes API; its id, host and name stay.
+  const moved = await routesCall(standIn, "PATCH", `/${first.id}`, { serviceId: site.id });
+  assert.deepEqual([moved.status, moved.body.id, moved.body.host, moved.body.serviceId, moved.body.target], [200, first.id, HOST, site.id, first.target]);
+  assert.deepEqual((await client.readService(serviceId)).routes, []);
+  const withPort = await routesCall(standIn, "PATCH", `/${first.id}`, { serviceId: serviceId, port: 8080 });
+  assert.deepEqual([withPort.status, withPort.body.error.code, Object.keys(withPort.body.error.details.fieldErrors)], [422, "validation_failed", ["port"]]);
+  const removed = await routesCall(standIn, "DELETE", `/${first.id}`);
+  assert.deepEqual([removed.status, removed.body], [200, { removed: true }]);
+  assert.equal(await production.readRoute(first.id), null);
+  assert.deepEqual((await client.readService(site.id)).routes, []);
+  const made = await routesCall(standIn, "POST", "", { host: HOST, serviceId: site.id });
+  assert.deepEqual([made.status, made.body.host, made.body.serviceId, made.body.target, made.body.live],
+    [201, HOST, site.id, `${made.body.id.replace("_", "-")}.routes.mobilynet.standin`, true]);
+  const again = await routesCall(standIn, "POST", "", { host: HOST, serviceId: serviceId });
+  assert.deepEqual([again.status, again.body.error.code, again.body.error.details], [409, "name_taken", { host: HOST, routeId: made.body.id }]);
+  const toMachine = await routesCall(standIn, "POST", "", { host: `www.${HOST}`, vpsId: "vps_any", port: 3000 });
+  assert.deepEqual([toMachine.status, Object.keys(toMachine.body.error.details.fieldErrors)], [422, ["vpsId"]], "the stand-in has no machines");
+  const elsewhere = await routesCall(standIn, "PATCH", `/${made.body.id}`, { serviceId: "svc_unknown" });
+  assert.deepEqual([elsewhere.status, Object.keys(elsewhere.body.error.details.fieldErrors)], [422, ["serviceId"]]);
+});
+
+test("the adapter's domainRecords names what the owner adds: mobilynet's TXT while the domain is unverified, and the CNAME to the route's own name while the route stands, Offline too", async () => {
+  const { standIn, client, production, projectId } = world();
+  const adapter = createMobilynetAdapter({ client, project: projectId });
+  assert.deepEqual(await adapter.domainRecords(HOST), { domain: HOST, live: false, waitingFor: null, target: null, certificate: null, records: [] });
+  await adapter.ensureDomain(HOST, { idempotencyKey: "domain-shop" });
+  const [domain] = await production.listDomains();
+  const txt = { name: `_mobilynet.${HOST}.`, type: "TXT", data: domain.records[0].value };
+  assert.deepEqual(await adapter.domainRecords(HOST), { domain: HOST, live: false, waitingFor: "domain", target: null, certificate: null, records: [txt] });
+  const { release } = await production.createRelease("shop", upload(SHOP, "1"));
+  const created = await production.createService(webSpec(release.version), { idempotencyKey: "service-web" });
+  const [route] = created.service.routes;
+  const cname = { name: `${HOST}.`, type: "CNAME", data: `${route.target}.` };
+  assert.deepEqual(await adapter.domainRecords(HOST), { domain: HOST, live: false, waitingFor: "domain", target: route.target, certificate: null, records: [txt, cname] });
+  standIn.verifyDomain(HOST, projectId);
+  settle(standIn);
+  assert.deepEqual(await adapter.domainRecords(HOST), { domain: HOST, live: true, waitingFor: null, target: route.target, certificate: null, records: [cname] });
+  await client.deleteService(created.service.id);
+  settle(standIn);
+  assert.deepEqual(await adapter.domainRecords(HOST), { domain: HOST, live: false, waitingFor: "target", target: route.target, certificate: null, records: [cname] },
+    "Offline, the domain keeps its route and the same CNAME");
+});
+
+test("a route whose DNS target is not its own name (an older mobilynet's: its App Service's name) gives no target, so nothing says it stays", async () => {
+  const route = { id: "rte_k7m2abcdef", host: HOST, target: "svc-nr4nhn642f3tnrxl.us.mobilynet.standin", live: true, waitingFor: null, certificate: { state: "issued" } };
+  const calls = { listDomains: async () => [{ name: HOST, state: "verified", records: [] }], listRoutes: async () => [route] };
+  const adapter = createMobilynetAdapter({ client: { project: () => calls }, project: "prj_any" });
+  assert.deepEqual(await adapter.domainRecords(HOST), {
+    domain: HOST, live: true, waitingFor: null, target: null, certificate: "issued", records: [{ name: `${HOST}.`, type: "CNAME", data: `${route.target}.` }]
+  });
+  route.target = "rte-k7m2abcdef.routes.mobilynet.standin";
+  assert.equal((await adapter.domainRecords(HOST)).target, route.target);
 });
 
 test("prices list instances, the load balancer and the disk, and the catalogue prices each size", async () => {

@@ -51,10 +51,16 @@ const isRecord = (value) => Boolean(value) && typeof value === "object" && !Arra
 
 /**
  * A thing's own name, as mobilynet's publicNames.js makes it: its id with the `_` made a `-`, in its region's names
- * zone, `svc-…` for an App Service. A public service's routes' CNAME target.
+ * zone, `svc-…` for an App Service.
  * @param {{ id: string, region: string }} thing
  */
 const thingName = (thing) => `${thing.id.replace("_", "-")}.${thing.region}.${APPS_DOMAIN}`;
+
+/**
+ * A route's own name, region-free, in the routes zone (`rte-…`): its CNAME target, which stays while the route does,
+ * whatever it sends to. @param {{ id: string }} route
+ */
+const routeName = (route) => `${route.id.replace("_", "-")}.routes.${APPS_DOMAIN}`;
 
 /** A project's label in internal names: its id with a hyphen. @param {string} projectId */
 const projectLabel = (projectId) => projectId.replace("_", "-");
@@ -358,5 +364,6 @@ export {
   pageOf,
   projectLabel,
   randomText,
+  routeName,
   thingName
 };

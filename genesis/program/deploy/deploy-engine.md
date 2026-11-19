@@ -15,6 +15,8 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/image.js`
 - `packages/vibe64-deploy/src/plan.js`
 - `packages/vibe64-deploy/src/steps.js`
+- `packages/vibe64-deploy/src/address.js`
+- `packages/vibe64-deploy/src/lastRun.js`
 - `packages/vibe64-deploy/src/instances.js`
 - `packages/vibe64-deploy/src/report.js`
 - `packages/vibe64-deploy/src/migrations.js`
@@ -267,7 +269,8 @@ making it twice. In order:
    instances start with them; the version it runs restarts with the new values
    first. Then its release is uploaded and its App Service made (labelled,
    internal ones with no routes, the public one routed at the domain with a
-   connection to each service it reaches) with the count the Plan chose for
+   connection to each service it reaches, or made without the domain while
+   another App Service the record holds has it: 7) with the count the Plan chose for
    it, or it is handed the release. Each resource it is still not linked to is
    linked the moment that refresh is open, and the refresh is waited for.
    mobilynet's refresh rolls to the count the service has as it rolls, so a
@@ -390,11 +393,30 @@ making it twice. In order:
    given, since the provider kept those before, so the next Deploy gives them
    again. After a Deploy that stopped while one ran, the next gives them again
    unless it reads that it succeeded: one still running may yet fail;
-7. a service the Stack no longer names is deleted;
-8. live, once every service runs its release on as many healthy instances as
+7. the domain, where the adapter lists the names each App Service's routes
+   send it (`hosts`, mobilynet's inventory) and the public service lacks it, is
+   routed to it once it runs its release healthy (`takeDomain`, `address.js`):
+   moved in one call from the App Service the record holds that has it, so a
+   renamed public service (made in 4 without the domain while the one it
+   replaces still served, where mobilynet refused it `name_taken` until 20 Nov)
+   takes the address with no gap and the same DNS target before the old one is
+   deleted; a public service lacking it otherwise (its route deleted or moved by
+   hand) asks for it plainly, which the provider refuses when a thing the record
+   doesn't hold has it, failing the Deploy with its reason;
+8. a service the Stack no longer names is deleted;
+9. live, once every service runs its release on as many healthy instances as
    the provider runs it on now (its live count, whatever set it; 1 where the
    provider reports none) and its last refresh (a link's or a change's) did not
-   fail.
+   fail. Where the adapter names the address's DNS target that stays
+   (`domainRecords()`'s `target`: a mobilynet route's own name), a Deploy that
+   goes live tells it once (`{ kind: "address", host, target, previous, words
+   }`) when the record holds none or another, and keeps it (`record.address`,
+   what the owner was told): "app.example.com's DNS target is
+   rte-k7m2abcdef.routes.apps.example.com, which stays the same through Take
+   offline, every Deploy and a replaced App Service. If its CNAME (or ALIAS)
+   names anything else, such as an App Service's own name, change it once."
+   Every deployment recorded before 20 Nov hears it once at its next live
+   Deploy; a read of it that fails never fails a live Deploy.
 
 So a Deploy changes only what changed. A hosted service is made once and then
 only resized when its chosen size changes, and is never made again, restarted or
@@ -436,7 +458,9 @@ would have let it go, its links made ahead dropped, since they ended with it,
 and its service handed its release again, so a Deploy after a run that stopped
 makes the links again and reuses everything else it made. A Deploy never deletes or makes again a hosted service
 and never acts on a thing the record does not hold. `takeOffline()` deletes the
-services, public first, and keeps every resource: it keeps the record without
+services, public first, and keeps every resource (and at mobilynet the domain's
+route, which then sends to nothing and keeps its name, certificate and DNS
+target, so the next Deploy's public service takes it): it keeps the record without
 them (`save`) once each delete is asked, then reads the provider again
 (`pause` between reads, 5 seconds unless given) until it lists none of them,
 and returns. A provider still removing some after `maxReads` reads (120 unless
@@ -571,6 +595,28 @@ secrets and links' settings), after `build_passed` and before any instance
 fails fails the refresh `release_task_failed` with nothing rolled out; and the
 refresh's `task` (`{ name, state, exitCode, output }`). The stand-in's
 `releaseTaskFails` fault fails it.
+
+The domain is a route's at mobilynet, as its stable domain target change
+(designed 20 Nov, being built; the stand-in answers it already) makes it: a
+route is its name's, and its `target`, the CNAME the owner adds once, is its
+own region-free name (`rte-<id>.routes.<apps domain>`) whatever it sends to. An
+App Service deleted, or no longer asking for the name, leaves the route kept,
+sending to nothing (`waitingFor` `target`; mobilynet's offline edges answer the
+name with a 503 page and keep its certificate renewing), and the next public
+service asking for the name takes it, so a Deploy after Take offline answers at
+the same name and DNS target. A name another App Service's route sends to is
+refused `409 name_taken` with `{ host, routeId }` unless the service's route
+entry says `take: true`, which moves it in one call; the routes API makes,
+moves (`PATCH`, its id, name and target kept) or deletes any route. The adapter
+lists each App Service's route names (`hosts`), makes a public service with no
+route while `domain` is null, and answers `takeDomain(id, domain, { take })`
+(one `PATCH /v1/services/{id}` of its `routes`) and `domainRecords(domain)` in
+the other adapters' shape, with `live`, `waitingFor` and `target`: mobilynet's
+TXT (and a wildcard's challenge CNAME) while the domain is unverified, and the
+CNAME of the name to its route's own name while it has a route, Offline too.
+`target` is null where the route's target is not its own name (`rte-…`): a
+mobilynet before that change answers its App Service's `svc-` name, which
+changes with the service, so nothing tells an owner that it stays.
 
 Its client also reads what mobilynet did, for a caller that shows it: a
 refresh with its steps (`readServiceRefresh`: build started, passed or failed,
@@ -778,6 +824,7 @@ request's signature (or the gateway's token), for the engine's tests.
 - `imagePackages()`, `imageUpload()` — the image per service, for container providers.
 - `planOf()` — the Plan with verbs, drift, the quote, the quotas and its hash.
 - `deploy()` — a whole Deploy, step by step, under the lease.
+- `domainStep()`, `addressChange()` — the domain routed to the public service, and its DNS target told once.
 - `setInstances()` — how many instances a running App Service runs, set at its provider at once.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
 - `createGoogleAdapter()` — the same for Google Cloud; `createGoogleClient()` its REST client.

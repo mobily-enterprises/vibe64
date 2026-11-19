@@ -10,7 +10,7 @@ import { createStandInServices } from "./standIn/services.js";
 // mobilynet main c6af5ca3), for a mobilynet organisation's projects: App Services made from a project's releases of an
 // app, public or internal, with their connections, refreshes and instances, each instance with its `_mobilynet`
 // (standIn/services.js, serviceEngine.js, releases.js); hosted services of the catalogue's four apps with several links
-// each (standIn/hosted.js); regions, domains and the App Services' routes (standIn/network.js); prices
+// each (standIn/hosted.js); regions, domains and routes (standIn/network.js); prices
 // (standIn/prices.js); and the parts mobilynet is building for the engine (its docs/stages/engine-support.md at
 // 7d775240): labels on App Services and hosted services (M2), App Service instances in the project's vCPU and memory
 // quotas beside its hosted services' machines (M12), read with their use as mobilynet's readQuotas answers them, and a
@@ -76,7 +76,7 @@ const ID = "[^/]+";
 const ROUTES = Object.freeze([
   ["^/v1/(regions|hosted-services/catalogue)$", {}],
   [`^/v1/projects/${ID}/events$`, { GET: "events:read" }],
-  [`^/v1/projects/${ID}/(domains|routes)(/${ID})?(/actions/check)?$`, { GET: "network:read", POST: "network:manage", DELETE: "network:manage" }],
+  [`^/v1/projects/${ID}/(domains|routes)(/${ID})?(/actions/check)?$`, { GET: "network:read", POST: "network:manage", PATCH: "network:manage", DELETE: "network:manage" }],
   [`^/v1/projects/${ID}/apps/${ID}/releases$`, { POST: "services:deploy" }],
   [`^/v1/projects/${ID}/services$`, { GET: "services:read", POST: "services:manage" }],
   [`^/v1/projects/${ID}/hosted-services$`, { GET: "hosted:read", POST: "hosted:manage" }],
@@ -142,7 +142,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     failure,
     answer,
     faults: Object.fromEntries(FAULTS.map((name) => [name, false])),
-    /** Every route, the App Services' (services.js makes them, network.js answers them). */
+    /** Every route (network.js makes, keeps and answers them; services.js asks names of them). */
     routes: [],
     /** How many settings and secrets an App Service of a region holds now, its links' among them. @param {string} region */
     settingsMax: (region) => (world.faults.olderHost && HOST_REGIONS.includes(region) ? SERVICE_SETTINGS.earlier : SERVICE_SETTINGS.current),
@@ -201,7 +201,10 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
   }
 
   const releases = createStandInReleases(world);
-  const network = createStandInNetwork(world, { members: (serviceId) => services.serving(serviceId) });
+  const network = createStandInNetwork(world, {
+    members: (serviceId) => services.serving(serviceId),
+    routable: (projectId, serviceId) => services.routable(projectId, serviceId)
+  });
   const services = createStandInServices(world, { releases, network });
   const hosted = createStandInHosted(world, { services, prices });
   services.useHooks({ nameTaken: hosted.nameTaken, consumerGone: hosted.consumerGone, refreshFailed: hosted.refreshFailed });

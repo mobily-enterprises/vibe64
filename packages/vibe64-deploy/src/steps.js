@@ -21,7 +21,8 @@
 //      release under way): its adapter refuses them SETTINGS_NEED_RELEASE. Those, and settings that didn't go live on
 //      the version it runs, follow the release (6), as a kept release's do;
 //      its release is uploaded, then its service made (internal: no routes; public: routed at the domain, with a
-//      connection to each service it reaches), with the count the plan chose for a service it makes, or handed the
+//      connection to each service it reaches; without it while another service the record holds has it: address.js),
+//      with the count the plan chose for a service it makes, or handed the
 //      release, which rolls to the count the service runs (a provider's refresh rolls to the count the service has as
 //      it rolls, as mobilynet's does); then each resource it is still not linked to is linked the moment that refresh
 //      is open, and the refresh waited for.
@@ -47,9 +48,10 @@
 //      link made ahead of a refresh is open (mobilynet does). A size change alone is only that, and the record's
 //      choices follow it, so the next plan starts from what runs. A settings refresh that fails lets go of the settings
 //      the record says the service was given (the provider kept those before), so the next Deploy gives them again;
-//   7. a service the Stack no longer names is deleted (its links end with it);
-//   8. live, once every service runs its release with as many healthy instances as it runs at the provider and its
-//      last refresh did not fail.
+//   7. the domain, where the public service lacks it, is routed to it once it serves its release (address.js);
+//   8. a service the Stack no longer names is deleted (its links end with it);
+//   9. live, once every service runs its release with as many healthy instances as it runs at the provider and its
+//      last refresh did not fail; the address's DNS target is told once (address.js).
 //
 // A service's count is a running setting, never part of a Deploy: the Deploy makes a service with the count the plan
 // chose for it and never sets, puts back or keeps a count after that. The provider holds it, set by `setInstances` (the
@@ -76,7 +78,7 @@
 // tried again, waiting one pause, then two, four and at most six, so a Deploy waiting for a build lives until it is
 // live or fails. A Deploy first reads how the refreshes a Deploy before it started and never read ended (that one
 // stopped in its wait), letting go of a failed one's links and release as that Deploy would have, and of settings
-// whose refresh didn't succeed (settleLastRun).
+// whose refresh didn't succeed (lastRun.js).
 //
 // Each call's idempotency key names this Deploy's run, so a call tried again within it gets the first answer, and a
 // later Deploy asking the same again (a count put back, a service made again after it was taken offline) is not
@@ -84,6 +86,8 @@
 // keeping its record is made whole by the labels: the next one finds the thing labelled as that item and adopts it.
 import { createHash, randomBytes } from "node:crypto";
 
+import { addressChange, addressWords, domainHolder, domainStep } from "./address.js";
+import { settleLastRun } from "./lastRun.js";
 import { MIGRATED_NOTE, migrationDue, migrationsOf, noteHandOver, noteTask } from "./migrations.js";
 import { planOf, stableJson } from "./plan.js";
 import { LABEL, keptChoices, labelsFor } from "./record.js";
@@ -169,38 +173,6 @@ const BACKOFF_PAUSES_MAX = 6;
 const backoffPauses = (failures) => Math.min(2 ** (failures - 1), BACKOFF_PAUSES_MAX);
 
 /**
- * What a Deploy that stopped before it read how its refreshes ended (the editor stopped, or a read failed in its wait)
- * left: each refresh it started is read now, and one that failed or was aborted is let go as the run would have let it
- * go, its links made ahead dropped (they ended with it) and its service handed its release again, so the next Deploy
- * makes them again and nothing it holds is stale. A refresh still open is waited for by the next Deploy as it reads
- * the service; should it then fail, the links it ends are made again as the provider no longer holds them (nextStep).
- * A settings refresh that didn't succeed, open or ended, gives its settings again. Answers the record with the reason
- * of each that failed.
- * @param {any} adapter @param {any} record @param {(event: any) => void} tell
- */
-async function settleLastRun(adapter, record, tell) {
-  const kept = structuredClone(record);
-  for (const [service, state] of Object.entries(kept.run?.services ?? {})) {
-    const id = kept.items[`service.${service}`]?.id;
-    if (!state?.refreshId || !id || kept.run.state === "live") continue;
-    const words = `Reading how the last Deploy's update of ${service} ended`;
-    tell({ kind: "step", phase: "start", step: "settleRefresh", service, words, refresh: { serviceId: id, refreshId: state.refreshId } });
-    const refresh = await adapter.readRefresh(id, state.refreshId);
-    noteTask(kept, state, refresh);
-    // A settings refresh not known to have succeeded (failed, or still open and may yet fail): the provider may keep the
-    // settings the service had, so this Deploy gives them again.
-    if (state.settingsRefresh && refresh?.state !== "succeeded") delete kept.items[`service.${service}`].settingsHash;
-    if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
-      for (const resource of state.linkedAhead ?? []) delete kept.items[`resource.${resource}`]?.links?.[service];
-      delete kept.items[`service.${service}`].release;
-      tell({ kind: "step", phase: "done", step: "settleRefresh", service, words, message: `It ${refresh.state}: `
-        + `${sentence(refresh.error?.message ?? "the provider gave no reason")} This Deploy hands ${service} its ${state.settingsRefresh ? "settings and " : ""}release again.` });
-    } else tell({ kind: "step", phase: "done", step: "settleRefresh", service, words, message: `It is ${refresh?.state ?? "gone"}.` });
-  }
-  return kept;
-}
-
-/**
  * The next step of a Deploy, or `{ kind: "live" }`, or `{ kind: "failed", message }`, or `{ kind: "wait", words }`
  * when the provider is still at work on the last one.
  * @param {object} context
@@ -227,6 +199,12 @@ function nextStep({ plan, needs, record, observed, release }) {
     const held = thingOf(item)?.links;
     return Boolean(linkId) && (!Array.isArray(held) || held.some((link) => link.id === linkId));
   };
+
+  // A service whose last refresh failed, naming why, or null; and whether it runs this Deploy's release with as many
+  // healthy instances as the provider runs now, whatever set that count.
+  const failureOf = (service, thing) => (!thing.refresh && thing.lastError ? `${service.id}: ${thing.lastError.message ?? thing.lastError}` : null);
+  const serves = (service, thing) => thing.version === run.services[service.id].version && !thing.refresh
+    && thing.healthy >= (Number.isInteger(thing.instances) ? thing.instances : 1);
 
   // A service keeps its release only while the provider runs it with no error: one that failed since is handed it again.
   const keeps = (service, item, thing) => Boolean(thing) && item?.release?.digest === release.digests[service.id]
@@ -304,7 +282,8 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (leaving) return { kind: "wait", words: `Waiting for the old ${service.id} to go` };
       const values = valuesOf(service, { record, release }, byId);
       if (!values) return { kind: "wait", words: `Waiting for the services ${service.id} reaches` };
-      return { kind: "createService", service: service.id, values, ...migrateTask(service.id) };
+      const held = service.exposure === "public" ? domainHolder(record, thingOf, release.domain) : null;
+      return { kind: "createService", service: service.id, values, ...(held ? { withoutDomain: held.name } : {}), ...migrateTask(service.id) };
     }
     // A service runs one refresh at a time, the rest queued behind it, and shows the one under way, else the next: this
     // Deploy's has ended once none is. A resource it is still not linked to (a new service, one that runs no release,
@@ -340,24 +319,29 @@ function nextStep({ plan, needs, record, observed, release }) {
     if (thing.size !== choice.size) return { kind: "changeService", service: service.id, id: thing.id, change: { size: choice.size } };
   }
 
-  // 7. A service the Stack no longer names.
+  // 7. The domain, where the public service lacks it.
+  const routed = needs.services.find((one) => one.exposure === "public");
+  const front = routed ? thingOf(itemOf("service", routed.id)) : null;
+  const routing = front && domainStep({
+    service: routed, thing: front, domain: release.domain, holder: domainHolder(record, thingOf, release.domain, front), serving: serves(routed, front), failure: failureOf(routed, front)
+  });
+  if (routing) return routing;
+
+  // 8. A service the Stack no longer names.
   for (const item of Object.values(record.items)) {
     if (item.kind === "service" && !needs.services.some((one) => one.id === item.name) && thingOf(item)) {
       return { kind: "deleteService", service: item.name, id: item.id, replaced: false };
     }
   }
 
-  // 8. Live once every service runs its release, healthy, its last refresh (a link's or a change's) not failed: a
+  // 9. Live once every service runs its release, healthy, its last refresh (a link's or a change's) not failed: a
   // provider clears a service's last error when a refresh succeeds, and this Deploy's release refresh did. It waits
   // for as many healthy instances as the provider runs now, whatever set that count.
   for (const service of servicesInOrder(needs)) {
     const thing = thingOf(itemOf("service", service.id));
-    const { version } = run.services[service.id];
-    const wanted = Number.isInteger(thing.instances) ? thing.instances : 1;
-    if (!thing.refresh && thing.lastError) {
-      return { kind: "failed", message: `${service.id}: ${thing.lastError.message ?? thing.lastError}` };
-    }
-    if (thing.version === version && !thing.refresh && thing.healthy >= wanted) continue;
+    const failure = failureOf(service, thing);
+    if (failure) return { kind: "failed", message: failure };
+    if (serves(service, thing)) continue;
     return { kind: "wait", words: `Waiting for ${service.id}'s instances` };
   }
   return { kind: "live" };
@@ -428,7 +412,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       const state = stateOf(service.id);
       const made = await adapter.createService({
         name, exposure: service.exposure, size: choice.size, instances: choice.instances, app: name, version: state.version,
-        settings: values.settings, secrets: values.secrets, domain: release.domain, connections, labels: labelsFor(record, { kind: "service", name: service.id }),
+        settings: values.settings, secrets: values.secrets, domain: step.withoutDomain ? null : release.domain, connections, labels: labelsFor(record, { kind: "service", name: service.id }),
         ...(step.task ? { task: step.task } : {})
       }, { idempotencyKey: keyOf(record, "service", service.id, name) });
       record.items[`service.${service.id}`] = {
@@ -528,6 +512,9 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       if (refreshId) stateOf(step.service).refreshId = refreshId;
       break;
     }
+    case "takeDomain":
+      await adapter.takeDomain(step.id, step.domain, { take: Boolean(step.from), idempotencyKey: keyOf(record, "takeDomain", step.service, step.domain) });
+      break;
     case "deleteService":
       await adapter.deleteService(step.id);
       delete record.items[`service.${step.service}`];
@@ -616,8 +603,11 @@ async function deploy({
       const step = nextStep({ plan, needs, record, observed, release: full });
       if (step.kind === "live" || step.kind === "failed") {
         const ended = { ...structuredClone(record), run: { ...record.run, state: step.kind, failure: step.message ?? null } };
+        const address = step.kind === "live" ? await addressChange(adapter, release.domain, record.address) : null;
         if (step.kind === "live") Object.assign(ended, { choices: keptChoices(plan.choices), lastPlan: { hash: plan.hash } });
+        if (address) ended.address = { host: address.host, target: address.target };
         record = await save(ended);
+        if (address) tell({ kind: "address", ...address, words: addressWords(address) });
         // Whether this Deploy's migrations ran, failed or were skipped (no release handed, or one the database ran); none
         // where they run as each instance starts.
         const migrations = full.migrations ? (record.run.migration?.state ?? "skipped") : null;

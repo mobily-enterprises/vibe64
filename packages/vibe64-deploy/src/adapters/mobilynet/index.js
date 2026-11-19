@@ -7,6 +7,12 @@
 // each hosted service Vibe64 made with the links mobilynet holds of it, which the steps believe over the record's.
 // Every App Service it makes drains for mobilynet's shortest time (DRAIN_SECONDS).
 //
+// The domain: a public App Service asks for the domain's name in its `routes`, and mobilynet sends the name's route to
+// it, making the route or taking the one the name has (kept, sending to nothing, after Take offline; or moved with
+// `take` from the public service it replaces: takeDomain). The route is the name's: its `target`, the CNAME the owner
+// adds once, is its own name (`rte-…`), which stays through Take offline, every Deploy and a replaced App Service
+// (domainRecords). A mobilynet whose service routes still answer the service's own name (`svc-…`) gives no target.
+//
 // Leases: mobilynet has none yet. The lease calls (client.js takeLease, renewLease, releaseLease) exist in the shape
 // the engine asks mobilynet for, and its stand-in answers them; until mobilynet builds them, an adapter made without
 // `leases: true` takes none, which is safe only while one editor deploys a project's environment (Managed today:
@@ -25,6 +31,8 @@ const QUOTA_COUNTS = Object.freeze({ service: Object.freeze(["vcpus", "memoryGib
 // this long to finish the requests it has, then a stop signal and as long again: mobilynet's shortest drain, which
 // genesis/stack.md has no line to change.
 const DRAIN_SECONDS = 30;
+// A route's own name, which stays while the route does, where a service's own name (`svc-…`) changes with the service.
+const ROUTE_NAME = /^rte-/u;
 // The states in which mobilynet holds a link (hostedLinks.js HELD): its consumer has or is being given its need's
 // settings, and a second link of that need is refused (`need_linked`). One `revoking` or `revoked` has ended: removed,
 // or ended with a refresh of its consumer that failed or was aborted, which ends every link the release the consumer
@@ -142,8 +150,8 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
   /**
    * Every App Service and hosted service of the project, as the plan, the steps and the record read them: `{ id, name,
    * kind, labels, size, instances, ... }`, a service with its exposure, version, refresh, healthy count, internal
-   * name, connections and last error, a resource with its kind, state and the links mobilynet holds of it (`links`,
-   * null for a hosted service Vibe64 didn't make).
+   * name, connections, last error and the names its routes send it (`hosts`), a resource with its kind, state and the
+   * links mobilynet holds of it (`links`, null for a hosted service Vibe64 didn't make).
    */
   async function inventory() {
     const [services, listed] = await Promise.all([calls.listServices(), calls.listHostedServices()]);
@@ -164,7 +172,8 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         healthy: one.instances?.healthy ?? 0,
         internalName: one.internalName ?? null,
         connections: (one.connections ?? []).map(({ to, port }) => ({ to, port })),
-        lastError: one.lastError ?? null
+        lastError: one.lastError ?? null,
+        hosts: (one.routes ?? []).map((route) => route.host)
       })),
       ...hosted.map((one, index) => ({
         id: one.id,
@@ -256,6 +265,30 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
       if (domains.some((one) => one.name === name || one.name === `*.${parent}`)) return null;
       return calls.createDomain(name, { idempotencyKey });
     },
+    /**
+     * What the owner adds to the domain's DNS, as the other adapters answer it: mobilynet's TXT (and a wildcard's
+     * challenge CNAME) while its domain is unverified, and the CNAME of the name to its route's own name while it has a
+     * route, sending to nothing (Offline) too; `target` that name, null where mobilynet answers no route's own name.
+     * @param {string} name
+     */
+    async domainRecords(name) {
+      const [domains, routes] = await Promise.all([calls.listDomains(), calls.listRoutes()]);
+      const parent = name.split(".").slice(1).join(".");
+      const domain = domains.find((one) => one.name === name) ?? domains.find((one) => one.name === `*.${parent}`) ?? null;
+      const route = routes.find((one) => one.host === name) ?? null;
+      const proving = domain && domain.state !== "verified";
+      return {
+        domain: name,
+        certificate: route?.certificate?.state ?? null,
+        live: route?.live === true,
+        waitingFor: route ? route.waitingFor ?? null : proving ? "domain" : null,
+        target: ROUTE_NAME.test(route?.target ?? "") ? route.target : null,
+        records: [
+          ...(proving ? domain.records.map((one) => ({ name: `${one.name}.`, type: one.type, data: one.type === "CNAME" ? `${one.value}.` : one.value })) : []),
+          ...(route ? [{ name: `${name}.`, type: "CNAME", data: `${route.target}.` }] : [])
+        ]
+      };
+    },
     /** A release of a service's app from its upload: `{ version }`. */
     uploadRelease: async (app, upload) => (await calls.createRelease(app, { archive: upload.bytes, sha256: upload.sha256 })).release,
     /**
@@ -282,7 +315,10 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
       const answer = await client.createServiceRelease(id, { archive: upload.bytes, sha256: upload.sha256 }, { task });
       return { version: answer.release.version, refreshId: answer.refresh?.id ?? null };
     },
-    /** Makes an App Service, labelled, with mobilynet's drain: internal ones with no routes, public ones routed at the domain. */
+    /**
+     * Makes an App Service, labelled, with mobilynet's drain: internal ones with no routes, public ones routed at the
+     * domain (none while `domain` is null: another public service has it, which takeDomain moves it from).
+     */
     async createService({ name, exposure, size, instances, app, version, settings, secrets, domain, connections, labels, task = null }, { idempotencyKey }) {
       const { service, refresh } = await calls.createService({
         name,
@@ -294,7 +330,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         app: { name: app, version },
         settings,
         secrets,
-        ...(exposure === "public" ? { routes: [{ host: domain, tls: "edge" }] } : {}),
+        ...(exposure === "public" ? { routes: domain ? [{ host: domain, tls: "edge" }] : [] } : {}),
         ...(connections.length > 0 ? { connections } : {}),
         labels,
         ...(task ? { task } : {})
@@ -315,6 +351,14 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
       }
     },
     changeService: async (id, change, { idempotencyKey }) => (await client.changeService(id, change, { idempotencyKey })).refresh?.id ?? null,
+    /**
+     * Routes the domain to a public App Service: its route made or taken, and with `take` moved from the service that
+     * has it, in one call; mobilynet refuses a name a VPS, a group or another service has, without `take`, `409
+     * name_taken`.
+     */
+    takeDomain: async (id, domain, { take, idempotencyKey }) => {
+      await client.changeService(id, { routes: [{ host: domain, tls: "edge", ...(take ? { take: true } : {}) }] }, { idempotencyKey });
+    },
     deleteService: (id) => client.deleteService(id),
     /** The port a service reaches another on: every service listens on 3000. */
     servicePort: 3000,

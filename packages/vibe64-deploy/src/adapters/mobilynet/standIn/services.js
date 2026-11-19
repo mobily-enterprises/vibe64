@@ -3,17 +3,21 @@ import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingW
 import { createStandInServiceLogs } from "./serviceLogs.js";
 
 // mobilynet's App Services as its stand-in answers them (openApiServices.js, and its machines package's services.js,
-// serviceViews.js, serviceEngine.js and serviceLinks.js): a service is one app on a count of instances of an `a-`
-// size, made from a release its mobilynet project has (`app: { name, version }`, releases.js), public behind the load
-// balancer (its routes, the route group on its `mobilynet-service` label) or internal (no routes, reached inside its
-// project as `<name>.<project label>.internal`, each instance as `<instance>.<that>`). `connections` open a port of
-// another service of the project to its instances. Every change of what its instances run is a refresh, one at a time
-// per service, in order, which moves one step each time the stand-in moves on (serviceEngine.js). A count change places
-// or drains instances at once, outside any refresh; a delete is `deleting`, then `deleted` at the next step, its
-// instances and routes gone. A link of a hosted service gives a service its need's settings (`<AS>_<FIELD>`) through a
-// settings refresh, which only the link sets or takes out (hosted.js). Labels (engine-support M2) are set at create and
-// replaced whole by a PATCH, which starts no refresh; a list filters by them. A create, a count raised or a size made
-// larger is admitted by the project's spending cap and its vCPU and memory quotas, instances times size (M12, M13).
+// serviceViews.js, serviceEngine.js and serviceLinks.js): a service is one app on a count of instances of an `a-` size,
+// made from a release its mobilynet project has (`app: { name, version }`, releases.js), public behind the load
+// balancer (the routes sending to it, network.js) or internal (no routes, reached inside its project as
+// `<name>.<project label>.internal`, each instance as `<instance>.<that>`). `connections` open a port of another
+// service of the project to its instances. Every change of what its instances run is a refresh, one at a time per
+// service, in order, which moves one step each time the stand-in moves on (serviceEngine.js). A count change places or
+// drains instances at once, outside any refresh; a delete is `deleting`, then `deleted` at the next step, its instances
+// gone and its routes kept, sending to nothing. A service's `routes` ask for names: each name's route is made or taken
+// (one kept sending to nothing), one another service's route sends to is refused `409 name_taken` naming the route
+// unless the entry says `take: true`, which moves it, and a name no longer asked for keeps its route, sending to
+// nothing. Its view lists the routes sending to it, read from the routes, which the service row keeps no copy of. A
+// link of a hosted service gives a service its need's settings (`<AS>_<FIELD>`) through a settings refresh, which only
+// the link sets or takes out (hosted.js). Labels (engine-support M2) are set at create and replaced whole by a PATCH,
+// which starts no refresh; a list filters by them. A create, a count raised or a size made larger is admitted by the
+// project's spending cap and its vCPU and memory quotas, instances times size (M12, M13).
 // Faults: `instancesUnhealthy` (a refresh's new instances never get healthy, every one or those its function picks:
 // it fails `instance_never_healthy`), `noCapacity` (a count raise answers `409 no_capacity`) and `releaseBuildFails`.
 // A replace takes a name the release the service runs doesn't declare as a plain setting or a secret, text of up to
@@ -21,11 +25,8 @@ import { createStandInServiceLogs } from "./serviceLogs.js";
 // service at most as many settings and secrets in all as its region says (world.settingsMax), its links' among them.
 // STAND-IN ONLY: ids are the stand-in's own (`svc_s000123`), a connection makes no allow rule (`ruleId` null), a
 // release's settings are checked only for the required ones its declaration declares (a replace also for the names it
-// doesn't declare), unlinking a link made ahead queues a settings refresh rather than changing its refresh ahead, and a
-// service's route, before the service has a port, shows `{ host, tls, target }` alone.
+// doesn't declare), and unlinking a link made ahead queues a settings refresh rather than changing its refresh ahead.
 
-/** The label every instance of a service carries, so a public service's route group sends to them. */
-const SERVICE_LABEL = "mobilynet-service";
 const APP_NAME = /^[a-z][a-z0-9-]{0,40}$/u;
 const OPEN_REFRESH = Object.freeze(["queued", "building", "rolling", "aborting"]);
 const RUNNING_REFRESH = Object.freeze(["building", "rolling", "aborting"]);
@@ -50,7 +51,7 @@ function taskOf(invalid, release, name) {
  * @param {any} world the stand-in's world
  * @param {object} parts
  * @param {ReturnType<typeof import("./releases.js").createStandInReleases>} parts.releases a project's releases
- * @param {{ coveringDomain: (projectId: string, host: string) => any, routeLive: (routeId: string) => boolean }} parts.network
+ * @param {ReturnType<typeof import("./network.js").createStandInNetwork>} parts.network the routes, which services ask names of
  */
 function createStandInServices(world, { releases, network }) {
   const { routes, faults, failure, answer, once, nextId, at, now } = world;
@@ -87,17 +88,16 @@ function createStandInServices(world, { releases, network }) {
   const declarationOf = (service) => releaseOf(service, service.version)?.declaration ?? null;
   /** The settings the needs of a declaration declare, which only a link sets. @param {any} declaration */
   const linkedNames = (declaration) => (declaration?.needs ?? []).flatMap((need) => needSettings(need).map((entry) => entry.name));
-  /** A public service's own name, its routes' CNAME target; null for an internal one. @param {any} service */
+  /** A public service's own name, the thing's (not a DNS target); null for an internal one. @param {any} service */
   const targetOf = (service) => (service.exposure === "public" ? thingName(service) : null);
-  /** Whether a route is one of a service's. @param {any} service @param {any} route */
-  const routeOf = (service, route) => route.group?.label.key === SERVICE_LABEL && route.group.label.value === service.id;
+  /** The routes sending to a service. @param {any} service */
+  const routesTo = (service) => routes.filter((route) => route.serviceId === service.id);
 
-  /** A service's routes as its view shows them, each made one with its id and whether it is live. @param {any} service */
+  /** A service's routes as its view shows them: each sending to it, with its id, its own name and whether it is live. */
   function routesView(service) {
-    const target = targetOf(service);
-    return service.routes.map(({ host, tls }) => {
-      const made = routes.find((route) => routeOf(service, route) && route.host === host);
-      return made ? { host, tls, target, id: made.id, live: network.routeLive(made.id) } : { host, tls, target };
+    return routesTo(service).map((route) => {
+      const { host, tls, id, target, live } = network.routeView(route);
+      return { host, tls, id, target, live };
     });
   }
 
@@ -197,49 +197,36 @@ function createStandInServices(world, { releases, network }) {
     return Object.keys(errors).length > 0 ? invalid(errors) : null;
   }
 
-  /** A service's routes checked as asked: each covered by a domain of its project, its name free there. */
+  /**
+   * A service's routes checked as asked: each covered by a domain of its project, and its route, where it has one,
+   * sending to this service or to nothing, or moved with `take`.
+   */
   function routesRefusal(projectId, serviceId, asked) {
-    for (const [index, { host }] of asked.entries()) {
+    for (const [index, { host, take }] of asked.entries()) {
       if (!network.coveringDomain(projectId, host)) return invalid({ [`routes.${index}.host`]: COVER_WORDS });
-      const taken = routes.find((route) => route.projectId === projectId && route.host === host);
-      const own = taken?.group?.label.key === SERVICE_LABEL && taken.group.label.value === serviceId;
-      if (taken && !own) return failure(409, "name_taken", `The name "${host}" is already taken here.`, { name: host });
+      const held = network.routeOfHost(projectId, host);
+      if (held?.serviceId && held.serviceId !== serviceId && !take) return network.nameTaken(host, held);
     }
     return null;
   }
 
   /**
-   * Makes a service's route rows what it asks for (serviceNetwork.js syncRoutes): one per name on its label, its port
-   * and health path, edge TLS, made once it has a port; rows no longer asked for go. @param {any} service
+   * The names a service asks for sent to it, each route made or taken; a route sending to it whose name it no longer
+   * asks for is kept, sending to nothing. @param {any} service @param {Array<{ host: string }>} asked
+   */
+  function askRoutes(service, asked) {
+    for (const route of routesTo(service).filter((one) => !asked.some(({ host }) => host === one.host))) network.sendNowhere(route);
+    for (const { host } of asked) network.sendNameTo(service.projectId, host, service);
+  }
+
+  /**
+   * The routes sending to a service follow it (serviceNetwork.js syncRoutes): its port and health path once it has
+   * them; deleted, they are kept, sending to nothing. @param {any} service
    */
   function syncRoutes(service) {
-    const asked = service.state === "deleted" ? [] : service.routes.map((route) => route.host);
-    for (let index = routes.length - 1; index >= 0; index -= 1) {
-      if (routeOf(service, routes[index]) && !asked.includes(routes[index].host)) routes.splice(index, 1);
-    }
-    if (!service.port) return;
-    for (const route of routes.filter((one) => routeOf(service, one))) {
-      Object.assign(route, { port: service.port, healthPath: service.healthPath });
-    }
-    for (const host of asked) {
-      if (routes.some((route) => route.projectId === service.projectId && route.host === host)) continue;
-      const domain = network.coveringDomain(service.projectId, host);
-      if (!domain) continue;
-      routes.push({
-        id: nextId("rte"),
-        projectId: service.projectId,
-        host,
-        domainId: domain.id,
-        vpsId: null,
-        group: { label: { key: SERVICE_LABEL, value: service.id } },
-        port: service.port,
-        tls: "edge",
-        healthPath: service.healthPath,
-        region: service.region,
-        certificate: null,
-        createdAt: at(),
-        changedAt: at()
-      });
+    for (const route of routesTo(service)) {
+      if (service.state === "deleted") network.sendNowhere(route);
+      else Object.assign(route, { port: service.port, healthPath: service.healthPath });
     }
   }
 
@@ -324,10 +311,11 @@ function createStandInServices(world, { releases, network }) {
     const refused = connectableRefusal(projectId, null, fields.connections) ?? routesRefusal(projectId, null, fields.routes)
       ?? world.admit(projectId, taking(fields.instances, fields.size));
     if (refused) return refused;
+    const { routes: asked, ...kept } = fields;
     const service = {
       id: nextId("svc"),
       projectId,
-      ...fields,
+      ...kept,
       app,
       version: null,
       previousVersion: null,
@@ -344,6 +332,7 @@ function createStandInServices(world, { releases, network }) {
     const task = taskOf(invalid, release, input.task);
     if (task.refusal) return task.refusal;
     services.set(service.id, service);
+    askRoutes(service, asked);
     const refresh = queueRefresh(service, { kind: "create", toVersion: release.version, task: task.task });
     event(service, "service.created", { name: service.name, exposure: service.exposure, instances: service.instances, version: release.version });
     return answer(202, { service: view(service), refresh: refreshView(refresh) });
@@ -376,10 +365,10 @@ function createStandInServices(world, { releases, network }) {
       }
       event(service, "service.instances_changed", { from: service.instances, to: fields.instances });
     }
-    const { size, ...rest } = fields;
+    const { size, routes: asked, ...rest } = fields;
     patch(service, { ...rest, ...(labelled ? { labels: labelled.labels } : {}) });
     if (labelled) event(service, "service.changed", { fields: ["labels"] });
-    if (fields.routes) syncRoutes(service);
+    if (asked) askRoutes(service, asked);
     let refresh = null;
     if (size && size !== service.size) {
       const changed = changeOrRefresh(service, { kind: "size", target: { size } });
@@ -594,8 +583,14 @@ function createStandInServices(world, { releases, network }) {
     return used;
   }
 
-  /** The instances a service's route group sends to: those in rotation. @param {string} serviceId */
+  /** The instances a service's routes send to: those in rotation. @param {string} serviceId */
   const serving = (serviceId) => liveOf(serviceId).filter((one) => one.rotation === "in").map((one) => one.id);
+
+  /** A public App Service of the project, not being deleted, which a route may send to; or null. */
+  function routable(projectId, serviceId) {
+    const service = typeof serviceId === "string" ? services.get(serviceId) : null;
+    return service?.projectId === projectId && service.exposure === "public" && !["deleting", "deleted"].includes(service.state) ? service : null;
+  }
 
   /** A service with its settings' and secrets' values, as its instances read them, for tests. @param {any} service */
   const heldView = (service) => ({ ...view(service), settings: { ...service.settings }, secrets: { ...service.secrets }, deletedAt: service.deletedAt });
@@ -641,9 +636,10 @@ function createStandInServices(world, { releases, network }) {
     nameTaken,
     usage,
     serving,
+    routable,
     useHooks: (given) => Object.assign(hooks, given),
     controls
   });
 }
 
-export { SERVICE_LABEL, createStandInServices };
+export { createStandInServices };

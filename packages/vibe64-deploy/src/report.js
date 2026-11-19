@@ -17,9 +17,11 @@ function stepWords(step, { needs, release } = {}) {
     case "uploadRelease": return `Uploading the release of ${step.service}`;
     case "keepRelease": return `${step.service} keeps the release it runs: the same commit, Stack and engine`;
     case "releaseService": return `Handing App Service ${step.service} the new release${step.task ? MIGRATING : ""}`;
-    case "createService": return (exposure === "public"
-      ? `Making App Service ${step.service}, public behind the load balancer at ${release?.domain ?? "its domain"}`
-      : `Making App Service ${step.service}, internal: only the app's other services reach it`) + (step.task ? MIGRATING : "");
+    case "createService": return (exposure !== "public"
+      ? `Making App Service ${step.service}, internal: only the app's other services reach it`
+      : step.withoutDomain
+        ? `Making App Service ${step.service}, public behind the load balancer: it takes ${release?.domain ?? "its domain"} from ${step.withoutDomain} once healthy`
+        : `Making App Service ${step.service}, public behind the load balancer at ${release?.domain ?? "its domain"}`) + (step.task ? MIGRATING : "");
     case "link": return `Linking ${step.service} to ${step.resource}`;
     case "checkRefresh": return `Reading how the update of ${step.service} ended`;
     case "unlink": return `Unlinking ${step.resource}, no longer in genesis/stack.md, from ${step.service}`;
@@ -29,6 +31,9 @@ function stepWords(step, { needs, release } = {}) {
       if (change.connections) return `Updating the services ${step.service} reaches`;
       return `Resizing App Service ${step.service} to ${change.size}`;
     }
+    case "takeDomain": return step.from
+      ? `Moving ${step.domain} from App Service ${step.from} to ${step.service}, at the same DNS target`
+      : `Routing ${step.domain} to App Service ${step.service}`;
     case "deleteService": return step.replaced
       ? `Deleting App Service ${step.service}, to make it again: its exposure changed`
       : `Deleting App Service ${step.service}, no longer in genesis/stack.md`;

@@ -7,6 +7,7 @@ import { gzipSync } from "node:zlib";
 
 import { vibe64DeploymentInspection } from "../../packages/vibe64-genesis/src/server/applicationDeployment.js";
 import { preferredAlternative, resourceKindIsDatabase } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
+import { domainHolder, domainStep } from "../../packages/vibe64-deploy/src/address.js";
 import { createMobilynetClient } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
 import { servicePackages, serviceUpload } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
 import { DRAIN_SECONDS, createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapters/mobilynet/index.js";
@@ -999,6 +1000,106 @@ test("take offline returns once the provider removed the services, or names thos
   settle(standIn);
   for (const name of ["web", "computers"]) assert.equal(standIn.services.service(first.record.items[`service.${name}`].id).state, "deleted");
   assert.deepEqual(await takeOffline(adapter, kept, { pause: () => assert.fail("nothing to wait for") }), kept);
+});
+
+test("a Deploy after Take offline answers at the same DNS target: the domain's route is kept through Take offline, its name the same, and the new web takes it", async () => {
+  const { standIn, adapter, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  standIn.verifyDomain(DOMAIN);
+  const [route] = standIn.routes();
+  const before = await adapter.domainRecords(DOMAIN);
+  assert.deepEqual([before.target, before.live, before.records], [route.target, true, [{ name: `${DOMAIN}.`, type: "CNAME", data: `${route.target}.` }]]);
+
+  const offline = await takeOffline(adapter, first.record, { pause: () => standIn.advance() });
+  const during = await adapter.domainRecords(DOMAIN);
+  assert.deepEqual([during.target, during.live, during.waitingFor, during.records], [route.target, false, "target", before.records]);
+
+  const again = await run({ record: offline, commit: "c1" });
+  assert.equal(again.outcome, "live", again.message);
+  const web = again.record.items["service.web"].id;
+  assert.notEqual(web, first.record.items["service.web"].id, "a new App Service");
+  assert.deepEqual(standIn.routes().map((one) => [one.id, one.serviceId, one.target, one.live]), [[route.id, web, route.target, true]]);
+  assert.deepEqual(await adapter.domainRecords(DOMAIN), before);
+});
+
+test("a renamed public service is made with no route, takes the domain's route once healthy, then the old one goes: the same DNS target, never a name_taken", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  standIn.verifyDomain(DOMAIN);
+  const [route] = standIn.routes();
+  const renamed = stackOf((lines) => lines.map((line) => line.replace("### Service `web`", "### Service `site`")));
+  const records = ENV_RECORDS.map((one) => ({ ...one, services: (one.services ?? ["web"]).map((name) => (name === "web" ? "site" : name)) }));
+  const before = standIn.requests().length;
+  const done = [];
+  const dark = [];
+  let healthyAtTake = null;
+  const report = (event) => {
+    if (event.kind === "step" && event.phase === "done") done.push(`${event.step} ${event.service}`);
+    if (event.kind === "step" && event.phase === "start" && event.step === "takeDomain") {
+      healthyAtTake = standIn.services.all().find((one) => one.name === "memobot-site").instances.healthy;
+    }
+    // The address serves at every step: its one route live, sending to web, then to site.
+    if (!standIn.routes().every((one) => one.live)) dark.push(event.words);
+  };
+  const second = await run({ stack: renamed, record: first.record, commit: "c1", records, report });
+  assert.equal(second.outcome, "live", second.message);
+  assert.deepEqual(dark, []);
+  assert.equal(healthyAtTake, 2, "the domain moves once site's two instances are healthy");
+  const site = second.record.items["service.site"].id;
+  assert.equal(second.record.items["service.web"], undefined);
+  assert.deepEqual(done.filter((one) => /^(createService site|takeDomain site|deleteService web)$/u.test(one)), ["createService site", "takeDomain site", "deleteService web"]);
+  const asked = standIn.requests().slice(before);
+  const made = asked.find((request) => request.method === "POST" && request.path.endsWith("/services") && request.body?.name === "memobot-site");
+  assert.deepEqual(made.body.routes, [], "made with no route while web holds the domain");
+  const take = asked.find((request) => request.method === "PATCH" && request.path === `/v1/services/${site}`);
+  assert.deepEqual(take.body, { routes: [{ host: DOMAIN, tls: "edge", take: true }] });
+  const healthyAt = asked.findIndex((request) => request === take);
+  assert.ok(healthyAt < asked.findIndex((request) => request.method === "DELETE" && request.path === `/v1/services/${first.record.items["service.web"].id}`));
+  assert.deepEqual(standIn.routes().map((one) => [one.id, one.serviceId, one.target, one.live]), [[route.id, site, route.target, true]]);
+});
+
+test("the domain step waits for the public service to serve its release, fails with its failure, and moves the domain only from a service the record holds", () => {
+  const service = { id: "site" };
+  const thing = { id: "svc_site", hosts: [] };
+  const step = (more) => domainStep({ service, thing, domain: DOMAIN, holder: null, serving: true, failure: null, ...more });
+  assert.equal(step({ thing: { ...thing, hosts: [DOMAIN] } }), null, "it has the domain");
+  assert.equal(step({ thing: { id: "svc_site" } }), null, "an adapter that lists no hosts");
+  assert.deepEqual(step({ serving: false }), { kind: "wait", words: `Waiting for site to be healthy before it takes ${DOMAIN}` });
+  assert.deepEqual(step({ serving: false, failure: "site: it never got healthy" }), { kind: "failed", message: "site: it never got healthy" });
+  assert.deepEqual(step({ holder: { name: "web" } }), { kind: "takeDomain", service: "site", id: "svc_site", domain: DOMAIN, from: "web" });
+  assert.deepEqual(step({}), { kind: "takeDomain", service: "site", id: "svc_site", domain: DOMAIN });
+  const record = { items: { "service.web": { kind: "service", name: "web", id: "svc_web" }, "service.site": { kind: "service", name: "site", id: "svc_site" } } };
+  const things = { svc_web: { id: "svc_web", hosts: [DOMAIN] }, svc_site: { id: "svc_site", hosts: [] } };
+  const thingOf = (item) => things[item.id];
+  assert.equal(domainHolder(record, thingOf, DOMAIN, things.svc_site).name, "web");
+  assert.equal(domainHolder(record, thingOf, DOMAIN, things.svc_web), null, "never the service itself");
+  assert.equal(domainHolder({ items: { "service.site": record.items["service.site"] } }, thingOf, DOMAIN, things.svc_site), null, "a service the record doesn't hold is no holder");
+});
+
+test("a Deploy that goes live reports the address's DNS target once: the first names it, one with the same target says nothing, a record kept before any was reported hears it once, and a changed one is named with the one before", async () => {
+  const { standIn, run, record } = setup();
+  const said = [];
+  const report = (event) => {
+    if (event.kind === "address") said.push({ host: event.host, target: event.target, previous: event.previous, words: event.words });
+  };
+  const first = await run({ record, commit: "c1", report });
+  assert.equal(first.outcome, "live", first.message);
+  const [route] = standIn.routes();
+  const stays = "stays the same through Take offline, every Deploy and a replaced App Service";
+  assert.deepEqual(first.record.address, { host: DOMAIN, target: route.target });
+  assert.deepEqual(said, [{ host: DOMAIN, target: route.target, previous: null,
+    words: `${DOMAIN}'s DNS target is ${route.target}, which ${stays}. If its CNAME (or ALIAS) names anything else, such as an App Service's own name, change it once.` }]);
+  const second = await run({ record: first.record, commit: "c1", report });
+  assert.deepEqual([second.outcome, said.length], ["live", 1]);
+  const { address, ...older } = second.record;
+  const third = await run({ record: older, commit: "c1", report });
+  assert.deepEqual([third.outcome, said.length, third.record.address], ["live", 2, address]);
+  const moved = await run({ record: { ...third.record, address: { host: DOMAIN, target: "svc-old.us.mobilynet.standin" } }, commit: "c1", report });
+  assert.deepEqual([moved.outcome, moved.record.address], ["live", address]);
+  assert.deepEqual(said.at(-1), { host: DOMAIN, target: route.target, previous: "svc-old.us.mobilynet.standin",
+    words: `${DOMAIN}'s DNS target is now ${route.target}, no longer svc-old.us.mobilynet.standin: change its CNAME (or ALIAS) to it once. It ${stays}.` });
 });
 
 /** Every value of the release's Env (but a count, which any time holds), which no report of a Deploy may carry. */

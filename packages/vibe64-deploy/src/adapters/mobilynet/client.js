@@ -17,7 +17,11 @@ import { performance } from "node:perf_hooks";
 // with `{ projectId, capNano, spentNano, month, currency }`, while what runs keeps running and a release, a rollback, a
 // scale-down or a delete still works; `GET …/spending-cap` reads it). The leases (`/v1/leases`: a named lease in the
 // key's mobilynet project, its holder's text, at most 60 minutes, renewable, `409 lease_held` naming the holder while
-// another holds it) are the shape the engine asks mobilynet for; mobilynet has none yet.
+// another holds it) are the shape the engine asks mobilynet for; mobilynet has none yet. Routes are as mobilynet's
+// stable domain target change (being built, 20 Nov) makes them: a route is its name's, its `target` its own region-free
+// name whatever it sends to, kept sending to nothing when its App Service goes or no longer asks for it, and taken by
+// the next service asking for the name, or moved with `take`; until mobilynet runs it, a service's route answers the
+// service's own name and goes with it.
 
 // mobilynet's refusals that a retry of the same request would only repeat: the step waits for a person (a new key, a
 // raised quota, more capacity, a choice) rather than for time.
@@ -25,7 +29,7 @@ const REFUSALS = new Set([
   "unauthenticated", "key_expired", "key_revoked", "address_not_allowed", "payment_required", "organisation_suspended",
   "scope_missing", "no_capacity", "quota_exceeded", "name_taken", "size_unknown", "size_not_offered", "validation_failed",
   "invalid_request", "idempotency_key_reused", "settings_missing", "invalid_state", "need_linked", "hosted_service_linked",
-  "no_previous_version", "domain_in_use", "made_by_service", "no_backup_store", "lease_held", "spending_cap_reached"
+  "no_previous_version", "domain_in_use", "no_backup_store", "lease_held", "spending_cap_reached"
 ]);
 // The refusals a token source may answer by refreshing its access token, once.
 const TOKEN_REFUSALS = new Set(["unauthenticated", "key_expired"]);
@@ -250,7 +254,10 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
        * @param {string} domainId
        */
       deleteDomain: (domainId) => removedOn404(() => call("DELETE", at("domains", domainId))),
-      /** The mobilynet project's routes, its App Services' among them, every page. */
+      /**
+       * The mobilynet project's routes, every page: each a name's, its `target` its own name (`rte-…`), the CNAME its
+       * owner adds once, whatever it sends to (`serviceId`, `vpsId`, `group`, or none while it sends to nothing).
+       */
       listRoutes: () => listAll(`${projectAt}/routes`),
       /** A route: its target, whether it is live and what it waits for; null when there is none. @param {string} routeId */
       readRoute: (routeId) => orNull(() => call("GET", at("routes", routeId))),
@@ -264,12 +271,14 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
       /**
        * An App Service (`services:manage`): `{ service, refresh }`, `creating`, its first refresh (kind `create`) onto
        * the release `app` names (`{ name, version }`). Its name is its own among the project's services and hosted
-       * services (`409 name_taken`); a route's name needs a domain of the project covering it; an internal one has no
+       * services (`409 name_taken`); a route's name needs a domain of the project covering it, and its route, where it
+       * has one, sends to it: made, taken (one kept sending to nothing), or with `take` moved from what it sends to,
+       * which mobilynet otherwise refuses `409 name_taken` with `{ host, routeId }`; an internal one has no
        * routes and is reached as `<name>.<project label>.internal`; `connections` open a port of another service of
        * the project to its instances. Its instances times its size count against the project's vCPU and memory quotas
        * (`429 quota_exceeded`), and a project at its spending cap makes none (`409 spending_cap_reached`). `task` names a
        * task of the release's declaration its first refresh runs once before any instance starts (M-C, as a release's).
-       * @param {{ name: string, region: string, exposure?: "public" | "internal", size: string, instances: number, app: { name?: string, version: string }, settings?: Record<string, unknown>, secrets?: Record<string, string>, routes?: Array<{ host: string, tls?: "edge" }>, connections?: Array<{ to: string, port: number }>, healthCheck?: object, drainSeconds?: number, labels?: Record<string, string>, task?: string }} spec
+       * @param {{ name: string, region: string, exposure?: "public" | "internal", size: string, instances: number, app: { name?: string, version: string }, settings?: Record<string, unknown>, secrets?: Record<string, string>, routes?: Array<{ host: string, tls?: "edge", take?: boolean }>, connections?: Array<{ to: string, port: number }>, healthCheck?: object, drainSeconds?: number, labels?: Record<string, string>, task?: string }} spec
        * @param {{ idempotencyKey: string }} context
        */
       createService: (spec, { idempotencyKey }) => call("POST", `${projectAt}/services`, { body: spec, idempotencyKey }),
@@ -326,7 +335,8 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
     readHostedCatalogue: () => call("GET", "/v1/hosted-services/catalogue"),
     /**
      * An App Service (`services:read`), or null when mobilynet has none by that id (deleted ones too). A public one has
-     * its own name as `target` (`svc-…`, null for an internal one), and each of its `routes` that target too.
+     * its own name as `target` (`svc-…`, null for an internal one), and lists the routes sending to it (`routes`), each
+     * with its id, its own name as its `target` and whether it is live.
      * @param {string} serviceId
      */
     readService: async (serviceId) => (await orNull(() => call("GET", servicePath(serviceId))))?.service ?? null,
@@ -334,16 +344,16 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
      * Changes an App Service: `{ service, refresh }`. Its count (`instances`, `services:deploy`) changes at once, with
      * no refresh (`409 no_capacity` when its region has no room, the count kept); its size is a refresh (`202`); its
      * health check, drain, routes, connections and labels change at once (`services:manage`), labels replaced whole and
-     * starting no refresh. A count raised or a size made larger is refused past a quota (`429 quota_exceeded`) or at
+     * starting no refresh; a name its `routes` no longer hold keeps its route, sending to nothing. A count raised or a size made larger is refused past a quota (`429 quota_exceeded`) or at
      * the spending cap (`409 spending_cap_reached`); a count lowered or a smaller size never is.
      * @param {string} serviceId
-     * @param {{ instances?: number, size?: string, healthCheck?: object, drainSeconds?: number, routes?: Array<{ host: string }>, connections?: Array<{ to: string, port: number }>, labels?: Record<string, string> }} change
+     * @param {{ instances?: number, size?: string, healthCheck?: object, drainSeconds?: number, routes?: Array<{ host: string, tls?: "edge", take?: boolean }>, connections?: Array<{ to: string, port: number }>, labels?: Record<string, string> }} change
      * @param {{ idempotencyKey?: string }} [context]
      */
     changeService: (serviceId, change, { idempotencyKey } = {}) => call("PATCH", servicePath(serviceId), { body: change, idempotencyKey }),
     /**
-     * Deletes an App Service (`services:manage`): `{ service }`, `deleting`, its refreshes stopped, its instances and
-     * routes gone with it; one mobilynet no longer has answers `{ removed: true }`.
+     * Deletes an App Service (`services:manage`): `{ service }`, `deleting`, its refreshes stopped, its instances gone
+     * with it and its routes kept, sending to nothing; one mobilynet no longer has answers `{ removed: true }`.
      * @param {string} serviceId
      */
     deleteService: (serviceId) => removedOn404(() => call("DELETE", servicePath(serviceId))),
