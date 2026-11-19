@@ -251,20 +251,36 @@ making it twice. In order:
      release whose new code needs a value its running version refuses still
      fails: that value would have to go in the release's own refresh, which
      mobilynet has no call for.
-   - A provider may refuse settings the release the service runs doesn't take.
-     mobilynet checks a replace against that release's declaration: it refuses
-     a setting only the new release declares (or declares otherwise) `422
-     validation_failed`, one lacking a setting only the release it runs
-     requires `422 settings_missing`, and any replace while the service's first
-     release is still under way `409 invalid_state`. The mobilynet adapter
-     answers those with the engine's own code, `settings_need_release`, and the
-     settings then follow the release, as before. Settings whose refresh fails
-     on the version the service runs (the old code refuses a value the new
-     code takes) follow the release too, and the Deploy goes on. A value no
-     release takes is refused again after the release, where the Deploy fails
-     with the provider's reason. A provider that takes settings at once (a
-     service whose first release failed) starts no refresh, and the release
-     starts with them.
+   - mobilynet takes a service's settings only for the release it runs: it
+     checks a replace against that release's declaration, refusing a setting
+     the release doesn't declare `422 validation_failed`, one lacking a setting
+     it requires `422 settings_missing`, and any replace while the service's
+     first release is still under way `409 invalid_state`. A release brings no
+     settings: its refresh starts from those the service holds and, once built,
+     checks them against the new declaration, failing `settings_missing` when
+     one it requires is missing and `validation_failed` when the service holds
+     one it doesn't declare. So where the provider names the settings a service
+     holds (mobilynet's service read does, `held`; each is one the release it
+     runs declares), only those go ahead of the release (`heldValues`), a fixed
+     value among them, and a name new to the service follows the release (6).
+     A production Deploy adding a Production Env entry (19 Nov) was refused it
+     when the engine gave every setting ahead. A name the new release no longer
+     declares is left out ahead, so the release doesn't find it held.
+   - A new release requiring a setting the service doesn't hold (a new
+     generated secret, a new Reaches) can't be handed at such a provider in any
+     order, so the Deploy fails before any change, naming the fix: take
+     Production offline, then deploy; services made again get every setting,
+     and their databases and files are kept. Bringing one with a release would
+     need mobilynet to take a settings replace against a held release refresh,
+     as it takes a link (M14).
+   - The mobilynet adapter answers its refusals of settings ahead with the
+     engine's own code, `settings_need_release`, and those settings then follow
+     the release. Settings whose refresh fails on the version the service runs
+     (the old code refuses a value the new code takes) follow the release too,
+     and the Deploy goes on. A value no release takes is refused again after
+     the release, where the Deploy fails with the provider's reason. A provider
+     that takes settings at once (a service whose first release failed, which
+     runs none) starts no refresh, and the release starts with all of them.
    - A refresh that fails ends the links mobilynet made against the release it
      moved to, which the record lets go so the next Deploy makes them again,
      and fails the Deploy with the service's reason. Services not yet moved keep
@@ -308,8 +324,8 @@ making it twice. In order:
 6. each service's settings (`settingValues`: Production's own, each Reaches
    setting the reached service's private address, the Production Env's values
    for the names it declares) where they differ from those it was given: a
-   service that kept its release, or one whose settings had to follow its
-   release (4). Then the services it reaches, its size and (when it was handed
+   service that kept its release, one given names new to it, or one whose
+   settings had to follow its release (4). Then the services it reaches, its size and (when it was handed
    no release) its count, only once every move ended: mobilynet refuses a
    settings replace while a link made ahead of an open refresh stands. The
    record's choices follow each count or size the Deploy sets, so a Deploy that
@@ -329,18 +345,20 @@ so the same server keeps the same login, and a Deploy makes one again only for a
 link the provider ended. Only an App Service whose release changed (its code,
 its declaration) or whose last release failed is handed a release, and so gets
 new machines; the others keep theirs. One whose settings changed with its
-release gets them twice: the version it runs restarts with the new values, then
-the release starts. A Deploy of unchanged code and Stack sends the provider
-nothing but its lease. The migrations run at most once per Deploy, and not at
-all when no release is handed or the database already ran this code's. The
-engine's tests hold the provider to these exact writes (deploySteps: an
-unchanged redeploy, one of two services changed, a failed release handed again,
-the migrations run, skipped and failing, a secret's new value given before the
-release it fixes, settings that follow the release when the release a service
-runs refuses them or fails with them, and a Deploy resumed after such settings
-failed or while they still ran). Two parts rest on mobilynet: a link made ahead of a failed refresh ends
-with it (M14), so the next Deploy makes it again with a new login; and the
-migrations run once only where the provider runs a release's task.
+release gets them twice: the version it runs restarts with the new values of the
+names it holds, then the release starts. A Deploy of unchanged code and Stack
+sends the provider nothing but its lease. The migrations run at most once per
+Deploy, and not at all when no release is handed or the database already ran
+this code's. The engine's tests hold the provider to these exact writes
+(deploySteps: an unchanged redeploy, one of two services changed, a failed
+release handed again, the migrations run, skipped and failing, a secret's new
+value given before the release it fixes, a name new to a service following its
+release, a fixed value going ahead beside one, a new required setting refused
+before any change, settings that follow the release when the release a service
+runs fails with them, and a Deploy resumed after such settings failed or while
+they still ran). Two parts rest on mobilynet: a link made ahead of a failed
+refresh ends with it (M14), so the next Deploy makes it again with a new login;
+and the migrations run once only where the provider runs a release's task.
 
 A refusal from the provider (a quota, the spending cap) fails the Deploy with
 its reason, the record kept as far as it got; an answer the provider may give

@@ -13,10 +13,13 @@
 //      that refresh waited for, so the release's instances start with them (the version it runs restarts with them
 //      first). Handed the release first, a release that failed for a setting's value (an app refusing it as it boots)
 //      failed again at each Deploy with the value changed, which never reached the settings (a production Deploy, 19
-//      Nov). A provider may refuse settings the release the service runs doesn't take (a setting only the new release
-//      declares, one only the release it runs requires, a first release still under way): its adapter refuses them
-//      SETTINGS_NEED_RELEASE. Those, and settings that didn't go live on the version it runs, follow the release (6),
-//      as a kept release's do;
+//      Nov). Where the provider names the settings a service holds (`held`: mobilynet takes only those the release it
+//      runs declares), only those go ahead, and a name new to it follows the release (6): a production Deploy adding
+//      one (19 Nov) was refused it. A new release requiring one the service doesn't hold fails the Deploy before any
+//      change, naming the fix (such a provider's release brings no settings). A provider may still refuse settings
+//      the release the service runs doesn't take (one only it requires, a first release under way): its adapter
+//      refuses them SETTINGS_NEED_RELEASE. Those, and settings that didn't go live on the version it runs, follow the
+//      release (6), as a kept release's do;
 //      its release is uploaded, then its service made (internal: no routes; public: routed at the domain, with a
 //      connection to each service it reaches) or handed the release and, while that refresh is open, set to the count
 //      chosen (a provider's refresh may roll to the count the service has as it rolls, as mobilynet's does, so it starts
@@ -80,7 +83,7 @@ import { MIGRATED_NOTE, migrationDue, migrationsOf, noteHandOver, noteTask } fro
 import { planOf, stableJson } from "./plan.js";
 import { LABEL, labelsFor } from "./record.js";
 import { reporterOf, sentence, stepEvent, stepWords } from "./report.js";
-import { settingValues } from "./package.js";
+import { heldValues, settingValues } from "./package.js";
 
 const LEASE_SECONDS = 600;
 // An adapter's refusal of a link its provider takes only with the service's new release under way: the release the
@@ -220,6 +223,26 @@ function nextStep({ plan, needs, record, observed, release }) {
     return Boolean(linkId) && (!Array.isArray(held) || held.some((link) => link.id === linkId));
   };
 
+  // A service keeps its release only while the provider runs it with no error: one that failed since is handed it again.
+  const keeps = (service, item, thing) => Boolean(thing) && item?.release?.digest === release.digests[service.id]
+    && thing.version === item.release.version && !thing.lastError;
+
+  // Where the provider names the settings a service holds (`held`, those the release it runs takes), it gives settings
+  // only for the release a service runs and a release only those it holds: a new release can't bring one it requires
+  // that the service doesn't hold, so the Deploy says so before it changes anything (one made again gets all).
+  for (const service of needs.services) {
+    const item = itemOf("service", service.id);
+    const thing = thingOf(item);
+    const handed = thing?.version && Array.isArray(thing.held) && thing.exposure === service.exposure && !run.services[service.id]?.version;
+    const missing = handed && !keeps(service, item, thing)
+      ? Object.entries(release.settings[service.id]).filter(([name, { required }]) => required && !thing.held.includes(name)).map(([name]) => name) : [];
+    if (missing.length > 0) {
+      return { kind: "failed", message: `${service.id}'s new release requires ${missing.join(", ")}, which ${service.id} doesn't hold, and `
+        + "its provider gives a service settings only for the release it runs, so a release can't bring one it requires: take "
+        + `Production offline, then deploy. ${service.id} is made again with every setting; its databases and files are kept.` };
+    }
+  }
+
   // 1. A service whose exposure changed goes first, to be made again.
   for (const service of needs.services) {
     const thing = thingOf(itemOf("service", service.id));
@@ -267,16 +290,14 @@ function nextStep({ plan, needs, record, observed, release }) {
       // link the provider takes only with the new release under way (LINK_NEEDS_RELEASE) waits for that release.
       const first = thing?.version ? needs.resources.find((resource) => unlinked(resource) && !(state.afterRelease ?? []).includes(resource.id)) : null;
       if (first) return { kind: "link", resource: first.id, id: itemOf("resource", first.id).id, service: service.id, serviceId: thing.id, beforeRelease: true };
-      // Kept only while the provider runs it with no error: one that failed since is handed it again.
-      const live = item?.release;
-      if (thing && live?.digest === release.digests[service.id] && thing.version === live.version && !thing.lastError) {
-        return { kind: "keepRelease", service: service.id };
-      }
+      if (keeps(service, item, thing)) return { kind: "keepRelease", service: service.id };
       if (!thing) return { kind: "uploadRelease", service: service.id, id: null };
-      // Its settings before its release, where they changed, so the release's instances start with them; those the
-      // release it runs doesn't take, or that didn't go live on it, follow the release (6).
+      // Its settings before its release, where they changed, so the release's instances start with them: where the
+      // provider names those it holds, only those, a fixed value among them; a name new to it, one the release it runs
+      // doesn't take, and those that didn't go live on it follow the release (6).
       const values = state.settingsAfterRelease ? null : valuesOf(service, { record, release }, byId);
-      if (values && values.hash !== item.settingsHash) return { kind: "putSettings", service: service.id, id: thing.id, values, beforeRelease: true };
+      const ahead = values && thing.version && Array.isArray(thing.held) ? heldValues(values, thing.held) : values;
+      if (ahead && ahead.hash !== item.settingsHash) return { kind: "putSettings", service: service.id, id: thing.id, values: ahead, beforeRelease: true };
       return { kind: "releaseService", service: service.id, id: thing.id, ...migrateTask(service.id) };
     }
     if (!thing) {

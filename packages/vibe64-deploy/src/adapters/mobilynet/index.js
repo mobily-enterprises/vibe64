@@ -135,7 +135,8 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
   /**
    * Every App Service and hosted service of the project, as the plan, the steps and the record read them: `{ id, name,
    * kind, labels, size, instances, ... }`, a service with its exposure, version, refresh, healthy count, internal
-   * name, connections and last error, a resource with its kind, state and the links mobilynet holds of it (`links`,
+   * name, connections, last error and the names of the settings and secrets it holds (`held`: mobilynet takes only
+   * those the release it runs declares, a link's among them; null when it doesn't name them), a resource with its kind, state and the links mobilynet holds of it (`links`,
    * null for a hosted service Vibe64 didn't make).
    */
   async function inventory() {
@@ -157,7 +158,8 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         healthy: one.instances?.healthy ?? 0,
         internalName: one.internalName ?? null,
         connections: (one.connections ?? []).map(({ to, port }) => ({ to, port })),
-        lastError: one.lastError ?? null
+        lastError: one.lastError ?? null,
+        held: Array.isArray(one.settings) && Array.isArray(one.secrets) ? [...one.settings, ...one.secrets] : null
       })),
       ...hosted.map((one, index) => ({
         id: one.id,

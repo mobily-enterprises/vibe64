@@ -562,24 +562,64 @@ test("a release that fails for a secret's value is put right by a Deploy with th
   assert.deepEqual(writesAfter(standIn, moved), [["POST", `/v1/services/${computers}/releases`], ["POST", `/v1/services/${web}/releases`]]);
 });
 
-test("settings the release a service runs doesn't take (a setting only its new release declares) follow the release, as a kept release's do", async () => {
+test("a name new to a service (a Production Env entry the release it runs doesn't declare) follows its release, and its other settings, unchanged, aren't given again", async () => {
   const { standIn, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
   const web = first.record.items["service.web"].id;
-  // A new Production Env entry for web: c1's declaration has no such setting, so mobilynet refuses it before the release.
+  // A new Production Env entry for web: c1's declaration has no such setting, which mobilynet would refuse before the
+  // release, so web is handed the release that declares it, then given it.
   const records = [...ENV_RECORDS, { key: "MEMOBOT_GREETING", secret: false }];
   const env = { ...ENV, MEMOBOT_GREETING: "Hello" };
-  const events = reports();
   const at = standIn.requests().length;
-  const second = await run({ record: first.record, commit: "c1", env, records, report: events.report });
+  const second = await run({ record: first.record, commit: "c1", env, records });
   assert.equal(second.outcome, "live", second.message);
-  assert.deepEqual(writesTo(standIn, at, web), [["PUT", `/v1/services/${web}/settings`, 422], ["POST", `/v1/services/${web}/releases`, 202], ["PUT", `/v1/services/${web}/settings`, 202]]);
-  assert.ok(events.said().includes("The release web runs doesn't take its new settings: it gets them after its new release."));
+  assert.deepEqual(writesTo(standIn, at, web), [["POST", `/v1/services/${web}/releases`, 202], ["PUT", `/v1/services/${web}/settings`, 202]]);
   const serving = standIn.services.instances(web).filter((one) => !one.removedReason);
   assert.ok(serving.length === 2 && serving.every((one) => one.settings.MEMOBOT_GREETING === "Hello"), "web serves with the new setting");
-  assert.deepEqual(second.record.run.services.web.settingsAfterRelease, true);
+});
+
+test("a new release requiring a setting its service doesn't hold fails the Deploy before any change, naming the fix", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  // A new generated secret, which every service requires: mobilynet's release brings no settings, and the services
+  // hold none by that name, so neither can be handed a release requiring it.
+  const stack = stackOf((lines) => lines.map((line) => (line.startsWith("- Generated secrets:") ? `${line} \`MEMOBOT_SIGNING_KEY\`` : line)));
+  const at = standIn.requests().length;
+  const second = await run({ stack, record: first.record, commit: "c2", env: { ...ENV, MEMOBOT_SIGNING_KEY: "signing-1" } });
+  assert.equal(second.outcome, "failed");
+  assert.equal(second.message, "web's new release requires MEMOBOT_SIGNING_KEY, which web doesn't hold, and its provider gives a service settings "
+    + "only for the release it runs, so a release can't bring one it requires: take Production offline, then deploy. web is made again with "
+    + "every setting; its databases and files are kept.");
+  assert.deepEqual(requestsAfter(standIn, at).filter((request) => isWrite(request) && !request.path.includes("/leases")).map((request) => [request.method, request.path]), []);
+});
+
+test("a fixed value goes ahead of the release that needs it even beside a name new to its service, which follows the release", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  const web = first.record.items["service.web"].id;
+  const c1 = first.record.run.services.web.version;
+  // c2's web refuses, as it boots, a setup code shorter than 20 letters and digits.
+  standIn.faults.instancesUnhealthy = (instance) => instance.serviceId === web && instance.version !== c1 && !longCode(instance.secrets.AUTH_LOCAL_SETUP_CODE);
+  const failed = await run({ record: first.record, commit: "c2" });
+  assert.equal(failed.outcome, "failed", failed.message);
+  settle(standIn);
+  // The owner saves a long code and, in the same Deploy, a new Production Env entry, which c1 doesn't declare: the code
+  // goes ahead on c1, then c2 starts with it, then web is given the new entry.
+  const records = [...ENV_RECORDS, { key: "MEMOBOT_GREETING", secret: false }];
+  const env = { ...ENV, AUTH_LOCAL_SETUP_CODE: "SetupCodeOfTwentyFour024", MEMOBOT_GREETING: "Hello" };
+  const at = standIn.requests().length;
+  const fixed = await run({ record: failed.record, commit: "c2", env, records });
+  assert.equal(fixed.outcome, "live", fixed.message);
+  assert.deepEqual(writesTo(standIn, at, web), [["PUT", `/v1/services/${web}/settings`, 202], ["POST", `/v1/services/${web}/releases`, 202], ["PUT", `/v1/services/${web}/settings`, 202]]);
+  const serving = standIn.services.instances(web).filter((one) => !one.removedReason);
+  assert.ok(serving.length === 2 && serving.every((one) => one.version === fixed.record.run.services.web.version
+    && one.secrets.AUTH_LOCAL_SETUP_CODE === "SetupCodeOfTwentyFour024" && one.settings.MEMOBOT_GREETING === "Hello"), "web serves c2 with both");
 });
 
 test("settings that don't go live on the version a service runs follow its release, which takes them", async () => {

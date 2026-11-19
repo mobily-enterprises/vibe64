@@ -166,7 +166,22 @@ function settingValues({ declared, env, domain, trustedProxies, port, reached = 
   for (const [name, { secret }] of Object.entries(declared)) {
     if (typeof all[name] === "string") (secret ? secrets : settings)[name] = all[name];
   }
+  return hashedValues(settings, secrets);
+}
+
+/** A service's settings and secrets with the hash a Deploy compares them by. */
+function hashedValues(settings, secrets) {
   return { settings, secrets, hash: `sha256:${sha256Of(Buffer.from(JSON.stringify([sortedObject(settings), sortedObject(secrets)])))}` };
+}
+
+/**
+ * Those of a service's values (settingValues) whose names it holds at its provider (`held`), with their own hash: what a
+ * Deploy gives it ahead of a release, where the provider takes only those the release it runs declares.
+ * @param {{ settings: Record<string, string>, secrets: Record<string, string> }} values @param {string[]} held
+ */
+function heldValues(values, held) {
+  const pick = (from) => Object.fromEntries(Object.entries(from).filter(([name]) => held.includes(name)));
+  return hashedValues(pick(values.settings), pick(values.secrets));
 }
 
 function sortedObject(value) {
@@ -214,6 +229,7 @@ export {
   archiveProblem,
   declaredSettingsOf,
   envEntryProblem,
+  heldValues,
   packArchive,
   settingValues,
   settingsPerService,
