@@ -115,8 +115,10 @@ explanation so it can repair the file. Skill and agent-guidance refresh waits
 until the file reads again. Desktop and mobile behave the same; Colleague can
 explain the notice and offer to ask the coding assistant to fix the file.
 
-When the session's installed packages lack an Agent Skill its Genesis needs,
-usually because the session still has older packages than its project, the
+When the session's installed packages lack an Agent Skill its Stack selects
+(a technology's skill that one of the project's own packages supplies; Genesis's
+own skills always come with Vibe64), usually because the session still has
+older packages than its project, the
 message is still sent with the skills the project already has. The chat says so
 once, naming the missing skill, and marks **Workspace preparation required**
 once: **Prepare workspace** reinstalls the packages, and a session behind its

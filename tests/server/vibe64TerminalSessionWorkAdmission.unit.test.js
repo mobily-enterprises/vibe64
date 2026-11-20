@@ -47,6 +47,7 @@ import {
   initializeGenesisProject,
   inspectVibe64WorkspaceSetup,
   inspectGenesisSkills,
+  syncGenesisSkills,
   vibe64ConversationInstructions
 } from "../../packages/vibe64-genesis/src/server/index.js";
 import process from "node:process";
@@ -274,28 +275,52 @@ async function terminalServiceFixture(t, lock, {
   };
 }
 
+// Skills an older Genesis synced: Genesis serves every project its own skills, so the only Genesis
+// that serves other ones is Genesis's own source, which stands in for that older release while it
+// syncs the project, then goes. The project keeps the older genesis-project skill as managed.
 async function outdatedSkillFixture(projectRoot) {
   await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
-  const compilerRoot = path.join(projectRoot, "node_modules/genesis-compiler");
-  await mkdir(compilerRoot, { recursive: true });
-  await writeFile(path.join(projectRoot, "package.json"), JSON.stringify({
-    dependencies: { "genesis-compiler": "0.0.0-fixture" }
-  }));
-  await writeFile(path.join(compilerRoot, "package.json"), JSON.stringify({
-    name: "genesis-compiler", version: "0.0.0-fixture"
-  }));
-  await cp(
-    path.join(genesisPackageBinDirectory(), "../genesis-compiler/skills"),
-    path.join(compilerRoot, "skills"),
-    { recursive: true }
-  );
   await initializeGenesisProject({ projectRoot });
   const skillPath = path.join(projectRoot, ".agents/skills/genesis-project/SKILL.md");
-  const original = await readFile(skillPath, "utf8");
-  const expected = `${original}\nUpdated installed skill guidance.\n`;
-  await writeFile(path.join(compilerRoot, "skills/genesis-project/SKILL.md"), expected);
+  const expected = await readFile(skillPath, "utf8");
+  const original = `${expected}\nGuidance from an older Genesis.\n`;
+  const olderSkills = path.join(projectRoot, "skills");
+  await cp(path.join(genesisPackageBinDirectory(), "../genesis-compiler/skills"), olderSkills, { recursive: true });
+  await writeFile(path.join(olderSkills, "genesis-project/SKILL.md"), original);
+  await writeFile(path.join(projectRoot, "package.json"), JSON.stringify({ name: "genesis-compiler", version: "0.0.0-fixture" }));
+  await syncGenesisSkills({ projectRoot });
+  await rm(olderSkills, { recursive: true });
+  await rm(path.join(projectRoot, "package.json"));
+  assert.equal(await readFile(skillPath, "utf8"), original);
   assert.equal((await inspectGenesisSkills({ projectRoot })).status, "outdated");
   return { skillPath, original, expected };
+}
+
+// A project-installed Stack package whose selected technology skill its installed copy lacks: the
+// one Agent Skill a project's own packages supply, which preparing the workspace reinstalls.
+async function missingStackSkillFixture(projectRoot) {
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  const stackPackage = path.join(projectRoot, "node_modules/example-skill-stack");
+  await mkdir(path.join(stackPackage, "stacks/pieces"), { recursive: true });
+  await mkdir(path.join(stackPackage, "skills/example-framework"), { recursive: true });
+  await writeFile(path.join(stackPackage, "package.json"), JSON.stringify({
+    name: "example-skill-stack", version: "0.0.0-fixture", genesis: { stackPieces: "stacks/pieces" }
+  }));
+  await writeFile(path.join(stackPackage, "stacks/pieces/example-framework.md"), [
+    "# Stack piece: example-framework", "", "## Description", "", "A framework whose package supplies its Agent Skill.", "",
+    "## Requires", "", "- Nothing.", "", "## Skill", "", "- Package: `example-skill-stack`", "- Path: `skills/example-framework`", ""
+  ].join("\n"));
+  await writeFile(path.join(stackPackage, "skills/example-framework/SKILL.md"), [
+    "---", "name: example-framework", "description: A framework skill its Stack package supplies.", "---", "", "# Example framework", ""
+  ].join("\n"));
+  await writeFile(path.join(projectRoot, "genesis/stack.md"),
+    "# Stack\n\n## Stack packages\n- `example-skill-stack`\n\n## Components\n- `example-framework`\n");
+  await syncGenesisSkills({ projectRoot });
+  const skillPath = path.join(projectRoot, ".agents/skills/example-framework/SKILL.md");
+  const original = await readFile(skillPath, "utf8");
+  await rm(path.join(stackPackage, "skills"), { recursive: true });
+  return { skillPath, original, stackPackage };
 }
 
 test("native replacement uses the service's write lock and access gate without starting inference", async (t) => {
@@ -615,7 +640,7 @@ for (const practice of [true, false]) test(`${practice ? "practice" : "ordinary"
   }
 });
 
-test("missing project-pinned skills leave chat delivery and preparation recovery available", async (t) => {
+test("a Stack skill missing from the project's installed packages leaves chat delivery and preparation recovery available", async (t) => {
   const lock = agentWriteLockHarness();
   const warnings = [];
   const events = [];
@@ -624,8 +649,7 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
     publishSessionChanged: { agentTerminal: async (_sessionId, event) => events.push(event) }
   });
   const projectRoot = session.metadata.source_path;
-  const { skillPath, original } = await outdatedSkillFixture(projectRoot);
-  await rm(path.join(projectRoot, "node_modules/genesis-compiler"), { recursive: true });
+  const { skillPath, original, stackPackage } = await missingStackSkillFixture(projectRoot);
   session.workspaceSetup = { status: "succeeded", recipeHash: "unchanged-install-command" };
   project.runProjectSourceExclusive = async () => assert.fail("Unavailable skills must not change source.");
 
@@ -636,19 +660,20 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
   { code: "vibe64_assistant_selection_invalid" });
   assert.equal(session.workspaceSetup.status, "required");
   assert.equal(session.workspaceSetup.recipeHash, "");
-  assert.match(session.workspaceSetup.diagnostic, /genesis-compiler/u);
+  assert.match(session.workspaceSetup.diagnostic, /example-skill-stack\/skills\/example-framework/u);
+  assert.doesNotMatch(session.workspaceSetup.diagnostic, /genesis-compiler/u);
   assert.equal(events.some((event) => event.reason === "workspace-setup-updated"), true);
   assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.preparation_required"), true);
   assert.equal(await readFile(skillPath, "utf8"), original);
-  await assert.rejects(access(path.join(projectRoot, "node_modules/genesis-compiler")), { code: "ENOENT" });
+  await assert.rejects(access(path.join(stackPackage, "skills")), { code: "ENOENT" });
 });
 
-test("a skill the session's installed Genesis lacks is noticed once and never asks for preparation again", async (t) => {
+test("a Stack skill the session's installed packages lack is noticed once and never asks for preparation again", async (t) => {
   const warnings = [];
   const events = [];
   const { service, session, runtime, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {
     inspectAgentSkills: async ({ projectRoot }) => {
-      throw Object.assign(new Error(`Selected Agent Skill is unavailable: ${projectRoot}/node_modules/genesis-compiler/skills/genesis-ui-pass`),
+      throw Object.assign(new Error(`Selected Agent Skill is unavailable: ${projectRoot}/node_modules/example-skill-stack/skills/example-framework`),
         { code: "AGENT_SKILL_UNAVAILABLE", name: "GenesisError" });
     },
     logger: { ...silentLogger, warn(event) { warnings.push(event); } },
@@ -671,7 +696,7 @@ test("a skill the session's installed Genesis lacks is noticed once and never as
   assert.equal(events.filter((event) => event.reason === "workspace-setup-updated").length, 1);
   const notices = (await runtime.store.readConversationLog(session.sessionId)).filter((turn) => turn.system);
   assert.equal(notices.length, 1);
-  assert.match(notices[0].system.text, /^This session's installed packages lack an Agent Skill its Genesis needs: Selected Agent Skill is unavailable: /u);
+  assert.match(notices[0].system.text, /^This session's installed packages lack an Agent Skill its Stack selects: Selected Agent Skill is unavailable: /u);
   assert.match(notices[0].system.text, /Your message was still sent/u);
   assert.match(notices[0].system.text, /Prepare workspace reinstalls the packages; if this session is behind its project, Update this session first/u);
   assert.doesNotMatch(notices[0].system.text, /cannot be read|fix the file/u);

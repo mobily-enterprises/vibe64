@@ -146,7 +146,8 @@ function createServiceAssistantPreparation({
   }
 
   /**
-   * The session's installed packages lack an Agent Skill its Genesis selects, so nothing in the
+   * The session's installed packages lack an Agent Skill its Stack selects (a technology skill a
+   * project-installed Stack package supplies; Genesis's own skills always come with Vibe64), so nothing in the
    * project needs fixing. Preparing the workspace reinstalls the packages the session pins; a session
    * behind its project keeps older pins until Update this session. The person is told once and the
    * workspace setup is marked required once: repeating either on each message would not help.
@@ -156,7 +157,7 @@ function createServiceAssistantPreparation({
     const noticed = await noticeOnce(sessionId, context, {
       diagnostic,
       reason: "agent-skill-unavailable",
-      text: `This session's installed packages lack an Agent Skill its Genesis needs: ${diagnostic} ` +
+      text: `This session's installed packages lack an Agent Skill its Stack selects: ${diagnostic} ` +
         "Your message was still sent, with the skills the project already has. Prepare workspace reinstalls " +
         "the packages; if this session is behind its project, Update this session first to take the project's newer ones."
     });

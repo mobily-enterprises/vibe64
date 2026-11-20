@@ -171,7 +171,7 @@ function createAssistantRoutingOutcomes({
   /**
    * A plan completed during this request: the passes the chat ticks in Passes (After a plan) run
    * one after another in Genesis's Master pass order, each its own Senior turn over the changes
-   * since the session's after-plan base. A pass this project's Genesis cannot run is skipped with
+   * since the session's after-plan base. A pass the Genesis serving this project cannot run is skipped with
    * its reason, and with no base none runs. Genesis's list and the ticks are read once, here.
    * @returns {Promise<{ context: object, state: object } | null>} the finished work to save, if any
    */
@@ -207,7 +207,7 @@ function createAssistantRoutingOutcomes({
     for (const id of AFTER_PLAN_PASS_ORDER.filter((pass) => choice.afterPlan.includes(pass))) {
       const pass = listing.passes.find((entry) => entry.id === id);
       if (!pass?.sinceBase) {
-        await notice(id, `${pass?.title || AFTER_PLAN_PASS_TITLES[id]} skipped after the plan: ${pass?.unavailable || "this project's Genesis doesn't offer it."}`);
+        await notice(id, `${pass?.title || AFTER_PLAN_PASS_TITLES[id]} skipped after the plan: ${pass?.unavailable || "the Genesis serving this project doesn't offer it."}`);
         continue;
       }
       const deep = choice.afterPlanDeep.includes(id) && Boolean(pass.sinceBase.deep);

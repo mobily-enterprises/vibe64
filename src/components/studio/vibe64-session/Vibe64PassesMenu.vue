@@ -138,7 +138,7 @@
 
 <script setup>
 // The chat's Passes list: each pass Genesis offers, when it last completed in this project, and a
-// button for each run Genesis offers for it, or why the project's Genesis cannot run it; then the
+// button for each run Genesis offers for it, or why the Genesis serving the project cannot run it; then the
 // Master pass, with a tick box for each pass it runs, all ticked until the person unticks one.
 // Main chat's own list also holds its After a plan and Deeply ticks: the passes that run, each in
 // its own turn, once a plan is completed, saved with the chat's settings.

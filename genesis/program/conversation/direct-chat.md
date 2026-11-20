@@ -5038,10 +5038,11 @@ Each run is Genesis's: an `id`, a `label` such as `Whole app` or `Since last
 completed (abc1234, 42 commits)`, and the `request` it sends. Genesis decides
 which runs a pass has, what each covers and that only those requests record the
 pass; the list shows one button per run, with Genesis's label, and nothing
-else. The project's own Genesis, the `genesis-compiler` its source declares,
-decides which passes it can run: when it cannot run one, that pass's
-`unavailable` names the update and its `runs` are empty, and the list's own
-`unavailable` says why when it runs none. The list shows that reason above the
+else. The Genesis serving the project decides which passes it can run: Vibe64's
+own for every project, whatever `genesis-compiler` its source declares, which
+runs every pass, and only for Genesis's own source repository that source. When
+it cannot run one, that pass's `unavailable` says why and its `runs` are empty,
+and the list's own `unavailable` says why when it runs none. The list shows that reason above the
 passes, or under a pass when only that pass is missing; such a pass is never
 suggested, and admission refuses a run of it sent with `genesisTask` with
 Genesis's reason (`vibe64_assistant_routing_pass_unavailable`). A typed bare

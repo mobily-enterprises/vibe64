@@ -999,12 +999,12 @@ test("Genesis failing for a reason of its own sends the request as written", asy
   });
 });
 
-test("a core Agent Skill the project's installed Genesis cannot supply never stops the message", async () => {
+test("a genesis-compiler the project declares, even a copy missing a skill, never stops the message", async () => {
   await withTemporaryRoot(async (projectRoot) => {
     await initializeGit(projectRoot);
     await initializeGenesisProject({ projectRoot });
-    // The project lists genesis-compiler, so Genesis reads core skills from the project's installed copy,
-    // which here has no UI pass skill.
+    // The project lists genesis-compiler, and its installed copy here has no UI pass skill; Vibe64's Genesis
+    // serves the project all the same.
     const installed = path.join(path.dirname(genesisPackageBinDirectory()), "genesis-compiler");
     const copy = path.join(projectRoot, "node_modules/genesis-compiler");
     await mkdir(copy, { recursive: true });

@@ -14,7 +14,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 /**
  * One pass as the chat lists it: Genesis's pass with its last completed run in this project (lastRun,
  * an ISO time, or null when it never completed), the commits since, the runs Genesis offers for it,
- * and why the project's Genesis cannot run it (null when it can).
+ * and why the Genesis serving the project cannot run it (null when it can).
  * @typedef {{ id: string, title: string, description: string, recommend: { when: string, hint: string }, request: string,
  *   lastRun: string | null, commitsSince: number | null, unavailable: string | null, runs: Vibe64PassRun[],
  *   snoozedUntil: string, dismissed: boolean }} Vibe64Pass
@@ -78,7 +78,7 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   });
   /** @type {import("vue").ComputedRef<Vibe64Pass[]>} */
   const passes = computed(() => resource.data.value?.passes || []);
-  // Why the project's own Genesis runs no pass, naming the update; empty when it runs them.
+  // Why the Genesis serving the project runs no pass; empty when it runs them.
   const unavailable = computed(() => resource.data.value?.unavailable || "");
   const recommendation = computed(() => passes.value.find(({ id }) => id === resource.data.value?.recommendation) || null);
   // The Master pass, which runs the passes in its own order deeply, one after another; null before the read.

@@ -1648,7 +1648,7 @@ in its own Senior turn with Genesis's request for the changes since the commit
 where the plan's work started (the commit recorded when the previous passes
 after a plan ended, or when a plan became current with none recorded, otherwise
 where the session left its canonical history), each announced in chat. A pass
-the project's Genesis lacks is skipped with its reason; without a known start
+the Genesis serving the project lacks is skipped with its reason; without a known start
 commit none runs and the chat says so, never falling back to whole-app runs.
 After the last pass the plan is archived and Automatically save changes runs
 Save. Stop or a failed pass ends them with a notice and saves nothing. These

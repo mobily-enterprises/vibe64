@@ -109,7 +109,7 @@ it("each run Genesis offers sends its own request verbatim to Main chat as the p
 });
 
 it("a project whose own Genesis runs no pass reads Genesis's reason, and its passes offer no run", () => {
-  const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later.";
+  const reason = "This Genesis source (genesis-compiler 1.10.15) cannot run passes.";
   mocks.resource.data.value = { ok: true, unavailable: reason, recommendation: "",
     passes: listed(Object.fromEntries(GENESIS_PASSES.map(({ id }) => [id, { unavailable: reason, runs: [] }]))) };
   const { state } = passes();

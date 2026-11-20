@@ -608,7 +608,7 @@ test.describe("direct chat", () => {
           await expect(page.getByText(request, { exact: true })).toBeVisible();
 
           // A project pinned to a Genesis that runs no pass: the list says why and names the update, and offers no run.
-          const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later with npm install --save-dev genesis-compiler@1.10.21, then commit the change.";
+          const reason = "This Genesis source (genesis-compiler 1.10.15) cannot run passes.";
           listing = { unavailable: reason, passes: passes.map((pass) => ({ ...pass, unavailable: reason, runs: [] })) };
           await page.getByRole("button", { name: "Passes", exact: true }).click();
           await expect(list.getByRole("alert")).toHaveText(reason);

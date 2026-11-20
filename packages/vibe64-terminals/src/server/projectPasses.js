@@ -114,7 +114,7 @@ async function countSessionCommits(sourceRoot, since = "") {
 /**
  * The chat's Passes list: the passes Genesis offers with when each last completed in this project, the
  * runs Genesis offers for each, the commits since, the Master pass that runs them deeply in turn, why
- * the project's Genesis runs none (when it cannot), and the one suggestion the rule picks; and the
+ * the Genesis serving the project runs none (when it cannot), and the one suggestion the rule picks; and the
  * suggestion's Later and Dismiss.
  * Each answers as a route does: a refusal is a failure result, not a thrown error.
  * @param {object} dependencies

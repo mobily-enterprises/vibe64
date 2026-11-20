@@ -487,7 +487,7 @@ function inspectGenesisCollaboration(options = {}) {
  *   or "periodic", and a line saying so; Vibe64 decides when to suggest it
  * @property {string} request the pass's own request, over the whole app
  * @property {string | null} lastRun when it last completed, from Genesis's committed record (a UTC ISO time), or null
- * @property {string | null} unavailable why the project's own Genesis cannot run it, naming the update, or null
+ * @property {string | null} unavailable why the Genesis serving the project cannot run it, or null
  * @property {{ id: string, label: string, request: string, files?: number, lines?: number }[]} runs the runs Genesis
  *   offers now ("whole", "since-last", and "deep" with the files and lines it reads, which its label shows), none while
  *   the pass is unavailable: Run sends a run's request verbatim, and Genesis records the pass only for these requests
@@ -504,7 +504,7 @@ function inspectGenesisCollaboration(options = {}) {
 
 /**
  * The passes Genesis offers for a project, in its order, each with its last completed run there and its runs, the
- * Master pass that runs them deeply in turn, and why the project's own Genesis runs no pass (null when it runs them).
+ * Master pass that runs them deeply in turn, and why the Genesis serving the project runs no pass (null when it runs them).
  * This is Vibe64's one reader of Genesis's pass list and its record of runs; a malformed record
  * fails it with Genesis's PASS_RECORD_INVALID, whose message names the file and the fix.
  * @param {{ projectRoot: string }} options

@@ -72,14 +72,14 @@ test("the Passes list is Genesis's passes, each with its last completed run from
   assert.equal(result.byId.deslop.commitsSince, 120, "a pass that never ran counts the whole history");
   assert.deepEqual(f.counted.sort(), ["", ago(3)], "passes that last ran at the same time share one count");
   assert.deepEqual(f.listed, [{ projectRoot: "" }], "Genesis lists the passes for the session's source");
-  assert.equal(result.unavailable, null, "the project's Genesis runs passes");
+  assert.equal(result.unavailable, null, "the Genesis serving the project runs passes");
   assert.deepEqual(result.byId.deslop.runs, GENESIS_PASSES[0].runs, "each pass carries the runs Genesis offers");
   assert.deepEqual(result.master, { ...GENESIS_MASTER_PASS, commitsSince: 120 },
     "the Master pass, never completed, with the whole history's count, which it shares");
 });
 
 test("a project whose own Genesis runs no pass lists its passes with Genesis's reason and suggests none", async (t) => {
-  const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later.";
+  const reason = "This Genesis source (genesis-compiler 1.10.15) cannot run passes.";
   const f = await project(t, { unavailable: reason, commits: () => 500 });
   const result = await f.read();
   assert.equal(result.unavailable, reason);
@@ -102,8 +102,8 @@ test("the suggestion rule: a never-run or overdue pass, never-run first, then th
   assert.equal(suggested({ dismissed: true }), "");
   assert.equal(suggested({ snoozedUntil: ago(-1) }), "");
   assert.equal(suggested({ snoozedUntil: ago(1) }), "quality-pass", "a snooze that ended no longer hides it");
-  assert.equal(suggested({ unavailable: "This project's Genesis has no Quality pass.", runs: [] }), "",
-    "a pass the project's Genesis cannot run is never suggested");
+  assert.equal(suggested({ unavailable: "This Genesis source (genesis-compiler 1.10.21) has no Quality pass.", runs: [] }), "",
+    "a pass the Genesis serving the project cannot run is never suggested");
   assert.equal(passRecommendation([{ ...pass("data-pass"), recommend: { when: "someday", hint: "" }, lastRun: ago(21) }], START)?.id,
     "data-pass", "a hint Vibe64 does not know is periodic");
 

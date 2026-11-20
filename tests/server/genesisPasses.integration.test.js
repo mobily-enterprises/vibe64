@@ -177,7 +177,7 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   });
 });
 
-test("a project pinned to a Genesis that cannot run passes lists them with Genesis's reason, offers no run and suggests none", async (t) => {
+test("a project that declares an older genesis-compiler is served the Genesis Vibe64 runs: every pass runs, and one is suggested", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-genesis-passes-old-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const source = path.join(root, "sessions", "active", "session-1", "source");
@@ -188,19 +188,18 @@ test("a project pinned to a Genesis that cannot run passes lists them with Genes
   await git(["config", "user.email", "vibe64@example.test"]);
   await initializeGenesisProject({ projectRoot: source });
   // genesis-compiler 1.10.15, as the project installs it: a release from before passes, with its two pass skills.
+  // It serves only the project's own scripts; Vibe64's Genesis serves the project.
   const pinned = path.join(source, "node_modules", "genesis-compiler");
   for (const skill of ["genesis-deslop", "genesis-program", "genesis-project", "genesis-ui-pass"]) {
     await mkdir(path.join(pinned, "skills", skill), { recursive: true });
   }
   await writeFile(path.join(pinned, "package.json"), JSON.stringify({ name: "genesis-compiler", version: "1.10.15" }));
-  await writeFile(path.join(source, "package.json"), JSON.stringify({ devDependencies: { "genesis-compiler": "1.10.15" } }));
+  await writeFile(path.join(source, "package.json"), JSON.stringify({ name: "app", devDependencies: { "genesis-compiler": "1.10.15" } }));
   await writeFile(path.join(source, ".gitignore"), "node_modules/\n", { flag: "a" });
   await git(["add", "-A"]);
-  await git(["commit", "-q", "-m", "A project pinned to an older Genesis"]);
+  await git(["commit", "-q", "-m", "A project that declares an older Genesis"]);
   for (let index = 0; index < 40; index += 1) await git(["commit", "-q", "--allow-empty", "-m", `Change ${index}`]);
 
-  const { version } = JSON.parse(await readFile(path.join(genesisPackageBinDirectory(), "..", "genesis-compiler", "package.json"), "utf8"));
-  const reason = `This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to ${version} or later with npm install --save-dev genesis-compiler@${version}, then commit the change.`;
   const passes = createProjectPasses({
     sessionContext: async (sessionId) => ({
       runtime: { stateRoot: path.join(root, "state") },
@@ -209,13 +208,15 @@ test("a project pinned to a Genesis that cannot run passes lists them with Genes
   });
   const result = await passes.readSessionPasses("session-1");
   assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(result.unavailable, reason);
-  assert.deepEqual(result.passes.map(({ id }) => id), GENESIS_PASSES.map(({ id }) => id), "every pass is still listed");
-  assert.ok(result.passes.every((pass) => pass.unavailable === reason && pass.runs.length === 0));
-  // So no after-plan pass runs there either, except Review, whose prompt needs nothing from that Genesis.
-  assert.deepEqual(Object.fromEntries(result.passes.map(({ id, sinceBase }) => [id, sinceBase])), Object.fromEntries(GENESIS_PASSES.map(({ id }) =>
-    [id, id === "review" ? { request: "Review: the changes since base commit {base}, judged against the whole app.", deep: null } : null])));
+  assert.equal(result.unavailable, null, "the Genesis Vibe64 runs runs every pass, whatever the project declares");
+  assert.deepEqual(result.passes.map(({ id }) => id), GENESIS_PASSES.map(({ id }) => id));
+  for (const pass of result.passes) {
+    assert.equal(pass.unavailable, null, pass.id);
+    assert.deepEqual(pass.runs.map(({ id }) => id), ["whole", "deep"], pass.id);
+    assert.ok(pass.sinceBase?.request, pass.id);
+  }
   assert.ok(result.passes.every(({ commitsSince }) => commitsSince >= 30), "every pass is due by its commits");
-  assert.equal(result.recommendation, "", "but none is suggested, since none can run");
-  assert.deepEqual([result.master.unavailable, result.master.passes, result.master.runs], [reason, [], []], "nor the Master pass");
+  assert.notEqual(result.recommendation, "", "so one is suggested");
+  assert.deepEqual([result.master.unavailable, result.master.passes], [null, GENESIS_MASTER_PASS.passes], "and the Master pass runs them all");
+  assert.doesNotMatch(JSON.stringify(result), /npm install|genesis-compiler@|commit the change/u, "nothing asks the project to change its dependencies");
 });

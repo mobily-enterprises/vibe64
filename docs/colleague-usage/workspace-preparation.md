@@ -154,8 +154,8 @@ current-format project does not add them. Use **Fix it with AI** or ask your
 coding assistant to inspect
 `genesis/stack.md` and reconcile the missing section with the actual application.
 If `nodejs` is already listed under **Components**, the existing explicit repair
-is `genesis stack add nodejs`. Use the project's installed Genesis command
-(`npm exec --no -- genesis stack add nodejs` when it declares `genesis-compiler`).
+is `genesis stack add nodejs`, with the `genesis` command Vibe64 provides; a
+project never needs to list `genesis-compiler` for it.
 Do not select Node or another technology merely to dismiss a warning.
 
 The command preserves existing complete project sections and adds missing

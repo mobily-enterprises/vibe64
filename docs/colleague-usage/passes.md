@@ -170,7 +170,7 @@ Each pass adds a notice as it starts, such as **Security pass started
 automatically after the plan (Passes: After a plan)**, or **Data pass deeply
 started automatically after the plan (Passes: After a plan)**.
 
-- A ticked pass this project's Genesis can't run is skipped with its reason,
+- A ticked pass the Genesis serving this project can't run is skipped with its reason,
   such as **User experience pass skipped after the plan:** followed by the
   reason the Passes list gives for it.
 - When Vibe64 can't tell where the plan's work started, no pass runs: **The
@@ -183,28 +183,23 @@ started automatically after the plan (Passes: After a plan)**.
   completed plan stays as it is, and **Resume** doesn't restart them: start the
   passes you still want from this list, then **Save**.
 
-## When the project's Genesis is too old
+## Which Genesis runs the passes
 
-A project runs passes with its own Genesis, the `genesis-compiler` version in
-its `package.json`. When that version cannot run passes, the list says so
-above the passes and names the update, such as **This project's Genesis
-(genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later
-with npm install --save-dev genesis-compiler@1.10.21, then commit the
-change.** The passes are still listed, without run buttons, and none is
-suggested. When the version runs passes but lacks one, only that pass says
-so (**This project's Genesis (genesis-compiler …) has no …**), followed by
-the same update; a version from before the Master pass says so under it,
-such as **This project's Genesis (genesis-compiler 1.10.21) has no Master
-pass.** When the project's Genesis runs passes in a different way
-from the Genesis this Vibe64 runs, the list says **This project's Genesis
-(genesis-compiler …) runs passes differently from genesis-compiler 1.10.21.
-Update the older of the two.**; the older one may be the project's or this
-Vibe64's. When the project's dependencies are not
-installed, the list says **This project's Genesis (genesis-compiler) is not
-installed. Install the project's dependencies with npm install.**
+Every project runs its passes with the Genesis this Vibe64 runs, whatever its
+language and whatever `genesis-compiler` version its `package.json` lists, so
+every pass this Vibe64 offers runs in every project. A project never needs to
+list Genesis, install it or update it for passes, and nothing asks it to: a
+`genesis-compiler` the project lists serves only the project's own scripts,
+such as its own `npm run verify`.
 
-Ask the AI in main chat to make the update the list names, then save it as
-usual; the runs appear the next time you open the list.
+The one exception is Genesis's own source repository (its `package.json` is
+named `genesis-compiler`), which runs passes with its own source. There the
+list can say that this source cannot run passes, such as **This Genesis source
+(genesis-compiler 1.10.15) cannot run passes.**, that it lacks one pass, such
+as **This Genesis source (genesis-compiler 1.10.21) has no Master pass.**, or
+that it runs passes differently from this Vibe64's Genesis (**… runs passes
+differently from genesis-compiler 1.10.25. Update the older of the two.**).
+Such a pass is listed without run buttons and never suggested.
 
 ## Suggestions
 

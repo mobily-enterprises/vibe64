@@ -23,8 +23,8 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
  * The pass a message starts, as a refusal names it: its Genesis title, and its purpose as the
  * suffix of the refusal's codes. A task Genesis does not list as a pass, or as its Master pass,
  * for the session's source is refused before it is sent, and so is a run sent by name (genesisTask,
- * as Run in Passes sends it) of a pass the project's own Genesis cannot run, with Genesis's reason,
- * which names the update.
+ * as Run in Passes sends it) of a pass the Genesis serving the project cannot run, with Genesis's
+ * reason.
  * @param {{ genesisTask?: string }} input
  * @param {string} task
  * @param {object} context

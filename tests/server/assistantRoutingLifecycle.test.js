@@ -1259,7 +1259,7 @@ test("Run in the Passes list sends Genesis's pass in its own Senior turn, as the
 
 test("Start on the Master pass sends Genesis's request in its own Senior turn, or Genesis's reason when it cannot run", async (t) => {
   const f = await fixture(t, { mode: "junior", ...EVERY_PASS });
-  const reason = "This project's Genesis (genesis-compiler 1.10.21) has no Master pass. Update it to 1.10.22 or later.";
+  const reason = "This Genesis source (genesis-compiler 1.10.21) has no Master pass.";
   const master = f.genesis.master;
   f.genesis.master = { ...master, unavailable: reason, passes: [], runs: [] };
   const message = "Master pass (Security pass, Deslop) the whole app.";
@@ -1296,9 +1296,9 @@ test("a pass is refused politely while a turn or goal runs, and a task Genesis d
   assert.equal(f.sends.length, 0);
 });
 
-test("a pass the project's own Genesis cannot run is refused by name with Genesis's reason; a typed Deslop still runs", async (t) => {
+test("a pass the Genesis serving the project cannot run is refused by name with Genesis's reason; a typed Deslop still runs", async (t) => {
   const f = await fixture(t, { mode: "senior" });
-  const reason = "This project's Genesis (genesis-compiler 1.10.15) cannot run passes. Update it to 1.10.21 or later.";
+  const reason = "This Genesis source (genesis-compiler 1.10.15) cannot run passes.";
   f.genesis.unavailable = reason;
   f.genesis.passes = f.genesis.passes.map((pass) => ({ ...pass, unavailable: reason, runs: [] }));
   await assert.rejects(f.service.send("session-1", { ...request, genesisTask: "deslop", message: "Deslop the whole app." }, f.context), {

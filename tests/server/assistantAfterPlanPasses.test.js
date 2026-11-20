@@ -55,8 +55,8 @@ test("a completed plan runs each ticked pass in Master pass order, each its own 
     return "Saved automatically.";
   } });
   await readyPlan(f);
-  // This project's Genesis cannot run the User experience pass.
-  const reason = "This project's Genesis has no User experience pass. Update it to run it.";
+  // The Genesis serving this project cannot run the User experience pass.
+  const reason = "This Genesis source (genesis-compiler 1.10.21) has no User experience pass.";
   f.genesis.passes = GENESIS_PASSES.map((pass) => pass.id === "ux-pass" ? { ...pass, unavailable: reason, runs: [], sinceBase: null } : pass);
 
   await f.service.send("session-1", request, f.context);
