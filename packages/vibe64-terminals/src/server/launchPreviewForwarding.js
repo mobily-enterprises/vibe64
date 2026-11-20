@@ -8,12 +8,19 @@ import { PREVIEW_IDENTITY_CONTROL_PATH } from "@local/vibe64-core/server/preview
 import { vibe64SessionDebugDurationMs, vibe64SessionDebugError } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { activeUsageRecording } from "@local/vibe64-usage-recording/server/activeRecordings";
 import { USAGE_RECORDING_INTERACTION_HEADER } from "@local/vibe64-usage-recording/shared/contract";
+import {
+  previewDiagnosticUrl,
+  PREVIEW_WINDOW_PATH,
+  PREVIEW_WINDOW_TICKET_PATH
+} from "../shared/launchPreviewProtocol.js";
 import { injectLaunchPreviewBridge } from "./launchPreviewBridge.js";
 import { previewProxyDebugEnabled, previewProxyDebugLog } from "./launchPreviewDebugLog.js";
 import {
   cleanPreviewTokenRedirectLocation,
   HTML_CONTENT_TYPE_PATTERN,
   presentsOnLoopbackOrigin,
+  previewHeldSessionCookie,
+  previewRequestHeldSession,
   previewRequestToken,
   previewRequestTokenDiagnostics,
   previewResponseHeaders,
@@ -25,9 +32,7 @@ import {
   requestHeader,
   requestIsBrowserDocumentNavigation,
   requestShouldCleanPreviewToken,
-  stripPreviewTokenQueryParam,
-  targetRequestUrl,
-  tokenMatches
+  targetRequestUrl
 } from "./launchPreviewHeaders.js";
 import { bindPreviewProxySocketPair, recordPreviewUpgradeSocketError, safeSocketWrite } from "./launchPreviewConnections.js";
 import {
@@ -36,6 +41,7 @@ import {
   readStreamBuffer,
   writePreviewIdentityJson
 } from "./launchPreviewIdentity.js";
+import { enterPreviewWindow, issuePreviewWindowTicket } from "./launchPreviewWindow.js";
 
 // An HTML page is buffered to inject the bridge; anything larger is refused
 // rather than held in the daemon's memory.
@@ -98,6 +104,7 @@ function rejectPreviewUpgrade(socket, options = {}) {
 
 function redirectPreviewTokenBootstrap(response, options = {}) {
   const {
+    heldSession = "",
     location = "",
     proxyOrigin = "",
     token = ""
@@ -106,9 +113,23 @@ function redirectPreviewTokenBootstrap(response, options = {}) {
     "Cache-Control": "no-store",
     "Connection": "close",
     "Location": location,
-    "Set-Cookie": previewTokenCookie(token, { proxyOrigin })
+    "Set-Cookie": [
+      previewTokenCookie(token, { proxyOrigin }),
+      ...(heldSession ? [previewHeldSessionCookie(heldSession, { proxyOrigin })] : [])
+    ]
   });
   response.end();
+}
+
+/**
+ * Whether a page coming in with the token starts a held session: only the editor's Preview pane, a frame of an
+ * HTTPS Preview, whose windows the browser keeps apart from it (launchPreviewWindow.js). A page in a tab of its
+ * own, the agent's browser, a client that is no browser, and an HTTP Preview (on the editor's own loopback name,
+ * so its windows share the pane's cookies) keep the app's cookies in the browser, as they always did.
+ */
+function startsHeldSession(request, proxyOrigin) {
+  return String(proxyOrigin).startsWith("https:") &&
+    ["frame", "iframe"].includes(requestHeader(request, "sec-fetch-dest").toLowerCase());
 }
 
 /**
@@ -222,7 +243,15 @@ function proxiedLoopbackHtml(html = "", options = {}) {
   return text;
 }
 
+/**
+ * One browser request to a Preview: its gate (the Preview's access token, from
+ * the address or the access cookie; a window's ticket at the window path), then
+ * the app's answer, with the app cookies held for the page's held session
+ * (launchPreviewAccess.js). The debug log gets each request's path, never its
+ * query, which can carry a token or a ticket.
+ */
 async function proxyPreviewRequest(request, response, {
+  access,
   connectOrigin = "",
   consumeIdentityGrant = null,
   editorOrigins = [],
@@ -236,8 +265,6 @@ async function proxyPreviewRequest(request, response, {
   targetState = { answered: false },
   tracker,
   tokenScope = {},
-  token = "",
-  tokenHash = "",
   targetHost = "",
   targetOrigin = ""
 }) {
@@ -251,13 +278,22 @@ async function proxyPreviewRequest(request, response, {
     method: String(request.method || "GET").toUpperCase(),
     pathname: requestUrl.pathname,
     proxyOrigin,
-    search: stripPreviewTokenQueryParam(requestUrl.search),
     sessionId: String(tokenScope.sessionId || ""),
     connectOrigin,
     targetOrigin,
     terminalSessionId: String(tokenScope.terminalSessionId || "")
   };
-  if (!tokenMatches(previewRequestToken(request, requestUrl, { proxyOrigin }), tokenHash, tokenScope)) {
+  const heldSession = previewRequestHeldSession(request, { proxyOrigin });
+  if (requestUrl.pathname === PREVIEW_WINDOW_PATH) {
+    const entered = enterPreviewWindow(request, response, { access, proxyOrigin, requestUrl });
+    previewProxyDebugLog(`server.launchPreviewProxy.request.${entered ? "windowEntered" : "windowRefused"}`, {
+      ...requestDetails,
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs)
+    });
+    return;
+  }
+  const token = access.token;
+  if (!access.admits(previewRequestToken(request, requestUrl, { proxyOrigin }))) {
     previewProxyDebugLog("server.launchPreviewProxy.request.rejected", {
       ...requestDetails,
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -268,7 +304,9 @@ async function proxyPreviewRequest(request, response, {
   }
   if (requestShouldCleanPreviewToken(request, requestUrl)) {
     const location = cleanPreviewTokenRedirectLocation(requestUrl);
+    // The pane coming in with the token is a held session from now on, or stays the one it is.
     redirectPreviewTokenBootstrap(response, {
+      heldSession: heldSession || (startsHeldSession(request, proxyOrigin) ? access.newHeldSession() : ""),
       location,
       proxyOrigin,
       token
@@ -276,10 +314,17 @@ async function proxyPreviewRequest(request, response, {
     previewProxyDebugLog("server.launchPreviewProxy.request.bootstrapRedirect", {
       ...requestDetails,
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      location
+      location: previewDiagnosticUrl(location)
     });
     return;
   }
+  if (requestUrl.pathname === PREVIEW_WINDOW_TICKET_PATH) {
+    issuePreviewWindowTicket(request, response, { access, heldSession });
+    return;
+  }
+  // A request of no held session (anything but the pane and its windows) keeps the app's cookies itself.
+  const heldCookies = heldSession ? access.heldCookies(heldSession) : null;
+  const holdCookie = (header) => Boolean(heldCookies?.hold(header, requestUrl.pathname));
   if (requestUrl.pathname === PREVIEW_IDENTITY_CONTROL_PATH) {
     if (String(request.method || "GET").toUpperCase() !== "POST") {
       writePreviewIdentityJson(response, 405, {
@@ -292,6 +337,7 @@ async function proxyPreviewRequest(request, response, {
     await proxyPreviewIdentityExchange(request, response, {
       consumeIdentityGrant,
       executePreviewIdentityCommand,
+      holdCookie,
       previewAuth,
       proxyOrigin,
       token
@@ -323,6 +369,8 @@ async function proxyPreviewRequest(request, response, {
       headers: proxyRequestHeaders(request.headers, targetUrl, {
         clientAddress: request.socket?.remoteAddress || "",
         freshDocument: requestIsBrowserDocumentNavigation(request),
+        heldCookies,
+        method,
         proxyOrigin,
         targetHost,
         usageRequestId: recordedRequest?.requestId || ""
@@ -352,6 +400,7 @@ async function proxyPreviewRequest(request, response, {
         targetOrigin
       });
       response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
+        holdCookie,
         injected: true,
         proxyOrigin,
         reportWidenedCookieDomain,
@@ -366,12 +415,13 @@ async function proxyPreviewRequest(request, response, {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         injectedBridge: body !== html,
         responseStatus: targetResponse.statusCode || 200,
-        targetHref: targetUrl.toString()
+        targetHref: previewDiagnosticUrl(targetUrl)
       });
       return;
     }
 
     response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
+      holdCookie,
       proxyOrigin,
       reportWidenedCookieDomain,
       targetOrigin,
@@ -383,7 +433,7 @@ async function proxyPreviewRequest(request, response, {
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       injectedBridge: false,
       responseStatus: targetResponse.statusCode || 200,
-      targetHref: targetUrl.toString()
+      targetHref: previewDiagnosticUrl(targetUrl)
     });
     pipePreviewResponseBody(targetResponse, response);
   } catch (error) {
@@ -531,20 +581,26 @@ function pipePreviewResponseBody(stream, response) {
 }
 
 function proxyPreviewUpgrade(request, socket, head, {
+  access,
   connectOrigin = "",
   proxyOrigin = "",
   reportWidenedCookieDomain,
   tracker,
-  tokenScope = {},
-  tokenHash = "",
   targetHost = "",
   targetOrigin = ""
 }) {
   const requestUrl = new URL(String(request.url || "/"), proxyOrigin || targetOrigin);
-  if (!tokenMatches(previewRequestToken(request, requestUrl, { proxyOrigin }), tokenHash, tokenScope)) {
+  if (!access.admits(previewRequestToken(request, requestUrl, { proxyOrigin }))) {
     rejectPreviewUpgrade(socket);
     return;
   }
+  const heldSession = previewRequestHeldSession(request, { proxyOrigin });
+  const heldCookies = heldSession ? access.heldCookies(heldSession) : null;
+  const cookieOptions = {
+    holdCookie: (header) => Boolean(heldCookies?.hold(header, requestUrl.pathname)),
+    proxyOrigin,
+    reportWidenedCookieDomain
+  };
 
   let targetUrl;
   try {
@@ -563,6 +619,7 @@ function proxyPreviewUpgrade(request, socket, head, {
   const upstreamRequest = requestFactory(targetUrl, {
     headers: proxyUpgradeHeaders(request.headers, targetUrl, {
       clientAddress: request.socket?.remoteAddress || "",
+      heldCookies,
       proxyOrigin,
       targetHost
     }),
@@ -583,7 +640,7 @@ function proxyPreviewUpgrade(request, socket, head, {
     bindPreviewProxySocketPair(socket, upstreamSocket, {
       tracker
     });
-    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse, { proxyOrigin, reportWidenedCookieDomain }));
+    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse, cookieOptions));
     if (upstreamHead?.length) {
       safeSocketWrite(socket, upstreamHead);
     }
@@ -599,7 +656,7 @@ function proxyPreviewUpgrade(request, socket, head, {
     upstreamResponse.on("aborted", () => socket.destroy());
     socket.on("close", () => upstreamResponse.destroy());
     socket.on("end", () => upstreamResponse.destroy());
-    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse, { proxyOrigin, reportWidenedCookieDomain }));
+    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse, cookieOptions));
     upstreamResponse.on("data", (chunk) => {
       safeSocketWrite(socket, chunk);
     });
@@ -627,7 +684,7 @@ function proxyPreviewUpgrade(request, socket, head, {
 
 /**
  * The app's answer to a WebSocket upgrade, with its cookies as the Preview's other answers give them
- * (previewSetCookies).
+ * (previewSetCookies): a held one is left out.
  * @param {import("node:http").IncomingMessage} response
  * @param {Parameters<typeof previewSetCookies>[1]} cookieOptions
  */
@@ -635,10 +692,12 @@ function upgradeResponseHead(response, cookieOptions) {
   const headers = [`HTTP/${response.httpVersion} ${response.statusCode} ${response.statusMessage || ""}`];
   const rawHeaders = Array.isArray(response.rawHeaders) ? response.rawHeaders : [];
   for (let index = 0; index < rawHeaders.length; index += 2) {
-    const value = String(rawHeaders[index]).toLowerCase() === "set-cookie"
+    const values = String(rawHeaders[index]).toLowerCase() === "set-cookie"
       ? previewSetCookies(String(rawHeaders[index + 1]), cookieOptions)
-      : rawHeaders[index + 1];
-    headers.push(`${rawHeaders[index]}: ${value}`);
+      : [rawHeaders[index + 1]];
+    for (const value of values) {
+      headers.push(`${rawHeaders[index]}: ${value}`);
+    }
   }
   headers.push("", "");
   return headers.join("\r\n");

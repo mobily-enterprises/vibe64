@@ -9,13 +9,14 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import { normalizePreviewAuthKind } from "@local/vibe64-core/server/previewAuth";
 
+import { previewDiagnosticUrl } from "../shared/launchPreviewProtocol.js";
+import { createPreviewAccess } from "./launchPreviewAccess.js";
 import { previewProxyDebugLog } from "./launchPreviewDebugLog.js";
 import {
   appendPreviewTokenQueryParam,
   normalizePreviewEditorOrigin,
   normalizePreviewTargetHref,
   previewOriginHost,
-  previewTokenHash,
   requestPreviewOrigin
 } from "./launchPreviewHeaders.js";
 import {
@@ -52,10 +53,13 @@ function normalizePreviewProxySocketIdleTimeoutMs(value, env) {
 
 /**
  * The Preview proxies of one controller, keyed by project, session and public origin.
- * Each key keeps one access token while its proxy is replaced, as every app
- * restart does, so a Preview tab already open keeps its cookie. The token is
- * retired with the session (`retire`) or the controller (`closeAll`); it lives
- * only in memory, so a server restart issues a new one.
+ * Each key keeps its access (launchPreviewAccess.js: its token, the app
+ * cookies it holds for its browser pages, window tickets) while its proxy is
+ * replaced, as every app restart does, so a Preview page already open keeps
+ * its cookie and its app session. Stopping the Preview (`stop`) drops the held
+ * cookies and tickets; the access goes with the session (`retire`) or the
+ * controller (`closeAll`). It lives only in memory, so a server restart issues
+ * a new token.
  * @param {object} options
  * @param {RuntimeEnv} options.env the configured Preview env
  * @param {number} [options.socketIdleTimeoutMs]
@@ -68,22 +72,26 @@ function createLaunchPreviewProxyRegistry({
 }) {
   const proxies = new Map();
   const pendingStarts = new Map();
-  const sessionTokens = new Map();
+  const sessionAccess = new Map();
   let publicSocketPreparation = null;
   const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, env);
 
-  function sessionToken(key, scope) {
-    const existing = sessionTokens.get(key);
+  function previewAccess(key, scope) {
+    const existing = sessionAccess.get(key);
     if (existing) {
-      return existing.token;
+      return existing.access;
     }
-    const token = crypto.randomBytes(32).toString("base64url");
-    sessionTokens.set(key, {
+    const access = createPreviewAccess({
       projectScope: scope.projectScope,
-      sessionId: scope.sessionId,
-      token
+      publicOrigin: scope.publicOrigin,
+      sessionId: scope.sessionId
     });
-    return token;
+    sessionAccess.set(key, {
+      access,
+      projectScope: scope.projectScope,
+      sessionId: scope.sessionId
+    });
+    return access;
   }
 
   async function ensure(input = {}, connectHref = "") {
@@ -114,20 +122,20 @@ function createLaunchPreviewProxyRegistry({
       connectHref: connectUrl.toString(),
       previewAuth,
       publicOrigin,
-      targetHref: targetUrl.toString(),
+      targetHref: previewDiagnosticUrl(targetUrl),
       terminalSessionId: scope.terminalSessionId
     });
     previewProxyDebugLog("server.launchPreviewProxy.ensure", {
       existingProxy: Boolean(existing),
       pendingStart: pendingStarts.has(key),
-      existingConnectHref: String(existing?.connectHref || ""),
-      existingTargetHref: String(existing?.targetHref || ""),
-      connectHref: connectUrl.toString(),
+      existingConnectHref: previewDiagnosticUrl(existing?.connectHref),
+      existingTargetHref: previewDiagnosticUrl(existing?.targetHref),
+      connectHref: previewDiagnosticUrl(connectUrl),
       key,
       projectScope: String(scope.projectScope || ""),
       publicOrigin,
       sessionId: String(scope.sessionId || ""),
-      targetHref: targetUrl.toString(),
+      targetHref: previewDiagnosticUrl(targetUrl),
       terminalSessionId: String(scope.terminalSessionId || "")
     });
     const existingIdentityMatches = Boolean(
@@ -142,8 +150,8 @@ function createLaunchPreviewProxyRegistry({
         projectScope: String(scope.projectScope || ""),
         proxyOrigin: String(existing.origin || ""),
         sessionId: String(scope.sessionId || ""),
-        connectHref: connectUrl.toString(),
-        targetHref: targetUrl.toString(),
+        connectHref: previewDiagnosticUrl(connectUrl),
+        targetHref: previewDiagnosticUrl(targetUrl),
         terminalSessionId: String(scope.terminalSessionId || "")
       });
       existing.allowEditorOrigin(input.editorOrigin);
@@ -158,7 +166,7 @@ function createLaunchPreviewProxyRegistry({
           projectScope: String(scope.projectScope || ""),
           publicOrigin,
           sessionId: String(scope.sessionId || ""),
-          targetHref: targetUrl.toString(),
+          targetHref: previewDiagnosticUrl(targetUrl),
           terminalSessionId: String(scope.terminalSessionId || "")
         });
         const proxy = await pending.promise;
@@ -171,7 +179,7 @@ function createLaunchPreviewProxyRegistry({
         projectScope: String(scope.projectScope || ""),
         publicOrigin,
         sessionId: String(scope.sessionId || ""),
-        targetHref: targetUrl.toString(),
+        targetHref: previewDiagnosticUrl(targetUrl),
         terminalSessionId: String(scope.terminalSessionId || "")
       });
       await pending.promise.catch(() => null);
@@ -200,7 +208,7 @@ function createLaunchPreviewProxyRegistry({
         targetHref: targetUrl.toString()
       }
     };
-    const token = sessionToken(key, scope);
+    const access = previewAccess(key, scope);
     pendingStarts.set(key, pendingEntry);
     if (existing) {
       proxies.delete(key);
@@ -216,14 +224,14 @@ function createLaunchPreviewProxyRegistry({
         ...scope,
         targetHref: targetUrl.toString()
       }, {
+        access,
         env,
         executePreviewIdentityCommand: input.executePreviewIdentityCommand,
         previewAuth,
         publicOrigin,
         recordFrameLoad: input.recordFrameLoad,
         socketIdleTimeoutMs: normalizedSocketIdleTimeoutMs,
-        targetRestartWaitMs,
-        token
+        targetRestartWaitMs
       });
       if (pendingEntry.closeRequested) {
         await proxy.close();
@@ -242,7 +250,7 @@ function createLaunchPreviewProxyRegistry({
         proxyOrigin: String(proxy.origin || ""),
         publicOrigin,
         sessionId: String(scope.sessionId || ""),
-        targetHref: targetUrl.toString(),
+        targetHref: previewDiagnosticUrl(targetUrl),
         terminalSessionId: String(scope.terminalSessionId || "")
       });
       return proxyDescriptor(proxy, targetUrl);
@@ -265,11 +273,11 @@ function createLaunchPreviewProxyRegistry({
         pendingCount: pendingCloseEntries.length,
         ...debugDetails,
         targets: closeEntries.map(([, proxy]) => ({
-          connectHref: String(proxy.connectHref || ""),
+          connectHref: previewDiagnosticUrl(proxy.connectHref),
           projectScope: String(proxy.scope?.projectScope || ""),
           proxyOrigin: String(proxy.origin || ""),
           sessionId: String(proxy.scope?.sessionId || ""),
-          targetHref: String(proxy.targetHref || ""),
+          targetHref: previewDiagnosticUrl(proxy.targetHref),
           terminalSessionId: String(proxy.scope?.terminalSessionId || "")
         }))
       });
@@ -298,13 +306,18 @@ function createLaunchPreviewProxyRegistry({
     ]);
   }
 
-  async function close(input = {}) {
-    const scope = previewProxyScope(input);
-    await closeMatching((candidate) => (
+  /** Whether a proxy's scope is one `close` and `stop` with this scope end: the session's, or its terminal's. */
+  function closedWith(scope) {
+    return (candidate) => (
       candidate.projectScope === scope.projectScope &&
       candidate.sessionId === scope.sessionId &&
       (!scope.terminalSessionId || candidate.terminalSessionId === scope.terminalSessionId)
-    ), "server.launchPreviewProxy.close", {
+    );
+  }
+
+  async function close(input = {}) {
+    const scope = previewProxyScope(input);
+    await closeMatching(closedWith(scope), "server.launchPreviewProxy.close", {
       projectScope: String(scope.projectScope || ""),
       sessionId: String(scope.sessionId || ""),
       terminalSessionId: String(scope.terminalSessionId || "")
@@ -312,15 +325,39 @@ function createLaunchPreviewProxyRegistry({
   }
 
   /**
-   * The session ended: its proxies close and its access tokens are retired,
-   * so a Preview it is given later gets a new token. Tokens go first, so a
-   * proxy starting meanwhile is either closed here or uses a new token.
+   * The Preview stopped (Stop, its terminal closed): its proxies close and the
+   * app cookies and window tickets it held go. Its token stays, so a Preview
+   * page left open comes back when it starts again, signed out.
+   */
+  async function stop(input = {}) {
+    const scope = previewProxyScope(input);
+    const stopping = closedWith(scope);
+    // One terminal's stop is the Preview's only when that terminal runs it.
+    const stoppedKeys = new Set([...proxies, ...pendingStarts]
+      .filter(([, entry]) => stopping(entry.scope))
+      .map(([key]) => key));
+    for (const [key, entry] of sessionAccess) {
+      if (
+        entry.projectScope === scope.projectScope &&
+        entry.sessionId === scope.sessionId &&
+        (!scope.terminalSessionId || stoppedKeys.has(key))
+      ) {
+        entry.access.forgetHeld();
+      }
+    }
+    await close(input);
+  }
+
+  /**
+   * The session ended: its proxies close and its access is retired, so a
+   * Preview it is given later gets new tokens. Access goes first, so a proxy
+   * starting meanwhile is either closed here or uses new tokens.
    */
   async function retire(input = {}) {
     const { projectScope, sessionId } = previewProxyScope(input);
-    for (const [key, entry] of sessionTokens) {
+    for (const [key, entry] of sessionAccess) {
       if (entry.projectScope === projectScope && entry.sessionId === sessionId) {
-        sessionTokens.delete(key);
+        sessionAccess.delete(key);
       }
     }
     await close({
@@ -330,7 +367,7 @@ function createLaunchPreviewProxyRegistry({
   }
 
   async function closeAll() {
-    sessionTokens.clear();
+    sessionAccess.clear();
     await closeMatching(() => true, "server.launchPreviewProxy.closeAll");
   }
 
@@ -338,7 +375,8 @@ function createLaunchPreviewProxyRegistry({
     close,
     closeAll,
     ensure,
-    retire
+    retire,
+    stop
   });
 }
 
@@ -412,18 +450,17 @@ async function startLaunchPreviewProxy({
   targetUrl
 } = {}, scope = {}, options = {}) {
   const {
+    access,
     env,
     executePreviewIdentityCommand = null,
     previewAuth = null,
     publicOrigin = "",
     recordFrameLoad = () => {},
     socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS,
-    targetRestartWaitMs = DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS,
-    token
+    targetRestartWaitMs = DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS
   } = options;
-  if (!token) {
-    // An empty token would match a request that carries none.
-    throw new Error("Launch preview proxy requires an access token.");
+  if (!access) {
+    throw new Error("Launch preview proxy requires its access.");
   }
   const frameLoads = createPreviewFrameLoadRecorder(recordFrameLoad);
   const server = createServer();
@@ -438,7 +475,6 @@ async function startLaunchPreviewProxy({
     targetHref: targetUrl.toString()
   };
   const connectOrigin = connectUrl.origin;
-  const tokenHash = previewTokenHash(token, tokenScope);
   const consumeIdentityGrant = previewAuth
     ? createPreviewIdentityGrantConsumer(previewAuth)
     : null;
@@ -452,6 +488,7 @@ async function startLaunchPreviewProxy({
   const reportWidenedCookieDomain = createWidenedCookieDomainWarning({ env, publicOrigin, scope });
   server.on("request", (request, response) => {
     void proxyPreviewRequest(request, response, {
+      access,
       connectOrigin,
       consumeIdentityGrant,
       editorOrigins: [...editorOrigins],
@@ -464,21 +501,18 @@ async function startLaunchPreviewProxy({
       targetRestartWaitMs,
       targetState,
       tracker,
-      token,
       tokenScope,
-      tokenHash,
       targetHost: targetUrl.host,
       targetOrigin: targetUrl.origin
     });
   });
   server.on("upgrade", (request, socket, head) => {
     proxyPreviewUpgrade(request, socket, head, {
+      access,
       connectOrigin,
       proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
       reportWidenedCookieDomain,
       tracker,
-      tokenScope,
-      tokenHash,
       targetHost: targetUrl.host,
       targetOrigin: targetUrl.origin
     });
@@ -496,14 +530,14 @@ async function startLaunchPreviewProxy({
   server.unref();
   proxyOrigin = listen.origin;
   previewProxyDebugLog("server.launchPreviewProxy.started", {
-    connectHref: connectUrl.toString(),
+    connectHref: previewDiagnosticUrl(connectUrl),
     listenKind: listen.kind,
     port: listen.port,
     projectScope: String(scope.projectScope || ""),
     proxyOrigin,
     sessionId: String(scope.sessionId || ""),
     socketPath: listen.socketPath || "",
-    targetHref: targetUrl.toString(),
+    targetHref: previewDiagnosticUrl(targetUrl),
     terminalSessionId: String(scope.terminalSessionId || "")
   });
   function allowEditorOrigin(value = "") {
@@ -547,6 +581,7 @@ async function startLaunchPreviewProxy({
   }
 
   return Object.freeze({
+    access,
     allowEditorOrigin,
     useLocatorSource,
     close,
@@ -561,7 +596,6 @@ async function startLaunchPreviewProxy({
       projectScope: String(scope.projectScope || "").trim(),
       publicOrigin: String(scope.publicOrigin || "").trim()
     }),
-    token,
     targetHref: targetUrl.toString()
   });
 }
@@ -652,7 +686,7 @@ function previewAuthFingerprint(value = null) {
 function proxyDescriptor(proxy, targetUrl) {
   const href = new URL(proxy.origin);
   href.pathname = targetUrl.pathname;
-  href.search = appendPreviewTokenQueryParam(targetUrl.search, proxy.token);
+  href.search = appendPreviewTokenQueryParam(targetUrl.search, proxy.access.token);
   href.hash = targetUrl.hash;
   return {
     available: true,

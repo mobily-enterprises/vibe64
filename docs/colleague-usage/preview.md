@@ -88,17 +88,32 @@ secure login cookies and redirects.
 
 A host may give Previews a domain of their own, apart from the editor's, so the
 application's code never shares the editor's site. On such a host the Preview
-pane shows another site's page, and the browser treats the application's cookies
-there as another site's: Preview marks each cookie the application sets so the
-browser keeps it for that pane (`SameSite=None`, `Secure`, `Partitioned`), and
-signing in inside the pane works as usual. The pane and the Preview opened in its
-own tab keep separate cookies: signing in inside the pane does not sign in the
-tab, so sign in again there if you need to. A sign-in that opens a window of its
-own (an accounts hub, Google and other providers, which refuse to be framed)
-cannot finish from the pane on such a host: the window is the Preview's own site
-and shows **Launch preview token is missing or invalid.**, and even a window
-that gets through signs in only itself. Open the Preview in its own tab and sign
-in there; the tab signs in through the provider's page directly. The browser must support partitioned
+pane shows another site's page, and the browser keeps the pane's cookies apart
+from every other page's. Preview therefore keeps the application's sign-in for
+the pane itself: the cookies the application marks `HttpOnly` (its session,
+usually) stay in Preview, which sends them with the pane's requests, and the
+cookies the application's own scripts read are marked so the browser keeps them
+for the pane (`SameSite=None`, `Secure`, `Partitioned`). Signing in inside the
+pane works as usual and survives a reload.
+
+A sign-in that opens a window of its own (an accounts hub, Google and other
+providers, which refuse to be framed) works from the pane too: Preview lets the
+window in as the pane, with a one-time pass the pane asks for as it opens the
+window, so the window and the pane share one sign-in. An application that waits
+for its window, as JSKIT applications do, reloads the pane signed in when the
+window finishes. Some providers cut the window off from the page that opened it:
+the window then stays open, signed in, and the pane is not told. Close the
+window and select **Reload preview** (or reload the page inside the pane) to see
+the pane signed in. The Preview opened in its own tab keeps a sign-in of its own
+until a window from the pane signs in, which signs the tab in too (both are pages
+of the Preview's own site); otherwise sign in there separately if you need to. An
+application that keeps its sign-in in the browser's own storage (local storage,
+or a cookie its scripts write) keeps it only in the window that signed in: ask
+the coding agent to keep the session in an `HttpOnly` cookie, or sign in in the
+Preview's own tab. **Stop** signs the application out in the pane and its
+windows; a restart keeps the sign-in.
+
+The browser must support partitioned
 cookies (current Chrome, Edge, Firefox and Safari 26.2 or later do); in an older
 Safari, or with a browser setting that blocks every cookie in frames, the pane
 shows **Launch preview token is missing or invalid.** Open the Preview in its own
@@ -244,7 +259,11 @@ Only the editor that showed you the Preview can use it. Another website that
 puts the Preview address in its own frame gets no app page, because the browser
 keeps the Preview's cookie only for the site that showed it (the editor's, or the
 Preview's own in its own tab), and none of the app's captured console or network
-details.
+details. A window's one-time pass is no use to it either: only the pane can ask
+for one, and the pass works once, within 30 seconds, only as a window's own page,
+never inside another site's frame; a refused pass shows **This Preview window's
+ticket is missing, used, expired or not this page's.** Open the window again
+from the Preview.
 If two temporary editors show the same address, their host routing configuration
 needs correction. Restart the affected Previews after the host update; changing
 an application's listening port is not required.

@@ -77,7 +77,8 @@ function createOutputTargetTerminalSessions({
         error: "Browser tests own this Preview. Stop the test command before closing Preview."
       };
     }
-    await state.launchPreviewProxies.close({
+    // The Preview stops with its terminal: the app cookies it held go (launchPreviewAccess.js).
+    await state.launchPreviewProxies.stop({
       sessionId,
       terminalSessionId
     });
@@ -127,7 +128,7 @@ function createOutputTargetTerminalSessions({
           });
           if (result?.ok === false) throw new Error(result.error || "Preview process did not stop.");
         }
-        await state.launchPreviewProxies.close({ sessionId });
+        await state.launchPreviewProxies.stop({ sessionId });
         const browserCleanup = await stopPreviewBrowsers(sessionId);
         if (browserCleanup?.ok === false) throw new Error(browserCleanup.error || "Managed Preview browser did not stop.");
         await writePreviewStopState(runtime.store, sessionId, { stopped: true });

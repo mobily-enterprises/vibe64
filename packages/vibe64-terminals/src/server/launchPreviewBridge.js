@@ -15,7 +15,11 @@ import {
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE,
   PREVIEW_RECORDING_MESSAGE_TYPE,
-  PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
+  PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE,
+  PREVIEW_WINDOW_DESTINATION_QUERY_PARAM,
+  PREVIEW_WINDOW_PATH,
+  PREVIEW_WINDOW_TICKET_PATH,
+  PREVIEW_WINDOW_TICKET_QUERY_PARAM
 } from "../shared/launchPreviewProtocol.js";
 import {
   PREVIEW_IDENTITY_CONTROL_PATH
@@ -85,7 +89,11 @@ function launchPreviewBridgeScript({
     resourceFailureMessageType: PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE,
     targetOrigin: String(targetOrigin || ""),
     tokenQueryParam: PREVIEW_PROXY_TOKEN_QUERY_PARAM,
-    version: PREVIEW_BRIDGE_VERSION
+    version: PREVIEW_BRIDGE_VERSION,
+    windowDestinationQueryParam: PREVIEW_WINDOW_DESTINATION_QUERY_PARAM,
+    windowPath: PREVIEW_WINDOW_PATH,
+    windowTicketPath: PREVIEW_WINDOW_TICKET_PATH,
+    windowTicketQueryParam: PREVIEW_WINDOW_TICKET_QUERY_PARAM
   });
 
   return `<script data-vibe64-preview-bridge="1">${BRIDGE_SCRIPT_HEAD}${config}${BRIDGE_SCRIPT_TAIL}</script>${previewLocatorScript(locatorSource)}`;

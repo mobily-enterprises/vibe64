@@ -639,6 +639,69 @@
       }
     };
   }
+  // A window this page opens from the editor's Preview pane, a sign-in window
+  // say, has none of the pane's cookies: an HTTPS Preview may be on a domain of
+  // its own, a cross-site frame of the editor, and the browser keeps the
+  // window's cookies apart. So the window opens blank at once, as the click
+  // allows, this page asks the Preview for a single-use ticket with the pane's
+  // own access, and the window goes through the Preview's window path, which
+  // lets it in as the pane and sends it on to the address it was opening. The
+  // app's session is the one the Preview holds for the pane, so the window's
+  // sign-in is the pane's. A page in a tab or window of its own, and an HTTP
+  // Preview (same-site with its editor), open windows as they always did.
+  const originalOpen = window.open;
+  let framedPage = true;
+  try {
+    framedPage = window.self !== window.top;
+  } catch {
+    framedPage = true;
+  }
+  if (typeof originalOpen === "function" && framedPage && location.protocol === "https:") {
+    window.open = function vibe64PreviewOpen(url, target, features) {
+      const name = target === undefined || target === null || target === "" ? "_blank" : String(target);
+      let destination = null;
+      try {
+        destination = url === undefined || url === null || String(url) === "" ? null : new URL(String(url), location.href);
+      } catch {
+        destination = null;
+      }
+      if (!destination || !/^https?:$/u.test(destination.protocol) || /^_(?:self|parent|top)$/iu.test(name)) {
+        return originalOpen.apply(window, arguments);
+      }
+      const featureParts = String(features ?? "").split(",");
+      const severed = featureParts.some((part) => /^\s*no(?:opener|referrer)\s*(?:=\s*(?:yes|1|true)\s*)?$/iu.test(part));
+      const opened = originalOpen.call(
+        window,
+        "",
+        name,
+        featureParts.filter((part) => !/^\s*no(?:opener|referrer)\b/iu.test(part)).join(",")
+      );
+      if (!opened) {
+        return null;
+      }
+      if (severed) {
+        try {
+          opened.opener = null;
+        } catch {
+          // A window that cannot be cut from this page still opens.
+        }
+      }
+      void originalFetch.call(window, config.windowTicketPath, {
+        cache: "no-store",
+        credentials: "same-origin",
+        method: "POST"
+      })
+        .then((response) => (response.ok ? response.json() : {}))
+        .catch(() => ({}))
+        .then((payload) => {
+          const entry = new URL(config.windowPath, location.origin);
+          entry.searchParams.set(config.windowTicketQueryParam, String(payload?.ticket || ""));
+          entry.searchParams.set(config.windowDestinationQueryParam, destination.toString());
+          opened.location.replace(entry.toString());
+        });
+      return severed ? null : opened;
+    };
+  }
   const xhrMetadata = new WeakMap();
   const xhrPrototype = window.XMLHttpRequest?.prototype;
   const originalXhrOpen = xhrPrototype?.open;

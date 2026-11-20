@@ -143,7 +143,7 @@ function createOutputTargetPreviewTests({
           await ensureTargetReady(previous.targetId, { restoring: true });
         } else {
           await launchCoordination.withLaunchStartLock(sessionId, async () => {
-            await state.launchPreviewProxies.close({ sessionId });
+            await state.launchPreviewProxies.stop({ sessionId });
             const closed = await closeTerminalSessionsForNamespace(outputTargetTerminalNamespace(sessionId));
             if (closed?.ok === false) throw new Error(closed.error);
             await clearLaunchMetadata(previous.store, sessionId);

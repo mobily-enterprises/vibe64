@@ -159,6 +159,7 @@
   },
   "devDependencies": {
     "@jskit-ai/agent-docs": "0.1.345",
+    "@jskit-ai/auth-web": "0.2.54",
     "@jskit-ai/config-eslint": "0.1.252",
     "@jskit-ai/jskit-catalog": "0.2.97",
     "@jskit-ai/release": "0.1.14",

@@ -155,10 +155,12 @@ function createPreviewIdentityGrantConsumer(previewAuth = {}) {
  * @param {object} options
  * @param {((grant: object) => object) | null} options.consumeIdentityGrant null when the Preview has no identity signing
  * @param {((input: object) => Promise<object>) | null} options.executePreviewIdentityCommand null when the Preview was launched without identity switching
+ * @param {(header: string) => boolean} [options.holdCookie] keeps an app cookie the Preview holds for the page's held session
  */
 async function proxyPreviewIdentityExchange(request, response, {
   consumeIdentityGrant,
   executePreviewIdentityCommand,
+  holdCookie,
   previewAuth = null,
   proxyOrigin = "",
   token = ""
@@ -187,7 +189,8 @@ async function proxyPreviewIdentityExchange(request, response, {
       selection
     });
     // The app's session cookies, as the Preview's other answers give them (previewSetCookies).
-    setCookie.push(...previewSetCookies(Array.isArray(commandResult?.setCookie) ? commandResult.setCookie : [], { proxyOrigin }));
+    const appSetCookie = Array.isArray(commandResult?.setCookie) ? commandResult.setCookie : [];
+    setCookie.push(...previewSetCookies(appSetCookie, { holdCookie, proxyOrigin }));
     signedOut = commandResult?.signedOut === true;
     if (commandResult?.ok !== true) {
       throw previewIdentityProxyError(

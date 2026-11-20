@@ -1,4 +1,4 @@
-const PREVIEW_BRIDGE_VERSION = 8;
+const PREVIEW_BRIDGE_VERSION = 9;
 // Learning-only reduced projection of a failed learner-started in-app request.
 const PREVIEW_APP_REQUEST_MESSAGE_TYPE = "vibe64:preview-app-request";
 const PREVIEW_BRIDGE_READY_MESSAGE_TYPE = "vibe64:preview-bridge-ready";
@@ -19,6 +19,15 @@ const PREVIEW_LOCATION_MESSAGE_TYPE = "vibe64:preview-location";
 const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
 const PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE = "vibe64:preview-resource-failure";
 const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
+// A window the Preview pane opens (a sign-in window, say) is a page of its own,
+// whose cookies are not the pane's: the pane's bridge asks the Preview for a
+// single-use ticket (a POST to the ticket path) and sends the window to the
+// window path with it and the address it was opening, and the Preview gives the
+// window the pane's access and sends it on (launchPreviewWindow.js).
+const PREVIEW_WINDOW_TICKET_PATH = "/__vibe64/preview-window-ticket";
+const PREVIEW_WINDOW_PATH = "/__vibe64/preview-window";
+const PREVIEW_WINDOW_TICKET_QUERY_PARAM = "ticket";
+const PREVIEW_WINDOW_DESTINATION_QUERY_PARAM = "to";
 // The session change that asks the session's editors to open an app page in
 // their Preview, as its address box would (`vibe64-helper preview open`).
 const PREVIEW_OPEN_REQUESTED_REASON = "preview-open-requested";
@@ -101,5 +110,9 @@ export {
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE,
   PREVIEW_RECORDING_MESSAGE_TYPE,
-  PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
+  PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE,
+  PREVIEW_WINDOW_DESTINATION_QUERY_PARAM,
+  PREVIEW_WINDOW_PATH,
+  PREVIEW_WINDOW_TICKET_PATH,
+  PREVIEW_WINDOW_TICKET_QUERY_PARAM
 };

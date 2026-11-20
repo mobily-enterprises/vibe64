@@ -114,6 +114,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `tests/server/agentPreviewCommand.unit.test.js`
 - `tests/server/agentPreviewOpenCommand.unit.test.js`
 - `tests/server/launchPreviewCrossSiteCookies.unit.test.js`
+- `tests/server/launchPreviewHeldSessions.unit.test.js`
 - `tests/server/previewCrossSiteFrame.browser.test.js`
 - `tests/client/vibe64PreviewOpenRequest.vitest.js`
 - `packages/vibe64-core/src/server/sessionUiSyncState.js`
@@ -130,6 +131,9 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/launchPreviewHeaders.js`
 - `packages/vibe64-core/src/server/cookieDomainGuard.js`
 - `packages/vibe64-terminals/src/server/launchPreviewIdentity.js`
+- `packages/vibe64-terminals/src/server/launchPreviewAccess.js`
+- `packages/vibe64-terminals/src/server/launchPreviewHeldCookies.js`
+- `packages/vibe64-terminals/src/server/launchPreviewWindow.js`
 - `packages/vibe64-terminals/src/server/launchPreviewListening.js`
 - `packages/vibe64-terminals/src/server/launchPreviewConnections.js`
 - `packages/vibe64-terminals/src/server/launchPreviewBridge.js`
@@ -571,15 +575,56 @@ with no cookie, so it gets no application page. The Preview opened in its own
 tab is its own top-level site and bootstraps its own cookie from the token in
 its address. An HTTP Preview runs on this computer on the editor's own loopback
 name, same-site with it, so its cookie stays `SameSite=Lax` and `HttpOnly`
-without `Secure`. The application's own Set-Cookie headers (page and asset
-answers, WebSocket upgrade answers and the identity exchange) get the same
-treatment on HTTPS: the application's `SameSite`, `Secure` and `Partitioned`
-give way to `Secure; SameSite=None; Partitioned`, so signing in inside the pane
-keeps its session; the pane and the tab keep separate cookies. A window the
-pane opens on the Preview's origin (a framed app's OAuth sign-in window) is a
-top-level page of the Preview's own site, with neither the pane's gate cookie
-nor its app cookies, so the gate refuses it; such sign-ins finish only in the
-Preview's own tab. On every Preview a
+without `Secure`.
+
+The browser keeps a cross-site pane's cookies apart from a window at the
+Preview's own address, so a window the pane opens (a framed app's OAuth sign-in
+window, which JSKIT's popup client opens on the app's origin) would have neither
+the pane's gate cookie nor its app session. The Preview proxy therefore holds the
+application's session itself (`launchPreviewAccess.js`,
+`launchPreviewHeldCookies.js`, `launchPreviewWindow.js`). The pane coming in
+with the token on an HTTPS Preview (a frame's load, `Sec-Fetch-Dest: iframe`) is
+also given a held session by the bootstrap redirect: a random id in a second
+cookie beside the bearer cookie, with the same attributes. For a request of a
+held session the proxy keeps each `HttpOnly` cookie the application
+sets (page and asset answers, WebSocket upgrade answers, the identity exchange)
+instead of passing it to the browser, and sends the held cookies with that
+session's requests, by path and expiry, longest path first, in place of any older
+browser copy of the same name. A cookie the application ends is dropped and still
+passed on, so a browser copy ends too. A request another site started gets only
+held `SameSite=None` cookies unless it is a GET page load, so another site's form
+post or fetch does not carry the session. Cookies the page's script reads stay
+the browser's: on HTTPS their `SameSite`, `Secure` and `Partitioned` give way to
+`Secure; SameSite=None; Partitioned`. Every other request (a tab of its own,
+the agent's browser and test runner, a client that is no browser, an HTTP
+Preview, whose windows share the pane's cookies on the editor's loopback name)
+has no held session and keeps passing every cookie through, as before. The
+bridge's `window.open`, in a framed HTTPS page only, opens the window blank
+inside the click, asks the proxy for a ticket
+(`POST /__vibe64/preview-window-ticket`: same-origin, behind the gate, from a
+held session) and sends the window to `/__vibe64/preview-window?ticket=…&to=…`,
+keeping `noopener`. The ticket is random, single-use and lives 30 seconds; it
+carries the pane's held session. The window path, before the gate, accepts it
+only for a top-level GET page load (`Sec-Fetch-Dest: document`), never in a
+frame, and only for an http(s) destination. It sets the bearer cookie and the
+pane's held session in the window's own cookies, in place of any the window's
+browser kept, and answers 303 to the destination with
+`Referrer-Policy: no-referrer`. A ticket is used up by its first use, whatever
+comes of it. The pane and its window are one application session; when the
+provider severs the window (COOP), a reload of the pane shows the sign-in. The
+Preview in its own tab is a page of the window's site, so after a window's
+sign-in it shares that session too. The redemption does not check the editor
+person: the Preview's site never sees the editor's sign-in. Only the pane, which
+holds that person's partitioned bearer cookie and held session, can ask for a
+ticket, and the window uses it at once. Held cookies and tickets live only in
+the editor process's memory, per
+Preview (project, session and origin), at most 64 held sessions of 64 cookies and
+16 pending tickets, the oldest giving way. They survive the proxy's replacement
+on an app restart. Stop and a closed launch terminal (`stop`) drop them, and the
+session's end (`retire`) drops the token too. Application sign-in state kept in
+browser storage or in cookies its own script writes stays in the page that made
+it. The gate and proxy debug log record a request's path, never its query, which
+can carry the token or a ticket. On every Preview a
 `Domain` attribute naming a domain above the Preview's host (the workspace's or
 the Preview domain itself, `@local/vibe64-core/server/cookieDomainGuard`) is
 removed, so a cookie never reaches another Preview or app, and the proxy logs a

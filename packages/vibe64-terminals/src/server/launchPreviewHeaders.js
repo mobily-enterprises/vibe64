@@ -10,6 +10,10 @@ import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol
 const HTML_CONTENT_TYPE_PATTERN = /\btext\/html\b/iu;
 
 const PREVIEW_PROXY_TOKEN_COOKIE = PREVIEW_PROXY_TOKEN_QUERY_PARAM;
+// The held session a browser page of the Preview is (launchPreviewAccess.js): the id the Preview holds that
+// page's app cookies under, kept beside its access cookie with the same attributes.
+const PREVIEW_HELD_SESSION_COOKIE = "vibe64_preview_session";
+const PREVIEW_HELD_SESSION_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 
 const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
 
@@ -42,6 +46,8 @@ function proxyRequestHeaders(headers, targetUrl, options = {}) {
   const {
     clientAddress = "",
     freshDocument = false,
+    heldCookies = null,
+    method = "GET",
     proxyOrigin = "",
     targetHost = "",
     usageRequestId = ""
@@ -58,7 +64,7 @@ function proxyRequestHeaders(headers, targetUrl, options = {}) {
     delete nextHeaders["if-modified-since"];
     delete nextHeaders["if-none-match"];
   }
-  const cookie = stripPreviewTokenCookie(nextHeaders.cookie, { proxyOrigin });
+  const cookie = appCookieHeader(nextHeaders, { heldCookies, method, proxyOrigin, requestPath: targetUrl.pathname });
   if (cookie) {
     nextHeaders.cookie = cookie;
   } else {
@@ -74,11 +80,12 @@ function proxyRequestHeaders(headers, targetUrl, options = {}) {
 function proxyUpgradeHeaders(headers, targetUrl, options = {}) {
   const {
     clientAddress = "",
+    heldCookies = null,
     proxyOrigin = "",
     targetHost = ""
   } = options;
   const nextHeaders = stripUsageRecordingHeaders({ ...headers });
-  const cookie = stripPreviewTokenCookie(nextHeaders.cookie, { proxyOrigin });
+  const cookie = appCookieHeader(nextHeaders, { heldCookies, proxyOrigin, requestPath: targetUrl.pathname });
   if (cookie) {
     nextHeaders.cookie = cookie;
   } else {
@@ -176,12 +183,6 @@ function previewTokenHash(token = "", scope = {}) {
     .digest("hex");
 }
 
-function tokenMatches(token = "", expectedHash = "", scope = {}) {
-  const tokenHash = Buffer.from(previewTokenHash(token, scope), "hex");
-  const expected = Buffer.from(String(expectedHash || ""), "hex");
-  return tokenHash.length === expected.length && crypto.timingSafeEqual(tokenHash, expected);
-}
-
 function previewRequestToken(request, requestUrl, options = {}) {
   const {
     proxyOrigin = ""
@@ -209,15 +210,25 @@ function previewRequestTokenDiagnostics(request, requestUrl, options = {}) {
  * HTTPS Preview gates use a __Host- cookie: Secure, Path=/ and no Domain, so a
  * sibling host under the same parent domain cannot set or replace it.
  */
-function previewTokenCookieName(proxyOrigin = "") {
+function previewCookieName(baseName, proxyOrigin = "") {
   try {
     const url = new URL(proxyOrigin);
     const https = url.protocol === "https:";
     const suffix = url.port || (https ? "443" : "80");
-    return `${https ? "__Host-" : ""}${PREVIEW_PROXY_TOKEN_COOKIE}_${suffix}`;
+    return `${https ? "__Host-" : ""}${baseName}_${suffix}`;
   } catch {
-    return PREVIEW_PROXY_TOKEN_COOKIE;
+    return baseName;
   }
+}
+
+function previewTokenCookieName(proxyOrigin = "") {
+  return previewCookieName(PREVIEW_PROXY_TOKEN_COOKIE, proxyOrigin);
+}
+
+/** The held session a request's page is, from its cookie, or "" for none. */
+function previewRequestHeldSession(request, options = {}) {
+  const value = parseCookies(request.headers?.cookie || "")[previewCookieName(PREVIEW_HELD_SESSION_COOKIE, options.proxyOrigin)];
+  return PREVIEW_HELD_SESSION_PATTERN.test(String(value || "")) ? value : "";
 }
 
 /**
@@ -233,6 +244,15 @@ function previewTokenCookieName(proxyOrigin = "") {
 const CROSS_SITE_COOKIE_ATTRIBUTES = Object.freeze(["Secure", "SameSite=None", "Partitioned"]);
 
 function previewTokenCookie(token = "", options = {}) {
+  return previewOwnCookie(PREVIEW_PROXY_TOKEN_COOKIE, token, options);
+}
+
+/** The cookie that keeps a browser page's held session (launchPreviewAccess.js), made as the access cookie is. */
+function previewHeldSessionCookie(heldSession = "", options = {}) {
+  return previewOwnCookie(PREVIEW_HELD_SESSION_COOKIE, heldSession, options);
+}
+
+function previewOwnCookie(baseName, value = "", options = {}) {
   const {
     proxyOrigin = ""
   } = options;
@@ -243,7 +263,7 @@ function previewTokenCookie(token = "", options = {}) {
   const policy = previewOriginUsesHttps(proxyOrigin)
     ? `HttpOnly; ${CROSS_SITE_COOKIE_ATTRIBUTES.join("; ")}`
     : "SameSite=Lax; HttpOnly";
-  return `${previewTokenCookieName(proxyOrigin)}=${encodeURIComponent(String(token || ""))}; Path=/; ${policy}`;
+  return `${previewCookieName(baseName, proxyOrigin)}=${encodeURIComponent(String(value || ""))}; Path=/; ${policy}`;
 }
 
 /**
@@ -262,15 +282,17 @@ function crossSiteSetCookie(header = "") {
 /**
  * The app's Set-Cookie headers as the browser gets them from its Preview: no
  * Domain attribute shares a cookie beyond the Preview's own host (each one
- * taken off is reported, so a project that tries it shows in the log), and an
- * HTTPS Preview's cookies are cross-site ones (crossSiteSetCookie).
- * @template {string | string[] | undefined} T
- * @param {T} value one header, a list of them, or none
- * @param {{ proxyOrigin?: string, reportWidenedCookieDomain?: (widened: { cookie: string, domain: string, host: string }) => void }} [options]
- * @returns {T}
+ * taken off is reported, so a project that tries it shows in the log); a
+ * cookie the Preview holds for the page (`holdCookie`, its HttpOnly ones) is
+ * kept from the browser; and an HTTPS Preview's other cookies are cross-site
+ * ones (crossSiteSetCookie).
+ * @param {string | string[] | undefined} value one header, a list of them, or none
+ * @param {{ holdCookie?: (header: string) => boolean, proxyOrigin?: string, reportWidenedCookieDomain?: (widened: { cookie: string, domain: string, host: string }) => void }} [options]
+ * @returns {string[] | undefined}
  */
 function previewSetCookies(value, options = {}) {
   const {
+    holdCookie = holdNoCookie,
     proxyOrigin = "",
     reportWidenedCookieDomain = ignoreWidenedCookieDomain
   } = options;
@@ -279,14 +301,20 @@ function previewSetCookies(value, options = {}) {
   }
   const host = previewOriginHost(proxyOrigin);
   const https = previewOriginUsesHttps(proxyOrigin);
-  const headers = (Array.isArray(value) ? value : [value]).map((entry) => {
+  return (Array.isArray(value) ? value : [value]).flatMap((entry) => {
     const guarded = withoutWideningCookieDomain(String(entry ?? ""), host);
     for (const domain of guarded.widenedDomains) {
       reportWidenedCookieDomain({ cookie: guarded.name, domain, host });
     }
-    return https ? crossSiteSetCookie(guarded.header) : guarded.header;
+    if (holdCookie(guarded.header)) {
+      return [];
+    }
+    return [https ? crossSiteSetCookie(guarded.header) : guarded.header];
   });
-  return /** @type {T} */ (Array.isArray(value) ? headers : headers[0]);
+}
+
+function holdNoCookie() {
+  return false;
 }
 
 function ignoreWidenedCookieDomain() {}
@@ -309,17 +337,43 @@ function previewOriginUsesHttps(value = "") {
 }
 
 /**
- * The app sees the browser's cookies without this proxy's token cookie.
+ * The Cookie header the app gets: the cookies the Preview holds for the page's
+ * held session (launchPreviewHeldCookies.js), then the browser's own, without
+ * the Preview's own cookies and without an older copy of a cookie it holds.
+ * @param {Record<string, string | string[] | undefined>} headers the browser's request headers
+ * @param {{ heldCookies?: ReturnType<typeof import("./launchPreviewHeldCookies.js").createHeldCookieJar> | null, method?: string, proxyOrigin?: string, requestPath?: string }} options
+ */
+function appCookieHeader(headers, {
+  heldCookies = null,
+  method = "GET",
+  proxyOrigin = "",
+  requestPath = "/"
+} = {}) {
+  const browserCookies = stripPreviewTokenCookie(headers.cookie, { proxyOrigin });
+  if (!heldCookies) {
+    return browserCookies;
+  }
+  const held = heldCookies.cookieHeaderPairs(requestPath, {
+    crossSite: requestHeader({ headers }, "sec-fetch-site").toLowerCase() === "cross-site",
+    navigation: ["GET", "HEAD"].includes(String(method).toUpperCase()) &&
+      requestHeader({ headers }, "sec-fetch-mode").toLowerCase() === "navigate"
+  });
+  const own = browserCookies.split("; ").filter((part) => part && !heldCookies.holds(cookiePairName(part)));
+  return [...held.map((cookie) => cookie.pair), ...own].join("; ");
+}
+
+/**
+ * The app sees the browser's cookies without this proxy's own: its access and held session cookies.
  */
 function stripPreviewTokenCookie(header = "", options = {}) {
   const {
     proxyOrigin = ""
   } = options;
-  const cookieName = previewTokenCookieName(proxyOrigin);
+  const ownNames = [PREVIEW_PROXY_TOKEN_COOKIE, PREVIEW_HELD_SESSION_COOKIE].map((name) => previewCookieName(name, proxyOrigin));
   return String(header || "")
     .split(";")
     .map((part) => part.trim())
-    .filter((part) => part && cookiePairName(part) !== cookieName)
+    .filter((part) => part && !ownNames.includes(cookiePairName(part)))
     .join("; ");
 }
 
@@ -333,6 +387,7 @@ function cookiePairName(part = "") {
 
 function responseHeaders(response, options = {}) {
   const {
+    holdCookie = holdNoCookie,
     injected = false,
     proxyOrigin = "",
     reportWidenedCookieDomain = ignoreWidenedCookieDomain,
@@ -345,7 +400,7 @@ function responseHeaders(response, options = {}) {
     }
   }
   if (headers["set-cookie"] !== undefined) {
-    headers["set-cookie"] = previewSetCookies(headers["set-cookie"], { proxyOrigin, reportWidenedCookieDomain });
+    headers["set-cookie"] = previewSetCookies(headers["set-cookie"], { holdCookie, proxyOrigin, reportWidenedCookieDomain });
   }
   delete headers["content-length"];
   if (injected) {
@@ -523,7 +578,9 @@ export {
   normalizePreviewEditorOrigin,
   normalizePreviewTargetHref,
   presentsOnLoopbackOrigin,
+  previewHeldSessionCookie,
   previewOriginHost,
+  previewRequestHeldSession,
   previewRequestToken,
   previewRequestTokenDiagnostics,
   previewResponseHeaders,
@@ -539,7 +596,6 @@ export {
   requestShouldCleanPreviewToken,
   stripPreviewTokenQueryParam,
   targetRequestUrl,
-  tokenMatches,
   VIBE64_LAUNCH_ALIAS_PATTERN,
   __testables
 };
