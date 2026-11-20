@@ -14,6 +14,7 @@ import {
   appendPreviewTokenQueryParam,
   normalizePreviewEditorOrigin,
   normalizePreviewTargetHref,
+  previewOriginHost,
   previewTokenHash,
   requestPreviewOrigin
 } from "./launchPreviewHeaders.js";
@@ -448,6 +449,7 @@ async function startLaunchPreviewProxy({
   const editorOrigins = new Set();
   // The project's Preview locator, inlined into each page's bridge.
   let locatorSource = "";
+  const reportWidenedCookieDomain = createWidenedCookieDomainWarning({ env, publicOrigin, scope });
   server.on("request", (request, response) => {
     void proxyPreviewRequest(request, response, {
       connectOrigin,
@@ -458,6 +460,7 @@ async function startLaunchPreviewProxy({
       locatorSource,
       previewAuth,
       proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
+      reportWidenedCookieDomain,
       targetRestartWaitMs,
       targetState,
       tracker,
@@ -472,6 +475,7 @@ async function startLaunchPreviewProxy({
     proxyPreviewUpgrade(request, socket, head, {
       connectOrigin,
       proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
+      reportWidenedCookieDomain,
       tracker,
       tokenScope,
       tokenHash,
@@ -560,6 +564,44 @@ async function startLaunchPreviewProxy({
     token,
     targetHref: targetUrl.toString()
   });
+}
+
+// How many cookie and domain pairs one Preview warns about: each warns once, and an app that keeps inventing new
+// ones cannot fill the log or this process's memory.
+const WIDENED_COOKIE_DOMAIN_WARNINGS_MAX = 64;
+
+/**
+ * The warning a Preview logs when it takes a cookie's Domain off (previewSetCookies), naming the workspace and
+ * project whose app tried to share a cookie beyond its Preview: once for each cookie and domain.
+ * @param {{ env: RuntimeEnv, publicOrigin?: string, scope?: { projectScope?: string, sessionId?: string } }} options
+ */
+function createWidenedCookieDomainWarning({ env, publicOrigin = "", scope = {} }) {
+  const warned = new Set();
+  // A public Preview's host names its workspace (<preview>.<workspace>.<domain>); a Preview on this computer has none.
+  const workspace = /^v64preview-[a-z0-9]{12}\.([a-z0-9-]+)\./u.exec(previewOriginHost(publicOrigin))?.[1] ||
+    String(env.VIBE64_WORKSPACE || "").trim() ||
+    "local";
+  const project = String(scope.projectScope || "").replace(/^project:/u, "") || "unknown";
+  return ({ cookie = "", domain = "", host = "" } = {}) => {
+    const key = `${cookie}\n${domain}`;
+    if (warned.has(key) || warned.size >= WIDENED_COOKIE_DOMAIN_WARNINGS_MAX) {
+      return;
+    }
+    warned.add(key);
+    console.warn(
+      `Vibe64 Preview took Domain=${domain} off cookie ${cookie} of project ${project} in workspace ${workspace}: ` +
+        `it would have reached every host below ${domain}, so it stays on ${host}.`,
+      {
+        event: "vibe64.preview.cookie_domain_removed",
+        cookie,
+        domain,
+        host,
+        project,
+        sessionId: String(scope.sessionId || ""),
+        workspace
+      }
+    );
+  };
 }
 
 function normalizePreviewAuth(value = {}, options = {}) {

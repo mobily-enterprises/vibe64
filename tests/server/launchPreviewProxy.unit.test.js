@@ -103,7 +103,8 @@ test("launch preview bearer cookies are host-only __Host- cookies on proxied HTT
   const hostedCookie = previewTokenCookie("secret", {
     proxyOrigin: "https://v64preview-abc123def456.workspace.studio.example"
   });
-  assert.match(hostedCookie, /^__Host-vibe64_preview_token_443=secret; Path=\/; SameSite=Lax; HttpOnly; Secure$/u);
+  // Cross-site attributes: launchPreviewCrossSiteCookies.unit.test.js.
+  assert.match(hostedCookie, /^__Host-vibe64_preview_token_443=secret; Path=\/; HttpOnly; Secure; SameSite=None; Partitioned$/u);
   assert.doesNotMatch(hostedCookie, /Domain=/iu);
   const localCookie = previewTokenCookie("secret", {
     proxyOrigin: "http://127.0.0.1:49000"
@@ -528,7 +529,7 @@ test("HTTPS preview preserves secure cookies and redirects from a proxy-aware HT
       });
       assert.equal(response.statusCode, 302);
       assert.equal(response.headers.location, `${publicOrigin}/home`);
-      assert.ok(response.headers["set-cookie"].includes("target_session=example; HttpOnly; Secure"));
+      assert.ok(response.headers["set-cookie"].includes("target_session=example; HttpOnly; Secure; SameSite=None; Partitioned"));
       const forwarded = target.requests.at(-1);
       assert.equal(forwarded.origin, target.origin.replace("http:", "https:"));
       assert.equal(forwarded.forwardedProto, "https");

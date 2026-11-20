@@ -113,6 +113,8 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
 - `tests/server/agentPreviewCommand.unit.test.js`
 - `tests/server/agentPreviewOpenCommand.unit.test.js`
+- `tests/server/launchPreviewCrossSiteCookies.unit.test.js`
+- `tests/server/previewCrossSiteFrame.browser.test.js`
 - `tests/client/vibe64PreviewOpenRequest.vitest.js`
 - `packages/vibe64-core/src/server/sessionUiSyncState.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
@@ -126,6 +128,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/launchPreviewForwarding.js`
 - `packages/vibe64-terminals/src/server/launchPreviewFrameLoads.js`
 - `packages/vibe64-terminals/src/server/launchPreviewHeaders.js`
+- `packages/vibe64-core/src/server/cookieDomainGuard.js`
 - `packages/vibe64-terminals/src/server/launchPreviewIdentity.js`
 - `packages/vibe64-terminals/src/server/launchPreviewListening.js`
 - `packages/vibe64-terminals/src/server/launchPreviewConnections.js`
@@ -346,8 +349,9 @@ after the target owner has already awaited readiness. Playwright authentication
 uses an isolated request context: it obtains the host's Preview cookie and runs
 the declared identity exchange without rendering extra application pages or
 launching another Chromium process. The test runner receives that temporary
-cookie state moved to the tested address; interactive browser identities remain
-separate. The state belongs to the host, and the project's Playwright config hands
+cookie state moved to the tested address, each cookie as the tested address's
+own (an HTTPS Preview's partition key does not move with it); interactive browser
+identities remain separate. The state belongs to the host, and the project's Playwright config hands
 it to `use.storageState` unchanged. Before preparing it, the runner refuses the
 suite when a root `playwright*.config.*` file names `PLAYWRIGHT_STORAGE_STATE`
 and, ignoring comments, mentions `cookies` or `origins` or passes the variable (or
@@ -556,11 +560,33 @@ address.
 Redirects from the target's ordinary origin or
 its forwarded-scheme origin stay on the preview origin. Foreign,
 opaque and absent origins are preserved so application origin checks still apply.
-The preview proxy's own bearer cookie uses `SameSite=Lax` (plus `Secure` and the
-`__Host-` prefix on HTTPS). A Preview, including one nested inside a previewed
-editor, is same-site with the editor that frames it, so token bootstrap works;
-a foreign site that frames the Preview sends no cookie and gets no application
-page. Both cookies remain HTTP-only and scoped to the proxy host.
+A host may give Previews their own domain (`VIBE64_PREVIEW_PUBLIC_DOMAIN`), apart
+from its editors', so no application code shares a site with an editor; an HTTPS
+Preview is then a cross-site frame of the editor that shows it. The preview
+proxy's own bearer cookie on HTTPS is therefore `__Host-`, `HttpOnly`, `Secure`,
+`SameSite=None` and `Partitioned`: the editor's pane sends it, browsers that
+block third-party cookies still keep it (partitioned by the framing page's
+site), and a foreign site that frames the Preview has a partition of its own,
+with no cookie, so it gets no application page. The Preview opened in its own
+tab is its own top-level site and bootstraps its own cookie from the token in
+its address. An HTTP Preview runs on this computer on the editor's own loopback
+name, same-site with it, so its cookie stays `SameSite=Lax` and `HttpOnly`
+without `Secure`. The application's own Set-Cookie headers (page and asset
+answers, WebSocket upgrade answers and the identity exchange) get the same
+treatment on HTTPS: the application's `SameSite`, `Secure` and `Partitioned`
+give way to `Secure; SameSite=None; Partitioned`, so signing in inside the pane
+keeps its session; the pane and the tab keep separate cookies. A window the
+pane opens on the Preview's origin (a framed app's OAuth sign-in window) is a
+top-level page of the Preview's own site, with neither the pane's gate cookie
+nor its app cookies, so the gate refuses it; such sign-ins finish only in the
+Preview's own tab. On every Preview a
+`Domain` attribute naming a domain above the Preview's host (the workspace's or
+the Preview domain itself, `@local/vibe64-core/server/cookieDomainGuard`) is
+removed, so a cookie never reaches another Preview or app, and the proxy logs a
+warning naming the workspace and project, once per cookie and domain for each
+proxy. A `Domain` naming the Preview's own host, or an unrelated domain the
+browser refuses anyway, is left as it is. The Preview's own cookie is never
+sent to the application.
 The bearer token belongs to the session's Preview at its public origin, not to
 one app run: the proxy registry keeps one token per project, session and origin,
 and a proxy that replaces another, as every restart, Stop and Start or recovery

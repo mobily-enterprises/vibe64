@@ -17,6 +17,7 @@ import {
   previewRequestToken,
   previewRequestTokenDiagnostics,
   previewResponseHeaders,
+  previewSetCookies,
   previewTokenCookie,
   proxyRequestHeaders,
   proxyUpgradeHeaders,
@@ -230,6 +231,7 @@ async function proxyPreviewRequest(request, response, {
   locatorSource = "",
   previewAuth = null,
   proxyOrigin = "",
+  reportWidenedCookieDomain,
   targetRestartWaitMs = DEFAULT_PREVIEW_TARGET_RESTART_WAIT_MS,
   targetState = { answered: false },
   tracker,
@@ -352,6 +354,7 @@ async function proxyPreviewRequest(request, response, {
       response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
         injected: true,
         proxyOrigin,
+        reportWidenedCookieDomain,
         targetOrigin,
         token
       }));
@@ -370,6 +373,7 @@ async function proxyPreviewRequest(request, response, {
 
     response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
       proxyOrigin,
+      reportWidenedCookieDomain,
       targetOrigin,
       token
     }));
@@ -529,6 +533,7 @@ function pipePreviewResponseBody(stream, response) {
 function proxyPreviewUpgrade(request, socket, head, {
   connectOrigin = "",
   proxyOrigin = "",
+  reportWidenedCookieDomain,
   tracker,
   tokenScope = {},
   tokenHash = "",
@@ -578,7 +583,7 @@ function proxyPreviewUpgrade(request, socket, head, {
     bindPreviewProxySocketPair(socket, upstreamSocket, {
       tracker
     });
-    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse));
+    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse, { proxyOrigin, reportWidenedCookieDomain }));
     if (upstreamHead?.length) {
       safeSocketWrite(socket, upstreamHead);
     }
@@ -594,7 +599,7 @@ function proxyPreviewUpgrade(request, socket, head, {
     upstreamResponse.on("aborted", () => socket.destroy());
     socket.on("close", () => upstreamResponse.destroy());
     socket.on("end", () => upstreamResponse.destroy());
-    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse));
+    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse, { proxyOrigin, reportWidenedCookieDomain }));
     upstreamResponse.on("data", (chunk) => {
       safeSocketWrite(socket, chunk);
     });
@@ -620,11 +625,20 @@ function proxyPreviewUpgrade(request, socket, head, {
   upstreamRequest.end();
 }
 
-function upgradeResponseHead(response) {
+/**
+ * The app's answer to a WebSocket upgrade, with its cookies as the Preview's other answers give them
+ * (previewSetCookies).
+ * @param {import("node:http").IncomingMessage} response
+ * @param {Parameters<typeof previewSetCookies>[1]} cookieOptions
+ */
+function upgradeResponseHead(response, cookieOptions) {
   const headers = [`HTTP/${response.httpVersion} ${response.statusCode} ${response.statusMessage || ""}`];
   const rawHeaders = Array.isArray(response.rawHeaders) ? response.rawHeaders : [];
   for (let index = 0; index < rawHeaders.length; index += 2) {
-    headers.push(`${rawHeaders[index]}: ${rawHeaders[index + 1]}`);
+    const value = String(rawHeaders[index]).toLowerCase() === "set-cookie"
+      ? previewSetCookies(String(rawHeaders[index + 1]), cookieOptions)
+      : rawHeaders[index + 1];
+    headers.push(`${rawHeaders[index]}: ${value}`);
   }
   headers.push("", "");
   return headers.join("\r\n");

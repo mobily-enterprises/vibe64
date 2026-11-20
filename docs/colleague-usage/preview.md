@@ -85,6 +85,30 @@ If the previewed application shows its own login screen, enter that application'
 credentials. Its login and realtime connection run through the Preview address.
 HTTPS previews retain the HTTPS scheme for applications that use it to set
 secure login cookies and redirects.
+
+A host may give Previews a domain of their own, apart from the editor's, so the
+application's code never shares the editor's site. On such a host the Preview
+pane shows another site's page, and the browser treats the application's cookies
+there as another site's: Preview marks each cookie the application sets so the
+browser keeps it for that pane (`SameSite=None`, `Secure`, `Partitioned`), and
+signing in inside the pane works as usual. The pane and the Preview opened in its
+own tab keep separate cookies: signing in inside the pane does not sign in the
+tab, so sign in again there if you need to. A sign-in that opens a window of its
+own (an accounts hub, Google and other providers, which refuse to be framed)
+cannot finish from the pane on such a host: the window is the Preview's own site
+and shows **Launch preview token is missing or invalid.**, and even a window
+that gets through signs in only itself. Open the Preview in its own tab and sign
+in there; the tab signs in through the provider's page directly. The browser must support partitioned
+cookies (current Chrome, Edge, Firefox and Safari 26.2 or later do); in an older
+Safari, or with a browser setting that blocks every cookie in frames, the pane
+shows **Launch preview token is missing or invalid.** Open the Preview in its own
+tab instead, or update the browser.
+An application cookie is never shared beyond the Preview's own address: if the
+application names a wider domain for one (a `Domain` that would also reach other
+Previews or apps), Preview removes that domain, keeps the cookie on the Preview's
+address alone and records a warning in Vibe64's log naming the workspace and the
+project. The application keeps working; ask the coding agent to stop setting that
+domain in development.
 Preview only ever shows the application. If the browser ever puts Vibe64's own
 page inside the Preview frame, the editor records where the frame came from in
 Vibe64's log, loads the application again and says so above the Preview for a
@@ -217,9 +241,10 @@ A single app page larger than 16 MB cannot be shown in Preview: it shows
 that page smaller, for example by loading its data separately. Uploads of any
 size pass through to the app unchanged.
 Only the editor that showed you the Preview can use it. Another website that
-puts the Preview address in its own frame gets no app page, because the Preview
-cookie reaches only same-site frames, and none of the app's captured console or
-network details.
+puts the Preview address in its own frame gets no app page, because the browser
+keeps the Preview's cookie only for the site that showed it (the editor's, or the
+Preview's own in its own tab), and none of the app's captured console or network
+details.
 If two temporary editors show the same address, their host routing configuration
 needs correction. Restart the affected Previews after the host update; changing
 an application's listening port is not required.

@@ -2,6 +2,7 @@
 // query parameter, and the origins and redirects the browser sees.
 
 import crypto from "node:crypto";
+import { withoutWideningCookieDomain } from "@local/vibe64-core/server/cookieDomainGuard";
 import { isLoopbackAddress } from "@local/vibe64-core/server/localStudioRequest";
 import { USAGE_RECORDING_INTERACTION_HEADER, USAGE_RECORDING_REQUEST_HEADER } from "@local/vibe64-usage-recording/shared/contract";
 import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol.js";
@@ -219,15 +220,84 @@ function previewTokenCookieName(proxyOrigin = "") {
   }
 }
 
+/**
+ * An HTTPS Preview is on another site than the editor that frames it (a host
+ * gives Previews a domain of their own), so its cookies are third-party ones
+ * in the editor's Preview pane: SameSite=None lets the pane send them, and
+ * Partitioned keeps them to the site of the page that frames the Preview, so a
+ * browser that blocks third-party cookies still keeps them there. A page of
+ * another site that frames the Preview gets a partition of its own, with no
+ * token cookie and so no application page; a Preview opened in its own tab is
+ * its own site's page and gets its token from its address, as the pane does.
+ */
+const CROSS_SITE_COOKIE_ATTRIBUTES = Object.freeze(["Secure", "SameSite=None", "Partitioned"]);
+
 function previewTokenCookie(token = "", options = {}) {
   const {
     proxyOrigin = ""
   } = options;
-  const https = previewOriginUsesHttps(proxyOrigin);
-  // The Preview is same-site with its editor, so Lax suffices; a foreign site
-  // that frames the Preview gets no token cookie and so no application page.
-  const policy = `SameSite=Lax; HttpOnly${https ? "; Secure" : ""}`;
+  // An HTTP Preview runs on this computer beside its editor, on the editor's
+  // own loopback name (vibe64LaunchPreviewDestination's sameSiteLoopbackPreviewUrl),
+  // so it is same-site with it and Lax suffices; a browser need not keep a
+  // Secure cookie there.
+  const policy = previewOriginUsesHttps(proxyOrigin)
+    ? `HttpOnly; ${CROSS_SITE_COOKIE_ATTRIBUTES.join("; ")}`
+    : "SameSite=Lax; HttpOnly";
   return `${previewTokenCookieName(proxyOrigin)}=${encodeURIComponent(String(token || ""))}; Path=/; ${policy}`;
+}
+
+/**
+ * One app cookie as an HTTPS Preview's browser gets it: the app's own
+ * SameSite, Secure and Partitioned give way to the Preview's cross-site ones
+ * (CROSS_SITE_COOKIE_ATTRIBUTES), so signing in to the app inside the pane
+ * keeps working; every other attribute is the app's.
+ * @param {string} header
+ */
+function crossSiteSetCookie(header = "") {
+  const [pair = "", ...attributes] = String(header || "").split(";");
+  const kept = attributes.filter((part) => !["partitioned", "samesite", "secure"].includes(cookiePairName(part).toLowerCase()));
+  return [pair, ...kept, ...CROSS_SITE_COOKIE_ATTRIBUTES.map((attribute) => ` ${attribute}`)].join(";");
+}
+
+/**
+ * The app's Set-Cookie headers as the browser gets them from its Preview: no
+ * Domain attribute shares a cookie beyond the Preview's own host (each one
+ * taken off is reported, so a project that tries it shows in the log), and an
+ * HTTPS Preview's cookies are cross-site ones (crossSiteSetCookie).
+ * @template {string | string[] | undefined} T
+ * @param {T} value one header, a list of them, or none
+ * @param {{ proxyOrigin?: string, reportWidenedCookieDomain?: (widened: { cookie: string, domain: string, host: string }) => void }} [options]
+ * @returns {T}
+ */
+function previewSetCookies(value, options = {}) {
+  const {
+    proxyOrigin = "",
+    reportWidenedCookieDomain = ignoreWidenedCookieDomain
+  } = options;
+  if (value === undefined) {
+    return value;
+  }
+  const host = previewOriginHost(proxyOrigin);
+  const https = previewOriginUsesHttps(proxyOrigin);
+  const headers = (Array.isArray(value) ? value : [value]).map((entry) => {
+    const guarded = withoutWideningCookieDomain(String(entry ?? ""), host);
+    for (const domain of guarded.widenedDomains) {
+      reportWidenedCookieDomain({ cookie: guarded.name, domain, host });
+    }
+    return https ? crossSiteSetCookie(guarded.header) : guarded.header;
+  });
+  return /** @type {T} */ (Array.isArray(value) ? headers : headers[0]);
+}
+
+function ignoreWidenedCookieDomain() {}
+
+/** The host name of a Preview's origin, or "" for none. */
+function previewOriginHost(value = "") {
+  try {
+    return new URL(String(value || "")).hostname;
+  } catch {
+    return "";
+  }
 }
 
 function previewOriginUsesHttps(value = "") {
@@ -265,6 +335,7 @@ function responseHeaders(response, options = {}) {
   const {
     injected = false,
     proxyOrigin = "",
+    reportWidenedCookieDomain = ignoreWidenedCookieDomain,
     targetOrigin = ""
   } = options;
   const headers = {};
@@ -272,6 +343,9 @@ function responseHeaders(response, options = {}) {
     if (value !== undefined) {
       headers[key] = value;
     }
+  }
+  if (headers["set-cookie"] !== undefined) {
+    headers["set-cookie"] = previewSetCookies(headers["set-cookie"], { proxyOrigin, reportWidenedCookieDomain });
   }
   delete headers["content-length"];
   if (injected) {
@@ -449,9 +523,11 @@ export {
   normalizePreviewEditorOrigin,
   normalizePreviewTargetHref,
   presentsOnLoopbackOrigin,
+  previewOriginHost,
   previewRequestToken,
   previewRequestTokenDiagnostics,
   previewResponseHeaders,
+  previewSetCookies,
   previewTokenCookie,
   previewTokenHash,
   proxyRequestHeaders,

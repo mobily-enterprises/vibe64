@@ -2,7 +2,7 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 import { PREVIEW_IDENTITY_LOGOUT_OPERATION, verifyPreviewIdentityGrant } from "@local/vibe64-core/server/previewAuth";
-import { previewTokenCookie } from "./launchPreviewHeaders.js";
+import { previewSetCookies, previewTokenCookie } from "./launchPreviewHeaders.js";
 
 const PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
 const consumedPreviewIdentityGrantNonces = new Map();
@@ -186,7 +186,8 @@ async function proxyPreviewIdentityExchange(request, response, {
       previewAuth,
       selection
     });
-    setCookie.push(...(Array.isArray(commandResult?.setCookie) ? commandResult.setCookie : []));
+    // The app's session cookies, as the Preview's other answers give them (previewSetCookies).
+    setCookie.push(...previewSetCookies(Array.isArray(commandResult?.setCookie) ? commandResult.setCookie : [], { proxyOrigin }));
     signedOut = commandResult?.signedOut === true;
     if (commandResult?.ok !== true) {
       throw previewIdentityProxyError(

@@ -319,7 +319,9 @@ function managedPreview(applicationRoot = "", {
 // The identity exchange runs through the Preview proxy, so the login state comes back stamped for
 // the proxy's host, while the suite visits the direct application endpoint. A browser sends a
 // cookie only to its own host, so the application's cookies and storage move to the tested origin;
-// the proxy's own __Host- cookie means nothing there and stays behind.
+// the proxy's own __Host- cookie means nothing there and stays behind. An HTTPS Preview's cookies
+// are partitioned (made for the editor's cross-site Preview pane), keyed by the Preview's site,
+// which the tested origin is not: they move as the tested origin's own cookies.
 function moveStorageStateToBaseUrl(storageState = {}, baseUrl = "") {
   const target = new URL(baseUrl);
   const secure = target.protocol === "https:";
@@ -327,7 +329,7 @@ function moveStorageStateToBaseUrl(storageState = {}, baseUrl = "") {
     ...storageState,
     cookies: (Array.isArray(storageState.cookies) ? storageState.cookies : [])
       .filter((cookie) => !String(cookie?.name || "").startsWith("__Host-"))
-      .map((cookie) => ({
+      .map(({ partitionKey: _partitionKey, _crHasCrossSiteAncestor: _crossSiteAncestor, ...cookie }) => ({
         ...cookie,
         domain: target.hostname,
         secure,

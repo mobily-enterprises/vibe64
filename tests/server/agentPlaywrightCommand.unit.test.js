@@ -103,10 +103,14 @@ function proxyStorageState(identity = "default") {
       secure: true,
       value: identity
     }, {
+      // An HTTPS Preview's cookie, partitioned for the editor's cross-site Preview pane, as
+      // Playwright's storageState writes it.
+      _crHasCrossSiteAncestor: false,
       domain: proxyHost,
       expires: -1,
       httpOnly: false,
       name: "app_csrf",
+      partitionKey: "https://example.test",
       path: "/",
       sameSite: "None",
       secure: true,

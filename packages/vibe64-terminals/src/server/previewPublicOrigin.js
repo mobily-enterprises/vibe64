@@ -122,8 +122,10 @@ function previewPublicOriginForLaunch({
   if (!hash) {
     return "";
   }
-  // The Preview nests under its editor's workspace name, keeping the editor
-  // and its Preview iframe one site even when the domain is a public suffix.
+  // The Preview nests under its editor's workspace name. A host may give
+  // Previews a domain of their own (VIBE64_PREVIEW_PUBLIC_DOMAIN), so that no
+  // app code shares a site with the editor; the Preview is then a cross-site
+  // frame of its editor, and its cookies are made for one (previewTokenCookie).
   return `${protocol}://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}.${workspace}.${baseDomain}`;
 }
 
