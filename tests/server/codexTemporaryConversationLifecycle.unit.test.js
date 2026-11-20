@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11461,26 +11461,63 @@ test("a suspended Codex goal remains readable and only explicit Resume clears it
   });
 });
 
-test("Codex stops when its notification queue cannot save commentary", async () => {
-  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+test("Codex stops when its notification queue cannot save commentary, and the session's close ends after that stop", async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
     await controller.sendMessage(sessionId, { message: "Work", messageId: "commentary-storage-loss" });
     const provider = captures.provider;
     let stops = 0;
     provider.stopThreadForObservationLoss = async () => { stops += 1; provider.status = "idle"; };
+    // Nothing awaits the stop a failed save starts. Its last step saves the stopped run under the session's
+    // lock; here it waits until the close has begun releasing the provider, so a close that did not wait for
+    // the stop would stop the provider and return while the stop still writes, as a whole run once saw.
+    const order = [];
+    let releaseStop;
+    const closeReleasing = new Promise((resolve) => { releaseStop = resolve; });
+    let reachSave;
+    const stopSaving = new Promise((resolve) => { reachSave = resolve; });
+    provider.unsubscribeThread = async () => {
+      order.push("close releases the provider");
+      releaseStop();
+      return { status: "unsubscribed" };
+    };
+    const stopRuntime = provider.stopRuntime;
+    provider.stopRuntime = async (...args) => {
+      order.push("close stops the provider");
+      return stopRuntime(...args);
+    };
     const write = store.writeConversationCommentaryMessage;
+    const mutateSession = store.mutateSession;
     store.writeConversationCommentaryMessage = async () => { throw new Error("Commentary storage failed"); };
+    store.mutateSession = async (...args) => {
+      store.mutateSession = mutateSession;
+      reachSave();
+      await closeReleasing;
+      const saved = await mutateSession(...args);
+      order.push("stopped run saved");
+      return saved;
+    };
     try {
       emitCodexNotification(captures.subscribers, assistantItemCompleted({
         itemId: "unsaved-commentary", phase: "commentary", text: "Working", threadId: provider.threadId, turnId: provider.turnId
       }));
-      await waitForSessionValue(
-        () => store.readAgentRun(sessionId, "codex_app_server"),
-        (run) => run?.providerStatus === "observation_lost" && run.active === false,
-        "a verified stop after failed commentary persistence"
-      );
+      await stopSaving;
       assert.equal(stops, 1);
+      const lost = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(lost.providerStatus, "observation_lost");
+      assert.equal(lost.active, true, "the stop has not saved its stopped run yet");
+      await controller.closeAllForSession(sessionId);
+      order.push("closed");
+      assert.deepEqual(order, ["close releases the provider", "stopped run saved", "close stops the provider", "closed"]);
+      const stopped = await store.readAgentRun(sessionId, "codex_app_server");
+      assert.equal(stopped.providerStatus, "observation_lost");
+      assert.equal(stopped.active, false);
+      assert.deepEqual(await readdir(path.join(runtime.stateRoot, "sessions", ".locks", sessionId)), [],
+        "the close returned with the session's lock still held or being released");
       assert.equal(captures.turns.length, 1);
-    } finally { store.writeConversationCommentaryMessage = write; }
+    } finally {
+      store.writeConversationCommentaryMessage = write;
+      store.mutateSession = mutateSession;
+    }
   });
 });
 
