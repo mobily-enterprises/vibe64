@@ -257,7 +257,8 @@ separate runtime directory, packs it, and tests that exact tarball in an isolate
 npm installation. The result is `.vibe64-release/build-<id>/vibe64-<version>.tgz`.
 `npm run smoke:package -- /absolute/path/to/package.tgz` repeats the installation
 proof for an existing artifact. It tests the real server and frontend asset,
-realtime handshake, native terminal, Genesis indexing and catalog, and CLI paths.
+realtime WebSocket handshake (with long-polling refused, as JSKIT's realtime
+refuses it), native terminal, Genesis indexing and catalog, and CLI paths.
 The relocated runtime also instantiates Knex's MySQL and PostgreSQL clients
 without connecting to a database. Their dynamically loaded `mysql2` and `pg`
 drivers remain explicit runtime dependencies even when bundling cannot see the

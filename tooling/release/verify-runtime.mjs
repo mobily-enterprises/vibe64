@@ -25,6 +25,20 @@ async function verifyNativeTerminal(appRoot, { cwd = appRoot } = {}) {
   });
 }
 
+// The first frame of a WebSocket handshake: Engine.IO's open packet (0{"sid"...) when realtime takes the connection.
+async function realtimeHandshake(address) {
+  const socket = new WebSocket(`${address.replace(/^http/u, "ws")}/socket.io/?EIO=4&transport=websocket`);
+  try {
+    return await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Realtime WebSocket handshake timed out")), 10000);
+      socket.addEventListener("message", event => { clearTimeout(timer); resolve(String(event.data)); });
+      socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("Realtime WebSocket handshake failed")); });
+    });
+  } finally {
+    socket.close();
+  }
+}
+
 async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-runtime-proof-"));
   const project = path.join(root, "project");
@@ -68,9 +82,11 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
     assert.equal(script.statusCode, 200);
     assert.match(script.headers["content-type"], /javascript/u);
     const address = await server.listen({ host: "127.0.0.1", port: 0 });
-    const socket = await fetch(`${address}/socket.io/?EIO=4&transport=polling`);
-    assert.equal(socket.status, 200);
-    assert.match(await socket.text(), /^0\{/u);
+    // Realtime is WebSocket only, as every client connects: JSKIT refuses long-polling, whose addresses carry the session id.
+    const polling = await fetch(`${address}/socket.io/?EIO=4&transport=polling`);
+    assert.equal(polling.status, 400, "Realtime must refuse long-polling");
+    assert.match(await polling.text(), /Transport unknown/u);
+    assert.match(await realtimeHandshake(address), /^0\{/u);
     await execute("git", ["init", "--quiet", project]);
     const genesis = path.join(appRoot, "node_modules/@local/vibe64-genesis/bin/genesis");
     const cli = (...args) => execute(process.execPath, [genesis, ...args], {
@@ -104,7 +120,7 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
       });
     });
     assert.equal((await fetch(`${address}/api/health`)).status, 200);
-    console.log("Runtime proof passed: database drivers, server, release usage guides, frontend asset, realtime handshake, native PTY, Genesis catalog and index, packaged CLI startup.");
+    console.log("Runtime proof passed: database drivers, server, release usage guides, frontend asset, realtime WebSocket handshake with long-polling refused, native PTY, Genesis catalog and index, packaged CLI startup.");
   } finally {
     if (cliProcess && cliProcess.exitCode === null) {
       cliProcess.kill("SIGTERM");
