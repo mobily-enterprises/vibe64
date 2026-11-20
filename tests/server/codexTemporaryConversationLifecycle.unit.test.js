@@ -144,20 +144,24 @@ async function exactProcessIdentity(pid, runtimeToken, commandHash) {
 }
 
 /**
- * Resolves once Node reaped this test's own detached child, and rejects after 10 s. A runtime the shutdown stopped is
- * proved gone when its group has no live member, but a child of the test process stays a zombie until libuv reaps it
- * on SIGCHLD, a loop turn later on a busy host, and its group answers `kill(-pgid, 0)` until then.
- * @param {import("node:child_process").ChildProcess} child
+ * Asserts that the exact process a shutdown proved stopped has exited, as soon as the shutdown resolves: its pid holds
+ * no process, or one that started later, or the process is a zombie. A runtime this test spawned stays a zombie until
+ * Node reaps it, which neither the shutdown nor this check waits for: whether Node has reaped its own child yet is not
+ * what the shutdown proves. A process still running fails at once, with its state.
+ * @param {number} pid
+ * @param {string} startTimeTicks its start time, as its process identity records it
  */
-function reapedChild(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
-  let timer;
-  return Promise.race([
-    once(child, "exit"),
-    new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error(`process ${child.pid} was never reaped`)), 10_000);
-    })
-  ]).finally(() => clearTimeout(timer));
+async function assertExactProcessExited(pid, startTimeTicks) {
+  let statText;
+  try {
+    statText = await readFile(`/proc/${pid}/stat`, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ESRCH") return;
+    throw error;
+  }
+  const fields = statText.slice(statText.lastIndexOf(")") + 1).trim().split(/\s+/u);
+  if (fields[19] !== startTimeTicks) return;
+  assert.ok(["Z", "X"].includes(fields[0]), `process ${pid} still runs (state ${fields[0]}) after the shutdown proved it stopped`);
 }
 
 function createProvider(calls, subscribers, captures, providerOptions = {}) {
@@ -7986,6 +7990,7 @@ test("server shutdown serializes with an owned runtime before metadata is publis
   };
   const preMetadata = createDeterministicHold();
   let child = null;
+  let processIdentity = null;
   let runtimeDir = "";
   let stopRuntimeCalls = 0;
   const controller = createCodexTerminalController({
@@ -8016,7 +8021,7 @@ test("server shutdown serializes with an owned runtime before metadata is publis
             stdio: "ignore"
           });
           child.unref();
-          const processIdentity = await exactProcessIdentity(
+          processIdentity = await exactProcessIdentity(
             child.pid,
             runtimeToken,
             commandHash
@@ -8103,8 +8108,7 @@ test("server shutdown serializes with an owned runtime before metadata is publis
     assert.equal(shutdown.providerCount, 1);
     assert.equal(shutdown.stopped, 1);
     assert.equal(stopRuntimeCalls, 1);
-    await reapedChild(child);
-    assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
+    await assertExactProcessExited(child.pid, processIdentity.startTimeTicks);
   } finally {
     preMetadata.release();
     if (runtimeDir) {
@@ -8158,6 +8162,7 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
     sessionId: "owned-runtime-session"
   };
   let child = null;
+  let processIdentity = null;
   let runtimeDir = "";
   const controller = createCodexTerminalController({
     codexAppServerProviderFactory(providerOptions) {
@@ -8182,10 +8187,11 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
             stdio: "ignore"
           });
           child.unref();
+          processIdentity = await exactProcessIdentity(child.pid, runtimeToken, commandHash);
           await writeFile(path.join(runtimeDir, "runtime.json"), `${JSON.stringify({
             ...exactStoppedRuntimeMetadata(runtimeDir),
             pid: child.pid,
-            processIdentity: await exactProcessIdentity(child.pid, runtimeToken, commandHash)
+            processIdentity
           })}\n`);
           return { ok: true };
         },
@@ -8243,8 +8249,7 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
     assert.equal(shutdown.ok, true, JSON.stringify(shutdown));
     assert.equal(shutdown.providerCount, 1);
     assert.equal(shutdown.stopped, 1);
-    await reapedChild(child);
-    assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
+    await assertExactProcessExited(child.pid, processIdentity.startTimeTicks);
   } finally {
     if (runtimeDir) {
       await stopCodexAppServerRuntime({ runtimeDir }).catch(() => null);
