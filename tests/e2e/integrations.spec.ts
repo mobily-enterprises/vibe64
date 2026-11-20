@@ -3459,7 +3459,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByRole("link", { name: "Provider setup guide", exact: true })).toHaveAttribute("href", "https://developer.waveapps.com/hc/en-us/articles/50682251860884-2-Create-an-application");
         await expect(panel.getByText("Wave OAuth access requires an active Pro or Wave Advisor business subscription. Integrations for other Wave users require Wave approval.", { exact: true })).toBeVisible();
         for (const phrase of [
-          /Sign in to Wave, open Manage applications/, /Use this project's deployed application URL/,
+          /Sign in to Wave, open Manage applications/, /Use the application URL of this project's staging or production server/,
           /Copy the issued Client ID into Client ID/, /Put the same registered callback URL/,
           /Keep profile and business read access/, /Product writes that reference accounts or taxes/,
           /Save the configuration, then use the project's Connect action/, /Reconnect after changing permissions/,
