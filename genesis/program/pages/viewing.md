@@ -27,13 +27,16 @@ always runs sandboxed: page content is untrusted.
   and one sandboxed frame of `GET /api/vibe64/pages/files/:token/*`. Both are
   served with a Content-Security-Policy `sandbox allow-scripts allow-forms
   allow-modals` (an opaque origin: no cookies, no reach into the Vibe64 window),
-  `no-store`, `no-referrer` and `nosniff`. The files' policy admits scripts,
-  styles, images, fonts, media, connections and frames only from that link's own
-  files, no workers, objects, form submissions or base changes, and the frame
-  host lets its frame show only those files. A page therefore cannot read
-  Vibe64's cookies, call Vibe64's API as the viewer, reach another page or
-  project, or send anything to another address. Missing files, other paths,
-  links and ended links answer 404 in plain text.
+  `no-store`, `no-referrer` and `nosniff`, and both are framed on purpose, so
+  they keep exactly these headers: no `frame-ancestors` and no
+  `X-Frame-Options`, which every other editor answer carries outside
+  development (the frame host's opaque origin frames the files). The files'
+  policy admits scripts, styles, images, fonts, media, connections and frames
+  only from that link's own files, no workers, objects, form submissions or
+  base changes, and the frame host lets its frame show only those files. A
+  page therefore cannot read Vibe64's cookies, call Vibe64's API as the viewer,
+  reach another page or project, or send anything to another address. Missing
+  files, other paths, links and ended links answer 404 in plain text.
 - `_vibe64/page.css` is Vibe64's stylesheet for pages: its colours as `--v64-*`
   custom properties, with a text colour and a tint for each status (done,
   running, waiting, attention, error, later, neutral), its font

@@ -18,6 +18,7 @@
     "./server/codexCacheUpgrade": "./src/server/codexCacheUpgrade.js",
     "./server/deepFreeze": "./src/server/deepFreeze.js",
     "./server/eventStream": "./src/server/eventStream.js",
+    "./server/editorFraming": "./src/server/editorFraming.js",
     "./server/featureRoutes": "./src/server/featureRoutes.js",
     "./server/localhostCheckBypass": "./src/server/localhostCheckBypass.js",
     "./server/launchPreviewProxyEnv": "./src/server/launchPreviewProxyEnv.js",

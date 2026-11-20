@@ -41,6 +41,7 @@ import {
   createVibe64FastifyLoggerOptions,
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
+import { registerEditorFraming } from "@local/vibe64-core/server/editorFraming";
 import {
   createBrowserLifecycleMonitor,
   registerBrowserLifecycleWebSocketRoute
@@ -330,6 +331,8 @@ async function createServer(options = {}) {
       }
     }
   });
+  // Before any plugin or route, so every answer, the release bundle's included, refuses other sites' frames.
+  registerEditorFraming(app, { env: runtimeEnv });
   for (const warning of loggerOptions.warnings) {
     logOperationalEvent(
       app.log,

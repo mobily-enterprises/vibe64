@@ -5,6 +5,7 @@ import {
   vibe64RouteHandler,
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
+import { framedOnPurpose } from "@local/vibe64-core/server/editorFraming";
 
 import { PAGES_ACTIONS } from "./pagesActions.js";
 import {
@@ -43,7 +44,7 @@ function pageVersionInput(request) {
  * @param {string} message
  */
 function plainRefusal(reply, status, message) {
-  reply.code(status).headers({
+  framedOnPurpose(reply).code(status).headers({
     ...sandboxHeaders("default-src 'none'; sandbox"),
     "content-type": "text/plain; charset=utf-8"
   }).send(message);
@@ -140,6 +141,8 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext, pages })
 
   // The viewing link is the whole authority of these two: a sandboxed page
   // sends no cookie and has an opaque origin, so no Studio check could pass.
+  // Both are framed on purpose, the files by the frame host's opaque origin,
+  // so they keep their own headers and no frame-ancestors.
   const viewing = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-pages"] }), {
     relativePath: "vibe64/pages",
     surface: "app"
@@ -152,7 +155,7 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext, pages })
     if (!viewed) return plainRefusal(reply, 404, LINK_ENDED);
     if (!origin) return plainRefusal(reply, 400, "This page link needs the address it was opened at.");
     const filesBase = pageFilesBase(origin, request.params.token);
-    return reply.code(200).headers({
+    return framedOnPurpose(reply).code(200).headers({
       ...sandboxHeaders(frameHostContentSecurityPolicy(filesBase)),
       "content-type": "text/html; charset=utf-8"
     }).send(frameHostHtml({
@@ -175,7 +178,7 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext, pages })
       font: pages.font
     });
     if (!response) return plainRefusal(reply, 404, "This page has no such file.");
-    return reply.code(200).headers({
+    return framedOnPurpose(reply).code(200).headers({
       ...sandboxHeaders(pageContentSecurityPolicy(pageFilesBase(origin, request.params.token))),
       // Its own scripts fetch its files from an opaque origin.
       "access-control-allow-origin": "*",

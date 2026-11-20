@@ -155,6 +155,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-core/src/server/localStudioRequest.js`
 - `server.js`
 - `tests/server/smoke.test.js`
+- `packages/vibe64-core/src/server/editorFraming.js`
+- `tests/server/editorFraming.unit.test.js`
 - `server/lib/browserLifecycle.js`
 - `packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js`
 - `packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js`
@@ -203,6 +205,22 @@ makes a request look local or HTTPS; a host whose edge ends TLS names that
 edge's addresses there. The local Studio check compares the Host header its
 connection carries, as the Origin match does: a trusted proxy's
 X-Forwarded-Host only routes output, such as a Preview's public address.
+
+Only the editor may frame the editor. Outside development and test (an unset
+or unknown `APP_ENV` included), every answer the server sends, pages, files,
+API answers and errors alike, carries `Content-Security-Policy:
+frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`
+(`packages/vibe64-core/src/server/editorFraming.js`, which `server.js` registers
+before anything else): a host's Previews can be same-site with its editors, and
+a signed-in editor's `SameSite=Lax` cookie reaches a same-site frame, so a
+Preview could otherwise frame the editor and trick clicks. The server sends
+them itself because the release's server bundle starts its features without
+JSKIT's security headers. A route's own policy gains the directive in its one
+header; a route that names its frame ancestors keeps them and gets no
+X-Frame-Options. Answers framed on purpose keep their own headers: a Pages
+viewing link's (`framedOnPurpose`) and every Preview's, which its own proxy
+serves. Development and test name no frame ancestors, as an outer editor's
+Preview frames the editor when Vibe64 is developed in Vibe64.
 
 Colleague exposes the canonical Models (`model-routing`) read, preview and save
 actions without project selection. Their assistant results contain each setup's
