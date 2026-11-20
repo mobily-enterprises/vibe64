@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -402,16 +404,71 @@ test("decorated functions join their canonical function, and the name-line rule 
   assert.ok(recorded.some((line) => line.name === "" && line.start.line > 1), "lambdas join by position");
 });
 
+// Runs the rest of its arguments pinned to the CPU its first names, set before that interpreter
+// starts, so every thread it makes (a recorder's flusher too) runs there. -I -S: it loads no recorder.
+const ON_CPU = ["-I", "-S", "-c", "import os, sys\nos.sched_setaffinity(0, {int(sys.argv[1])})\nos.execvp(sys.argv[2], sys.argv[2:])"];
+
+// The CPUs this test may pin to, or none where Python cannot pin a process (not Linux).
+const pinnableCpus = () => JSON.parse(runPython(["-I", "-S", "-c",
+  "import json, os; print(json.dumps(sorted(os.sched_getaffinity(0)) if hasattr(os, 'sched_setaffinity') else []))"
+], { env: { PATH: process.env.PATH } }));
+
+// A `cli.py steps` process, pinned to `cpu` when one is given: step() runs one step of the
+// benchmark and answers its milliseconds, { clock, cpu }.
+async function stepProcess(t, env, cpu) {
+  const args = cpu === undefined ? ["cli.py", "steps"] : [...ON_CPU, String(cpu), "python3", "cli.py", "steps"];
+  const child = spawn("python3", args, { cwd: CLI_ROOT, env, stdio: ["pipe", "pipe", "pipe"] });
+  t.after(() => child.kill("SIGKILL"));
+  const exited = once(child, "exit");
+  let errors = "";
+  child.stderr.on("data", (chunk) => { errors += chunk; });
+  child.stdin.on("error", () => {}); // a process that died fails at its next line, with its stderr
+  const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
+  const line = async () => {
+    const { done, value } = await lines.next();
+    assert.equal(done, false, errors);
+    return value;
+  };
+  assert.equal(await line(), "ready");
+  return {
+    async step() {
+      child.stdin.write("\n");
+      const [clock, cpuTime] = (await line()).split(" ").map(Number);
+      return { clock, cpu: cpuTime };
+    },
+    async end() {
+      child.stdin.end();
+      const [code] = await exited;
+      assert.equal(code, 0, errors);
+    }
+  };
+}
+
+const median = (values) => [...values].sort((left, right) => left - right)[Math.floor(values.length / 2)];
+
+// Tracing must not make a CPU-bound program more than 2.5 times slower. A shared host's load moves
+// a program's speed by about as much (a busy hyperthread sibling alone makes a step up to twice as
+// long), so each traced step is set against an untraced one taken beside it, in the same
+// conditions: an untraced and a traced process share one CPU and take turns, one step each
+// (ABAB…), and each pair of steps gives one ratio. The cost is the median of the 45 ratios, from
+// three fresh pairs of processes, each pair on a CPU picked at random, so load that comes or goes
+// between the two steps of a pair moves a few ratios, never the median. Unpinned, the two
+// processes of a pair could sit on different CPUs, one slowed throughout and the other not.
 test("recording costs at most 2.5 times the untraced time on the CPU benchmark", { skip }, async (t) => {
   const directory = await recordingDirectory(t);
-  const traced = pythonEnvironment({ directory, sourceRoot: CLI_ROOT, targetKind: "terminal" });
-  const untraced = pythonEnvironment({ recording: false });
-  const runs = { traced: [], untraced: [] };
+  const cpus = pinnableCpus();
+  const pairs = [];
   for (let round = 0; round < 3; round += 1) {
-    runs.untraced.push(Number(runPython(["cli.py", "bench"], { env: untraced })));
-    runs.traced.push(Number(runPython(["cli.py", "bench"], { env: traced })));
+    const cpu = cpus.length ? cpus[Math.floor(Math.random() * cpus.length)] : undefined;
+    const untraced = await stepProcess(t, pythonEnvironment({ recording: false }), cpu);
+    const traced = await stepProcess(t, pythonEnvironment({ directory, sourceRoot: CLI_ROOT, targetKind: "terminal" }), cpu);
+    for (let step = 0; step < 15; step += 1) pairs.push({ untraced: await untraced.step(), traced: await traced.step() });
+    await untraced.end();
+    await traced.end();
   }
-  const ratio = Math.min(...runs.traced) / Math.min(...runs.untraced);
-  t.diagnostic(`benchmark ms ${JSON.stringify(runs)} ratio ${ratio.toFixed(2)}`);
-  assert.ok(ratio <= 2.5, `ratio ${ratio.toFixed(2)}`);
+  const ratio = median(pairs.map((pair) => pair.traced.clock / pair.untraced.clock));
+  const summary = `median of ${pairs.length} step ratios ${ratio.toFixed(2)} (in CPU time ${median(pairs.map((pair) => pair.traced.cpu / pair.untraced.cpu)).toFixed(2)}); ` +
+    `median step ms untraced ${median(pairs.map((pair) => pair.untraced.clock))}, traced ${median(pairs.map((pair) => pair.traced.clock))}`;
+  t.diagnostic(summary);
+  assert.ok(ratio <= 2.5, `${summary}; step ms [untraced, traced]: ${JSON.stringify(pairs.map((pair) => [pair.untraced.clock, pair.traced.clock]))}`);
 });

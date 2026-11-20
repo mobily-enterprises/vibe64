@@ -1,7 +1,8 @@
 """Usage recording fixture: a command-line run.
 
   python3 cli.py report      highlights a short sample and prints a summary
-  python3 cli.py bench       prints the milliseconds a highlighting workload took
+  python3 cli.py steps       prints "ready", then highlights a workload once for each line it reads
+                             and prints the milliseconds that took, on the clock and in CPU time
   python3 cli.py probe       prints what the interpreter started with, as JSON
 """
 import json
@@ -24,12 +25,15 @@ def report():
     print("%d characters of HTML" % len(html))
 
 
-def bench():
+def steps():
     text = SAMPLE * 40
-    started = time.perf_counter()
-    for _ in range(25):
+    highlight(text)  # the first call, with a recorder's declarations of its functions, is no step
+    print("ready", flush=True)
+    for _ in sys.stdin:
+        clock = time.perf_counter()
+        cpu = time.process_time()
         highlight(text)
-    print(round((time.perf_counter() - started) * 1000, 3))
+        print("%.4f %.4f" % ((time.perf_counter() - clock) * 1000, (time.process_time() - cpu) * 1000), flush=True)
 
 
 def probe():
@@ -42,4 +46,4 @@ def probe():
 
 
 if __name__ == "__main__":
-    {"report": report, "bench": bench, "probe": probe}[sys.argv[1]]()
+    {"report": report, "steps": steps, "probe": probe}[sys.argv[1]]()
