@@ -21,7 +21,7 @@ import { createRecordingResults } from "./recordingResults.js";
 import { createRecordingTargets } from "./recordingTargets.js";
 import { readSourceIdentity } from "./sourceIdentity.js";
 import {
-  appendJsonLine,
+  appendJsonLines,
   createTraceReader,
   readJsonFile,
   writeJsonFile
@@ -276,9 +276,25 @@ function createService({
       unregister: () => {},
       writes: Promise.resolve()
     };
+    // Lines that come while a write runs wait for the next one, which appends them in the order they came, one append
+    // per log they run on: the 20,000 lines of a burst of requests are one append, not 20,000. An append resolves once
+    // its line is written, or its failure logged, and a failure stops no later line.
+    let queued = [];
+    const writeQueued = async () => {
+      const lines = queued;
+      queued = [];
+      let start = 0;
+      while (start < lines.length) {
+        let end = start + 1;
+        while (end < lines.length && lines[end].name === lines[start].name) end += 1;
+        await appendJsonLines(path.join(directory, lines[start].name), lines.slice(start, end).map(({ row }) => row))
+          .catch((error) => logger.warn({ error, recordingId: record.id }, "Usage recording could not append to its log."));
+        start = end;
+      }
+    };
     const append = (name, row) => {
-      entry.writes = entry.writes.then(() => appendJsonLine(path.join(directory, name), row))
-        .catch((error) => logger.warn({ error, recordingId: record.id }, "Usage recording could not append a line."));
+      if (queued.length === 0) entry.writes = entry.writes.then(writeQueued);
+      queued.push({ name, row });
       return entry.writes;
     };
     /**

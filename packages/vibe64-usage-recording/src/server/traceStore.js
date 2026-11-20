@@ -37,11 +37,12 @@ async function writeJsonFile(filePath, value) {
   await writeJsonFileAtomic(filePath, value, { fileMode: 0o660 });
 }
 
-async function appendJsonLine(filePath, value) {
+/** Appends values to a log as JSON lines, in order, with one append. */
+async function appendJsonLines(filePath, values) {
   const handle = await open(filePath, APPEND_FLAGS, 0o660);
   try {
     if (!(await handle.stat()).isFile()) throw new Error("A usage recording log is not a regular file.");
-    await handle.appendFile(`${JSON.stringify(value)}\n`);
+    await handle.appendFile(values.map((value) => `${JSON.stringify(value)}\n`).join(""));
   } finally {
     await handle.close();
   }
@@ -461,7 +462,7 @@ function pageOf(items, options = {}) {
 }
 
 export {
-  appendJsonLine,
+  appendJsonLines,
   createTraceReader,
   pageOf,
   readInteractions,

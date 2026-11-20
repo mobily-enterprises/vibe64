@@ -51,10 +51,11 @@ async function recorder(t, { status = "active", startResult = null, admission, t
   };
   const starts = [];
   const published = [];
+  const warnings = [];
   const service = createService({
     admission: admission ?? admitUsageRecording,
     events: { publish: async (event) => published.push(event) },
-    logger: { warn() {} },
+    logger: { warn: (fields, message) => warnings.push(message) },
     project: { createRuntime: async () => ({ getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: {
       usageRecordingTargets: async () => ({ ok: true, previewTargetId: "web", targets }),
@@ -72,7 +73,7 @@ async function recorder(t, { status = "active", startResult = null, admission, t
   });
   const call = (method, input = {}) => inProject(() => service[method]({ sessionId: SESSION_ID, ...input }));
   const current = async () => (await call("readCurrent")).recording;
-  return { call, current, published, root, service, session, sessionRoot, sourceRoot, starts };
+  return { call, current, published, root, service, session, sessionRoot, sourceRoot, starts, warnings };
 }
 
 // A stand-in tracer: the lines a recorder writes into the recording directory.
@@ -132,8 +133,8 @@ test("a prepended variable joins the value the recorded process would inherit", 
   assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "" } }).environment.PYTHONPATH, ours);
 });
 
-test("a recording appends its logs to no file but its own", async (t) => {
-  const { call, root } = await recorder(t);
+test("a recording appends its logs to no file but its own, and a refused append stops no other line", async (t) => {
+  const { call, root, warnings } = await recorder(t);
   const { recording } = await call("start", { targetId: "preview" });
   const directory = launchOf({ web: true, outputTargetId: "web" }).environment.VIBE64_USAGE_RECORDING_DIR;
   const outside = path.join(root, "outside.ndjson");
@@ -141,6 +142,11 @@ test("a recording appends its logs to no file but its own", async (t) => {
   await symlink(outside, path.join(directory, "interactions.ndjson"));
   await call("recordInteraction", { recordingId: recording.id, id: "i_0001", at: new Date().toISOString(), label: "button" });
   assert.equal(await readFile(outside, "utf8"), "");
+  assert.ok(warnings.some((message) => /could not append/u.test(message)), JSON.stringify(warnings));
+  // The refused append is logged, and the recording's next line is still written.
+  activeUsageRecording(SCOPE, SESSION_ID).proxyRequest({ method: "GET", path: "/api/after" }).finish({ status: 200 });
+  await waitFor(() => readFile(path.join(directory, "requests.ndjson"), "utf8").catch(() => ""),
+    (text) => text.includes("/api/after"), "the next request line");
 });
 
 test("request paths keep no query and hide long ids and tokens, and still match their routes", async (t) => {
@@ -255,6 +261,19 @@ test("module and asset loads are counted, and a full request log says so", async
   assert.deepEqual(recording.requestLog, { assets: 0, full: false });
   const directory = launchOf({ web: true }).environment.VIBE64_USAGE_RECORDING_DIR;
   const active = activeUsageRecording(SCOPE, SESSION_ID);
+  // Every append to the request log, to compare a burst of 3 lines with one of 19,997; while held, an append waits.
+  const appends = [];
+  let held = null;
+  const realOpen = fs.open;
+  fs.open = async (target, flags, ...rest) => {
+    if (String(target).endsWith("requests.ndjson") && typeof flags === "number" && flags & fs.constants.O_APPEND) {
+      appends.push(target);
+      await held?.promise;
+    }
+    return realOpen(target, flags, ...rest);
+  };
+  syncBuiltinESMExports();
+  t.after(() => { held?.resolve(); fs.open = realOpen; syncBuiltinESMExports(); });
   const assets = [
     { path: "/@vite/client" }, { path: "/@fs/app/node_modules/vue/index.js" }, { path: "/@id/virtual:icons" },
     { path: "/node_modules/.vite/deps/vue.js" }, { path: "/src/App.vue" }, { path: "/src/main.ts" },
@@ -274,8 +293,10 @@ test("module and asset loads are counted, and a full request log says so", async
   const logged = await waitFor(async () => (await readFile(path.join(directory, "requests.ndjson"), "utf8").catch(() => "")).trim().split("\n").filter(Boolean),
     (lines) => lines.length === 3, "three logged requests");
   assert.deepEqual(logged.map((line) => JSON.parse(line).path), ["/", "/api/config.js", "/api/sessions"]);
+  const appendsForThree = appends.length;
 
   // The log keeps its line limit, and the recording says it stopped logging.
+  held = Promise.withResolvers();
   for (let index = 3; index < 20_000; index += 1) active.proxyRequest({ method: "GET", path: "/api/ping" }).finish({ status: 204 });
   assert.equal((await current()).requestLog.full, false);
   const unlogged = active.proxyRequest({ method: "GET", path: "/api/late" });
@@ -287,8 +308,18 @@ test("module and asset loads are counted, and a full request log says so", async
   await waitFor(current, (value) => value?.state === "recording", "recording");
   assert.equal((await call("stop", { recordingId: recording.id })).recording.requestLog.full, true);
   await trace.idle();
-  // Stopping waits for the 20,000 queued log lines; allow for a busy machine.
-  await waitFor(current, (value) => value?.state === "stopped", "stopped", 30_000);
+  // A stop waits for the lines queued before it: while their append is held, past the stop's idle wait (150 ms here)
+  // after which a stop that did not wait would have ended, the recording is still stopping.
+  await delay(500);
+  assert.equal((await current()).state, "stopping");
+  held.resolve();
+  await waitFor(current, (value) => value?.state === "stopped", "stopped");
+  // Its log then holds every line queued before the stop, in the order the requests finished, and the 19,997 lines
+  // that queued together took as many appends as the first 3.
+  const lines = (await readFile(path.join(directory, "requests.ndjson"), "utf8")).split("\n").filter(Boolean);
+  assert.equal(lines.length, 20_000);
+  assert.ok(lines.every((line, index) => JSON.parse(line).seq === index + 1), "the log is in finishing order");
+  assert.equal(appends.length - appendsForThree, appendsForThree, "a burst of lines is one append, however long");
   const { requests } = await call("readRequests", { recordingId: recording.id });
   // A request the full log missed still shows what ran, without a made-up path.
   assert.deepEqual(requests.map(({ id, method, path: requestPath }) => ({ id, method, path: requestPath })),

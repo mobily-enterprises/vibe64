@@ -307,6 +307,19 @@ test("recording files are read only as regular files within their caps, and writ
   assert.equal(await readJsonFile(path.join(directory, "linked.json")), null);
 });
 
+test("a log a crash cut short keeps every whole line before its torn end", async (t) => {
+  const directory = await temporary(t);
+  const request = (id) => ({ id, seq: Number(id.slice(2)), method: "GET", path: "/api/x", status: 200, startedAt: at, durationMs: 1, interaction: null });
+  const interaction = (id) => ({ id, at, label: "button", kind: "click", componentFile: null });
+  // Each log's last append stopped partway through its last line.
+  await writeFile(path.join(directory, "requests.ndjson"),
+    ndjson([request("r_000001"), request("r_000002")]) + JSON.stringify(request("r_000003")).slice(0, 40));
+  await writeFile(path.join(directory, "interactions.ndjson"),
+    ndjson([interaction("i_0001")]) + JSON.stringify(interaction("i_0002")).slice(0, 20));
+  assert.deepEqual(await loggedRequestIds(directory), ["r_000001", "r_000002"]);
+  assert.deepEqual((await readInteractions(directory)).map(({ id }) => id), ["i_0001"]);
+});
+
 test("a session keeps its newest recordings within the count, size and age limits", async (t) => {
   const sessionRoot = await temporary(t);
   const now = Date.parse("2026-10-30T12:00:00.000Z");

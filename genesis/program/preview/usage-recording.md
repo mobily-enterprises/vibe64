@@ -95,8 +95,9 @@ by the proxy's rule: no query, and each long id or token segment written as
 `[redacted]` before the path is cut, so no part of one reaches a file; reads
 apply the rule again. The service reads those files incrementally and
 announces changes to the session's viewers. Stop always succeeds and is safe to
-repeat: it tells tracers to stop through `control.json`, then writes an index
-of the results. Recordings also stop at their time, request and size limits,
+repeat: it tells tracers to stop through `control.json`, waits for the log
+lines queued before it (lines that queue while a write runs are appended
+together, in order, one append per log), then writes an index of the results. Recordings also stop at their time, request and size limits,
 when a terminal target exits, when the session closes, and after a read error.
 A recording left running by an earlier server process ends as an error.
 
