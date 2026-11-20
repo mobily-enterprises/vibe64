@@ -279,8 +279,11 @@ instruction to use these commands, avoiding publication of the development tree.
 Every external dependency version must already exist in the target registry.
 
 The shared builder discovers installed server providers once at build time and
-compiles their registry. It bundles helper entrypoints as well as the server,
-including the standalone host execution helper, the Codex process leader
+compiles their registry, which the server bundle hands to JSKIT's
+`createStaticInstalledRuntime`: the development server's runtime, with its
+APP_ENV check, security headers and health, without reading `node_modules`.
+It bundles helper entrypoints as well as the server, including the standalone
+host execution helper, the Codex process leader
 with its history adapter and the working-turns reader (`workingTurns.js`), which
 a host tool loads by its package export from outside the editor, preserving
 runtime-relative resource paths. The relocated-package test launches the Codex

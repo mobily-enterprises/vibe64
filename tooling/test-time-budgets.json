@@ -18,7 +18,7 @@
       "tests/server/codexTemporaryConversationLifecycle.unit.test.js": 1580000,
       "tests/server/colleagueConversationRuntimeUpgrade.unit.test.js": 160000,
       "tests/server/developmentExample.integration.test.js": 280000,
-      "tests/server/editorFraming.unit.test.js": 200000,
+      "tests/server/editorSecurityHeaders.unit.test.js": 200000,
       "tests/server/gitTurnCheckpoint.unit.test.js": 140000,
       "tests/server/localRepositoryRemote.unit.test.js": 260000,
       "tests/server/opencodeReasoningSummaries.unit.test.js": 90000,

@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import Fastify from "fastify";
+import { createInstalledRuntime } from "@jskit-ai/kernel/server/platform";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createVibe64ActionPolicy, registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
@@ -318,6 +320,8 @@ test("a viewing link serves only its page's files, sandboxed to them, and nothin
       const reply = captureReply();
       // Sandboxed requests carry no cookie and no user: the token is all they have.
       await route.handler({ params, headers: requestHeaders, protocol: "http" }, reply);
+      // A page's file is sent as a stream of its bytes.
+      if (typeof reply.payload?.pipe === "function") reply.payload = Buffer.concat(await reply.payload.toArray());
       return reply;
     };
     const filesBase = `http://127.0.0.1:4173/api/vibe64/pages/files/${token}/`;
@@ -334,6 +338,7 @@ test("a viewing link serves only its page's files, sandboxed to them, and nothin
     const index = await get(filesRoute, { token, "*": "index.html" });
     assert.equal(index.payload.toString(), "<p>Chart</p>");
     assert.equal(index.sent["content-type"], "text/html; charset=utf-8");
+    assert.equal(index.sent["content-length"], Buffer.byteLength("<p>Chart</p>"));
     assert.equal(index.sent["content-security-policy"], pageContentSecurityPolicy(filesBase));
     assert.match(index.sent["content-security-policy"], /connect-src http:\/\/127\.0\.0\.1:4173\/api\/vibe64\/pages\/files\/[^/]+\/;/u);
     assert.match(index.sent["content-security-policy"], /sandbox allow-scripts allow-forms allow-modals$/u);
@@ -357,4 +362,30 @@ test("a viewing link serves only its page's files, sandboxed to them, and nothin
     assert.equal(lapsed.statusCode, 404, "a link lapses after 15 idle minutes");
     assert.match(String(lapsed.payload), /link has ended/u);
   }, { clock: () => now });
+});
+
+test("in production a published page reaches its viewer byte for byte, past the server's page hooks", async () => {
+  await withPages(async ({ pages, inProject, root }) => {
+    const html = "<!doctype html><html><head><title>Chart</title></head><body><p>Chart</p></body></html>";
+    const { page } = await inProject(() => pages.publishPage({ title: "Chart", files: files(html), by: alice, sessionId: "s" }));
+    const routes = testRouteApp();
+    registerRoutes(routes.http, { localhostCheckBypassed: true, projectContext: { projectsRoot: root, currentPracticeProjectScope: () => null }, pages });
+    const filesRoute = findRegisteredRoute(routes, { method: "GET", path: "/api/vibe64/pages/files/:token/*" });
+    const token = (await inProject(() => pages.openPageView({ pageId: page.id, theme: "dark" }))).viewPath.split("/").at(-1);
+    // The editor's server as a host starts it: JSKIT's runtime in production, whose hooks name the environment in
+    // every page the server sends.
+    await writeFile(path.join(root, "package.json"), JSON.stringify({ name: "pages-viewer", private: true }));
+    const app = Fastify();
+    try {
+      await createInstalledRuntime({ appRoot: root, env: { APP_ENV: "production", NODE_ENV: "production" }, logger: quietLogger, fastify: app });
+      app.get(filesRoute.path, filesRoute.handler);
+      const response = await app.inject({ method: "GET", url: `/api/vibe64/pages/files/${token}/index.html`, headers: { host: "127.0.0.1:4173" } });
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.headers["content-type"], "text/html; charset=utf-8");
+      assert.equal(response.body, html, "the page is the person's own bytes");
+      assert.equal(response.headers["content-length"], String(Buffer.byteLength(html)));
+    } finally {
+      await app.close();
+    }
+  });
 });

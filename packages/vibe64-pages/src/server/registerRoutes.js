@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import {
   VIBE64_PROJECT_ROUTE_BASE,
@@ -178,12 +179,16 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext, pages })
       font: pages.font
     });
     if (!response) return plainRefusal(reply, 404, "This page has no such file.");
+    const body = Buffer.isBuffer(response.body) ? response.body : Buffer.from(response.body);
+    // As a stream, which the server's page hooks leave alone (JSKIT's tag naming the environment in every page it
+    // sends), so a page reaches its viewer as the person's own bytes.
     return framedOnPurpose(reply).code(200).headers({
       ...sandboxHeaders(pageContentSecurityPolicy(pageFilesBase(origin, request.params.token))),
       // Its own scripts fetch its files from an opaque origin.
       "access-control-allow-origin": "*",
-      "content-type": response.contentType
-    }).send(response.body);
+      "content-type": response.contentType,
+      "content-length": body.length
+    }).send(Readable.from([body]));
   });
 }
 

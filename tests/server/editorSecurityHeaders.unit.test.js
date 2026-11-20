@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -12,7 +14,7 @@ import { createLaunchPreviewProxyRegistry } from "../../packages/vibe64-terminal
 import { prepareServerBuild, STATIC_SERVER_ENTRY_PATH } from "../../tooling/release/server-build.mjs";
 import * as editorServer from "../../server.js";
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "editor-framing";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "editor-security-headers";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const COMPOSED = Object.freeze({
@@ -23,6 +25,27 @@ const COMPOSED = Object.freeze({
   singleTargetRoot: ""
 });
 const SELF_ONLY = /(?:^|;)\s*frame-ancestors 'self'\s*(?:;|$)/u;
+const SECURITY_HEADERS = Object.freeze([
+  "x-content-type-options",
+  "referrer-policy",
+  "strict-transport-security",
+  "content-security-policy",
+  "content-security-policy-report-only",
+  "x-frame-options",
+  "cache-control"
+]);
+// An editor page, a missing page, a representative API answer, a missing API path, routes with policies of their
+// own and a Pages viewing link.
+const ANSWERED = Object.freeze([
+  "/app",
+  "/app/project/demo",
+  "/api/health",
+  "/api/nothing-here",
+  "/api/framing-proof/sandboxed",
+  "/api/framing-proof/no-frames",
+  "/api/vibe64/pages/view/ended-link"
+]);
+const run = promisify(execFile);
 
 /** Runs the rest of the test under this APP_ENV, as a host starts the editor. */
 function useAppEnvironment(t, appEnv) {
@@ -38,7 +61,7 @@ function useAppEnvironment(t, appEnv) {
 
 /**
  * An app root with a built page, whose server can also start as the release bundle's static entry does: its
- * features through tooling/release/server-build.mjs's createStaticInstalledRuntime, not JSKIT's createInstalledRuntime.
+ * features from the providers tooling/release/server-build.mjs collected, not from reading node_modules.
  */
 async function releaseAppRoot(t) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-editor-framing-"));
@@ -50,8 +73,28 @@ async function releaseAppRoot(t) {
   }
   await symlink(path.join(sourceRoot, "node_modules"), path.join(appRoot, "node_modules"));
   await mkdir(path.join(appRoot, "dist"));
-  await writeFile(path.join(appRoot, "dist/index.html"), "<!doctype html><title>Vibe64</title>");
+  await writeFile(path.join(appRoot, "dist/index.html"), "<!doctype html><html><head><title>Vibe64</title></head><body></body></html>");
   return { appRoot, systemRoot: path.join(root, "state") };
+}
+
+/** The release bundle's static entry in this app root, written as the release writes it, minus the bundling. */
+async function releaseServerOf({ appRoot }) {
+  await prepareServerBuild({ appRoot });
+  return import(pathToFileURL(path.join(appRoot, STATIC_SERVER_ENTRY_PATH)).href);
+}
+
+/** What each of ANSWERED answers: its status, its security headers and, for a page, its body. */
+async function answersOf(app) {
+  const answers = {};
+  for (const url of ANSWERED) {
+    const response = await app.inject({ method: "GET", url });
+    answers[url] = {
+      status: response.statusCode,
+      headers: Object.fromEntries(SECURITY_HEADERS.map((name) => [name, response.headers[name]])),
+      ...(String(response.headers["content-type"]).startsWith("text/html") ? { body: response.body } : {})
+    };
+  }
+  return answers;
 }
 
 /**
@@ -115,15 +158,85 @@ test("in production every editor answer refuses other sites' frames, on the runt
 test("in production every editor answer refuses other sites' frames, on the runtime the release bundle starts", async (t) => {
   useAppEnvironment(t, "production");
   const roots = await releaseAppRoot(t);
-  // The release bundle's static entry, written as the release writes it, minus the bundling: its features start
-  // through createStaticInstalledRuntime, without JSKIT's security headers.
-  await prepareServerBuild({ appRoot: roots.appRoot });
-  const releaseServer = await import(pathToFileURL(path.join(roots.appRoot, STATIC_SERVER_ENTRY_PATH)).href);
-  const app = await startEditor(roots, releaseServer);
+  const app = await startEditor(roots, await releaseServerOf(roots));
   try {
     await assertEditorRefusesOtherFrames(app);
   } finally {
     await app.close();
+  }
+});
+
+test("in production the release bundle answers as the dev server does: a year of HSTS, nosniff, no report-only policy", async (t) => {
+  useAppEnvironment(t, "production");
+  const development = await startEditor(await releaseAppRoot(t));
+  let expected;
+  try {
+    expected = await answersOf(development);
+  } finally {
+    await development.close();
+  }
+  const releaseRoots = await releaseAppRoot(t);
+  const release = await startEditor(releaseRoots, await releaseServerOf(releaseRoots));
+  try {
+    assert.deepEqual(await answersOf(release), expected);
+  } finally {
+    await release.close();
+  }
+  for (const url of ANSWERED) {
+    assert.equal(expected[url].headers["x-content-type-options"], "nosniff", url);
+    // The editor's own host name only: each Preview is a name below it.
+    assert.equal(expected[url].headers["strict-transport-security"], "max-age=31536000", url);
+    assert.equal(expected[url].headers["content-security-policy-report-only"], undefined, url);
+  }
+  assert.equal(expected["/app"].headers["content-security-policy"], "frame-ancestors 'self'");
+  assert.equal(expected["/app"].headers["referrer-policy"], "strict-origin-when-cross-origin");
+  assert.equal(expected["/app"].headers["cache-control"], "no-store");
+  assert.match(expected["/app"].body, /<head><meta name="jskit-app-environment" content="production"><title>/u);
+  assert.equal(expected["/api/health"].headers["cache-control"], "no-store, no-cache, must-revalidate");
+  assert.equal(expected["/api/nothing-here"].headers["cache-control"], "no-store, no-cache, must-revalidate");
+  // A Pages viewing link keeps its own sandbox headers.
+  assert.equal(expected["/api/vibe64/pages/view/ended-link"].headers["referrer-policy"], "no-referrer");
+  assert.equal(expected["/api/vibe64/pages/view/ended-link"].headers["cache-control"], "no-store");
+});
+
+test("the release bundle refuses to start where the dev server refuses: APP_ENV unknown, NODE_ENV not production, a retired setting", async (t) => {
+  const roots = await releaseAppRoot(t);
+  await prepareServerBuild({ appRoot: roots.appRoot });
+  // Each start in a child of its own, which ends with the outcome whatever the refused start left open.
+  const starter = path.join(path.dirname(roots.appRoot), "start-editor.mjs");
+  await writeFile(starter, [
+    "const [entry, appRoot, systemRoot, profile] = process.argv.slice(2);",
+    "const server = await import(entry);",
+    "try {",
+    "  const app = await server.createServer({ appRoot, systemRoot, logLevel: \"silent\", runtimeProfile: JSON.parse(profile) });",
+    "  await app.close();",
+    "  console.log(\"STARTED\");",
+    "} catch (error) {",
+    "  console.log(`REFUSED ${error.message}`);",
+    "}",
+    "process.exit(0);"
+  ].join("\n"));
+  const outcome = async (entry, env) => {
+    const { stdout } = await run(process.execPath, [
+      starter,
+      pathToFileURL(path.join(roots.appRoot, entry)).href,
+      roots.appRoot,
+      roots.systemRoot,
+      JSON.stringify(COMPOSED)
+    ], { env: { ...process.env, ...env }, timeout: 60_000 });
+    return stdout.split("\n").find((line) => /^(STARTED|REFUSED )/u.test(line));
+  };
+  const production = { APP_ENV: "production", NODE_ENV: "production" };
+  for (const [env, refusal] of [
+    [production, null],
+    [{ APP_ENV: "production", NODE_ENV: "development" }, /^REFUSED APP_ENV is production, so NODE_ENV must be production, and it is development\./u],
+    [{ APP_ENV: "prod", NODE_ENV: "production" }, /^REFUSED APP_ENV is "prod", which is not an environment JSKIT knows\./u],
+    [{ ...production, SIDE_EFFECTS: "live" }, /^REFUSED SIDE_EFFECTS was replaced by APP_ENV: remove SIDE_EFFECTS\./u]
+  ]) {
+    const development = await outcome("server.js", env);
+    if (refusal) assert.match(String(development), refusal, `the dev server with ${JSON.stringify(env)}`);
+    else assert.equal(development, "STARTED");
+    assert.equal(await outcome(STATIC_SERVER_ENTRY_PATH, env), development, `the release bundle with ${JSON.stringify(env)}`);
   }
 });
 
@@ -175,6 +288,7 @@ test("a production editor's Preview answers name no frame ancestors, as the edit
     assert.match(await response.text(), /app/u);
     assert.doesNotMatch(String(response.headers.get("content-security-policy") || ""), /frame-ancestors/u);
     assert.equal(response.headers.get("x-frame-options"), null);
+    assert.equal(response.headers.get("strict-transport-security"), null);
   } finally {
     await registry.closeAll();
     await new Promise((resolve) => target.close(resolve));

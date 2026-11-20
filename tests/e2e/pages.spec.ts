@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import { expect, test, type Frame, type Page } from "@playwright/test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
@@ -41,6 +42,12 @@ function nodeReply(response: ServerResponse) {
     },
     send(payload: unknown) {
       if (response.writableEnded) return reply;
+      // A page's file is sent as a stream, which Fastify pipes as it is.
+      if (payload instanceof Readable) {
+        response.writeHead(status, headers);
+        payload.pipe(response);
+        return reply;
+      }
       const raw = typeof payload === "string" || Buffer.isBuffer(payload);
       headers["content-type"] ||= raw ? "text/plain; charset=utf-8" : "application/json; charset=utf-8";
       response.writeHead(status, headers);

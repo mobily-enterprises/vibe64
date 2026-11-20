@@ -156,7 +156,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `server.js`
 - `tests/server/smoke.test.js`
 - `packages/vibe64-core/src/server/editorFraming.js`
-- `tests/server/editorFraming.unit.test.js`
+- `config/server.js`
+- `tests/server/editorSecurityHeaders.unit.test.js`
 - `server/lib/browserLifecycle.js`
 - `packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js`
 - `packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js`
@@ -213,14 +214,32 @@ frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`
 (`packages/vibe64-core/src/server/editorFraming.js`, which `server.js` registers
 before anything else): a host's Previews can be same-site with its editors, and
 a signed-in editor's `SameSite=Lax` cookie reaches a same-site frame, so a
-Preview could otherwise frame the editor and trick clicks. The server sends
-them itself because the release's server bundle starts its features without
-JSKIT's security headers. A route's own policy gains the directive in its one
+Preview could otherwise frame the editor and trick clicks. The server's hook is
+the one writer of these two headers (`config/server.js` sets JSKIT's
+`frameAncestors: false`): a route's own policy gains the directive in its one
 header; a route that names its frame ancestors keeps them and gets no
 X-Frame-Options. Answers framed on purpose keep their own headers: a Pages
 viewing link's (`framedOnPurpose`) and every Preview's, which its own proxy
 serves. Development and test name no frame ancestors, as an outer editor's
 Preview frames the editor when Vibe64 is developed in Vibe64.
+
+Every answer also carries JSKIT's security headers, from the development server
+and the release's server bundle alike: the bundle starts its features through
+JSKIT's `createStaticInstalledRuntime` with the providers its build collected
+(`tooling/release/server-build.mjs`), the same runtime the development server
+starts. They are `X-Content-Type-Options: nosniff` and `Referrer-Policy:
+strict-origin-when-cross-origin`, and `Cache-Control: no-store, no-cache,
+must-revalidate` on each API answer that sets none, in every environment; in
+staging and production also `Strict-Transport-Security: max-age=31536000`, a
+year of HTTPS for the editor's own host name only (no `includeSubDomains`, as
+each Preview is a name below it, and no preload). A route's own header wins.
+`config/server.js` turns JSKIT's report-only content policy off, as no
+endpoint receives its reports. Every page names its `APP_ENV`
+(`jskit-app-environment`), and the server refuses to start with `APP_ENV`
+missing or unknown, with staging or production and `NODE_ENV` other than
+`production`, with `SIDE_EFFECTS`, `PROD_DB_NAME` or
+`AUTH_LOCAL_FILE_PRODUCTION_ACK` set, or with `STAGING_REACHES_REAL_PEOPLE`
+anything but `true` in staging.
 
 Colleague exposes the canonical Models (`model-routing`) read, preview and save
 actions without project selection. Their assistant results contain each setup's

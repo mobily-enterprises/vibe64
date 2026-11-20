@@ -28,9 +28,11 @@ always runs sandboxed: page content is untrusted.
   served with a Content-Security-Policy `sandbox allow-scripts allow-forms
   allow-modals` (an opaque origin: no cookies, no reach into the Vibe64 window),
   `no-store`, `no-referrer` and `nosniff`, and both are framed on purpose, so
-  they keep exactly these headers: no `frame-ancestors` and no
-  `X-Frame-Options`, which every other editor answer carries outside
-  development (the frame host's opaque origin frames the files). The files'
+  they keep these headers: no `frame-ancestors` and no `X-Frame-Options`, which
+  every other editor answer carries outside development (the frame host's
+  opaque origin frames the files). A page's file reaches its viewer as the
+  person's own bytes: it is sent as a stream, which the server's page hooks
+  leave alone, so no tag naming the environment joins a page. The files'
   policy admits scripts, styles, images, fonts, media, connections and frames
   only from that link's own files, no workers, objects, form submissions or
   base changes, and the frame host lets its frame show only those files. A
