@@ -52,6 +52,33 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/adapters/aws/xml.js`
 - `packages/vibe64-deploy/src/adapters/aws/standIn.js`
 
+## Public contract
+
+- `needsOfStack()` reads what a project needs at a provider from its saved
+  commit's Stack alone; a Stack that doesn't say enough is refused, naming the
+  fix in `genesis/stack.md`.
+- `planOf()` answers the Plan from the needs, the record and what the provider
+  reports now: each service and resource with its verb, its drift, the quote at
+  the provider's list prices, the quotas it would pass and its hash. It changes
+  nothing at the provider.
+- `deploy()` carries a Plan out one step at a time, under the deployment's lease
+  where the adapter takes leases, keeping the record after each step and saying
+  what it does through the caller's `report`. `takeOffline()` takes the services
+  down and `deleteResource()` deletes a disconnected resource, each its own call;
+  `setInstances()` and `moveDomain()` change a running App Service's count and
+  domain at its provider at once.
+- `createRecordStore()`, `newRecord()`, `labelsFor()` and `rebuildFromLabels()`
+  are the record of what a deployment made, a file written against the revision
+  it read. Everything the engine makes carries the deployment's labels
+  (`vibe64-deployment`, `vibe64-app`, `vibe64-environment`, `vibe64-item`) at
+  its provider, under the provider's own name for them (mobilynet's and AWS's
+  tags, Google's labels), so a lost record is made again from them.
+- Guarantees: the engine acts only on things its record holds or that carry its
+  labels; a Deploy never deletes or makes again a thing that holds data; a
+  provider's refusal fails the step with the provider's reason, and what may
+  answer later is asked again. Each adapter (`createMobilynetAdapter()`,
+  `createGoogleAdapter()`, `createAwsAdapter()`) answers the same calls.
+
 ## Needs
 
 `needsOfStack()` reads the needs from the saved commit's Stack alone, as public
