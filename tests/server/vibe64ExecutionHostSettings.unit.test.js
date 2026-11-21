@@ -361,7 +361,13 @@ test("a unit in systemd's own folder is enabled by name; one in another folder i
   assert.deepEqual(host.commands.slice(1), ["systemctl daemon-reload", `systemctl reset-failed ${MANAGED_UNIT}`, `systemctl start ${MANAGED_UNIT}`]);
 
   host = unitHost();
-  install(host, { activation: "restart", unitName: RELEASE_UNIT, unitPath: path.join(folder, RELEASE_UNIT), unitRoot: folder });
+  // Every account reads a unit, whatever umask sudo gave the helper (sudo-rs merges the caller's 0007 with its 0022).
+  const umask = process.umask(0o027);
+  try {
+    install(host, { activation: "restart", unitName: RELEASE_UNIT, unitPath: path.join(folder, RELEASE_UNIT), unitRoot: folder });
+  } finally {
+    process.umask(umask);
+  }
   assert.match(host.commands[0], new RegExp(`^mv \\S+\\.tmp-\\d+ ${path.join(folder, RELEASE_UNIT)}$`, "u"));
   assert.deepEqual(host.commands.slice(1), [
     `systemctl enable --runtime ${path.join(folder, RELEASE_UNIT)}`,
@@ -407,10 +413,13 @@ test("relink-units links every unit root wrote outside systemd's folder again as
   const folder = await temporaryFolder(t, "v64-relink-");
   const unrelated = path.join(await temporaryFolder(t, "v64-relink-other-"), "other.service");
   await writeFile(path.join(folder, RELEASE_UNIT), "[Service]\n[Install]\nWantedBy=multi-user.target\n", { mode: 0o644 });
-  await writeFile(path.join(folder, MANAGED_UNIT), "[Service]\n", { mode: 0o644 });
+  // Written by a helper whose umask took others' read away: relinked, it is every account's to read again.
+  await writeFile(path.join(folder, MANAGED_UNIT), "[Service]\n", { mode: 0o640 });
+  await chmod(path.join(folder, MANAGED_UNIT), 0o640);
   await writeFile(path.join(folder, "vibe64-staging-test-shop-111111111111.service"), "[Service]\n", { mode: 0o644 });
   await chmod(path.join(folder, "vibe64-staging-test-shop-111111111111.service"), 0o666);
-  await writeFile(unrelated, "[Service]\n", { mode: 0o644 });
+  await writeFile(unrelated, "[Service]\n", { mode: 0o640 });
+  await chmod(unrelated, 0o640);
   await symlink(unrelated, path.join(folder, "vibe64-managed-test-cache.service"));
   await writeFile(path.join(folder, "unrelated.service"), "[Service]\n", { mode: 0o644 });
   await writeFile(path.join(folder, `${RELEASE_UNIT}.tmp-123`), "[Service]\n", { mode: 0o644 });
@@ -423,6 +432,10 @@ test("relink-units links every unit root wrote outside systemd's folder again as
     assert.doesNotMatch(error.message, /unrelated|blog|test-db/u);
     return true;
   });
+  assert.equal((await stat(path.join(folder, MANAGED_UNIT))).mode & 0o777, 0o644);
+  // A unit others may write, or a link, is left as it is.
+  assert.equal((await stat(path.join(folder, "vibe64-staging-test-shop-111111111111.service"))).mode & 0o777, 0o666);
+  assert.equal((await stat(unrelated)).mode & 0o777, 0o640);
   // The rest are linked and started all the same.
   assert.deepEqual(host.commands, [
     `systemctl link --runtime ${path.join(folder, MANAGED_UNIT)}`,

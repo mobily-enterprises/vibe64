@@ -2,7 +2,9 @@
 // without a unit, and a staging service's start.
 
 import {
+  chmodSync,
   closeSync,
+  fchmodSync,
   fsyncSync,
   openSync,
   readdirSync,
@@ -421,10 +423,12 @@ function installSystemdUnit({
   const linked = unitRoot !== SYSTEMD_UNIT_ROOT;
   if (linked) closeSync(openUnitRoot(unitRoot, rootUid));
   // Durable: the unit's data reaches the disk before it is moved into place,
-  // and its folder after, so a power cut never leaves an empty unit.
+  // and its folder after, so a power cut never leaves an empty unit. Every
+  // account reads it (UNIT_MODE), whatever umask sudo gave the helper.
   const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
-  const descriptor = openSync(temporaryUnitPath, "w", 0o644);
+  const descriptor = openSync(temporaryUnitPath, "w", UNIT_MODE);
   try {
+    fchmodSync(descriptor, UNIT_MODE);
     writeFileSync(descriptor, unit);
     fsyncSync(descriptor);
   } finally {
@@ -478,6 +482,10 @@ function installSystemdUnit({
   }
 }
 
+// A unit file is every account's to read, as systemd's own folder's are: the editor reads the installed units' ports
+// (a release's port claim), and a staging login its own unit.
+const UNIT_MODE = 0o644;
+
 // A unit folder other than systemd's own must be root's alone: systemd runs what a unit there says as root.
 function openUnitRoot(unitRoot = "", rootUid = 0) {
   try {
@@ -521,7 +529,9 @@ function removeStagingUnit(unitName = "", owner = {}, unitRoot = helperSystemdUn
 // root wrote there is linked again as it was installed: a staging unit with its boot target, and started, as a
 // boot starts one from systemd's own folder; a managed one without, for the staging unit that Requires= it to
 // start. Other files stay as they are. A unit root did not write, or one others may change, stays unlinked and
-// is reported once every other unit is linked and started.
+// is reported once every other unit is linked and started. A unit root wrote takes the mode the helper installs
+// units with (UNIT_MODE): one the helper wrote under a stricter umask, before it set the mode itself, becomes
+// readable again.
 function relinkSystemdUnits({
   rootUid = 0,
   runAllowFailure = runRootCommandAllowFailure,
@@ -547,6 +557,8 @@ function relinkSystemdUnits({
         problems.push(`${name}: not a unit file root wrote (${error.code || error.message})`);
         continue;
       }
+      // The folder is root's alone, so the regular file just read is the one this changes.
+      chmodSync(openedPath(directory, name), UNIT_MODE);
       const staging = kind === "staging";
       if (systemctl([staging ? "enable" : "link", "--runtime", path.join(unitRoot, name)], name) && staging) {
         stagingUnits.push(name);

@@ -274,8 +274,10 @@ names none keeps the system's own account files, ranges and folders, as before:
 - `VIBE64_SYSTEMD_UNIT_ROOT`: an absolute folder for release and managed
   service units in place of systemd's own, which must be a folder only root can
   change. Like systemd's own folder and the settings file, every account may
-  read it: a staging login finds its staging unit as its staging
-  account. systemd does not read it, so the helper links each unit it installs
+  read it and each unit in it: a staging login finds its staging unit as its
+  staging account, and the editor reads the installed units' ports. The helper
+  writes every unit `0644` whatever umask sudo gave it (`UNIT_MODE` in
+  `serviceOperations.js`). systemd does not read it, so the helper links each unit it installs
   into systemd's runtime folder, a staging unit with its boot target
   (`systemctl enable --runtime`), a managed one without (`systemctl link
   --runtime`), and removing a staging unit takes both away (`systemctl disable
@@ -283,8 +285,9 @@ names none keeps the system's own account files, ranges and folders, as before:
   its services, the host runs the root-only `vibe64-exec-helper relink-units`,
   which links every release and managed service unit root wrote there again as
   it was installed and starts the staging units, as a boot starts them from
-  systemd's own folder. A unit root did not write, or one others may change, it
-  leaves unlinked and reports. Every reader of the installed units (a release's
+  systemd's own folder, and gives each `0644` again (one a helper before this
+  wrote under a stricter umask, which the editor could not read). A unit root
+  did not write, or one others may change, it leaves unlinked and reports. Every reader of the installed units (a release's
   port claim, retiring an application, a staging login) reads the same folder.
 - `VIBE64_SUDOERS_ROOT`: an absolute folder for the staging sudo rules in
   place of sudo's own, which the host's sudo configuration includes.
