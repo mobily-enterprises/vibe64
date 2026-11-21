@@ -4746,6 +4746,9 @@ for (const { viewport, providerBatch } of [
           values: { RESEND_KEY: { value: "fixture-resend-secret", secret: true } } });
         expect(page.url()).not.toContain("fixture-resend-secret");
         expect(await readFile(filePath, "utf8")).not.toContain("fixture-resend-secret");
+        // The Env writes' "Env saved." feedback may still show, and at this width it covers the end of the integration
+        // form, where Save configuration sits (see waitForFeedbackToClear).
+        await waitForFeedbackToClear(page);
         await openCompactDashboardSection(page, "Integrations");
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("After CLI update", { exact: true }).click();
         await panel.getByText("One shared account", { exact: true }).click();
