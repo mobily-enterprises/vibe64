@@ -23,16 +23,15 @@ import {
   addUserToGroup,
   assertEnabledForVibe64,
   assertHumanUsername,
-  createSystemUser,
+  createPerson,
   DAEMON_USERNAME_PREFIX,
-  ensureGroup,
   HOST_SETTINGS_ROOT,
   MANAGED_USERNAME_PATTERN,
   MEMBERSHIP_DIRECTORY,
   MEMBERSHIP_LIMIT_BYTES,
   osGroupNames,
   resolveOsUser,
-  resolveOwnerUser,
+  tryResolveOsUser,
   VIBE64_GROUP
 } from "./hostAccounts.js";
 import {
@@ -45,12 +44,15 @@ import {
   openRootOwnedDirectory,
   readOwnedFile
 } from "./hostFiles.js";
-import { helperAccountDatabase, helperAccountNumberOptions, helperCommand } from "./hostSettings.js";
+import { helperAccountDatabase, helperAccountNumberOptions, helperCommand, helperPersonShell } from "./hostSettings.js";
 
 const PERSON_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "people");
 const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
 const REGISTRATION_LIMIT_BYTES = 4096;
 const PERSON_REFUSED_EXIT_CODE = 3;
+// The group the units of a person's and the daemon's commands name besides the
+// shared one (systemdUnits.js, SupplementaryGroups=nix-users).
+const PERSON_UNIT_GROUP = "nix-users";
 // The host's own narrow sudo commands for its people, one per line exactly as
 // `sudo -l` prints them, in a file only root can change.
 const PERSON_SUDO_COMMANDS_FILE = path.join(HOST_SETTINGS_ROOT, "person-sudo-commands");
@@ -75,34 +77,11 @@ const ADMINISTRATOR_GROUPS = new Set([
   "wheel"
 ]);
 
-// The daemon may create a new person, whom the helper then registers, or
-// re-enable a person root already registered. It can never make an existing
-// account a person merely by naming it.
-function handleUserManagementOperation(operation = "", payload = {}, username = "") {
-  assertHumanUsername(username);
-  const workspace = personWorkspace(resolveOwnerUser());
-  ensureGroup(VIBE64_GROUP);
-  if (operation === "create-system-user") {
-    createSystemUser(username, String(payload.password || ""), helperAccountDatabase(), helperAccountNumberOptions());
-    registerPerson(workspace, username);
-    return;
-  }
-  enablePerson(workspace, username);
-}
-
-function enablePerson(workspace = "", username = "", {
-  addToGroup = (name) => addUserToGroup(name, VIBE64_GROUP, helperAccountDatabase()),
-  resolveUser = resolveOsUser,
-  ...options
-} = {}) {
-  assertRegisteredPerson(workspace, resolveUser(username), options);
-  addToGroup(username);
-}
-
 // The people of a workspace are the accounts root registered for it, one file
 // each below a root-owned directory its daemon cannot write. Root-side host
-// setup and this helper's own account creation register them; the daemon's
-// own state only says which of them it currently enables.
+// setup (register-person) and the host's member accounts step (add-person)
+// register them; the daemon's own state only says which of them it currently
+// enables, and the daemon can neither make nor register one.
 function personWorkspace(owner = {}) {
   const username = String(owner.username || "");
   if (!username.startsWith(DAEMON_USERNAME_PREFIX)) {
@@ -367,6 +346,45 @@ function registerPerson(workspace = "", username = "", {
   return user;
 }
 
+// A person of the workspace for a login its member list names, root-side only
+// (add-person): an existing account is registered as register-person registers
+// one, and a login without an account is first made, without a password, as
+// the host makes people (createPerson). Either way the person is in the shared
+// group and in nix-users, the group the units of a person's commands name, as
+// the owner is. A name Vibe64 keeps for its own accounts, and an existing
+// account that is not a person's login (a system or administrator account), are
+// refused (exit 3) before anything changes, so a list never makes one a person.
+// Running it again changes nothing.
+function addPerson(workspace = "", username = "", {
+  addToGroup = (name, group) => addUserToGroup(name, group, helperAccountDatabase()),
+  create = (name) => createPerson(name, {
+    database: helperAccountDatabase(),
+    numberOptions: helperAccountNumberOptions(),
+    shell: helperPersonShell()
+  }),
+  existing = tryResolveOsUser,
+  facts = hostPersonFacts,
+  resolveUser = resolveOsUser,
+  ...registry
+} = {}) {
+  personWorkspaceName(workspace);
+  try {
+    assertHumanUsername(username);
+  } catch (error) {
+    throw personRefusal(`Vibe64 makes no person of ${username}: ${error.message}`);
+  }
+  resolveUser(`${DAEMON_USERNAME_PREFIX}${workspace}`);
+  if (!existing(username)) create(username);
+  const user = registerPerson(workspace, username, {
+    addToGroup: (name) => addToGroup(name, VIBE64_GROUP),
+    facts,
+    resolveUser,
+    ...registry
+  });
+  addToGroup(username, PERSON_UNIT_GROUP);
+  return user;
+}
+
 // One-time registration of the people a workspace had before root kept its
 // registry: each membership in the daemon's state whose account is already in
 // the shared group, except system and administrator accounts, which it reports.
@@ -457,10 +475,9 @@ function daemonMembershipUsernames(daemon = {}) {
 }
 
 export {
+  addPerson,
   assertActablePerson,
   assertPersonAccount,
-  enablePerson,
-  handleUserManagementOperation,
   hostLoginUids,
   hostPersonFacts,
   loginUidRange,

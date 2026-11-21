@@ -21,6 +21,8 @@ const COMMAND_PATH_PATTERN = /^(?:\/[A-Za-z0-9._+-]+)+$/u;
 // The variable a host's runtime pack tools find their packs by: the wrappers its PATH names first (policy-bin's npm,
 // npx and the rest) run the pack's own program below it.
 const RUNTIME_PACK_ROOT_ENV = "VIBE64_RUNTIME_PACK_ROOT";
+// A person's login shell where the host's settings name none.
+const PERSON_SHELL = "/bin/bash";
 
 /**
  * The account database the helper adds accounts and group memberships to: the system's own files, or the extra users
@@ -125,6 +127,23 @@ function helperRuntimePackRoot(settings = helperSettings()) {
 }
 
 /**
+ * The login shell of a person the helper makes (`add-person`): /bin/bash, unless the host's helper settings name
+ * another (`VIBE64_PERSON_SHELL`), for a host whose people sign in through a login shell of its own, so a person made
+ * while it runs has the shell the host gives its people at its next start. It is written into the account database
+ * as it is, so it must be an absolute, normalized path of letters, digits and `. _ + -` alone.
+ * @param {Record<string, string>} [settings] the host's helper settings
+ */
+function helperPersonShell(settings = helperSettings()) {
+  const configured = String(settings.VIBE64_PERSON_SHELL || "").trim();
+  if (!configured) return PERSON_SHELL;
+  if (!COMMAND_PATH_PATTERN.test(configured) || path.resolve(configured) !== configured) {
+    throw new Error("This host's Vibe64 exec helper settings name a person's login shell (VIBE64_PERSON_SHELL) that is " +
+      "not an absolute, normalized path of letters, digits and . _ + - alone.");
+  }
+  return configured;
+}
+
+/**
  * How the helper's later runs start it: the staging sudo rule and the staging shell's commands, staging-enter,
  * staging units' ExecStart and managed runs. It is the file the helper runs from, unless the host's helper settings
  * name the command the host starts it with (`VIBE64_EXEC_HELPER_COMMAND`): a host that starts it through a
@@ -147,6 +166,7 @@ export {
   helperAccountDatabase,
   helperAccountNumberOptions,
   helperCommand,
+  helperPersonShell,
   helperRuntimePackRoot,
   helperStagingKeysRoot,
   helperSudoersRoot,

@@ -257,10 +257,14 @@ names none keeps the system's own account files, ranges and folders, as before:
   login shell (staging access) changes through `usermod --prefix`, with a
   root-only folder in `/run` whose `etc` is the database (`changeLoginShell` in
   `hostAccounts.js`): plain `usermod` changes such an account too, but opens the
-  system's own account files for writing, which fails there. Such a host signs
-  people in without a password, so the helper creates no person there:
-  `create-system-user` is refused before any account changes, while a person
-  the host made is registered and re-enabled as anywhere else.
+  system's own account files for writing, which fails there. A person the
+  helper makes (`add-person`, below) goes to the same database, without a
+  password there as anywhere.
+- `VIBE64_PERSON_SHELL`: the login shell of a person the helper makes,
+  `/bin/bash` unless the host names its own (an absolute, normalized path of
+  letters, digits and `. _ + -`), for a host whose people sign in through a
+  shell of its own, so a person made while it runs has the shell the host gives
+  its people.
 - `VIBE64_SYSTEM_ID_BAND` and `VIBE64_PERSON_ID_BAND`, each `FIRST-LAST`: the
   numbers the helper gives new staging accounts and their groups, and new
   people and theirs, as `useradd -K` keys. A host names them when its system's
@@ -354,10 +358,22 @@ The helper acts as another account only for a person of the calling daemon's
 workspace. Root keeps that workspace's people in its own registry, one
 root-owned file per person in a root-only folder for the workspace, which no
 daemon can write. Host setup registers an existing account with the root-only
-`register-person <workspace> <username>`, and the helper's own
-`create-system-user` registers the account it creates. `enable-system-user` only
-re-enables a registered person: the daemon can no longer make an existing
-account a person, or add it to the shared group, merely by naming it. Every
+`register-person <workspace> <username>`. The root-only
+`add-person <workspace> <username>` (`addPerson` in `personRegistry.js`) is for
+a login the workspace's member list names: an existing account is registered as
+`register-person` registers one, and a login without an account is first made
+without a password (`createPerson` in `hostAccounts.js`): in the host's account
+database, numbered in its people's band, in a group of its own, with the host's
+person shell and an empty home of its own, `/home/<login>` at 0750, whatever the
+umask (a home already there is kept as it is). Either way the person joins the
+shared group and `nix-users`, the group the units of a person's commands name,
+and running it again changes nothing. A name Vibe64 keeps for its own accounts
+(`v64d_`, `v64s_`, `root`, or not a managed username) and an existing system or
+administrator account are refused with exit 3 before anything changes. The
+daemon has no operation that makes, registers or re-enables a person (the
+helper refuses `create-system-user` and `enable-system-user` as unknown
+operations): it can never make an account, nor make an existing one a person
+or add it to the shared group, merely by naming it. Every
 command as a person, captured or managed, needs that registration with the
 account's current uid, a login uid from `login.defs` rather than a system
 account, no administrator power, the shared group, and an active membership in
@@ -392,8 +408,10 @@ it starts. Host setup runs the root-only
 membership whose account is already in the shared group, except system and
 administrator accounts, which it reports; a workspace that has a registry keeps
 it.
-`tests/server/vibe64ExecutionPersonRegistry.unit.test.js` covers the registry
-and its refusals.
+`tests/server/vibe64ExecutionPersonRegistry.unit.test.js` covers the registry,
+`add-person` and their refusals; `tests/server/vibe64ExecutionHostSettings.unit.test.js`
+covers how a person is made, and `tests/server/vibe64ExecutionHelperSource.unit.test.js`
+that the daemon's `create-system-user` and `enable-system-user` are refused.
 
 Each project published to staging runs as its own staging account, which the
 helper's `staging-account` operation makes and retires; the daemon names only the

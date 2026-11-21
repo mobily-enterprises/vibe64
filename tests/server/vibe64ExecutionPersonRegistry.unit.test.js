@@ -5,8 +5,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { DAEMON_USERNAME_PREFIX } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import {
+  addPerson,
   assertActablePerson,
-  enablePerson,
   loginUidRange,
   personAccountProblem,
   personSudoCommands,
@@ -60,29 +60,80 @@ async function workspaceHost(t) {
     return accounts[name];
   };
   const personOptions = { ...registry, addToGroup: (name) => added.push(name), resolveUser };
+  const created = [];
+  const joined = [];
+  // As add-person runs on the host: its account tools stand in, each making or joining what it names.
+  const addOptions = {
+    ...registry,
+    addToGroup: (name, group) => {
+      joined.push(`${name}:${group}`);
+      facts[name] = { ...facts[name], groups: [...new Set([...(facts[name]?.groups ?? [name]), group])] };
+    },
+    create: (name) => {
+      created.push(name);
+      accounts[name] = { gid: 20000 + created.length, home: `/home/${name}`, uid: 20000 + created.length, username: name };
+      facts[name] = { groups: [name], loginUids: LOGIN_UIDS, sudoListing: notAllowed(name) };
+    },
+    existing: (name) => accounts[name] ?? null,
+    resolveUser
+  };
   return {
-    accounts, added, facts, owner, registry, resolveUser, root, users,
+    accounts, added, created, facts, joined, owner, registry, resolveUser, root, users,
     // What the daemon itself can write: its own membership records.
     member: (username, status = "active") => writeFile(path.join(users, `${username}.json`),
       JSON.stringify({ role: "member", status, username })),
-    enable: (username) => enablePerson("test", username, personOptions),
+    add: (username, workspace = "test") => addPerson(workspace, username, addOptions),
     register: (username) => registerPerson("test", username, personOptions)
   };
 }
 
-test("an account the daemon merely names is never a person it can enable or act as", async (t) => {
+test("an account the daemon merely names is never a person it can act as", async (t) => {
   const host = await workspaceHost(t);
   // The escalation: the daemon writes ubuntu's membership itself, then asks
-  // the helper to enable ubuntu and to run bash as ubuntu.
+  // the helper to run bash as ubuntu.
   await host.member("ubuntu");
   await host.member("bob");
   for (const username of ["ubuntu", "bob"]) {
-    assert.throws(() => host.enable(username), (error) => error.exitCode === 3 &&
-      /not registered as a Vibe64 person of workspace test/u.test(error.message) &&
+    assert.throws(() => assertActablePerson(host.owner, host.accounts[username], host.registry), (error) =>
+      error.exitCode === 3 && /not registered as a Vibe64 person of workspace test/u.test(error.message) &&
       new RegExp(`register-person test ${username}$`, "u").test(error.message));
-    assert.throws(() => assertActablePerson(host.owner, host.accounts[username], host.registry), /not registered/u);
   }
   assert.deepEqual(host.added, [], "no account joined the shared group");
+});
+
+test("a login its member list names becomes a person of the workspace, made without a password when it has no account", async (t) => {
+  const host = await workspaceHost(t);
+  // sam has no account yet; bob is an existing person's login, not yet registered.
+  for (const username of ["sam", "bob"]) host.add(username);
+  assert.deepEqual(host.created, ["sam"], "only the login without an account is made");
+  assert.deepEqual(host.joined, ["sam:vibe64", "sam:nix-users", "bob:vibe64", "bob:nix-users"]);
+  assert.deepEqual(readPersonRegistration("test", "sam", host.registry), { uid: 20001, username: "sam" });
+  assert.deepEqual(readPersonRegistration("test", "bob", host.registry), { uid: 1002, username: "bob" });
+  // Once its daemon enables the membership, the helper acts as the person.
+  await host.member("sam");
+  assert.doesNotThrow(() => assertActablePerson(host.owner, host.accounts.sam, host.registry));
+  // Again changes nothing: the account is not made twice and stays registered.
+  host.add("sam");
+  assert.deepEqual(host.created, ["sam"]);
+  assert.deepEqual(readPersonRegistration("test", "sam", host.registry), { uid: 20001, username: "sam" });
+  // Only for a workspace that has a daemon.
+  assert.throws(() => host.add("dora", "other"), /OS user was not found: v64d_other/u);
+  assert.deepEqual(host.created, ["sam"]);
+});
+
+test("a member list never makes a person of a system or administrator account, nor of a name Vibe64 keeps", async (t) => {
+  const host = await workspaceHost(t);
+  for (const username of ["ubuntu", "merc", "sshd"]) {
+    assert.throws(() => host.add(username), (error) => error.exitCode === 3 &&
+      /never runs commands as an administrator or system account/u.test(error.message), username);
+  }
+  for (const username of [DAEMON, `${DAEMON_USERNAME_PREFIX}other`, "v64s_blog", "root", "Sam", "a"]) {
+    assert.throws(() => host.add(username), (error) => error.exitCode === 3 &&
+      new RegExp(`^Vibe64 makes no person of ${username}: `, "u").test(error.message), username);
+  }
+  assert.deepEqual(host.created, [], "no account was made");
+  assert.deepEqual(host.joined, [], "no account joined a group");
+  for (const username of ["ubuntu", "merc", "sshd"]) assert.equal(readPersonRegistration("test", username, host.registry), null);
 });
 
 test("the helper acts as a person root registered for the daemon's own workspace", async (t) => {
@@ -90,8 +141,7 @@ test("the helper acts as a person root registered for the daemon's own workspace
   await host.member("alice");
   host.register("alice");
   assert.doesNotThrow(() => assertActablePerson(host.owner, host.accounts.alice, host.registry));
-  assert.doesNotThrow(() => host.enable("alice"));
-  assert.deepEqual(host.added, ["alice", "alice"]);
+  assert.deepEqual(host.added, ["alice"]);
 
   // Another workspace's daemon cannot act as this workspace's person.
   assert.throws(() => assertActablePerson({ ...host.owner, username: `${DAEMON_USERNAME_PREFIX}other` }, host.accounts.alice, host.registry),

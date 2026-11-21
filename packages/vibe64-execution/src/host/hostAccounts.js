@@ -2,7 +2,7 @@
 // and the root commands that change accounts.
 
 import { spawnSync } from "node:child_process";
-import { closeSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
+import { chmodSync, chownSync, closeSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -156,35 +156,35 @@ function accountDatabaseOptions(database = "files") {
   return database === "extrausers" ? ["--extrausers"] : [];
 }
 
-// A person made here gets the password given, and a number as the host numbers the helper's new accounts
-// (numberOptions, hostSettings.js). A host keeping its accounts in the extra users database signs people in
-// without one, so the helper makes no person there.
-function createSystemUser(username = "", password = "", database = "files", numberOptions = []) {
-  if (database === "extrausers") {
-    throw new Error("This host keeps its accounts in the extra users database, where people sign in without a " +
-      "password: the helper creates no person with one here.");
+// The folder a person's home is made in.
+const PEOPLE_HOME_ROOT = "/home";
+
+// A person made here (add-person, personRegistry.js) has no password: Vibe64 signs people in itself, never with one
+// of the host's. The account goes to the account database the host's helper settings name, numbered as the host
+// numbers the helper's new people (numberOptions, hostSettings.js), in a group of its own, with the login shell
+// those settings name, and with an empty home of its own (0750, whatever the umask), as a host whose people are made
+// at boot makes them. A home already there is a person's data and stays as it is. Answers the account.
+function createPerson(username = "", {
+  database = "files",
+  homeRoot = PEOPLE_HOME_ROOT,
+  numberOptions = [],
+  resolveUser = resolveOsUser,
+  run = runRootCommand,
+  shell = "/bin/bash"
+} = {}) {
+  const home = path.join(homeRoot, username);
+  run("useradd", [...accountDatabaseOptions(database), ...numberOptions, "--user-group", "--no-create-home",
+    "--home-dir", home, "--shell", shell, username]);
+  const user = resolveUser(username);
+  try {
+    mkdirSync(home, { mode: 0o700 });
+  } catch (error) {
+    if (error.code === "EEXIST") return user;
+    throw error;
   }
-  if (tryResolveOsUser(username)) {
-    throw new Error(`OS user already exists: ${username}`);
-  }
-  if (!password || /[\r\n]/u.test(password)) {
-    throw new Error("A valid initial password is required to create an OS user.");
-  }
-  runRootCommand("useradd", [
-    ...numberOptions,
-    "--create-home",
-    "--user-group",
-    "--shell",
-    "/bin/bash",
-    username
-  ]);
-  const passwordResult = spawnSync("chpasswd", {
-    encoding: "utf8",
-    input: `${username}:${password}\n`
-  });
-  if (passwordResult.status !== 0) {
-    throw new Error(String(passwordResult.stderr || passwordResult.stdout || "Could not set OS user password.").trim());
-  }
+  chownSync(home, user.uid, user.gid);
+  chmodSync(home, 0o750);
+  return user;
 }
 
 // usermod has no --extrausers, and its -a -G leaves a group in the extra users database unchanged.
@@ -294,7 +294,7 @@ export {
   assertHumanUsername,
   assertUserInGroup,
   changeLoginShell,
-  createSystemUser,
+  createPerson,
   DAEMON_USERNAME_PREFIX,
   ensureGroup,
   HOST_SETTINGS_ROOT,

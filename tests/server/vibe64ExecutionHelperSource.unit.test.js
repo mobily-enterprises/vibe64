@@ -819,6 +819,22 @@ function payloadOfSize(bytes, operation = "managed-execution") {
   return envelope.replace("\"inputBase64\":\"\"", `"inputBase64":"${"A".repeat(bytes - envelope.length)}"`);
 }
 
+test("the daemon can neither make nor enable a person: only root's add-person makes one", () => {
+  const helperPath = new URL(HELPER_SOURCE_URL).pathname;
+  for (const operation of ["create-system-user", "enable-system-user"]) {
+    const payload = JSON.stringify({ operation, password: "initial password", schema: "vibe64.exec-helper.payload",
+      schemaVersion: 1, username: "sam" });
+    const sent = spawnSync(process.execPath, [helperPath, "execute"], {
+      encoding: "utf8", env: { ...process.env, SUDO_USER: "v64d_test" }, input: payload, timeout: 15_000
+    });
+    assert.equal(sent.status, 2, operation);
+    assert.match(sent.stderr, /^Vibe64 exec helper rejected an unknown operation\.$/mu, operation);
+  }
+  const usage = spawnSync(process.execPath, [helperPath, "add-person", "test"], { encoding: "utf8", timeout: 15_000 });
+  assert.equal(usage.status, 2);
+  assert.match(usage.stderr, /^Usage: vibe64-exec-helper add-person <workspace> <username>$/mu);
+});
+
 test("a payload on standard input is read up to the helper's payload limit and no further", () => {
   const helperPath = new URL(HELPER_SOURCE_URL).pathname;
   const send = (bytes) => spawnSync(process.execPath, [helperPath, "execute"], {

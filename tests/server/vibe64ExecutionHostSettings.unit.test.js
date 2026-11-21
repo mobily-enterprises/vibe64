@@ -9,11 +9,12 @@ import { fileURLToPath } from "node:url";
 
 import { helperSystemdUnitRoot as exportedSystemdUnitRoot } from "@local/vibe64-execution/server/hostSettings";
 import { helperSettings } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
-import { addUserToGroup, createSystemUser, hostSettingsRoot } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
+import { addUserToGroup, createPerson, hostSettingsRoot } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import {
   helperAccountDatabase,
   helperAccountNumberOptions,
   helperCommand,
+  helperPersonShell,
   helperRuntimePackRoot,
   helperStagingKeysRoot,
   helperSudoersRoot,
@@ -234,43 +235,69 @@ test("the helper numbers new accounts in the bands the host's settings name; wit
   }
 });
 
-test("memberships go to the account database the host names, which gets no person with a password", async (t) => {
+test("people and memberships go to the account database the host names, people without a password", async (t) => {
   const bin = await temporaryFolder(t, "v64-account-tools-");
+  const homes = await temporaryFolder(t, "v64-person-homes-");
   const log = path.join(bin, "calls.log");
-  for (const tool of ["useradd", "usermod", "gpasswd"]) {
+  for (const tool of ["useradd", "usermod", "gpasswd", "chpasswd", "passwd"]) {
     await writeFile(path.join(bin, tool), `#!/bin/sh\necho "${tool} $*" >> "${log}"\n`, { mode: 0o755 });
   }
-  await writeFile(path.join(bin, "chpasswd"), `#!/bin/sh\ncat > /dev/null\necho chpasswd >> "${log}"\n`, { mode: 0o755 });
   const previousPath = process.env.PATH;
   process.env.PATH = `${bin}:${previousPath}`;
+  // The mode a home is made with is the one asked for, whatever the umask.
+  const previousUmask = process.umask(0o077);
   t.after(() => {
     process.env.PATH = previousPath;
+    process.umask(previousUmask);
   });
   const username = "v64hostsettingsprobe";
+  const person = { gid: process.getgid(), home: path.join(homes, username), uid: UID, username };
+  const resolveUser = (name) => (name === username ? person : assert.fail(`resolved ${name}`));
 
-  createSystemUser(username, "initial password", "files", ["-K", "UID_MIN=20000"]);
+  assert.equal(createPerson(username, { homeRoot: homes, numberOptions: ["-K", "UID_MIN=20000"], resolveUser }), person);
   addUserToGroup(username, "vibe64", "files");
-  // Refused before any account command runs.
-  assert.throws(() => createSystemUser(username, "initial password", "extrausers"),
-    /extra users database, where people sign in without a password: the helper creates no person with one here/u);
+  const home = await stat(person.home);
+  assert.ok(home.isDirectory());
+  assert.equal(home.mode & 0o7777, 0o750, "an empty home of the person's own, 0750");
+  assert.equal(home.uid, UID);
+  assert.deepEqual(await readdir(person.home), []);
+  // A home already there is the person's data and stays as it is.
+  await chmod(person.home, 0o700);
+  await writeFile(path.join(person.home, "notes.txt"), "mine");
+  createPerson(username, { database: "extrausers", homeRoot: homes, shell: "/usr/lib/host/shell", resolveUser });
   addUserToGroup(username, "vibe64", "extrausers");
+  assert.equal((await stat(person.home)).mode & 0o7777, 0o700);
+  assert.deepEqual(await readdir(person.home), ["notes.txt"]);
 
   assert.deepEqual((await readFile(log, "utf8")).trim().split("\n"), [
-    `useradd -K UID_MIN=20000 --create-home --user-group --shell /bin/bash ${username}`,
-    "chpasswd",
+    `useradd -K UID_MIN=20000 --user-group --no-create-home --home-dir ${person.home} --shell /bin/bash ${username}`,
     `usermod -a -G vibe64 ${username}`,
+    // No password is set: no chpasswd or passwd ran.
+    `useradd --extrausers --user-group --no-create-home --home-dir ${person.home} --shell /usr/lib/host/shell ${username}`,
     // usermod has no --extrausers and its -a -G leaves such a group unchanged.
     `gpasswd --extrausers -a ${username} vibe64`
   ]);
 });
 
+test("the host's helper settings may name a person's login shell; without it /bin/bash", () => {
+  assert.equal(helperPersonShell({}), "/bin/bash");
+  assert.equal(helperPersonShell({ VIBE64_PERSON_SHELL: "/usr/lib/host/login-shell" }), "/usr/lib/host/login-shell");
+  // A setting's surrounding blanks are not part of it, as for every other setting.
+  assert.equal(helperPersonShell({ VIBE64_PERSON_SHELL: " /bin/zsh " }), "/bin/zsh");
+  for (const shell of ["bash", "/bin/../bin/bash", "/bin/ba sh", "/bin/bash\n/bin/sh", "/bin/bash/", "/"]) {
+    assert.throws(() => helperPersonShell({ VIBE64_PERSON_SHELL: shell }),
+      /a person's login shell \(VIBE64_PERSON_SHELL\) that is not an absolute, normalized path/u, shell);
+  }
+});
+
 test("the helper's people, memberships, staging accounts, unit readers and sudo rules all follow the host's settings", async () => {
   const source = await execHelperSource();
 
-  assert.match(source,
-    /createSystemUser\(username, String\(payload\.password \|\| ""\), helperAccountDatabase\(\), helperAccountNumberOptions\(\)\);/u);
+  assert.match(source, /create = \(name\) => createPerson\(name, \{\n\s*database: helperAccountDatabase\(\),\n\s*numberOptions: helperAccountNumberOptions\(\),\n\s*shell: helperPersonShell\(\)\n\s*\}\),/u);
   assert.equal(source.match(/addToGroup = \(name\) => addUserToGroup\(name, VIBE64_GROUP, helperAccountDatabase\(\)\),/gu)?.length,
-    2, "registering and re-enabling a person");
+    1, "registering a person");
+  assert.equal(source.match(/addToGroup = \(name, group\) => addUserToGroup\(name, group, helperAccountDatabase\(\)\),/gu)?.length,
+    1, "adding a person");
   assert.match(source,
     /runRootCommand\("useradd", \[\.\.\.accountDatabaseOptions\(helperAccountDatabase\(\)\),\n\s*\.\.\.helperAccountNumberOptions\(\), "--system",/u);
   assert.match(source, /runRootCommand\("userdel", \[\.\.\.accountDatabaseOptions\(helperAccountDatabase\(\)\), username\]\)/u);

@@ -128,6 +128,20 @@ test("OS lookup delegates absent users, unavailable files, and non-Linux systems
   }
 });
 
+test("a user NSS does not know is not found, as getent answers with its exit status 2; any other failure stays one", async () => {
+  // The host's own getent: a key the database lacks exits 2, with nothing on standard output.
+  await assert.rejects(resolveOsUser("v64-no-such-user-0b8d1f", {
+    platform: "linux",
+    readFileFn: async () => ""
+  }), { code: "vibe64_os_user_not_found", message: "OS user was not found: v64-no-such-user-0b8d1f" });
+  const broken = Object.assign(new Error("Command failed: getent passwd ada"), { code: 1 });
+  await assert.rejects(resolveOsUser("ada", {
+    platform: "linux",
+    readFileFn: async () => "",
+    execFileFn: async () => { throw broken; }
+  }), (error) => error === broken);
+});
+
 test("numeric lookup keys keep getent's UID interpretation", async () => {
   await assert.rejects(resolveOsUser("1001", {
     platform: "linux",

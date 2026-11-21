@@ -22,9 +22,9 @@ import {
 } from "./hostAccounts.js";
 import { handleManagedExecutionOperation, runManagedExecutionPayload } from "./managedExecution.js";
 import {
+  addPerson,
   assertActablePerson,
   assertPersonAccount,
-  handleUserManagementOperation,
   hostPersonFacts,
   PERSON_REFUSED_EXIT_CODE,
   registerPerson,
@@ -43,9 +43,7 @@ const ALLOWED_OPERATIONS = new Set([
   "staging-account",
   "account-status",
   "codex-app-server",
-  "create-system-user",
   "staging-unit",
-  "enable-system-user",
   "github-api-command",
   "github-toolchain",
   "github-workflow-command",
@@ -84,7 +82,7 @@ async function main() {
     return;
   }
   // Root-only: the daemon's sudo rule names only
-  // `execute`, so it can never register a person itself.
+  // `execute`, so it can never make or register a person itself.
   if (process.argv[2] === "upgrade-person-registry") {
     if (process.argv.length !== 4) {
       throw new Error("Usage: vibe64-exec-helper upgrade-person-registry <workspace>");
@@ -97,6 +95,16 @@ async function main() {
       throw new Error("Usage: vibe64-exec-helper register-person <workspace> <username>");
     }
     registerPerson(process.argv[3], process.argv[4]);
+    return;
+  }
+  // A login the workspace's member list names (a host that adds its people
+  // from such a list runs it as root): registered as register-person registers
+  // one, made first, without a password, when it has no account.
+  if (process.argv[2] === "add-person") {
+    if (process.argv.length !== 5) {
+      throw new Error("Usage: vibe64-exec-helper add-person <workspace> <username>");
+    }
+    addPerson(process.argv[3], process.argv[4]);
     return;
   }
   // At every start of a host whose helper units live outside systemd's own folder, before its services start.
@@ -154,10 +162,6 @@ async function main() {
     return;
   }
   const username = safeUsername(payload.username);
-  if (operation === "create-system-user" || operation === "enable-system-user") {
-    handleUserManagementOperation(operation, payload, username);
-    return;
-  }
   assertHumanUsername(username);
   const command = String(payload.command || "").trim();
   if (!ALLOWED_COMMANDS.has(command)) {

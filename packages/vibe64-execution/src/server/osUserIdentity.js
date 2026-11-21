@@ -124,7 +124,12 @@ async function resolveOsUser(username = "", {
       await commandOutput(execFileFn, "dscacheutil", ["-q", "user", "-a", "name", safeUsername])
     );
   } else {
-    record = parsePasswdLine((await commandOutput(execFileFn, "getent", ["passwd", safeUsername])).split(/\r?\n/u)[0]);
+    // getent exits 2 when the database has no such key: a missing user, not a failure.
+    const passwd = await commandOutput(execFileFn, "getent", ["passwd", safeUsername]).catch((error) => {
+      if (error?.code === 2) return "";
+      throw error;
+    });
+    record = parsePasswdLine(passwd.split(/\r?\n/u)[0]);
   }
   if (!record || record.username !== safeUsername) {
     const error = new Error(`OS user was not found: ${safeUsername}`);
