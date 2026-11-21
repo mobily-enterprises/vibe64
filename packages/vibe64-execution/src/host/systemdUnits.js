@@ -14,7 +14,7 @@ import {
 } from "./hostAccounts.js";
 import { editorPrivateStateLine } from "./editorPrivateState.js";
 import { canonicalPath, relativePathParts } from "./hostFiles.js";
-import { helperSystemdUnitRoot } from "./hostSettings.js";
+import { helperSystemdUnitRoot, RUNTIME_PACK_ROOT_ENV } from "./hostSettings.js";
 
 // A person's or the daemon's execution runs as a member of the shared group;
 // an application's only as itself, inside its sandbox, where its area and its
@@ -236,12 +236,26 @@ function serviceResourceUnitLines(owner = {}) {
   ];
 }
 
+// The line of a unit that names its runtime pack folder; a staging login reads it back from the unit.
+const RUNTIME_PACK_ROOT_UNIT_LINE = `Environment=${RUNTIME_PACK_ROOT_ENV}=`;
+
+// What a release or managed service starts with beside its own Env: the PATH the host's helper settings name and, when
+// they name the runtime packs that PATH's tool wrappers come from, their folder, by which those wrappers find their
+// packs (helperRuntimePackRoot). Without it a wrapper looks in its own default folder, which may not be this host's.
+function serviceEnvironmentLines({ runtimePackRoot = "", servicePath = "" } = {}) {
+  return [
+    `Environment=PATH=${systemdUnitSafeValue(servicePath)}`,
+    ...(runtimePackRoot ? [`${RUNTIME_PACK_ROOT_UNIT_LINE}${systemdUnitSafeValue(runtimePackRoot)}`] : [])
+  ];
+}
+
 function stagingUnitFile({
   environmentFile = "",
   helperPath = "",
   loopbackPort = 0,
   owner = {},
   requiredUnits = [],
+  runtimePackRoot = "",
   sandboxAllowances = [],
   servicePath = "",
   startScript = "",
@@ -272,7 +286,7 @@ function stagingUnitFile({
     "SocketBindAllow=udp",
     "SocketBindDeny=any",
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
-    `Environment=PATH=${systemdUnitSafeValue(servicePath)}`,
+    ...serviceEnvironmentLines({ runtimePackRoot, servicePath }),
     "Environment=TMPDIR=/tmp",
     // The service's own user loads its environment at every start; see
     // runStagingUnit. setpriv holds even where a drop-in switches the
@@ -293,6 +307,7 @@ function managedServiceUnit({
   owner = {},
   pidFile = "",
   processModel = "simple",
+  runtimePackRoot = "",
   servicePath = "",
   startScript = "",
   unitName = "",
@@ -310,7 +325,7 @@ function managedServiceUnit({
     ...serviceAccountUnitLines(owner),
     ...serviceResourceUnitLines(owner),
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
-    `Environment=PATH=${systemdUnitSafeValue(servicePath)}`,
+    ...serviceEnvironmentLines({ runtimePackRoot, servicePath }),
     `Environment=TMPDIR=${systemdUnitSafeValue(workspaceTempRoot(owner.username))}`,
     `ExecStart=${systemdUnitSafeValue(startScript)}`,
     ...(normalizedProcessModel === "forking" ? [`PIDFile=${systemdUnitSafeValue(pidFile)}`] : []),
@@ -332,6 +347,7 @@ function systemdUnitSafeValue(value = "") {
 
 export {
   accountUnitLines,
+  RUNTIME_PACK_ROOT_UNIT_LINE,
   STAGING_SANDBOX_ALLOWANCES,
   stagingSandboxLines,
   assertSafeManagedServicePath,

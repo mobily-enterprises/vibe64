@@ -963,6 +963,38 @@ test("managed execution does not inherit the launching shell PATH", async () => 
   }
 });
 
+// A command that runs with a Staging Env file (a Staging app's integration setup) starts from no environment of the
+// editor's, where a host's runtime pack folder was otherwise inherited, yet its PATH starts with the packs' tool
+// wrappers (policy-bin's npm), which find their pack by VIBE64_RUNTIME_PACK_ROOT alone.
+test("a command run with a Staging Env file is told the runtime pack folder its PATH's tool wrappers come from", async () => {
+  let seen = null;
+  const release = installVibe64ManagedExecutionProvider({
+    runCommand: async (_request, context) => {
+      seen = context.env;
+      return { ok: true, output: "" };
+    },
+    stopExecution: async () => ({ ok: true })
+  });
+  try {
+    const result = await runVibe64Command({
+      actor: "app",
+      allowedRoots: [HOST_ROOT],
+      args: ["run", "integration-setup"],
+      command: "npm",
+      cwd: HOST_ROOT,
+      envPolicy: "staging",
+      purpose: "source-editor",
+      runtimes: ["node26"],
+      stagingEnvironmentFile: path.join(HOST_ROOT, "handover", "r1", "environment")
+    });
+    assert.equal(result.ok, true, result.error);
+  } finally {
+    release();
+  }
+  assert.equal(seen.PATH.split(":")[0], path.join(RUNTIME_PACKS, "policy-bin"));
+  assert.equal(seen.VIBE64_RUNTIME_PACK_ROOT, RUNTIME_PACKS);
+});
+
 test("execution gateway preserves database env names without projecting aliases", async () => {
   assert.deepEqual(databaseEnv({ DB_PASSWORD: "" }), { DB_PASSWORD: "" });
   assert.deepEqual(databaseEnv({

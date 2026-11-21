@@ -223,7 +223,9 @@ privilege. Root's own steps run with the system folders as PATH. The requested
 command PATH takes effect only for the target user; a command whose caller names
 none, and every release and managed service unit, starts with the PATH the
 host's helper settings name (`PATH` in `exec-helper.env`, an EnvironmentFile in
-the helper's root-only settings folder), else the system folders;
+the helper's root-only settings folder), else the system folders, and, when
+those settings name the runtime packs that PATH's tools come from
+(`VIBE64_RUNTIME_PACK_ROOT`, below), with their folder beside it;
 provider credentials and the private OpenCode home remain in their existing
 environment. Loader and shell startup injection variables are excluded.
 Allowed working directories and host service paths are checked after resolving
@@ -286,6 +288,20 @@ names none keeps the system's own account files, ranges and folders, as before:
   accounts' staging key files in place of `staging-ssh` in the helper's
   settings folder, which host setup's SSH policy names; the host's sshd reads
   each account's keys there by its name (`helperStagingKeysRoot`).
+- `VIBE64_RUNTIME_PACK_ROOT`: the folder of the runtime packs whose folders
+  the helper settings' `PATH` names, when it is not the folder their tool
+  wrappers default to (`helperRuntimePackRoot` in `hostSettings.js`). The
+  wrappers that come first on that PATH (`policy-bin`'s `npm`, `npx` and
+  the rest) run the pack's own program below that folder, and a release or
+  managed service has no editor environment to take it from: every release and
+  managed service unit names it beside its PATH
+  (`Environment=VIBE64_RUNTIME_PACK_ROOT=`), and a staging login and
+  `staging-enter` carry it from the unit as they carry its PATH. Without it
+  units name none and the wrappers keep their own default. It is written into
+  a unit as it is, so it must be an absolute, normalized path of letters,
+  digits and `. _ + -` alone. A unit takes it when the helper writes the unit
+  (a publish, a Restart, a managed service's install); a unit written before
+  keeps what it had until then.
 - `VIBE64_EXEC_HELPER_COMMAND`: the command that starts the helper, when the
   host starts it through a launcher rather than by the file it runs from
   (`helperCommand` in `hostSettings.js`). The helper's later runs start it
@@ -451,7 +467,7 @@ command. That command runs as the account, finds the staging unit root
 installed for it (the running one), and starts the client's command, bash
 (`--noprofile --norc`, and no `BASH_ENV` or `ENV` from the login's
 environment) or an SFTP server in that release's folder with its Env file, the
-unit's PATH and, for a release whose start script runs the command it is
+unit's PATH and runtime pack folder and, for a release whose start script runs the command it is
 given, that script's runtimes and Serve defaults; it adds `staging-logs`,
 `staging-status`, `staging-restart` and `staging-enter`. `activity`
 reads two records for the account, each its newest 500 entries, and says when

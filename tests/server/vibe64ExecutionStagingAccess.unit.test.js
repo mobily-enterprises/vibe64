@@ -20,6 +20,7 @@ import {
   stagingActivity,
   stagingEnterArgv,
   stagingEnterCommand,
+  stagingLoginEnvironment,
   stagingLogWindow,
   stagingShellCommand,
   stagingShellFunctions,
@@ -248,7 +249,8 @@ test("on a host keeping accounts in the extra users database, the login shell ch
   assert.deepEqual(await readdir(prefixParent), []);
 });
 
-function stagingUnitLines({ user = ACCOUNT, release = "20261111_080000z-ab12cd34", name = "vibe64-staging-test-shop-0123456789ab.service" } = {}) {
+function stagingUnitLines({ user = ACCOUNT, release = "20261111_080000z-ab12cd34", name = "vibe64-staging-test-shop-0123456789ab.service",
+  runtimePackRoot = "" } = {}) {
   const handover = `/var/lib/vibe64-staging/test/shop/handover/${release}`;
   return {
     lines: stagingUnitFile({
@@ -256,6 +258,7 @@ function stagingUnitLines({ user = ACCOUNT, release = "20261111_080000z-ab12cd34
       helperPath: HELPER,
       loopbackPort: 41000,
       owner: { username: "v64d_test" },
+      runtimePackRoot,
       startScript: `${handover}/start.sh`,
       servicePath: "/opt/vibe64/runtime-packs/node26/bin:/usr/bin:/bin",
       unitName: name,
@@ -276,6 +279,7 @@ test("a staging login finds the account's own staging unit as root installed it,
     environmentFile: "/var/lib/vibe64-staging/test/shop/handover/r2/environment",
     name: live.name,
     path: "/opt/vibe64/runtime-packs/node26/bin:/usr/bin:/bin",
+    runtimePackRoot: "",
     startScript: "/var/lib/vibe64-staging/test/shop/handover/r2/start.sh",
     workingDirectory: "/var/lib/vibe64-staging/test/shop/app/releases/r2/workspace"
   });
@@ -286,6 +290,33 @@ test("a staging login finds the account's own staging unit as root installed it,
   const odd = { lines: [`User=${ACCOUNT}`, "ExecStart=/bin/sh -c true"], name: "vibe64-staging-test-shop-dddddddddddd.service" };
   assert.throws(() => runningStagingUnit(ACCOUNT, { isActive: () => true, units: () => [odd] }),
     /does not start a Vibe64 staging service/u);
+});
+
+// The service's PATH starts with the runtime packs' tool wrappers (policy-bin's npm), which find their pack by the folder
+// its unit names; a login or staging-enter that took only the PATH ran a wrapper looking in its default folder.
+test("a staging login and staging-enter run with the runtime pack folder the service's unit names beside its PATH", () => {
+  const packs = "/srv/apps/editor/runtime-packs";
+  const unit = runningStagingUnit(ACCOUNT, { isActive: () => true, units: () => [stagingUnitLines({ runtimePackRoot: packs })] });
+  assert.equal(unit.runtimePackRoot, packs);
+  const user = { gid: 990, home: "/var/lib/vibe64-staging/test/shop/app/home", uid: 991, username: ACCOUNT };
+  const login = stagingLoginEnvironment(unit, { env: { BASH_ENV: "/home/x/.profile", ENV: "/home/x/.env", TERM: "xterm" },
+    helperPath: HELPER, readEnvironment: (file) => (file === unit.environmentFile ? { DB_NAME: "shop" } : {}) });
+  assert.equal(login.VIBE64_RUNTIME_PACK_ROOT, packs);
+  assert.equal(login.PATH, unit.path);
+  assert.equal(login.DB_NAME, "shop", "the release's Env");
+  assert.equal(login.VIBE64_STAGING_UNIT, unit.name);
+  assert.equal(login.TERM, "xterm");
+  assert.equal("BASH_ENV" in login || "ENV" in login, false, "no file a shell would read first");
+  assert.ok(login["BASH_FUNC_staging-enter%%"]);
+  const entered = stagingEnterCommand({ command: [], env: {}, helperPath: HELPER, mountNamespace: "mnt:[4026532800]", pid: 4242,
+    unit, user });
+  assert.equal(entered.env.VIBE64_RUNTIME_PACK_ROOT, packs);
+  // A unit that names none, as a host whose settings name none writes it, gives none: the wrappers keep their default.
+  const plain = runningStagingUnit(ACCOUNT, { isActive: () => true, units: () => [stagingUnitLines()] });
+  assert.equal(plain.runtimePackRoot, "");
+  assert.equal("VIBE64_RUNTIME_PACK_ROOT" in stagingLoginEnvironment(plain, { env: {}, helperPath: HELPER, readEnvironment: () => ({}) }), false);
+  assert.equal("VIBE64_RUNTIME_PACK_ROOT" in stagingEnterCommand({ command: [], env: {}, helperPath: HELPER,
+    mountNamespace: "mnt:[4026532800]", pid: 4242, unit: plain, user }).env, false);
 });
 
 test("a staging login runs bash without profile or rc files, the client's command through it or an SFTP server", () => {

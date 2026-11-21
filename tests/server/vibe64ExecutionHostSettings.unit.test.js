@@ -14,6 +14,7 @@ import {
   helperAccountDatabase,
   helperAccountNumberOptions,
   helperCommand,
+  helperRuntimePackRoot,
   helperStagingKeysRoot,
   helperSudoersRoot,
   helperSystemdUnitRoot
@@ -66,6 +67,22 @@ test("the host's helper settings name the account database and the unit, sudo ru
   }
   // A host's own server reads the unit folder through the package.
   assert.equal(exportedSystemdUnitRoot, helperSystemdUnitRoot);
+});
+
+// A host whose runtime packs are not in the folder their tool wrappers default to names it, so the units the helper
+// writes with its PATH can name it too: without it a wrapper (policy-bin's npm) looks for its pack where there is none.
+test("the host's helper settings may name the runtime pack folder of its PATH's tools; without it the helper names none", async (t) => {
+  assert.equal(helperRuntimePackRoot({}), "");
+  assert.equal(helperRuntimePackRoot({ VIBE64_RUNTIME_PACK_ROOT: " " }), "");
+  const file = path.join(await temporaryFolder(t, "v64-host-pack-root-"), "exec-helper.env");
+  await writeFile(file, "PATH=/srv/apps/editor/runtime-packs/policy-bin:/usr/bin\n" +
+    "VIBE64_RUNTIME_PACK_ROOT=/srv/apps/editor/runtime-packs\n", { mode: 0o600 });
+  assert.equal(helperRuntimePackRoot(helperSettings(file, UID)), "/srv/apps/editor/runtime-packs");
+  // It is written into a unit as it is.
+  for (const folder of ["/", "runtime-packs", "/srv/../packs", "/srv/packs/", "/srv/run time/packs", "/srv/packs\"x"]) {
+    assert.throws(() => helperRuntimePackRoot({ VIBE64_RUNTIME_PACK_ROOT: folder }),
+      /runtime pack folder \(VIBE64_RUNTIME_PACK_ROOT\) that is not an absolute, normalized path/u, folder);
+  }
 });
 
 test("the helper's settings folder is /etc/vibe64 unless VIBE64_HOST_SETTINGS_ROOT names another absolute, normalized path", () => {

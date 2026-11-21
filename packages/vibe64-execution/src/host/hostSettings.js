@@ -18,6 +18,9 @@ const STAGING_KEYS_ROOT = path.join(HOST_SETTINGS_ROOT, "staging-ssh");
 // A command a sudo rule, a unit's ExecStart and a shell function each name as it is: an absolute path whose parts
 // hold no character any of them would read as more than a name.
 const COMMAND_PATH_PATTERN = /^(?:\/[A-Za-z0-9._+-]+)+$/u;
+// The variable a host's runtime pack tools find their packs by: the wrappers its PATH names first (policy-bin's npm,
+// npx and the rest) run the pack's own program below it.
+const RUNTIME_PACK_ROOT_ENV = "VIBE64_RUNTIME_PACK_ROOT";
 
 /**
  * The account database the helper adds accounts and group memberships to: the system's own files, or the extra users
@@ -103,6 +106,25 @@ function helperStagingKeysRoot(settings = helperSettings()) {
 }
 
 /**
+ * The folder of the runtime packs whose folders the host's PATH names, as its helper settings name it
+ * (`VIBE64_RUNTIME_PACK_ROOT`), or "" when they name none. Their tools' wrappers, which come first on that PATH, find
+ * the packs by it, so every release and managed service unit, which starts with that PATH, names it beside PATH, and a
+ * staging login and staging-enter carry it from the unit as they carry its PATH. A host that names none writes units
+ * that name none either, and the wrappers keep their own default. It is written into a unit as it is, so it must be an
+ * absolute, normalized path of letters, digits and `. _ + -` alone.
+ * @param {Record<string, string>} [settings] the host's helper settings
+ */
+function helperRuntimePackRoot(settings = helperSettings()) {
+  const configured = String(settings[RUNTIME_PACK_ROOT_ENV] || "").trim();
+  if (!configured) return "";
+  if (!COMMAND_PATH_PATTERN.test(configured) || path.resolve(configured) !== configured) {
+    throw new Error(`This host's Vibe64 exec helper settings name a runtime pack folder (${RUNTIME_PACK_ROOT_ENV}) that ` +
+      "is not an absolute, normalized path of letters, digits and . _ + - alone.");
+  }
+  return configured;
+}
+
+/**
  * How the helper's later runs start it: the staging sudo rule and the staging shell's commands, staging-enter,
  * staging units' ExecStart and managed runs. It is the file the helper runs from, unless the host's helper settings
  * name the command the host starts it with (`VIBE64_EXEC_HELPER_COMMAND`): a host that starts it through a
@@ -125,8 +147,10 @@ export {
   helperAccountDatabase,
   helperAccountNumberOptions,
   helperCommand,
+  helperRuntimePackRoot,
   helperStagingKeysRoot,
   helperSudoersRoot,
   helperSystemdUnitRoot,
+  RUNTIME_PACK_ROOT_ENV,
   SYSTEMD_UNIT_ROOT
 };

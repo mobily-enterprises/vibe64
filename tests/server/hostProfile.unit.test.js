@@ -106,8 +106,10 @@ test("pinned packs and an explicit option take precedence over the person's tool
   const parts = resolveRuntimePath({ env: {}, existingPath: "/caller/bin", runtimes: ["node26"] }).split(":");
   assert.deepEqual(parts.slice(0, 4), ["/srv/packs/policy-bin", "/srv/packs/node26/bin", "/srv/packs/guard-bin", "/caller/bin"]);
   assert.ok(!parts.includes("/opt/homebrew/bin"));
+  // Every command is told where the packs are, which its PATH's pack wrappers (policy-bin's) find their tools by.
   assert.deepEqual(sharedToolEnv(), {
     VIBE64_SHARED_CACHE_ROOT: "/srv/cache",
+    VIBE64_RUNTIME_PACK_ROOT: "/srv/packs",
     PLAYWRIGHT_BROWSERS_PATH: "/srv/packs/playwright/browsers",
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
   });

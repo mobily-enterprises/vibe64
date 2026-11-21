@@ -404,11 +404,16 @@ Gateway-owned process identity env looks like:
 ```
 
 Shared tool env is present only when the host provides a shared cache and
-runtime packs; on a person's own computer the tools use their own defaults:
+runtime packs; on a person's own computer the tools use their own defaults.
+With packs every command is told their folder, which the `policy-bin`
+wrappers first on its PATH (`npm`, `npx` and the rest) find their tools by;
+a command run with a Staging Env file starts from none of the editor's own
+environment, so it has the folder only from here:
 
 ```js
 {
   VIBE64_SHARED_CACHE_ROOT: "<shared cache root>",
+  VIBE64_RUNTIME_PACK_ROOT: "<runtime pack root>",
   PLAYWRIGHT_BROWSERS_PATH: "<runtime pack root>/playwright/browsers"
 }
 ```

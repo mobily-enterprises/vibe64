@@ -40,7 +40,7 @@ import {
   readOwnedFile,
   relativePathParts
 } from "./hostFiles.js";
-import { helperCommand, helperSystemdUnitRoot, SYSTEMD_UNIT_ROOT } from "./hostSettings.js";
+import { helperCommand, helperRuntimePackRoot, helperSystemdUnitRoot, SYSTEMD_UNIT_ROOT } from "./hostSettings.js";
 import {
   assertSafeManagedServicePath,
   assertValidStagingUnitName,
@@ -88,6 +88,7 @@ function handleStagingUnitOperation(payload = {}) {
     loopbackPort,
     owner,
     requiredUnits,
+    runtimePackRoot: helperRuntimePackRoot(),
     sandboxAllowances,
     servicePath: helperCommandPath(),
     unitName,
@@ -180,6 +181,7 @@ function handleManagedServiceOperation(payload = {}) {
     owner,
     pidFile,
     processModel,
+    runtimePackRoot: helperRuntimePackRoot(),
     servicePath: helperCommandPath(),
     startScript,
     unitName,

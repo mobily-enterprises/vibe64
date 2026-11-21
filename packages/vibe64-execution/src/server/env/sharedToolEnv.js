@@ -10,6 +10,9 @@ import {
 } from "../runtime/runtimePacks.js";
 
 const VIBE64_SHARED_CACHE_ROOT_ENV = "VIBE64_SHARED_CACHE_ROOT";
+// The variable a host's runtime pack tools find their packs by: the wrappers every command's PATH names first
+// (policy-bin's npm, npx and the rest) run the pack's own program below it.
+const VIBE64_RUNTIME_PACK_ROOT_ENV = "VIBE64_RUNTIME_PACK_ROOT";
 const PLAYWRIGHT_BROWSERS_PATH_ENV = "PLAYWRIGHT_BROWSERS_PATH";
 const PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV = "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD";
 const VIBE64_PLAYWRIGHT_VERSION_ENV = "VIBE64_PLAYWRIGHT_VERSION";
@@ -44,7 +47,9 @@ function resolveManagedPlaywrightVersion({ runtimePackRoot = "" } = {}) {
 }
 
 /**
- * Without packs, Playwright keeps its own browser cache and downloads.
+ * Without packs, Playwright keeps its own browser cache and downloads. With them every command is told where they are,
+ * as its PATH's pack wrappers need: a command whose env does not start from the editor's own (one that runs with a
+ * Staging Env file) has the folder only from here.
  */
 function sharedToolEnv({ runtimePackRoot = "" } = {}) {
   const packRoot = resolveRuntimePackRoot({ root: runtimePackRoot });
@@ -54,6 +59,7 @@ function sharedToolEnv({ runtimePackRoot = "" } = {}) {
     ...(cacheRoot ? { [VIBE64_SHARED_CACHE_ROOT_ENV]: cacheRoot } : {}),
     ...(packRoot
       ? {
+          [VIBE64_RUNTIME_PACK_ROOT_ENV]: packRoot,
           [PLAYWRIGHT_BROWSERS_PATH_ENV]: path.join(packRoot, PLAYWRIGHT_RUNTIME_PACK_NAME, PLAYWRIGHT_BROWSERS_DIR_NAME),
           [PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV]: "1"
         }
@@ -66,6 +72,7 @@ export {
   PLAYWRIGHT_BROWSERS_PATH_ENV,
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV,
   VIBE64_PLAYWRIGHT_VERSION_ENV,
+  VIBE64_RUNTIME_PACK_ROOT_ENV,
   VIBE64_SHARED_CACHE_ROOT_ENV,
   sharedToolEnv
 };

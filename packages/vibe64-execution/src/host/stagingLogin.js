@@ -30,7 +30,8 @@ import {
   safeUsername,
   tryResolveOsUser
 } from "./hostAccounts.js";
-import { helperCommand } from "./hostSettings.js";
+import { helperCommand, RUNTIME_PACK_ROOT_ENV } from "./hostSettings.js";
+import { RUNTIME_PACK_ROOT_UNIT_LINE } from "./systemdUnits.js";
 import { installStagingAccess, removeStagingAccess, stagingAccessGranted } from "./stagingAccess.js";
 import { stagingJournalWindow, printStagingUnit } from "./serviceOperations.js";
 
@@ -149,7 +150,8 @@ function unitValue(lines = [], prefix = "") {
 
 /**
  * The staging unit root installed for the account: the running one, or the last of its own when none runs. It
- * names the release's folder, its Env file and start script, and the PATH its service starts with.
+ * names the release's folder, its Env file and start script, and the PATH and runtime pack folder its service starts
+ * with.
  * @param {string} username
  */
 function runningStagingUnit(username, {
@@ -167,9 +169,16 @@ function runningStagingUnit(username, {
     environmentFile: unitText(started[1]),
     name: unit.name,
     path: unitValue(unit.lines, "Environment=PATH="),
+    runtimePackRoot: unitValue(unit.lines, RUNTIME_PACK_ROOT_UNIT_LINE),
     startScript: unitText(started[2]),
     workingDirectory: unitValue(unit.lines, "WorkingDirectory=")
   };
+}
+
+// The runtime pack folder the unit names beside its PATH, by which that PATH's tool wrappers find their packs, so a login
+// and staging-enter run npm and the rest as the service does; none when the unit names none.
+function unitRuntimePackEnvironment(unit = {}) {
+  return unit.runtimePackRoot ? { [RUNTIME_PACK_ROOT_ENV]: unit.runtimePackRoot } : {};
 }
 
 // staging-enter, staging-logs, staging-restart and staging-status, as functions bash imports.
@@ -212,6 +221,27 @@ function recordStagingLogin(event = {}) {
 }
 
 /**
+ * What a staging login's command runs with: the login's own environment, without a file a shell would read before the
+ * command (which only that environment could name), then the PATH and runtime pack folder the service starts with, as
+ * its unit names them, the release's Env file, the staging-* functions and the unit's name.
+ * @param {{ environmentFile: string, name: string, path: string, runtimePackRoot?: string }} unit
+ * @param {{ env?: Record<string, string>, helperPath?: string, readEnvironment?: (file: string) => Record<string, string> }} options
+ */
+function stagingLoginEnvironment(unit, { env = process.env, helperPath = "", readEnvironment = readEnvironmentFile } = {}) {
+  const inherited = { ...env };
+  delete inherited.BASH_ENV;
+  delete inherited.ENV;
+  return {
+    ...inherited,
+    PATH: unit.path || env.PATH || "",
+    ...unitRuntimePackEnvironment(unit),
+    ...readEnvironment(unit.environmentFile),
+    ...stagingShellFunctions(helperPath),
+    VIBE64_STAGING_UNIT: unit.name
+  };
+}
+
+/**
  * sshd's forced command for a staging account's staging login, run as that account: it starts what the
  * client asked for in the staging release's folder with that release's Env (its database connection included),
  * runtimes and PATH, plus staging-logs, staging-status, staging-restart and staging-enter, and
@@ -235,10 +265,6 @@ function runStagingShell({ env = process.env, helperPath = helperCommand() } = {
     release: path.basename(path.dirname(unit.environmentFile)),
     session: STAGING_SESSION_PATTERN.test(session) ? session : ""
   };
-  // A file a shell would read before the command, which only the login's own environment could name.
-  const inherited = { ...env };
-  delete inherited.BASH_ENV;
-  delete inherited.ENV;
   const command = stagingShellCommand(original);
   recordStagingLogin({ ...login, command: original.slice(0, 2000), event: "start" });
   // A release published before its start script ran other commands gets its Env file and the service's PATH,
@@ -252,13 +278,7 @@ function runStagingShell({ env = process.env, helperPath = helperCommand() } = {
   for (const signal of ["SIGINT", "SIGQUIT"]) process.on(signal, () => {});
   const child = spawnSync(file, args, {
     cwd: unit.workingDirectory,
-    env: {
-      ...inherited,
-      PATH: unit.path || env.PATH || "",
-      ...readEnvironmentFile(unit.environmentFile),
-      ...stagingShellFunctions(helperPath),
-      VIBE64_STAGING_UNIT: unit.name
-    },
+    env: stagingLoginEnvironment(unit, { env, helperPath }),
     stdio: "inherit"
   });
   const exitCode = typeof child.status === "number" ? child.status : 1;
@@ -349,6 +369,7 @@ function stagingEnterCommand({
       LANG: env.LANG || "C.UTF-8",
       LOGNAME: user.username,
       PATH: unit.path || env.PATH || "",
+      ...unitRuntimePackEnvironment(unit),
       SHELL: STAGING_SHELL[0],
       TERM: env.TERM || "dumb",
       USER: user.username,
@@ -476,6 +497,7 @@ export {
   stagingActivity,
   stagingEnterArgv,
   stagingEnterCommand,
+  stagingLoginEnvironment,
   stagingLogWindow,
   stagingShellCommand,
   stagingShellFunctions,

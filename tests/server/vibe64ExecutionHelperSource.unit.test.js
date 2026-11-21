@@ -398,10 +398,39 @@ test("execution helper gives staging services the host's command PATH", async ()
 
   assert.match(source, /Environment=PATH=\$\{systemdUnitSafeValue\(servicePath\)\}/u);
   assert.equal(source.match(/servicePath: helperCommandPath\(\)/gu)?.length, 2, "release and managed services");
+  assert.equal(source.match(/runtimePackRoot: helperRuntimePackRoot\(\),/gu)?.length, 2,
+    "release and managed services name the runtime pack folder the host's settings name");
   assert.match(source, /`ExecStart=\$\{systemdUnitSafeValue\(startScript\)\}`/u);
   assert.match(source, /StartLimitIntervalSec=60/u);
   assert.match(source, /StartLimitBurst=5/u);
   assert.match(source, /runRootCommandAllowFailure\("systemctl", \[\s*"reset-failed",\s*unitName/u);
+});
+
+// A unit's PATH comes from the host's helper settings, and its first folder holds the runtime packs' tool wrappers
+// (policy-bin's npm), which find their pack by VIBE64_RUNTIME_PACK_ROOT; a service has no editor environment to take it
+// from. On a host whose packs are not in the wrappers' default folder, a Staging app's npm start failed with status 127.
+test("release and managed service units name the runtime pack folder beside their PATH when the host names one, and none otherwise", () => {
+  const packs = "/srv/apps/editor/runtime-packs";
+  const servicePath = `${packs}/policy-bin:${packs}/node26/bin:/usr/bin`;
+  const staging = (runtimePackRoot) => stagingUnitFile({
+    environmentFile: "/area/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort: 4100,
+    owner: { username: daemonUser("test") }, requiredUnits: [], runtimePackRoot, servicePath,
+    startScript: "/area/handover/r1/start.sh", unitName: "vibe64-staging-test-shop-0123456789ab.service",
+    user: { stagingAccount: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: `${STAGING_ACCOUNT_USERNAME_PREFIX}0123456789ab` },
+    workingDirectory: "/area/app/releases/r1/workspace"
+  }).split("\n");
+  const managed = (runtimePackRoot) => managedServiceUnit({ owner: { home: "/home/daemon", username: "daemon" }, runtimePackRoot,
+    servicePath, startScript: "/home/daemon/services/db/start", unitName: "vibe64-acme-db.service",
+    workingDirectory: "/home/daemon/services/db" }).split("\n");
+  for (const [kind, lines] of [["staging", staging(packs)], ["managed", managed(packs)]]) {
+    const named = lines.indexOf(`Environment=VIBE64_RUNTIME_PACK_ROOT=${packs}`);
+    assert.notEqual(named, -1, `the ${kind} unit names the runtime pack folder`);
+    assert.equal(lines[named - 1], `Environment=PATH=${servicePath}`, `${kind}: beside its PATH`);
+  }
+  for (const [kind, lines] of [["staging", staging("")], ["managed", managed("")]]) {
+    assert.equal(lines.some((line) => line.startsWith("Environment=VIBE64_RUNTIME_PACK_ROOT=")), false, kind);
+    assert.ok(lines.includes(`Environment=PATH=${servicePath}`), kind);
+  }
 });
 
 test("execution helper gives daemon-owned services the shared primary group, and staging services their application's", async () => {
