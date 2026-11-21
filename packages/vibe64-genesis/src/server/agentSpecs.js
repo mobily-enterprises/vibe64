@@ -61,6 +61,14 @@ import {
   VIBE64_RESOURCE_ESTIMATES_SECTION
 } from "./resourceEstimates.js";
 import {
+  STAGING_DATA_ENTRY_FORMS,
+  STAGING_DATA_HEADING_FORMS,
+  STAGING_DATA_LIMITS,
+  STAGING_DATA_MODES,
+  VIBE64_STAGING_DATA_CONTRACT,
+  VIBE64_STAGING_DATA_SECTION
+} from "./stagingData.js";
+import {
   VIBE64_WORKSPACE_SETUP_CONTRACT,
   VIBE64_WORKSPACE_SETUP_SECTION,
   WORKSPACE_SETUP_ENTRY_FORM
@@ -161,6 +169,15 @@ const outputsExample = `
 - Name: \`report.csv\`
 - Media type: \`text/csv\`
 `;
+
+// What each Staging data mode means, by its name in the inspection's result.
+const STAGING_DATA_MODE_MEANINGS = Object.freeze({
+  empty: "Staging has its own database and it starts empty; the Deployment's Migrate makes its structure. An application without this section has this.",
+  full: "Staging's own database is built from a whole dump of production's. Needs Source and `### Contacts`.",
+  sampled: "Staging's own database is built from a sample of that dump, by the recipe below. Needs Source, Unlisted tables, `### Tables` and `### Contacts`; `### Links` and `### Keep together` are optional.",
+  shared: "Staging uses production's database itself and nothing is copied. A host treats a Migrate on Staging as a migration of production's database.",
+  frozen: "as shared, and Staging never runs Migrate: its code must work with production's structure as it is."
+});
 
 const VIBE64_GENESIS_AGENT_SPECS = Object.freeze([
   sectionSpec({
@@ -272,6 +289,69 @@ ${list(DEPLOYMENT_RESOURCE_ENTRY_FORMS)}
 - Migrate \`Migrate\`: \`npm\` \`run\` \`db:migrate\`
 - Serve \`Serve\`: \`env\` \`NODE_ENV=production\` \`node\` \`server.js\`
 - Ready when: \`GET\` \`/health\` returns \`200\`
+`
+  }),
+  sectionSpec({
+    name: "staging-data",
+    title: "Staging data",
+    section: VIBE64_STAGING_DATA_SECTION,
+    contract: VIBE64_STAGING_DATA_CONTRACT,
+    summary: "What Staging's database holds: a database of its own (empty, or built from a whole or sampled dump of production's) or production's database itself. Without the section Staging has its own empty database.",
+    body: `
+Entries before any heading, each at most once:
+${list(STAGING_DATA_ENTRY_FORMS.section)}
+
+Headings, each at most once, in any order, each followed by its entries:
+${list(STAGING_DATA_HEADING_FORMS)}
+
+\`### Tables\` entries, each table once:
+${list(STAGING_DATA_ENTRY_FORMS.tables)}
+
+\`### Links\` entries, each from-column once:
+${list(STAGING_DATA_ENTRY_FORMS.links)}
+
+\`### Keep together\` entries, each child table and column once:
+${list(STAGING_DATA_ENTRY_FORMS.keepTogether)}
+
+\`### Contacts\` entries, each column once, or exactly \`- Nothing.\`:
+${list(STAGING_DATA_ENTRY_FORMS.contacts)}
+
+- Database (always) names the database resource of the Stack's \`## Resources\`, of kind \`mysql\` or \`postgresql\`, whose Staging data this is. Mode (always) is one of the phrases above, written without backticks:
+${Object.entries(STAGING_DATA_MODES).map(([phrase, mode]) => `  - \`${phrase}\`: ${STAGING_DATA_MODE_MEANINGS[mode]}`).join("\n")}
+  Only an own copy, full or sampled, has Source and \`### Contacts\`; only a sampled one has Unlisted tables, \`### Tables\`, \`### Links\` and \`### Keep together\`. Whether Staging holds production's data, or uses its database, is the person's decision: an assistant never chooses a copy or a shared mode on its own; it may draft a sampled recipe from the application's schema for the person to review.
+- Source is the application's own command that writes a dump of production's database to the file \`{dump}\` names. A host runs it with the settings it gives the app's Staging, where the database's own settings (such as \`DB_HOST\`) name Staging's own database, so the command reaches production's dump, or production's database, through settings of its own (such as \`PRODUCTION_DUMP_URL\`); the host builds Staging's own database from the file, and Staging itself never connects to production's database. \`{dump}\` is an argument of its own, exactly once, and the command's only placeholder. The dump is, for \`mysql\`, SQL text as \`mariadb-dump\` or \`mysqldump\` writes it, plain or gzip-compressed, of one database's tables (never \`--databases\` or \`--all-databases\`); for \`postgresql\`, \`pg_dump\` custom format (\`-Fc\`).
+- Tables: \`all\` keeps every row, \`none\` keeps the table empty, and \`\` recent by \`column\` \`\` keeps the rows whose column is in the last \`n\` days (${STAGING_DATA_LIMITS.days.join(" to ")}), the newest \`n\` rows by that column (${STAGING_DATA_LIMITS.rows.join(" to ")}), or both: the newest \`n\` of the last \`n\` days. Unlisted tables: a table \`### Tables\` doesn't list is copied whole when it has at most \`n\` rows (${STAGING_DATA_LIMITS.unlistedRows.join(" to ")}); a larger one needs a rule of its own.
+- A host also keeps every row a kept row refers to, through the database's own foreign keys and \`### Links\`, which names a column that refers to another column without a foreign key saying so. \`### Keep together\` goes the other way: for every kept \`parent\` row, every \`child\` row whose \`column\` refers to it is kept too. A host loads the copy with the database's constraint checks on and checks for orphans after.
+- \`### Contacts\` names every column that holds a person's email address or phone number; a host replaces their values in Staging's copy with made-up ones, the same at every build, so that Staging reaches no real person. \`- Nothing.\` says no column holds one.
+- Table and column names are 1 to 64 letters, digits and \`_\`, starting with a letter or \`_\`, each in backticks; \`table.column\` joins two with one dot. Keep together's column belongs to its child table.
+- A section of only \`- Nothing.\` is refused: declare a mode, or leave the section out.
+`,
+    example: `
+- Database: \`database\`
+- Mode: own copy, sampled
+- Source: dump written by command with \`nodejs\` in \`.\`: \`node\` \`scripts/production-dump.js\` \`{dump}\`
+- Unlisted tables: all up to \`10000\` rows
+
+### Tables
+
+- \`countries\`: all
+- \`jobs\`: recent by \`created_at\`, last \`180\` days
+- \`job_events\`: recent by \`id\`, newest \`200000\` rows
+- \`messages\`: recent by \`sent_at\`, last \`90\` days, newest \`50000\` rows
+- \`sessions\`: none
+
+### Links
+
+- \`jobs.vessel_id\` to \`vessels.id\`
+
+### Keep together
+
+- \`invoices\` keeps every \`invoice_lines\` row by \`invoice_id\`
+
+### Contacts
+
+- \`users.email\`: email
+- \`users.mobile\`: phone
 `
   }),
   sectionSpec({

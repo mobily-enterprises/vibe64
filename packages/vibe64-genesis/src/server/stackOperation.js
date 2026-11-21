@@ -21,7 +21,8 @@ const SPEC_BY_ERROR_CODE = Object.freeze({
   VIBE64_PROJECT_SERVICES_INVALID: "project-services",
   VIBE64_INTEGRATION_SETUP_INVALID: "integration-setup",
   VIBE64_ARCHITECTURE_INSPECTION_INVALID: "architecture-inspection",
-  VIBE64_ARCHITECTURE_LAYOUT_INVALID: "architecture-layout"
+  VIBE64_ARCHITECTURE_LAYOUT_INVALID: "architecture-layout",
+  VIBE64_STAGING_DATA_INVALID: "staging-data"
 });
 const SPEC_POINTER = / Exact grammar: vibe64-helper spec [a-z-]+\.$/u;
 
@@ -255,6 +256,17 @@ function assertMatchingStackInspections(section = {}, environment = {}, label = 
   }
 }
 
+// The id a Vibe64 section names a resource of the Stack's `## Resources` by.
+const STACK_RESOURCE_ID = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/u;
+
+/** The Stack's resources by id, from Genesis's environment inspection's `resources` (each `{ component, resource }`). */
+function stackResourcesById(declarations) {
+  return new Map((Array.isArray(declarations) ? declarations : [])
+    .map((declaration) => declaration?.resource)
+    .filter((resource) => resource && typeof resource.id === "string")
+    .map((resource) => [resource.id, resource]));
+}
+
 function uniqueSorted(values = []) {
   return [...new Set(values)].sort();
 }
@@ -267,6 +279,7 @@ function isExplicitlyEmptyStackSection(lines = []) {
 const __testables = Object.freeze({ SPEC_BY_ERROR_CODE });
 
 export {
+  STACK_RESOURCE_ID,
   Vibe64StackOperationError,
   assertMatchingStackInspections,
   backtickedArguments,
@@ -280,6 +293,7 @@ export {
   runtimeArguments,
   stackCommand,
   stackOperationHash,
+  stackResourcesById,
   uniqueSorted,
   unknownEntryMessage,
   urlPath,

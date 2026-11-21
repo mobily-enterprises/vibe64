@@ -38,6 +38,19 @@ only estimates does not change the preparation recipe identity. Mixed Stack
 identities throw `VIBE64_STACK_CHANGED` so callers re-inspect instead of using
 hints for a different source snapshot. Inspection never rewrites project source.
 
+## Staging data
+
+`inspectVibe64StagingData()` reads the optional project-owned `Staging data`
+section as `vibe64.staging-data.v1`: the database resource of `## Resources`
+it is for (a `mysql` or `postgresql` one, whose kind the result names as
+`engine`), its mode (an own copy, empty, full or sampled, or production's
+database, shared or with its structure frozen), the application's command that
+writes production's dump to `{dump}`, and a sampled copy's table rules, links,
+keep-together entries and contact columns. An absent section is `unconfigured`,
+mode `empty`; a refusal throws `VIBE64_STAGING_DATA_INVALID` at its line. The
+grammar is `vibe64 spec staging-data`; the Program page is
+`genesis/program/projects/staging-data.md`.
+
 ## Agent specs
 
 `./server/agentSpecs` holds the agent-readable spec of every Vibe64 Stack

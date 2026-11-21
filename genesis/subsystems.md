@@ -1070,7 +1070,7 @@ Terminal orchestration supplies workspace preparation policy; Genesis supplies d
 
 ## `packages-vibe64-genesis` Genesis boundary
 
-Provides the sole Vibe64 boundary to Genesis’s project contracts, prompts and inspection results. It transports the canonical subsystem and Program facts and interprets Vibe64-owned operation sections such as workspace preparation, outputs, deployment and packaging.
+Provides the sole Vibe64 boundary to Genesis’s project contracts, prompts and inspection results. It transports the canonical subsystem and Program facts and interprets Vibe64-owned operation sections such as workspace preparation, outputs, deployment, Staging data and packaging.
 
 Genesis owns the portable explanation grammar, explicit directory ownership, Program membership and required main source. This package does not generate a competing subsystem list. Execution and application services implement the operation recipes; Genesis descriptions are explanatory evidence rather than runtime instructions.
 Its agent specs (`./server/agentSpecs`) print each section's grammar from the
@@ -1085,6 +1085,7 @@ not allocate source, run treatment commands or certify source consumption.
 ### Program
 - `genesis/program/execution/resource-estimates.md`
 - `genesis/program/projects/application-deployment.md`
+- `genesis/program/projects/staging-data.md`
 
 ### Data owned
 - Nothing.

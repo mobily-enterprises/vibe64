@@ -2,9 +2,11 @@
 // section is read, and those that need the Stack's `## Resources`.
 import { DEPLOYMENT_SERVICE_ID, DEPLOYMENT_SERVICES_MAX } from "../shared/deploymentServiceNames.js";
 import {
+  STACK_RESOURCE_ID,
   backtickedArguments,
   httpReadinessLine,
   oneLineText,
+  stackResourcesById,
   unknownEntryMessage
 } from "./stackOperation.js";
 import {
@@ -29,7 +31,6 @@ import {
 const SERVICE_HEADING = /^### Service `([^`\r\n]*)`:[ \t]+(.+)$/u;
 const RESOURCE_HEADING = /^### Resource `([^`\r\n]*)`$/u;
 const SERVICE_ID = DEPLOYMENT_SERVICE_ID;
-const RESOURCE_ID = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/u;
 const SERVICES_MAX = DEPLOYMENT_SERVICES_MAX;
 // Public: behind a load balancer at the environment's address. Internal: no public address, reached only over the
 // private network by the services that name it.
@@ -235,7 +236,7 @@ function settingName(service, name, deploymentPath, line) {
 
 function resourceDraft(match, deploymentPath, line, resources) {
   const id = match[1];
-  if (!RESOURCE_ID.test(id)) {
+  if (!STACK_RESOURCE_ID.test(id)) {
     invalid(deploymentPath, `### Resource names a resource of ## Resources by its id, such as \`files\`; ${JSON.stringify(id)} isn't one.`, line);
   }
   if (resources.has(id)) invalid(deploymentPath, `Deployment has a second ### Resource \`${id}\`.`, line);
@@ -319,10 +320,7 @@ function finishServices(drafts, result, deploymentPath) {
 // The checks that need `## Resources`: a `### Resource` names one of them, `Development` is a bucket's, and no
 // service's Reaches or Setting takes a name a resource binds.
 function checkAgainstResources(located, declarations, deploymentPath) {
-  const resources = new Map((Array.isArray(declarations) ? declarations : [])
-    .map((declaration) => declaration?.resource)
-    .filter((resource) => resource && typeof resource.id === "string")
-    .map((resource) => [resource.id, resource]));
+  const resources = stackResourcesById(declarations);
   for (const resource of located.resources.values()) {
     const declared = resources.get(resource.id);
     if (!declared) {

@@ -18,6 +18,7 @@ import {
   parseVibe64ResourceEstimatesLines
 } from "../../packages/vibe64-genesis/src/server/resourceEstimates.js";
 import { __testables as stackOperationTestables } from "../../packages/vibe64-genesis/src/server/stackOperation.js";
+import { STAGING_DATA_ENTRY_FORMS, parseVibe64StagingDataLines } from "../../packages/vibe64-genesis/src/server/stagingData.js";
 import { parseVibe64WorkspaceSetupLines } from "../../packages/vibe64-genesis/src/server/workspaceSetup.js";
 import { PREVIEW_APPLICATION_IDENTITY_LIMIT } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import { __testables as previewIdentityCommandTestables } from "../../packages/vibe64-terminals/src/server/previewIdentityCommand.js";
@@ -45,6 +46,7 @@ const SECTION_PARSERS = {
   },
   "project-services": (lines) => parseVibe64ProjectServicesLines(lines),
   "integration-setup": (lines) => parseVibe64IntegrationSetupLines(lines),
+  "staging-data": (lines) => parseVibe64StagingDataLines(lines),
   "architecture-inspection": (lines) => parseVibe64ArchitectureInspectionLines(lines),
   "architecture-layout": (lines) => parseVibe64ArchitectureLayoutLines(lines)
 };
@@ -114,6 +116,12 @@ test("printed entry forms are the parsers' own tables, and unknown entries list 
   assert.throws(
     () => parseVibe64PackagingLines(["### Package `x`: X", "- Signing key: `k`"]),
     (error) => PACKAGING_ENTRY_FORMS.every((form) => error.message.includes(form))
+  );
+  const stagingData = (await cli(["staging-data"])).stdout;
+  for (const form of Object.values(STAGING_DATA_ENTRY_FORMS).flat()) assert.ok(stagingData.includes(form), form);
+  assert.throws(
+    () => parseVibe64StagingDataLines(["- Database: `database`", "- Mode: own copy, empty", "- Owner: `x`"]),
+    (error) => STAGING_DATA_ENTRY_FORMS.section.every((form) => error.message.includes(form))
   );
   const connected = (await cli(["connected-development"])).stdout;
   for (const form of CONNECTED_DEVELOPMENT_ENTRY_FORMS) assert.ok(connected.includes(form), form);
@@ -201,6 +209,7 @@ test("every Vibe64 section error points to its listed spec, including wrapped er
     }),
     "project-services": () => parseVibe64ProjectServicesLines(["- Run `x`"]),
     "integration-setup": () => parseVibe64IntegrationSetupLines(["- Run `x`"]),
+    "staging-data": () => parseVibe64StagingDataLines(["- Run `x`"]),
     "architecture-inspection": () => parseVibe64ArchitectureInspectionLines(["- Runtime: `nodejs`"]),
     "architecture-layout": () => parseVibe64ArchitectureLayoutLines(["- Kind: `layer`"])
   };

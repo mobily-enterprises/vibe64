@@ -40,6 +40,7 @@ import {
   vibe64OutputsInspection
 } from "./outputs.js";
 import { VIBE64_PROJECT_SERVICES_SECTION, parseVibe64ProjectServicesLines, vibe64ProjectServicesInspection } from "./projectServices.js";
+import { VIBE64_STAGING_DATA_SECTION, vibe64StagingDataInspection } from "./stagingData.js";
 import { VIBE64_WORKSPACE_SETUP_SECTION, parseVibe64WorkspaceSetupLines, vibe64WorkspaceSetupInspection } from "./workspaceSetup.js";
 import { vibe64Driver } from "./promptContext.js";
 import {
@@ -47,12 +48,7 @@ import {
   parseVibe64ResourceEstimatesLines,
   vibe64ResourceEstimatesInspection
 } from "./resourceEstimates.js";
-
-import {
-  VIBE64_INTEGRATION_SETUP_SECTION,
-  parseVibe64IntegrationSetupLines,
-  vibe64IntegrationSetupInspection
-} from "./integrationSetup.js";
+import { VIBE64_INTEGRATION_SETUP_SECTION, parseVibe64IntegrationSetupLines, vibe64IntegrationSetupInspection } from "./integrationSetup.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
@@ -429,21 +425,20 @@ async function inspectGenesisStackComponents(options = {}) {
   return { components: stack.components, stackHash: stack.stackHash };
 }
 
-async function inspectVibe64Deployment(options = {}) {
-  const [section, environment] = await Promise.all([
-    inspectGenesisStackSection(VIBE64_APPLICATION_DEPLOYMENT_SECTION, options),
-    exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options)
-  ]);
-  return vibe64DeploymentInspection({ environment, section });
+// The inspection of a section read with the Stack's environment (its resources, Environment defaults), from one Stack.
+function withGenesisEnvironment(sectionName, interpret) {
+  return async (options = {}) => {
+    const [section, environment] = await Promise.all([
+      inspectGenesisStackSection(sectionName, options),
+      exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options)
+    ]);
+    return interpret({ environment, section });
+  };
 }
 
-async function inspectVibe64Packaging(options = {}) {
-  const [section, environment] = await Promise.all([
-    inspectGenesisStackSection(VIBE64_PACKAGING_SECTION, options),
-    exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options)
-  ]);
-  return vibe64PackagingInspection({ environment, section });
-}
+const inspectVibe64Deployment = withGenesisEnvironment(VIBE64_APPLICATION_DEPLOYMENT_SECTION, vibe64DeploymentInspection);
+const inspectVibe64Packaging = withGenesisEnvironment(VIBE64_PACKAGING_SECTION, vibe64PackagingInspection);
+const inspectVibe64StagingData = withGenesisEnvironment(VIBE64_STAGING_DATA_SECTION, vibe64StagingDataInspection);
 
 /**
  * Runs the project's own `## Verification` commands in projectRoot (a Git checkout).
@@ -706,6 +701,7 @@ export {
   inspectGenesisStackComponents,
   inspectVibe64Deployment,
   inspectVibe64Packaging,
+  inspectVibe64StagingData,
   verifyGenesisProject,
   inspectGenesisEnvironment,
   inspectVibe64Outputs,
@@ -746,3 +742,5 @@ export {
   withGenesisCommandShim,
   withinGenesisDeadline
 };
+export { STAGING_DATA_ENTRY_FORMS, STAGING_DATA_MODES, VIBE64_STAGING_DATA_CONTRACT, VIBE64_STAGING_DATA_SECTION } from "./stagingData.js";
+export { parseVibe64StagingDataLines, vibe64StagingDataInspection } from "./stagingData.js";
