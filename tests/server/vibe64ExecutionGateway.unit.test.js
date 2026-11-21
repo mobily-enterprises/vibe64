@@ -309,7 +309,7 @@ test("a login environment's cache folder reaches a person's command through the 
   const resolve = (request = {}) => resolveCommandEnv({
     actor, baseEnv: { PATH: "/usr/bin" }, request: { actor: "person", purpose: "source", ...request }, resolvedGitIdentityEnv: {}
   });
-  const helperRun = (env, user = person) => helperChildEnv(env, user, "v64d_sas", "vibe64-command");
+  const helperRun = (env, user = person) => helperChildEnv(env, user, "daemon_user", "vibe64-command");
   const folders = (env) => [env.XDG_CACHE_HOME, env.GRADLE_USER_HOME, env.XDG_CONFIG_HOME, env.XDG_DATA_HOME];
   const named = [path.join(work, "person", ".cache"), path.join(work, "person", ".gradle"),
     path.join(person.home, ".config"), path.join(person.home, ".local", "share")];
