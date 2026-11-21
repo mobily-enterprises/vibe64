@@ -378,6 +378,18 @@ Staging Env says. A Preview command (`purpose: "preview"`) also
 starts with `NODE_ENV=development`, which the project's Env or launch may still
 change. Development Env refuses to save `APP_ENV`.
 
+Nor does a command take the editor's own sign-in settings: every name beginning
+`AUTH_` in the editor's environment or the caller's `baseEnv`. The editor is
+itself a JSKIT application, and a project's JSKIT application reads the same
+names for its own sign-in, so an editor that signs people in with a one-time
+pass (`AUTH_PASS_PUBLIC_KEY` and its audience and resource) would otherwise turn
+pass sign-in on in every Preview. A command's `AUTH_*` come only from the
+project's Env (`project.runtimeConfigEnv`), a launch's or terminal's own env,
+or its Staging Env. A caller that starts a process from the editor's env, as a
+Claude Code conversation does, hands its project's Env as the project's
+(`project.runtimeConfigEnv`, or `projectEnv` for the conversation execution),
+not inside `baseEnv`.
+
 Gateway-owned process identity env looks like:
 
 ```js

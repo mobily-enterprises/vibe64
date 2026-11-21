@@ -348,13 +348,37 @@ test("Claude main and temporary chats receive project values with their managed 
     conversationId: temporary.conversationId, message: "Temporary", messageId: "temporary-env"
   });
   for (const { options } of f.processes) {
-    assert.equal(options.env.REFERENCE_SECRET, "dummy-project-secret");
+    // The project's Env is the project's, apart from the editor's own env, where its AUTH_* would not pass.
+    assert.deepEqual(options.projectEnv, { REFERENCE_SECRET: "dummy-project-secret" });
+    assert.equal(options.env.REFERENCE_SECRET, undefined);
     assert.equal(options.env.MANAGED_COMMAND, "ready");
     // Resources show each assistant process under its project and session.
     assert.equal(options.execution.projectSlug, "demo-project");
     assert.equal(options.execution.sessionId, "test");
   }
   assert.equal(f.processes.length, 2);
+});
+
+test("Claude's native terminal gets its project's Env as the project's, apart from the editor's own env", async (t) => {
+  const f = await fixture(t);
+  let request;
+  const terminalProvider = createClaudeSessionAgentProvider({
+    ...f.providerOptions,
+    codexGitCommand: {},
+    commandRunner: async input => { request = input; return { ok: true }; },
+    project: {
+      ...f.providerOptions.project,
+      projectInspectionEnvironment: async () => ({ AUTH_LOCAL_STORE_DIR: ".jskit/project-auth" })
+    },
+    prepareCommandEnvironment: async () => ({ ok: true, env: { MANAGED_COMMAND: "ready" }, shimDirs: [] })
+  });
+  const claudeSettings = path.join(f.providerOptions.env.CLAUDE_CONFIG_DIR, ".claude.json");
+  await mkdir(path.dirname(claudeSettings), { recursive: true });
+  await writeFile(claudeSettings, JSON.stringify({ oauthAccount: { emailAddress: "fixture@example.test" } }));
+  await terminalProvider.startTerminal(f.context);
+  assert.deepEqual(request.project, { runtimeConfigEnv: { AUTH_LOCAL_STORE_DIR: ".jskit/project-auth" } });
+  assert.equal(request.baseEnv.AUTH_LOCAL_STORE_DIR, undefined);
+  assert.equal(request.baseEnv.MANAGED_COMMAND, "ready");
 });
 
 test("Claude conversations run the Claude Code found when each process starts", async (t) => {

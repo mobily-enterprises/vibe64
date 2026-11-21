@@ -72,6 +72,16 @@ const BASE_ENV_POLICY_NAMES = new Set([
 // Nor does the editor's own APP_ENV: Vibe64 itself is a production
 // application, while everything a session runs is Development.
 const EDITOR_ONLY_ENV_NAMES = new Set(["APP_ENV", "NODE_ENV"]);
+// Nor do the editor's own sign-in settings. The editor is itself a JSKIT
+// application, and a project's JSKIT application reads the same AUTH_* names
+// for its own sign-in: the editor's one-time pass key, for one, would turn pass
+// sign-in on in a Preview that has nothing to name its accounts. A project's own
+// AUTH_* come from its Env, a launch's or terminal's own env, or its Staging Env.
+const EDITOR_SIGN_IN_ENV_PREFIX = "AUTH_";
+
+function editorOnlyEnvName(key) {
+  return EDITOR_ONLY_ENV_NAMES.has(key) || key.startsWith(EDITOR_SIGN_IN_ENV_PREFIX);
+}
 
 // Everything a session runs (its commands, terminals, agents and Preview) is
 // Development, whatever the project's own Env says, so nothing it starts acts
@@ -94,7 +104,7 @@ function commandBaseEnv(baseEnv = {}) {
     .map(([key, value]) => [String(key || "").trim(), String(value ?? "")])
     .filter(([key]) => key &&
       !BASE_ENV_POLICY_NAMES.has(key) &&
-      !EDITOR_ONLY_ENV_NAMES.has(key) &&
+      !editorOnlyEnvName(key) &&
       !key.startsWith("GIT_") &&
       !key.startsWith("GH_") &&
       !key.startsWith("XDG_")));

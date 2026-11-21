@@ -53,6 +53,7 @@ function claudeCodeArguments(options = {}) {
  * @param {(executionId: string) => unknown} dependencies.onStarted
  * @param {RuntimeLogger} dependencies.logger
  * @param {string} dependencies.accountQuery the account query this process answers, if it runs one
+ * @param {Record<string, string>} [dependencies.projectEnv] the session project's Env, which its process gets as the project's
  */
 async function createClaudeCodeProcess({
   commandRunner,
@@ -63,6 +64,7 @@ async function createClaudeCodeProcess({
   onStarted,
   logger,
   accountQuery,
+  projectEnv,
   ...options
 }) {
   const host = createVibe64ConversationExecution({
@@ -72,6 +74,7 @@ async function createClaudeCodeProcess({
     execution,
     shimDirs,
     onStarted,
+    projectEnv,
     purpose: options.toolFree ? "account" : "assistant",
     operationId: "claude-code",
     label: "Claude Code assistant"

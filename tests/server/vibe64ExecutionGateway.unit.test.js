@@ -40,6 +40,8 @@ import {
 } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
+import { readEnvUserValues, saveEnvUserValues } from "../../packages/vibe64-core/src/server/envUserValues.js";
+import { RUNTIME_CONFIG_SCOPES, runtimeConfigEnv } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 
@@ -786,6 +788,78 @@ test("everything a session runs gets APP_ENV=development, Preview NODE_ENV=devel
   assert.deepEqual(await modes({ envPolicy: "staging", purpose: "staging" }), ["unset", "unset"]);
   assert.deepEqual(await modes({ envPolicy: "staging", purpose: "staging",
     project: { stagingEnv: { APP_ENV: "staging", NODE_ENV: "production" } } }), ["staging", "production"]);
+});
+
+// Incident 2026-11-21: a host signed people in to the editor itself with a one-time pass (AUTH_PASS_PUBLIC_KEY,
+// _AUDIENCE, _RESOURCE in the editor's own env). Every Preview inherited them, and a project on a JSKIT whose local
+// sign-in refuses to start with a pass key but nothing to name its accounts could not start its Preview at all.
+test("the editor's own sign-in settings never reach what a session runs, and a project's own AUTH_* still do", async (t) => {
+  const editor = {
+    AUTH_PASS_AUDIENCE: "editor-audience",
+    AUTH_PASS_PUBLIC_KEY: "editor-public-key",
+    AUTH_PASS_RESOURCE: "editor-workspace",
+    // The editor's own GIT_CONFIG_* (a host's safe directories, say) never come with them either.
+    GIT_CONFIG_COUNT: "3",
+    GIT_CONFIG_KEY_0: "safe.directory",
+    GIT_CONFIG_VALUE_0: "/editor"
+  };
+  const saved = Object.fromEntries(Object.keys(editor).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, editor);
+  const projectRuntimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-gateway-auth-env-"));
+  t.after(async () => {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    await rm(projectRuntimeRoot, { force: true, recursive: true });
+  });
+  const names = ["AUTH_PASS_PUBLIC_KEY", "AUTH_PASS_AUDIENCE", "AUTH_PASS_RESOURCE", "AUTH_GOOGLE_CLIENT_ID",
+    "AUTH_LOCAL_STORE_DIR", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0"];
+  const print = `process.stdout.write('AUTH_ENV:' + JSON.stringify(Object.fromEntries(${JSON.stringify(names)}
+    .map((name) => [name, process.env[name] ?? "unset"]))))`;
+  const expected = (values = {}) => ({ ...Object.fromEntries(names.map((name) => [name, "unset"])),
+    GIT_CONFIG_COUNT: "0", ...values });
+  async function authEnv(request) {
+    const result = await runVibe64Command({ command: process.execPath, args: ["-e", print], ...request });
+    assert.equal(result.ok, true, result.output);
+    return JSON.parse(result.stdout.replace(/^AUTH_ENV:/u, ""));
+  }
+  // Inherited from the editor, handed over as a caller's base env (as an agent's own env is), in Preview and on
+  // Staging alike.
+  assert.deepEqual(await authEnv({}), expected());
+  assert.deepEqual(await authEnv({ purpose: "preview", envPolicy: "preview" }), expected());
+  assert.deepEqual(await authEnv({ inheritProcessEnv: false, baseEnv: { ...editor, PATH: process.env.PATH } }), expected());
+  assert.deepEqual(await authEnv({ envPolicy: "staging", purpose: "staging" }), expected());
+  // A project's own come from its Development Env, an empty value included (it turns pass sign-in off), ...
+  await saveEnvUserValues({
+    environment: RUNTIME_CONFIG_SCOPES.DEV,
+    projectRuntimeRoot,
+    values: {
+      AUTH_GOOGLE_CLIENT_ID: { secret: false, value: "project-client" },
+      AUTH_PASS_PUBLIC_KEY: { secret: true, value: "" }
+    }
+  });
+  const runtimeConfig = runtimeConfigEnv((await readEnvUserValues({ projectRuntimeRoot })).records);
+  assert.deepEqual(await authEnv({ purpose: "preview", envPolicy: "preview", project: { runtimeConfigEnv: runtimeConfig } }),
+    expected({ AUTH_GOOGLE_CLIENT_ID: "project-client", AUTH_PASS_PUBLIC_KEY: "" }));
+  // ... a launch's or terminal's own env, and a Staging Env.
+  assert.deepEqual(await authEnv({ purpose: "preview", envPolicy: "preview", env: { AUTH_LOCAL_STORE_DIR: ".jskit/auth" } }),
+    expected({ AUTH_LOCAL_STORE_DIR: ".jskit/auth" }));
+  assert.deepEqual(await authEnv({ envPolicy: "staging", purpose: "staging",
+    project: { stagingEnv: { AUTH_PASS_PUBLIC_KEY: "staging-key" } } }), expected({ AUTH_PASS_PUBLIC_KEY: "staging-key" }));
+  // A terminal or Preview (PTY) starts from the same env.
+  const namespace = `gateway-pty-auth-env-${Date.now()}`;
+  const terminal = await runVibe64Command({ command: process.execPath, args: ["-e", print], mode: "pty",
+    purpose: "preview", envPolicy: "preview", project: { runtimeConfigEnv: runtimeConfig }, runtimes: [], terminal: { namespace } });
+  try {
+    assert.equal(terminal.ok, true, terminal.output || terminal.error);
+    const snapshot = await waitForTerminalOutput(terminal.id, namespace, "}");
+    const match = String(snapshot.output || "").match(/AUTH_ENV:(\{[^\r\n]+\})/u);
+    assert.ok(match, snapshot.output);
+    assert.deepEqual(JSON.parse(match[1]), expected({ AUTH_GOOGLE_CLIENT_ID: "project-client", AUTH_PASS_PUBLIC_KEY: "" }));
+  } finally {
+    if (terminal.id) await closeTerminalSession(terminal.id, { namespace });
+  }
 });
 
 test("PTY env factories see the execution id like every other gateway command", async () => {

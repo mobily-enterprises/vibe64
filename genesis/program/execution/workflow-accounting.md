@@ -192,7 +192,12 @@ host may serve the editor itself in production mode. Nor does it take the
 editor's `APP_ENV`: every command but a staging command or a staging
 account's gets `APP_ENV=development` over the project's Env and its own env,
 and a Preview command also starts with `NODE_ENV=development`, which the
-project's Env or launch may change.
+project's Env or launch may change. Nor does it take the editor's own sign-in
+settings, any name beginning `AUTH_`: the editor is itself a JSKIT application
+whose `AUTH_*` would turn on or redirect a project's own JSKIT sign-in, so a
+command's `AUTH_*` come only from the project's Env, the launch's or caller's
+own env or its Staging Env. A Claude Code process, started from the editor's
+env, gets its project's Env as the project's for the same reason.
 On a host whose homes cannot start programs (the host profile's
 `npmPrefixRoot`), a person's or the daemon's command gets `NPM_CONFIG_PREFIX`
 `<npmPrefixRoot>/<login>` with its `bin` on PATH, and no login's

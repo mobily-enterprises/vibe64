@@ -213,6 +213,22 @@ test("native private home and state directories reach the process through the cr
   await assert.rejects(f.start({ env: { HOME: "relative" } }), /absolute directory/);
 });
 
+// A Claude process is started with the editor's own env, where the editor's sign-in settings never pass; its
+// session project's Env reaches it as the project's, AUTH_* included, as a Preview gets it.
+test("a native process gets its project's Env as the project's, never the editor's own sign-in settings", { timeout: 10_000 }, async t => {
+  const f = await fixture(t, { projectEnv: { AUTH_LOCAL_STORE_DIR: ".jskit/project-auth", PROJECT_FLAG: "on" } });
+  const names = ["AUTH_PASS_PUBLIC_KEY", "AUTH_LOCAL_STORE_DIR", "PROJECT_FLAG"];
+  const native = await f.start({ stream: true,
+    env: { PATH: process.env.PATH, AUTH_PASS_PUBLIC_KEY: "editor-public-key", AUTH_LOCAL_STORE_DIR: "/editor/auth" },
+    args: ["-e", `process.stdout.write(JSON.stringify(Object.fromEntries(${JSON.stringify(names)}.map(name => [name, process.env[name] ?? "unset"]))))`] });
+  native.stdin.end();
+  const chunks = [];
+  for await (const chunk of native.stdout) chunks.push(chunk);
+  assert.deepEqual(JSON.parse(Buffer.concat(chunks).toString()),
+    { AUTH_PASS_PUBLIC_KEY: "unset", AUTH_LOCAL_STORE_DIR: ".jskit/project-auth", PROJECT_FLAG: "on" });
+  assert.equal((await native.exited).code, 0);
+});
+
 test("the gateway drains a native process after its streaming client closes", { timeout: 10_000 }, async t => {
   const f = await fixture(t);
   const native = await f.start({ stream: true, args: ["-e", "process.stdout.write('ready'); setInterval(() => {}, 1000)"] });

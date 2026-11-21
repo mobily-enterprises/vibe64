@@ -141,12 +141,11 @@ function createClaudeConversationEnvironment({
       worktreePath: context.workdir
     });
     if (prepared.ok !== true) throw claudeConversationError("Claude's session command environment could not be prepared.", { code: "vibe64_claude_command_environment_failed" });
+    // The project's Env goes to the gateway as the project's, never in the
+    // editor's own env, where its AUTH_* and NODE_ENV would not pass.
     return {
       ...prepared,
-      env: {
-        ...await loadProjectExecutionEnv({ project, session: context.session, target: "claude" }),
-        ...prepared.env
-      }
+      projectEnv: await loadProjectExecutionEnv({ project, session: context.session, target: "claude" })
     };
   }
 
@@ -232,6 +231,7 @@ function createClaudeConversationEnvironment({
       stopExecution,
       credentialHome,
       env: { ...env, ...prepared.env, ...guidanceEnvironment },
+      projectEnv: prepared.projectEnv || {},
       shimDirs: !profile && !ctx.assistantScope && ctx.runtime?.learningScope?.noExercise !== true
         ? withGenesisCommandShim(prepared.shimDirs)
         : prepared.shimDirs,
@@ -309,6 +309,7 @@ function createClaudeConversationEnvironment({
         cwd: ctx.workdir,
         allowedRoots: [ctx.workdir],
         envPolicy: "auth",
+        project: { runtimeConfigEnv: prepared.projectEnv || {} },
         purpose: "assistant",
         mode: "pty",
         shimDirs: withGenesisCommandShim(prepared.shimDirs),

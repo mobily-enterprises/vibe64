@@ -46,6 +46,8 @@ function processExists(pid) {
  * @param {string} [options.label]
  * @param {string} [options.logPath]
  * @param {(executionId: string) => unknown} [options.onStarted]
+ * @param {Record<string, string>} [options.projectEnv] the session project's Env: the native process gets it as the
+ *   project's, as a Preview does, so its AUTH_* and NODE_ENV pass where the editor's own in `env` do not
  */
 export function createVibe64ConversationExecution({
   commandRunner = runVibe64Command,
@@ -59,7 +61,8 @@ export function createVibe64ConversationExecution({
   operationId = "conversation",
   label = "Assistant",
   logPath,
-  onStarted = noStartStep
+  onStarted = noStartStep,
+  projectEnv = {}
 }) {
   const entries = new Map();
   async function stop(id, options = {}) {
@@ -167,6 +170,7 @@ export function createVibe64ConversationExecution({
         cwd,
         allowedRoots: [cwd],
         envPolicy: "auth",
+        project: { runtimeConfigEnv: projectEnv },
         purpose,
         mode: "detached",
         shimDirs,

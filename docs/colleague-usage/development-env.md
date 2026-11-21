@@ -141,6 +141,15 @@ with `NODE_ENV=development`, which a Development Env value or the launch's own
 settings may change. Staging's mode belongs on the Stack's Deployment Serve
 step. Colleague can explain this and open Env.
 
+Nor do Vibe64's own sign-in settings reach a session. Vibe64 is itself a JSKIT
+application, and every setting it was started with whose name begins `AUTH_`
+(a host's one-time pass sign-in to Vibe64, for one) stays with it: Preview,
+Workspace setup, terminals, tests and agent commands get only the project's own
+`AUTH_*` values, from Development Env (or its Stack default), a launch's own
+settings or the command itself, and Staging gets only its Staging Env's. A
+project that took an `AUTH_*` value from the shell Vibe64 was started in adds
+it to Development Env instead. Colleague can explain this and open Env.
+
 `APP_ENV` says where the application runs, and Vibe64 sets it: everything a
 session runs (Preview, terminals, tests and agent commands) gets
 `APP_ENV=development`, whatever the project's own Env or launch says. An
