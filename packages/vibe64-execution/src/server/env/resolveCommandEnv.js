@@ -37,11 +37,11 @@ import {
   npmToolBinDirs,
   npmToolEnv
 } from "./npmToolEnv.js";
+import { loginToolEnv } from "./loginToolEnv.js";
 import {
   resolveRuntimePath
 } from "../runtime/resolveRuntimePath.js";
 import { runtimePackRoot } from "../runtime/runtimePacks.js";
-import { vibe64Host } from "../hostProfile.js";
 import {
   envRecord
 } from "../normalize.js";
@@ -191,26 +191,28 @@ function commandEnvWithoutGitIdentity({
     ...sharedEnv,
     ...sessionAppEnv(request)
   };
-  // A staging account's home is in its own area, where programs start;
-  // a person's and the daemon's may not be (vibe64Host().npmPrefixRoot).
-  const prefixRoot = actor.stagingAccount ? "" : vibe64Host().npmPrefixRoot;
+  // A staging account's home is in its own area, where programs start; a person's and the daemon's may not be, so
+  // the host may give their commands tool homes elsewhere (vibe64Host().loginEnvironment). What the command's own
+  // environment names wins, as a project's Env does.
+  const tools = actor.stagingAccount ? { env: {}, path: [] } : loginToolEnv(env.USER);
+  const toolEnv = { ...tools.env, ...env };
   const finalEnv = {
-    ...env,
-    ...npmToolEnv({ env, prefixRoot }),
+    ...toolEnv,
+    ...npmToolEnv({ env: toolEnv }),
     VIBE64_DECLARED_RUNTIMES: declaredRuntimes
   };
   const runtimePath = resolveRuntimePath({
     env: finalEnv,
     existingPath: [
-      ...npmToolBinDirs({ env: finalEnv, prefixRoot }),
+      ...new Set([...tools.path, ...npmToolBinDirs({ env: finalEnv })]),
       finalEnv.PATH
     ].filter(Boolean).join(":"),
     inheritedPath: localPath,
     runtimes: request.runtimes,
     shimDirs: request.shimDirs || []
   });
-  // The npm prefix's bin takes ~/.local/bin's place: the command's login's, and the server's own login's.
-  const PATH = prefixRoot ? withoutHomeLocalBins(runtimePath, [finalEnv.HOME, os.homedir()]) : runtimePath;
+  // The tool homes' folders take ~/.local/bin's place: the command's login's, and the server's own login's.
+  const PATH = tools.path.length ? withoutHomeLocalBins(runtimePath, [finalEnv.HOME, os.homedir()]) : runtimePath;
   // A login shell (Launch runs `bash -lc`) may reorder PATH; with the person's
   // own tools its script restores this one, so Launch finds what setup found.
   return { ...finalEnv, PATH, ...(runtimePackRoot() ? {} : { VIBE64_TOOL_PATH: PATH }) };

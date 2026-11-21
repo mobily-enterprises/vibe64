@@ -427,17 +427,22 @@ NPM prefix is derived from HOME, and its `bin` joins PATH:
 ```
 
 A host whose homes cannot start programs (homes mounted `noexec`) names
-`npmPrefixRoot` in its host profile. Each person's and
-the daemon's prefix is then that login's own folder below it, which the host
-makes and keeps that login's alone, so a CLI installed with `npm -g` starts:
+`loginEnvironment` in its host profile: the tool homes it gives each login, in a
+folder where programs start, `%u` standing for the login. Each person's and the
+daemon's command gets its variables, unless the command's own environment names
+them, so a CLI installed with `npm -g`, `go install`, `cargo install`,
+`python3 -m pip install --user` or `gem install` starts, and `npx` and Corepack
+run what they download:
 
 ```js
 {
-  NPM_CONFIG_PREFIX: "<npmPrefixRoot>/<login>"
+  NPM_CONFIG_PREFIX: "<work>/<login>/.tools/npm",
+  NPM_CONFIG_CACHE: "<work>/<login>/.tools/npm-cache",
+  GOPATH: "<work>/<login>/.tools/go"
 }
 ```
 
-Its `bin` takes `~/.local/bin`'s place on PATH: no login's `~/.local/bin`
+The host's program folders take `~/.local/bin`'s place on PATH: no login's `~/.local/bin`
 is on the command's PATH, not even one the server's own PATH inherited from a
 login shell's profile, since a program found there would refuse to start.
 

@@ -7,16 +7,17 @@ import { isMainThread } from "node:worker_threads";
 // A host that provisions its own machines passes its values once at startup.
 const HOST_PROFILE_KEY = Symbol.for("vibe64.hostProfile");
 const HOST_UMASK_KEY = Symbol.for("vibe64.hostProfile.previousUmask");
-const PATH_FIELDS = ["runtimePackRoot", "sharedCacheRoot", "npmPrefixRoot", "execHelperPath"];
+const PATH_FIELDS = ["runtimePackRoot", "sharedCacheRoot", "execHelperPath"];
 const LOCAL_HOST_PROFILE = Object.freeze({
   // Pinned tool packs; "" means the person's own installed tools.
   runtimePackRoot: "",
   // Cache shared by every account on the machine.
   sharedCacheRoot: "",
-  // Where each person's and the daemon's npm prefix is, <root>/<login>, made
-  // by the host and that login's alone, when their homes cannot start programs
-  // (a noexec mount); "" means the login's own ~/.local.
-  npmPrefixRoot: "",
+  // The tool homes the host gives each login's commands, when their homes
+  // cannot start programs (a noexec mount): { env: { NAME: value }, path: [folder] },
+  // "%u" in a value standing for the login. null means the login's own
+  // ~/.local for npm and each tool's own default.
+  loginEnvironment: null,
   // Privileged helper that runs commands as other OS users.
   execHelperPath: "",
   // Several OS users share project files through one group.
@@ -35,6 +36,33 @@ function setHostUmask(shared) {
     process.umask(globalThis[HOST_UMASK_KEY]);
     delete globalThis[HOST_UMASK_KEY];
   }
+}
+
+const LOGIN_TOOL_PATH = /^(?:\/(?:%u|[A-Za-z0-9._-])+)+$/u;
+
+function loginToolPath(value, what) {
+  if (typeof value !== "string" || !LOGIN_TOOL_PATH.test(value) || value.split("/").includes("..") ||
+    value.replaceAll("%u", "").includes("%")) {
+    throw new TypeError(`Host profile loginEnvironment ${what} must be an absolute path, "%u" standing for the login.`);
+  }
+  return value;
+}
+
+/** A copy of the host's login tool homes, checked and frozen, or null. */
+function loginEnvironmentSetting(value) {
+  if (value === null) return null;
+  const { env, path: folders } = value || {};
+  if (typeof value !== "object" || Object.keys(value).some((key) => key !== "env" && key !== "path") ||
+    !env || typeof env !== "object" || Array.isArray(env) || !Array.isArray(folders)) {
+    throw new TypeError("Host profile loginEnvironment must be null or { env, path }.");
+  }
+  const names = Object.keys(env);
+  const bad = names.find((name) => !/^[A-Z][A-Z0-9_]*$/u.test(name) || ["HOME", "PATH", "TMPDIR", "USER"].includes(name));
+  if (bad !== undefined) throw new TypeError(`Host profile loginEnvironment cannot set ${bad}.`);
+  return Object.freeze({
+    env: Object.freeze(Object.fromEntries(names.map((name) => [name, loginToolPath(env[name], name)]))),
+    path: Object.freeze(folders.map((folder) => loginToolPath(folder, "path")))
+  });
 }
 
 function configureVibe64Host(profile = null) {
@@ -56,6 +84,7 @@ function configureVibe64Host(profile = null) {
   if (typeof configured.sharedGroupAccess !== "boolean") {
     throw new TypeError("Host profile sharedGroupAccess must be true or false.");
   }
+  configured.loginEnvironment = loginEnvironmentSetting(configured.loginEnvironment);
   const frozen = Object.freeze(configured);
   globalThis[HOST_PROFILE_KEY] = frozen;
   setHostUmask(frozen.sharedGroupAccess);

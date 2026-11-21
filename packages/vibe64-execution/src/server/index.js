@@ -77,6 +77,9 @@ export {
   NPM_CONFIG_PREFIX_ENV
 } from "./env/npmToolEnv.js";
 export {
+  loginToolEnv
+} from "./env/loginToolEnv.js";
+export {
   GIT_IDENTITY_COMMANDS,
   isFallbackGitIdentityEmail
 } from "./env/gitIdentityEnv.js";

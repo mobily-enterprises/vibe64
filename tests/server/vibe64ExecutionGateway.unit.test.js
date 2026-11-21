@@ -244,10 +244,15 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
   assert.equal(env.committerEmail, "vibe64@sas.users.vibe64.invalid");
 });
 
-test("a host whose homes cannot start programs gives each login its own npm prefix, never ~/.local, and a staging account keeps its home's", async (t) => {
-  const npmPrefixRoot = path.join(HOST_ROOT, "npm-prefixes");
-  useHost(t, { ...PACK_HOST, npmPrefixRoot });
+test("a host whose homes cannot start programs gives each login's commands its tool homes, never ~/.local, and a staging account keeps its home's", async (t) => {
+  const work = path.join(HOST_ROOT, "work");
+  useHost(t, { ...PACK_HOST, loginEnvironment: {
+    env: { NPM_CONFIG_PREFIX: `${work}/%u/.tools/npm`, NPM_CONFIG_CACHE: `${work}/%u/.tools/npm-cache`,
+      GOPATH: `${work}/%u/.tools/go`, GEM_HOME: `${work}/%u/.tools/gem` },
+    path: [`${work}/%u/.tools/npm/bin`, `${work}/%u/.tools/go/bin`]
+  } });
   const currentUser = os.userInfo();
+  const tools = path.join(work, currentUser.username, ".tools");
   // The server's own PATH may carry the login's ~/.local/bin (a login shell's profile adds it, as GitHub's runners
   // have it): a program found there could not start, so the command never gets it.
   const serverPath = process.env.PATH;
@@ -256,17 +261,21 @@ test("a host whose homes cannot start programs gives each login its own npm pref
     process.env.PATH = serverPath;
   });
   const result = await runVibe64Command({
-    env: NO_PERSON_GIT_CONFIG_ENV,
+    // A command's own setting wins over the host's.
+    env: { ...NO_PERSON_GIT_CONFIG_ENV, GEM_HOME: "/srv/own-gems" },
     command: process.execPath,
-    args: ["-e", "console.log(JSON.stringify({ npmPrefix: process.env.NPM_CONFIG_PREFIX, path: process.env.PATH }))"],
+    args: ["-e", "const e = process.env; console.log(JSON.stringify({ npmPrefix: e.NPM_CONFIG_PREFIX, npmCache: e.NPM_CONFIG_CACHE, go: e.GOPATH, gems: e.GEM_HOME, path: e.PATH }))"],
     project: { workspace: "sas" },
     userKey: "person"
   });
   assert.equal(result.ok, true, result.output);
   const env = JSON.parse(result.stdout);
-  assert.equal(env.npmPrefix, path.join(npmPrefixRoot, currentUser.username));
+  assert.deepEqual([env.npmPrefix, env.npmCache, env.go, env.gems],
+    [path.join(tools, "npm"), path.join(tools, "npm-cache"), path.join(tools, "go"), "/srv/own-gems"]);
   const pathParts = env.path.split(":");
-  assert.ok(pathParts.includes(path.join(npmPrefixRoot, currentUser.username, "bin")), env.path);
+  for (const folder of [path.join(tools, "npm", "bin"), path.join(tools, "go", "bin")]) {
+    assert.equal(pathParts.filter((part) => part === folder).length, 1, `${folder} once in ${env.path}`);
+  }
   assert.ok(!pathParts.includes(path.join(currentUser.homedir, ".local", "bin")), env.path);
 
   const application = { username: "v64s_app", home: path.join(HOST_ROOT, "apps", "app", "home") };
@@ -278,7 +287,8 @@ test("a host whose homes cannot start programs gives each login its own npm pref
   });
   assert.equal(applicationEnv.NPM_CONFIG_PREFIX, path.join(application.home, ".local"));
   assert.ok(applicationEnv.PATH.split(":").includes(path.join(application.home, ".local", "bin")));
-  assert.ok(!applicationEnv.PATH.includes(npmPrefixRoot));
+  assert.equal(applicationEnv.GOPATH, undefined);
+  assert.ok(!applicationEnv.PATH.includes(work));
 });
 
 test("execution gateway gives Codex commands only their declared database env, fallback git identity, shared browser runtime, and actor HOME", async () => {

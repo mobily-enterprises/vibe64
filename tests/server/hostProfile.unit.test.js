@@ -37,7 +37,7 @@ test("a person's own computer needs no host configuration", () => {
   assert.deepEqual({ ...vibe64Host() }, {
     runtimePackRoot: "",
     sharedCacheRoot: "",
-    npmPrefixRoot: "",
+    loginEnvironment: null,
     execHelperPath: "",
     sharedGroupAccess: false
   });
@@ -48,7 +48,24 @@ test("a person's own computer needs no host configuration", () => {
 test("a host profile is validated, frozen and replaces the local defaults", (t) => {
   t.after(() => configureVibe64Host(null));
   assert.throws(() => configureVibe64Host({ runtimePackRoot: "relative/packs" }), /absolute path or empty/u);
-  assert.throws(() => configureVibe64Host({ npmPrefixRoot: "relative/npm" }), /npmPrefixRoot must be an absolute path or empty/u);
+  for (const loginEnvironment of [{ env: {} }, { env: {}, path: [], cache: "/srv" }, { env: [], path: [] }, "/srv/%u"]) {
+    assert.throws(() => configureVibe64Host({ loginEnvironment }), /loginEnvironment must be null or \{ env, path \}/u);
+  }
+  for (const [env, folders, refused] of [
+    [{ GOPATH: "srv/%u/go" }, [], "GOPATH must be an absolute path"],
+    [{ GOPATH: "/srv/%u/../go" }, [], "GOPATH must be an absolute path"],
+    [{ GOPATH: "/srv/%h/go" }, [], "GOPATH must be an absolute path"],
+    [{ GOPATH: "/srv/$USER/go" }, [], "GOPATH must be an absolute path"],
+    [{}, ["/srv/%u/go bin"], "path must be an absolute path"],
+    [{ PATH: "/srv/%u/bin" }, [], "cannot set PATH"],
+    [{ HOME: "/srv/%u" }, [], "cannot set HOME"],
+    [{ npm_config_cache: "/srv/%u" }, [], "cannot set npm_config_cache"]
+  ]) {
+    assert.throws(() => configureVibe64Host({ loginEnvironment: { env, path: folders } }), new RegExp(refused, "u"));
+  }
+  assert.deepEqual(configureVibe64Host({ loginEnvironment: { env: { GOPATH: "/srv/%u/.tools/go" }, path: ["/srv/%u/.tools/go/bin"] } })
+    .loginEnvironment, { env: { GOPATH: "/srv/%u/.tools/go" }, path: ["/srv/%u/.tools/go/bin"] });
+  assert.ok(Object.isFrozen(vibe64Host().loginEnvironment.env) && Object.isFrozen(vibe64Host().loginEnvironment.path));
   assert.throws(() => configureVibe64Host({ sharedGroupAccess: "yes" }), /true or false/u);
   assert.throws(() => configureVibe64Host({ packRoot: "/srv/packs" }), /Unknown host profile setting: packRoot/u);
 

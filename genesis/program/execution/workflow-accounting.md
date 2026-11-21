@@ -198,11 +198,13 @@ whose `AUTH_*` would turn on or redirect a project's own JSKIT sign-in, so a
 command's `AUTH_*` come only from the project's Env, the launch's or caller's
 own env or its Staging Env. A Claude Code process, started from the editor's
 env, gets its project's Env as the project's for the same reason.
-On a host whose homes cannot start programs (the host profile's
-`npmPrefixRoot`), a person's or the daemon's command gets `NPM_CONFIG_PREFIX`
-`<npmPrefixRoot>/<login>` with its `bin` on PATH, and no login's
-`~/.local/bin`, not even one the editor's own PATH inherited; a staging
-account keeps its home's.
+On a host whose homes cannot start programs, the host profile's
+`loginEnvironment` names the tool homes the host gives each login, `%u` standing
+for the login (`packages/vibe64-execution/src/server/env/loginToolEnv.js`): a
+person's or the daemon's command gets its variables (npm's prefix and cache,
+Cargo's, Go's, Python's user base, Corepack's, gems') unless its own environment
+names them, its folders on PATH, and no login's `~/.local/bin`, not even one the
+editor's own PATH inherited; a staging account keeps its home's.
 The exec helper gives every command but a staging account's the workspace's
 temporary folder as `TMPDIR` (`packages/vibe64-execution/src/host/commandEnvironment.js`),
 and, because a JVM ignores `TMPDIR`, `JAVA_TOOL_OPTIONS` starting with
