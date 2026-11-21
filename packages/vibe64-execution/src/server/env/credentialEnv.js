@@ -36,6 +36,11 @@ function credentialEnv({ actor = {}, request = {} } = {}) {
   }, {
     VIBE64_CREDENTIAL_HOME: home
   });
+  // The login's own home: its folders under it are only the fallback the command already has, below the host's tool
+  // homes (loginEnvironment), so they are not named again. A home of its own keeps its own folders apart.
+  if (actorHome && home === actorHome) {
+    for (const name of ["XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"]) delete env[name];
+  }
   return {
     ...env,
     ...(normalizeAbsolutePath(credentialHome.cacheRoot)

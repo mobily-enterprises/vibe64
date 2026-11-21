@@ -328,7 +328,10 @@ Rules:
 - For real-user actors, credential home must match the actor home.
 - For app/daemon actors, `/home/...` credential homes are restricted.
 - Credential home sets `VIBE64_CREDENTIAL_HOME`.
-- Credential home also becomes `HOME`, `USER`, `LOGNAME`, and XDG home env when allowed.
+- Credential home also becomes `HOME`, `USER`, `LOGNAME`, and XDG home env when allowed. A credential home that is
+  the actor's own home names no XDG folders of its own: the command keeps the folders its login already has (the
+  host's tool homes where they name one, else the home's), and only the credential home's explicit roots
+  (`cacheRoot`, `configRoot`, `dataRoot`, `stateRoot`) replace them.
 
 ## Environment Ownership
 
@@ -438,9 +441,17 @@ run what they download:
 {
   NPM_CONFIG_PREFIX: "<work>/<login>/.tools/npm",
   NPM_CONFIG_CACHE: "<work>/<login>/.tools/npm-cache",
-  GOPATH: "<work>/<login>/.tools/go"
+  GOPATH: "<work>/<login>/.tools/go",
+  XDG_CACHE_HOME: "<work>/<login>/.cache"
 }
 ```
+
+Its variables win over the home's own folders (`~/.cache`, `~/.config`,
+`~/.local/share`), which are only the fallback: a login environment naming
+`XDG_CACHE_HOME` gives `uvx` and Corepack a cache folder they can start programs
+from, and the exec helper keeps the folders the command names when it runs it as
+the person. It cannot name `HOME`, `LOGNAME`, `PATH`, `TMPDIR`, `USER` or
+`XDG_RUNTIME_DIR`, which the resolver and the helper own.
 
 The host's program folders take `~/.local/bin`'s place on PATH: no login's `~/.local/bin`
 is on the command's PATH, not even one the server's own PATH inherited from a

@@ -40,6 +40,7 @@ import {
 } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
+import { helperChildEnv } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
 import { readEnvUserValues, saveEnvUserValues } from "../../packages/vibe64-core/src/server/envUserValues.js";
 import { RUNTIME_CONFIG_SCOPES, runtimeConfigEnv } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
@@ -289,6 +290,54 @@ test("a host whose homes cannot start programs gives each login's commands its t
   assert.ok(applicationEnv.PATH.split(":").includes(path.join(application.home, ".local", "bin")));
   assert.equal(applicationEnv.GOPATH, undefined);
   assert.ok(!applicationEnv.PATH.includes(work));
+});
+
+// On a host whose homes cannot start programs, a tool that starts what it fetched into its cache (uvx, from
+// $XDG_CACHE_HOME/uv) needs the cache folder the host's login environment names: in ~/.cache it fails with
+// "Permission denied". The editor resolves a person's command, the exec helper runs it as that person.
+test("a login environment's cache folder reaches a person's command through the exec helper, the home's only where nothing names one, and the command's own folders win", (t) => {
+  const work = path.join(HOST_ROOT, "work");
+  const loginEnvironment = { env: { XDG_CACHE_HOME: `${work}/%u/.cache`, GRADLE_USER_HOME: `${work}/%u/.gradle` }, path: [] };
+  useHost(t, { ...PACK_HOST, loginEnvironment });
+  const person = { username: "person", home: path.join(HOST_ROOT, "homes", "person") };
+  const actor = { actor: "person", requiresRealUser: true, user: person };
+  const resolve = (request = {}) => resolveCommandEnv({
+    actor, baseEnv: { PATH: "/usr/bin" }, request: { actor: "person", purpose: "source", ...request }, resolvedGitIdentityEnv: {}
+  });
+  const helperRun = (env, user = person) => helperChildEnv(env, user, "v64d_sas", "vibe64-command");
+  const folders = (env) => [env.XDG_CACHE_HOME, env.GRADLE_USER_HOME, env.XDG_CONFIG_HOME, env.XDG_DATA_HOME];
+  const named = [path.join(work, "person", ".cache"), path.join(work, "person", ".gradle"),
+    path.join(person.home, ".config"), path.join(person.home, ".local", "share")];
+
+  // The login environment's folders win over the home's, which fill in what it does not name (XDG_CONFIG_HOME).
+  const editor = resolve();
+  assert.deepEqual(folders(editor), named, "the editor's resolved env");
+  assert.deepEqual(folders(helperRun(editor)), named, "the exec helper's env for it");
+  // A command that runs with its login's own home as its credential home, as the AI's processes do.
+  assert.deepEqual(folders(helperRun(resolve({ credentialHome: { home: person.home } }))), named,
+    "a credential home that is the login's own");
+  // The command's own folders win over the login environment's.
+  const ownCache = path.join(HOST_ROOT, "own", "cache");
+  const ownGradle = path.join(HOST_ROOT, "own", "gradle");
+  assert.deepEqual(folders(helperRun(resolve({ credentialHome: { home: person.home, cacheRoot: ownCache },
+    env: { GRADLE_USER_HOME: ownGradle } }))), [ownCache, ownGradle, ...named.slice(2)]);
+  // A credential home of its own keeps its own folders apart from the login's.
+  const toolHome = path.join(HOST_ROOT, "tool-home");
+  const tool = resolveCommandEnv({ actor: { actor: "app", user: currentActorUser() }, baseEnv: { PATH: "/usr/bin" },
+    request: { actor: "app", credentialHome: { home: toolHome, username: "tool" } }, resolvedGitIdentityEnv: {} });
+  assert.deepEqual([tool.XDG_CACHE_HOME, tool.XDG_CONFIG_HOME], [path.join(toolHome, ".cache"), path.join(toolHome, ".config")]);
+  // The exec helper gives the home's folders only for those the command names none of, or names relative.
+  assert.deepEqual(folders(helperRun({ PATH: "/usr/bin", XDG_CACHE_HOME: named[0], XDG_DATA_HOME: "relative/share" })),
+    [named[0], undefined, ...named.slice(2)]);
+  // A staging account's stay in its own area.
+  const application = { username: "v64s_app", home: path.join(HOST_ROOT, "apps", "app", "home"), stagingAccount: {} };
+  assert.equal(helperRun({ PATH: "/usr/bin", XDG_CACHE_HOME: named[0] }, application).XDG_CACHE_HOME,
+    path.join(application.home, ".cache"));
+
+  // Without a login environment the home's own folders apply.
+  configureVibe64Host(PACK_HOST);
+  assert.deepEqual(folders(helperRun(resolve())),
+    [path.join(person.home, ".cache"), undefined, ...named.slice(2)]);
 });
 
 test("execution gateway gives Codex commands only their declared database env, fallback git identity, shared browser runtime, and actor HOME", async () => {

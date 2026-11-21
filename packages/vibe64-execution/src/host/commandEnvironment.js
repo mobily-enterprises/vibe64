@@ -382,9 +382,18 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
     }
   } else {
     env.HOME = targetUser.home;
-    env.XDG_CACHE_HOME = path.join(targetUser.home, ".cache");
-    env.XDG_CONFIG_HOME = path.join(targetUser.home, ".config");
-    env.XDG_DATA_HOME = path.join(targetUser.home, ".local", "share");
+    // The editor resolved the command's folders for this login (the host's tool homes where they name one, as a
+    // home that cannot start programs needs), so a person's or the daemon's command keeps what it names; the home's
+    // own folders are only the fallback when it names none. A staging account's stay in its own area.
+    for (const [name, folder] of [
+      ["XDG_CACHE_HOME", ".cache"],
+      ["XDG_CONFIG_HOME", ".config"],
+      ["XDG_DATA_HOME", path.join(".local", "share")]
+    ]) {
+      if (targetUser.stagingAccount || !path.isAbsolute(env[name] || "")) {
+        env[name] = path.join(targetUser.home, folder);
+      }
+    }
   }
   env.LOGNAME = targetUser.username;
   env.USER = targetUser.username;

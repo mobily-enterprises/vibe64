@@ -59,6 +59,8 @@ test("a host profile is validated, frozen and replaces the local defaults", (t) 
     [{}, ["/srv/%u/go bin"], "path must be an absolute path"],
     [{ PATH: "/srv/%u/bin" }, [], "cannot set PATH"],
     [{ HOME: "/srv/%u" }, [], "cannot set HOME"],
+    [{ LOGNAME: "/srv/%u" }, [], "cannot set LOGNAME"],
+    [{ XDG_RUNTIME_DIR: "/srv/%u/run" }, [], "cannot set XDG_RUNTIME_DIR"],
     [{ npm_config_cache: "/srv/%u" }, [], "cannot set npm_config_cache"]
   ]) {
     assert.throws(() => configureVibe64Host({ loginEnvironment: { env, path: folders } }), new RegExp(refused, "u"));

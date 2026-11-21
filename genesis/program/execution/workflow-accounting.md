@@ -202,9 +202,19 @@ On a host whose homes cannot start programs, the host profile's
 `loginEnvironment` names the tool homes the host gives each login, `%u` standing
 for the login (`packages/vibe64-execution/src/server/env/loginToolEnv.js`): a
 person's or the daemon's command gets its variables (npm's prefix and cache,
-Cargo's, Go's, Python's user base, Corepack's, gems') unless its own environment
-names them, its folders on PATH, and no login's `~/.local/bin`, not even one the
-editor's own PATH inherited; a staging account keeps its home's.
+Cargo's, Go's, Python's user base, Corepack's, gems', a cache folder) unless its
+own environment names them, its folders on PATH, and no login's `~/.local/bin`, not
+even one the editor's own PATH inherited; a staging account keeps its home's. Its
+variables win over the home's own folders (`~/.cache`, `~/.config`,
+`~/.local/share`), which are only the fallback where nothing names one: a credential
+home that is the login's own names no folders of its own over them, only its
+explicit roots, while a credential home of its own keeps its own folders, and the
+exec helper keeps the absolute XDG folders a person's or the daemon's command names
+(`packages/vibe64-execution/src/host/commandEnvironment.js`), filling in only the
+ones it names none of or names relative; a staging account's stay in its area. A
+login environment cannot name `HOME`, `LOGNAME`, `PATH`, `TMPDIR`, `USER` or
+`XDG_RUNTIME_DIR`, which the resolver and the helper already own, and a host
+profile that does is refused.
 The exec helper gives every command but a staging account's the workspace's
 temporary folder as `TMPDIR` (`packages/vibe64-execution/src/host/commandEnvironment.js`),
 and, because a JVM ignores `TMPDIR`, `JAVA_TOOL_OPTIONS` starting with

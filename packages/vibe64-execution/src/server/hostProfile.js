@@ -57,7 +57,10 @@ function loginEnvironmentSetting(value) {
     throw new TypeError("Host profile loginEnvironment must be null or { env, path }.");
   }
   const names = Object.keys(env);
-  const bad = names.find((name) => !/^[A-Z][A-Z0-9_]*$/u.test(name) || ["HOME", "PATH", "TMPDIR", "USER"].includes(name));
+  // The login's identity, its PATH and temporary folder, and its runtime folder, which belongs to its OS identity, each
+  // have one owner already: the command's resolver and the exec helper.
+  const bad = names.find((name) => !/^[A-Z][A-Z0-9_]*$/u.test(name) ||
+    ["HOME", "LOGNAME", "PATH", "TMPDIR", "USER", "XDG_RUNTIME_DIR"].includes(name));
   if (bad !== undefined) throw new TypeError(`Host profile loginEnvironment cannot set ${bad}.`);
   return Object.freeze({
     env: Object.freeze(Object.fromEntries(names.map((name) => [name, loginToolPath(env[name], name)]))),
