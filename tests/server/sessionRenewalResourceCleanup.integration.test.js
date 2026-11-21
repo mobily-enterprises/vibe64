@@ -82,7 +82,10 @@ import {
 configureStudioProjectContext({ env: process.env });
 
 const execFileAsync = promisify(execFile);
-const PREDECESSOR_ID = "renewal-resource-predecessor";
+// Each test renews a session of its own: terminal admission is per session for
+// the whole process, so a renewal one test leaves unfinished cannot freeze the
+// terminals of the next.
+let renewedSessionCount = 0;
 const ASSISTANT_SELECTION = Object.freeze({
   agentId: "codex",
   catalogRevision: `sha256:${"1".repeat(64)}`,
@@ -105,18 +108,50 @@ async function pathExists(filePath) {
   }
 }
 
-async function eventually(operation, predicate, attempts = 300) {
-  let latest;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    latest = await operation();
-    if (predicate(latest)) {
-      return latest;
+// The renewal publishes a session change whenever there is something new to
+// see: its draft ready for review, its failure, and its archive once its
+// maintenance completes. A wait reads the renewal state again at each one until
+// it is the state waited for, so it lasts as long as the renewal takes on this
+// host, where every durable write waits for the disk; the test's own timeout
+// ends a renewal that never gets there.
+function createRenewalPublications() {
+  let next = Promise.withResolvers();
+  return {
+    next: () => next.promise,
+    async publishSessionChanged() {
+      next.resolve();
+      next = Promise.withResolvers();
+      return null;
     }
-    await new Promise((resolve) => setTimeout(resolve, 10));
+  };
+}
+
+function publishedBeforeAbort(published, signal) {
+  if (signal.aborted) {
+    return Promise.resolve(false);
   }
-  assert.fail(
-    `Timed out waiting for the integrated renewal state. Latest: ${JSON.stringify(latest)}`
-  );
+  return new Promise((resolve) => {
+    const aborted = () => resolve(false);
+    signal.addEventListener("abort", aborted, { once: true });
+    published.then(() => {
+      signal.removeEventListener("abort", aborted);
+      resolve(true);
+    });
+  });
+}
+
+async function untilRenewalState(context, signal, predicate) {
+  for (;;) {
+    // Taken before the read, so a publication during the read is not missed.
+    const published = context.publications.next();
+    const state = await readSessionRenewalState(context.runtime, context.predecessorId);
+    if (predicate(state)) {
+      return state;
+    }
+    if (!await publishedBeforeAbort(published, signal)) {
+      assert.fail(`The renewal never reached the state this test waits for. Latest: ${JSON.stringify(state)}`);
+    }
+  }
 }
 
 async function initializeGitWorktree(sourceRoot) {
@@ -134,9 +169,9 @@ async function initializeGitWorktree(sourceRoot) {
   return (await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: sourceRoot })).stdout.trim();
 }
 
-function sourceMetadata(targetRoot, sessionId, commit) {
+function sourceMetadata(targetRoot, sessionId, commit, { threadId = "" } = {}) {
   return {
-    agent_identity_conversation_id: sessionId === PREDECESSOR_ID ? "thread-predecessor" : "",
+    agent_identity_conversation_id: threadId,
     assistant_selection: serializeVibe64AssistantSelection(ASSISTANT_SELECTION),
     base_branch: "main",
     base_commit: commit,
@@ -349,8 +384,10 @@ async function renewalHarness(targetRoot, {
   failSuccessorCreation = false,
   seedError = null
 } = {}) {
+  renewedSessionCount += 1;
+  const predecessorId = `renewal-resource-predecessor-${renewedSessionCount}`;
   const projectSessionSourceRoot = managedSessionSourceRoot(targetRoot);
-  const predecessorSource = sourcePath(targetRoot, PREDECESSOR_ID);
+  const predecessorSource = sourcePath(targetRoot, predecessorId);
   const commit = await initializeGitWorktree(predecessorSource);
   const runtimeDir = path.join(
     targetRoot,
@@ -366,7 +403,7 @@ async function renewalHarness(targetRoot, {
   const runtime = new Vibe64SessionRuntime({
     promptEnvironment: process.env,
     createSessionSource: async ({ expectedCommit = "", session, store }) => {
-      if (session.sessionId === PREDECESSOR_ID) {
+      if (session.sessionId === predecessorId) {
         return;
       }
       if (failSuccessorCreation) {
@@ -395,14 +432,14 @@ async function renewalHarness(targetRoot, {
   });
   await runtime.createSession({
     metadata: {
-      ...sourceMetadata(targetRoot, PREDECESSOR_ID, commit),
+      ...sourceMetadata(targetRoot, predecessorId, commit, { threadId: "thread-predecessor" }),
       agent_transport_runtime_dir: runtimeDir
     },
-    sessionId: PREDECESSOR_ID
+    sessionId: predecessorId
   });
   const resourceCalls = [];
   const resourceRoot = path.join(targetRoot, "managed-resources");
-  const predecessorResource = path.join(resourceRoot, PREDECESSOR_ID);
+  const predecessorResource = path.join(resourceRoot, predecessorId);
   await mkdir(predecessorResource, { recursive: true });
   await writeFile(path.join(predecessorResource, "database.marker"), "owned\n", "utf8");
   const project = createProjectService({ ...projectServiceCollaborators(), logger: console,
@@ -454,7 +491,7 @@ async function renewalHarness(targetRoot, {
     env,
     project: commandProject
   }));
-  const predecessor = await runtime.getSessionWithoutSource(PREDECESSOR_ID);
+  const predecessor = await runtime.getSessionWithoutSource(predecessorId);
   const resources = await createLiveResourceSet({
     attachmentRoot,
     commandProject,
@@ -542,6 +579,7 @@ async function renewalHarness(targetRoot, {
       });
     }
   };
+  const publications = createRenewalPublications();
   const controller = createSessionRenewalController({
     prepareArchive: async () => undefined,
     project: {
@@ -553,11 +591,11 @@ async function renewalHarness(targetRoot, {
         return project.releaseSessionResources(input);
       }
     },
-    publishSessionChanged: async () => null,
+    publishSessionChanged: publications.publishSessionChanged,
     restoreRenewalActor: restoreStandaloneRenewalActor,
     async resolveSuccessorAssistant(input, { session, vibe64User }) {
       assert.equal(input.assistantSelection, undefined);
-      assert.equal(session.sessionId, PREDECESSOR_ID);
+      assert.equal(session.sessionId, predecessorId);
       assert.equal(session.metadata.assistant_selection, serializeVibe64AssistantSelection(ASSISTANT_SELECTION));
       assert.deepEqual(vibe64User, { id: "resource-proof-owner", name: "Resource proof owner" });
       return { assistantSelection: ASSISTANT_SELECTION, assistantRouting: { mode: "senior", afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: true } };
@@ -580,8 +618,10 @@ async function renewalHarness(targetRoot, {
     commit,
     controller,
     env,
+    predecessorId,
     predecessorResource,
     project,
+    publications,
     resourceCalls,
     resources,
     runtime,
@@ -590,16 +630,17 @@ async function renewalHarness(targetRoot, {
   };
 }
 
-async function requestAndConfirmRenewal(context, operationKey) {
-  await context.controller.requestSessionRenewalDraft(PREDECESSOR_ID, {
+async function requestAndConfirmRenewal(context, operationKey, signal) {
+  await context.controller.requestSessionRenewalDraft(context.predecessorId, {
     operationKey,
     vibe64User: { id: "resource-proof-owner", name: "Resource proof owner" }
   });
-  const review = await eventually(
-    () => readSessionRenewalState(context.runtime, PREDECESSOR_ID),
+  const review = await untilRenewalState(
+    context,
+    signal,
     (state) => state?.status === SESSION_RENEWAL_STATUS.REVIEW
   );
-  await context.controller.confirmSessionRenewal(PREDECESSOR_ID, {
+  await context.controller.confirmSessionRenewal(context.predecessorId, {
     expectedHash: review.draft.hash,
     expectedRevision: review.draft.revision,
     operationKey: review.operationKey,
@@ -610,8 +651,8 @@ async function requestAndConfirmRenewal(context, operationKey) {
 
 async function closeHarness(context) {
   await Promise.allSettled([
-    context.resources.envCommands.closeAllForSession(PREDECESSOR_ID),
-    context.resources.previewCommands.closeAllForSession(PREDECESSOR_ID),
+    context.resources.envCommands.closeAllForSession(context.predecessorId),
+    context.resources.previewCommands.closeAllForSession(context.predecessorId),
     closeTerminalSessionsForNamespace(context.resources.assistantNamespace),
     closeTerminalSessionsForNamespace(context.resources.launchNamespace),
     context.terminals.close()
@@ -622,24 +663,25 @@ test.after(() => configureVibe64Host(null));
 
 test("completed renewal removes every predecessor process, command, attachment, and managed resource", {
   timeout: 60_000
-}, async () => {
+}, async (t) => {
   await withTemporaryRoot(async (targetRoot) => {
     const context = await renewalHarness(targetRoot);
+    const { predecessorId } = context;
     try {
-      await context.runtime.store.writeConversationUserMessage(PREDECESSOR_ID, { text: "Configure calendar." });
-      const integrationTurn = await context.runtime.store.writeConversationAssistantMessage(PREDECESSOR_ID, {
+      await context.runtime.store.writeConversationUserMessage(predecessorId, { text: "Configure calendar." });
+      const integrationTurn = await context.runtime.store.writeConversationAssistantMessage(predecessorId, {
         text: '```vibe64-integration\n{"integrationId":"calendar"}\n```'
       });
       const integrationRequest = { turnId: integrationTurn.turnId, requestId: integrationTurn.integrationSetup.requestId };
-      await context.runtime.store.completeIntegrationSetupRequest(PREDECESSOR_ID, {
+      await context.runtime.store.completeIntegrationSetupRequest(predecessorId, {
         ...integrationRequest, configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00Z"
       });
-      await requestAndConfirmRenewal(context, "renewal:actual-resource-success");
-      const completed = await eventually(
-        () => readSessionRenewalState(context.runtime, PREDECESSOR_ID),
+      await requestAndConfirmRenewal(context, "renewal:actual-resource-success", t.signal);
+      const completed = await untilRenewalState(
+        context,
+        t.signal,
         (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED &&
-          state?.maintenance?.status === "completed",
-        600
+          state?.maintenance?.status === "completed"
       );
 
       await assertLiveProcessesClosed(context.resources);
@@ -647,18 +689,18 @@ test("completed renewal removes every predecessor process, command, attachment, 
       assert.equal(await pathExists(context.runtimeDir), false);
       assert.equal(await pathExists(context.predecessorResource), false);
       assert.equal(context.resourceCalls.length, 1);
-      assert.equal(context.resourceCalls[0].sessionId, PREDECESSOR_ID);
+      assert.equal(context.resourceCalls[0].sessionId, predecessorId);
       assert.equal(
         path.resolve(context.resourceCalls[0].sourceRoot),
-        path.resolve(sourcePath(targetRoot, PREDECESSOR_ID))
+        path.resolve(sourcePath(targetRoot, predecessorId))
       );
-      const predecessor = await context.runtime.getSessionForRenewalWithoutSource(PREDECESSOR_ID);
+      const predecessor = await context.runtime.getSessionForRenewalWithoutSource(predecessorId);
       const successor = await context.runtime.getSessionWithoutSource(completed.commit.successorSessionId);
       assert.equal(predecessor.archived, true);
       assert.equal(predecessor.status, "archived");
       assert.equal(successor.status, "active");
-      assert.equal(successor.metadata.renewed_from, PREDECESSOR_ID);
-      const oldRequest = await context.runtime.store.readIntegrationSetupRequest(PREDECESSOR_ID, integrationRequest.turnId);
+      assert.equal(successor.metadata.renewed_from, predecessorId);
+      const oldRequest = await context.runtime.store.readIntegrationSetupRequest(predecessorId, integrationRequest.turnId);
       assert.equal(oldRequest.outcome, "completed");
       assert.equal(oldRequest.continuation.status, "pending");
       const successorLog = await context.runtime.store.readConversationLog(successor.sessionId);
@@ -677,18 +719,18 @@ test("completed renewal removes every predecessor process, command, attachment, 
 
 test("post-commit attachment release is idempotent when its first response is lost", {
   timeout: 60_000
-}, async () => {
+}, async (t) => {
   await withTemporaryRoot(async (targetRoot) => {
     const context = await renewalHarness(targetRoot, {
       loseFirstAttachmentReleaseResponse: true
     });
     try {
-      await requestAndConfirmRenewal(context, "renewal:attachment-response-loss");
-      const completed = await eventually(
-        () => readSessionRenewalState(context.runtime, PREDECESSOR_ID),
+      await requestAndConfirmRenewal(context, "renewal:attachment-response-loss", t.signal);
+      const completed = await untilRenewalState(
+        context,
+        t.signal,
         (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED &&
-          state?.maintenance?.status === "completed",
-        600
+          state?.maintenance?.status === "completed"
       );
 
       assert.equal(context.attachmentReleaseCallCount(), 2);
@@ -706,20 +748,22 @@ test("post-commit attachment release is idempotent when its first response is lo
 
 test("an injected pre-commit clone failure restores the predecessor, its attachment, and resource admission", {
   timeout: 60_000
-}, async () => {
+}, async (t) => {
   await withTemporaryRoot(async (targetRoot) => {
     const context = await renewalHarness(targetRoot, {
       failSuccessorCreation: true
     });
+    const { predecessorId } = context;
     try {
-      await requestAndConfirmRenewal(context, "renewal:actual-resource-rollback");
-      const failed = await eventually(
-        () => readSessionRenewalState(context.runtime, PREDECESSOR_ID),
+      await requestAndConfirmRenewal(context, "renewal:actual-resource-rollback", t.signal);
+      const failed = await untilRenewalState(
+        context,
+        t.signal,
         (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
       );
 
       assert.equal(failed.error.code, "injected_successor_clone_failure");
-      const predecessor = await context.runtime.getSessionWithoutSource(PREDECESSOR_ID);
+      const predecessor = await context.runtime.getSessionWithoutSource(predecessorId);
       assert.equal(predecessor.status, "active");
       assert.notEqual(predecessor.archived, true);
       assert.equal(await pathExists(predecessor.metadata.source_path), true);
@@ -749,17 +793,19 @@ test("an injected pre-commit clone failure restores the predecessor, its attachm
 
 test("a renewal that failed at seeding is cancelled, discarding its hidden successor, and its original session archives", {
   timeout: 60_000
-}, async () => {
+}, async (t) => {
   await withTemporaryRoot(async (targetRoot) => {
     const context = await renewalHarness(targetRoot, {
       seedError: Object.assign(new Error("Vibe64 session is reserved for an in-progress renewal."), {
         code: "vibe64_session_renewal_private"
       })
     });
+    const { predecessorId } = context;
     try {
-      const review = await requestAndConfirmRenewal(context, "renewal:cancel-then-archive");
-      const failed = await eventually(
-        () => readSessionRenewalState(context.runtime, PREDECESSOR_ID),
+      const review = await requestAndConfirmRenewal(context, "renewal:cancel-then-archive", t.signal);
+      const failed = await untilRenewalState(
+        context,
+        t.signal,
         (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
       );
       assert.equal(failed.stage, SESSION_RENEWAL_STAGE.SUCCESSOR_SEEDING);
@@ -781,23 +827,23 @@ test("a renewal that failed at seeding is cancelled, discarding its hidden succe
         }
       });
 
-      const blocked = await archive.archiveSession(PREDECESSOR_ID, {});
+      const blocked = await archive.archiveSession(predecessorId, {});
       assert.equal(blocked.code, "vibe64_session_renewal_blocks_archive");
       assert.match(blocked.error, /Retry/u);
       assert.match(blocked.error, /Cancel renewal/u);
 
-      const cancelled = await context.controller.cancelSessionRenewal(PREDECESSOR_ID, {
+      const cancelled = await context.controller.cancelSessionRenewal(predecessorId, {
         operationKey: review.operationKey
       });
       assert.equal(cancelled.renewal.status, SESSION_RENEWAL_STATUS.CANCELLED);
       await assert.rejects(context.runtime.getSessionForRenewalWithoutSource(successorId), {
         code: "vibe64_session_not_found"
       });
-      assert.equal((await context.runtime.getSessionWithoutSource(PREDECESSOR_ID)).status, "active");
+      assert.equal((await context.runtime.getSessionWithoutSource(predecessorId)).status, "active");
 
-      const archived = await archive.archiveSession(PREDECESSOR_ID, {});
+      const archived = await archive.archiveSession(predecessorId, {});
       assert.equal(archived.ok, true, archived.error);
-      assert.equal((await context.runtime.getSessionForRenewalWithoutSource(PREDECESSOR_ID)).archived, true);
+      assert.equal((await context.runtime.getSessionForRenewalWithoutSource(predecessorId)).archived, true);
     } finally {
       await closeHarness(context);
     }
