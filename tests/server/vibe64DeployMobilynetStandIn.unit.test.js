@@ -676,6 +676,14 @@ test("labels, tags' previous name, is refused 422 under its own name in a body a
     const { error } = await answered.json();
     assert.deepEqual([answered.status, error.code, error.details.fieldErrors], [422, "validation_failed", { label: "Filter by tag: label is its previous name." }], list);
   }
+  // As mobilynet checks a key's scopes before what it sends: a key without the scope is refused 403 whatever its body.
+  const reader = standIn.addKey({ projectId, scopes: ["services:read"] });
+  const unscoped = await standIn.fetch(`${standIn.baseUrl}/v1/projects/${projectId}/services`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${reader}`, "content-type": "application/json", "idempotency-key": "unscoped" },
+    body: JSON.stringify({ name: "api", labels: { "vibe64-deployment": "dep_one" } })
+  });
+  assert.deepEqual([unscoped.status, (await unscoped.json()).error.code], [403, "scope_missing"]);
 });
 
 test("App Service instances times their size count against the project's vCPU and memory quotas beside its hosted services' machines", async () => {

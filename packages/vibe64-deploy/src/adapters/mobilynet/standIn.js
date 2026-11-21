@@ -310,10 +310,10 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     if (method === "GET" && path === "/v1/prices") return answer(200, prices.answer());
     const { caller, refusal } = callerOf(authorization);
     if (refusal) return refusal;
-    const previous = previousTagNames(body, params);
-    if (previous) return failure(422, "validation_failed", `Check ${Object.keys(previous).join(", ")}.`, { fieldErrors: previous });
     const lacking = missingScope(method, path, body, caller.scopes);
     if (lacking) return world.scopeRefusal(caller, lacking);
+    const previous = previousTagNames(body, params);
+    if (previous) return failure(422, "validation_failed", `Check ${Object.keys(previous).join(", ")}.`, { fieldErrors: previous });
     if (autoAdvance) advance();
     const request = { method, path, params, body, idempotencyKey, contentSha256, caller };
     const answered = network.request(request) ?? services.request(request) ?? hosted.request(request);
