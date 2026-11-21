@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -108,6 +108,80 @@ test("the build script runs Prepare then Build, and the service exports its sett
   assert.equal(await readFile(path.join(root, "steps"), "utf8"), "migrate staging it's $HOME `x`\nserve staging it's $HOME `x`\n");
   assert.ok((await exec("test", ["-d", signIns]).then(() => true)), "the sign-in folder is made");
   assert.match(scripts["vibe64-app/serve-web.sh"], /^if \[ -z "\$\{TRUSTED_PROXIES\+set\}" \]; then export TRUSTED_PROXIES='loopback'; fi$/mu);
+});
+
+test("a python app's build points the release's native modules at the libraries its runtime declares, and a node app's build is as before", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-python-app-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { declaration, scripts } = appPackage({
+    ...SHOP,
+    runtimes: ["python"],
+    workdir: "app",
+    steps: { prepare: { command: "touch prepared", label: "Install dependencies" }, serve: { command: ".venv/bin/python -m shop" } }
+  });
+  assert.deepEqual(declaration.requiredPackages, ["bash", "coreutils", "curl", "jq", "python313", "python313Packages.pip",
+    "python313Packages.virtualenv", "gcc-unwrapped^lib", "zlib"]);
+  assert.deepEqual(declaration.build, { packages: ["patchelf"], command: "bash vibe64-app/build.sh", cache: [], output: ["."] });
+
+  // A release as Prepare leaves it, its venv beside the work folder. A stand-in patchelf answers --print-needed from a
+  // file's first line ("ELF" and its NEEDED names), fails on any other file as on one that isn't ELF, and records each
+  // --add-rpath.
+  const release = path.join(root, "release");
+  const site = path.join(release, ".venv/lib/python3.13/site-packages");
+  const objects = {
+    "numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so": "ELF libstdc++.so.6 libm.so.6 libc.so.6",
+    "numpy.libs/libscipy_openblas64_-fdde5778.so": "ELF libm.so.6 libc.so.6",
+    "scipy.libs/libgfortran-040039e1.so.5.0.0": "ELF libquadmath-96973f99.so.0.0.0 libz.so.1 libc.so.6",
+    "scipy/_lib/_ccallback_c.cpython-313-x86_64-linux-gnu.so": "ELF libgcc_s.so.1 libc.so.6",
+    "_cffi_backend.cpython-313-x86_64-linux-gnu.so": "ELF libc.so.6",
+    "notes.so": "not ELF, but libstdc++.so.6",
+    "numpy/_core/include/numpy/ndarraytypes.h": "ELF libstdc++.so.6"
+  };
+  for (const [file, text] of Object.entries(objects)) {
+    await mkdir(path.dirname(path.join(site, file)), { recursive: true });
+    await writeFile(path.join(site, file), `${text}\n`);
+  }
+  await symlink("numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so", path.join(site, "linked.so"));
+  await mkdir(path.join(release, "app"), { recursive: true });
+  for (const [file, text] of Object.entries(scripts)) {
+    await mkdir(path.dirname(path.join(release, file)), { recursive: true });
+    await writeFile(path.join(release, file), text);
+  }
+  const record = path.join(root, "rpaths");
+  await mkdir(path.join(root, "bin"));
+  await writeFile(path.join(root, "bin/patchelf"), [
+    "#!/usr/bin/env bash",
+    "case \"$1\" in",
+    "  --print-needed) read -r first needed < \"$2\"; [ \"$first\" = ELF ] || exit 1; tr ' ' '\\n' <<< \"$needed\" ;;",
+    `  --add-rpath) printf '%s %s\\n' "\${3#${release}/}" "$2" >> ${record} ;;`,
+    "  *) exit 2 ;;",
+    "esac",
+    ""
+  ].join("\n"), { mode: 0o755 });
+  const { stdout } = await exec("bash", ["vibe64-app/build.sh"], { cwd: release, env: { PATH: `${path.join(root, "bin")}:${process.env.PATH}` } });
+  assert.equal(stdout, "Prepare: Install dependencies\nPython: point native modules at the C++ runtime and zlib\n");
+  assert.ok(await readFile(path.join(release, "app/prepared")).then(() => true), "Prepare ran in the work folder");
+  // Only the shared objects that need one of the libraries, each once, the folders of the packages that hold them.
+  const folders = "/nix/var/mobilynet/packages/gcc-unwrapped^lib/lib:/nix/var/mobilynet/packages/zlib/lib";
+  assert.deepEqual((await readFile(record, "utf8")).trim().split("\n").sort(), [
+    `.venv/lib/python3.13/site-packages/numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so ${folders}`,
+    `.venv/lib/python3.13/site-packages/scipy.libs/libgfortran-040039e1.so.5.0.0 ${folders}`,
+    `.venv/lib/python3.13/site-packages/scipy/_lib/_ccallback_c.cpython-313-x86_64-linux-gnu.so ${folders}`
+  ]);
+
+  // A node app's declaration and build are what they were: no build packages, no step.
+  const node = appPackage(SHOP);
+  assert.equal("packages" in node.declaration.build, false);
+  assert.equal(node.scripts["vibe64-app/build.sh"], [
+    "#!/usr/bin/env bash",
+    "# Made by Vibe64: mobilynet's build VM runs this in the release's folder, which it then keeps as the app.",
+    "set -euo pipefail",
+    "printf '%s\\n' 'Prepare: Install dependencies'",
+    "npm ci --include=dev",
+    "printf '%s\\n' 'Build: Build'",
+    "npm run build",
+    ""
+  ].join("\n"));
 });
 
 test("with release tasks, the service only serves and the release's migrate task exports the same settings, then migrates in the work folder", async (t) => {

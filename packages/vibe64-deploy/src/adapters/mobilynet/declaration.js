@@ -50,7 +50,8 @@ const STACK_RUNTIME_PACKS = Object.freeze({
 });
 
 // The nixpkgs packages of each runtime pack a Deployment can name (node26 for the Stack's nodejs), as mobilynet's base
-// index names them. A pack not here can't be declared yet: playwright's browsers are not in the index.
+// index names them. A pack not here can't be declared yet: playwright's browsers are not in the index. python's last two
+// are the libraries its build points native modules at (PYTHON_LIBRARY_LINES).
 const RUNTIME_PACKAGES = Object.freeze({
   composer: Object.freeze(["php84", "php84Packages.composer"]),
   cpp: Object.freeze(["binutils", "gcc", "clang", "lld", "cmake", "ninja", "gnumake", "pkg-config", "gdb", "lldb"]),
@@ -59,8 +60,26 @@ const RUNTIME_PACKAGES = Object.freeze({
   node26: Object.freeze(["nodejs_26", "corepack"]),
   php: Object.freeze(["php84"]),
   postgresql: Object.freeze(["postgresql_16"]),
-  python: Object.freeze(["python313", "python313Packages.pip", "python313Packages.virtualenv"])
+  python: Object.freeze(["python313", "python313Packages.pip", "python313Packages.virtualenv", "gcc-unwrapped^lib", "zlib"])
 });
+// The python runtime's last build step, with patchelf, which only the build VM gets (the build block's `packages`). The
+// native modules of pip's manylinux wheels (numpy, pandas, scipy) need libstdc++.so.6, libgcc_s.so.1 and libz.so.1 from
+// the system, and python313's loader searches no system folder, so `import numpy` fails with "libstdc++.so.6: cannot
+// open shared object file". Each shared object of the release that needs one of them gets the folders of the packages
+// that hold them (gcc-unwrapped^lib, zlib) added to its RUNPATH, after its own, as auditwheel points one at the
+// libraries its wheel bundles. Those are the machine's paths, the same in the build VM, so a venv built in
+// /home/build/src still loads them from the app's folder, /nix/var/mobilynet/apps/<app>. A copy of the interpreter made
+// to load them could not do that: a venv links to its interpreter by the build's path. Nothing goes into the
+// environment, so no child process sees the libraries.
+const PYTHON_LIBRARY_LINES = Object.freeze([
+  "printf '%s\\n' 'Python: point native modules at the C++ runtime and zlib'",
+  "while IFS= read -r -d '' object; do",
+  "  needed=\"$(patchelf --print-needed \"$object\" 2> /dev/null)\" || continue",
+  "  if grep -qxE 'libstdc\\+\\+\\.so\\.6|libgcc_s\\.so\\.1|libz\\.so\\.1' <<< \"$needed\"; then",
+  "    patchelf --add-rpath '/nix/var/mobilynet/packages/gcc-unwrapped^lib/lib:/nix/var/mobilynet/packages/zlib/lib' \"$object\"",
+  "  fi",
+  "done < <(find \"$vibe64_release\" -type f \\( -name '*.so' -o -name '*.so.*' \\) -print0)"
+]);
 // What every package needs for its own steps: bash runs the scripts, install is start, curl is check, jq reads the
 // settings in the service script.
 const BASE_PACKAGES = Object.freeze(["bash", "coreutils", "curl", "jq"]);
@@ -209,7 +228,8 @@ function stepLines(role, step) {
 
 /**
  * An app's package: its mobilynet.json (`declaration`) and the scripts it names (`scripts`, each by its path in the
- * release). The build runs Prepare then Build; the service exports the app's settings (and Serve's defaults for those
+ * release). The build runs Prepare then Build, then, for the python runtime, points the release's native modules at the
+ * libraries it declares (PYTHON_LIBRARY_LINES); the service exports the app's settings (and Serve's defaults for those
  * they leave out), then runs Migrate then Serve, as the app's login on `port`. Every step is a shell command, run in
  * `workdir`. No setting has a value here.
  * @param {object} app
@@ -239,10 +259,12 @@ function appPackage({
   // With release tasks, Migrate runs once per Deploy as the release's task, never as an instance starts.
   const migrateTask = releaseTasks && steps.migrate ? migrateScriptOf(service) : null;
   const machineFeatures = machineFeaturesOf(sandboxAllowances);
+  const pythonLibraries = runtimes.includes("python");
   const declaration = {
     name,
     requiredPackages: requiredPackagesOf(runtimes, packages),
     build: {
+      ...(pythonLibraries ? { packages: ["patchelf"] } : {}),
       command: `bash ${BUILD_SCRIPT}`,
       cache: [...new Set(runtimes.flatMap((runtime) => RUNTIME_CACHES[runtime] ?? []))],
       output: ["."]
@@ -263,9 +285,12 @@ function appPackage({
     "#!/usr/bin/env bash",
     "# Made by Vibe64: mobilynet's build VM runs this in the release's folder, which it then keeps as the app.",
     "set -euo pipefail",
+    // The whole release's modules, wherever the steps put them: a venv may sit beside the work folder.
+    ...(pythonLibraries ? ["vibe64_release=\"$PWD\""] : []),
     ...intoWorkdir,
     ...stepLines("Prepare", steps.prepare),
     ...stepLines("Build", steps.build),
+    ...(pythonLibraries ? PYTHON_LIBRARY_LINES : []),
     ""
   ];
   // What the serve script and the migrate task both do first: export the settings start left for this login, the

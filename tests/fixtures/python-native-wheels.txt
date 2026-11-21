@@ -1,0 +1,12 @@
+# The PyPI wheels tests/server/deployMobilynetPythonNativeLibs.integration.test.js installs, with no index and
+# each checked by its SHA-256, from $VIBE64_LANGUAGE_RUNTIME_TEST_ROOT/python-wheels, a folder made once on the test
+# host with
+#   pip download --require-hashes --only-binary=:all: --python-version 3.13 --platform manylinux_2_28_x86_64 \
+#     -r tests/fixtures/python-native-wheels.txt -d "$VIBE64_LANGUAGE_RUNTIME_TEST_ROOT/python-wheels"
+# numpy, pandas and scipy are manylinux wheels whose native code takes libstdc++.so.6, libgcc_s.so.1 and libz.so.1
+# from the system; the rest are what pandas needs, as pip resolved them on 21 Nov 2026.
+numpy==2.3.5 --hash=sha256:11e06aa0af8c0f05104d56450d6093ee639e15f24ecf62d417329d06e522e017
+pandas==3.1.1 --hash=sha256:645fa00fd85cfced2d2c09dc116d3694f578501b1ce4899153fbe64788ecda98
+scipy==1.18.1 --hash=sha256:fdaf5ea890a6183d0565f51a61799d67081bd5b1cf03c5f4b3fd3732108625c9
+python-dateutil==4.0.0 --hash=sha256:a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c
+tzdata==2026.6 --hash=sha256:0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec

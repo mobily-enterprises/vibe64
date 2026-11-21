@@ -145,6 +145,26 @@ runs, never a new release or build: until 19 Nov every entry was declared, and
 adding one made mobilynet build the same code again (about four minutes for a
 production web service, for one name).
 
+The build script runs Prepare then Build. For the python runtime each
+declaration also requires `gcc-unwrapped^lib` and `zlib`, its build block takes
+`patchelf`, and the build's last step (`PYTHON_LIBRARY_LINES`) adds those
+packages' library folders,
+`/nix/var/mobilynet/packages/gcc-unwrapped^lib/lib` and
+`/nix/var/mobilynet/packages/zlib/lib`, to the RUNPATH of each shared object in
+the release that needs `libstdc++.so.6`, `libgcc_s.so.1` or `libz.so.1`: the
+native modules of pip's manylinux wheels, such as numpy's, pandas' and scipy's,
+which python313's loader finds nowhere else. Those paths are the machine's and
+the same in the build VM, so a venv built in `/home/build/src` loads them from
+the app's folder, `/nix/var/mobilynet/apps/<app>`, and nothing goes into the
+environment. A copy of the interpreter made to load them would not survive the
+move, since a venv links to its interpreter by the build's path; the venv's
+console scripts keep that path in their first line too, so a Serve starts one
+as `.venv/bin/python -m <module>`. `deployMobilynetPythonNativeLibs.integration.test.js`
+builds such an app's upload as mobilynet's build runner does, runs it from
+another folder with the build gone, and needs mobilynet's packages and a folder
+of pinned wheels (`tests/fixtures/python-native-wheels.txt`), skipping without
+them.
+
 Each serve script exports the settings mobilynet gave the instance, the
 resources' bound names, the instance facts, the service's own Setting lines,
 then Serve's defaults, migrates and serves. The instance facts come from the
