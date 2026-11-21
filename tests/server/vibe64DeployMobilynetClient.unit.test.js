@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { MobilynetError, createMobilynetClient, labelQuery } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
+import { MobilynetError, createMobilynetClient, tagQuery } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
 
 // The deploy engine's mobilynet client against a recording fetch: what it sends (the key, Idempotency-Key, JSON or an
-// upload with its SHA-256, label filters, pages), how it reads mobilynet's refusals, and how a token source refreshes.
+// upload with its SHA-256, tag filters, pages), how it reads mobilynet's refusals, and how a token source refreshes.
 
 const BASE = "https://api.mobilynet.test";
 
@@ -31,7 +31,7 @@ function clientWith(answers, more = {}) {
   return { ...recorded, client: createMobilynetClient({ baseUrl: BASE, credential: "mnk_test", fetch: recorded.fetch, ...more }) };
 }
 
-test("a request carries the key, its Idempotency-Key, JSON or an upload with its SHA-256, each label filter, and follows no redirect", async () => {
+test("a request carries the key, its Idempotency-Key, JSON or an upload with its SHA-256, each tag filter, and follows no redirect", async () => {
   const { client, asked } = clientWith([
     { status: 202, body: { service: { id: "svc_1" }, refresh: null } },
     { status: 202, body: { release: { version: "20261120-abcdef0" } } },
@@ -41,11 +41,11 @@ test("a request carries the key, its Idempotency-Key, JSON or an upload with its
     { status: 200, body: { spendingCap: { state: "under" } } }
   ]);
   const production = client.project("prj_1");
-  const spec = { name: "web", region: "us", size: "a-2", instances: 2, app: { version: "v" }, labels: { "vibe64-deployment": "dep_1" } };
+  const spec = { name: "web", region: "us", size: "a-2", instances: 2, app: { version: "v" }, tags: { "vibe64-deployment": "dep_1" } };
   await production.createService(spec, { idempotencyKey: "service-web" });
   const archive = Buffer.from([0x1f, 0x8b, 1, 2, 3]);
   await production.createRelease("shop", { archive, sha256: "a".repeat(64) });
-  assert.deepEqual((await production.listServices({ labels: { "vibe64-deployment": "dep_1", "vibe64-item": "service.web" } })).map((one) => one.id), ["svc_1", "svc_2"]);
+  assert.deepEqual((await production.listServices({ tags: { "vibe64-deployment": "dep_1", "vibe64-item": "service.web" } })).map((one) => one.id), ["svc_1", "svc_2"]);
   await client.deleteHostedService("hs_1", { revokeLinks: true });
   assert.deepEqual(await production.readSpendingCap(), { state: "under" });
 
@@ -54,17 +54,18 @@ test("a request carries the key, its Idempotency-Key, JSON or an upload with its
     [create.init.method, create.url.pathname, create.init.headers.authorization, create.init.headers["idempotency-key"], create.init.headers["content-type"], create.init.redirect],
     ["POST", "/v1/projects/prj_1/services", "Bearer mnk_test", "service-web", "application/json", "manual"]
   );
-  assert.deepEqual(JSON.parse(create.init.body), spec, "labels go as the create gives them");
+  assert.deepEqual(JSON.parse(create.init.body), spec, "tags go as the create gives them");
   assert.equal(create.init.headers["user-agent"], "vibe64-deploy");
   assert.deepEqual(
     [upload.url.pathname, upload.init.headers["content-type"], upload.init.headers["mobilynet-content-sha256"], upload.init.body],
     ["/v1/projects/prj_1/apps/shop/releases", "application/gzip", "a".repeat(64), archive]
   );
-  assert.deepEqual(firstPage.url.searchParams.getAll("label"), ["vibe64-deployment:dep_1", "vibe64-item:service.web"]);
+  assert.deepEqual(firstPage.url.searchParams.getAll("tag"), ["vibe64-deployment:dep_1", "vibe64-item:service.web"]);
+  assert.equal(firstPage.url.searchParams.has("label"), false, "never label=, tag's previous name");
   assert.deepEqual([firstPage.url.searchParams.get("limit"), firstPage.url.searchParams.get("after"), secondPage.url.searchParams.get("after")], ["100", null, "1"]);
   assert.deepEqual([remove.init.method, remove.url.pathname, remove.url.search], ["DELETE", "/v1/hosted-services/hs_1", "?links=revoke"]);
   assert.equal(cap.url.pathname, "/v1/projects/prj_1/spending-cap");
-  assert.deepEqual(labelQuery(undefined), []);
+  assert.deepEqual(tagQuery(undefined), []);
 });
 
 test("a refusal is a MobilynetError with mobilynet's code, message, details and request id; a refusal waits for a person, the rest are tried again", async () => {

@@ -1,4 +1,4 @@
-import { HOST_REGIONS, SERVICE_SETTINGS } from "./standIn/catalogue.js";
+import { HOST_REGIONS, SERVICE_SETTINGS, previousTagNames } from "./standIn/catalogue.js";
 import { createStandInHosted } from "./standIn/hosted.js";
 import { createStandInNetwork } from "./standIn/network.js";
 import { prices } from "./standIn/prices.js";
@@ -12,9 +12,12 @@ import { createStandInServices } from "./standIn/services.js";
 // (standIn/services.js, serviceEngine.js, releases.js); hosted services of the catalogue's four apps with several links
 // each (standIn/hosted.js); regions, domains and routes (standIn/network.js); prices
 // (standIn/prices.js); and the parts mobilynet is building for the engine (its docs/stages/engine-support.md at
-// 7d775240): labels on App Services and hosted services (M2), App Service instances in the project's vCPU and memory
-// quotas beside its hosted services' machines (M12), read with their use as mobilynet's readQuotas answers them, and a
-// monthly spending cap that refuses new creates and scale-ups (M13). Nothing here reaches a network.
+// 7d775240): App Service instances in the project's vCPU and memory quotas beside its hosted services' machines (M12),
+// read with their use as mobilynet's readQuotas answers them, and a monthly spending cap that refuses new creates and
+// scale-ups (M13); and tags on App Services and hosted services, as mobilynet has them since its tags change (its
+// docs/stages/tags.md): `tags` in a create's or a change's body and in every answer, a list filtered by `tag=name:value`,
+// and tags' previous name, `labels` in a body or `label=` in a query, refused `422` under that name. Nothing here
+// reaches a network.
 //
 // Keys: the stand-in starts with one mobilynet project (`projectId`) and one key of it (`key`) holding the scopes the
 // engine's key holds (ENGINE_SCOPES) unless made with `scopes`; `addKey` makes others, of a project or of the
@@ -307,6 +310,8 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     if (method === "GET" && path === "/v1/prices") return answer(200, prices.answer());
     const { caller, refusal } = callerOf(authorization);
     if (refusal) return refusal;
+    const previous = previousTagNames(body, params);
+    if (previous) return failure(422, "validation_failed", `Check ${Object.keys(previous).join(", ")}.`, { fieldErrors: previous });
     const lacking = missingScope(method, path, body, caller.scopes);
     if (lacking) return world.scopeRefusal(caller, lacking);
     if (autoAdvance) advance();

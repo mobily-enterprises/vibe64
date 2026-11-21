@@ -69,7 +69,7 @@ function connectionsOf(given) {
 
 /**
  * The fields of a create or change, checked as serviceFields.js checks them; the first wrong one refused, as mobilynet
- * throws on the first. A service's name, region and exposure are its create's alone; its labels are checked apart.
+ * throws on the first. A service's name, region and exposure are its create's alone; its tags are checked apart.
  * @param {(fieldErrors: Record<string, string>) => any} invalid the stand-in's refusal of those fields
  * @param {any} input @param {{ exposure?: string, healthCheck?: any }} [current]
  * @returns {{ refusal: any } | { fields: Record<string, any> }}

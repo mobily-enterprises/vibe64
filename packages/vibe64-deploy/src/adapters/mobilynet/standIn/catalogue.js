@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 
-// What the mobilynet stand-in's parts share (standIn.js): mobilynet's sizes, labels' rules, its listings' pages, the
+// What the mobilynet stand-in's parts share (standIn.js): mobilynet's sizes, tags' rules, its listings' pages, the
 // interfaces its hosted services provide and its apps need, and the catalogue of apps that run as hosted services, as
 // mobilynet main c6af5ca3 has them (its machines package's shared/sizes.js and validation.js, its apps package's
 // shared/interfaces, catalogue/packages/*.mobilynet.json; their summaries shortened).
@@ -40,11 +40,12 @@ const EDGE_ADDRESSES = Object.freeze(["203.0.113.40", "203.0.113.41"]);
 /** The stand-in's apps domain, which every thing's own name is under. */
 const APPS_DOMAIN = "mobilynet.standin";
 
-// Labels, as a mobilynet machine's (validation.js labels), App Services' and hosted services' (engine-support M2).
-const LABEL_KEY = /^[a-z0-9](?:[a-z0-9._/-]{0,61}[a-z0-9])?$/u;
-const MAX_LABELS = 20;
-const MAX_LABEL_VALUE = 256;
-const RESERVED_LABEL_PREFIX = "mobilynet";
+// Tags, as mobilynet's customers package's shared/tags.js has them for every thing that carries them.
+const TAG_NAME = /^[a-z0-9](?:[a-z0-9._/-]{0,61}[a-z0-9])?$/u;
+const TAG_NAME_WORDS = "Up to 63 lowercase letters, digits, dots, underscores, slashes and hyphens, starting and ending with a letter or digit.";
+const MAX_TAGS = 20;
+const MAX_TAG_VALUE = 256;
+const RESERVED_TAG_PREFIX = "mobilynet";
 
 /** A plain object (not null, not an array). @param {unknown} value */
 const isRecord = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -73,36 +74,50 @@ function pageOf(items, query) {
 }
 
 /**
- * A thing's labels as given, or the field errors mobilynet refuses them with (validation.js labels): at most 20, each
- * key up to 63 lowercase letters, digits, dots, slashes and hyphens, none starting with `mobilynet`, each value text of
- * up to 256 characters without control characters.
+ * A thing's tags as given, or the field errors mobilynet refuses them with (its customers package's tags.js tagsOf):
+ * at most 20, each name 1 to 63 lowercase letters, digits, dots, underscores, slashes and hyphens starting and ending
+ * with a letter or digit, none starting with `mobilynet` (MobilyNet's own), each value text of up to 256 characters
+ * without control characters.
  * @param {unknown} value
- * @returns {{ errors: Record<string, string> } | { labels: Record<string, string> }}
+ * @returns {{ errors: Record<string, string> } | { tags: Record<string, string> }}
  */
-function labelsOf(value) {
-  if (!isRecord(value)) return { errors: { labels: "An object of label names to values." } };
+function tagsOf(value) {
+  if (!isRecord(value)) return { errors: { tags: "An object of tag names to values." } };
   const entries = Object.entries(value);
-  if (entries.length > MAX_LABELS) return { errors: { labels: `At most ${MAX_LABELS} labels.` } };
-  for (const [key, text] of entries) {
-    if (!LABEL_KEY.test(key)) return { errors: { [`labels.${key}`]: "Up to 63 lowercase letters, digits, dots, slashes and hyphens." } };
-    if (key.startsWith(RESERVED_LABEL_PREFIX)) return { errors: { [`labels.${key}`]: "Labels starting with mobilynet are MobilyNet's." } };
+  if (entries.length > MAX_TAGS) return { errors: { tags: `At most ${MAX_TAGS} tags.` } };
+  for (const [name, text] of entries) {
+    if (!TAG_NAME.test(name)) return { errors: { [`tags.${name}`]: TAG_NAME_WORDS } };
+    if (name.startsWith(RESERVED_TAG_PREFIX)) return { errors: { [`tags.${name}`]: "Tags starting with mobilynet are MobilyNet's." } };
     const control = typeof text === "string" && [...text].some((character) => character.charCodeAt(0) < 0x20 || character.charCodeAt(0) === 0x7f);
-    if (typeof text !== "string" || text.length > MAX_LABEL_VALUE || control) {
-      return { errors: { [`labels.${key}`]: `A value of up to ${MAX_LABEL_VALUE} characters, without control characters.` } };
+    if (typeof text !== "string" || text.length > MAX_TAG_VALUE || control) {
+      return { errors: { [`tags.${name}`]: `A value of up to ${MAX_TAG_VALUE} characters, without control characters.` } };
     }
   }
-  return { labels: Object.fromEntries(entries) };
+  return { tags: Object.fromEntries(entries) };
 }
 
 /**
- * Whether a thing's labels hold every `key:value` a list's `label` filter asks for (repeatable, each matched).
- * @param {Record<string, string>} labels @param {URLSearchParams} query
+ * Whether a thing's tags hold every `name:value` a list's `tag` filter asks for (repeatable, each one held).
+ * @param {Record<string, string>} tags @param {URLSearchParams} query
  */
-function labelsMatch(labels, query) {
-  return query.getAll("label").every((asked) => {
+function tagsMatch(tags, query) {
+  return query.getAll("tag").every((asked) => {
     const at = asked.indexOf(":");
-    return at > 0 && labels[asked.slice(0, at)] === asked.slice(at + 1);
+    return at > 0 && tags[asked.slice(0, at)] === asked.slice(at + 1);
   });
+}
+
+/**
+ * The refusal of tags' previous name, labels, as mobilynet answers it since tags (docs/stages/tags.md section 7): a
+ * body naming `labels` or a query naming `label` is refused `422` under that name, never read as tags. Null when the
+ * request names neither.
+ * @param {unknown} body @param {URLSearchParams} query
+ * @returns {Record<string, string> | null}
+ */
+function previousTagNames(body, query) {
+  if (isRecord(body) && Object.hasOwn(body, "labels")) return { labels: "Give tags: labels is their previous name." };
+  if (query.has("label")) return { label: "Filter by tag: label is its previous name." };
+  return null;
 }
 
 const field = (name, title, type, secret, from, more = {}) => Object.freeze({ name, title, type, secret, from, ...more });
@@ -356,14 +371,15 @@ export {
   catalogueApp,
   interfaceNamed,
   isRecord,
-  labelsMatch,
-  labelsOf,
   needSettings,
   needValues,
   newCredential,
   pageOf,
+  previousTagNames,
   projectLabel,
   randomText,
   routeName,
+  tagsMatch,
+  tagsOf,
   thingName
 };

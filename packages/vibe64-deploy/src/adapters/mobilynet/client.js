@@ -8,9 +8,10 @@ import { performance } from "node:perf_hooks";
 // is JSON both ways but an upload (a release's tarball, sent as its bytes with its SHA-256), carries the
 // `Idempotency-Key` the caller gives, follows no redirect and is tried once: the engine's next step tries again with the
 // same key. A refusal is a MobilynetError with mobilynet's `{ code, message, details, requestId }`.
-// Three parts follow mobilynet's design for the engine (its docs/stages/engine-support.md at 7d775240, being built):
-// labels on App Services and hosted services as mobilynet machines have them (M2: `labels` set at create, replaced whole by a PATCH,
-// answered in reads and lists, a list filtered by `label=key:value`, each one matched); an App Service's instances times
+// App Services and hosted services carry tags, as every thing a mobilynet customer pays for does (its
+// docs/stages/tags.md): `tags` set at create, replaced whole by a PATCH, answered in reads and lists, a list filtered
+// by `tag=name:value`, each one held; tags' previous name, labels, is refused `422`. Two parts follow mobilynet's design
+// for the engine (its docs/stages/engine-support.md at 7d775240, being built): an App Service's instances times
 // its size counted against the mobilynet project's vCPU and memory quotas (M12: `429 quota_exceeded` with `{ quota,
 // limit }` at a create, a count raised or a size made larger, as a hosted service's machine already was); and a monthly
 // spending cap (M13: once the month's spend reaches it, every new create and scale-up is `409 spending_cap_reached`
@@ -62,11 +63,11 @@ class MobilynetError extends Error {
 }
 
 /**
- * The `label` query a list is filtered by: `key:value` for each label, every one needed.
- * @param {Record<string, string> | undefined} labels
+ * The `tag` query a list is filtered by: `name:value` for each tag, every one needed.
+ * @param {Record<string, string> | undefined} tags
  */
-function labelQuery(labels) {
-  return Object.entries(labels ?? {}).map(([key, value]) => `${key}:${value}`);
+function tagQuery(tags) {
+  return Object.entries(tags ?? {}).map(([name, value]) => `${name}:${value}`);
 }
 
 /**
@@ -278,31 +279,31 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
        * the project to its instances. Its instances times its size count against the project's vCPU and memory quotas
        * (`429 quota_exceeded`), and a project at its spending cap makes none (`409 spending_cap_reached`). `task` names a
        * task of the release's declaration its first refresh runs once before any instance starts (M-C, as a release's).
-       * @param {{ name: string, region: string, exposure?: "public" | "internal", size: string, instances: number, app: { name?: string, version: string }, settings?: Record<string, unknown>, secrets?: Record<string, string>, routes?: Array<{ host: string, tls?: "edge", take?: boolean }>, connections?: Array<{ to: string, port: number }>, healthCheck?: object, drainSeconds?: number, labels?: Record<string, string>, task?: string }} spec
+       * @param {{ name: string, region: string, exposure?: "public" | "internal", size: string, instances: number, app: { name?: string, version: string }, settings?: Record<string, unknown>, secrets?: Record<string, string>, routes?: Array<{ host: string, tls?: "edge", take?: boolean }>, connections?: Array<{ to: string, port: number }>, healthCheck?: object, drainSeconds?: number, tags?: Record<string, string>, task?: string }} spec
        * @param {{ idempotencyKey: string }} context
        */
       createService: (spec, { idempotencyKey }) => call("POST", `${projectAt}/services`, { body: spec, idempotencyKey }),
       /**
        * Every App Service of the mobilynet project, newest first, deleted ones left out (`services:read`); with
-       * `labels`, those carrying every one.
-       * @param {{ labels?: Record<string, string> }} [filter]
+       * `tags`, those carrying every one.
+       * @param {{ tags?: Record<string, string> }} [filter]
        */
-      listServices: ({ labels } = {}) => listAll(`${projectAt}/services`, { label: labelQuery(labels) }),
+      listServices: ({ tags } = {}) => listAll(`${projectAt}/services`, { tag: tagQuery(tags) }),
       /**
        * A hosted service of the catalogue (`hosted:manage`): `{ hostedService, links, operation }`, `creating`, each of
        * its `links` (`[{ consumer: { service }, need? }]`) with its secret fields shown this once, never again. Its
        * machine counts against the project's quotas (`429 quota_exceeded`), and a project at its spending cap makes none
        * (`409 spending_cap_reached`).
-       * @param {{ app: string, name?: string, size?: string, region?: string, settings?: Record<string, unknown>, links?: Array<{ consumer: object, need?: string }>, labels?: Record<string, string> }} spec
+       * @param {{ app: string, name?: string, size?: string, region?: string, settings?: Record<string, unknown>, links?: Array<{ consumer: object, need?: string }>, tags?: Record<string, string> }} spec
        * @param {{ idempotencyKey: string }} context
        */
       createHostedService: (spec, { idempotencyKey }) => call("POST", `${projectAt}/hosted-services`, { body: spec, idempotencyKey }),
       /**
        * Every hosted service of the mobilynet project, newest first, deleted ones left out (`hosted:read`); `app`,
-       * `state` and `labels` narrow it.
-       * @param {{ labels?: Record<string, string>, app?: string, state?: string }} [filter]
+       * `state` and `tags` narrow it.
+       * @param {{ tags?: Record<string, string>, app?: string, state?: string }} [filter]
        */
-      listHostedServices: ({ labels, app, state } = {}) => listAll(`${projectAt}/hosted-services`, { label: labelQuery(labels), app, state }),
+      listHostedServices: ({ tags, app, state } = {}) => listAll(`${projectAt}/hosted-services`, { tag: tagQuery(tags), app, state }),
       /**
        * The mobilynet project's monthly spending cap and this month's spend (`usage:read`): `{ projectId, capNano,
        * month, spentNano, state, currency, meteredUntil, changedAt }`, amounts as whole nano-units in decimal text, `state`
@@ -343,11 +344,11 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
     /**
      * Changes an App Service: `{ service, refresh }`. Its count (`instances`, `services:deploy`) changes at once, with
      * no refresh (`409 no_capacity` when its region has no room, the count kept); its size is a refresh (`202`); its
-     * health check, drain, routes, connections and labels change at once (`services:manage`), labels replaced whole and
+     * health check, drain, routes, connections and tags change at once (`services:manage`), tags replaced whole and
      * starting no refresh; a name its `routes` no longer hold keeps its route, sending to nothing. A count raised or a size made larger is refused past a quota (`429 quota_exceeded`) or at
      * the spending cap (`409 spending_cap_reached`); a count lowered or a smaller size never is.
      * @param {string} serviceId
-     * @param {{ instances?: number, size?: string, healthCheck?: object, drainSeconds?: number, routes?: Array<{ host: string, tls?: "edge", take?: boolean }>, connections?: Array<{ to: string, port: number }>, labels?: Record<string, string> }} change
+     * @param {{ instances?: number, size?: string, healthCheck?: object, drainSeconds?: number, routes?: Array<{ host: string, tls?: "edge", take?: boolean }>, connections?: Array<{ to: string, port: number }>, tags?: Record<string, string> }} change
      * @param {{ idempotencyKey?: string }} [context]
      */
     changeService: (serviceId, change, { idempotencyKey } = {}) => call("PATCH", servicePath(serviceId), { body: change, idempotencyKey }),
@@ -407,10 +408,10 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
     /** A hosted service (`hosted:read`), or null when mobilynet has none by that id (deleted ones too). @param {string} hostedServiceId */
     readHostedService: async (hostedServiceId) => (await orNull(() => call("GET", hostedPath(hostedServiceId))))?.hostedService ?? null,
     /**
-     * Resizes a hosted service to another of its app's sizes, or replaces its labels (`hosted:manage`): `{ hostedService,
+     * Resizes a hosted service to another of its app's sizes, or replaces its tags (`hosted:manage`): `{ hostedService,
      * operation }`, `202` `resizing`, or `200` with no operation when its machine already is that size or only its
-     * labels changed. A larger size is refused past a quota or at the spending cap, as a create is.
-     * @param {string} hostedServiceId @param {{ size?: string, labels?: Record<string, string> }} change
+     * tags changed. A larger size is refused past a quota or at the spending cap, as a create is.
+     * @param {string} hostedServiceId @param {{ size?: string, tags?: Record<string, string> }} change
      * @param {{ idempotencyKey?: string }} [context]
      */
     changeHostedService: (hostedServiceId, change, { idempotencyKey } = {}) => call("PATCH", hostedPath(hostedServiceId), { body: change, idempotencyKey }),
@@ -467,4 +468,4 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
   });
 }
 
-export { MobilynetError, createMobilynetClient, labelQuery };
+export { MobilynetError, createMobilynetClient, tagQuery };

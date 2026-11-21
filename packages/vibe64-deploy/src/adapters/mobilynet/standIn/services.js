@@ -1,4 +1,4 @@
-import { INSTANCE_SIZES, isRecord, labelsMatch, labelsOf, needSettings, pageOf, projectLabel, thingName } from "./catalogue.js";
+import { INSTANCE_SIZES, isRecord, needSettings, pageOf, projectLabel, tagsMatch, tagsOf, thingName } from "./catalogue.js";
 import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, tooManySettings, undeclaredErrors, valuesOf } from "./serviceEngine.js";
 import { createStandInServiceLogs } from "./serviceLogs.js";
 
@@ -15,8 +15,8 @@ import { createStandInServiceLogs } from "./serviceLogs.js";
 // unless the entry says `take: true`, which moves it, and a name no longer asked for keeps its route, sending to
 // nothing. Its view lists the routes sending to it, read from the routes, which the service row keeps no copy of. A
 // link of a hosted service gives a service its need's settings (`<AS>_<FIELD>`) through a settings refresh, which only
-// the link sets or takes out (hosted.js). Labels (engine-support M2) are set at create and replaced whole by a PATCH,
-// which starts no refresh; a list filters by them. A create, a count raised or a size made larger is admitted by the
+// the link sets or takes out (hosted.js). Tags are set at create and replaced whole by a PATCH, which starts no
+// refresh; a list filters by them (`tag=name:value`). A create, a count raised or a size made larger is admitted by the
 // project's spending cap and its vCPU and memory quotas, instances times size (M12, M13).
 // Faults: `instancesUnhealthy` (a refresh's new instances never get healthy, every one or those its function picks:
 // it fails `instance_never_healthy`), `noCapacity` (a count raise answers `409 no_capacity`) and `releaseBuildFails`.
@@ -133,7 +133,7 @@ function createStandInServices(world, { releases, network }) {
       routes: routesView(service),
       connections: service.connections.map((connection) => ({ ...connection, ruleId: null })),
       internalName: internalName(service),
-      labels: { ...service.labels },
+      tags: { ...service.tags },
       lastError: service.lastError ? structuredClone(service.lastError) : null,
       createdAt: service.createdAt,
       changedAt: service.changedAt
@@ -302,8 +302,8 @@ function createStandInServices(world, { releases, network }) {
     if (typeof input.app.version !== "string" || input.app.version.length === 0 || input.app.version.length > 64) return invalid({ "app.version": "A version of the app's releases." });
     const values = valuesOf(invalid, input);
     if (values.refusal) return values.refusal;
-    const labelled = labelsOf(input.labels ?? {});
-    if (labelled.errors) return invalid(labelled.errors);
+    const tagged = tagsOf(input.tags ?? {});
+    if (tagged.errors) return invalid(tagged.errors);
     const release = releases.named(projectId, app, input.app.version);
     if (!release) return notFound("release");
     if (release.state === "retired") return failure(409, "invalid_state", "This can't be done while it is retired.", { state: "retired", version: release.version });
@@ -322,7 +322,7 @@ function createStandInServices(world, { releases, network }) {
       port: null,
       healthPath: null,
       ...values.values,
-      labels: labelled.labels,
+      tags: tagged.tags,
       state: "creating",
       lastError: null,
       createdAt: at(),
@@ -338,14 +338,14 @@ function createStandInServices(world, { releases, network }) {
     return answer(202, { service: view(service), refresh: refreshView(refresh) });
   }
 
-  /** `PATCH /v1/services/{id}` (changeService): its count, size, health check, drain, routes, connections or labels. */
+  /** `PATCH /v1/services/{id}` (changeService): its count, size, health check, drain, routes, connections or tags. */
   function change(service, body) {
     const input = isRecord(body) ? body : {};
     const checked = fieldsOf(invalid, input, service);
     if (checked.refusal) return checked.refusal;
     const { fields } = checked;
-    const labelled = input.labels === undefined ? null : labelsOf(input.labels);
-    if (labelled?.errors) return invalid(labelled.errors);
+    const tagged = input.tags === undefined ? null : tagsOf(input.tags);
+    if (tagged?.errors) return invalid(tagged.errors);
     const raising = fields.instances !== undefined && fields.instances > service.instances;
     const growing = fields.size !== undefined && INSTANCE_SIZES[fields.size].vcpus + INSTANCE_SIZES[fields.size].memoryGib
       > INSTANCE_SIZES[service.size].vcpus + INSTANCE_SIZES[service.size].memoryGib;
@@ -366,8 +366,8 @@ function createStandInServices(world, { releases, network }) {
       event(service, "service.instances_changed", { from: service.instances, to: fields.instances });
     }
     const { size, routes: asked, ...rest } = fields;
-    patch(service, { ...rest, ...(labelled ? { labels: labelled.labels } : {}) });
-    if (labelled) event(service, "service.changed", { fields: ["labels"] });
+    patch(service, { ...rest, ...(tagged ? { tags: tagged.tags } : {}) });
+    if (tagged) event(service, "service.changed", { fields: ["tags"] });
     if (asked) askRoutes(service, asked);
     let refresh = null;
     if (size && size !== service.size) {
@@ -472,7 +472,7 @@ function createStandInServices(world, { releases, network }) {
       if (!world.reaches(caller, projectId)) return notFound("project");
       if (inProject[2] === "services" && method === "POST") return once(idempotencyKey, `${projectId} service ${JSON.stringify(body)}`, () => create(projectId, body));
       if (inProject[2] === "services" && method === "GET") {
-        const listed = [...services.values()].filter((one) => one.projectId === projectId && one.state !== "deleted" && labelsMatch(one.labels, params));
+        const listed = [...services.values()].filter((one) => one.projectId === projectId && one.state !== "deleted" && tagsMatch(one.tags, params));
         return answer(200, pageOf(listed.reverse().map(view), params));
       }
       if (inProject[3] !== undefined && method === "POST") return projectRelease(projectId, decodeURIComponent(inProject[3]), body, contentSha256);

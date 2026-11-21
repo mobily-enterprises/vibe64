@@ -77,12 +77,12 @@ async function deployShop(parts, record) {
     ["computers", webSpec(release.version, { name: "computers", exposure: "internal", routes: [], size: "a-8", instances: 1 })]
   ];
   for (const [name, spec] of services) {
-    const { service } = await production.createService({ ...spec, labels: labelsFor(record, { kind: "service", name }) }, { idempotencyKey: `service-${name}` });
+    const { service } = await production.createService({ ...spec, tags: labelsFor(record, { kind: "service", name }) }, { idempotencyKey: `service-${name}` });
     record.items[`service.${name}`] = { kind: "service", name, id: service.id, providerName: service.name, origin: "made", size: spec.size };
     record.choices.services[name] = { size: spec.size };
   }
   for (const [name, app, size] of [["database", "postgresql-18", "small"], ["files", "garage-2", "medium"]]) {
-    const { hostedService } = await production.createHostedService({ app, size, labels: labelsFor(record, { kind: "resource", name }) }, { idempotencyKey: `hosted-${name}` });
+    const { hostedService } = await production.createHostedService({ app, size, tags: labelsFor(record, { kind: "resource", name }) }, { idempotencyKey: `hosted-${name}` });
     record.items[`resource.${name}`] = { kind: "resource", name, id: hostedService.id, providerName: hostedService.name, origin: "made", size };
     record.choices.resources[name] = { size };
   }
@@ -90,13 +90,13 @@ async function deployShop(parts, record) {
   return record;
 }
 
-/** The mobilynet adapter's inventory, as the engine's adapter answers it: the project's services and hosted services with their labels. */
+/** The mobilynet adapter's inventory, as the engine's adapter answers it: the project's services and hosted services, their mobilynet tags as their labels. */
 function adapterOf(client) {
   return {
     provider: "mobilynet",
     inventory: async ({ project }) => [
-      ...(await client.project(project).listServices()).map((one) => ({ id: one.id, name: one.name, labels: one.labels, size: one.size, instances: one.instances.wanted })),
-      ...(await client.project(project).listHostedServices()).map((one) => ({ id: one.id, name: one.name, labels: one.labels, size: one.size }))
+      ...(await client.project(project).listServices()).map((one) => ({ id: one.id, name: one.name, labels: one.tags, size: one.size, instances: one.instances.wanted })),
+      ...(await client.project(project).listHostedServices()).map((one) => ({ id: one.id, name: one.name, labels: one.tags, size: one.size }))
     ]
   };
 }
@@ -112,8 +112,8 @@ test("rebuildFromLabels makes the record again from the labels on what was made,
     expectedRevision: 0
   });
   const blog = newRecord({ app: "blog", environment: "production", provider: { id: "mobilynet", project: projectId } });
-  const { hostedService: cache } = await production.createHostedService({ app: "valkey-9", labels: labelsFor(blog, { kind: "resource", name: "cache" }) }, { idempotencyKey: "hosted-blog-cache" });
-  await production.createHostedService({ app: "valkey-9", name: "by-hand", labels: { team: "ops" } }, { idempotencyKey: "hosted-by-hand" });
+  const { hostedService: cache } = await production.createHostedService({ app: "valkey-9", tags: labelsFor(blog, { kind: "resource", name: "cache" }) }, { idempotencyKey: "hosted-blog-cache" });
+  await production.createHostedService({ app: "valkey-9", name: "by-hand", tags: { team: "ops" } }, { idempotencyKey: "hosted-by-hand" });
   settle(standIn);
 
   const adapter = adapterOf(client);
@@ -129,7 +129,7 @@ test("rebuildFromLabels makes the record again from the labels on what was made,
   assert.deepEqual((await rebuildFromLabels(adapter, projectId, { app: "shop" })).map((one) => one.deploymentId), [written.deploymentId]);
   assert.deepEqual(await rebuildFromLabels(adapter, projectId, { environment: "staging" }), []);
 
-  await production.createHostedService({ app: "postgresql-18", labels: labelsFor(written, { kind: "resource", name: "database" }) }, { idempotencyKey: "hosted-copy" });
+  await production.createHostedService({ app: "postgresql-18", tags: labelsFor(written, { kind: "resource", name: "database" }) }, { idempotencyKey: "hosted-copy" });
   const conflict = await rebuildFromLabels(adapter, projectId).catch((error) => error);
   assert.deepEqual([conflict.code, conflict.details.item], ["production_deploy_labels_conflict", "resource.database"], "two things labelled as one item are refused, never guessed");
 });

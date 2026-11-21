@@ -3,7 +3,8 @@
 // catalogue (its interface the resource's kind: mysql, postgresql, redis, s3 for a bucket), linked to every service
 // under the resource's need (V64_<ID>). Its offer is mobilynet's App Service instance sizes with their list prices, the
 // load balancer's and each hosted app's sizes, and the project's quotas with their use; its inventory every App Service
-// and hosted service of the project with its labels, the only things the steps act on being those the record holds,
+// and hosted service of the project with its mobilynet tags as the engine's labels (what the steps make carries the
+// engine's labels, record.js labelsFor, as its tags), the only things the steps act on being those the record holds,
 // each hosted service Vibe64 made with the links mobilynet holds of it, which the steps believe over the record's.
 // Every App Service it makes drains for mobilynet's shortest time (DRAIN_SECONDS).
 //
@@ -135,7 +136,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
    * @param {any} one the hosted service as mobilynet lists it
    */
   async function linksHeld(one) {
-    if (!one.labels?.[LABEL.deployment]) return null;
+    if (!one.tags?.[LABEL.deployment]) return null;
     let listed;
     try {
       listed = await client.listHostedLinks(one.id);
@@ -149,9 +150,9 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
 
   /**
    * Every App Service and hosted service of the project, as the plan, the steps and the record read them: `{ id, name,
-   * kind, labels, size, instances, ... }`, a service with its exposure, version, refresh, healthy count, internal
-   * name, connections, last error and the names its routes send it (`hosts`), a resource with its kind, state and the
-   * links mobilynet holds of it (`links`, null for a hosted service Vibe64 didn't make).
+   * kind, labels, size, instances, ... }` (`labels` its mobilynet tags), a service with its exposure, version, refresh,
+   * healthy count, internal name, connections, last error and the names its routes send it (`hosts`), a resource with
+   * its kind, state and the links mobilynet holds of it (`links`, null for a hosted service Vibe64 didn't make).
    */
   async function inventory() {
     const [services, listed] = await Promise.all([calls.listServices(), calls.listHostedServices()]);
@@ -162,7 +163,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         id: one.id,
         name: one.name,
         kind: "service",
-        labels: one.labels ?? {},
+        labels: one.tags ?? {},
         size: one.size,
         instances: one.instances?.wanted ?? null,
         exposure: one.exposure,
@@ -179,7 +180,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         id: one.id,
         name: one.name,
         kind: "resource",
-        labels: one.labels ?? {},
+        labels: one.tags ?? {},
         size: one.size,
         resourceKind: RESOURCE_KIND_OF[one.interface] ?? null,
         state: one.state,
@@ -214,10 +215,10 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     hostedName: (app, resource) => `${app}-${resource}`.toLowerCase().replace(/[^a-z0-9-]/gu, "-").slice(0, HOSTED_NAME_MAX).replace(/-+$/u, ""),
     /** The need a resource's link fills in every service. */
     needOf: (resource) => needAs(resource),
-    /** Makes a resource's hosted service, labelled. */
+    /** Makes a resource's hosted service, its labels its tags. */
     createResource: async ({ name, kind, size, labels }, { idempotencyKey }) => {
       const { app } = (await resourcesOffered())[kind];
-      return (await calls.createHostedService({ app, name, size, region, labels }, { idempotencyKey })).hostedService;
+      return (await calls.createHostedService({ app, name, size, region, tags: labels }, { idempotencyKey })).hostedService;
     },
     resizeResource: (id, size, { idempotencyKey }) => client.changeHostedService(id, { size }, { idempotencyKey }),
     linkResource: async (id, serviceId, need, { idempotencyKey }) => {
@@ -316,8 +317,8 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
       return { version: answer.release.version, refreshId: answer.refresh?.id ?? null };
     },
     /**
-     * Makes an App Service, labelled, with mobilynet's drain: internal ones with no routes, public ones routed at the
-     * domain (none while `domain` is null: another public service has it, which takeDomain moves it from).
+     * Makes an App Service, its labels its tags, with mobilynet's drain: internal ones with no routes, public ones
+     * routed at the domain (none while `domain` is null: another public service has it, which takeDomain moves it from).
      */
     async createService({ name, exposure, size, instances, app, version, settings, secrets, domain, connections, labels, task = null }, { idempotencyKey }) {
       const { service, refresh } = await calls.createService({
@@ -332,7 +333,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         secrets,
         ...(exposure === "public" ? { routes: domain ? [{ host: domain, tls: "edge" }] : [] } : {}),
         ...(connections.length > 0 ? { connections } : {}),
-        labels,
+        tags: labels,
         ...(task ? { task } : {})
       }, { idempotencyKey });
       return { id: service.id, refreshId: refresh?.id ?? null };

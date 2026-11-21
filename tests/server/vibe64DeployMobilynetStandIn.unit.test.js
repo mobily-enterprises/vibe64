@@ -7,7 +7,7 @@ import { createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapter
 
 // The deploy engine's mobilynet stand-in, asked through the engine's client with no server: a project's releases,
 // App Services made from them and refreshed, public and internal with connections, hosted services linked to several
-// services, prices and the catalogue; and what mobilynet is building for the engine: labels on services and hosted
+// services, prices and the catalogue; and what mobilynet is building for the engine: tags on services and hosted
 // services, service instances in the project's quotas, the spending cap, and leases.
 
 const DB_SETTINGS = ["DB_DATABASE", "DB_HOST", "DB_PORT", "DB_SSLMODE", "DB_USER"];
@@ -604,47 +604,78 @@ test("each region says how many settings and secrets an App Service there holds 
   }
 });
 
-test("labels: set at create, answered in reads and lists, a list filtered by them, replaced whole by a PATCH that starts no refresh", async () => {
+test("tags: set at create, answered in reads and lists, a list filtered by them, replaced whole by a PATCH that starts no refresh", async () => {
   const { standIn, client, production, release, serviceId } = await runningShop();
   const mark = { "vibe64-deployment": "dep_one", "vibe64-app": "shop", "vibe64-environment": "production" };
   const computers = await production.createService(webSpec(release.version, {
-    name: "computers", exposure: "internal", routes: [], instances: 1, labels: { ...mark, "vibe64-item": "service.computers" }
+    name: "computers", exposure: "internal", routes: [], instances: 1, tags: { ...mark, "vibe64-item": "service.computers" }
   }), { idempotencyKey: "service-computers" });
-  assert.deepEqual(computers.service.labels, { ...mark, "vibe64-item": "service.computers" });
-  const { hostedService: db } = await production.createHostedService({ app: "postgresql-18", labels: { ...mark, "vibe64-item": "resource.database" } }, { idempotencyKey: "hosted-db" });
-  await production.createHostedService({ app: "valkey-9", labels: { "vibe64-deployment": "dep_two" } }, { idempotencyKey: "hosted-cache" });
-  assert.deepEqual(db.labels, { ...mark, "vibe64-item": "resource.database" });
-  assert.deepEqual((await client.readService(serviceId)).labels, {}, "a service made without labels has none");
+  assert.deepEqual(computers.service.tags, { ...mark, "vibe64-item": "service.computers" });
+  assert.equal(Object.hasOwn(computers.service, "labels"), false, "an answer names tags alone");
+  const { hostedService: db } = await production.createHostedService({ app: "postgresql-18", tags: { ...mark, "vibe64-item": "resource.database" } }, { idempotencyKey: "hosted-db" });
+  await production.createHostedService({ app: "valkey-9", tags: { "vibe64-deployment": "dep_two" } }, { idempotencyKey: "hosted-cache" });
+  assert.deepEqual(db.tags, { ...mark, "vibe64-item": "resource.database" });
+  assert.equal(Object.hasOwn(db, "labels"), false, "an answer names tags alone");
+  assert.deepEqual((await client.readService(serviceId)).tags, {}, "a service made without tags has none");
 
-  assert.deepEqual((await production.listServices({ labels: { "vibe64-deployment": "dep_one" } })).map((one) => one.id), [computers.service.id]);
-  assert.deepEqual((await production.listServices({ labels: { "vibe64-deployment": "dep_one", "vibe64-item": "service.web" } })), [], "each label must match");
-  assert.deepEqual((await production.listHostedServices({ labels: { "vibe64-deployment": "dep_one" } })).map((one) => one.id), [db.id]);
+  assert.deepEqual((await production.listServices({ tags: { "vibe64-deployment": "dep_one" } })).map((one) => one.id), [computers.service.id]);
+  assert.deepEqual((await production.listServices({ tags: { "vibe64-deployment": "dep_one", "vibe64-item": "service.web" } })), [], "each tag must match");
+  assert.deepEqual((await production.listHostedServices({ tags: { "vibe64-deployment": "dep_one" } })).map((one) => one.id), [db.id]);
   assert.equal((await production.listHostedServices()).length, 2);
+  assert.deepEqual(standIn.requests().filter((one) => one.method === "GET" && one.query.tag).map((one) => one.query.tag), [
+    ["vibe64-deployment:dep_one"], ["vibe64-deployment:dep_one", "vibe64-item:service.web"], ["vibe64-deployment:dep_one"]
+  ], "a list is filtered by tag=name:value");
 
   settle(standIn);
   const refreshes = (await client.listServiceRefreshes(serviceId)).length;
-  const relabelled = await client.changeService(serviceId, { labels: { ...mark, "vibe64-item": "service.web" } });
-  assert.deepEqual([relabelled.refresh, relabelled.service.labels["vibe64-item"]], [null, "service.web"]);
-  assert.equal((await client.listServiceRefreshes(serviceId)).length, refreshes, "a change of labels starts no refresh");
-  const replaced = await client.changeService(serviceId, { labels: { "vibe64-deployment": "dep_one" } });
-  assert.deepEqual(replaced.service.labels, { "vibe64-deployment": "dep_one" }, "the whole set replaced");
-  const hostedLabels = await client.changeHostedService(db.id, { labels: { ...mark, "vibe64-item": "resource.db" } });
-  assert.deepEqual([hostedLabels.operation, hostedLabels.hostedService.labels["vibe64-item"], hostedLabels.hostedService.state], [null, "resource.db", "running"]);
+  const retagged = await client.changeService(serviceId, { tags: { ...mark, "vibe64-item": "service.web" } });
+  assert.deepEqual([retagged.refresh, retagged.service.tags["vibe64-item"]], [null, "service.web"]);
+  assert.equal((await client.listServiceRefreshes(serviceId)).length, refreshes, "a change of tags starts no refresh");
+  const replaced = await client.changeService(serviceId, { tags: { "vibe64-deployment": "dep_one" } });
+  assert.deepEqual(replaced.service.tags, { "vibe64-deployment": "dep_one" }, "the whole set replaced");
+  const hostedTags = await client.changeHostedService(db.id, { tags: { ...mark, "vibe64-item": "resource.db" } });
+  assert.deepEqual([hostedTags.operation, hostedTags.hostedService.tags["vibe64-item"], hostedTags.hostedService.state], [null, "resource.db", "running"]);
   await client.createServiceRelease(serviceId, upload(SHOP, "2"));
   settle(standIn);
-  assert.deepEqual((await client.readService(serviceId)).labels, { "vibe64-deployment": "dep_one" }, "a release keeps them");
-  assert.ok(standIn.events().some((event) => event.type === "service.changed" && event.details.fields[0] === "labels"));
+  assert.deepEqual((await client.readService(serviceId)).tags, { "vibe64-deployment": "dep_one" }, "a release keeps them");
+  assert.ok(standIn.events().some((event) => event.type === "service.changed" && event.details.fields[0] === "tags"));
+  assert.ok(standIn.events().some((event) => event.type === "hosted.changed" && event.details.fields[0] === "tags"));
 
-  const reserved = await refused(client.changeService(serviceId, { labels: { "mobilynet-service": "x" } }));
-  assert.deepEqual(refusal(reserved), { status: 422, code: "validation_failed", fields: ["labels.mobilynet-service"] });
-  const control = await refused(client.changeHostedService(db.id, { labels: { note: "a\nb" } }));
-  assert.deepEqual(refusal(control), { status: 422, code: "validation_failed", fields: ["labels.note"] });
+  const reserved = await refused(client.changeService(serviceId, { tags: { "mobilynet-service": "x" } }));
+  assert.deepEqual(refusal(reserved), { status: 422, code: "validation_failed", fields: ["tags.mobilynet-service"] });
+  assert.equal(reserved.details.fieldErrors["tags.mobilynet-service"], "Tags starting with mobilynet are MobilyNet's.");
+  const control = await refused(client.changeHostedService(db.id, { tags: { note: "a\nb" } }));
+  assert.deepEqual(refusal(control), { status: 422, code: "validation_failed", fields: ["tags.note"] });
   const many = Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`k${index}`, "v"]));
-  const tooMany = await refused(production.createHostedService({ app: "valkey-9", labels: many }, { idempotencyKey: "hosted-many" }));
-  assert.deepEqual(refusal(tooMany), { status: 422, code: "validation_failed", fields: ["labels"] });
-  const upper = await refused(production.createService(webSpec(release.version, { name: "api", routes: [], labels: { Upper: "x" } }), { idempotencyKey: "service-api" }));
-  assert.deepEqual(refusal(upper), { status: 422, code: "validation_failed", fields: ["labels.Upper"] });
-  assert.equal((await client.readService(serviceId)).labels["vibe64-deployment"], "dep_one", "a refused change changes nothing");
+  const tooMany = await refused(production.createHostedService({ app: "valkey-9", tags: many }, { idempotencyKey: "hosted-many" }));
+  assert.deepEqual(refusal(tooMany), { status: 422, code: "validation_failed", fields: ["tags"] });
+  assert.equal(tooMany.details.fieldErrors.tags, "At most 20 tags.");
+  const upper = await refused(production.createService(webSpec(release.version, { name: "api", routes: [], tags: { Upper: "x" } }), { idempotencyKey: "service-api" }));
+  assert.deepEqual(refusal(upper), { status: 422, code: "validation_failed", fields: ["tags.Upper"] });
+  assert.equal((await client.readService(serviceId)).tags["vibe64-deployment"], "dep_one", "a refused change changes nothing");
+});
+
+test("labels, tags' previous name, is refused 422 under its own name in a body and a list's filter, never read as tags", async () => {
+  const { standIn, client, production, projectId, release, serviceId } = await runningShop();
+  settle(standIn);
+  const made = await refused(production.createService(webSpec(release.version, { name: "api", routes: [], labels: { "vibe64-deployment": "dep_one" } }), { idempotencyKey: "service-api" }));
+  assert.deepEqual(refusal(made), { status: 422, code: "validation_failed", fields: ["labels"] });
+  assert.equal(made.details.fieldErrors.labels, "Give tags: labels is their previous name.");
+  const hosted = await refused(production.createHostedService({ app: "valkey-9", labels: { "vibe64-deployment": "dep_one" } }, { idempotencyKey: "hosted-cache" }));
+  assert.deepEqual(refusal(hosted), { status: 422, code: "validation_failed", fields: ["labels"] });
+  const changed = await refused(client.changeService(serviceId, { labels: { "vibe64-deployment": "dep_one" } }));
+  assert.deepEqual(refusal(changed), { status: 422, code: "validation_failed", fields: ["labels"] });
+  const both = await refused(client.changeService(serviceId, { tags: { "vibe64-deployment": "dep_one" }, labels: { "vibe64-deployment": "dep_one" } }));
+  assert.deepEqual(refusal(both), { status: 422, code: "validation_failed", fields: ["labels"] }, "naming both is refused too");
+  assert.deepEqual((await client.readService(serviceId)).tags, {}, "a refused change changes nothing");
+  assert.deepEqual((await production.listServices()).map((one) => one.name), ["web"], "a refused create makes nothing");
+  assert.deepEqual(await production.listHostedServices(), []);
+
+  for (const list of ["services", "hosted-services"]) {
+    const answered = await standIn.fetch(`${standIn.baseUrl}/v1/projects/${projectId}/${list}?label=vibe64-deployment:dep_one`, { headers: { authorization: `Bearer ${standIn.key}` } });
+    const { error } = await answered.json();
+    assert.deepEqual([answered.status, error.code, error.details.fieldErrors], [422, "validation_failed", { label: "Filter by tag: label is its previous name." }], list);
+  }
 });
 
 test("App Service instances times their size count against the project's vCPU and memory quotas beside its hosted services' machines", async () => {
@@ -741,8 +772,8 @@ test("keys: a project's key reaches its project alone, a revoked or expired key 
   assert.deepEqual([nobody.status, nobody.code], [401, "unauthenticated"]);
 
   const deployOnly = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: standIn.addKey({ projectId, scopes: ["services:read", "services:deploy"] }), fetch: standIn.fetch });
-  const relabel = await refused(deployOnly.changeService("svc_any", { labels: {} }));
-  assert.deepEqual([relabel.status, relabel.code, relabel.details], [403, "scope_missing", { scope: "services:manage" }]);
+  const retag = await refused(deployOnly.changeService("svc_any", { tags: {} }));
+  assert.deepEqual([retag.status, retag.code, retag.details], [403, "scope_missing", { scope: "services:manage" }]);
   const cap = await refused(deployOnly.project(projectId).readSpendingCap());
   assert.deepEqual(cap.details, { scope: "usage:read" });
   const hosted = await refused(deployOnly.project(projectId).createHostedService({ app: "valkey-9" }, { idempotencyKey: "hosted" }));
@@ -782,15 +813,15 @@ test("leases: a second take is refused naming the holder, a renewal extends it, 
 
 test("every request is kept in order with what it asked of what, and a stand-in that is down answers nothing", async () => {
   const { standIn, client, production, serviceId } = await runningShop();
-  const { hostedService } = await production.createHostedService({ app: "valkey-9", labels: { "vibe64-deployment": "dep_one" } }, { idempotencyKey: "hosted-cache" });
-  await production.listHostedServices({ labels: { "vibe64-deployment": "dep_one", "vibe64-item": "resource.cache" } });
+  const { hostedService } = await production.createHostedService({ app: "valkey-9", tags: { "vibe64-deployment": "dep_one" } }, { idempotencyKey: "hosted-cache" });
+  await production.listHostedServices({ tags: { "vibe64-deployment": "dep_one", "vibe64-item": "resource.cache" } });
   const asked = standIn.requests();
   const create = asked.find((one) => one.method === "POST" && one.path.endsWith("/hosted-services"));
   assert.deepEqual(
-    [create.idempotencyKey, create.body.labels, create.status, create.errorCode],
+    [create.idempotencyKey, create.body.tags, create.status, create.errorCode],
     ["hosted-cache", { "vibe64-deployment": "dep_one" }, 202, null]
   );
-  assert.deepEqual(asked.at(-1).query.label, ["vibe64-deployment:dep_one", "vibe64-item:resource.cache"]);
+  assert.deepEqual(asked.at(-1).query.tag, ["vibe64-deployment:dep_one", "vibe64-item:resource.cache"]);
   const releaseUpload = asked.find((one) => one.path.endsWith("/apps/shop/releases"));
   assert.match(releaseUpload.body.upload, /^[0-9a-f]{64}$/u, "an upload is kept as its SHA-256");
   assert.equal(asked.some((one) => one.method === "DELETE"), false);

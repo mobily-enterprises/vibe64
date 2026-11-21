@@ -1,6 +1,6 @@
 import {
-  CATALOGUE, HOST_REGIONS, MACHINE_SIZES, REGIONS, catalogueApp, interfaceNamed, isRecord, labelsMatch, labelsOf,
-  needSettings, needValues, newCredential, pageOf, projectLabel, randomText
+  CATALOGUE, HOST_REGIONS, MACHINE_SIZES, REGIONS, catalogueApp, interfaceNamed, isRecord, needSettings,
+  needValues, newCredential, pageOf, projectLabel, randomText, tagsMatch, tagsOf
 } from "./catalogue.js";
 
 // mobilynet's hosted services as its stand-in answers them (openApiHosted.js, and its machines package's
@@ -18,8 +18,8 @@ import {
 // can't be checked yet (its refresh queued), such a link is refused `422`, to be tried again once that refresh builds.
 // A delete is refused `409 hosted_service_linked` while links are held, unless `?links=revoke` ends them with it. A
 // size change resizes its machine (`202`, `resizing`, then running again), or answers `200` with no operation when its
-// machine already is that size. Labels (engine-support M2) are set at create and replaced whole by a PATCH (`200`, no
-// operation, when nothing else changes), and a list filters by them. Its machine counts against the project's
+// machine already is that size. Tags are set at create and replaced whole by a PATCH (`200`, no operation, when
+// nothing else changes), and a list filters by them (`tag=name:value`). Its machine counts against the project's
 // machines, vCPU, memory and disk quotas, and a project at its spending cap makes none and resizes none up (M12, M13:
 // `world.admit`). Faults: `neverBoots` (a hosted service stays `creating`) and `noCapacity`.
 // STAND-IN ONLY: a link's consumer is an App Service alone (a mobilynet machine's app or another hosted service is refused `422`); a
@@ -112,7 +112,7 @@ function createStandInHosted(world, { services, prices }) {
         { step: "links", state: counts.failed > 0 ? "failed" : counts.pending > 0 ? (ready ? "running" : "waiting") : "done" },
         { step: "health", state: one.health.state === "unknown" ? (ready ? "running" : "waiting") : "done" }
       ],
-      labels: { ...one.labels },
+      tags: { ...one.tags },
       restoredFrom: null,
       lastError: null,
       createdAt: one.createdAt,
@@ -343,8 +343,8 @@ function createStandInHosted(world, { services, prices }) {
     const region = input.region ?? REGIONS[0];
     if (!REGIONS.includes(region)) return invalid({ region: `Choose one of ${REGIONS.join(", ")}.` });
     if (input.settings != null && !isRecord(input.settings)) return invalid({ settings: "An object of setting names and values." });
-    const labelled = labelsOf(input.labels ?? {});
-    if (labelled.errors) return invalid(labelled.errors);
+    const tagged = tagsOf(input.tags ?? {});
+    if (tagged.errors) return invalid(tagged.errors);
     if (input.links != null && (!Array.isArray(input.links) || input.links.length > MAX_LINKS)) {
       return invalid({ links: `A list of up to ${MAX_LINKS} links, each { consumer, need? }.` });
     }
@@ -373,7 +373,7 @@ function createStandInHosted(world, { services, prices }) {
         health: { state: "unknown", reasons: [], checkedAt: null, metrics: [] },
         settings: own.settings,
         secrets: own.secrets,
-        labels: labelled.labels,
+        tags: tagged.tags,
         operations: [],
         createdAt: at(),
         changedAt: at(),
@@ -438,17 +438,17 @@ function createStandInHosted(world, { services, prices }) {
 
   /**
    * `PATCH /v1/hosted-services/{id}` (changeHostedService): another of its app's sizes, its disk only growing, and its
-   * labels replaced whole; a larger machine or disk admitted by the project's spending cap and quotas.
+   * tags replaced whole; a larger machine or disk admitted by the project's spending cap and quotas.
    */
   function change(one, body) {
     const input = isRecord(body) ? body : {};
     const { provides } = catalogueApp(one.app);
-    if (input.size === undefined && input.labels === undefined) return invalid({ size: `One of ${Object.keys(provides.sizes).join(", ")}, or labels.` });
+    if (input.size === undefined && input.tags === undefined) return invalid({ size: `One of ${Object.keys(provides.sizes).join(", ")}, or tags.` });
     if (input.size !== undefined && (typeof input.size !== "string" || !Object.hasOwn(provides.sizes, input.size))) {
       return invalid({ size: `One of ${Object.keys(provides.sizes).join(", ")}.` });
     }
-    const labelled = input.labels === undefined ? null : labelsOf(input.labels);
-    if (labelled?.errors) return invalid(labelled.errors);
+    const tagged = input.tags === undefined ? null : tagsOf(input.tags);
+    if (tagged?.errors) return invalid(tagged.errors);
     let started = null;
     if (input.size !== undefined) {
       const wanted = provides.sizes[input.size];
@@ -467,9 +467,9 @@ function createStandInHosted(world, { services, prices }) {
       }
       one.size = input.size;
     }
-    if (labelled) one.labels = labelled.labels;
+    if (tagged) one.tags = tagged.tags;
     one.changedAt = at();
-    if (labelled) event(one, "hosted.changed", { fields: ["labels"] });
+    if (tagged) event(one, "hosted.changed", { fields: ["tags"] });
     return answer(started ? 202 : 200, { hostedService: view(one), operation: started });
   }
 
@@ -549,7 +549,7 @@ function createStandInHosted(world, { services, prices }) {
       if (method === "GET") {
         const listed = [...hosted.values()].filter((one) => one.projectId === projectId && !one.deletedAt
           && (!params.get("app") || one.app === params.get("app")) && (!params.get("state") || one.state === params.get("state"))
-          && labelsMatch(one.labels, params)).reverse().map(view);
+          && tagsMatch(one.tags, params)).reverse().map(view);
         return answer(200, pageOf(listed, params));
       }
       return null;

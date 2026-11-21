@@ -603,7 +603,12 @@ each read), the calls the steps make, and, from its region in `GET
 and how many settings and secrets an App Service there holds now
 (`serviceSettingsMax()`). The stand-in's regions say 199 each, and 49 for a
 region with a host while its `olderHost` fault is on, which its settings
-replace enforces too. mobilynet has no leases yet: an
+replace enforces too. mobilynet calls the engine's labels **tags**: a create or
+a change of an App Service or a hosted service sends them as `tags`, the
+inventory reads each thing's `tags` as its labels, and a list asks for
+`tag=name:value`. mobilynet refuses their previous name, `labels` in a body or
+`label=` in a query, `422 validation_failed` under that name, and so does the
+stand-in. mobilynet has no leases yet: an
 adapter made without `leases: true` takes none, which is safe only while one
 editor deploys an environment. Nor does it run a release's task yet: an adapter
 made without `releaseTasks: true` (`RELEASE_TASKS`) runs none, and its

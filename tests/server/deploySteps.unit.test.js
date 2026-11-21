@@ -115,9 +115,9 @@ test("a two-service deploy makes both App Services and both hosted services, lab
     assert.deepEqual(hosted.links.filter((link) => link.state === "active").map((link) => [link.consumer.id, link.need]).sort(),
       [[computers.id, hosted === database ? "V64_DATABASE" : "V64_FILES"], [web.id, hosted === database ? "V64_DATABASE" : "V64_FILES"]].sort());
   }
-  // Every thing made carries the deployment's labels.
+  // Every thing made carries the deployment's labels, as mobilynet tags.
   for (const [thing, item] of [[web, "service.web"], [computers, "service.computers"], [database, "resource.database"], [files, "resource.files"]]) {
-    assert.deepEqual(thing.labels, { [LABEL.deployment]: record.deploymentId, [LABEL.app]: "memobot", [LABEL.environment]: "production", [LABEL.item]: item });
+    assert.deepEqual(thing.tags, { [LABEL.deployment]: record.deploymentId, [LABEL.app]: "memobot", [LABEL.environment]: "production", [LABEL.item]: item });
   }
   // Settings per service: the generated secret the same on both, Stripe and the setup code only on web, computers' own
   // entry only on computers, web given computers' private address.
@@ -144,7 +144,7 @@ test("a two-service deploy makes both App Services and both hosted services, lab
   assert.deepEqual(asked.filter((request) => request.path.includes(hand) || JSON.stringify(request.body ?? {}).includes(hand)), []);
   assert.equal(standIn.services.service(hand).state, "running");
   // Every write that names a thing names one this deployment made and labelled.
-  const ours = new Set([...standIn.services.all(), ...standIn.hosted.all()].filter((one) => one.labels?.[LABEL.deployment] === record.deploymentId).map((one) => one.id));
+  const ours = new Set([...standIn.services.all(), ...standIn.hosted.all()].filter((one) => one.tags?.[LABEL.deployment] === record.deploymentId).map((one) => one.id));
   const named = asked.filter(isWrite).flatMap((request) => request.path.match(/\b(svc|hs)_[A-Za-z0-9]+/gu) ?? []);
   assert.ok(named.length >= 4, "the four links at least");
   assert.deepEqual(named.filter((id) => !ours.has(id)), []);
@@ -356,9 +356,9 @@ test("a Deploy cut short between a create or a link and keeping its record is ma
   const last = await run({ record: kept, commit: "c1" });
   assert.equal(last.outcome, "live", last.message);
   // One thing per item, each hosted service linked once to each service.
-  const ours = [...standIn.services.all(), ...standIn.hosted.all()].filter((one) => one.state !== "deleted" && one.labels?.[LABEL.deployment] === record.deploymentId);
-  assert.deepEqual(ours.map((one) => one.labels[LABEL.item]).sort(), ["resource.database", "resource.files", "service.computers", "service.web"]);
-  for (const hosted of standIn.hosted.all().filter((one) => one.labels?.[LABEL.deployment] === record.deploymentId)) {
+  const ours = [...standIn.services.all(), ...standIn.hosted.all()].filter((one) => one.state !== "deleted" && one.tags?.[LABEL.deployment] === record.deploymentId);
+  assert.deepEqual(ours.map((one) => one.tags[LABEL.item]).sort(), ["resource.database", "resource.files", "service.computers", "service.web"]);
+  for (const hosted of standIn.hosted.all().filter((one) => one.tags?.[LABEL.deployment] === record.deploymentId)) {
     assert.deepEqual(hosted.links.filter((link) => link.state !== "revoked").map((link) => link.consumer.id).sort(),
       [last.record.items["service.computers"].id, last.record.items["service.web"].id].sort());
   }
@@ -1490,7 +1490,7 @@ test("the mobilynet inventory lists the links mobilynet holds of each hosted ser
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   const { items } = first.record;
-  const { hostedService: byHand } = await client.project(projectId).createHostedService({ app: "valkey-9", name: "by-hand", labels: { team: "ops" } }, { idempotencyKey: "hosted-by-hand" });
+  const { hostedService: byHand } = await client.project(projectId).createHostedService({ app: "valkey-9", name: "by-hand", tags: { team: "ops" } }, { idempotencyKey: "hosted-by-hand" });
   settle(standIn);
   await client.unlinkHostedService(items["resource.files"].id, items["resource.files"].links.computers);
   const at = standIn.requests().length;
