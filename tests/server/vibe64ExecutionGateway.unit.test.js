@@ -245,7 +245,7 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
   assert.equal(env.committerEmail, "vibe64@sas.users.vibe64.invalid");
 });
 
-test("a host whose homes cannot start programs gives each login's commands its tool homes, never ~/.local, and a staging account keeps its home's", async (t) => {
+test("a host whose homes cannot start programs gives each login's commands its tool homes, over the server's own and never ~/.local, and a staging account keeps its home's", async (t) => {
   const work = path.join(HOST_ROOT, "work");
   useHost(t, { ...PACK_HOST, loginEnvironment: {
     env: { NPM_CONFIG_PREFIX: `${work}/%u/.tools/npm`, NPM_CONFIG_CACHE: `${work}/%u/.tools/npm-cache`,
@@ -255,11 +255,16 @@ test("a host whose homes cannot start programs gives each login's commands its t
   const currentUser = os.userInfo();
   const tools = path.join(work, currentUser.username, ".tools");
   // The server's own PATH may carry the login's ~/.local/bin (a login shell's profile adds it, as GitHub's runners
-  // have it): a program found there could not start, so the command never gets it.
-  const serverPath = process.env.PATH;
-  process.env.PATH = [path.join(currentUser.homedir, ".local", "bin"), serverPath].join(path.delimiter);
+  // have it): a program found there could not start, so the command never gets it. Tool homes the server's own
+  // environment carries (its login's, from such a profile) lose to those the host names for the command's login.
+  const server = { PATH: process.env.PATH, GOPATH: process.env.GOPATH, NPM_CONFIG_PREFIX: process.env.NPM_CONFIG_PREFIX };
+  Object.assign(process.env, { PATH: [path.join(currentUser.homedir, ".local", "bin"), server.PATH].join(path.delimiter),
+    GOPATH: "/srv/server-login/.tools/go", NPM_CONFIG_PREFIX: "/srv/server-login/.tools/npm" });
   t.after(() => {
-    process.env.PATH = serverPath;
+    for (const [name, value] of Object.entries(server)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   });
   const result = await runVibe64Command({
     // A command's own setting wins over the host's.

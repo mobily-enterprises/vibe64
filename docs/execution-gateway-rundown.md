@@ -432,7 +432,8 @@ NPM prefix is derived from HOME, and its `bin` joins PATH:
 A host whose homes cannot start programs (homes mounted `noexec`) names
 `loginEnvironment` in its host profile: the tool homes it gives each login, in a
 folder where programs start, `%u` standing for the login. Each person's and the
-daemon's command gets its variables, unless the command's own environment names
+daemon's command gets its variables, over the ones the server's own environment
+carries (its own login's, say), unless the command's own environment names
 them, so a CLI installed with `npm -g`, `go install`, `cargo install`,
 `python3 -m pip install --user` or `gem install` starts, and `npx` and Corepack
 run what they download:

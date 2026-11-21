@@ -180,14 +180,15 @@ function commandEnvWithoutGitIdentity({
   // The login's HOME, LOGNAME and USER, and its home's own folders (~/.cache, ~/.config, ~/.local/share), which are
   // only the fallback. A staging account's home is in its own area, where programs start; a person's and the daemon's
   // may not be, so the host may give their commands tool homes elsewhere (vibe64Host().loginEnvironment): what those
-  // name wins over the home's folders, and what the command's own environment names wins over both, as a project's
-  // Env does. The server's own environment never names HOME, USER or XDG folders (commandBaseEnv).
+  // name wins over the home's folders and over the server's own environment, which may carry its own login's, and
+  // what the command's own environment names wins over all of them, as a project's Env does. The server's own
+  // environment never names HOME, USER or XDG folders (commandBaseEnv).
   const login = homeEnvForUser(actor.user);
   const tools = actor.stagingAccount ? { env: {}, path: [] } : loginToolEnv(login.USER);
   const env = {
     ...login,
-    ...tools.env,
     ...commandBaseEnv(baseEnv),
+    ...tools.env,
     // Runtime sockets belong to the OS identity, not its configurable HOME.
     ...(processMatchesActor(actor) && path.isAbsolute(runtimeDir)
       ? { XDG_RUNTIME_DIR: runtimeDir } : {}),

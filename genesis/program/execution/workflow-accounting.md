@@ -202,8 +202,9 @@ On a host whose homes cannot start programs, the host profile's
 `loginEnvironment` names the tool homes the host gives each login, `%u` standing
 for the login (`packages/vibe64-execution/src/server/env/loginToolEnv.js`): a
 person's or the daemon's command gets its variables (npm's prefix and cache,
-Cargo's, Go's, Python's user base, Corepack's, gems', a cache folder) unless its
-own environment names them, its folders on PATH, and no login's `~/.local/bin`, not
+Cargo's, Go's, Python's user base, Corepack's, gems', a cache folder) over the
+ones the editor's own environment carries, unless the command's own environment
+names them, its folders on PATH, and no login's `~/.local/bin`, not
 even one the editor's own PATH inherited; a staging account keeps its home's. Its
 variables win over the home's own folders (`~/.cache`, `~/.config`,
 `~/.local/share`), which are only the fallback where nothing names one: a credential
