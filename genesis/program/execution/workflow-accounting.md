@@ -371,8 +371,8 @@ person shell and an empty home of its own, `/home/<login>` at 0750, whatever the
 umask (a home already there is kept as it is). Either way the person joins the
 shared group and `nix-users`, the group the units of a person's commands name,
 and running it again changes nothing. A name Vibe64 keeps for its own accounts
-(`v64d_`, `v64s_`, `root`, or not a managed username) and an existing system or
-administrator account are refused with exit 3 before anything changes. The
+(a workspace daemon's or a staging account's, `root`, or not a managed
+username) and an existing system or administrator account are refused with exit 3 before anything changes. The
 daemon has no operation that makes, registers or re-enables a person (the
 helper refuses `create-system-user` and `enable-system-user` as unknown
 operations): it can never make an account, nor make an existing one a person

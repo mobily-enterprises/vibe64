@@ -117,7 +117,7 @@ test("a login its member list names becomes a person of the workspace, made with
   assert.deepEqual(host.created, ["sam"]);
   assert.deepEqual(readPersonRegistration("test", "sam", host.registry), { uid: 20001, username: "sam" });
   // Only for a workspace that has a daemon.
-  assert.throws(() => host.add("dora", "other"), /OS user was not found: v64d_other/u);
+  assert.throws(() => host.add("dora", "other"), new RegExp(`OS user was not found: ${DAEMON_USERNAME_PREFIX}other$`, "u"));
   assert.deepEqual(host.created, ["sam"]);
 });
 

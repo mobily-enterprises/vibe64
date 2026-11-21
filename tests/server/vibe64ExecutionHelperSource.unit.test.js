@@ -825,7 +825,7 @@ test("the daemon can neither make nor enable a person: only root's add-person ma
     const payload = JSON.stringify({ operation, password: "initial password", schema: "vibe64.exec-helper.payload",
       schemaVersion: 1, username: "sam" });
     const sent = spawnSync(process.execPath, [helperPath, "execute"], {
-      encoding: "utf8", env: { ...process.env, SUDO_USER: "v64d_test" }, input: payload, timeout: 15_000
+      encoding: "utf8", env: { ...process.env, SUDO_USER: daemonUser("test") }, input: payload, timeout: 15_000
     });
     assert.equal(sent.status, 2, operation);
     assert.match(sent.stderr, /^Vibe64 exec helper rejected an unknown operation\.$/mu, operation);
