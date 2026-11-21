@@ -89,7 +89,9 @@ values, the generated dotenv and Git exclude projections, Preview identities
 and archive bundle records all use it, so its temporary file never outlives a
 failed write. Its writes are durable when they return: the temporary file's
 data is synced to disk before the rename and its folder after it, so a power
-cut leaves the previous file or the new one, never an empty one. The editor's
+cut leaves the previous file or the new one, never an empty one. A writer whose
+record no one needs after a power cut, a session lock's owner, passes
+`durable: false` and skips both syncs. The editor's
 other state writers (session text and metadata, the state upgrade ledger,
 Colleague and retained Claude conversations, work plans, AI connections,
 account status, publishing state and keys, usage recordings, output-result

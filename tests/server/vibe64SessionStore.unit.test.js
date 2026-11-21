@@ -1,6 +1,6 @@
 import { writeProjectRuntimeOpenState, clearProjectRuntimeOpenState } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import assert from "node:assert/strict";
-import fs, { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import fs, { access, mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import path from "node:path";
 import test from "node:test";
@@ -22,6 +22,7 @@ import {
   sessionClosingReason,
   sessionIsClosing
 } from "../../packages/vibe64-runtime/src/server/sessionLifecycle.js";
+import { traceDurableWrites } from "./durableWriteTrace.js";
 
 function createStore(targetRoot, options = {}) {
   return createVibe64SessionStore({
@@ -457,6 +458,58 @@ test("session locks retire an owner whose process is demonstrably absent", {
         value: "replacement-owner"
       }
     );
+  });
+});
+
+// A lock's owner record only has to be read whole while its process runs:
+// after a power cut no process it names is running, so it is never synced.
+test("a session lock publishes its owner record whole and never waits for the disk", async (t) => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    const lockPath = path.resolve(renewalWorkflowLockPath(store, "unsynced-owner-lock"));
+    const ownerPath = path.join(lockPath, "owner.json");
+    const events = await traceDurableWrites(t);
+    let owner = null;
+    assert.deepEqual(
+      await store.runSessionRenewalWorkflowExclusive("unsynced-owner-lock", async () => {
+        owner = JSON.parse(await readFile(ownerPath, "utf8"));
+        return "held";
+      }),
+      { acquired: true, value: "held" }
+    );
+    assert.equal(owner.pid, process.pid);
+    assert.ok(
+      events.some((event) => event.op === "rename" && event.to === ownerPath),
+      "the owner record is renamed into place whole"
+    );
+    assert.deepEqual(
+      events.filter((event) => event.op === "fsync" && String(event.path).startsWith(lockPath)),
+      [],
+      "neither the owner record nor the lock folder is synced"
+    );
+  });
+});
+
+test("a session lock whose owner record a power cut lost is reclaimed once its folder is past the owner grace", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    for (const [sessionId, ownerText] of [["empty-owner-lock", ""], ["missing-owner-lock", null]]) {
+      const lockPath = renewalWorkflowLockPath(store, sessionId);
+      await mkdir(lockPath, { mode: 0o700, recursive: true });
+      if (ownerText !== null) await writeFile(path.join(lockPath, "owner.json"), ownerText);
+      assert.deepEqual(
+        await store.runSessionRenewalWorkflowExclusive(sessionId, async () => "must-not-run"),
+        { acquired: false, value: null },
+        `${sessionId}: a lock just made, whose owner may still be being written, stays held`
+      );
+      const pastGrace = new Date(Date.now() - 3_000);
+      await utimes(lockPath, pastGrace, pastGrace);
+      assert.deepEqual(
+        await store.runSessionRenewalWorkflowExclusive(sessionId, async () => "replacement-owner"),
+        { acquired: true, value: "replacement-owner" },
+        `${sessionId}: reclaimed past the grace`
+      );
+    }
   });
 });
 

@@ -8,7 +8,7 @@ import {
   processStartIdentityPlatform,
   readProcessStart
 } from "@local/vibe64-execution/server";
-import { writeJsonFile } from "./sessionFiles.js";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
@@ -16,7 +16,10 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 // Cross-process session locks: a lock is a directory under sessionsRoot/.locks
 // whose owner.json names the holding process, so abandoned locks can be
-// recognised and quarantined.
+// recognised and quarantined. owner.json is published whole but never synced
+// to disk, nor is a release: after a power cut no process it names is running,
+// and a lock whose owner record is missing or unreadable is abandoned once its
+// folder is SESSION_LOCK_OWNER_GRACE_MS old.
 const SESSION_LOCK_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const SESSION_LOCK_OWNER_GRACE_MS = 2_000;
 const SESSION_LOCK_OWNER_SCHEMA_VERSION = 1;
@@ -252,7 +255,7 @@ async function acquireSessionLock(sessionPaths, lockName, {
           await mkdir(lockPath, { mode: 0o700 });
           const acquiredAtMs = Date.now();
           try {
-            await writeJsonFile(path.join(lockPath, "owner.json"), {
+            await writeJsonFileAtomic(path.join(lockPath, "owner.json"), {
               createdAt: new Date(acquiredAtMs).toISOString(),
               operation: operation || lockName,
               attemptId,
@@ -260,7 +263,7 @@ async function acquireSessionLock(sessionPaths, lockName, {
               processIdentity,
               schemaVersion: SESSION_LOCK_OWNER_SCHEMA_VERSION,
               token
-            });
+            }, { durable: false });
           } catch (error) {
             await rm(lockPath, { force: true, recursive: true });
             throw error;

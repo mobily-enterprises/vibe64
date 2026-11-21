@@ -45,6 +45,17 @@ test("an atomic write is durable: its data reaches the disk before the rename, a
   assert.equal(await readFile(filePath, "utf8"), "replaced\n");
 });
 
+test("a write with durable: false is published whole by rename, with neither it nor its folder synced", async (t) => {
+  const root = await temporaryRoot(t);
+  const filePath = path.join(root, "locks", "owner.json");
+  const events = await traceDurableWrites(t);
+  await writeJsonFileAtomic(filePath, { pid: 1 }, { durable: false });
+  assert.deepEqual(JSON.parse(await readFile(filePath, "utf8")), { pid: 1 });
+  assert.equal(events.filter((event) => event.op === "rename" && event.to === filePath).length, 1);
+  assert.deepEqual(events.filter((event) => event.op === "fsync"), []);
+  assert.deepEqual(await readdir(path.dirname(filePath)), ["owner.json"]);
+});
+
 test("serializeByKey runs one key's operations in order, past failures, and other keys independently", async () => {
   const pending = new Map();
   const order = [];

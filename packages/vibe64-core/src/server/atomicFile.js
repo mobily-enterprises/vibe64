@@ -13,9 +13,14 @@ import path from "node:path";
  * power cut leaves the old file or the new one, never an empty one. Resolves
  * to the published file's stats (bigints), taken before the rename, which
  * keeps the file's inode and modification time.
+ *
+ * durable: false publishes the file the same way without either sync, for a
+ * record no one needs after a power cut, such as a session lock's owner, so
+ * its writer never waits for the disk (on a busy one each sync can take a
+ * tenth of a second or more).
  */
 async function writeFileAtomic(filePath, text, options = {}) {
-  const { directoryMode, fileMode } = options;
+  const { directoryMode, durable = true, fileMode } = options;
   const directory = path.dirname(filePath);
   await mkdir(directory, { recursive: true, mode: directoryMode });
   const temporaryPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
@@ -25,7 +30,7 @@ async function writeFileAtomic(filePath, text, options = {}) {
     try {
       await handle.writeFile(text, "utf8");
       if (fileMode !== undefined) await handle.chmod(fileMode);
-      await handle.sync();
+      if (durable) await handle.sync();
       stats = await handle.stat({ bigint: true });
     } finally {
       await handle.close();
@@ -34,7 +39,7 @@ async function writeFileAtomic(filePath, text, options = {}) {
   } finally {
     await rm(temporaryPath, { force: true });
   }
-  await syncDirectory(directory);
+  if (durable) await syncDirectory(directory);
   return stats;
 }
 

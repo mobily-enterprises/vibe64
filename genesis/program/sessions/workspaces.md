@@ -471,6 +471,13 @@ complete previous or next value during assistant changes; a failed replacement
 or a power cut preserves the saved value. This does not make multiple
 metadata files one transaction or change their saved format.
 
+A session lock's owner record (`sessionLocks.js`) is published whole through
+the same writer but never synced to disk (`durable: false`), and neither is its
+release: after a power cut no process it names is running, and a lock whose
+owner record is missing or unreadable counts as abandoned once its folder is
+older than the two-second owner grace. A renewal takes some fifty locks, whose
+owner records would otherwise be over a quarter of its disk syncs.
+
 A scoped conversation write may supply captured turn metadata for a new
 transcript block. Explicit message metadata and already saved block metadata
 take precedence. Temporary native-history reconciliation uses this seam to retain
