@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -92,6 +92,50 @@ test("a finished process group has no live member", async () => {
   if (process.platform === "linux") {
     assert.equal(await processGroupHasLiveMember(child.pid), false);
     assert.equal((await readProcessStart(child.pid)).status, "absent");
+  }
+});
+
+test("a process table that cannot be read whole never hides a group's live member", async (t) => {
+  if (process.platform !== "linux") {
+    t.skip("Linux /proc and process groups are required.");
+    return;
+  }
+  const live = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
+  await new Promise((resolve, reject) => { live.once("spawn", resolve); live.once("error", reject); });
+  t.after(() => {
+    try {
+      process.kill(-live.pid, "SIGKILL");
+    } catch {
+      // The group has already gone.
+    }
+  });
+  const finished = spawn(process.execPath, ["-e", ""], { detached: true, stdio: "ignore" });
+  await new Promise((resolve) => finished.once("exit", resolve));
+  // /proc lists a process being reaped mid-listing without an entry type. A listing asked for entry types then
+  // lstat's that entry itself, and with the process gone the lstat's ENOENT rejects the whole listing.
+  const racingReaddir = async (target, options) => {
+    if (options?.withFileTypes) {
+      await lstat(`/proc/${finished.pid}`);
+    }
+    return readdir(target, options);
+  };
+  assert.equal(await processGroupHasLiveMember(live.pid, { readdirFn: racingReaddir }), true);
+  const tooManyFiles = async () => { throw Object.assign(new Error("EMFILE: too many open files"), { code: "EMFILE" }); };
+  // A table that cannot be read proves nothing: the kernel's answer for the group decides, zombies included.
+  assert.equal(await processGroupHasLiveMember(live.pid, { readdirFn: tooManyFiles }), true);
+  assert.equal(await processGroupHasLiveMember(live.pid, { readFileFn: tooManyFiles }), true);
+  assert.equal(await processGroupHasLiveMember(live.pid, { platform: "darwin", execFileFn: tooManyFiles }), true);
+  assert.equal(await processGroupHasLiveMember(finished.pid, { readdirFn: tooManyFiles }), false);
+  // A stat read for a process that has gone or that hidepid hides is still just left out.
+  for (const code of ["ENOENT", "ESRCH", "EACCES", "EPERM"]) {
+    const unreadable = async (file, encoding) => {
+      if (file === `/proc/${process.pid}/stat`) {
+        throw Object.assign(new Error(code), { code });
+      }
+      return readFile(file, encoding);
+    };
+    assert.equal(await processGroupHasLiveMember(live.pid, { readFileFn: unreadable }), true, code);
+    assert.equal(await processGroupHasLiveMember(finished.pid, { readFileFn: unreadable }), false, code);
   }
 });
 

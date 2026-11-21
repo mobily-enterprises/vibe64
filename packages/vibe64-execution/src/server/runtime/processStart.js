@@ -91,7 +91,36 @@ async function readProcessStart(pid, {
 }
 
 /**
- * True when any non-zombie process still belongs to the process group.
+ * The kernel's answer for a process group: true while it has any member, a zombie included. EPERM means
+ * the group exists but belongs to another user.
+ */
+function processGroupExists(groupId) {
+  try {
+    process.kill(-groupId, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
+/**
+ * /proc/<name>/stat, or "" for a process that has gone (ENOENT before the open, ESRCH once reaped after it)
+ * or that hidepid hides from this user (EACCES, EPERM). Any other failure throws.
+ */
+async function readLinuxProcessStatText(name, readFileFn) {
+  try {
+    return await readFileFn(`/proc/${name}/stat`, "utf8");
+  } catch (error) {
+    if (["EACCES", "ENOENT", "EPERM", "ESRCH"].includes(error?.code)) {
+      return "";
+    }
+    throw error;
+  }
+}
+
+/**
+ * True when any non-zombie process still belongs to the process group. A process table that could not be read
+ * proves nothing, so the kernel's answer for the group, which counts zombies, decides then.
  */
 async function processGroupHasLiveMember(groupId, {
   execFileFn = execFile,
@@ -104,18 +133,23 @@ async function processGroupHasLiveMember(groupId, {
     return false;
   }
   if (platform === "linux") {
-    for (const entry of await readdirFn("/proc", { withFileTypes: true }).catch(() => [])) {
-      if (!entry.isDirectory() || !/^\d+$/u.test(entry.name)) {
-        continue;
+    try {
+      // Names only, as every numeric entry is a process directory. Listed with entry types, /proc gives a process
+      // being reaped mid-listing no type, Node then lstat's that entry, and once the process has gone the lstat's
+      // ENOENT rejects the whole listing, which read as a group with no live member.
+      for (const name of await readdirFn("/proc")) {
+        if (!/^\d+$/u.test(name)) {
+          continue;
+        }
+        const identity = parseLinuxProcessStat(await readLinuxProcessStatText(name, readFileFn));
+        if (identity?.groupId === normalizedGroupId && identity.state !== "Z") {
+          return true;
+        }
       }
-      const identity = parseLinuxProcessStat(
-        await readFileFn(`/proc/${entry.name}/stat`, "utf8").catch(() => "")
-      );
-      if (identity?.groupId === normalizedGroupId && identity.state !== "Z") {
-        return true;
-      }
+      return false;
+    } catch {
+      return processGroupExists(normalizedGroupId);
     }
-    return false;
   }
   try {
     const { stdout } = await execFileFn("ps", ["-ax", "-o", "pgid=,stat="], {
@@ -127,7 +161,7 @@ async function processGroupHasLiveMember(groupId, {
       return Number(group) === normalizedGroupId && !state.startsWith("Z");
     });
   } catch {
-    return false;
+    return processGroupExists(normalizedGroupId);
   }
 }
 
