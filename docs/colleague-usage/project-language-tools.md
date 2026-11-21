@@ -8,9 +8,15 @@ database or run a migration.
 
 Where pinned runtime packs are installed, Vibe64 uses the selected packs.
 Otherwise standalone Vibe64 uses the developer's installed tools through its
-ordinary PATH and does not require a Nix installation. Kotlin's runtime pack
-includes the Java toolchain; Rust's includes the native linker tools. Projects needing native
+ordinary PATH and does not require a Nix installation. Kotlin's pack runs
+`kotlinc` with its own Java runtime but does not put `java`, `javac`, Maven or
+Gradle on PATH: a Kotlin project whose commands run them declares `java` too.
+Rust links with the computer's C compiler (`cc`). Projects needing native
 extensions or Go C integration also declare their required build toolchain.
+Every Java program a managed command starts keeps its temporary files, among
+them the native libraries of SQLite's JDBC driver, Netty or JNA, in the
+command's temporary folder rather than `/tmp`; a project's own
+`-Djava.io.tmpdir` still wins.
 JSKIT, Vue, Laravel, Django, Rails, Spring Boot, Express and Next.js use the
 tools specified by their project commands rather than a separate framework
 runtime: Django uses `python`, Rails uses `ruby` with `cpp` for native gems (and

@@ -523,6 +523,7 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   const env = helperChildEnv({ HOME: "/elsewhere", TMPDIR: "/elsewhere" }, user, daemonUser("test"), "vibe64-command");
   assert.equal(env.HOME, account.home);
   assert.equal(env.TMPDIR, "/tmp");
+  assert.equal(env.JAVA_TOOL_OPTIONS, undefined, "an application's JVM keeps its own private /tmp");
 
   // The runner loads the staging environment as the application, keeping its
   // private temporary directory.

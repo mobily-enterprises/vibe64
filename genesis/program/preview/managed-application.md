@@ -720,6 +720,12 @@ continues the browser nor counts as use. The idle period (five minutes) starts
 when the worker starts and again when each command ends, and never expires
 during a command. Group drains send `SIGCONT` after `SIGTERM`, so a stopped
 browser still exits at once when its worker is gone.
+A worker that cannot load Playwright writes why beside its metadata, for its own
+execution, and exits; the start stops waiting at once, cleans up its execution and
+returns that reason with whose fault it is: with runtime packs, Vibe64's installation
+(Health's Playwright runtime row shows the same), so the agent must not install
+Playwright into the project; without them, the project's or the computer's
+Playwright. A worker that never reports still ends in the ten-second readiness timeout.
 Finite browser-test executions retain their calling execution as parent.
 
 ## Project services

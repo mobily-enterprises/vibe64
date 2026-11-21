@@ -238,7 +238,18 @@ function loadPlaywright() {
     return createRequire(import.meta.url)(computerModule);
   }
 }
-const { chromium, request } = loadPlaywright();
+let playwright;
+try {
+  playwright = loadPlaywright();
+} catch (error) {
+  // The editor waits for this worker's metadata; the reason it never comes goes beside it, for this execution.
+  const reason = String(error?.message || error).split("\\n")[0];
+  await writeFile(metadataPath + ".failed", JSON.stringify({ executionId, reason }) + "\\n", { mode: 0o600 })
+    .catch(() => null);
+  process.stderr.write("Vibe64 managed browser worker could not load Playwright: " + reason + "\\n");
+  process.exit(1);
+}
+const { chromium, request } = playwright;
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const documentReadyForScreenshot = ${documentReadyForScreenshot.toString()};
 const pngVisualMetrics = ${pngVisualMetrics.toString()};

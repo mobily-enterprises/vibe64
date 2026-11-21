@@ -56,6 +56,18 @@ test("runuser receives a trusted PATH and no new privileges while the user comma
   assert.equal(env.PATH, "/workspace/bin:/usr/bin", "managed commands keep the gateway's runtime selection");
 });
 
+test("every JVM a command starts unpacks native libraries into the command's TMPDIR, and the caller's own -D wins", () => {
+  // java.io.tmpdir is /tmp and JNA's folder ~/.cache whatever TMPDIR says; where both are noexec, SQLite's JDBC driver,
+  // Netty, Jansi and JNA fail to load the libraries they unpack there.
+  const user = { username: "member", home: "/home/member" };
+  const tmp = "/var/lib/vibe64/workspace/tmp";
+  assert.equal(helperChildEnv({ PATH: "/usr/bin" }, user, "v64d_workspace").JAVA_TOOL_OPTIONS,
+    `-Djava.io.tmpdir=${tmp} -Djna.tmpdir=${tmp}`);
+  assert.equal(helperChildEnv({ JAVA_TOOL_OPTIONS: "-Xmx512m -Djava.io.tmpdir=/var/lib/vibe64/workspace/projects/a/tmp" },
+    user, "v64d_workspace").JAVA_TOOL_OPTIONS,
+  `-Djava.io.tmpdir=${tmp} -Djna.tmpdir=${tmp} -Xmx512m -Djava.io.tmpdir=/var/lib/vibe64/workspace/projects/a/tmp`);
+});
+
 test("OpenCode retains its private provider home and XDG directories", () => {
   const root = "/run/vibe64-workspace/vibe64/agent-providers/opencode";
   const input = { PATH: "/managed/toolchain/bin" };

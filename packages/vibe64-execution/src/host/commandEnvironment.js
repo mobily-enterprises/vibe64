@@ -391,6 +391,15 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   // An application has its own private temporary directory, and no access to
   // the workspace's.
   env.TMPDIR = targetUser.stagingAccount ? "/tmp" : workspaceTempRoot(ownerUsername);
+  // A JVM ignores TMPDIR: its temporary files, among them the native libraries a Java library unpacks to load
+  // (SQLite's JDBC driver, Netty, Jansi), go to java.io.tmpdir, /tmp, and JNA's to ~/.cache. Where /tmp and the homes
+  // are noexec (mobilynet) each load fails with "failed to map segment from shared object". Every JVM a command
+  // starts, Maven's and Gradle's forked ones too, reads JAVA_TOOL_OPTIONS; the caller's options come after these,
+  // so a -D they name wins.
+  if (!targetUser.stagingAccount) {
+    env.JAVA_TOOL_OPTIONS = [`-Djava.io.tmpdir=${env.TMPDIR}`, `-Djna.tmpdir=${env.TMPDIR}`, env.JAVA_TOOL_OPTIONS]
+      .filter(Boolean).join(" ");
+  }
   return env;
 }
 

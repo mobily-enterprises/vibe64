@@ -203,6 +203,13 @@ On a host whose homes cannot start programs (the host profile's
 `<npmPrefixRoot>/<login>` with its `bin` on PATH, and no login's
 `~/.local/bin`, not even one the editor's own PATH inherited; a staging
 account keeps its home's.
+The exec helper gives every command but a staging account's the workspace's
+temporary folder as `TMPDIR` (`packages/vibe64-execution/src/host/commandEnvironment.js`),
+and, because a JVM ignores `TMPDIR`, `JAVA_TOOL_OPTIONS` starting with
+`-Djava.io.tmpdir` and `-Djna.tmpdir` set to it: the native libraries SQLite's JDBC
+driver, Netty, Jansi and JNA unpack would otherwise go to `/tmp` and `~/.cache`,
+which cannot start programs on a host whose `/tmp` and homes are `noexec`. The
+caller's own `JAVA_TOOL_OPTIONS` follow, so a `-D` it names wins.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
 account home. Relative directories are rejected before starting a process.

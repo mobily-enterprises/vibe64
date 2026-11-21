@@ -145,6 +145,25 @@ async function registeredWorkerMetadata(descriptor = {}) {
   }
 }
 
+// The reason a worker of this execution could not start, which it writes beside its metadata before it exits
+// (agentPreviewBrowserWorkerSource): today, that it could not load Playwright.
+async function registeredWorkerStartFailure(descriptor = {}) {
+  const failure = await readFile(`${descriptor.metadataPath}.failed`, "utf8").then(JSON.parse).catch(() => null);
+  return failure && normalizeText(failure.executionId) === normalizeText(descriptor.executionId)
+    ? normalizeText(failure.reason) || "it gave no reason" : "";
+}
+
+function browserStartFailure(descriptor = {}, reason = "") {
+  const message = descriptor.runtimeRoot
+    ? `The managed browser could not load Playwright from this computer's Vibe64 browser runtime: ${reason}. ` +
+      "This is a fault in Vibe64's installation here, not in the project, so do not install Playwright into the " +
+      "project to work around it. Report it: Dashboard → Health → Playwright runtime shows the same fault, and " +
+      "whoever runs this Vibe64 installation repairs its runtime packs."
+    : `The managed browser could not load Playwright: ${reason}. Report this and ask the person to repair the ` +
+      "project's own Playwright (reinstall its dependencies) or the one installed on this computer.";
+  return commandFailure(message, "vibe64_managed_browser_playwright_unavailable");
+}
+
 async function registeredWorkerStatus(descriptor = {}) {
   try {
     const payload = await browserWorkerRequest({
@@ -571,6 +590,7 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
       }
     }
 
+    await rm(`${descriptor.metadataPath}.failed`, { force: true });
     const result = await runCommand({
       actor: "daemon",
       allowedRoots: [descriptor.worktreePath],
@@ -611,10 +631,12 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
         "The managed browser started without an execution ownership record."
       );
     }
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const [status, metadata] = await Promise.all([
+    let failure = "";
+    for (let attempt = 0; attempt < 100 && !failure; attempt += 1) {
+      const [status, metadata, startFailure] = await Promise.all([
         registeredWorkerStatus(descriptor),
-        registeredWorkerMetadata(descriptor)
+        registeredWorkerMetadata(descriptor),
+        registeredWorkerStartFailure(descriptor)
       ]);
       if (status && metadata?.executionId === descriptor.executionId) {
         return {
@@ -623,16 +645,21 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
           value: status
         };
       }
-      await delay(100);
+      failure = startFailure;
+      await delay(failure ? 0 : 100);
     }
+    await rm(`${descriptor.metadataPath}.failed`, { force: true });
     const drained = await stopRegisteredBrowserWorker(descriptor, {
-      reason: "browser-readiness-timeout",
+      reason: failure ? "browser-start-failed" : "browser-readiness-timeout",
       skipStartWait: true,
       stopExecution,
       stopOwnedExecutions
     });
     if (drained.ok !== true) {
       return drained;
+    }
+    if (failure) {
+      return browserStartFailure(descriptor, failure);
     }
     return commandFailure(
       "The managed browser worker did not become ready.",

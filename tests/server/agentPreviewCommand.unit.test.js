@@ -1346,6 +1346,38 @@ test("managed preview browser surfaces capacity refusal without creating a worke
   }
 });
 
+test("a managed browser that cannot load the runtime's Playwright says why, at once, and whose fault it is", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-browser-no-playwright-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const sessionId = "browser-no-playwright";
+  const commandService = createReadyPreviewCommandService({ previewUrl: "https://preview.example.test/" });
+  try {
+    await createFakePlaywrightRuntime(runtimeRoot);
+    // The runtime pack's Playwright module is missing, as on a host whose pack lacked runtime/lib/node_modules.
+    await rm(path.join(runtimeRoot, "playwright/runtime/lib/node_modules/playwright"), { recursive: true, force: true });
+    const prepared = await prepareAgentPreviewCommand({
+      commandService, env: packEnv(runtimeRoot), sessionId, worktreePath: root, wrapperHostDir: root
+    });
+    const started = Date.now();
+    await assert.rejects(execFileAsync(prepared.hostWrapperPath, ["browser", "ensure"], {
+      cwd: root, env: { ...process.env, ...prepared.env, VIBE64_EXECUTION_ID: "short-lived-tool-command" }
+    }), (error) => {
+      assert.match(error.stderr, /could not load Playwright from this computer's Vibe64 browser runtime: Cannot find module/u);
+      assert.match(error.stderr, /not in the project, so do not install Playwright into the project/u);
+      assert.match(error.stderr, /Dashboard → Health → Playwright runtime/u);
+      assert.doesNotMatch(error.stderr, /did not become ready/u);
+      return true;
+    });
+    // The worker's own report ends the wait; the readiness wait alone takes ten seconds.
+    assert.ok(Date.now() - started < 8_000, `${Date.now() - started} ms`);
+    await assert.rejects(stat(`${prepared.hostBrowserMetadataPath}.failed`), { code: "ENOENT" });
+    await assert.rejects(stat(prepared.hostBrowserMetadataPath), { code: "ENOENT" });
+  } finally {
+    await commandService.closeAllForSession(sessionId);
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("managed browser does not start when its project environment cannot be read", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-browser-env-failure-"));
   const sessionId = "browser-env-failure";
