@@ -403,6 +403,10 @@ function processBelongsToSystemdUnit(pid = 0, unitName = "") {
     .some((line) => line.trim().endsWith(suffix));
 }
 
+// A unit file is every account's to read, as systemd's own folder's are: the editor reads the installed units' ports
+// (a release's port claim), and a staging login its own unit.
+const UNIT_MODE = 0o644;
+
 // A unit goes to the helper's unit folder (hostSettings.js). systemd reads its own folder itself; a unit in any
 // other folder it knows only through a link in its runtime folder, made with the unit's boot target
 // (`enable --runtime`) or without (`link --runtime`), which lasts until the host restarts (relinkSystemdUnits).
@@ -481,10 +485,6 @@ function installSystemdUnit({
     throw error;
   }
 }
-
-// A unit file is every account's to read, as systemd's own folder's are: the editor reads the installed units' ports
-// (a release's port claim), and a staging login its own unit.
-const UNIT_MODE = 0o644;
 
 // A unit folder other than systemd's own must be root's alone: systemd runs what a unit there says as root.
 function openUnitRoot(unitRoot = "", rootUid = 0) {

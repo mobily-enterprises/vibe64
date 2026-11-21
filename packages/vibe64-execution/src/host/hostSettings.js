@@ -7,7 +7,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { helperSettings } from "./commandEnvironment.js";
-import { HOST_SETTINGS_ROOT } from "./hostAccounts.js";
+import { HOST_SETTINGS_ROOT, PERSON_SHELL } from "./hostAccounts.js";
 
 const ACCOUNT_DATABASES = Object.freeze(["files", "extrausers"]);
 // systemd's folder for the system's own units, and sudo's for added rules.
@@ -21,8 +21,6 @@ const COMMAND_PATH_PATTERN = /^(?:\/[A-Za-z0-9._+-]+)+$/u;
 // The variable a host's runtime pack tools find their packs by: the wrappers its PATH names first (policy-bin's npm,
 // npx and the rest) run the pack's own program below it.
 const RUNTIME_PACK_ROOT_ENV = "VIBE64_RUNTIME_PACK_ROOT";
-// A person's login shell where the host's settings name none.
-const PERSON_SHELL = "/bin/bash";
 
 /**
  * The account database the helper adds accounts and group memberships to: the system's own files, or the extra users

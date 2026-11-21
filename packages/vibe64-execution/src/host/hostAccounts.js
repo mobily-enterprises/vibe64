@@ -156,8 +156,10 @@ function accountDatabaseOptions(database = "files") {
   return database === "extrausers" ? ["--extrausers"] : [];
 }
 
-// The folder a person's home is made in.
+// The folder a person's home is made in, and a person's login shell where the host's helper settings name none
+// (helperPersonShell, hostSettings.js).
 const PEOPLE_HOME_ROOT = "/home";
+const PERSON_SHELL = "/bin/bash";
 
 // A person made here (add-person, personRegistry.js) has no password: Vibe64 signs people in itself, never with one
 // of the host's. The account goes to the account database the host's helper settings name, numbered as the host
@@ -170,7 +172,7 @@ function createPerson(username = "", {
   numberOptions = [],
   resolveUser = resolveOsUser,
   run = runRootCommand,
-  shell = "/bin/bash"
+  shell = PERSON_SHELL
 } = {}) {
   const home = path.join(homeRoot, username);
   run("useradd", [...accountDatabaseOptions(database), ...numberOptions, "--user-group", "--no-create-home",
@@ -304,6 +306,7 @@ export {
   MEMBERSHIP_DIRECTORY,
   MEMBERSHIP_LIMIT_BYTES,
   osGroupNames,
+  PERSON_SHELL,
   resolveOsUser,
   resolveOwnerUser,
   runRootCommand,

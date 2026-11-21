@@ -65,12 +65,13 @@ const KEEP_TOGETHER_LINE = /^- `([^`\r\n]*)` keeps every `([^`\r\n]*)` row by `(
 const CONTACT_KINDS = Object.freeze(["email", "phone"]);
 const NOTHING = "- Nothing.";
 
+const MODE_FORMS = Object.freeze(Object.keys(STAGING_DATA_MODES).map((phrase) => `- Mode: ${phrase}`));
 const SOURCE_FORM = "- Source: dump written by command with `runtime` in `workdir`: `command` `argument`... `{dump}`";
 const UNLISTED_FORM = "- Unlisted tables: all up to `n` rows";
 const STAGING_DATA_ENTRY_FORMS = Object.freeze({
   section: Object.freeze([
     "- Database: `resource`",
-    ...Object.keys(STAGING_DATA_MODES).map((phrase) => `- Mode: ${phrase}`),
+    ...MODE_FORMS,
     SOURCE_FORM,
     UNLISTED_FORM
   ]),
@@ -323,7 +324,7 @@ function checkParts(read, phrase, needs, reason) {
 
 function checkMode(read, top) {
   if (!read.at.database) read.fail("Staging data needs `- Database: `resource``, naming the database resource of genesis/stack.md's ## Resources whose Staging data it declares.", top);
-  if (!read.at.mode) read.fail(`Staging data needs a Mode. Use one of: ${STAGING_DATA_ENTRY_FORMS.section.filter((form) => form.startsWith("- Mode: ")).join("; ")}.`, top);
+  if (!read.at.mode) read.fail(`Staging data needs a Mode. Use one of: ${MODE_FORMS.join("; ")}.`, top);
   const phrase = MODE_PHRASES[read.model.mode];
   const needs = MODE_NEEDS[read.model.mode];
   const reason = WITHOUT_DUMP[read.model.mode] || "";

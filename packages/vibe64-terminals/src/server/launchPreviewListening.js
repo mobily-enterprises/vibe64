@@ -32,9 +32,9 @@ const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-
 // O_PATH|O_NOFOLLOW|O_DIRECTORY, so the address is /proc/self/fd/<n>/<name>, whose length is the socket name's, and a
 // link in the folder's place is refused (ENOTDIR). Elsewhere Preview sockets live in short folders
 // (fallbackPreviewProxySocketDir) and are named by path.
+const OPENS_THROUGH_HANDLES = process.platform === "linux";
 // Linux's O_PATH, which node:fs does not name: a handle on a folder or a socket that reads nothing.
 const O_PATH = 0o10000000;
-const OPENS_THROUGH_HANDLES = process.platform === "linux";
 
 /**
  * Listens on the first free loopback port of the configured Preview range.
@@ -264,7 +264,7 @@ function connectPreviewSocket(socketPath = "") {
   return socket;
 }
 
-function tryListenOnPreviewSocket(server, socketPath = "") {
+function tryListenOnPreviewSocket(server, address = "") {
   return new Promise((resolve, reject) => {
     const onError = (error) => {
       server.off("listening", onListening);
@@ -280,7 +280,7 @@ function tryListenOnPreviewSocket(server, socketPath = "") {
     }
     server.once("error", onError);
     server.once("listening", onListening);
-    server.listen(socketPath);
+    server.listen(address);
   });
 }
 

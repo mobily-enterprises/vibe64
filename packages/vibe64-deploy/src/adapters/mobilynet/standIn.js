@@ -135,6 +135,8 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
   const log = [];
 
   const failure = (status, code, message, details = null) => ({ status, body: { error: { code, message, details, requestId: nextId("req") } } });
+  /** mobilynet's `422 validation_failed`, `Check <fields>.` with the field errors. @param {Record<string, string>} fieldErrors */
+  const invalid = (fieldErrors) => failure(422, "validation_failed", `Check ${Object.keys(fieldErrors).join(", ")}.`, { fieldErrors });
   const answer = (status, body) => ({ status, body });
   const month = () => at().slice(0, 7);
 
@@ -261,7 +263,6 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     const view = ({ id, name, holder, since, expiresAt }) => ({ id, name, holder, since, expiresAt });
     const until = (seconds) => new Date(now().getTime() + seconds * 1000).toISOString();
     const secondsWrong = (seconds) => !Number.isInteger(seconds) || seconds < 1 || seconds > LEASE_MAX_SECONDS;
-    const invalid = (fieldErrors) => failure(422, "validation_failed", `Check ${Object.keys(fieldErrors).join(", ")}.`, { fieldErrors });
     if (caller.projectId === null) return invalid({ key: "A lease is taken with a project's key." });
     if (path === "/v1/leases" && method === "POST") {
       const errors = {};
@@ -313,7 +314,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     const lacking = missingScope(method, path, body, caller.scopes);
     if (lacking) return world.scopeRefusal(caller, lacking);
     const previous = previousTagNames(body, params);
-    if (previous) return failure(422, "validation_failed", `Check ${Object.keys(previous).join(", ")}.`, { fieldErrors: previous });
+    if (previous) return invalid(previous);
     if (autoAdvance) advance();
     const request = { method, path, params, body, idempotencyKey, contentSha256, caller };
     const answered = network.request(request) ?? services.request(request) ?? hosted.request(request);

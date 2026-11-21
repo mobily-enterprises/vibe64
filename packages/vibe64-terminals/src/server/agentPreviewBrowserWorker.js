@@ -646,7 +646,7 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
         };
       }
       failure = startFailure;
-      await delay(failure ? 0 : 100);
+      if (!failure) await delay(100);
     }
     await rm(`${descriptor.metadataPath}.failed`, { force: true });
     const drained = await stopRegisteredBrowserWorker(descriptor, {
