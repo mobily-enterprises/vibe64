@@ -27,8 +27,8 @@ const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:--p[0-9]{1,5})?\.sock$/u;
 
 // A Preview socket is listened on and connected to through its folder's handle, never by its path: a socket address
-// holds 107 bytes, and a path such as /run/vibe64-<workspace>/vibe64/apps/v64preview-<hash>--<workspace>.sock names
-// the workspace twice and passes that from a 25-character workspace name. On Linux the folder is opened
+// holds 107 bytes, and a Preview socket's full path can pass that: a deep socket folder and a long workspace name,
+// which the socket's name (v64preview-<hash>--<workspace>.sock) repeats, are enough. On Linux the folder is opened
 // O_PATH|O_NOFOLLOW|O_DIRECTORY, so the address is /proc/self/fd/<n>/<name>, whose length is the socket name's, and a
 // link in the folder's place is refused (ENOTDIR). Elsewhere Preview sockets live in short folders
 // (fallbackPreviewProxySocketDir) and are named by path.

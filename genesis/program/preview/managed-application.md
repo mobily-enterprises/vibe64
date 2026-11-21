@@ -550,8 +550,8 @@ ingress's `X-Forwarded-For` is kept. That socket lives in
 `VIBE64_PREVIEW_PROXY_SOCKET_DIR`, else `$XDG_RUNTIME_DIR/vibe64/apps`, else a
 private per-user `/tmp/vibe64-<uid>/apps`: never under TMPDIR, which may be
 longer than a socket path's 107 bytes allow. The socket's full path may itself
-pass those 107 bytes: `/run/vibe64-<workspace>/vibe64/apps/v64preview-<hash>--<workspace>.sock`
-names its workspace twice and does so from a 25-character workspace name. So on
+pass those 107 bytes: a deep socket folder and a long workspace name, which the
+socket's name `v64preview-<hash>--<workspace>.sock` repeats, are enough. So on
 Linux it is never listened on or connected to by that path. The listener opens
 the socket's folder `O_PATH|O_NOFOLLOW|O_DIRECTORY`, binds the socket at
 `/proc/self/fd/<n>/<name>`, and keeps that handle until the server has closed,

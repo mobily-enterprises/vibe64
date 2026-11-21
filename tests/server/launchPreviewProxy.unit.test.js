@@ -647,9 +647,9 @@ test("launch preview proxy places its public socket under the env's XDG runtime 
   });
 });
 
-// A hosted workspace's Preview sockets are in /run/vibe64-<workspace>/vibe64/apps, and a workspace name there may
-// take 27 characters: such a socket's path names the workspace twice and passes the 107 bytes a socket address holds.
-// Each test's root mirrors that folder under its own folder in /tmp, which makes the path longer still.
+// A Preview socket's full path can pass the 107 bytes a socket address holds: a deep socket folder and a long
+// workspace name, which the socket's name repeats, are enough. Each test gives a 27-character workspace a runtime
+// folder deep under its own folder in /tmp.
 const LONG_WORKSPACE = "longworkspacename0123456789";
 const LONG_WORKSPACE_ORIGIN = `https://v64preview-feedface1234.${LONG_WORKSPACE}.users.example.test`;
 const PREVIEW_SOCKET_HANDLES_SKIP = process.platform === "linux"
@@ -659,12 +659,10 @@ const PREVIEW_SOCKET_HANDLES_SKIP = process.platform === "linux"
 async function longWorkspacePreviewSockets(t) {
   const root = await mkdtemp(path.join("/tmp", "v64-preview-long-"));
   t.after(() => rm(root, { force: true, recursive: true }));
-  const env = { XDG_RUNTIME_DIR: path.join(root, "run", `vibe64-${LONG_WORKSPACE}`) };
+  const env = { XDG_RUNTIME_DIR: path.join(root, "a-deep-runtime-folder", LONG_WORKSPACE) };
   const socketPath = previewPublicSocketPath(LONG_WORKSPACE_ORIGIN, env);
-  const hostedPath = path.join("/run", `vibe64-${LONG_WORKSPACE}`, "vibe64", "apps", path.basename(socketPath));
   assert.equal(LONG_WORKSPACE.length, 27);
-  assert.ok(Buffer.byteLength(hostedPath) > 107, hostedPath);
-  assert.ok(Buffer.byteLength(socketPath) > Buffer.byteLength(hostedPath), socketPath);
+  assert.ok(Buffer.byteLength(socketPath) > 107, socketPath);
   return { env, root, socketPath };
 }
 
