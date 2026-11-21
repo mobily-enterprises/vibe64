@@ -1,7 +1,7 @@
 import vm from "node:vm";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { chmod, lstat, mkdir, mkdtemp, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, rm, rmdir, stat, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { request as httpRequest } from "node:http";
 import { connect as netConnect } from "node:net";
@@ -32,6 +32,7 @@ import {
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import { PREVIEW_IDENTITY_SELECTOR_EMAIL } from "../../packages/vibe64-core/src/shared/previewIdentity.js";
 import {
+  connectPreviewSocket,
   createLaunchPreviewProxyRegistry,
   previewPublicSocketPath
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
@@ -644,6 +645,143 @@ test("launch preview proxy places its public socket under the env's XDG runtime 
       });
     }
   });
+});
+
+// A hosted workspace's Preview sockets are in /run/vibe64-<workspace>/vibe64/apps, and a workspace name there may
+// take 27 characters: such a socket's path names the workspace twice and passes the 107 bytes a socket address holds.
+// Each test's root mirrors that folder under its own folder in /tmp, which makes the path longer still.
+const LONG_WORKSPACE = "longworkspacename0123456789";
+const LONG_WORKSPACE_ORIGIN = `https://v64preview-feedface1234.${LONG_WORKSPACE}.users.example.test`;
+const PREVIEW_SOCKET_HANDLES_SKIP = process.platform === "linux"
+  ? false
+  : "Preview sockets are reached through their folder's handle on Linux only";
+
+async function longWorkspacePreviewSockets(t) {
+  const root = await mkdtemp(path.join("/tmp", "v64-preview-long-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const env = { XDG_RUNTIME_DIR: path.join(root, "run", `vibe64-${LONG_WORKSPACE}`) };
+  const socketPath = previewPublicSocketPath(LONG_WORKSPACE_ORIGIN, env);
+  const hostedPath = path.join("/run", `vibe64-${LONG_WORKSPACE}`, "vibe64", "apps", path.basename(socketPath));
+  assert.equal(LONG_WORKSPACE.length, 27);
+  assert.ok(Buffer.byteLength(hostedPath) > 107, hostedPath);
+  assert.ok(Buffer.byteLength(socketPath) > Buffer.byteLength(hostedPath), socketPath);
+  return { env, root, socketPath };
+}
+
+/** A request to a Preview through connectPreviewSocket, as the editor's ingress makes one. */
+function requestThroughPreviewSocket(socketPath, preview) {
+  const url = new URL(preview.href);
+  return new Promise((resolve, reject) => {
+    const request = httpRequest({
+      createConnection: () => connectPreviewSocket(socketPath),
+      headers: { Host: url.host },
+      path: `${url.pathname}${url.search}`
+    }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        body += chunk;
+      });
+      response.on("end", () => resolve({ body, statusCode: response.statusCode }));
+    });
+    request.once("error", reject);
+    request.end();
+  });
+}
+
+// Another socket of a long workspace's Preview name, in another folder, which a link could aim the Preview's name at.
+async function socketElsewhere(t, root, socketPath) {
+  const elsewhere = path.join(root, "elsewhere");
+  const socket = path.join(elsewhere, path.basename(socketPath));
+  await mkdir(elsewhere);
+  const connections = [];
+  const server = createServer((_request, response) => response.end("elsewhere"));
+  server.on("connection", () => connections.push("connection"));
+  await listenOnUnixSocket(server, socket);
+  t.after(() => closeServer(server));
+  return { connections, folder: elsewhere, socket };
+}
+
+function longWorkspacePreview(registry, target, sessionId) {
+  return registry.ensure({
+    previewPublicOrigin: LONG_WORKSPACE_ORIGIN,
+    sessionId,
+    targetHref: `${target.origin}/home`,
+    terminalSessionId: `terminal-${sessionId}`
+  });
+}
+
+test("a 27-character workspace's Preview listens on its socket, is connected to and answers", {
+  skip: PREVIEW_SOCKET_HANDLES_SKIP
+}, async (t) => {
+  const { env, socketPath } = await longWorkspacePreviewSockets(t);
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry({ env });
+    try {
+      const preview = await longWorkspacePreview(registry, target, "session-long-workspace");
+      assert.equal(new URL(preview.href).origin, LONG_WORKSPACE_ORIGIN);
+      const socket = await lstat(socketPath);
+      assert.equal(socket.isSocket(), true);
+      assert.equal(socket.mode & 0o777, 0o600);
+      const response = await requestThroughPreviewSocket(socketPath, preview);
+      assert.equal(response.statusCode, 200);
+      assert.match(response.body, /Target home/u);
+      // Still published, so the same Preview is reused.
+      assert.equal((await longWorkspacePreview(registry, target, "session-long-workspace")).href, preview.href);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+  await assert.rejects(lstat(socketPath), { code: "ENOENT" });
+});
+
+test("a link swapped in for a running Preview's socket or its folder is refused, never followed", {
+  skip: PREVIEW_SOCKET_HANDLES_SKIP
+}, async (t) => {
+  const { env, root, socketPath } = await longWorkspacePreviewSockets(t);
+  const elsewhere = await socketElsewhere(t, root, socketPath);
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry({ env });
+    try {
+      const preview = await longWorkspacePreview(registry, target, "session-swapped-link");
+      assert.equal((await requestThroughPreviewSocket(socketPath, preview)).statusCode, 200);
+      // A link swapped in for the socket.
+      await rm(socketPath);
+      await symlink(elsewhere.socket, socketPath);
+      await assert.rejects(requestThroughPreviewSocket(socketPath, preview), { code: "ENOTSOCK" });
+      // A link swapped in for the socket's folder.
+      await rm(path.dirname(socketPath), { force: true, recursive: true });
+      await symlink(elsewhere.folder, path.dirname(socketPath));
+      await assert.rejects(requestThroughPreviewSocket(socketPath, preview), { code: "ENOTDIR" });
+    } finally {
+      await registry.closeAll();
+    }
+  });
+  // Closing the Preview removed nothing through the folder's link either.
+  assert.equal((await lstat(elsewhere.socket)).isSocket(), true);
+  assert.deepEqual(elsewhere.connections, []);
+});
+
+test("a link left at a Preview's socket name is no live Preview: the Preview listens in its place", {
+  skip: PREVIEW_SOCKET_HANDLES_SKIP
+}, async (t) => {
+  const { env, root, socketPath } = await longWorkspacePreviewSockets(t);
+  const elsewhere = await socketElsewhere(t, root, socketPath);
+  await mkdir(path.dirname(socketPath), { mode: 0o700, recursive: true });
+  await symlink(elsewhere.socket, socketPath);
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry({ env });
+    try {
+      const preview = await longWorkspacePreview(registry, target, "session-left-link");
+      assert.equal((await lstat(socketPath)).isSocket(), true);
+      const response = await requestThroughPreviewSocket(socketPath, preview);
+      assert.equal(response.statusCode, 200);
+      assert.match(response.body, /Target home/u);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+  assert.deepEqual(elsewhere.connections, []);
 });
 
 test("launch preview public socket path isolates localhost HTTP origins by port", async () => {

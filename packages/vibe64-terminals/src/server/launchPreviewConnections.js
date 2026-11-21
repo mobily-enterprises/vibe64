@@ -2,7 +2,7 @@
 
 import { vibe64SessionDebugError } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { previewProxyDebugLog } from "./launchPreviewDebugLog.js";
-import { unlinkIfExists } from "./launchPreviewListening.js";
+import { previewSocketAddress, releasePreviewSocketFolder, unlinkIfExists } from "./launchPreviewListening.js";
 
 const DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -160,8 +160,17 @@ async function closePreviewServer({
     server.closeAllConnections();
     tracker.destroyAll();
   });
-  if (listen.socketPath) {
-    await unlinkIfExists(listen.socketPath);
+  // Node unlinked the socket's address, /proc/self/fd/<folder>/<name>, as the server closed. Its name is removed
+  // again through that folder's handle, never a link in the folder's place, and the handle is released only now, and
+  // once: a second close must not close a descriptor whose number has since been given to another file.
+  const { socketFolder = null } = listen;
+  listen.socketFolder = null;
+  try {
+    if (listen.socketPath) {
+      await unlinkIfExists(previewSocketAddress(socketFolder, listen.socketPath));
+    }
+  } finally {
+    releasePreviewSocketFolder(socketFolder);
   }
 }
 

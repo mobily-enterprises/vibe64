@@ -20,6 +20,7 @@ import {
   requestPreviewOrigin
 } from "./launchPreviewHeaders.js";
 import {
+  connectPreviewSocket,
   listenOnPreviewPort,
   listenOnPreviewSocket,
   normalizePreviewPublicOrigin,
@@ -699,6 +700,7 @@ function proxyDescriptor(proxy, targetUrl) {
 }
 
 export {
+  connectPreviewSocket,
   createLaunchPreviewProxyRegistry,
   normalizePreviewEditorOrigin,
   previewPublicSocketPath

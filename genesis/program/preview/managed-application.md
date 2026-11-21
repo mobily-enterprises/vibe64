@@ -549,7 +549,21 @@ private Unix-socket listener, which only the host's ingress reaches, the
 ingress's `X-Forwarded-For` is kept. That socket lives in
 `VIBE64_PREVIEW_PROXY_SOCKET_DIR`, else `$XDG_RUNTIME_DIR/vibe64/apps`, else a
 private per-user `/tmp/vibe64-<uid>/apps`: never under TMPDIR, which may be
-longer than a socket path's 107 bytes allow. Applications that trust the loopback proxy
+longer than a socket path's 107 bytes allow. The socket's full path may itself
+pass those 107 bytes: `/run/vibe64-<workspace>/vibe64/apps/v64preview-<hash>--<workspace>.sock`
+names its workspace twice and does so from a 25-character workspace name. So on
+Linux it is never listened on or connected to by that path. The listener opens
+the socket's folder `O_PATH|O_NOFOLLOW|O_DIRECTORY`, binds the socket at
+`/proc/self/fd/<n>/<name>`, and keeps that handle until the server has closed,
+since Node unlinks the address it bound at close; closing removes the name
+through the same handle. Connections go through `connectPreviewSocket`, which
+the liveness check before a stale socket is replaced uses and which a host's
+ingress is given to reach a Preview: it opens the folder and then the socket
+`O_PATH|O_NOFOLLOW` and connects by the socket's own handle (`/proc/self/fd/<n>`). A link or file in the socket's
+place is refused (`ENOTSOCK`), as is a link in its folder's place (`ENOTDIR`),
+and is never followed; a link left at the socket's name is no live Preview and
+is replaced by the Preview's socket. Elsewhere sockets are named by path, in the
+short folders above. Applications that trust the loopback proxy
 therefore build absolute URLs on the Preview address and retain Secure cookies
 on HTTPS previews. A request carrying the browser's exact own Origin is
 presented on the loopback target instead: Origin becomes the loopback host with

@@ -1,6 +1,7 @@
 // Where a Preview proxy listens: a loopback port or a private socket, and clearing stale sockets first.
 
-import { connect as netConnect } from "node:net";
+import { closeSync, constants as fsConstants, fstatSync, openSync } from "node:fs";
+import { Socket, connect as netConnect } from "node:net";
 import {
   chmod,
   lstat,
@@ -24,6 +25,16 @@ const LOOPBACK_HOST = "127.0.0.1";
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 
 const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:--p[0-9]{1,5})?\.sock$/u;
+
+// A Preview socket is listened on and connected to through its folder's handle, never by its path: a socket address
+// holds 107 bytes, and a path such as /run/vibe64-<workspace>/vibe64/apps/v64preview-<hash>--<workspace>.sock names
+// the workspace twice and passes that from a 25-character workspace name. On Linux the folder is opened
+// O_PATH|O_NOFOLLOW|O_DIRECTORY, so the address is /proc/self/fd/<n>/<name>, whose length is the socket name's, and a
+// link in the folder's place is refused (ENOTDIR). Elsewhere Preview sockets live in short folders
+// (fallbackPreviewProxySocketDir) and are named by path.
+// Linux's O_PATH, which node:fs does not name: a handle on a folder or a socket that reads nothing.
+const O_PATH = 0o10000000;
+const OPENS_THROUGH_HANDLES = process.platform === "linux";
 
 /**
  * Listens on the first free loopback port of the configured Preview range.
@@ -138,7 +149,9 @@ async function pruneStalePreviewSockets({
 }
 
 /**
- * Listens on the private socket a public Preview origin names.
+ * Listens on the private socket a public Preview origin names. The listener holds its socket folder's handle, which
+ * closePreviewServer releases once the server has closed: the socket is bound at /proc/self/fd/<n>/<name>, and Node
+ * unlinks the address it bound when the server closes, so <n> must still name that folder then.
  * @param {import("node:http").Server} server
  * @param {{ env: RuntimeEnv, publicOrigin: string }} options
  */
@@ -149,33 +162,44 @@ async function listenOnPreviewSocket(server, options) {
   } = options;
   const socketPath = previewPublicSocketPath(publicOrigin, env);
   await preparePreviewSocketDirectory(env);
-  const listened = await tryListenOnPreviewSocket(server, socketPath);
-  if (!listened) {
-    const hasLiveListener = await previewSocketHasLiveListener(socketPath);
-    if (hasLiveListener) {
-      const error = new Error(`Launch preview proxy socket is already in use by a live listener: ${socketPath}`);
-      error.code = "EADDRINUSE";
-      error.address = socketPath;
-      throw error;
+  const socketFolder = openPreviewSocketFolder(socketPath);
+  const address = previewSocketAddress(socketFolder, socketPath);
+  try {
+    const listened = await tryListenOnPreviewSocket(server, address);
+    if (!listened) {
+      const hasLiveListener = await previewSocketHasLiveListener(socketPath);
+      if (hasLiveListener) {
+        const error = new Error(`Launch preview proxy socket is already in use by a live listener: ${socketPath}`);
+        error.code = "EADDRINUSE";
+        error.address = socketPath;
+        throw error;
+      }
+      await unlinkIfExists(address);
+      await listenOnPreviewSocketAfterStaleCleanup(server, address, socketPath);
     }
-    await unlinkIfExists(socketPath);
-    await listenOnPreviewSocketAfterStaleCleanup(server, socketPath);
+    await chmod(address, 0o600);
+    const socket = await lstat(address);
+    return {
+      kind: "socket",
+      origin: publicOrigin,
+      port: "",
+      publicHost: new URL(publicOrigin).host,
+      socketDevice: socket.dev,
+      socketFolder,
+      socketInode: socket.ino,
+      socketPath
+    };
+  } catch (error) {
+    if (server.listening) {
+      await new Promise((resolve) => server.close(() => resolve()));
+    }
+    releasePreviewSocketFolder(socketFolder);
+    throw error;
   }
-  await chmod(socketPath, 0o600);
-  const socket = await lstat(socketPath);
-  return {
-    kind: "socket",
-    origin: publicOrigin,
-    port: "",
-    publicHost: new URL(publicOrigin).host,
-    socketDevice: socket.dev,
-    socketInode: socket.ino,
-    socketPath
-  };
 }
 
-async function listenOnPreviewSocketAfterStaleCleanup(server, socketPath = "") {
-  const listened = await tryListenOnPreviewSocket(server, socketPath);
+async function listenOnPreviewSocketAfterStaleCleanup(server, address = "", socketPath = "") {
+  const listened = await tryListenOnPreviewSocket(server, address);
   if (listened) {
     return;
   }
@@ -183,6 +207,61 @@ async function listenOnPreviewSocketAfterStaleCleanup(server, socketPath = "") {
   error.code = "EADDRINUSE";
   error.address = socketPath;
   throw error;
+}
+
+/** The folder handle a Preview socket is reached through, or null where sockets are named by path. */
+function openPreviewSocketFolder(socketPath = "") {
+  return OPENS_THROUGH_HANDLES
+    ? openSync(path.dirname(socketPath), O_PATH | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW)
+    : null;
+}
+
+/** @param {number | null | undefined} socketFolder */
+function releasePreviewSocketFolder(socketFolder) {
+  if (socketFolder !== null && socketFolder !== undefined) {
+    closeSync(socketFolder);
+  }
+}
+
+/**
+ * @param {number | null} socketFolder
+ * @param {string} socketPath
+ */
+function previewSocketAddress(socketFolder, socketPath = "") {
+  return socketFolder === null ? socketPath : `/proc/self/fd/${socketFolder}/${path.basename(socketPath)}`;
+}
+
+/**
+ * A connection to the Preview socket at `socketPath` (previewPublicSocketPath), however long that path is, and
+ * through no link: on Linux its folder and then the socket are each opened O_PATH|O_NOFOLLOW, and the socket is
+ * connected by its own handle (/proc/self/fd/<n>). A link or a file in the socket's place is refused (ENOTSOCK), and
+ * so is a link in its folder's place (ENOTDIR).
+ * @param {string} socketPath
+ * @returns {import("node:net").Socket}
+ */
+function connectPreviewSocket(socketPath = "") {
+  if (!OPENS_THROUGH_HANDLES) {
+    return netConnect(socketPath);
+  }
+  const handles = [];
+  const release = () => {
+    for (const handle of handles.splice(0)) closeSync(handle);
+  };
+  try {
+    handles.push(openPreviewSocketFolder(socketPath));
+    handles.push(openSync(previewSocketAddress(handles[0], socketPath), O_PATH | fsConstants.O_NOFOLLOW));
+    if (!fstatSync(handles[1]).isSocket()) {
+      throw Object.assign(new Error(`${socketPath} is not a Preview socket.`), { code: "ENOTSOCK" });
+    }
+  } catch (error) {
+    release();
+    const refused = new Socket();
+    process.nextTick(() => refused.destroy(error));
+    return refused;
+  }
+  const socket = netConnect({ path: `/proc/self/fd/${handles[1]}` });
+  for (const event of ["connect", "error", "close"]) socket.once(event, release);
+  return socket;
 }
 
 function tryListenOnPreviewSocket(server, socketPath = "") {
@@ -207,19 +286,19 @@ function tryListenOnPreviewSocket(server, socketPath = "") {
 
 function previewSocketHasLiveListener(socketPath = "") {
   return new Promise((resolve) => {
-    const socket = netConnect(socketPath);
+    const socket = connectPreviewSocket(socketPath);
     let settled = false;
+    // The socket keeps its own listeners, which release the handles it was opened through when it closes.
     const finish = (value) => {
       if (settled) {
         return;
       }
       settled = true;
-      socket.removeAllListeners();
       socket.destroy();
       resolve(value);
     };
     socket.once("connect", () => finish(true));
-    socket.once("error", (error) => {
+    socket.on("error", (error) => {
       if (["ECONNREFUSED", "ENOENT", "ENOTSOCK"].includes(String(error?.code || ""))) {
         finish(false);
         return;
@@ -341,11 +420,14 @@ function previewProxyPublicHost(listenHost, env) {
 const __testables = Object.freeze({ assertPrivateFallbackSocketParent });
 
 export {
+  connectPreviewSocket,
   listenOnPreviewPort,
   listenOnPreviewSocket,
   normalizePreviewPublicOrigin,
   previewPublicSocketPath,
+  previewSocketAddress,
   pruneStalePreviewSockets,
+  releasePreviewSocketFolder,
   unlinkIfExists,
   __testables
 };
