@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { connectedSyncRunning } from "@local/vibe64-project/server/connectedSync";
 import { executionCleanupRequired } from "@local/vibe64-execution/server";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import {
@@ -18,6 +19,7 @@ import {
   inProjectContext,
   operationRedactionSecrets,
   safeSetupLabel,
+  setupStep,
   stepRecordValue,
   stepStatus
 } from "./workspaceSetupRules.js";
@@ -65,14 +67,86 @@ function createWorkspaceSetupExecution({
   runnerState,
   startWorkflow
 }) {
-  async function connectedSourceRoots(setup, runtime, session) {
-    if (!setup.connectedDevelopment) return [];
+  /** The session's prepared connections, checked against the recipe's selection. */
+  async function connectedInputs(setup, runtime, session) {
+    if (!setup.connectedDevelopment) return { repositories: [], sourceRoots: [] };
     const inputs = await connectedPreparation({ mode: "inspect", runtime, session });
     if (inputs?.ok === false) throw Object.assign(new Error(inputs.error), { code: inputs.code });
     if (inputs?.inputsHash !== setup.connectedDevelopment.inputsHash || !Array.isArray(inputs.sourceRoots)) {
       throw new Error("Connected source selection changed. Prepare the workspace again before running commands.");
     }
-    return inputs.sourceRoots;
+    return inputs;
+  }
+
+  async function connectedSourceRoots(setup, runtime, session) {
+    return (await connectedInputs(setup, runtime, session)).sourceRoots;
+  }
+
+  /**
+   * Keeps the session's swapped connected packages in step with its connected copies while it runs
+   * (once per session; a later call while it runs does nothing). What a sync needs to run (npm
+   * listing a package's files, or installing a new dependency) runs with the recipe's runtimes.
+   */
+  /**
+   * A managed command in the session's source and connected copies with the recipe's runtimes, as
+   * Vibe64's own connected work outside a preparation runs it (a sync, a Save's bumps and steps).
+   */
+  async function connectedCommand({ runtime, session, setup, runtimes, sourcePath, label }) {
+    const { sourceRoots } = await connectedInputs(setup, runtime, session);
+    const baseEnv = await runtime.resolvePromptEnvironment();
+    const projectSlug = currentProjectRequestContext()?.slug;
+    return ({ command, args, cwd, timeout, env }) => runCommand({
+      actor: "app",
+      allowedRoots: [sourcePath, ...sourceRoots],
+      args,
+      baseEnv: { ...baseEnv, ...env },
+      command,
+      cwd,
+      envPolicy: "project",
+      execution: { kind: "job", label, ownerId: session.sessionId, sessionId: session.sessionId, projectSlug },
+      mode: "capture",
+      purpose: "source",
+      runtimes,
+      timeout: timeout || WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
+    });
+  }
+
+  async function ensureConnectedSync({ runtime, session, setup, runtimes, sourcePath, restart = false }) {
+    if (!setup?.connectedDevelopment?.adapters || (!restart && connectedSyncRunning(session.sessionId))) return;
+    await project.syncConnectedRepositories({
+      session,
+      runCommand: await connectedCommand({ runtime, session, setup, runtimes, sourcePath, label: "Syncing connected packages" })
+    });
+  }
+
+  /**
+   * What Save runs for the session's connections, between saving its connected copies and its own
+   * commit: whether it has typed dependencies (whose published versions Save adopts), the Stack's
+   * Save entries, and the managed command both run with.
+   */
+  async function connectedSaveCommand({ runtime, session, setup, runtimes, sourcePath }) {
+    return {
+      dependencies: Boolean(setup.connectedDevelopment.adapters),
+      saveSteps: setup.connectedDevelopment.saveSteps.map((step, index) => setupStep(step, index, sourcePath)),
+      runCommand: await connectedCommand({ runtime, session, setup, runtimes, sourcePath, label: "Saving connected repositories" })
+    };
+  }
+
+  /**
+   * Whether every typed connected dependency of a ready recipe is in effect in the session's trees
+   * now; the first that is not, with why.
+   */
+  async function connectedInEffect(setup, session) {
+    if (!setup?.connectedDevelopment?.adapters) return { inEffect: true, reason: "" };
+    try {
+      const proofs = await project.inspectConnectedAdapters({ session });
+      const missing = proofs.find(proof => !proof.inEffect);
+      return missing
+        ? { inEffect: false, reason: `Connected ${missing.name} is not in effect: ${missing.reason}` }
+        : { inEffect: true, reason: "" };
+    } catch (error) {
+      return { inEffect: false, reason: toText(error?.message) || "Vibe64 could not check the connected repositories." };
+    }
   }
 
   /**
@@ -171,7 +245,8 @@ function createWorkspaceSetupExecution({
         throw new Error("Workspace setup changed while waiting for resources. Retry preparation to run the current steps.");
       }
       for (const [index, step] of recipe.steps.entries()) {
-        const connectedRoots = await connectedSourceRoots(admittedSetup, runtime, session);
+        const connected = await connectedInputs(admittedSetup, runtime, session);
+        const connectedRoots = connected.sourceRoots;
         const currentLabel = safeSetupLabel(step.label, redactionSecrets);
         context.currentLabel = currentLabel;
         if (signal?.aborted) {
@@ -205,13 +280,11 @@ function createWorkspaceSetupExecution({
           status: "running",
           transcript: context.transcript
         }, context.renewal);
-        const result = await runCommand({
+        const baseEnv = await runtime.resolvePromptEnvironment();
+        const command = (request) => runCommand({
           actor: "app",
           allowedRoots: [sourcePath, ...connectedRoots],
-          args: step.argv.slice(1),
-          baseEnv: await runtime.resolvePromptEnvironment(),
-          command: step.argv[0],
-          cwd: step.cwd,
+          baseEnv,
           envPolicy: "project",
           execution: {
             kind: "job",
@@ -228,8 +301,26 @@ function createWorkspaceSetupExecution({
           purpose: "source",
           runtimes: recipe.runtimes,
           ...(signal ? { signal } : {}),
-          timeout: WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
+          timeout: WORKSPACE_SETUP_COMMAND_TIMEOUT_MS,
+          ...request
         });
+        // A typed connected dependency's step is Vibe64's own: its adapter runs the commands it needs.
+        const result = step.connectedAdapter
+          ? await project.runConnectedAdapterStep({
+            action: step.connectedAdapter.action,
+            repository: step.connectedAdapter.repository,
+            repositories: connected.repositories,
+            sessionSourceRoot: sourcePath,
+            // An adapter's command may add environment of its own (COMPOSER, BUNDLE_GEMFILE).
+            runCommand: ({ command: executable, args, cwd, timeout, env }) => command({
+              command: executable,
+              args,
+              cwd,
+              ...(timeout ? { timeout } : {}),
+              ...(env ? { baseEnv: { ...baseEnv, ...env } } : {})
+            })
+          })
+          : await command({ args: step.argv.slice(1), command: step.argv[0], cwd: step.cwd });
         context.transcript = appendWorkspaceSetupTranscript(
           context.transcript,
           capturedCommandOutput(result, redactionSecrets)
@@ -262,6 +353,14 @@ function createWorkspaceSetupExecution({
       outcome = "succeeded";
       // What this run prepared, as it leaves it: what its own steps changed (a rewritten lockfile) is prepared too.
       const preparedTree = await currentTree({ runtime, session, setup: admittedSetup, sourcePath });
+      // The swaps this run made stay in step with the connected copies from now on.
+      await ensureConnectedSync({ runtime, session, setup: admittedSetup, runtimes: recipe.runtimes, sourcePath, restart: true })
+        .catch((error) => {
+          context.transcript = appendWorkspaceSetupTranscript(
+            context.transcript,
+            `[Connected] Saved changes will reach the swapped packages at the next preparation, not at once: ${toText(error?.message)}`
+          );
+        });
       return await persist(runtime, session.sessionId, {
         currentLabel: context.currentLabel,
         diagnostic: "",
@@ -323,7 +422,10 @@ function createWorkspaceSetupExecution({
   }
 
   return Object.freeze({
+    connectedInEffect,
+    connectedSaveCommand,
     connectedSourceRoots,
+    ensureConnectedSync,
     currentTree,
     execute,
     observe

@@ -49,10 +49,13 @@ test("Stack declares a package default independently of command runtimes", () =>
   assert.deepEqual(npm.runtimeRequirements, ["shell"]);
   assert.notEqual(npm.recipeHash, custom.recipeHash);
   assert.equal(vibe64ConnectedDevelopmentInspection({ status: "ready", lines }).defaultPackageType, "");
+  // Vibe64 puts a typed dependency in effect itself: a default alone is a whole declaration.
   const defaultOnly = vibe64ConnectedDevelopmentInspection({ status: "ready", lines: ["- Default package type: `npm`"] });
   assert.equal(defaultOnly.defaultPackageType, "npm");
-  assert.equal(defaultOnly.status, "unconfigured");
-  assert.equal(defaultOnly.recipeHash, "");
+  assert.equal(defaultOnly.status, "ready");
+  assert.equal(defaultOnly.sourcesFile, "");
+  assert.deepEqual(defaultOnly.steps, []);
+  assert.match(defaultOnly.recipeHash, /^sha256:[a-f0-9]{64}$/u);
   assert.throws(() => inspect("nodejs"), { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
   assert.deepEqual(CONNECTED_PACKAGE_TYPE_VALUES,
     ["npm", "composer", "pip", "bundler", "gomod", "cargo", "maven", "gradle", "nuget", "custom"]);
@@ -93,7 +96,7 @@ test("connected development rejects missing proof, conditional success, unsafe p
   const invalid = candidate => assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: candidate }),
     { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
   for (const candidate of [
-    [], lines.slice(1), lines.slice(0, 2), [...lines, lines[0]], [lines[0], lines[2], lines[1]],
+    [], lines.slice(1), lines.slice(1, 2), [...lines, lines[0]], [lines[0], lines[2], lines[1]],
     [...lines, "- Nothing."], [lines[0], "- arbitrary command"],
     [lines[0], lines[2].replace("`shell`:", "`shell` if `proof` exists:")],
     [lines[0], lines[2].replace("`shell`:", "`shell` when `proof` exists:")],
@@ -107,6 +110,16 @@ test("connected development rejects missing proof, conditional success, unsafe p
   assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: [lines[0], "", "- Verify `Bad` with `Shell`: `sh` `check.sh`"] }),
     error => error.code === "VIBE64_CONNECTED_DEVELOPMENT_INVALID"
       && error.details.path === "genesis/stack.md#Connected development" && error.details.line === 3);
+  // Project commands read the Sources file, so a Default package type does not stand in for it.
+  assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: ["- Default package type: `npm`", ...lines.slice(1)] }),
+    error => error.code === "VIBE64_CONNECTED_DEVELOPMENT_INVALID" && /read the Sources file: declare it too/u.test(error.message));
+  // A Sources file alone, or with Prepare entries only, is a declaration: Vibe64 proves typed
+  // dependencies itself, and preparation asks for a Verify entry where a composition needs one.
+  for (const candidate of [lines.slice(0, 1), lines.slice(0, 2)]) {
+    const inspected = vibe64ConnectedDevelopmentInspection({ status: "ready", lines: candidate });
+    assert.equal(inspected.status, "ready");
+    assert.equal(inspected.sourcesFile, ".development/connected-sources.json");
+  }
   assert.equal(vibe64ConnectedDevelopmentInspection({}).status, "unconfigured");
   assert.equal(vibe64ConnectedDevelopmentInspection({ status: "ready", lines: ["- Nothing."] }).status, "unconfigured");
   const blocked = vibe64ConnectedDevelopmentInspection({ status: "blocked", diagnostics: [{ code: "STACK_INVALID" }] });
@@ -153,4 +166,26 @@ test("connected development step errors describe its own grammar, never Workspac
     assert.doesNotMatch(message, /Workspace setup|when\|if/u);
   }
   assert.match(rejection("- Verify `Check` with `shell` if `ready.txt` exists: `sh` `check.sh`"), /must run unconditionally/u);
+});
+
+test("Save entries come after Prepare and Verify, need the Sources file and join the recipe only when declared", () => {
+  const save = "- Save `Record release state` with `nodejs`: `node` `tooling/record-release.mjs` `.development/connected-sources.json`";
+  const inspected = vibe64ConnectedDevelopmentInspection({ status: "ready", lines: [...lines, save] });
+  assert.equal(inspected.status, "ready");
+  assert.deepEqual(inspected.saveSteps, [{ label: "Record release state", argv: ["node", "tooling/record-release.mjs", ".development/connected-sources.json"],
+    runtimeRequirements: ["nodejs"], workdir: "." }]);
+  // Preparation never runs them; Save has their runtimes through the recipe's.
+  assert.equal(inspected.steps.length, 2);
+  assert.deepEqual(inspected.runtimeRequirements, ["nodejs", "shell"]);
+  const without = vibe64ConnectedDevelopmentInspection({ status: "ready", lines });
+  assert.deepEqual(without.saveSteps, []);
+  assert.notEqual(inspected.recipeHash, without.recipeHash);
+  for (const candidate of [
+    [lines[0], save, lines[1]],
+    [lines[0], save, lines[2]],
+    ["- Default package type: `npm`", save],
+    [lines[0], save.replace("`nodejs`:", "`nodejs` if `release` exists:")]
+  ]) {
+    assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: candidate }), { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
+  }
 });

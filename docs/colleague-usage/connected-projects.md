@@ -36,11 +36,12 @@ Each language's Stack proposes its default: Node `npm`, PHP/Laravel
 `composer`, Python `pip`, Ruby `bundler`, Go `gomod`, Rust `cargo`, Java
 `maven`, Kotlin `gradle` and C# `nuget`; C/C++ and shell projects use `custom`.
 A multi-language project's own `Connected development` section chooses one
-default; override other connections individually. A type other than custom is a
-declared label, not an installer: Vibe64 never runs Composer, pip or any other
-package manager because of it. The consuming project's declared Prepare and
-Verify commands read the type from the prepared source map and give the source
-that ecosystem's treatment. Every such type requires at least one Verify command.
+default; override other connections individually. For every type but custom,
+Vibe64 itself makes a Dependency connection take effect: **Prepare workspace**
+puts the session's copy in place of the published package and proves it, with
+no project command. `- Default package type: \`npm\`` alone is a complete
+`Connected development` section; see
+[What Vibe64 does for each type](#what-vibe64-does-for-each-type).
 
 For **custom**, provide **Preparation script (project-relative)**, for example
 `tooling/prepare-native-worker.mjs`. The script lives in the consuming project;
@@ -97,54 +98,145 @@ not prepare any session: configuration success alone does not establish that the
 copies are ready or used by Preview. For how each session copies, updates and
 saves them, see [Work in connected repositories](connected-repositories.md).
 
-Development consumption belongs to the project's Stack declarations. Those
-declarations must identify the connected source, where the task exposes it, how
-the selected toolchain builds/uses it, and how to verify that selection. This
-applies to mixed-language connections too: a Node application can use a connected
-C executable or library. Choose **custom** for that connection's **Package type**. Package type is
+## What Vibe64 does for each type
+
+Vibe64 treats each typed Dependency connection in the session's own source and
+never changes a tracked file: what it generates is kept out of Git, so **Save**
+commits none of it, and anything built from a saved commit, such as a
+deployment, uses the published packages.
+
+- **npm**: every installed copy of the connected package, in the session's
+  `node_modules` and in each connected copy's (nested duplicates included),
+  becomes exactly the files `npm pack` would publish from the session's copy.
+  The copy's own `node_modules` is not used, so the app and the connected
+  package share one instance of each dependency. A dependency the connected
+  copy needs that is missing or of an incompatible version is installed with
+  `npm install --no-save`; when no version satisfies it, preparation stops and
+  names it. `package.json` and lockfiles stay unchanged. Vibe64 adds
+  `node_modules` to the local Git exclude when the project does not ignore it,
+  and refuses a project that tracks `node_modules`. While the session runs, a
+  saved file in the connected copy reaches every installed copy within about a
+  second; adding or removing a file or editing `package.json` puts the
+  connection in effect again. A development server that bundles packages ahead
+  (Vite) keeps what it bundled until it restarts: Vibe64 clears Vite's
+  dependency metadata, so restarting Preview shows client changes. A connected
+  package no tree installs is refused by name, and a package marked `private`
+  is never a candidate. On **Save**, once the registry has published the
+  version the connected copy carries, Vibe64 moves the project's
+  `package.json` and `package-lock.json` to it (`npm install
+  --package-lock-only`, so the swap stays); until then it changes nothing.
+
+- **composer**: Vibe64 writes `composer.connected.json` and
+  `composer.connected.lock` (the tracked manifest with a first `path`
+  repository, symlinked to the session's copy) and runs `composer update` for
+  the connected packages with `COMPOSER` pointing at them; `vendor/<package>`
+  then links to the copy. On **Save** it moves `composer.json` and
+  `composer.lock` with `composer require <package>:<version> --no-install` once
+  the version is published.
+- **pip**: Vibe64 installs the session's copy editable into the project's
+  `.venv` in one resolution with `requirements.connected.txt` (the tracked
+  `requirements.txt` with the connected `==` pins left out). On **Save** it
+  edits the `==` pin once `pip download` finds the version.
+- **bundler**: Vibe64 writes `Gemfile.connected` (the tracked Gemfile with
+  `path:` gems) and its lock, selects it with `bundle config set --local
+  gemfile`, and installs. Launch through `bundle exec`. On **Save** it runs
+  `bundle lock --update <gem>` on the tracked Gemfile once the version is
+  published.
+- **gomod**: Vibe64 writes an untracked `go.work` (`use . <copy>`). On **Save**
+  it runs `GOWORK=off go get <module>@<tag>` for the copy's newest `v*` tag once
+  the module proxy has it.
+- **cargo**: Vibe64 writes an untracked `.cargo/config.toml` patch and a
+  derived lockfile (Cargo 1.97 or later). On **Save** it runs `cargo update -p
+  <crate> --precise <version>` without the patch once the version is published.
+- **nuget**: Vibe64 writes a `Directory.Build.targets` beside each consuming
+  project that turns the connected `PackageReference` into a `ProjectReference`
+  and restores. On **Save** it runs `dotnet add package <id> --version <version>`
+  once the version is published.
+- **maven**: Vibe64 installs each copy into the untracked
+  `.development/maven-connected-repository`, chained in front of your own Maven
+  repository (Maven 3.9.3 or later), and an untracked `.mvn/maven.config`
+  selects it for every `mvn` in the session. On **Save** it changes the
+  dependency's `<version>` (or the one property that holds it) in `pom.xml` once
+  the project's repositories publish the version; a `-SNAPSHOT` never moves.
+- **gradle**: Vibe64 writes an untracked init script,
+  `.development/connected.init.gradle.kts`, that includes each copy as a
+  composite build. Gradle reads it only when a command passes
+  `-I .development/connected.init.gradle.kts`, so the project's Gradle commands
+  in Stack add that flag. On **Save** it changes the dependency's version in the
+  build scripts once the build's repositories publish it, and rewrites
+  `gradle.lockfile` when the build locks.
+
+Every type except npm reads the session's copy in place, so a save takes effect
+at the next build or run; Maven installs a jar, so Vibe64 installs it again on
+save. The derived files stay out of Git, and a tracked file in their place is
+refused.
+
+Staging and Production never use a session's copy: they build from the saved
+commit, so they install the published versions the project's tracked manifests
+and lockfiles name. Vibe64 shows that gap instead of hiding it: the preparation's
+check and **Save** print, for each package, for example `[Connected] Library:
+this session runs the connected library; Staging and Production
+use the published 1.0.0 until 1.1.0 is published, which Save then moves this
+project to.`, and session status lists it under `published`. A Composition
+connection is not a package: **Save** records the commit it saved in
+`vibe64.connections.lock.json`, and the project's build reads that pin.
+
+When a connection is removed from the list, the next preparation gives the
+published package back (npm restores the installed copies; the other types
+remove what they generated).
+
+Use **Custom** for anything else, including mixed-language connections: a Node
+application can use a connected C executable or library. Package type is
 independent of the consuming project's language and of relationship. **Stack
-default** omits `type` in the repository file. The prepared source map records
-the effective type of every entry. A project's commands decide how to treat each
-type; for example, Node treatment requires a package manifest and excludes
-custom entries even if they contain one.
-Custom sources remain available to the project's build and execution commands. For a C program those commands must build it, expose its development
-executable or library to the app, and verify the app uses that build. It need
-not appear in `node_modules`. A cloned repository alone does not establish that
-Preview or tests use its changes.
+default** omits `type` in the repository file, and the prepared source map
+records the effective type of every entry. A custom connection's commands must
+build it, expose its development executable or library to the app, and verify
+the app uses that build; Vibe64 runs them but cannot judge what they produce. A
+cloned repository alone does not establish that Preview or tests use its
+changes.
+
+## Prepare workspace puts connections in effect
+
 Use the existing **Prepare workspace** action (or its **Retry** action after a
 failure). When Stack declares `Connected development`, preparation makes this
-session's missing copies, writes the declared source map pointing at them, runs
-ordinary Workspace setup, then runs the connected Prepare and Verify commands in
-order. Success requires those commands to succeed. If a non-custom
-connection exists without a Verify command, preparation is blocked with
-`vibe64_connected_verification_required` ("Declare a Verify command for the
-connected pip packages."); add a Verify entry to Stack and use **Retry**. The preparation
-identity includes both recipes and this session's copies; changing the list
-requires preparation again. The copies are checked again before each command and
-when checking whether preparation remains current.
+session's missing copies, writes the `Sources file` when Stack names one, runs
+ordinary Workspace setup, then runs in order any project Prepare commands, one
+`Put connected <name> in effect (<type>)` step per typed Dependency, any project
+Verify commands (custom scripts included), and one `Check connected <name> is in
+effect (<type>)` step per typed Dependency. Success requires every step. A failed
+check stops preparation with `Connected <name> is not in effect: <reason>`, and
+Preview waits; Vibe64 never falls back to the published package silently.
+
+A connection that stops being in effect later (for example an ordinary
+`npm install` put the published package back) makes the workspace unprepared:
+the next Preview start or **Prepare workspace** shows `Workspace preparation
+started again. Connected <name> is not in effect: <reason>` and puts it back.
+The session status (`vibe64-helper session status --json`) shows each copy's
+`inEffect` and `reason`.
+
+A Composition connection is assembled by the project itself, so a non-custom
+composition still needs a project Verify command: without one, preparation is
+blocked with `vibe64_connected_verification_required` ("Declare a Verify
+command for the connected npm composition."); add a Verify entry to Stack and
+use **Retry**. Its dependencies installed inside the composed tree are still
+swapped like any other installed copy. Project Prepare and Verify entries and a
+Custom runner read the `Sources file`, so Stack must name one when it declares
+them. The preparation identity includes both recipes and this session's copies;
+changing the list requires preparation again. The copies are checked again
+before each command and when checking whether preparation remains current.
 
 If a command reports that it requires an undeclared runtime, add that runtime
-to the affected command in Stack and prepare again. Vibe64's own Node
-composition checks declare both `nodejs` and `git`: Genesis inspects the
-Git worktree while verifying the composed application. Do not bypass the managed
-runtime restriction by adding host executables to PATH.
+to the affected command in Stack and prepare again. Vibe64's own steps declare
+the runtimes their toolchain needs (npm: `nodejs` and `git`). Do not bypass the
+managed runtime restriction by adding host executables to PATH.
 
-The initial consumption proof covers Node.js packages through `node_modules`:
-two tasks use distinct sources, source edits reach only the intended task, and
-an ordinary release installation retains its published dependency. PHP, Python,
-Ruby, C/C++, C#, Go, Java, Kotlin, Rust and framework-specific consumption still
-need their own declared commands and end-to-end proof; choosing their package
-type only records intent. Installed language runtimes alone
-do not establish connected-source support. A declaration alone does not prove
-that Preview or tests consume the dependency.
-
-`examples/connected-development/` holds a runnable reference proof for every
-package type (npm, composer, pip, bundler, gomod, cargo, maven, gradle, nuget
-and a custom CMake connection). Each one declares its own Prepare and Verify
-commands, leaves tracked files unchanged and shows Verify failing without the
-connection; `examples/connected-development/run-all.sh` runs every proof whose
-toolchain is installed. A proof shows the recipe works; each project still
-declares and verifies its own commands.
+`examples/connected-development/` holds a runnable proof for every package type
+(npm, composer, pip, bundler, gomod, cargo, maven, gradle, nuget and a custom
+CMake connection). Each typed proof runs Vibe64's own adapter through
+`examples/connected-development/vibe64-adapter.mjs`, leaves tracked files
+unchanged and shows the check failing once the connection is undone;
+`examples/connected-development/run-all.sh` runs every proof whose toolchain is
+installed.
 
 The `Sources file` is JSON with schema `vibe64.connected-sources.v2`:
 
@@ -180,3 +272,43 @@ or checked, preparation stops with `vibe64_connected_copy_missing`; see
 [Work in connected repositories](connected-repositories.md). Colleague can
 explain the process and offer supported preparation actions; it must not claim
 successful preparation from a declaration alone.
+
+## Save records what main was saved with
+
+Save covers the copies first; see
+[Save saves the copies first](connected-repositories.md#save-saves-the-copies-first).
+For a **Composition**, Save pins the saved commit in the tracked
+`vibe64.connections.lock.json`, in the same commit as the project's own work:
+
+```json
+{
+  "schema": "vibe64.connections-lock.v1",
+  "repositories": [
+    {
+      "name": "Library",
+      "repository": "https://github.com/example/library",
+      "commit": "<the copy's saved commit>",
+      "tree": "<that commit's tree>"
+    }
+  ]
+}
+```
+
+Have the project's composer, what Staging and Production build with, read the
+pin there: whatever is built from a saved commit then assembles exactly that
+commit of the composition. A session's own copy still takes its place while you
+work, through the Sources file. A
+**Dependency** gets no pin: Staging and Production install the published version
+the project's manifest and lock name, and Save moves them to a newer published
+version when the connected copy declares one (never to an unpublished commit).
+
+For anything else a project must record when it saves, declare **Save** entries
+after the Prepare and Verify entries (they need the `Sources file`):
+
+```markdown
+- Save `Record release state` with `nodejs`: `node` `tooling/record-release.mjs` `.development/connected.json`
+```
+
+They run after the copies are saved and pinned, before the project's own
+commit, which takes what they change; one that fails stops that commit. A Custom
+runner script is not called by Save.

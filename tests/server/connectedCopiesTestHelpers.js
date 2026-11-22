@@ -11,6 +11,8 @@ import {
   serializeSessionConnectedCopies,
   sessionConnectedCopies
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
+import { githubRepositoryFullName, readConnectedProjects } from "../../packages/vibe64-project/src/server/connectedProjects.js";
+import { planCompositionPins, recordCompositionPins } from "../../packages/vibe64-project/src/server/connectionsLock.js";
 import { prepareConnectedCopies } from "../../packages/vibe64-terminals/src/server/sessionConnectedCopies.js";
 import { createServiceSessionWork } from "../../packages/vibe64-terminals/src/server/serviceSessionWork.js";
 import { createServiceSessionWorkInspection } from "../../packages/vibe64-terminals/src/server/serviceSessionWorkInspection.js";
@@ -145,15 +147,22 @@ async function commitInCopy(f, name, file, content) {
  * This session's own repository `example/project`, cloned as its source, and the Save and Update
  * service over it and its copies. Every Git command of the service goes through the fixture's GitHub.
  * `sessionAccess(runtime)` gives the service a real session access (its agent-write lock) in place of
- * one that runs every write at once.
+ * one that runs every write at once. `ownFiles` are on the project's main before the session clones it;
+ * `connectedSaveRunner` and `bumpConnectedDependencies` stand in for the workspace recipe's Save
+ * commands and Project's published-version moves.
  */
 async function sessionService(f, {
+  bumpConnectedDependencies = async () => ({ lines: [], bumped: [] }),
+  connectedSaveRunner = async () => null,
   invalidateWorkspaceSetup = async () => {},
+  ownFiles = {},
   requirePullRequest = false,
   sessionAccess: accessFor = null,
   workspacePreparation = null
 } = {}) {
   const own = await githubRepository(f, "project");
+  // Files the project's main holds before the session starts (its connection list, say).
+  for (const [file, content] of Object.entries(ownFiles)) own.base = await pushPeer(own, file, content);
   await git(f.root, ["clone", own.bare, f.session.sourcePath]);
   await git(f.session.sourcePath, ["checkout", "-B", `vibe64/session/${SESSION_ID}`]);
   Object.assign(f.session.metadata, {
@@ -173,8 +182,14 @@ async function sessionService(f, {
     slug: "project"
   };
   const runtime = { getSessionWithoutSource: async () => f.session, store: f.store };
+  // The connections lock as Project keeps it, over the session source's own connection list.
+  const connections = async () => (await readConnectedProjects(f.session.sourcePath)).repositories
+    .map(connection => ({ ...connection, fullName: githubRepositoryFullName(connection.repository) }));
   const project = {
+    bumpConnectedDependencies,
+    planCompositionPins: async ({ commits }) => planCompositionPins({ sourceRoot: f.session.sourcePath, connections: await connections(), commits }),
     readCurrentProject: async () => projectRecord,
+    recordCompositionPins: async ({ pins }) => recordCompositionPins({ sourceRoot: f.session.sourcePath, connections: await connections(), pins }),
     readRepositoryWorkflow: async () => ({ requirePullRequest }),
     runProjectSourceExclusive: (operation) => operation()
   };
@@ -193,7 +208,7 @@ async function sessionService(f, {
     sessionAgent: {},
     state: { lifecycle: { closing: false }, writesWhileAssistantWorks: createWritesWhileAssistantWorks() },
     workspacePreparation: workspacePreparation || { invalidateWorkspaceSetup, waitForRunningPreparation: async () => false },
-    workspaceSetup: { isRunning: () => false }
+    workspaceSetup: { connectedSaveRunner, isRunning: () => false }
   });
   return {
     destinationReview: { branch: "main", mode: "github", repository: "example/project", sessionId: SESSION_ID },

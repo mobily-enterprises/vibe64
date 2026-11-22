@@ -25,7 +25,7 @@ async function fixture(target, name = "task") {
   const session = { sessionId: name, metadata: { ...sourceMetadata(target, name), connected_copies: JSON.stringify({ library: copy }) } };
   return { root, copyRoot, connection, session,
     input: { session,
-      inspection: { status: "ready", defaultPackageType: "npm", recipeHash: "test-recipe", sourcesFile: ".development/connected.json" } }
+      inspection: { status: "ready", defaultPackageType: "npm", recipeHash: "test-recipe", sourcesFile: ".development/connected.json", saveSteps: [] } }
   };
 }
 
@@ -47,7 +47,7 @@ test("connected source inputs are session-specific, ignored, repeatable and poin
       sourceRoot: first.copyRoot
     }] });
     assert.deepEqual(await materializeConnectedDevelopmentInputs(first.input), {
-      sourcesFile: ".development/connected.json", recipeHash: "test-recipe", status: "inputs-prepared"
+      sourcesFile: ".development/connected.json", recipeHash: "test-recipe", status: "inputs-prepared", lines: []
     });
     assert.equal((await lstat(mapPath, { bigint: true })).ctimeNs, before.ctimeNs);
     assert.equal(Number(before.mode) & 0o777, 0o660);
@@ -172,8 +172,11 @@ test("connected input inspection never creates or repairs a missing or changed s
 test("connected inputs require a declared recipe and this session's own copy; removal from the list keeps the copy's work", async () => {
   await withTemporaryRoot(async target => {
     const { root, copyRoot, input } = await fixture(target);
-    await assert.rejects(materializeConnectedDevelopmentInputs({ ...input, inspection: { status: "unconfigured" } }),
+    await assert.rejects(materializeConnectedDevelopmentInputs({ ...input, inspection: { status: "blocked" } }),
       { code: "vibe64_connected_development_required" });
+    // With no Connected development section, a connection is still prepared when it names its own type.
+    await assert.rejects(materializeConnectedDevelopmentInputs({ ...input, inspection: { status: "unconfigured" } }),
+      { code: "vibe64_connected_package_type_required" });
     const uncopied = { ...input, session: { ...input.session, metadata: { ...input.session.metadata, connected_copies: "" } } };
     await assert.rejects(materializeConnectedDevelopmentInputs(uncopied), { code: "vibe64_connected_copy_missing" });
     await materializeConnectedDevelopmentInputs(input);
@@ -205,8 +208,12 @@ test("workspace readiness includes both recipes and the exact session source sel
     await materializeConnectedDevelopmentInputs(second.input);
     const ready = await inspect(first);
     assert.equal(ready.status, "ready");
-    assert.deepEqual(ready.steps.map(step => step.label), ["Ordinary setup", "Verify connected source"]);
-    assert.deepEqual(ready.runtimeRequirements, ["nodejs"]);
+    // Vibe64's own steps for the typed dependency come after the project's: put in effect after its
+    // Prepare steps (an install would undo it), proved after its Verify steps.
+    assert.deepEqual(ready.steps.map(step => step.label), ["Ordinary setup", "Put connected Library in effect (npm)",
+      "Verify connected source", "Check connected Library is in effect (npm)"]);
+    assert.deepEqual(ready.runtimeRequirements, ["git", "nodejs"]);
+    assert.equal(ready.connectedDevelopment.adapters, true);
     assert.notEqual(ready.recipeHash, setup.recipeHash);
     assert.notEqual(ready.recipeHash, (await inspect(second)).recipeHash, "another task's successful preparation is not interchangeable");
     assert.notEqual(ready.recipeHash, (await inspect(first, { recipeHash: "changed-treatment" })).recipeHash);
@@ -223,28 +230,44 @@ test("workspace readiness includes both recipes and the exact session source sel
   });
 });
 
-test("every non-custom package type is recorded in the map and requires the project's own Verify command", async () => {
+test("every non-custom dependency type gets Vibe64's own steps and no project command; a composition keeps its Verify", async () => {
   await withTemporaryRoot(async target => {
-    const { root, input } = await fixture(target);
+    const { root, connection, input } = await fixture(target);
     const mapFile = path.join(root, input.inspection.sourcesFile);
     const setup = { status: "ready", recipeHash: "ordinary", diagnostics: [], steps: [] };
     const verify = { label: "Verify connected source", phase: "verify", argv: ["sh", "verify.sh"],
       runtimeRequirements: ["shell"], workdir: "." };
+    const connections = path.join(root, "vibe64.connections.json");
     for (const type of CONNECTED_PACKAGE_TYPE_VALUES.filter(value => value !== "custom")) {
+      await writeFile(connections, JSON.stringify({ repositories: [connection] }));
       const typed = { ...input, inspection: { ...input.inspection, defaultPackageType: type } };
       await materializeConnectedDevelopmentInputs(typed);
       assert.equal(JSON.parse(await readFile(mapFile, "utf8")).repositories[0].type, type);
+      const adapted = await inspectConnectedWorkspaceSetup({ session: input.session, setup,
+        inspection: { ...typed.inspection, steps: [], customRunner: null } });
+      assert.equal(adapted.status, "ready", `${type} needs no project Verify: ${JSON.stringify(adapted.diagnostics)}`);
+      assert.deepEqual(adapted.steps.map(step => [step.phase, step.connectedAdapter]), [
+        ["prepare", { action: "apply", type, repository: connection.repository }],
+        ["verify", { action: "proof", type, repository: connection.repository }]
+      ]);
+      assert.deepEqual(adapted.steps.map(step => step.argv), [
+        ["vibe64-connected", type, "apply", connection.repository], ["vibe64-connected", type, "proof", connection.repository]
+      ], "the steps name the adapter, never a project command");
+
+      await writeFile(connections, JSON.stringify({ repositories: [{ ...connection, relationship: "composition" }] }));
+      await materializeConnectedDevelopmentInputs(typed);
       const unverified = await inspectConnectedWorkspaceSetup({ session: input.session, setup,
         inspection: { ...typed.inspection, steps: [], customRunner: null } });
       assert.equal(unverified.status, "blocked");
       assert.deepEqual(unverified.diagnostics.at(-1), { code: "vibe64_connected_verification_required",
-        message: `Declare a Verify command for the connected ${type} packages.` });
+        message: `Declare a Verify command for the connected ${type} composition.` });
       const verified = await inspectConnectedWorkspaceSetup({ session: input.session, setup,
         inspection: { ...typed.inspection, steps: [verify], customRunner: null } });
-      assert.equal(verified.status, "ready", `${type} relies only on the declared Verify step`);
-      assert.deepEqual(verified.steps, [verify], `Vibe64 adds no ${type} package-manager command`);
+      assert.equal(verified.status, "ready");
+      assert.deepEqual(verified.steps, [verify], `a ${type} composition is the project's own treatment`);
     }
-    const connectionFile = path.join(root, "vibe64.connections.json");
+    await writeFile(connections, JSON.stringify({ repositories: [connection] }));
+    const connectionFile = connections;
     const configuration = JSON.parse(await readFile(connectionFile, "utf8"));
     configuration.repositories[0].type = "pip";
     configuration.repositories[0].script = "tooling/prepare.py";

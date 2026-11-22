@@ -1,9 +1,17 @@
 import { githubRepositoryFullName, readConnectedProjects } from "./connectedProjects.js";
+import { planCompositionPins, recordCompositionPins } from "./connectionsLock.js";
 import {
+  connectedDevelopmentApplies,
   inspectConnectedDevelopmentInputs,
   inspectConnectedWorkspaceSetup,
   materializeConnectedDevelopmentInputs
 } from "./connectedDevelopment.js";
+import {
+  bumpConnectedDependencies,
+  inspectConnectedAdapters,
+  runConnectedAdapterStep,
+  syncConnectedRepositories
+} from "./connectedAdapters/index.js";
 import { requireGithubRepository } from "./githubApi.js";
 import { githubIssues } from "./githubIssues.js";
 import {
@@ -74,6 +82,27 @@ function createProjectRepositories({
     return repositories.map(connection => ({ ...connection, fullName: githubRepositoryFullName(connection.repository) }));
   }
 
+  /**
+   * What Save would pin for this session: its composition connections and whether its lock would
+   * change, given each copy's saved commit (`commits` by GitHub owner/name).
+   */
+  async function planSessionCompositionPins({ session, commits }) {
+    return planCompositionPins({
+      sourceRoot: sessionSourcePath(session),
+      connections: await readSessionConnectedRepositories(session),
+      commits
+    });
+  }
+
+  /** Writes this session source's connections lock from its copies' pins. */
+  async function recordSessionCompositionPins({ session, pins }) {
+    return recordCompositionPins({
+      sourceRoot: sessionSourcePath(session),
+      connections: await readSessionConnectedRepositories(session),
+      pins
+    });
+  }
+
   async function inspectWorkspaceSetup({ session, projectRoot = sessionSourcePath(session), environment = env } = {}) {
     const [setup, inspection] = await Promise.all([
       inspectVibe64WorkspaceSetup({ projectRoot, environment }),
@@ -87,10 +116,47 @@ function createProjectRepositories({
       projectRoot: sessionSourcePath(session),
       environment
     });
-    if (inspection.status === "unconfigured" && !(await readSessionConnectedRepositories(session)).length) {
+    if (!connectedDevelopmentApplies(inspection, await readSessionConnectedRepositories(session))) {
       return { status: "unconfigured" };
     }
     return inspectConnectedDevelopmentInputs({ session, inspection, env: environment });
+  }
+
+  /**
+   * Whether each typed connected dependency of this session is in effect now: [] when it has none.
+   * Reads its trees; runs nothing.
+   */
+  async function inspectSessionConnectedAdapters({ session, environment = env } = {}) {
+    const inputs = await inspectSessionConnectedInputs({ session, environment });
+    if (inputs.status === "unconfigured") return [];
+    return inspectConnectedAdapters({ repositories: inputs.repositories, sessionSourceRoot: sessionSourcePath(session) });
+  }
+
+  /**
+   * Keeps this session's swapped packages in step with its connected copies while it runs; nothing
+   * when it has no typed npm dependency. `runCommand` runs a managed command in the session's trees.
+   */
+  async function syncSessionConnectedRepositories({ session, environment = env, runCommand, onEvent } = {}) {
+    const inputs = await inspectSessionConnectedInputs({ session, environment });
+    if (inputs.status === "unconfigured") return null;
+    return syncConnectedRepositories({
+      sessionId: session.sessionId,
+      repositories: inputs.repositories,
+      sessionSourceRoot: sessionSourcePath(session),
+      runCommand,
+      onEvent
+    });
+  }
+
+  /**
+   * Save's part for the session's typed dependencies: moves the project's tracked manifests and
+   * lockfiles to versions their registries have published, and says what Staging and Production use.
+   * `runCommand` runs a managed command in the session's trees.
+   */
+  async function bumpSessionConnectedDependencies({ session, environment = env, runCommand } = {}) {
+    const inputs = await inspectSessionConnectedInputs({ session, environment });
+    if (inputs.status === "unconfigured") return { bumped: [], lines: [] };
+    return bumpConnectedDependencies({ repositories: inputs.repositories, sessionSourceRoot: sessionSourcePath(session), runCommand });
   }
 
   async function prepareConnectedDevelopmentInputs({ session, environment = env } = {}) {
@@ -98,7 +164,7 @@ function createProjectRepositories({
       projectRoot: sessionSourcePath(session),
       environment
     });
-    if (inspection.status === "unconfigured" && !(await readSessionConnectedRepositories(session)).length) {
+    if (!connectedDevelopmentApplies(inspection, await readSessionConnectedRepositories(session))) {
       return { status: "unconfigured" };
     }
     return runProjectSourceExclusive(
@@ -320,8 +386,14 @@ function createProjectRepositories({
     resolveSessionBranch,
     inspectWorkspaceSetup,
     inspectConnectedDevelopmentInputs: inspectSessionConnectedInputs,
+    inspectConnectedAdapters: inspectSessionConnectedAdapters,
+    bumpConnectedDependencies: bumpSessionConnectedDependencies,
     prepareConnectedDevelopmentInputs,
+    runConnectedAdapterStep,
+    syncConnectedRepositories: syncSessionConnectedRepositories,
     readSessionConnectedRepositories,
+    planCompositionPins: planSessionCompositionPins,
+    recordCompositionPins: recordSessionCompositionPins,
     readRepositoryWorkflow,
     saveRepositoryWorkflow,
     refreshGithub,

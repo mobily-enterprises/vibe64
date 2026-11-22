@@ -1,4 +1,5 @@
 import { closeAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
+import { stopConnectedSync } from "@local/vibe64-project/server/connectedSync";
 import { removeCodexGitCommandSession } from "./codexGitCommand.js";
 import { cleanupSessionSaveCommitMessage } from "./sessionSaveCommitMessage.js";
 import { codexTerminalNamespace, outputTargetTerminalNamespace, vibe64Result } from "./terminalShared.js";
@@ -229,6 +230,15 @@ function createServiceSessionTerminals({
         {
           controller: { closeAllForSession: (id) => projectServices.closeSession(sessionAccess.projectRuntimeContext(), id) },
           label: "sessionServices"
+        },
+        {
+          controller: {
+            closeAllForSession: async (id) => {
+              await stopConnectedSync(id);
+              return { ok: true };
+            }
+          },
+          label: "Connected sync"
         },
         ...(!controllerOptions.renewalCleanup && assistantRan ? [{
           controller: {

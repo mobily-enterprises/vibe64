@@ -8,6 +8,7 @@ import {
   sessionRepositoryDestination
 } from "@local/vibe64-core/server/projectRepository";
 import { requireCompletedConversationRewind } from "./assistantChangeover.js";
+import { createSessionConnectedRelease } from "./sessionConnectedRelease.js";
 import { recoverConnectedCopySaves, saveConnectedCopies, updateConnectedCopies } from "./sessionConnectedCopies.js";
 import {
   connectedCopyOperations,
@@ -27,7 +28,7 @@ import {
   retireSessionWorkSave as retireManagedSessionWorkSave,
   saveSessionWork as saveManagedSessionWork
 } from "./sessionWorkSave.js";
-import { generateSessionSaveCommitMessage } from "./sessionSaveCommitMessage.js";
+import { nameSessionSave } from "./sessionSaveCommitMessage.js";
 import { recordSessionGitCommandActor as writeSessionGitCommandActor } from "./sessionGitCommandActor.js";
 import { createSessionSource as createManagedSessionSource } from "./sessionSource.js";
 import { GENESIS_DERIVED_ARTIFACT_PATHS } from "@local/vibe64-genesis/server";
@@ -113,38 +114,8 @@ function createServiceSessionWork({
   sessionAgent,
   workspaceSetup
 }) {
-  /**
-   * The version name for one Save: the assistant's, or a checkpoint-based one when naming is unavailable.
-   */
-  async function nameSave(prepared, { agentContext, onProgress = doNothing, operationId, sessionId }) {
-    try {
-      return await generateSessionSaveCommitMessage({
-        agent: sessionAgent,
-        agentContext,
-        changes: prepared.changes
-      });
-    } catch (error) {
-      // Naming is optional. Leave failed thread ownership intact and let the
-      // repository owner enforce the normal checkpoint and publish checks.
-      logOperationalEvent(logger, "warn", {
-        code: error.code || "vibe64_session_save_message_failed",
-        component: "vibe64.session_save",
-        event: "vibe64.session_save.message_fallback",
-        operationId,
-        sessionId
-      }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
-      await onProgress({
-        code: error.code || "vibe64_session_save_message_failed",
-        kind: "message",
-        message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
-        stage: "message-fallback"
-      });
-      return {
-        executionProfile: null,
-        subject: `Save work ${prepared.checkpoint.checkpointTree.slice(0, 12)}`
-      };
-    }
-  }
+  const connectedRelease = createSessionConnectedRelease({ project, workspaceSetup });
+  const nameSave = (prepared, options) => nameSessionSave(prepared, { ...options, agent: sessionAgent, logger });
 
   function logCacheMaintenance(operationId, sessionId) {
     return (cacheMaintenance = {}) => {
@@ -191,30 +162,44 @@ function createServiceSessionWork({
     };
     const copies = sessionConnectedCopies(session);
     // Copies push first, so the session's own work is checked before any push.
-    const ownUnsaved = !copies.length || (await inspectManagedSessionWork({
+    const ownWork = async () => !copies.length || (await inspectManagedSessionWork({
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
       project: projectRecord,
       session
     })).unsaved === true;
+    let ownUnsaved = await ownWork();
     if (ownUnsaved) await assertWorkflow();
     const runProjectSourceExclusive = project.runProjectSourceExclusive.bind(project);
+    const operations = connectedCopyOperations({ codexGitCommand, env, runtime, session }, {
+      createsCommits: true,
+      reason: "session-save",
+      runtime,
+      vibe64User: input.vibe64User || null
+    });
+    const release = await connectedRelease.planConnectedSave({
+      copies,
+      execution: operations,
+      onProgress,
+      runtime,
+      session,
+      sessionId: normalizedSessionId
+    });
     const connected = copies.length ? await saveConnectedCopies({
-      beforePush: () => ownUnsaved && refuseBehindSessionSave({
-        commandOptions: execution.commandOptions,
-        operationId: input.operationId,
-        project: projectRecord,
-        runCommand: execution.runCommand,
-        runProjectSourceExclusive,
-        session
-      }),
+      beforePush: async (ready) => {
+        if (!release.ownSaves(ownUnsaved, ready)) return;
+        if (!ownUnsaved) await assertWorkflow();
+        await refuseBehindSessionSave({
+          commandOptions: execution.commandOptions,
+          operationId: input.operationId,
+          project: projectRecord,
+          runCommand: execution.runCommand,
+          runProjectSourceExclusive,
+          session
+        });
+      },
       copies,
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-      ...connectedCopyOperations({ codexGitCommand, env, runtime, session }, {
-        createsCommits: true,
-        reason: "session-save",
-        runtime,
-        vibe64User: input.vibe64User || null
-      }),
+      ...operations,
       nameSave: async (prepared) => (await nameSave(prepared, {
         agentContext,
         operationId: input.operationId,
@@ -227,60 +212,71 @@ function createServiceSessionWork({
       runProjectSourceExclusive,
       session
     }) : [];
+    // Copies pushed, the session's own source records them before its own commit.
+    const connectedLines = await release.record(ownUnsaved, connected);
+    const recorded = connectedLines.length ? { connectedLines } : {};
+    ownUnsaved = ownUnsaved || await ownWork();
     if (!ownUnsaved) {
       if (!connected.length) {
         throw saveError("This session has no work to save.", "vibe64_session_save_no_changes");
       }
-      return { connected, ok: true, operationId: input.operationId, reconciled: true, status: "saved" };
+      return { connected, ...recorded, ok: true, operationId: input.operationId, reconciled: true, status: "saved" };
     }
-    const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
-      commandOptions: execution.commandOptions,
-      derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-      limit: 40,
-      operationId: input.operationId,
-      project: projectRecord,
-      runCommand: execution.runCommand,
-      session
+    return release.finishing(connected, async () => {
+      const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
+        commandOptions: execution.commandOptions,
+        derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+        limit: 40,
+        operationId: input.operationId,
+        project: projectRecord,
+        runCommand: execution.runCommand,
+        session
+      });
+      await onProgress({
+        checkpointCommit: saveMessageInput.checkpoint.checkpointCommit,
+        checkpointTree: saveMessageInput.checkpoint.checkpointTree,
+        kind: "message",
+        message: "Writing a concise name for this work.",
+        sessionHead: saveMessageInput.checkpoint.sessionHead,
+        stage: "message-writing"
+      });
+      const commitTitle = await nameSave(saveMessageInput, {
+        agentContext,
+        onProgress,
+        operationId: input.operationId,
+        sessionId: normalizedSessionId
+      });
+      await onProgress({
+        executionProfile: commitTitle.executionProfile,
+        kind: "message",
+        message: "Version name ready.",
+        stage: "message-ready"
+      });
+      const saved = await saveManagedSessionWork({
+        checkpoint: saveMessageInput.checkpoint,
+        commandOptions: execution.commandOptions,
+        derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+        message: commitTitle.subject,
+        onCacheMaintenance: logCacheMaintenance(input.operationId, normalizedSessionId),
+        onProgress: input.onProgress,
+        operationId: input.operationId,
+        project: projectRecord,
+        runCommand: execution.runCommand,
+        runProjectSourceExclusive: (operation, options) => project.runProjectSourceExclusive(async () => {
+          assertSessionRepositoryReview(await project.readCurrentProject(), session, input.destinationReview);
+          await assertWorkflow();
+          return operation();
+        }, options),
+        session
+      });
+      logDerivedArtifactsKept(logger, saved, "save", input.operationId, normalizedSessionId);
+      return {
+        ...saved,
+        commitTitleExecutionProfile: commitTitle.executionProfile,
+        ...(connected.length ? { connected } : {}),
+        ...recorded
+      };
     });
-    await onProgress({
-      checkpointCommit: saveMessageInput.checkpoint.checkpointCommit,
-      checkpointTree: saveMessageInput.checkpoint.checkpointTree,
-      kind: "message",
-      message: "Writing a concise name for this work.",
-      sessionHead: saveMessageInput.checkpoint.sessionHead,
-      stage: "message-writing"
-    });
-    const commitTitle = await nameSave(saveMessageInput, {
-      agentContext,
-      onProgress,
-      operationId: input.operationId,
-      sessionId: normalizedSessionId
-    });
-    await onProgress({
-      executionProfile: commitTitle.executionProfile,
-      kind: "message",
-      message: "Version name ready.",
-      stage: "message-ready"
-    });
-    const saved = await saveManagedSessionWork({
-      checkpoint: saveMessageInput.checkpoint,
-      commandOptions: execution.commandOptions,
-      derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-      message: commitTitle.subject,
-      onCacheMaintenance: logCacheMaintenance(input.operationId, normalizedSessionId),
-      onProgress: input.onProgress,
-      operationId: input.operationId,
-      project: projectRecord,
-      runCommand: execution.runCommand,
-      runProjectSourceExclusive: (operation, options) => project.runProjectSourceExclusive(async () => {
-        assertSessionRepositoryReview(await project.readCurrentProject(), session, input.destinationReview);
-        await assertWorkflow();
-        return operation();
-      }, options),
-      session
-    });
-    logDerivedArtifactsKept(logger, saved, "save", input.operationId, normalizedSessionId);
-    return { ...saved, commitTitleExecutionProfile: commitTitle.executionProfile, ...(connected.length ? { connected } : {}) };
   }
 
   /**
@@ -584,6 +580,7 @@ function createServiceSessionWork({
         session,
         signal
       });
+      if (copies.length) await connectedRelease.restoreUnsavedConnectionsLock(session, execution);
       const updated = await updateManagedSessionWork({
         ...review.own,
         beforeSourceChange,

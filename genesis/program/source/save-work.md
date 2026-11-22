@@ -93,6 +93,8 @@ Git commands.
 - `packages/vibe64-terminals/src/server/serviceHostSlots.js`
 - `packages/vibe64-terminals/src/server/serviceCommandServices.js`
 - `packages/vibe64-terminals/src/server/sessionConnectedCopies.js`
+- `packages/vibe64-terminals/src/server/sessionConnectedRelease.js`
+- `packages/vibe64-project/src/server/connectionsLock.js`
 - `packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `packages/vibe64-terminals/src/server/sessionSourceCommands.js`
@@ -162,16 +164,38 @@ adds one line to the preparation output.
 Save (`saveConnectedCopies`) first runs the update check for every copy: a copy
 behind its main refuses with `vibe64_session_save_update_required` (details
 `connectedRepository` and `updateRequired`), even when it has no work. Then
-`beforePush` runs the session's own check (`refuseBehindSessionSave`) when its
-own repository has work, so a behind repository refuses before anything is
-pushed. Each copy with unsaved work is then saved in list order through the
+`beforePush`, given the copies about to push, runs the session's own check
+(`refuseBehindSessionSave`, and the pull-request rule) when the session's own
+Save will run: its repository has work, or Project's `planCompositionPins` says
+the connections lock would change, or a composition copy is about to push. So a
+behind repository refuses before anything is pushed. Each copy with unsaved work is then saved in list order through the
 ordinary message preparation and native Save, recorded with Core's
 `recordSessionConnectedCopyCommits` and its prepared ref retired, before the
 next copy. A push refused because the main moved becomes
 the same Update-first refusal; any other failure also stops there, before the
 session's own Save. Copies always publish straight to their main; there is no
-pull-request path for them. When only copies have work, Save returns their
-results without saving the session's own repository. Creating a pull request runs
+pull-request path for them. After the copies push, the connected release
+(`sessionConnectedRelease.js`, planned by `planConnectedSave` before the push and
+run only by a Save that saves something) records the connections in the session's own source:
+each composition copy's recorded main commit and its tree (`connectedCopyPins`)
+go to Project's `recordCompositionPins`, which writes the tracked
+`vibe64.connections.lock.json` (`connectionsLock.js`, schema
+`vibe64.connections-lock.v1`, one `{ name, repository, commit, tree }` per
+composition in list order; a composition without a copy keeps its earlier pin;
+none left removes the file); then, with the managed command of the workspace
+recipe's runtimes (`connectedSaveRunner` / `connectedSaveCommand`), Project's
+`bumpConnectedDependencies` moves the project's manifests and lockfiles to newly
+published versions of typed dependencies (its failure is a line, never a
+refusal), and the Stack's Connected development Save entries run in order (a
+failed one refuses with `vibe64_connected_save_step_failed`). The session's own
+Save then commits all of it with its work. A failure after any copy pushed is
+rethrown by `savedCopiesPending` with its own fields, the copies saved, a message
+saying the project's main does not name them yet, and `retryable`; the next Save
+has nothing to push and records them. When only copies have work and nothing
+changed in the source, Save returns their results without saving the session's
+own repository. Before the session's own Update, `restoreUnsavedConnectionsLock`
+puts back a lock an unfinished Save left changed, so it never conflicts and the
+session takes its main's pins. Creating a pull request runs
 the same copy Save before pushing the session's own work to its branch.
 
 Genesis's derived artifacts belong to a copy only when the copy is itself a

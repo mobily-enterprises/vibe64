@@ -53,24 +53,27 @@ vocabulary (`npm`, `composer`, `pip`, `bundler`, `gomod`, `cargo`, `maven`,
 project's other technologies; a multi-language project declares one default. A connection's explicit type
 wins; an omitted type requires this declared default. The resulting source map
 contains the effective type for each repository, and changing that selection
-invalidates preparation. A default-only section is unconfigured: it supplies
-metadata but cannot certify source consumption. A custom connection supplies a
+invalidates preparation. A default-only section is ready: Vibe64's own adapter
+steps certify each typed dependency. A custom connection supplies a
 safe project-relative `script`; `Custom runner` declares the interpreter argv
 and runtimes using the existing setup grammar. The runner appends the resolved
 script and `--phase`, `--source-root`, `--project-root`, `--sources-file` and
 `--repository` arguments. Prepare runs before Verify; both phases must succeed.
 The script receives `prepare` or `verify` as its phase. Missing runners or
 scripts, symbolic-link escapes, and non-custom connections carrying a script fail.
-Custom source checks do not replace Verify commands when non-custom types exist.
-One `Sources file`
-declares the project-relative input location. Ordered `Prepare` and `Verify`
+One optional `Sources file`
+declares the project-relative input location; Prepare and Verify entries and a
+Custom runner require it. Ordered `Prepare` and `Verify`
 entries and the Custom runner reuse the Workspace setup argv, runtime and
 working-directory grammar through one command parser in `stackOperation.js`;
 their errors name the Connected development entry and its own form.
-Prepare entries precede verification. Every non-custom source type requires a
-Verify entry (`vibe64_connected_verification_required`), because Vibe64 runs no
-ecosystem command of its own; custom-only recipes may use the Custom runner's
-verification phase.
+Optional `Save` entries come last; Save runs them (not preparation) through the
+recipe's runtimes, after the connected copies are saved and pinned and before
+the project's own commit (`connectedDevelopment.saveSteps`, run by
+`connectedSaveCommand`). They join the recipe identity only when declared.
+Prepare entries precede verification. A non-custom composition requires a
+Verify entry (`vibe64_connected_verification_required`), because the project
+assembles it; custom-only recipes may use the Custom runner's verification phase.
 Conditions are rejected so missing files cannot silently skip a consumption
 check. Exactly `- Nothing.` or an absent section is unconfigured. Invalid or
 blocked sections cannot yield a ready recipe identity.
@@ -82,15 +85,34 @@ that file nor runs commands. A ready inspection only means the declaration is
 valid. Preparation with connected development first makes the session's
 missing connected repository copies (`prepareConnectedRepositories` in
 `serviceSessionConnectedCopies.js`) and then asks Project to write the declared
-Sources file pointing at those copies. Project reports `inputs-prepared`; it does
-not run the recipe. Preparation then executes ordinary setup followed by
-connected Prepare and Verify commands through the existing managed runner.
+Sources file pointing at those copies, and takes back what an adapter generated
+for a connection that left the list (`restoreDisconnected`). Project reports
+`inputs-prepared`; it does not run the recipe. Preparation then executes
+ordinary setup, the connected Prepare commands, one adapter apply step per
+typed dependency, the Verify commands and one adapter proof step per typed
+dependency through the existing managed runner. Adapter steps
+(`connectedAdapterSteps` in `vibe64-project/src/server/connectedAdapters/index.js`)
+carry `connectedAdapter: { action, type, repository }`; the runner hands them
+to `project.runConnectedAdapterStep`, which runs the type's adapter with a
+managed command function, so the adapter's commands stay inside the session's
+trees and runtimes. Each adapter (`connectedAdapters/<type>.js`) implements
+`apply`, `proof` and optionally `restore`, writes only untracked files kept out
+of Git, and refuses a tracked target. npm swaps every installed copy across the
+session source and the connected copies with the connected package's packlist,
+installs missing dependencies with `--no-save`, records its swaps in
+`node_modules/.vibe64-connected/npm-swaps.json` and keeps them in step through a
+per-session watcher (`connectedAdapters/sync.js`), started after a succeeded
+preparation and on a prepared Preview start, stopped when the session closes.
+`isPrepared` and cached-success reuse also require every typed connection's
+proof to pass (`connectedInEffect`); a failed proof starts preparation again
+with its reason, and session status reports each copy's `inEffect`.
 Project's combined inspection includes both recipe identities and the exact
 source map. Before each command and before accepting a cached success, setup
 reads the Sources file back and refuses when its inputs changed since
 preparation. The copies' roots enter the existing execution request; the map
-itself grants no filesystem authority. Node.js consumption has a focused real
-npm/import proof; other toolchains remain unproven.
+itself grants no filesystem authority. npm consumption has a focused real
+npm/import proof; each other type's example proof runs its adapter with the
+real toolchain in the opt-in toolchain proof run.
 
 A requested run (session creation, Prepare or Retry) with connected development
 first saves a running `Preparing connected repositories` state and returns;

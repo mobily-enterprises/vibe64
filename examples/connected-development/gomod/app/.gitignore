@@ -1,4 +1,2 @@
-# Derived connected-development state. Never commit these.
+# Derived connected-development state. Never commit it.
 /.development/
-/go.work
-/go.work.sum

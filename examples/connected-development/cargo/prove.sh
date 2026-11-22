@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Acceptance proof: a Cargo consumer builds against an unpublished change in a
-# connected library checkout through an untracked .cargo/config.toml
-# ([patch.crates-io] + resolver.lockfile-path), without touching its tracked
-# Cargo.toml or Cargo.lock. Needs cargo/rustc >= 1.97, git, tar and sha256sum
-# on PATH (rustup users also need RUSTUP_HOME). Offline: crates.io is replaced
-# by a local directory source that stands in for the published crate.
+# Acceptance proof of Vibe64's Cargo treatment: a Cargo consumer builds against an
+# unpublished change in a connected library checkout through the untracked
+# .cargo/config.toml Vibe64 writes ([patch.crates-io] + resolver.lockfile-path),
+# without touching its tracked Cargo.toml or Cargo.lock. Needs cargo/rustc >= 1.97,
+# node, git, tar and sha256sum on PATH (rustup users also need RUSTUP_HOME). Offline:
+# crates.io is replaced by a local directory source that stands in for the published crate.
 set -euo pipefail
 
 FIXTURE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+ADAPTER="$FIXTURE/../vibe64-adapter.mjs"
+SAVE="$FIXTURE/../vibe64-adapter.mjs"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/connected-cargo.XXXXXX")
 trap 'rm -rf -- "$WORK"' EXIT
 
@@ -25,6 +27,7 @@ say "tools"
 cargo --version
 rustc --version
 git --version
+node --version
 
 say "publish connected-library 1.0.0 to a local stand-in for crates.io"
 cp -R "$FIXTURE/library" "$WORK/publish"
@@ -76,20 +79,20 @@ cat > .development/connected.json <<JSON
 ]}
 JSON
 
-say "prepare (first)"
-sh tooling/connected.sh prepare .development/connected.json
+say "apply (first)"
+node "$ADAPTER" apply .development/connected.json
 cp .cargo/config.toml "$WORK/config.first"
 cp .development/cargo/Cargo.lock "$WORK/lock.first"
-say "prepare (second, must be idempotent)"
-sh tooling/connected.sh prepare .development/connected.json
-cmp -s .cargo/config.toml "$WORK/config.first" || fail "second prepare produced a different .cargo/config.toml"
-cmp -s .development/cargo/Cargo.lock "$WORK/lock.first" || fail "second prepare produced a different derived lock"
+say "apply (second, must be idempotent)"
+node "$ADAPTER" apply .development/connected.json
+cmp -s .cargo/config.toml "$WORK/config.first" || fail "second apply produced a different .cargo/config.toml"
+cmp -s .development/cargo/Cargo.lock "$WORK/lock.first" || fail "second apply produced a different derived lock"
 cat .cargo/config.toml
 echo "--- tracked Cargo.lock vs derived .development/cargo/Cargo.lock"
 diff -u Cargo.lock .development/cargo/Cargo.lock || true
 
-say "verify"
-sh tooling/connected.sh verify .development/connected.json
+say "proof"
+node "$ADAPTER" proof .development/connected.json
 
 say "run the consumer"
 out=$(cargo run --quiet --locked)
@@ -109,21 +112,53 @@ status=$(git status --porcelain --untracked-files=all)
 git diff --exit-code HEAD -- Cargo.toml Cargo.lock >/dev/null || fail "Cargo.toml or Cargo.lock changed"
 echo "git status --porcelain --untracked-files=all: clean (.cargo/config.toml, .development/, target/ are ignored)"
 
-say "verify must fail without the connection"
+say "the checkout moves to 1.1.0: the session keeps building it"
+sed -i 's/^version = "1.0.0"/version = "1.1.0"/' "$WORK/library/Cargo.toml"
+node "$ADAPTER" apply .development/connected.json
+node "$ADAPTER" proof .development/connected.json
+node "$SAVE" locked .development/connected.json
+
+say "Save before 1.1.0 is published: nothing moves"
+node "$SAVE" bump .development/connected.json
+git diff --exit-code HEAD -- Cargo.toml Cargo.lock >/dev/null || fail "Save moved to an unpublished version"
+
+say "publish connected-library 1.1.0 to the stand-in registry, then Save"
+cp -R "$FIXTURE/library" "$WORK/publish-1.1.0"
+sed -i 's/^version = "1.0.0"/version = "1.1.0"/' "$WORK/publish-1.1.0/Cargo.toml"
+( cd "$WORK/publish-1.1.0" && cargo package --quiet --no-verify --allow-dirty )
+CRATE2="$WORK/publish-1.1.0/target/package/connected-library-1.1.0.crate"
+tar -xzf "$CRATE2" -C "$WORK/registry"
+printf '{"files":{},"package":"%s"}\n' "$(sha256sum "$CRATE2" | cut -d' ' -f1)" \
+  > "$WORK/registry/connected-library-1.1.0/.cargo-checksum.json"
+node "$SAVE" bump .development/connected.json
+git diff HEAD -- Cargo.lock
+git diff --exit-code HEAD -- Cargo.toml >/dev/null || fail "Save changed Cargo.toml although ^1.0.0 admits 1.1.0"
+grep -A3 'name = "connected-library"' Cargo.lock | grep -q '^version = "1.1.0"' || fail "the tracked Cargo.lock is not at 1.1.0"
+grep -A3 'name = "connected-library"' Cargo.lock | grep -q '^source = "registry+https://github.com/rust-lang/crates.io-index"' ||
+  fail "the tracked Cargo.lock does not take 1.1.0 from the registry"
+node "$ADAPTER" proof .development/connected.json
+out=$(cargo run --quiet --locked)
+[ "$out" = "$MODIFIED" ] || fail "after Save the consumer printed '$out'"
+echo "after Save the session still builds the checkout: $out"
+git -c user.name=proof -c user.email=proof@example.invalid commit -qam "Save: published connected-library 1.1.0"
+status=$(git status --porcelain --untracked-files=all)
+[ -z "$status" ] || { echo "$status"; fail "checkout is not clean after Save"; }
+
+say "the proof must fail without the connection"
 mv .cargo/config.toml "$WORK/config.saved"
-if sh tooling/connected.sh verify .development/connected.json 2>"$WORK/neg.err"; then
-  fail "verify passed without .cargo/config.toml"
+if node "$ADAPTER" proof .development/connected.json 2>"$WORK/neg.err"; then
+  fail "the proof passed without .cargo/config.toml"
 fi
-echo "verify refused: $(grep '^connected verify' "$WORK/neg.err" || tail -n1 "$WORK/neg.err")"
+echo "proof refused: $(tail -n1 "$WORK/neg.err")"
 mv "$WORK/config.saved" .cargo/config.toml
 
-say "verify must fail when the patch does not apply"
-sed -i 's/^version = "1.0.0"/version = "2.0.0"/' "$WORK/library/Cargo.toml"
-if sh tooling/connected.sh prepare .development/connected.json >/dev/null 2>&1 &&
-   sh tooling/connected.sh verify .development/connected.json 2>"$WORK/neg2.err"; then
-  fail "verify passed with an unusable patch"
+say "the proof must fail when the patch does not apply"
+sed -i 's/^version = "1.1.0"/version = "2.0.0"/' "$WORK/library/Cargo.toml"
+if node "$ADAPTER" apply .development/connected.json >"$WORK/neg2.out" 2>"$WORK/neg2.err" &&
+   node "$ADAPTER" proof .development/connected.json 2>>"$WORK/neg2.err"; then
+  fail "the proof passed with an unusable patch"
 fi
-echo "verify refused: $(grep '^connected ' "$WORK/neg2.err" 2>/dev/null || echo 'prepare refused the mismatched version')"
+echo "refused: $(grep '^connected ' "$WORK/neg2.err" | tail -n1)"
 git diff --exit-code HEAD -- Cargo.toml Cargo.lock >/dev/null || fail "Cargo.toml or Cargo.lock changed"
 
 echo

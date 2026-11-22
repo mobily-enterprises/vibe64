@@ -326,7 +326,7 @@ test("session status gives the assistant the stored reason a repository needs he
   assert.deepEqual((await service.sessionStatus("session-1")).repository, { needsHelp: false });
 });
 
-test("session status lists this session's connected copies with whether each is behind or holds unsaved work", async (t) => {
+test("session status lists this session's connected copies with whether each is behind, holds unsaved work and is in effect", async (t) => {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-status-connected-"));
   t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
   const git = async (cwd, args) => String((await promisify(execFile)("git", args, { cwd, env: { ...process.env,
@@ -358,17 +358,27 @@ test("session status lists this session's connected copies with whether each is 
       async createRuntime() { return { async getSession() { return descriptor; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async inspectWorkspaceSetup() { return { status: "ready", steps: [], diagnostics: [] }; },
+      // What Vibe64's adapter proves of each typed dependency, read from the session's trees.
+      async inspectConnectedAdapters() { return proofs; },
       async projectEnvironmentStatus() { return { status: "ready", keys: [], resources: [] }; },
       async readCurrentProject() { return { projectRoot: path.join(temporaryRoot, "project"), slug: "project-1" }; },
       async runInProjectContext(_slug, operation) { return operation(); }
     }
   });
+  // The gap is never hidden: the published version Staging and Production install comes with it.
+  const published = [{ package: "library", connected: "1.1.0", locked: "1.0.0" }];
+  let proofs = [{ name: "Library", repository: "https://github.com/example/library", type: "npm", sourceRoot: copy, inEffect: true, reason: "", published }];
   await service.bindSession("session-1", { wrapperHostDir: path.join(temporaryRoot, "wrappers") });
   assert.deepEqual((await service.sessionStatus("session-1")).repository, {
     needsHelp: false,
-    connected: [{ name: "library", path: copy, behind: 0, unsaved: false }]
+    connected: [{ name: "library", path: copy, behind: 0, unsaved: false, type: "npm", inEffect: true, published }]
   });
   await writeFile(path.join(copy, "notes.md"), "unsaved\n");
+  proofs = [{ ...proofs[0], inEffect: false, reason: "node_modules/library is the published library 1.0.0; prepare the workspace to swap it.", published: [] }];
+  assert.deepEqual((await service.sessionStatus("session-1")).repository.connected, [{ name: "library", path: copy, behind: 0, unsaved: true,
+    type: "npm", inEffect: false, reason: "node_modules/library is the published library 1.0.0; prepare the workspace to swap it." }]);
+  // A connection with no adapter (custom, or a composition) reports no proof.
+  proofs = [];
   assert.deepEqual((await service.sessionStatus("session-1")).repository.connected,
     [{ name: "library", path: copy, behind: 0, unsaved: true }]);
 });
