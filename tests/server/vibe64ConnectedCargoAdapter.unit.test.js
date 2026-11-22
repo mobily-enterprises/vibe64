@@ -305,7 +305,8 @@ test("cargo: the proof says exactly why the checkout is not in effect", async t 
     sourceRoot: f.repositories[0].sourceRoot,
     inEffect: false,
     reason: `.development/cargo/Cargo.lock takes connected-library 1.0.0 from ${CRATES_IO}, not the checkout's 1.0.0: ` +
-      "prepare the workspace again, or make the checkout's version meet the app's requirement."
+      "prepare the workspace again, or make the checkout's version meet the app's requirement.",
+    published: [{ package: "connected-library", connected: "1.0.0", locked: "1.0.0" }]
   });
   await writeFile(lock, derived);
 
