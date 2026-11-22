@@ -569,7 +569,9 @@ async function lockedNpm({ connection, sessionSourceRoot }) {
       connected: entry.version || null,
       locked: lock?.packages?.[`node_modules/${entry.name}`]?.version || null
     };
-    const unreleased = versions.locked && versions.connected === versions.locked ? await npmUnreleased(sessionSourceRoot, entry.name, versions.locked) : null;
+    const unreleased = versions.locked && versions.connected === versions.locked
+      ? await npmUnreleased(sessionSourceRoot, entry.name, versions.locked)
+      : null;
     entries.push(unreleased === null ? versions : { ...versions, unreleased });
   }
   return entries;

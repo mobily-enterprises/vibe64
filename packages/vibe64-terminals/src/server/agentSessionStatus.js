@@ -65,7 +65,8 @@ async function readAgentSessionStatus({ descriptor, project, projectRecord, sess
   // Whether Vibe64 has each typed dependency in effect in this session's trees, or why not.
   const proofs = copies.length
     // Git answers whether a copy differs from what was published at the locked version.
-    ? await project.inspectConnectedAdapters({ session, runCommand: runVibe64Command }).catch((error) => ({ error: toText(error?.message) }))
+    ? await project.inspectConnectedAdapters({ session, runCommand: runVibe64Command })
+      .catch((error) => ({ error: toText(error?.message) }))
     : [];
   const connected = (await inspectConnectedCopies({
     copies,
