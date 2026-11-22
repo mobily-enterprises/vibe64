@@ -93,7 +93,7 @@ async function archivedPlanFixture(t, sessionId) {
     runInProjectContext: unused, saveEnvUserValues: unused },
     codexTerminalController: { codexAppServerProviderFactory() { assert.fail("Reading a plan must not start AI."); } } }));
   const file = workPlanPath({ runtime, session: await store.readSession(sessionId) });
-  const text = "# Keep the tally\nStatus: completed\n- [x] Count\n- [ ] Reset\n";
+  const text = "# Keep the tally\nStatus: completed\n- [x] Count\n- [~] Recount\n- [ ] Reset\n";
   // Necessary persisted-format fixture adaptation: explicit offline publication, never a reader backfill.
   for (const patch of planProgressUpgradeChanges([{ name: "current.md", text }])) {
     const destination = path.join(path.dirname(file), patch.name);
@@ -110,7 +110,8 @@ test("plan history reads an archived plan in full once and again only when its f
   const archived = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: current.revision });
   assert.equal(archived.ok, true, archived.error);
   const [entry] = archived.history;
-  assert.deepEqual([entry.title, entry.status, entry.checked, entry.total], ["Keep the tally", "completed", 1, 2]);
+  // History counts built (half-ticked or proven) and proven items of every requirement.
+  assert.deepEqual([entry.title, entry.status, entry.built, entry.checked, entry.total], ["Keep the tally", "completed", 2, 1, 3]);
   const document = path.join(path.dirname(file), "plan", `${entry.revision}.md`);
   const opened = [];
   const realOpen = fs.open;

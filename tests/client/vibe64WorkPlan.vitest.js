@@ -1,4 +1,5 @@
-import { createRenderer, h, nextTick, ref, shallowRef, ssrContextKey } from "vue";
+import { createRenderer, createSSRApp, h, nextTick, ref, shallowRef, ssrContextKey } from "vue";
+import { renderToString } from "@vue/server-renderer";
 import { afterEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ options: null, reads: [], realtime: null, resource: null, request: vi.fn(), report: vi.fn() }));
@@ -8,8 +9,10 @@ vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: (
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: mocks.report }) }));
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ({ value: "fixture" }) }));
 import WorkPlan from "../../src/components/studio/vibe64-session/Vibe64WorkPlan.vue";
+import WorkPlanSections from "../../src/components/studio/vibe64-session/Vibe64WorkPlanSections.vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PLAN_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { parseWorkPlanLines } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
+import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 
 let app;
 afterEach(() => { app?.unmount(); mocks.request.mockReset(); mocks.report.mockReset(); });
@@ -30,7 +33,7 @@ function mount(data) {
   return { props, actor, colleague, state: () => notice.value.$.setupState };
 }
 const active = { available: true, status: "active", current: { status: "active" }, history: [],
-  checked: 0, total: 1, text: "Status: active\n# Reporting\n- [ ] Prove privacy\n\nEvidence will appear here." };
+  built: 0, checked: 0, total: 1, text: "Status: active\n# Reporting\n- [ ] Prove privacy\n\nEvidence will appear here." };
 
 it("keeps the document open while live ticks and unticks arrive, and keeps completed plans accessible", async () => {
   const f = mount(active);
@@ -272,7 +275,7 @@ it("never mistakes a fenced heading for the technical boundary or hides unmarked
   expect(f.state().sections.filter(section => section.checked !== undefined)).toHaveLength(1);
   expect(parseWorkPlanLines(text, { markTechnicalDetails: true })).toEqual(parseWorkPlanLines(text));
   const heading = "## Technical details\n- [ ] Step";
-  expect(parseWorkPlanLines(heading)).toEqual([{ text: "## Technical details" }, { text: "Step", checked: false }]);
+  expect(parseWorkPlanLines(heading)).toEqual([{ text: "## Technical details" }, { text: "Step", checked: false, built: false }]);
   expect(parseWorkPlanLines(heading, { markTechnicalDetails: true })[0].technicalDetails).toBe(true);
 });
 
@@ -324,4 +327,35 @@ it("reads only the plan summary for its button and the plan text only while the 
   f.state().open = false;
   await nextTick();
   expect(document.enabled.value).toBe(false);
+});
+
+it("shows a half-ticked item as built but not yet proven, and counts built and proven requirements", async () => {
+  const text = "Status: active\n# Reporting\n- [x] Prove privacy\n- [~] Export the report\n- [ ] Email the report";
+  const id = "a".repeat(64);
+  const f = mount({ ...active, text, built: 2, checked: 1, total: 3,
+    history: [{ id, title: "Earlier", status: "active", built: 1, checked: 0, total: 1, archivedAt: "2026-09-29T00:00:00Z" }] });
+  expect(f.state().sections.filter(row => row.checked !== undefined).map(row => [row.checked, row.built]))
+    .toEqual([[true, true], [false, true], [false, false]]);
+  expect(f.state().planRequirements).toBe("2 built · 1 proven of 3 requirements");
+  expect(f.state().history[0].requirements).toBe("1 built · 0 proven of 1 requirement");
+  mocks.resource.data.value = { ...mocks.resource.data.value, text: text.replace("[~] Export", "[x] Export"), built: 2, checked: 2 };
+  await nextTick();
+  expect(f.state().planRequirements).toBe("2 built · 2 proven of 3 requirements");
+});
+
+it("renders each checklist mark as its own state: a built item is an indeterminate checkbox", async () => {
+  const sections = [["Email the report", false, false], ["Export the report", false, true], ["Prove privacy", true, true]]
+    .map(([text, checked, built]) => ({ technical: false, checked, built, blocks: parseLongTextReviewBlocks(text) }));
+  const html = await renderToString(createSSRApp(WorkPlanSections, { sections }));
+  const marks = html.match(/<input[^>]*>/gu);
+  expect(marks).toHaveLength(3);
+  expect(marks[0]).toContain('aria-label="Not done yet"');
+  expect(marks[0]).not.toMatch(/ checked|indeterminate="true"/u);
+  expect(marks[1]).toContain('aria-label="Built, not yet proven"');
+  expect(marks[1]).toContain('indeterminate="true"');
+  expect(marks[1]).not.toMatch(/ checked/u);
+  expect(marks[2]).toContain('aria-label="Proven"');
+  expect(marks[2]).toMatch(/ checked/u);
+  expect(marks[2]).not.toContain('indeterminate="true"');
+  expect(html).toContain("Export the report");
 });

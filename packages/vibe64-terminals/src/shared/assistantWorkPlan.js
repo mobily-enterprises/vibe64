@@ -1,5 +1,9 @@
 /**
  * Keep checklist recognition identical in stored progress and the plan viewer.
+ * A checklist item carries one of three marks: `[ ]` not done yet, `[~]` built
+ * (implemented, and its own focused checks pass) and `[x]` proven by the
+ * plan's final checks. `built` is true for a built or proven item, `checked`
+ * only for a proven one.
  */
 function parseWorkPlanLines(text, options = {}) {
   const { markTechnicalDetails = false } = options;
@@ -11,8 +15,8 @@ function parseWorkPlanLines(text, options = {}) {
       else if (marker[0] === fence[0] && marker.length >= fence.length) fence = "";
       return { text: line };
     }
-    const item = !fence && /^\s*(?:[-*+]|\d+[.)]) \[([ xX])\] (.+)$/u.exec(line);
-    return item ? { text: item[2], checked: item[1] !== " " } : {
+    const item = !fence && /^\s*(?:[-*+]|\d+[.)]) \[([ xX~])\] (.+)$/u.exec(line);
+    return item ? { text: item[2], checked: item[1] === "x" || item[1] === "X", built: item[1] !== " " } : {
       text: line,
       ...(markTechnicalDetails && !fence && /^## Technical details\s*$/iu.test(line) ? { technicalDetails: true } : {})
     };
@@ -26,7 +30,7 @@ function workPlanScope(text) {
   const lines = text.replace(/^Status: completed\r?$/mu, "Status: active").split("\n");
   return parseWorkPlanLines(lines.join("\n")).map((item, index) => item.checked === undefined
     ? lines[index]
-    : lines[index].replace(/^(\s*(?:[-*+]|\d+[.)]) \[)[ xX]/u, "$1 ")).join("\n");
+    : lines[index].replace(/^(\s*(?:[-*+]|\d+[.)]) \[)[ xX~]/u, "$1 ")).join("\n");
 }
 
 export { parseWorkPlanLines, workPlanScope };

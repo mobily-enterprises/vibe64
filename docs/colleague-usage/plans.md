@@ -22,8 +22,10 @@ Senior confirms creation or updates after the plan helper has saved the result.
 Both direct Senior and Junior receive the plan format and command instructions.
 Both roles must read the full Plan, including its technical details, and Progress
 before implementing or reviewing. Collapsing details in the viewer does not hide
-them from the agent. Junior updates Progress and ticks existing checklist items
-as each is implemented and verified; Senior owns agreed Plan scope changes. Creating,
+them from the agent. Junior updates Progress and the marks of existing checklist
+items as the work goes: a half tick once an item is built, a full tick once the
+plan's final checks prove it (see [Checklist marks](#checklist-marks)); Senior
+owns agreed Plan scope changes. Creating,
 reopening, archiving and completing a plan still require Senior. An unsuccessful
 save must be reported, and a chat outline alone is not a saved plan.
 
@@ -33,7 +35,9 @@ save must be reported, and a chat outline alone is not a saved plan.
    It is highlighted in muted yellow while the current plan is active. Its label
    is **View active plan** or **View plan and history**.
 2. Select **Current plan**. The selected tab has a coloured underline.
-3. Read the **Active** or **Completed** status and number of requirements. Select
+3. Read the **Active** or **Completed** status and the plan's progress, such as
+   **6 built · 2 proven of 9 requirements**: built counts every item that is
+   built or proven, proven only the proven ones. Select
    **Plan** for the stable summary, checklist and implementation instructions or **Progress** for work, evidence and
    blockers. Both tabs belong to the same current or archived artifact.
 4. Select **Technical details** below the summary and checklist to expand the
@@ -51,18 +55,34 @@ The icon remains available after completion and when only archived plans remain.
 When there is no current plan, the icon opens **History** directly.
 There is no icon when the session has neither a current plan nor history.
 
-Checklist wording stays stable while completion ticks update during development.
-Partial or unverified items stay unchecked; an item is unticked if review finds
-missing evidence or a regression. Junior records supporting evidence and blockers
-in Progress. Senior checks the ticks against that evidence and explicitly completes
-the artifact only after verifying every agreed acceptance requirement.
-A finished turn or a fully ticked checklist alone does not complete a plan.
-Updates appear while the viewer is open.
+### Checklist marks
+
+Each checklist item shows one of three boxes, so you can watch the plan fill in
+as items get built instead of waiting for the final checks:
+
+| Box | In the plan text | Meaning | When the AI sets it |
+|---|---|---|---|
+| Empty (**Not done yet**) | `- [ ]` | Not done yet | — |
+| A dash in a filled box, the indeterminate checkbox (**Built, not yet proven**) | `- [~]` | Built: implemented, and its own focused checks pass | As soon as that item is implemented |
+| Ticked (**Proven**) | `- [x]` | Proven by the plan's final checks | When the whole run, the review or the proof the plan states covers it |
+
+A screen reader reads each box's label, shown in bold above.
+
+Checklist wording stays stable while the marks update during development. The AI
+never leaves a built item empty, and a partly done item stays empty. Review moves
+an item back to built or to not done yet when its evidence is missing or it
+regressed. Junior records supporting evidence and blockers in Progress. Senior
+checks the marks against that evidence and explicitly completes the artifact only
+after verifying every agreed acceptance requirement. Vibe64 refuses to complete
+a plan while any item is not done yet or only built, and the refusal names each
+such item and its mark, so Senior proves it or leaves the plan active with the gap in
+Progress. A finished turn or a fully ticked checklist alone does not complete a
+plan. Updates appear while the viewer is open.
 
 ## Automatic completion and archival
 
 Only Senior marks a plan Completed, once it has verified every agreed
-requirement: in Auto, in the turn in which Senior checks the plan Junior
+requirement and every checklist item is ticked as proven: in Auto, in the turn in which Senior checks the plan Junior
 implemented; in a Senior chat, or when Senior implemented it, in Senior's own
 work on it. A Junior or Custom
 chat leaves the plan active for Senior to complete, and its work is saved as
@@ -114,7 +134,8 @@ the problem. If the plan changed, refresh the viewer before trying again.
 ## Read an archived plan and progress
 
 1. Select **History**. Each entry shows its title, archive date, **Completed** or
-   **Unfinished** status, and number of requirements. An empty list says
+   **Unfinished** status, and its progress, such as **4 built · 4 proven of 4
+   requirements**. An empty list says
    **No archived plans**.
 2. Select an entry. **History** stays selected, and **Archived · read-only** plus
    the archive date remain above the document while you scroll.
@@ -144,7 +165,8 @@ A loading placeholder means the selected document has not arrived yet. A load
 error includes **Retry**. Do not treat a partially loaded plan as the whole record.
 
 Colleague can explain these steps and, when its plan-reading action is available
-for the session, offer to read the plan or summarize the recorded work and blockers from both documents. It can
+for the session, offer to read the plan or summarize the recorded work and blockers from both documents, including
+how many requirements are built and how many proven. It can
 read an archive by its history identity without starting a coding turn. It must
 finish all pages of both documents before claiming to have reviewed the complete artifact.
 You can also ask **“Show me this session's plan”**, or name another accessible

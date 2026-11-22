@@ -141,7 +141,7 @@ const ASSISTANT_PLAN_COMPLETION_MESSAGE = [
   "Plan completion:",
   "Read every page of BOTH Plan and Progress, including the complete technical implementation plan; checklist marks do not establish completion.",
   "Verify each agreed requirement against the preceding implementation, my request, accepted steering and the recorded evidence. Inspect the implementation, fix in-scope gaps and run relevant checks. Leave unrelated plans unchanged.",
-  "Then explicitly complete the plan with the plan helper when every requirement is verified, and report complete with the returned revisions; otherwise leave Plan active, record the specific gaps and verification evidence in its paired Progress document, and report wait, or report handoff for substantial necessary rework.",
+  "Full-tick (- [x]) each item the final proof covers and move unsupported or regressed ones back to - [~] or - [ ]. Then explicitly complete the plan with the plan helper when every requirement is verified and every checklist item is - [x], and report complete with the returned revisions; otherwise leave Plan active, record the specific gaps and verification evidence in its paired Progress document, and report wait, or report handoff for substantial necessary rework.",
   "This turn checks the plan only: run no Deslop, UI pass or other pass. Once the plan is completed, Vibe64 runs the passes this chat ticks in Passes (After a plan) as their own turns.",
   "Do not ask for permission merely to verify or complete verified work. Report findings, fixes, actual checks and anything unverified."
 ].join(" ");

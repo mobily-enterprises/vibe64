@@ -1,7 +1,6 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, ref, unref, watch, watchEffect } from "vue";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
-import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 import { parseWorkPlanLines } from "@local/vibe64-terminals/shared/assistantWorkPlan";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
@@ -11,6 +10,7 @@ import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { VIBE64_SESSION_CHANGED_EVENT, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PLAN_KEY } from "@/lib/vibe64AssistantHost.js";
+import Vibe64WorkPlanSections from "./Vibe64WorkPlanSections.vue";
 
 const props = defineProps({ active: Boolean, busy: Boolean, session: { type: Object, default: null },
   sessionsApiPath: { type: [Function, Object, String], default: "" } });
@@ -80,9 +80,15 @@ function reloadPlan() {
 const plan = computed(() => resource.data.value || null);
 const overview = computed(() => summaryResource.data.value || null);
 const visible = computed(() => Boolean(overview.value?.available || overview.value?.history?.length || summaryResource.loadError.value));
+/** A plan's progress: its built items (half-ticked or proven) and proven items, of every requirement. */
+function requirementsProgress({ built = 0, checked = 0, total = 0 }) {
+  return `${built} built · ${checked} proven of ${total} ${total === 1 ? "requirement" : "requirements"}`;
+}
 const history = computed(() => (plan.value?.history || []).map(item => ({ ...item,
-  archivedDate: new Date(item.archivedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  archivedDate: new Date(item.archivedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+  requirements: requirementsProgress(item)
 })));
+const planRequirements = computed(() => plan.value ? requirementsProgress(plan.value) : "");
 const selectedArchive = computed(() => history.value.find(item => item.id === archiveId.value));
 const selectedPlanReady = computed(() => Boolean(plan.value) && (plan.value.archiveId || "") === archiveId.value);
 const canChangePlan = computed(() => !props.busy && !pendingOperation.value && selectedPlanReady.value);
@@ -176,7 +182,7 @@ const sections = computed(() => {
     }
     if (line.checked !== undefined) {
       flush();
-      result.push({ technical, checked: line.checked, blocks: parseLongTextReviewBlocks(line.text) });
+      result.push({ technical, checked: line.checked, built: line.built, blocks: parseLongTextReviewBlocks(line.text) });
     } else if (!/^Status: (active|completed)\s*$/u.test(line.text)) {
       prose.push(line.text);
     }
@@ -266,7 +272,7 @@ watch(() => props.active, (active) => {
                 <v-chip :color="item.status === 'completed' ? 'success' : undefined" size="small" variant="tonal">
                   <span class="text-high-emphasis">{{ item.status === 'completed' ? 'Completed' : 'Unfinished' }}</span>
                 </v-chip>
-                <span v-if="typeof item.total === 'number'" class="text-body-small on-surface-variant">{{ item.total }} requirements</span>
+                <span v-if="typeof item.total === 'number'" class="text-body-small on-surface-variant">{{ item.requirements }}</span>
               </div>
             </v-list-item>
           </v-list>
@@ -285,24 +291,18 @@ watch(() => props.active, (active) => {
             >
               <span class="text-high-emphasis">{{ plan.status === 'completed' ? 'Completed' : archiveId ? 'Unfinished' : 'Active' }}</span>
             </v-chip>
-            <span class="text-body-small on-surface-variant">{{ plan.total }} requirements</span>
+            <span class="text-body-small on-surface-variant">{{ planRequirements }}</span>
           </div>
           <v-tabs v-model="planDocument" grow height="48" aria-label="Plan documents" class="mb-4">
             <v-tab value="plan">Plan</v-tab>
             <v-tab value="progress">Progress</v-tab>
           </v-tabs>
           <p v-if="planDocument === 'progress' && !plan.progressAvailable" class="text-body-medium mb-4">This historical plan has no separate Progress document. Its original evidence remains in Plan.</p>
-          <div v-for="(section, index) in overviewSections" :key="index" :class="{ 'work-plan-item': section.checked !== undefined }">
-            <input v-if="section.checked !== undefined" type="checkbox" :checked="section.checked" disabled aria-label="Recorded checklist mark">
-            <LongTextPreviewBlocks :blocks="section.blocks" />
-          </div>
+          <Vibe64WorkPlanSections :sections="overviewSections" />
           <v-expansion-panels v-if="technicalSections.length" v-model="technicalPanel" class="mt-4" variant="accordion">
             <v-expansion-panel value="technical" title="Technical details">
               <v-expansion-panel-text>
-                <div v-for="(section, index) in technicalSections" :key="index" :class="{ 'work-plan-item': section.checked !== undefined }">
-                  <input v-if="section.checked !== undefined" type="checkbox" :checked="section.checked" disabled aria-label="Recorded checklist mark">
-                  <LongTextPreviewBlocks :blocks="section.blocks" />
-                </div>
+                <Vibe64WorkPlanSections :sections="technicalSections" />
               </v-expansion-panel-text>
             </v-expansion-panel>
           </v-expansion-panels>
@@ -324,7 +324,4 @@ watch(() => props.active, (active) => {
 .work-plan-archive-copy { min-width: 0; }
 .work-plan-history-title { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .work-plan-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; min-height: 12rem; }
-.work-plan-item { display: flex; align-items: flex-start; gap: 0.75rem; margin-block: 0.5rem; }
-.work-plan-item input { flex: none; width: 1.1rem; height: 1.1rem; margin-top: 0.25rem; opacity: 1; accent-color: rgb(var(--v-theme-primary)); }
-.work-plan-item > :last-child { min-width: 0; flex: 1; }
 </style>

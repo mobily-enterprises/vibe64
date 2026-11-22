@@ -41,6 +41,7 @@ test("implementation, Senior's check of the plan and its explicit completion arc
   assert.equal(f.helperCalls(), 1, "Router classifies only the new human request");
   assert.match(f.sends[1].input.message, /\n\nPlan completion: /u);
   assert.match(f.sends[1].input.message, /This turn checks the plan only: run no Deslop, UI pass or other pass\./u);
+  assert.match(f.sends[1].input.message, /when every requirement is verified and every checklist item is - \[x\]/u, "the check completes only a proven checklist");
   assert.equal(f.sends[1].input.genesisTask, undefined, "Senior's check of the plan is not a review or a pass");
   assert.deepEqual(started(f), [], "nothing starts automatically before the plan is completed");
   const plan = await readWorkPlan(f.context);
@@ -94,7 +95,8 @@ test("Senior can reconcile checklist ticks during review and archive the complet
 
 for (const change of ["wording", "fenced example"]) test(`completion still rejects changed ${change} during review`, async t => {
   const f = await fixture(t, { mode: "auto" }, { readyPlan: false });
-  await manageWorkPlan(f.context, { operation: "new", text: "# FDA controls\n\n- [ ] Block invoice\n\n```md\n- [ ] literal example\n```\n" }, "senior");
+  // Proven from the start, so completion itself is allowed and only the changed scope is refused.
+  await manageWorkPlan(f.context, { operation: "new", text: "# FDA controls\n\n- [x] Block invoice\n\n```md\n- [ ] literal example\n```\n" }, "senior");
   await review(f);
   let plan = await readWorkPlan(f.context);
   const text = change === "wording" ? plan.text.replace("Block invoice", "Allow invoice") : plan.text.replace("- [ ] literal", "- [x] literal");

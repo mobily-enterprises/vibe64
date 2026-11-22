@@ -3270,7 +3270,7 @@ for (const width of [390, 1280]) {
       server.state.conversationLog = turns;
       const archiveId = "b".repeat(64);
       await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/work-plan`, route => fulfillJson(route, {
-        available: false, current: null, history: [{ id: archiveId, title: "Validated plan", status: "completed", total: 1,
+        available: false, current: null, history: [{ id: archiveId, title: "Validated plan", status: "completed", built: 1, checked: 1, total: 1,
           archivedAt: "2026-10-09T00:00:00Z" }]
       }));
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);

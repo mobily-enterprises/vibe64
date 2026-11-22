@@ -183,8 +183,9 @@ a plan completed.
 
 Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.
-Junior updates Progress and existing checklist ticks as work is verified; only Senior can manage the plan’s lifecycle and
-explicitly mark it Completed after verifying the evidence.
+Junior updates Progress and existing checklist marks as work goes: a half tick once an item is built, a full tick once
+the plan's final checks prove it (see [Checklist marks](plans.md#checklist-marks)). Only Senior can manage the plan’s
+lifecycle and explicitly mark it Completed after verifying the evidence, and only once every item is proven.
 
 If an automatic handoff failed before its message was sent, you can type a new
 request and use the ordinary **Send** button (or speak a new request). Sending

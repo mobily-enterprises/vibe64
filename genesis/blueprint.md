@@ -1988,9 +1988,12 @@ Implement plan in a waiting Auto Planning notice. That explicit action starts
 implementation of the exact active saved plan; continuing planning never grants
 implementation permission. Waiting outcomes keep one explanation under Workflow details in chat history;
 the composer shows only actions. Separate delivery and cleanup errors retain recovery details. Waiting controls name the actual stage: Continue
-planning, Continue implementation or Continue review. The visible plan contains readable checklists and evidence. Junior
-checks completed work as it proceeds; Senior can uncheck unsupported claims and
-add missing acceptance checks within the agreed scope. Saved edits appear live
+planning, Continue implementation or Continue review. The visible plan contains readable checklists and evidence. Each
+item is not done yet, built (half-ticked once it is implemented and its own checks
+pass) or proven (ticked once the plan's final checks cover it), and the plan shows
+how many are built and how many proven. Junior marks work as it proceeds; Senior
+can move unsupported claims back and add missing acceptance checks within the
+agreed scope, and can complete the plan only once every item is proven. Saved edits appear live
 in open viewers without resetting their scroll position.
 
 Only Senior explicitly marks a plan completed after checking its requirements

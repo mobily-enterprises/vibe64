@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { __testables as assistantWorkPlanTestables, manageWorkPlan, readWorkPlan, readWorkPlanPage, workPlanInstructions, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { parseWorkPlanLines } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { upgradePlanProgress } from "../../packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js";
 import { __testables as assistantPlanUpgradeTestables, upgradeAssistantPlans } from "../../packages/vibe64-terminals/src/server/assistantPlanUpgrade.js";
@@ -37,6 +38,7 @@ async function fixture(t) {
 }
 const openText = "# Reporting tree\n\n- [ ] Save the supervisor\n- [ ] Prove access restrictions\n";
 const checkedText = openText.replaceAll("[ ]", "[x]") + "\nEvidence: focused checks pass.\n";
+const provenText = openText.replaceAll("[ ]", "[x]");
 
 test("stable scope and separate progress retain explicit Senior completion and reopen", async t => {
   const f = await fixture(t);
@@ -48,6 +50,8 @@ test("stable scope and separate progress retain explicit Senior completion and r
   assert.equal((await readWorkPlan(f.context)).status, "active");
   assert.equal((await readWorkPlanPage(f.context)).checked, 0);
   await assert.rejects(f.change("complete", "junior"), /Only Senior/);
+  await assert.rejects(f.change("complete", "review"), { code: "vibe64_work_plan_items_unproven" }, "Senior completes only a proven checklist");
+  await f.change("write", "review", { text: provenText });
   await f.change("complete", "review");
   const completed = await readWorkPlan(f.context);
   assert.equal(completed.status, "completed");
@@ -96,8 +100,92 @@ test("Junior updates verified checklist ticks without changing scope or completi
   const reopenedItem = await f.change("write", "junior", { text: allChecked.replace("[X] Prove", "[ ] Prove") });
   assert.equal(reopenedItem.checked, 3);
   await assert.rejects(f.change("archive", "junior"), /Only Senior/);
+  await assert.rejects(f.change("complete", "review"), { code: "vibe64_work_plan_items_unproven" });
+  await f.change("write", "junior", { text: allChecked });
   await f.change("complete", "review");
   await assert.rejects(f.change("write", "junior", { text: allChecked }), /explicitly reopen/);
+});
+
+test("a half tick marks a built item: plans read three marks and count built and proven items", async t => {
+  const f = await fixture(t);
+  const text = "# Reporting tree\n\n- [x] Save the supervisor\n- [~] Prove access restrictions\n  1. [~] Nested proof\n+ [ ] Final proof\n\n" +
+    "## Technical details\n```markdown\n- [~] Example only\n```\n";
+  assert.deepEqual(parseWorkPlanLines(text).filter(item => item.checked !== undefined), [
+    { text: "Save the supervisor", checked: true, built: true },
+    { text: "Prove access restrictions", checked: false, built: true },
+    { text: "Nested proof", checked: false, built: true },
+    { text: "Final proof", checked: false, built: false }
+  ]);
+  const saved = await f.change("new", "senior", { text });
+  assert.deepEqual([saved.built, saved.checked, saved.total], [3, 1, 4], "built counts built and proven items; checked only proven ones");
+  const page = await readWorkPlanPage(f.context);
+  assert.deepEqual([page.built, page.checked, page.total], [3, 1, 4]);
+  const builtOnly = await f.change("new", "senior", { text: "# Built only\n- [~] Built item\n", archiveCurrent: true });
+  assert.deepEqual([builtOnly.built, builtOnly.checked, builtOnly.total], [1, 0, 1], "a half-ticked item is a checklist item");
+  assert.deepEqual(builtOnly.history.map(entry => [entry.title, entry.built, entry.checked, entry.total]), [["Reporting tree", 3, 1, 4]]);
+});
+
+test("Junior moves existing checklist items among not done, built and proven, and changes nothing else", async t => {
+  const f = await fixture(t);
+  const text = "# Reporting tree\n\n- [ ] Save the supervisor\n- [ ] Prove access restrictions\n\n## Technical details\nKeep account isolation.\n```markdown\n- [ ] Example only\n```\n";
+  await f.change("new", "senior", { text });
+  const built = await f.change("write", "junior", { text: text.replace("[ ] Save", "[~] Save") });
+  assert.deepEqual([built.built, built.checked, built.total], [1, 0, 2]);
+  const proven = await f.change("write", "junior", { text: text.replace("[ ] Save", "[x] Save").replace("[ ] Prove", "[~] Prove") });
+  assert.deepEqual([proven.built, proven.checked], [2, 1]);
+  // Review found the proof missing for one item and a regression in the other.
+  const regressed = await f.change("write", "junior", { text: text.replace("[ ] Save", "[~] Save") });
+  assert.deepEqual([regressed.built, regressed.checked], [1, 0]);
+  for (const changed of [
+    text.replace("[ ] Save the supervisor", "[~] Skip the supervisor"),
+    text.replace("- [ ] Prove access restrictions\n", "- [~] Prove access restrictions\n- [~] Extra requirement\n"),
+    text.replace("[ ] Example only", "[~] Example only"),
+    text.replace("Keep account isolation.", "- [~] Keep account isolation.")
+  ]) {
+    await assert.rejects(f.change("write", "junior", { text: changed }), /existing checklist ticks only/);
+    assert.equal((await readWorkPlan(f.context)).revision, regressed.revision);
+  }
+  assert.equal((await readWorkPlan(f.context)).status, "active");
+});
+
+test("Senior completes a plan only when every checklist item is proven, and the refusal names each item that is not", async t => {
+  const f = await fixture(t);
+  const text = "# Reporting tree\n\n- [x] Save the supervisor\n- [~] Prove access restrictions\n- [ ] Report the result\n```markdown\n- [ ] Example only\n```\n";
+  await f.change("new", "senior", { text });
+  const refusal = await f.change("complete", "review").then(() => assert.fail("completed with unproven items"), error => error);
+  assert.equal(refusal.code, "vibe64_work_plan_items_unproven");
+  assert.match(refusal.message, /only when every checklist item is proven \(- \[x\]\)/);
+  assert.match(refusal.message, /“Prove access restrictions” \(built, not yet proven\)/);
+  assert.match(refusal.message, /“Report the result” \(not done yet\)/);
+  assert.doesNotMatch(refusal.message, /Save the supervisor|Example only/);
+  assert.equal((await readWorkPlan(f.context)).status, "active");
+  await f.change("write", "review", { text: text.replace("[ ] Report", "[x] Report") });
+  await assert.rejects(f.change("complete", "senior"), { code: "vibe64_work_plan_items_unproven", message: /“Prove access restrictions” \(built, not yet proven\)\. / },
+    "one built item blocks completion");
+  await f.change("write", "review", { text: text.replace("[ ] Report", "[x] Report").replace("[~] Prove", "[x] Prove") });
+  assert.equal((await f.change("complete", "review")).status, "completed", "a fenced example is not a requirement");
+  const many = Array.from({ length: 12 }, (_, index) => `- [~] Built item ${index + 1}`).join("\n");
+  await f.change("new", "senior", { text: `# Many\n${many}\n`, archiveCurrent: true });
+  const long = await f.change("complete", "senior").then(() => assert.fail("completed with unproven items"), error => error);
+  assert.match(long.message, /“Built item 8” \(built, not yet proven\), and 4 more\./);
+  assert.doesNotMatch(long.message, /Built item 9/);
+});
+
+test("plan guidance asks for a half tick once an item is built and a full tick once the plan's final proof covers it", () => {
+  for (const role of ["senior", "junior", "review"]) {
+    const guidance = workPlanInstructions(role);
+    assert.match(guidance, /- \[ \] not done yet, - \[~\] built \(implemented, and its own focused checks pass\) and - \[x\] proven by the plan's final checks/);
+    assert.match(guidance, /Half-tick each item \(- \[~\]\) as soon as it is implemented and its own focused checks pass/);
+    assert.match(guidance, /full-tick it \(- \[x\]\) when the plan's final proof covers it/);
+    assert.match(guidance, /Never leave a built item empty/);
+    assert.match(guidance, /moves back to - \[~\] or - \[ \]/);
+    assert.doesNotMatch(guidance, /Leave partial or unverified items unchecked/);
+  }
+  assert.match(workPlanInstructions("junior"), /change existing checklist marks among - \[ \], - \[~\] and - \[x\] only/);
+  for (const role of ["senior", "review"]) {
+    assert.match(workPlanInstructions(role), /complete ONLY when every checklist item is - \[x\]/);
+    assert.match(workPlanInstructions(role), /move unsupported or regressed claims back to - \[~\] or - \[ \]/);
+  }
 });
 
 test("new plans require acknowledged replacement and reopening moves the selected archive back to current", async t => {
@@ -203,18 +291,20 @@ test("the installed plan command uses the admitted role, emits live changes and 
   const ticked = await command("progress-write", { text: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision });
   assert.equal(ticked.checked, 0);
   assert.equal(ticked.progressText, checkedText);
+  const proven = await command("write", { text: provenText, expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision });
+  assert.equal(proven.checked, 2);
   // A Junior chat's own review (one upgraded in flight) records Progress but leaves the plan active for Senior.
   request = { schemaVersion: 6, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
-  await assert.rejects(command("complete", { expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision }), /Only Senior/);
+  await assert.rejects(command("complete", { expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision }), /Only Senior/);
   const reviewed = await command("progress-write", { text: `${checkedText}Review found no gaps.\n`,
-    expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision });
+    expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision });
   assert.equal((await command("read")).status, "active");
   // In Auto, Senior's check of the plan completes it.
   request = { schemaVersion: 6, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "auto", resolvedMode: "junior" };
   assert.equal((await command("complete", { expectedRevision: reviewed.revision, expectedProgressRevision: reviewed.progressRevision })).status, "completed");
   request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "senior", reason: "conversation" };
   await assert.rejects(command("reopen", { expectedRevision: (await command("read")).revision }), /Only Senior/);
-  assert.equal(events.filter(event => event.reason === "work-plan-changed").length, 4);
+  assert.equal(events.filter(event => event.reason === "work-plan-changed").length, 5);
   assert.deepEqual((await command("history")).history, [], "read-only commands finish even with stdin open");
   const laterHead = await commit();
   metadata.delete("after_plan_base");
@@ -303,10 +393,11 @@ test("paired progress writes preserve scope and explicit Senior completion rejec
   await assert.rejects(manageWorkPlan(f.context, { operation: "complete", expectedRevision: first.revision,
     expectedProgressRevision: first.progressRevision }, "review"), { code: "vibe64_work_plan_progress_changed" });
   assert.equal((await readWorkPlan(f.context)).status, "active");
+  await f.change("write", "review", { text: provenText });
   // This explicit command is the admitted Senior decision, not a server inference of a pass.
   const completed = await f.change("complete", "review");
   assert.equal(completed.status, "completed");
-  assert.equal(completed.checked, 0);
+  assert.equal(completed.checked, 2);
   assert.equal(completed.progressText, updated.progressText);
 });
 
@@ -376,7 +467,7 @@ test("full paired agent reads retain detailed implementation instructions beyond
   for (const role of ["senior", "junior", "review"]) {
     assert.match(workPlanInstructions(role), /MUST read and follow the complete technical section/);
     assert.match(workPlanInstructions(role), /Read every page of BOTH text and progressText/);
-    assert.match(workPlanInstructions(role), /Update checklist ticks with write as each item is implemented and verified/);
+    assert.match(workPlanInstructions(role), /Update checklist ticks with write as you go/);
     assert.doesNotMatch(workPlanInstructions(role), /Do not tick it/);
   }
 });

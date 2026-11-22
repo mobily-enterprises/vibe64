@@ -1380,6 +1380,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/agentPlanCommand.js`
 - `packages/vibe64-terminals/src/server/assistantPlanUpgrade.js`
 - `src/components/studio/vibe64-session/Vibe64WorkPlan.vue`
+- `src/components/studio/vibe64-session/Vibe64WorkPlanSections.vue`
 - `packages/vibe64-terminals/src/server/terminalActions.js`
 - `packages/vibe64-terminals/src/server/mainGoalControl.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
@@ -2072,9 +2073,11 @@ attach the current plan; Junior's lifecycle permissions remain unchanged.
 The model uses vibe64-helper plan read/history/new/write/complete/archive/reopen,
 through the existing bound session command socket. The server derives Senior,
 Junior or review authority from the admitted turn, never a caller's claimed role.
-Junior can write paired Progress and toggle existing checklist ticks. Junior Plan
-writes mask only checkbox state using the fence-aware parser and reject every other
-content change, including edits to fenced examples. Paired revision checks still
+Junior can write paired Progress and move existing checklist items among their
+three marks: `[ ]` not done yet, `[~]` built (implemented, and its own focused
+checks pass) and `[x]` proven by the plan's final checks. Junior Plan writes mask
+only that mark using the fence-aware parser (`workPlanScope`) and reject every
+other content change, including edits to fenced examples. Paired revision checks still
 apply. Senior owns agreed scope changes and lifecycle
 commands. Replacing the current plan requires an archive acknowledgement after
 the user authorizes replacement and is told which plan will be retained. An
@@ -2083,7 +2086,7 @@ record to History. Reopening an archive publishes its body as the active current
 plan, then removes the selected history entry; replacing another current plan
 archives that other plan first. Reopening the current plan creates no duplicate.
 Completion is an
-explicit admitted Senior/review operation at exact Plan and Progress revisions. A nonempty scope is required; checkmarks are not a completion gate or proof. Senior must review actual evidence against every acceptance requirement. Ending a coding or
+explicit admitted Senior/review operation at exact Plan and Progress revisions. A nonempty scope is required, and every checklist item must be proven (`[x]`): an item at `[ ]` or `[~]` refuses completion with `vibe64_work_plan_items_unproven`, whose message names up to eight such items with each one's mark. The marks gate completion but are not its proof: Senior must review actual evidence against every acceptance requirement. Ending a coding or
 review turn only ends execution and cannot promote a plan's status.
 After the turn in which Senior completed the plan (in Auto or a Senior chat) ends
 successfully and the passes ticked to run after a plan have ended, Routing archives an explicitly completed, unchanged scope
@@ -2128,9 +2131,16 @@ checklist parser marks that boundary only on the viewer's opt-in read; storage
 and agent reads retain the exact full Plan. Unmarked legacy plans and Progress
 remain fully visible. Plan/document/archive/session changes reset expansion;
 updating only Progress retains expansion of the same Plan.
-Progress shows actual work, evidence and blockers. Checklist ticks update as each
-item is verified; partial or unsupported claims remain unchecked. Historic marks
-remain visible. work-plan-changed events refresh open viewers; stable content
+Progress shows actual work, evidence and blockers. Checklist marks update as the
+work goes: the guidance half-ticks an item (`[~]`) as soon as it is implemented
+and its own focused checks pass, full-ticks it (`[x]`) once the plan's final proof
+covers it, never leaves a built item empty, and moves unsupported or regressed
+claims back to `[~]` or `[ ]`. `Vibe64WorkPlanSections` shows `[~]` as the
+indeterminate checkbox labelled Built, not yet proven, `[x]` as the checked one
+labelled Proven and `[ ]` as Not done yet. The plan owner's reads count `built`
+(`[~]` and `[x]`), `checked` (`[x]`) and `total`, which the viewer shows as N
+built · M proven of T requirements and Colleague's plan read returns. Historic
+marks remain visible. work-plan-changed events refresh open viewers; stable content
 containers preserve scrolling. Complete pagination uses one revision throughout;
 a changed document cannot be presented as a mixture of revisions.
 Colleague's plan-viewer navigation invokes the same local opening owner. It
@@ -2142,7 +2152,7 @@ Recover controls are removed. Current plan and History are labelled Material tab
 with a visible selection indicator. The dialog keeps the same viewport-bounded
 width and height across documents, loading, and empty or populated history;
 its content scrolls internally. History rows show title, archived date, completion
-state and number of requirements. An opened archive keeps a read-only context strip
+state and their built, proven and total requirements. An opened archive keeps a read-only context strip
 and Back to history action above the scrolling document. Loading uses a skeleton;
 action failures use shared feedback and preserve the displayed plan. Archive invokes the authenticated work-plan.archive action at
 the displayed current revision, preserves the snapshot without completing it,
@@ -4538,7 +4548,7 @@ both revisions with its outcome. Current actor, Stop and native receipt checks
 remain authoritative. A successful review turn alone never completes the artifact.
 
 Review completion compares the retained plan scope using the same checklist
-recognition as Junior edits: real checkbox ticks and completion status may change,
+recognition as Junior edits: real checkbox marks (`[ ]`, `[~]`, `[x]`) and completion status may change,
 while wording, technical instructions and fenced examples remain exact. Current
 Plan and Progress revisions, explicit Senior completion and the final reply are
 still required before the existing automatic archive transition.

@@ -441,7 +441,7 @@ function assistantModePrompt(mode, message, options = {}) {
       break;
     case "planning":
       instruction = "Discuss and manage the plan as requested through vibe64-helper plan. Do not change application files in a planning-only request. " +
-        "Clarify ambiguous references before changing a plan. Junior may update paired Progress and existing checklist ticks as work is verified; agreed Plan scope and lifecycle changes require Senior.";
+        "Clarify ambiguous references before changing a plan. Junior may update paired Progress and existing checklist ticks as work is built (- [~]) and proven (- [x]); agreed Plan scope and lifecycle changes require Senior.";
       break;
     case "implementation":
       instruction = direct +

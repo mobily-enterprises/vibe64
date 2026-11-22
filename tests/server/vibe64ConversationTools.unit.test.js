@@ -20,6 +20,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
       routingMetadata: { assistant_routing: JSON.stringify({ ...input.assistantRouting, afterPlan: ["review", "security-pass"], afterPlanDeep: [], autoSave: false }),
         private: "private-native-binding" } }; },
     async readSessionWorkPlan() { return { ok: true, available: true, text: "  Full page 🙂\n", status: "ready", revision: "a".repeat(64),
+      built: 2, checked: 1, total: 3, history: [{ id: "b".repeat(64), title: "Earlier", status: "completed", built: 4, checked: 4, total: 4 }],
       offset: 0, nextOffset: 14, totalCharacters: 16020, hasMore: true, path: "/private/plan.md", token: "secret" }; },
     async readTemporaryConversation(...args) { calls.push(args); return native; },
     async listTemporaryConversations() { return { ok: true, conversations: Array(60).fill(native) }; },
@@ -193,6 +194,9 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(plan.ok, true, JSON.stringify(plan));
   assert.equal(plan.result.text, "  Full page 🙂\n", "plan whitespace must be preserved");
   assert.equal(plan.result.hasMore, true);
+  // Colleague reads how many requirements are built (half-ticked or proven) and proven, for the plan and its history.
+  assert.deepEqual([plan.result.built, plan.result.checked, plan.result.total], [2, 1, 3]);
+  assert.deepEqual([plan.result.history[0].built, plan.result.history[0].checked, plan.result.history[0].total], [4, 4, 4]);
   assert.equal(JSON.stringify(plan).includes("private"), false);
   assert.equal(JSON.stringify(plan).includes("secret"), false);
   assert.equal((await execute("vibe64.terminals.work-plan.read", { sessionId: "session-1", limit: 16001 })).ok, false);

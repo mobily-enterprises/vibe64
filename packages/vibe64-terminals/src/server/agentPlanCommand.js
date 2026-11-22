@@ -9,14 +9,14 @@ import http from "node:http";
 const [operation, ...extra] = process.argv.slice(2);
 if (!operation || ["--help", "-h"].includes(operation)) {
   console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|complete|archive|reopen|outcome>\\n'
-    + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists).\\n'
+    + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven).\\n'
     + 'For read pagination or archive selection, use read --input with JSON on stdin. Bare read/history never wait for stdin.\\n'
     + 'Mutations require expectedRevision and expectedProgressRevision from the current paired read, unless no current plan exists.\\n'
     + 'Read returns BOTH text (Plan) and progressText (Progress). Read every page using offset/limit/expectedRevision/expectedProgressRevision; follow nextOffset while hasMore before working or reviewing.\\n'
     + 'Read/reopen may select an archiveId from history.\\n'
     + 'If a current plan exists, ask whether to update it or archive and replace it unless the user already chose. Explain that the archive remains accessible; pass archiveCurrent:true only after replacement is authorized.\\n'
     + 'Auto read also returns workflow identity. outcome takes {messageId,turnId,stage,decision,explanation,progress} and paired revisions when this plan is involved. Decisions: continue, handoff, wait, complete. Only Senior review can report complete.\\n'
-    + 'Only Senior can create, complete, reopen or archive. Junior can update Progress with progress-write and existing checklist ticks with write; all other Plan content stays unchanged.');
+    + 'Only Senior can create, complete, reopen or archive; complete needs every checklist item - [x]. Junior can update Progress with progress-write and existing checklist ticks with write; all other Plan content stays unchanged.');
   process.exit(0);
 }
 try {
