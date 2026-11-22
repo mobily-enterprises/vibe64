@@ -126,7 +126,38 @@ deployment, uses the published packages.
   `package.json` and `package-lock.json` to it (`npm install
   --package-lock-only`, so the swap stays); until then it changes nothing.
 
-CONNECTED_TYPES_PLACEHOLDER
+- **composer**: Vibe64 writes `composer.connected.json` and
+  `composer.connected.lock` (the tracked manifest with a first `path`
+  repository, symlinked to the session's copy) and runs `composer update` for
+  the connected packages with `COMPOSER` pointing at them; `vendor/<package>`
+  then links to the copy. On **Save** it moves `composer.json` and
+  `composer.lock` with `composer require <package>:<version> --no-install` once
+  the version is published.
+- **pip**: Vibe64 installs the session's copy editable into the project's
+  `.venv` in one resolution with `requirements.connected.txt` (the tracked
+  `requirements.txt` with the connected `==` pins left out). On **Save** it
+  edits the `==` pin once `pip download` finds the version.
+- **bundler**: Vibe64 writes `Gemfile.connected` (the tracked Gemfile with
+  `path:` gems) and its lock, selects it with `bundle config set --local
+  gemfile`, and installs. Launch through `bundle exec`. On **Save** it runs
+  `bundle lock --update <gem>` on the tracked Gemfile once the version is
+  published.
+- **gomod**: Vibe64 writes an untracked `go.work` (`use . <copy>`). On **Save**
+  it runs `GOWORK=off go get <module>@<tag>` for the copy's newest `v*` tag once
+  the module proxy has it.
+- **cargo**: Vibe64 writes an untracked `.cargo/config.toml` patch and a
+  derived lockfile (Cargo 1.97 or later). On **Save** it runs `cargo update -p
+  <crate> --precise <version>` without the patch once the version is published.
+- **nuget**: Vibe64 writes a `Directory.Build.targets` beside each consuming
+  project that turns the connected `PackageReference` into a `ProjectReference`
+  and restores. On **Save** it runs `dotnet add package <id> --version <version>`
+  once the version is published.
+JVM_TYPES_PLACEHOLDER
+
+Every type except npm reads the session's copy in place, so a save takes effect
+at the next build or run; Maven installs a jar, so Vibe64 installs it again on
+save. The derived files stay out of Git, and a tracked file in their place is
+refused.
 
 Staging and Production never use a session's copy: they build from the saved
 commit, so they install the published versions the project's tracked manifests
