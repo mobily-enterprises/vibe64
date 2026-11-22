@@ -152,7 +152,19 @@ deployment, uses the published packages.
   project that turns the connected `PackageReference` into a `ProjectReference`
   and restores. On **Save** it runs `dotnet add package <id> --version <version>`
   once the version is published.
-JVM_TYPES_PLACEHOLDER
+- **maven**: Vibe64 installs each copy into the untracked
+  `.development/maven-connected-repository`, chained in front of your own Maven
+  repository (Maven 3.9.3 or later), and an untracked `.mvn/maven.config`
+  selects it for every `mvn` in the session. On **Save** it changes the
+  dependency's `<version>` (or the one property that holds it) in `pom.xml` once
+  the project's repositories publish the version; a `-SNAPSHOT` never moves.
+- **gradle**: Vibe64 writes an untracked init script,
+  `.development/connected.init.gradle.kts`, that includes each copy as a
+  composite build. Gradle reads it only when a command passes
+  `-I .development/connected.init.gradle.kts`, so the project's Gradle commands
+  in Stack add that flag. On **Save** it changes the dependency's version in the
+  build scripts once the build's repositories publish it, and rewrites
+  `gradle.lockfile` when the build locks.
 
 Every type except npm reads the session's copy in place, so a save takes effect
 at the next build or run; Maven installs a jar, so Vibe64 installs it again on

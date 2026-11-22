@@ -1,5 +1,2 @@
 # Build output
 /target/
-# Connected development (written by tooling/Connected.java; never commit)
-/.development/
-/.mvn/maven.config
