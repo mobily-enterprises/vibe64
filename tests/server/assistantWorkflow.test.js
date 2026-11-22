@@ -785,3 +785,174 @@ test("turns that run nothing after them never say the work continues", async t =
     await plain({ mode: "auto" }, {})
   ]) assert.ok(!message.includes(CONTINUES), message);
 });
+
+// The owner's messages in an Auto chat (mercbot-online, 2026-11-12) with what Router decided for each, and a plan
+// as Junior drafted it; "…" stands for text the record elides.
+const PLAN_REQUESTS_ROUTED_TO_JUNIOR = [
+  ["conversation", "[1] Yes, make a plan from it [2] … IN THE SAME PLAN: …"],
+  ["implementation", "OK make the plan!"]
+];
+const JUNIOR_DRAFT = "# Contact threads\n\n- [ ] One thread per contact\n- [ ] Replies join their contact's thread\n\n" +
+  "## Technical details\nGroup messages by contact id.\n";
+
+/** The bound plan command, as the session's agent runs it, inside the request's own native turn. */
+async function planCommands(f) {
+  const { createAgentSessionCommandService } = await import("../../packages/vibe64-terminals/src/server/agentSessionCommand.js");
+  f.context.runtime.store.readSessionSourceDescriptor = async () => ({ sessionId: "session-1", metadata: f.source?.metadata ||
+    { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: `${f.context.runtime.stateRoot}/sessions/active/session-1/source` } });
+  const handoffs = [];
+  const commands = createAgentSessionCommandService({ logger: silentLogger, publishSessionChanged: async () => {}, project: {
+    readCurrentProject: async () => ({ slug: "fixture", projectRoot: f.context.runtime.stateRoot }),
+    createSessionStore: async () => f.context.runtime.store,
+    runInProjectContext: async (_slug, operation) => operation()
+  }, reportWorkflowOutcome: (id, input) => f.service.recordOutcome(id, input, f.context),
+  handPlanToSenior: (id, input) => { handoffs.push(input); return f.service.handPlanToSenior(id, input, f.context); } });
+  await commands.bindSession("session-1", { wrapperHostDir: f.context.runtime.stateRoot });
+  async function plan(input) {
+    const readNative = f.agent.sessionState;
+    f.agent.sessionState = async () => ({ turn: { active: true, id: f.state().turnId } });
+    try {
+      return await commands.managePlan("session-1", input);
+    } finally { f.agent.sessionState = readNative; }
+  }
+  const revisions = async () => {
+    const current = await readWorkPlan(f.context);
+    return { expectedRevision: current?.revision || "", expectedProgressRevision: current?.progressRevision || "" };
+  };
+  return { plan, handoffs, revisions };
+}
+
+for (const [reason, message] of PLAN_REQUESTS_ROUTED_TO_JUNIOR) {
+  test(`in Auto, a plan only Senior may save goes to Senior's planning turn by itself (Router said Junior, ${reason})`, async t => {
+    const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
+    await publishPlanFixture(f.context, planDocument("completed"));
+    f.router.respond = async () => ({ ok: true, text: JSON.stringify({ mode: "junior", reason }) });
+    await f.service.send("session-1", { ...request, message }, f.context);
+    // Router read the owner's message under the rule that makes it planning; this stand-in still answered Junior.
+    const routed = f.router.classifyInputs[0].message;
+    assert.ok(routed.includes(JSON.stringify(message)), routed);
+    assert.match(routed, /A request to make, create, write, draft, save, update, extend, reopen or add to a plan is planning/);
+    assert.equal(f.sends[0].selection.modelId, f.assignments.junior.modelId);
+    // Junior's Auto guidance sends the plan on and never sends the person to another mode.
+    assert.match(f.sends[0].input.message, /the helper hands this request and your draft to Senior/);
+    assert.doesNotMatch(f.sends[0].input.message, /explain that Senior must perform them|switch(ing)? Chat mode/);
+    const { plan, handoffs, revisions } = await planCommands(f);
+    await assert.rejects(plan({ operation: "new", text: JUNIOR_DRAFT, archiveCurrent: true, ...await revisions() }), (error) => {
+      assert.equal(error.code, "vibe64_work_plan_handed_to_senior");
+      assert.match(error.message, /Vibe64 hands this request and your draft to Senior's planning turn as soon as your turn ends/);
+      assert.match(error.message, /do not ask the person to switch modes or to ask Senior/);
+      return true;
+    });
+    assert.equal(handoffs.length, 1);
+    assert.equal((await readWorkPlan(f.context)).status, "completed", "nothing is saved in Junior's turn");
+    await f.service.afterTurn("session-1", end(f.state()), f.context);
+    assert.equal(f.sends.length, 2, "Senior's turn follows without the person asking");
+    assert.equal(f.helperCalls(), 1, "the handoff needs no second routing");
+    const senior = f.sends[1];
+    assert.equal(senior.selection.modelId, f.assignments.senior.modelId);
+    assert.equal(senior.input.displayMessage, "Senior saves the plan.");
+    assert.match(senior.input.message, /^\[Vibe64 role: Senior\./u);
+    assert.match(senior.input.message, /Save the plan: the previous turn could not save the plan change my request asks for/);
+    assert.ok(senior.input.message.includes(`Original request: ${message}`), "Senior gets the person's request");
+    assert.ok(senior.input.message.includes(`The previous turn's draft (plan new):\n${JUNIOR_DRAFT}`), "and Junior's draft");
+    assert.match(senior.input.message, /Auto workflow stage: planning\./);
+    assert.deepEqual([f.state().resolvedMode, f.state().reason, f.state().stage, f.state().status, f.state().workflow],
+      ["senior", "planning", "planning", "working", false]);
+    assert.equal(f.state().planHandoff, undefined);
+    assert.equal(senior.input.turnMetadata.assistantRouting.resolvedMode, "senior");
+    assert.equal(senior.input.turnMetadata.assistantRouting.reason, "planning");
+    assert.ok(noticeTexts(f).some(text => text.startsWith("Senior is saving the plan.")), noticeTexts(f).join("\n"));
+    // Senior saves it, as its planning turn may, and planning then waits as it always does.
+    const reopened = await plan({ operation: "reopen", ...await revisions() });
+    assert.equal(reopened.status, "active");
+    await finish(f, "wait", { explanation: "The plan is saved; implementing it waits for your go-ahead." });
+    assert.equal(f.sends.length, 2); assert.equal(f.state().status, "waiting"); assert.equal(f.state().stage, "planning");
+  });
+}
+
+test("in Auto, Junior's refused Plan content write goes to no one: it hears how to retry and how a scope change reaches Senior", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  const { plan, handoffs, revisions } = await planCommands(f);
+  const current = await readWorkPlan(f.context);
+  await assert.rejects(plan({ operation: "write", text: `${current.text}\n- [ ] A requirement nobody agreed\n`, ...await revisions() }), (error) => {
+    assert.equal(error.code, "vibe64_work_plan_content_senior_only");
+    assert.match(error.message, /^Only Senior can change Plan content\. Junior may change existing checklist ticks only/);
+    assert.match(error.message, /send the complete plan they asked for with vibe64-helper plan new instead: in Auto, the helper hands it to Senior/);
+    return true;
+  });
+  assert.deepEqual(handoffs, [], "a slip while ticking marks derails nothing");
+  await finish(f, "handoff");
+  assert.equal(f.state().stage, "review", "Junior's implementation goes on to Senior's check as before");
+  assert.equal(f.sends.length, 2); assert.equal(f.sends[1].input.displayMessage, "Senior checks and completes the plan.");
+});
+
+test("a stopped turn hands its refused plan to no one", async t => {
+  const f = await fixture(t, { mode: "auto" }, { readyPlan: false });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"junior","reason":"conversation"}' });
+  await f.service.send("session-1", { ...request, message: "OK make the plan!" }, f.context);
+  const { plan } = await planCommands(f);
+  await assert.rejects(plan({ operation: "new", text: JUNIOR_DRAFT }), { code: "vibe64_work_plan_handed_to_senior" });
+  assert.equal(await f.service.cancel("session-1", f.context), false);
+  await f.service.afterTurn("session-1", end(f.state(), "interrupted"), f.context);
+  assert.equal(f.sends.length, 1, "Stop means stop: no Senior turn");
+  assert.equal(f.state().stopped, true); assert.equal(f.state().stage, null);
+});
+
+test("a Junior chat keeps the refusal of a plan only Senior may save, and says how the person gets one", async t => {
+  const f = await fixture(t, { mode: "junior" }, { readyPlan: false });
+  await f.service.send("session-1", { ...request, message: "Make a plan for contact threads" }, f.context);
+  assert.match(f.sends[0].input.message, /In a Junior chat, if asked for those operations, explain that this Junior chat cannot make them and that switching Chat mode to Senior or Auto does/);
+  const { plan, handoffs } = await planCommands(f);
+  await assert.rejects(plan({ operation: "new", text: JUNIOR_DRAFT }), (error) => {
+    assert.equal(error.code, "vibe64_work_plan_senior_required");
+    assert.match(error.message, /^This is a Junior chat: it can update a plan's checklist marks and Progress, but only Senior creates a plan/);
+    assert.match(error.message, /Tell the person to switch Chat mode to Senior or Auto and ask again/);
+    return true;
+  });
+  assert.deepEqual(handoffs, [], "nothing goes to Senior");
+  assert.equal(await readWorkPlan(f.context), null);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.sends.length, 1); assert.equal(f.state().status, "complete");
+});
+
+// Stop ends the turn; the next message is a new request whichever way the composer sends it (a steer while it still
+// shows the turn running), and the turn still ending takes none of it.
+for (const ending of [0, 2]) for (const submissionKind of ["send", "steer"]) {
+  test(`after a Stop, the next Auto message is routed afresh, never steered into the stopped turn (${submissionKind}, ${ending ? "while the stopped turn is still ending" : "once it has ended"})`, async t => {
+    const f = await fixture(t);
+    await f.service.send("session-1", request, f.context);
+    assert.equal(await f.service.stop("session-1", f.context), false, "the accepted turn still needs its interrupt");
+    const stopped = f.state();
+    assert.equal(stopped.stopped, true);
+    let checks = 0;
+    f.agent.sessionState = async () => ({ turn: { active: ++checks <= ending, id: stopped.turnId } });
+    f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+    await f.service.send("session-1", { messageId: "request-2", message: "Make the plan", submissionKind }, f.context);
+    assert.ok(checks > ending, "the message waited for the stopped turn to end");
+    assert.equal(f.helperCalls(), 2, "Router classifies the new message");
+    assert.equal(f.sends.length, 2);
+    assert.equal(f.sends[1].input.messageId, "request-2");
+    assert.match(f.sends[1].input.message, /^\[Vibe64 role: Senior\./u, "a routed request, not a steer of the stopped turn");
+    assert.equal(f.sends[1].selection.modelId, f.assignments.senior.modelId);
+    assert.deepEqual([f.state().messageId, f.state().stage, f.state().stopped], ["request-2", "planning", undefined]);
+  });
+}
+
+test("a message sent while a stopped turn will not end is left unsent, never steered into it", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  await f.service.stop("session-1", f.context);
+  const stopped = f.state();
+  f.agent.sessionState = async () => ({ turn: { active: true, id: stopped.turnId } });
+  const realNow = Date.now;
+  let now = realNow();
+  // Each look at the turn moves the clock on a second, so the ten-second wait ends without ten real seconds.
+  Date.now = () => (now += 1000);
+  t.after(() => { Date.now = realNow; });
+  await assert.rejects(f.service.send("session-1", { messageId: "request-2", message: "Make the plan", submissionKind: "steer" }, f.context),
+    { code: "vibe64_assistant_routing_stopped_turn_ending", delivery: "not-sent" });
+  Date.now = realNow;
+  assert.equal(f.sends.length, 1); assert.equal(f.helperCalls(), 1);
+  assert.equal(f.state().messageId, request.messageId); assert.equal(f.state().stopped, true);
+});

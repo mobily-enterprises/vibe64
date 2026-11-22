@@ -47,6 +47,21 @@ async function explicitPass(input, task, context, listPasses) {
   return { name: pass.title, code: assistantTaskPurpose(task) };
 }
 
+// How long a message sent while a stopped turn is still ending waits for it to end, and how often it looks.
+const STOPPED_TURN_WAIT_MS = 10_000;
+const STOPPED_TURN_POLL_MS = 100;
+
+/** Whether the person stopped the saved request after its turn was accepted. */
+const isStoppedRequest = request => request?.stopped === true && request.delivery === "accepted" && Boolean(request.turnId);
+
+/**
+ * Whether the running native turn is the one the person stopped: the saved request was stopped after its turn was
+ * accepted, and the turn running is that turn (or reports no id of its own).
+ */
+function isStoppedTurn(request, native) {
+  return Boolean(native?.turn?.active) && isStoppedRequest(request) && (!native.turn.id || native.turn.id === request.turnId);
+}
+
 /**
  * Sending: a message's admission into a new or resumed request, its routing and delivery, and the
  * shutdown that closes the requests still being prepared.
@@ -96,12 +111,15 @@ function createAssistantRoutingAdmission({
     const context = await open(sessionId, options);
     const store = context.runtime.store;
     if ((await readCancelled(store, sessionId)).some(entry => entry.messageId === input.messageId) ||
-        await store.conversationMessageIdExists(sessionId, input.messageId) ||
-        !(await agent.sessionState(sessionId, context))?.turn?.active) return null;
+        await store.conversationMessageIdExists(sessionId, input.messageId)) return null;
+    const native = await agent.sessionState(sessionId, context);
+    if (!native?.turn?.active) return null;
     if (records.isCancelling(sessionId, context, input.messageId)) {
       throw notSent("Routing cancelled. Your message was not sent.", "vibe64_assistant_routing_cancelled");
     }
     const steered = await read(store, sessionId);
+    // A turn the person stopped takes no steering; the ordinary admission routes the message once it ends.
+    if (isStoppedTurn(steered, native)) return null;
     const result = await dispatch(sessionId, input, context);
     if (result?.delivered === true && records.isCancelling(sessionId, context, input.messageId)) {
       await interrupt(sessionId, context).catch((error) => logInterruptFailure(sessionId, error));
@@ -120,6 +138,26 @@ function createAssistantRoutingAdmission({
     }
     if (persisted) await records.announce(context, persisted);
     return result;
+  }
+
+  /**
+   * Stop ends the turn: the next message is a new request, which Router routes afresh. Sent while the stopped turn is
+   * still ending, it waits for that turn to end rather than join it, and is refused, unsent, if it outlasts the wait.
+   */
+  async function afterStoppedTurn(sessionId, context, state, native) {
+    const deadline = Date.now() + STOPPED_TURN_WAIT_MS;
+    let current = native;
+    while (isStoppedTurn(state, current)) {
+      if (Date.now() >= deadline) {
+        throw Object.assign(failure(
+          "The turn you stopped is still ending. Send your message again once it has stopped.",
+          "vibe64_assistant_routing_stopped_turn_ending"
+        ), { delivery: "not-sent" });
+      }
+      await new Promise(resolve => setTimeout(resolve, STOPPED_TURN_POLL_MS));
+      current = await agent.sessionState(sessionId, context);
+    }
+    return current;
   }
 
   function logInterruptFailure(sessionId, error) {
@@ -271,8 +309,12 @@ function createAssistantRoutingAdmission({
         }
         return;
       }
-      const native = await agent.sessionState(sessionId, context);
+      let native = await agent.sessionState(sessionId, context);
       records.mark(input.messageId, "native-state");
+      // Stop ends the turn: the next message is a new request, also when the composer sent it as a steer of the
+      // stopped turn, which it never joins.
+      const afterStop = isStoppedRequest(state) && (!native?.turn?.active || isStoppedTurn(state, native));
+      if (isStoppedTurn(state, native)) native = await afterStoppedTurn(sessionId, context, state, native);
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
@@ -289,7 +331,7 @@ function createAssistantRoutingAdmission({
         direct = true;
         return;
       }
-      if (input.submissionKind === "steer") {
+      if (input.submissionKind === "steer" && !afterStop) {
         const completed = ["complete", "completed"].includes(native?.turn?.runState || native?.turn?.state || native?.turn?.status);
         throw Object.assign(failure(
           "That turn has finished. Send this as a new request.",

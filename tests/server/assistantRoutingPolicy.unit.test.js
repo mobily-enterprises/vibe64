@@ -269,12 +269,47 @@ test("Auto distinguishes plan execution and confirmations from planning while pr
   assert.match(prompt, /Honor an explicit Senior or Junior request/);
   assert.match(prompt, /Implementation executes authorised changes.*continuing a plan or accepted choices that allow execution/);
   assert.match(prompt, /Otherwise planning and review use Senior; implementation and other conversation use Junior/);
-  assert.match(prompt, /Conversation answers or investigates without changes/);
+  assert.match(prompt, /Conversation answers or investigates without changing files or plans/);
   assert.match(prompt, /Questions and ambiguous offers are conversation, not execution authority/);
   const context = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
   assert.equal(context.messages[0].text, "Execute the plan");
   assert.equal(context.messages[1].text, "Confirm the open choices before I implement it.");
   assert.match(context.message, /Use all recommendations/);
+});
+
+// The owner's messages in an Auto chat (mercbot-online, 2026-11-12) that Router labelled conversation or
+// implementation and sent to Junior, so no plan was saved; "…" stands for text the record elides.
+const PLAN_REQUESTS_ROUTED_TO_JUNIOR = [
+  "[1] Yes, make a plan from it [2] … IN THE SAME PLAN: …",
+  "IN THE SAME PLAN!!! …",
+  "OK make the plan!"
+];
+
+test("a request to make, save or extend a plan is planning, so Senior gets the Auto messages Router once sent to Junior", () => {
+  // The chat's previous plan was completed, and the redesign had just been agreed in conversation.
+  const plan = { status: "completed", revision: "previous", outline: "# Contact list\n- [x] List contacts",
+    progressRevision: "", progressOutline: "" };
+  const messages = [
+    { role: "user", text: "Let's redesign the contact page around threads." },
+    { role: "assistant", text: "[1] Shall I make a plan from this redesign?\n[2] Should the replies go in a plan too?" }
+  ];
+  for (const message of PLAN_REQUESTS_ROUTED_TO_JUNIOR) {
+    const prompt = assistantRoutingPrompt({ message, messages, plan });
+    const input = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
+    assert.equal(input.message, message);
+    assert.deepEqual(input.plan, plan);
+    assert.deepEqual(input.messages, messages);
+    assert.match(prompt, /Otherwise planning and review use Senior/);
+    assert.match(prompt, /A request to make, create, write, draft, save, update, extend, reopen or add to a plan is planning, never conversation or implementation/);
+    // Each way these messages read as something else is named as planning.
+    assert.match(prompt, /when the plan comes from the conversation so far, when it adds work to the current or a completed plan/);
+    assert.match(prompt, /when it answers a numbered question, and when it only agrees \(yes, OK, go ahead\) to making the plan/);
+    assert.match(prompt, /Saving a plan is a change, and agreeing to make a plan does not authorise implementing it/);
+    assert.match(prompt, /the person asking to add work to a plan is planning/);
+    // The wording that let a plan read as an answer that changes nothing, or need an already agreed plan, is gone.
+    assert.doesNotMatch(prompt, /investigates without changes\./);
+    assert.doesNotMatch(prompt, /changes an agreed plan/);
+  }
 });
 
 test("explicit closure by scope reduction is Senior's implementation, verified before the plan completes, while draft edits and unrequested deferrals are not", () => {
@@ -285,7 +320,7 @@ test("explicit closure by scope reduction is Senior's implementation, verified b
   assert.deepEqual(input.plan, plan);
   assert.match(prompt, /explicitly authorised scope reduction of already implemented work is implementation using Senior/);
   assert.match(prompt, /who owns plan scope/);
-  assert.match(prompt, /Planning creates or changes an agreed plan/);
+  assert.match(prompt, /Planning makes, saves or changes a plan/);
   assert.match(prompt, /Preserve deferred requirements; never infer permission to drop them from blockers or checked boxes/);
   const coding = assistantModePrompt("senior", input.message, { intent: "implementation" });
   assert.match(coding, /record the exact deferred requirement and its agreed timing/);
@@ -376,7 +411,10 @@ test("task intent sets permissions independently of the selected role", () => {
   assert.match(assistantModePrompt("senior", text, { intent: "planning", planInstructions: "Auto planning instructions" }), /Do not change application files/);
   assert.match(assistantModePrompt("senior", text), /You may edit application files when requested/);
   const conversation = assistantModePrompt("senior", text, { intent: "conversation" });
-  assert.match(conversation, /Do not create or update a plan, change its status, edit application files/);
+  assert.match(conversation, /Do not change a plan's status, edit application files/);
+  // Router may misread a plan request as an answer: the turn sends the plan on to Senior instead of refusing it.
+  assert.match(conversation, /in fact asks to make, change, extend or reopen a plan, never reply that this turn or your role cannot/);
+  assert.match(conversation, /hands this request and your draft to Senior.*never ask the person to switch modes/);
   assert.match(conversation, /vibe64-helper plan read or history/);
   assert.doesNotMatch(conversation, /Auto's planning stage|You may edit application files|Do not read or update/);
   assert.ok(conversation.endsWith(text));

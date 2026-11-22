@@ -192,6 +192,7 @@ function createService({
     publishAgentSessionChanged,
     publishSessionChanged,
     recordWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),
+    handPlanToSenior: (sessionId, input, options) => assistantRouting.handPlanToSenior(sessionId, input, options),
     runCodexGitGatewayCommand,
     savedEnvValueLinks,
     sendAgentMessage: (sessionId, message, options) => assistant.sendAgentMessage(sessionId, message, options),

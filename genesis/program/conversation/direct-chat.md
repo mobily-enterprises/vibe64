@@ -1368,6 +1368,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantRoutingDelivery.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingCancellation.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js`
+- `packages/vibe64-terminals/src/server/assistantPlanHandoff.js`
 - `packages/vibe64-terminals/src/server/afterPlanBase.js`
 - `packages/vibe64-terminals/src/server/afterPlanPassesUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261114-after-plan-passes.js`
@@ -2255,6 +2256,49 @@ completes (waiting otherwise), and an outcome it reports is refused. A Senior,
 Junior or Custom request from main chat is an implementation-stage workflow
 from admission, without Router; an explicit Deslop or UI pass, generated Junior
 work, an unfinished goal and temporary chats never are.
+
+Router's prompt (`assistantRoutingPrompt`) names any request to make, create,
+write, draft, save, update, extend, reopen or add to a plan as planning: also a
+plan built from the conversation, work added to the current or a completed
+plan, the answer to a numbered question and a bare yes or OK to making one; a
+plan is a change, never conversation, and agreeing to one authorises no
+implementation. When Router still sends such a request to Junior, or calls it
+conversation, the plan helper's refusal is no dead end in Auto. The plan command
+acts as the running turn's role (`assistantPlanRole`: none for an answer-only
+turn, a pass or task); when it refuses `new`, `write`, `reopen` or `archive` with
+`vibe64_work_plan_senior_required` to an Auto turn that is not Senior's
+(`assistantPlanHandsOff`: Junior's, or an answer-only turn's),
+`refusedPlanChange` (`assistantPlanHandoff.js`) calls routing's
+`handPlanToSenior`, which checks the request and its active native turn under
+the routing lock and records `planHandoff` (that turn, the operation and the
+draft, bounded by `assistantPlanHandoffDraft`), and the turn hears
+`vibe64_work_plan_handed_to_senior`:
+end the turn, nothing was saved, never send the person to another mode. When
+that turn completes unstopped, `afterTurn` makes the same request Senior's
+planning turn before any other outcome (`continueWithSeniorPlan`: resolved mode
+Senior, reason and stage planning, no workflow or review, plan not involved), a
+step like any automatic follow-up, with the **Senior is saving the plan.**
+notice (`assistantPlanHandoffNotice`) and a follow-up displayed as **Senior saves
+the plan.** whose message is `ASSISTANT_PLAN_HANDOFF_MESSAGE`, the original
+request, accepted steering and the draft; it then follows planning's own
+outcomes. A stopped or failed turn never uses the handoff. Auto's Junior guidance
+(`workPlanInstructions` with `auto`) and Auto's conversation intent tell the turn
+to send such a plan through the helper rather than refuse it or ask the person
+to switch, Junior as `new` with the complete plan. Junior's own `write` that
+changes Plan content (`vibe64_work_plan_content_senior_only`) is often a slip
+while ticking marks, so it hands nothing on: Junior hears the refusal with how to
+send a real scope change (as `new` in Auto). A Junior or Custom chat keeps the
+refusal, worded for the person to switch Chat mode to Senior or Auto.
+
+Stop ends the turn. A message admitted while the saved request is stopped and
+its own native turn still runs (`isStoppedTurn`) is never steered into it:
+admission waits for that turn to end (ten seconds at most), then routes the
+message as a new request, and refuses it unsent
+(`vibe64_assistant_routing_stopped_turn_ending`) when the turn outlasts the
+wait. A steer sent without the lock leaves such a message to that admission, and
+a steer of a stopped request (`isStoppedRequest`) is admitted as a new request
+rather than refused as the steer of a finished turn, since the composer still
+offers steering while the stopped turn ends.
 
 Each workflow request records, at admission, the plan current then
 (`afterPlan.planAtAdmission`); a request that runs no pass after a plan (an

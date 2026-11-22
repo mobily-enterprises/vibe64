@@ -26,8 +26,12 @@ them from the agent. Junior updates Progress and the marks of existing checklist
 items as the work goes: a half tick once an item is built, a full tick once the
 plan's final checks prove it (see [Checklist marks](#checklist-marks)); Senior
 owns agreed Plan scope changes. Creating,
-reopening, archiving and completing a plan still require Senior. An unsuccessful
-save must be reported, and a chat outline alone is not a saved plan.
+reopening, archiving and completing a plan still require Senior. In **Auto**, a
+plan request that reached Junior is handed to Senior automatically with Junior's
+draft, so the plan is still saved without you asking (see [Auto](auto-workflow.md));
+in a **Junior** chat, Junior says so and asks you to switch **Chat mode** to
+**Senior** or **Auto**. An unsuccessful save must be reported, and a chat outline
+alone is not a saved plan.
 
 ## Read the current plan
 

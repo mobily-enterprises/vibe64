@@ -2045,3 +2045,17 @@ host's own Deploy to production and never another name for Staging. Env values
 that missed `20261114-staging-env-scope` still fail to read.
 Focused evidence: `stagingFoldersUpgrade.unit.test.js` and
 `stateUpgrades.unit.test.js`.
+
+## Auto plan handoff (no upgrade)
+
+The saved Auto request (`assistant_routing_request`, schema version 6) may hold
+an optional `planHandoff`: `{turnId, role, reason, operation, draft}`, the
+draft at most 32,000 characters. Only the plan command writes it, when it
+refuses a running Auto turn a plan change only Senior may make. Only the turn
+it names uses it, and only when that turn completes unstopped: its end removes
+the field and makes the request Senior's planning turn. A stopped turn leaves it
+unused, the next turn of the same request drops it, and a new request replaces
+the whole record. No existing record changes and nothing is backfilled: a
+request without it behaves as before. A release without the field reads the
+record as it always did (only status and delivery are validated) and ignores
+it. Focused evidence: `assistantWorkflow.test.js`.

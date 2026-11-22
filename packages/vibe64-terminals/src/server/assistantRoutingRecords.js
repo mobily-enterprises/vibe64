@@ -14,6 +14,7 @@ import {
   ASSISTANT_SENIOR_VERIFICATION_MESSAGE
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { STATE_KEY, failure, usesWorkPlan, recentVisibleMessages } from "./assistantRoutingRequests.js";
+import { ASSISTANT_PLAN_HANDOFF_MESSAGE } from "./assistantPlanHandoff.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -121,27 +122,33 @@ function createAssistantRoutingRecords({
   /**
    * The request's next automatic turn: an after-plan pass sends Genesis's request for the
    * changes since the chain's base, word for word, so Genesis recognises it as that pass's run;
+   * Senior's planning turn after a plan handoff saves the plan from the refused turn's draft;
    * every other stage continues the request's own work.
    */
   async function prepareFollowup(context, state, stage) {
     state.stage = stage;
     const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
     const pass = assistantAfterPlanPass(state);
+    const handoff = stage === "planning" ? state.planHandoff : null;
     const reviewer = state.mode === "auto" ? "Senior" : assistantModeLabel(state.resolvedMode);
     // Auto's Senior checks and completes a plan Junior implemented; without one it verifies a review.
     const checksPlan = stage === "review" && state.mode === "auto" && state.planInvolved;
     let displayMessage = stage === "planning" ? "Continue planning." : "Continue implementation.";
+    if (handoff) displayMessage = "Senior saves the plan.";
     if (stage === "review") displayMessage = checksPlan ? "Senior checks and completes the plan." : `Continue ${reviewer} review.`;
+    let lead = "Continue the authorised work from its current state; preserve completed work and do not reduce scope.";
+    if (handoff) lead = ASSISTANT_PLAN_HANDOFF_MESSAGE;
+    if (stage === "review") lead = checksPlan ? ASSISTANT_PLAN_COMPLETION_MESSAGE : ASSISTANT_SENIOR_VERIFICATION_MESSAGE;
+    const previous = handoff
+      ? `The previous turn's draft (plan ${handoff.operation}):\n${handoff.draft || "(none: it sent no plan text)"}`
+      : `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`;
     state.followup = {
       messageId: randomUUID(),
       planRevision: plan?.revision || null,
       messages: await recentVisibleMessages(context.runtime.store, context.session.sessionId, 5),
       displayMessage: pass ? pass.request : displayMessage,
-      message: pass ? pass.request : [stage === "review"
-        ? checksPlan ? ASSISTANT_PLAN_COMPLETION_MESSAGE : ASSISTANT_SENIOR_VERIFICATION_MESSAGE
-        : "Continue the authorised work from its current state; preserve completed work and do not reduce scope.",
-      `Original request: ${state.input.message}`, `Accepted steering: ${JSON.stringify(state.steering || [])}`,
-      `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`].join("\n\n")
+      message: pass ? pass.request : [lead, `Original request: ${state.input.message}`,
+        `Accepted steering: ${JSON.stringify(state.steering || [])}`, previous].join("\n\n")
     };
     state.delivery = "pending";
     delete state.attemptedMessageId;

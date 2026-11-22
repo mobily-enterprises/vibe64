@@ -710,7 +710,12 @@ Owners can open Models directly over the chat, without visiting account
 settings. Missing assignments point to this setup; other users are directed to
 the owner. In Auto, Router classifies new requests as conversation, planning, implementation
 or review and respects an explicit Senior or Junior choice. Senior handles planning
-and review; Junior implements unless the person explicitly chooses Senior.
+and review; Junior implements unless the person explicitly chooses Senior. Any
+request to make, save or extend a plan is planning. A request that needs a plan
+always gets one without the person asking for Senior: when Router sends it to
+Junior, or treats it as conversation, the plan helper hands the request and that
+turn's draft to Senior's planning turn once the turn ends. A Junior chat, which
+the person chose, keeps the refusal and says to switch to Senior or Auto.
 Routing progress appears with the message, without a duplicate banner above the
 composer.
 When Senior (in Auto or a Senior chat) explicitly completes a plan, the passes the
@@ -723,7 +728,8 @@ Interrupted-review notices disappear; errors and recovery actions remain.
 Routing is visible before delivery, and each routed exchange retains its mode
 and answering model. Auto planning restricts Senior to plan management. Junior
 implements the active plan and records unresolved decisions for the user. Direct Senior and Junior may both edit application files when asked.
-Steering stays with the currently working assistant.
+Steering stays with the currently working assistant. Stop ends the turn: the
+next message is a new request, routed afresh, and never joins the stopped turn.
 
 Auto retains three workflow states: Working, Waiting and Complete, with a separate
 Planning, Implementation or Review stage. The working agent explicitly reports

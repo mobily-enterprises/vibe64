@@ -21,7 +21,8 @@ import {
   assistantReplyAsksPerson,
   latestAssistantQuestionsAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
-import { read, failure, activeMessage, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { read, failure, activeMessage, assistantPlanHandsOff, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffDraft, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -128,6 +129,64 @@ function createAssistantRoutingOutcomes({
       await records.save(context, state);
       return { ok: true, outcome: state.outcome };
     });
+  }
+
+  /**
+   * The plan command refused Auto's running turn a plan change only Senior may make (creating a plan, changing its
+   * scope, reopening or archiving it): the request is Senior's once this turn ends. The latest refused draft wins.
+   */
+  async function handPlanToSenior(sessionId, input, options) {
+    return exclusiveAfterWrites(sessionId, options, async context => {
+      const state = await read(context.runtime.store, sessionId);
+      if (!assistantPlanHandsOff(state) || input.messageId !== state.messageId || input.turnId !== state.turnId ||
+          !PLAN_HANDOFF_OPERATIONS.includes(input.operation)) {
+        throw failure("The plan handoff does not match the active Auto request and turn.", "vibe64_assistant_plan_handoff_mismatch");
+      }
+      const native = await agent.sessionState(sessionId, context);
+      if (!native?.turn?.active || native.turn.id && native.turn.id !== state.turnId) {
+        throw failure("Only the active turn can hand its plan change to Senior.", "vibe64_assistant_plan_handoff_turn_inactive");
+      }
+      state.planHandoff = {
+        turnId: state.turnId,
+        role: state.resolvedMode,
+        reason: state.reason,
+        operation: input.operation,
+        draft: assistantPlanHandoffDraft(input.draft)
+      };
+      await records.save(context, state);
+      return { ok: true, handedTo: "senior" };
+    });
+  }
+
+  /**
+   * The turn whose plan change only Senior may make ended: the same request continues as Senior's planning turn, with
+   * that turn's draft and the conversation, and then follows planning's own outcomes.
+   */
+  async function continueWithSeniorPlan(context, state, { recovered, live }) {
+    Object.assign(state, { resolvedMode: "senior", reason: "planning", workflow: false, review: false, planInvolved: false });
+    state.steps = (state.steps || 0) + 1;
+    state.stalledTurns = 0;
+    delete state.outcome;
+    await records.prepareFollowup(context, state, "planning");
+    const notice = assistantPlanHandoffNotice(state);
+    delete state.planHandoff;
+    state.status = "working";
+    await records.save(context, state);
+    await records.writeNotice(context, state, notice);
+    if (recovered && !live) {
+      state.status = "waiting";
+      state.error = "Scheduling was disconnected. Resume the retained stage when ready.";
+      await records.save(context, state);
+      return;
+    }
+    try {
+      await delivery.deliver(context.session.sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
+    } catch (error) {
+      state.status = "waiting";
+      state.delivery = state.attemptedMessageId ? "uncertain" : "pending";
+      state.error = error.message;
+      await records.save(context, state);
+    }
   }
 
   /**
@@ -316,6 +375,15 @@ function createAssistantRoutingOutcomes({
       if (state.turnId !== (run.providerTurnId || run.turnId)) return;
       const live = routingState.liveFollowupRequests.get(key) === state.messageId;
       routingState.liveFollowupRequests.delete(key);
+      // A plan change only Senior may make, refused in this turn, makes the request Senior's planning turn, unless
+      // the person stopped it or the turn did not complete.
+      if (state.planHandoff) {
+        if (state.planHandoff.turnId === state.turnId && !state.stopped && run.state === "completed") {
+          await continueWithSeniorPlan(context, state, { recovered, live });
+          return;
+        }
+        delete state.planHandoff;
+      }
       if (!state.workflow && state.stage !== "planning") {
         // An answer in which Senior completed the plan (asked to, say) starts the passes too.
         const current = run.state === "completed" && !state.stopped && state.afterPlan ? await readablePlan(context) : null;
@@ -533,6 +601,7 @@ function createAssistantRoutingOutcomes({
 
   return Object.freeze({
     recordOutcome,
+    handPlanToSenior,
     afterTurn,
     reconcile
   });
