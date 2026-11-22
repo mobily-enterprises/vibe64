@@ -20,7 +20,11 @@ brings in its main.
 
 `vibe64-helper session status --json` lists the copies under
 `repository.connected`, each with its `name`, `path`, how many commits it is
-`behind` its main and whether it holds `unsaved` work.
+`behind` its main and whether it holds `unsaved` work. A typed `dependency`
+copy also has its package `type` and `inEffect`: `true` when the session's app
+uses this copy instead of the published package, otherwise `false` with the
+`reason` (for example `node_modules/library/index.js no longer holds the
+connected source.`); **Prepare workspace** puts it in effect again.
 
 ## Prepare workspace makes the missing copies
 
@@ -53,8 +57,9 @@ The output has one line per repository:
   that copy's commits and files; the next preparation then removes it. For work
   Save does not take, such as a stash, apply or drop it, or move the folder away.
 
-Preparation then writes the Stack's `Sources file` pointing at the copies and
-runs the declared connected Prepare and Verify commands; see
+Preparation then writes the Stack's `Sources file` pointing at the copies (when
+Stack names one), puts each typed dependency copy in effect, proves it, and
+runs any declared connected Prepare and Verify commands; see
 [Configure connected repositories](connected-projects.md).
 
 Preparation stops, naming the repository, when:

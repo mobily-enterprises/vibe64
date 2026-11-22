@@ -7,9 +7,9 @@ it never contains repository identities or a starting connection list.
 Connections may use different package types from the app: each entry can
 choose an ecosystem type (npm, Composer, pip, Bundler, Go modules, Cargo, Maven,
 Gradle or NuGet) or custom treatment, or inherit the one default declared by the
-project's Stack. A type records intent only; the project's declared commands
-give the source that ecosystem's treatment, and custom treatment belongs to
-project scripts.
+project's Stack. For every type but custom, Vibe64 itself makes a dependency
+connection take effect in the session, with no project command; custom
+treatment belongs to project scripts.
 The connection file travels with project source. Configuration requires
 the owner's connected account to have write access to the listed repositories.
 Configuration changes alone do not publish or merge work.
@@ -18,8 +18,13 @@ Every session works in its own copy of each listed repository, kept beside its
 source. Workspace preparation makes the missing copies, gives the project's
 declared development commands a local map of them, runs ordinary setup
 followed by connected preparation and verification, preserving authored files
-and the copies' work on failure. Initial consumption verification covers Node.js;
-other stacks still require end-to-end evidence. Update brings every copy onto
+and the copies' work on failure. For each typed dependency it puts the session's
+copy in place of the published package (for npm, every installed copy becomes
+exactly what npm would publish from it, kept in step on save while the session
+runs) and proves it is in effect; a connection that is not in effect blocks
+preparation with the reason, never falling back silently, and session status
+shows each copy's state. Nothing Vibe64 generates for it is committed, so a
+saved commit, and everything built from one, uses published packages. Update brings every copy onto
 its repository's main with the session's own repository; a copy that conflicts
 stays as it was and its conflict is reviewed and repaired like the session's own,
 and an interrupted Update recovers the copy it was applying. Save pushes each copy that has work straight to its main first,

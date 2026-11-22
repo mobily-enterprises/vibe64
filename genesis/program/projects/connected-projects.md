@@ -13,6 +13,20 @@ file as ordinary source editing.
 - `packages/vibe64-project/src/server/connectedProjects.js`
 - `packages/vibe64-genesis/src/shared/connectedPackageTypes.js`
 - `packages/vibe64-project/src/server/connectedDevelopment.js`
+- `packages/vibe64-project/src/server/connectedAdapters/index.js`
+- `packages/vibe64-project/src/server/connectedAdapters/npm.js`
+- `packages/vibe64-project/src/server/connectedAdapters/npmPackages.js`
+- `packages/vibe64-project/src/server/connectedAdapters/sync.js`
+- `packages/vibe64-project/src/server/connectedAdapters/derivedFiles.js`
+- `packages/vibe64-project/src/server/connectedAdapters/composer.js`
+- `packages/vibe64-project/src/server/connectedAdapters/pip.js`
+- `packages/vibe64-project/src/server/connectedAdapters/bundler.js`
+- `packages/vibe64-project/src/server/connectedAdapters/gomod.js`
+- `packages/vibe64-project/src/server/connectedAdapters/cargo.js`
+- `packages/vibe64-project/src/server/connectedAdapters/maven.js`
+- `packages/vibe64-project/src/server/connectedAdapters/gradle.js`
+- `packages/vibe64-project/src/server/connectedAdapters/nuget.js`
+- `packages/vibe64-terminals/src/server/agentSessionStatus.js`
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-project/src/server/projectActions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
@@ -35,9 +49,9 @@ validation, schemas, Colleague contracts and Settings: `npm`, `composer`,
 `pip`, `bundler`, `gomod`, `cargo`, `maven`, `gradle`, `nuget` and `custom`.
 Omission remains omitted in source and inherits the consuming Stack default
 (for example `npm` for Node or `composer` for PHP). Type is independent of the
-dependency/composition relationship. A non-custom type is a declared ecosystem
-label recorded in the prepared map; Vibe64 never derives or runs a package
-manager from it, and the consumer's declared commands perform the treatment.
+dependency/composition relationship. For a dependency of a non-custom type,
+Vibe64's adapter for that type performs the treatment (see Adapters below); the
+consumer's declared commands remain for compositions and custom connections.
 Settings offers Stack default and each type with its ecosystem label; selecting
 Stack default removes the override rather than writing an empty value or a
 resolved default. The bounded Colleague
@@ -88,6 +102,33 @@ coexists with the Environment file block. Repeated preparation preserves an
 unchanged map; removing a connection removes its projected entry, and the copy
 goes only when Prepare finds it holds no work. The map grants no authority.
 `inputs-prepared` does not certify command execution or development consumption.
+A section with only a Default package type writes no map; the adapters read the
+same resolved repositories from the inspection.
+
+## Adapters
+
+`connectedAdapters/index.js` registers one adapter per non-custom type with the
+contract `{ type, runtimeRequirements, apply(context), proof(context),
+restore?(input) }` documented at its top, and turns each typed dependency into
+two workspace preparation steps. `runConnectedAdapterStep` serializes applies
+(and syncs) per session source and returns a command-shaped result;
+`inspectConnectedAdapters` runs every proof without a command runner, from files
+only, for `isPrepared` and session status. The npm adapter (`npm.js`,
+`npmPackages.js`) finds the connected copy's publishable packages (npm
+workspaces and in-repository `file:` packages, never `private` ones), every
+installed copy of them in the session's trees, and replaces each with the
+packlist of `npm pack --dry-run`, moving the published copy to
+`node_modules/.vibe64-connected/originals/` and recording each file's digest in
+`npm-swaps.json`. Missing or incompatible dependencies of the connected package
+are installed with `npm install --no-save`, passing every earlier one again
+because npm prunes unsaved packages. A tracked copy is refused
+(`vibe64_connected_npm_tracked`) and `node_modules` is excluded when the tree
+does not ignore it. The proof compares the copies with the record and the
+record with the connected source. `sync.js` watches the copied package folders
+with chokidar; a content save copies the changed files, and a packlist change
+applies the connection again. The other adapters write their derived files
+through `derivedFiles.js`, in their type's own Git exclude block, and run their
+toolchain through the managed command function.
 
 The internal connected-input inspection compares the map with the session's
 recorded copies through the shared projection reader, which rejects missing,
