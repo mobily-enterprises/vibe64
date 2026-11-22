@@ -19,12 +19,15 @@ file as ordinary source editing.
 - `packages/vibe64-project/src/server/connectedAdapters/npmPackages.js`
 - `packages/vibe64-project/src/server/connectedAdapters/sync.js`
 - `packages/vibe64-project/src/server/connectedAdapters/derivedFiles.js`
+- `packages/vibe64-project/src/server/connectedAdapters/adapterResults.js`
+- `packages/vibe64-project/src/server/connectedAdapters/commandOutput.js`
 - `packages/vibe64-project/src/server/connectedAdapters/composer.js`
 - `packages/vibe64-project/src/server/connectedAdapters/pip.js`
 - `packages/vibe64-project/src/server/connectedAdapters/bundler.js`
 - `packages/vibe64-project/src/server/connectedAdapters/gomod.js`
 - `packages/vibe64-project/src/server/connectedAdapters/cargo.js`
 - `packages/vibe64-project/src/server/connectedAdapters/maven.js`
+- `packages/vibe64-project/src/server/connectedAdapters/mavenPom.js`
 - `packages/vibe64-project/src/server/connectedAdapters/gradle.js`
 - `packages/vibe64-project/src/server/connectedAdapters/nuget.js`
 - `packages/vibe64-terminals/src/server/agentSessionStatus.js`
