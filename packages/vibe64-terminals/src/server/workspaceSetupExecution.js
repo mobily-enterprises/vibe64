@@ -19,6 +19,7 @@ import {
   inProjectContext,
   operationRedactionSecrets,
   safeSetupLabel,
+  setupStep,
   stepRecordValue,
   stepStatus
 } from "./workspaceSetupRules.js";
@@ -86,28 +87,49 @@ function createWorkspaceSetupExecution({
    * (once per session; a later call while it runs does nothing). What a sync needs to run (npm
    * listing a package's files, or installing a new dependency) runs with the recipe's runtimes.
    */
-  async function ensureConnectedSync({ runtime, session, setup, runtimes, sourcePath, restart = false }) {
-    if (!setup?.connectedDevelopment?.adapters || (!restart && connectedSyncRunning(session.sessionId))) return;
+  /**
+   * A managed command in the session's source and connected copies with the recipe's runtimes, as
+   * Vibe64's own connected work outside a preparation runs it (a sync, a Save's bumps and steps).
+   */
+  async function connectedCommand({ runtime, session, setup, runtimes, sourcePath, label }) {
     const { sourceRoots } = await connectedInputs(setup, runtime, session);
     const baseEnv = await runtime.resolvePromptEnvironment();
     const projectSlug = currentProjectRequestContext()?.slug;
+    return ({ command, args, cwd, timeout, env }) => runCommand({
+      actor: "app",
+      allowedRoots: [sourcePath, ...sourceRoots],
+      args,
+      baseEnv: { ...baseEnv, ...env },
+      command,
+      cwd,
+      envPolicy: "project",
+      execution: { kind: "job", label, ownerId: session.sessionId, sessionId: session.sessionId, projectSlug },
+      mode: "capture",
+      purpose: "source",
+      runtimes,
+      timeout: timeout || WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
+    });
+  }
+
+  async function ensureConnectedSync({ runtime, session, setup, runtimes, sourcePath, restart = false }) {
+    if (!setup?.connectedDevelopment?.adapters || (!restart && connectedSyncRunning(session.sessionId))) return;
     await project.syncConnectedRepositories({
       session,
-      runCommand: ({ command, args, cwd, timeout, env }) => runCommand({
-        actor: "app",
-        allowedRoots: [sourcePath, ...sourceRoots],
-        args,
-        baseEnv: { ...baseEnv, ...env },
-        command,
-        cwd,
-        envPolicy: "project",
-        execution: { kind: "job", label: "Syncing connected packages", ownerId: session.sessionId, sessionId: session.sessionId, projectSlug },
-        mode: "capture",
-        purpose: "source",
-        runtimes,
-        timeout: timeout || WORKSPACE_SETUP_COMMAND_TIMEOUT_MS
-      })
+      runCommand: await connectedCommand({ runtime, session, setup, runtimes, sourcePath, label: "Syncing connected packages" })
     });
+  }
+
+  /**
+   * What Save runs for the session's connections, between saving its connected copies and its own
+   * commit: whether it has typed dependencies (whose published versions Save adopts), the Stack's
+   * Save entries, and the managed command both run with.
+   */
+  async function connectedSaveCommand({ runtime, session, setup, runtimes, sourcePath }) {
+    return {
+      dependencies: Boolean(setup.connectedDevelopment.adapters),
+      saveSteps: setup.connectedDevelopment.saveSteps.map((step, index) => setupStep(step, index, sourcePath)),
+      runCommand: await connectedCommand({ runtime, session, setup, runtimes, sourcePath, label: "Saving connected repositories" })
+    };
   }
 
   /**
@@ -401,6 +423,7 @@ function createWorkspaceSetupExecution({
 
   return Object.freeze({
     connectedInEffect,
+    connectedSaveCommand,
     connectedSourceRoots,
     ensureConnectedSync,
     currentTree,

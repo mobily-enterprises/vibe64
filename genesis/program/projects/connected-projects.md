@@ -13,6 +13,7 @@ file as ordinary source editing.
 - `packages/vibe64-project/src/server/connectedProjects.js`
 - `packages/vibe64-genesis/src/shared/connectedPackageTypes.js`
 - `packages/vibe64-project/src/server/connectedDevelopment.js`
+- `packages/vibe64-project/src/server/connectionsLock.js`
 - `packages/vibe64-project/src/server/connectedAdapters/index.js`
 - `packages/vibe64-project/src/server/connectedAdapters/npm.js`
 - `packages/vibe64-project/src/server/connectedAdapters/npmPackages.js`

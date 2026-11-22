@@ -77,7 +77,20 @@ function createWorkspaceSetupRunner({
     await setupExecution.ensureConnectedSync({ runtime, session, setup, runtimes: preparedRecipe(setup, sourcePath).runtimes, sourcePath });
   }
 
+  /**
+   * What Save runs for a session whose ready recipe has connected development (its typed
+   * dependencies' published versions and the Stack's Save entries); null when it has none.
+   */
+  async function connectedSaveRunner({ runtime, session }) {
+    const sourcePath = sessionSourcePath(session);
+    const setup = await runnerState.inspect({ session, environment: await runtime.resolvePromptEnvironment(), projectRoot: sourcePath });
+    if (setup?.status !== "ready" || !setup.connectedDevelopment) return null;
+    const { runtimes } = preparedRecipe(setup, sourcePath);
+    return setupExecution.connectedSaveCommand({ runtime, session, setup, runtimes, sourcePath });
+  }
+
   return Object.freeze({
+    connectedSaveRunner,
     invalidate: setupStatus.invalidate,
     keepConnectedInSync,
     isPrepared: setupStatus.isPrepared,

@@ -18,6 +18,7 @@ const COMMAND_FORM = "with `runtime` [in `workdir`]: `command` `argument`...";
 const STEP_FORMS = Object.freeze({
   Prepare: `- Prepare \`label\` ${COMMAND_FORM}`,
   Verify: `- Verify \`label\` ${COMMAND_FORM}`,
+  Save: `- Save \`label\` ${COMMAND_FORM}`,
   "Custom runner": `- Custom runner ${COMMAND_FORM}`
 });
 const CONNECTED_DEVELOPMENT_ENTRY_FORMS = Object.freeze([
@@ -25,7 +26,8 @@ const CONNECTED_DEVELOPMENT_ENTRY_FORMS = Object.freeze([
   "- Sources file: `path`",
   ...Object.values(STEP_FORMS)
 ]);
-const STEP_LINE = /^- (Prepare|Verify) `([^`\r\n]+)` (.+)$/u;
+const STEP_LINE = /^- (Prepare|Verify|Save) `([^`\r\n]+)` (.+)$/u;
+const STEP_PHASES = Object.freeze({ Prepare: "prepare", Verify: "verify", Save: "save" });
 const CUSTOM_RUNNER_LINE = /^- Custom runner (.+)$/u;
 // The one label a Custom runner step carries in the recipe.
 const CUSTOM_RUNNER_LABEL = "Custom connected source";
@@ -35,10 +37,13 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
   let defaultPackageType = "";
   let customRunner = null;
   const steps = [];
+  // Run by Save, after the connected copies are saved and before the project's own commit.
+  const saveSteps = [];
   const diagnostics = [...(section.diagnostics || [])];
   const declared = section.status === "ready";
   if (declared && !isExplicitlyEmptyStackSection(section.lines)) {
     let verifying = false;
+    let saving = false;
     for (const [index, text] of section.lines.entries()) {
       const source = text.trim();
       if (!source) continue;
@@ -84,7 +89,7 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
         );
       }
       const kind = custom ? "Custom runner" : entry[1];
-      const phase = kind === "Verify" ? "verify" : "prepare";
+      const phase = custom ? "prepare" : STEP_PHASES[kind];
       if (!custom && verifying && phase === "prepare") {
         invalidStackOperation(
           ERROR_CODE,
@@ -93,7 +98,16 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
           line
         );
       }
+      if (!custom && saving && phase !== "save") {
+        invalidStackOperation(
+          ERROR_CODE,
+          OPERATION_PATH,
+          "All Save entries must follow the Prepare and Verify entries.",
+          line
+        );
+      }
       verifying ||= !custom && phase === "verify";
+      saving ||= phase === "save";
       const step = {
         label: custom ? CUSTOM_RUNNER_LABEL
           : oneLineText(entry[2], ERROR_CODE, OPERATION_PATH, `Connected development ${kind} label`, line),
@@ -113,17 +127,19 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
       if (custom) {
         if (customRunner) invalidStackOperation(ERROR_CODE, OPERATION_PATH, "Declare exactly one Custom runner.", line);
         customRunner = step;
+      } else if (phase === "save") {
+        saveSteps.push(step);
       } else {
         steps.push({ ...step, phase });
       }
     }
     // Vibe64 puts a typed dependency in effect itself, so a default package type alone is a whole
     // declaration. Project commands read the Sources file, so they need one.
-    if ((steps.length || customRunner) && !sourcesFile) {
+    if ((steps.length || saveSteps.length || customRunner) && !sourcesFile) {
       invalidStackOperation(
         ERROR_CODE,
         OPERATION_PATH,
-        "Prepare and Verify entries and a Custom runner read the Sources file: declare it too."
+        "Prepare, Verify and Save entries and a Custom runner read the Sources file: declare it too."
       );
     }
     if (!defaultPackageType && !sourcesFile) {
@@ -141,14 +157,19 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
     declared,
     status,
     stackHash: section.stackHash,
-    recipeHash: status === "ready" ? stackOperationHash({ version: 1, sourcesFile, defaultPackageType, customRunner, steps }) : "",
+    // Save entries join the identity only when declared, so every earlier recipe keeps its own.
+    recipeHash: status === "ready"
+      ? stackOperationHash({ version: 1, sourcesFile, defaultPackageType, customRunner, steps, ...(saveSteps.length ? { saveSteps } : {}) })
+      : "",
     components: [...(section.components || [])],
     source: section.source || null,
     sourcesFile,
     defaultPackageType,
     customRunner,
     steps,
-    runtimeRequirements: uniqueSorted([...steps, ...(customRunner ? [customRunner] : [])].flatMap(step => step.runtimeRequirements)),
+    saveSteps,
+    runtimeRequirements: uniqueSorted([...steps, ...saveSteps, ...(customRunner ? [customRunner] : [])]
+      .flatMap(step => step.runtimeRequirements)),
     diagnostics
   };
 }

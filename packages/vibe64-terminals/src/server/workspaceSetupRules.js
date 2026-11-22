@@ -199,6 +199,7 @@ export {
   preparedRecipe,
   resourceIdentityMatches,
   safeSetupLabel,
+  setupStep,
   stepRecordValue,
   stepStatus,
   workspaceSetupRunKey

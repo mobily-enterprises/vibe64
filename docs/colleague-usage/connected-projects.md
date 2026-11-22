@@ -260,3 +260,43 @@ or checked, preparation stops with `vibe64_connected_copy_missing`; see
 [Work in connected repositories](connected-repositories.md). Colleague can
 explain the process and offer supported preparation actions; it must not claim
 successful preparation from a declaration alone.
+
+## Save records what main was saved with
+
+Save covers the copies first; see
+[Save saves the copies first](connected-repositories.md#save-saves-the-copies-first).
+For a **Composition**, Save pins the saved commit in the tracked
+`vibe64.connections.lock.json`, in the same commit as the project's own work:
+
+```json
+{
+  "schema": "vibe64.connections-lock.v1",
+  "repositories": [
+    {
+      "name": "Library",
+      "repository": "https://github.com/example/library",
+      "commit": "<the copy's saved commit>",
+      "tree": "<that commit's tree>"
+    }
+  ]
+}
+```
+
+Have the project's composer, what Staging and Production build with, read the
+pin there: whatever is built from a saved commit then assembles exactly that
+commit of the composition. A session's own copy still takes its place while you
+work, through the Sources file. A
+**Dependency** gets no pin: Staging and Production install the published version
+the project's manifest and lock name, and Save moves them to a newer published
+version when the connected copy declares one (never to an unpublished commit).
+
+For anything else a project must record when it saves, declare **Save** entries
+after the Prepare and Verify entries (they need the `Sources file`):
+
+```markdown
+- Save `Record release state` with `nodejs`: `node` `tooling/record-release.mjs` `.development/connected.json`
+```
+
+They run after the copies are saved and pinned, before the project's own
+commit, which takes what they change; one that fails stops that commit. A Custom
+runner script is not called by Save.

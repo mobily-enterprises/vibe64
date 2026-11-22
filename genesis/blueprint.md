@@ -29,7 +29,12 @@ its repository's main with the session's own repository; a copy that conflicts
 stays as it was and its conflict is reviewed and repaired like the session's own,
 and an interrupted Update recovers the copy it was applying. Save pushes each copy that has work straight to its main first,
 then the session's own repository, and refuses before pushing anything while any
-of them is behind its main. The unsaved badge, the check for newer saved work,
+of them is behind its main. Save pins each composition copy's saved commit in
+the project's tracked connections lock, in the same commit as the session's own
+work, so the project's main names exactly what it was saved with; dependencies
+reach Staging and Production only as published versions, which Save adopts in the
+project's manifest and lock. A Save stopped after a copy pushed says so and is
+retried by saving again. The unsaved badge, the check for newer saved work,
 turn checkpoints, archive recovery and renewal cover the copies too.
 
 Applications in Preview can request the person's microphone and play audio

@@ -67,6 +67,10 @@ Custom runner require it. Ordered `Prepare` and `Verify`
 entries and the Custom runner reuse the Workspace setup argv, runtime and
 working-directory grammar through one command parser in `stackOperation.js`;
 their errors name the Connected development entry and its own form.
+Optional `Save` entries come last; Save runs them (not preparation) through the
+recipe's runtimes, after the connected copies are saved and pinned and before
+the project's own commit (`connectedDevelopment.saveSteps`, run by
+`connectedSaveCommand`). They join the recipe identity only when declared.
 Prepare entries precede verification. A non-custom composition requires a
 Verify entry (`vibe64_connected_verification_required`), because the project
 assembles it; custom-only recipes may use the Custom runner's verification phase.

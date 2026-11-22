@@ -7,6 +7,10 @@
 // project's per-connection script, for what no adapter covers.
 const CONNECTED_CUSTOM_PACKAGE_TYPE = "custom";
 const CONNECTED_SOURCES_CONTRACT = "vibe64.connected-sources.v2";
+// The tracked pin of each composition connection, beside vibe64.connections.json: Save writes the
+// commit (and tree) of every composition copy it saved, in the same commit as the project's own work.
+const CONNECTIONS_LOCK_FILE = "vibe64.connections.lock.json";
+const CONNECTIONS_LOCK_SCHEMA = "vibe64.connections-lock.v1";
 
 const CONNECTED_PACKAGE_TYPES = Object.freeze([
   Object.freeze({ value: "npm", label: "npm (Node.js)" }),
@@ -56,6 +60,8 @@ export {
   CONNECTED_PACKAGE_TYPES,
   CONNECTED_PACKAGE_TYPE_VALUES,
   CONNECTED_SOURCES_CONTRACT,
+  CONNECTIONS_LOCK_FILE,
+  CONNECTIONS_LOCK_SCHEMA,
   connectedPackageTypeHasAdapter,
   connectedPackageTypeListText,
   connectedPackageTypeUsesScript,

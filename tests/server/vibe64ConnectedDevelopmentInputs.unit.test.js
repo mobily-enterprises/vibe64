@@ -25,7 +25,7 @@ async function fixture(target, name = "task") {
   const session = { sessionId: name, metadata: { ...sourceMetadata(target, name), connected_copies: JSON.stringify({ library: copy }) } };
   return { root, copyRoot, connection, session,
     input: { session,
-      inspection: { status: "ready", defaultPackageType: "npm", recipeHash: "test-recipe", sourcesFile: ".development/connected.json" } }
+      inspection: { status: "ready", defaultPackageType: "npm", recipeHash: "test-recipe", sourcesFile: ".development/connected.json", saveSteps: [] } }
   };
 }
 

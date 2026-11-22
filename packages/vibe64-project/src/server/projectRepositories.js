@@ -1,4 +1,5 @@
 import { githubRepositoryFullName, readConnectedProjects } from "./connectedProjects.js";
+import { planCompositionPins, recordCompositionPins } from "./connectionsLock.js";
 import {
   connectedDevelopmentApplies,
   inspectConnectedDevelopmentInputs,
@@ -79,6 +80,27 @@ function createProjectRepositories({
   async function readSessionConnectedRepositories(session) {
     const { repositories } = await readConnectedProjects(sessionSourcePath(session));
     return repositories.map(connection => ({ ...connection, fullName: githubRepositoryFullName(connection.repository) }));
+  }
+
+  /**
+   * What Save would pin for this session: its composition connections and whether its lock would
+   * change, given each copy's saved commit (`commits` by GitHub owner/name).
+   */
+  async function planSessionCompositionPins({ session, commits }) {
+    return planCompositionPins({
+      sourceRoot: sessionSourcePath(session),
+      connections: await readSessionConnectedRepositories(session),
+      commits
+    });
+  }
+
+  /** Writes this session source's connections lock from its copies' pins. */
+  async function recordSessionCompositionPins({ session, pins }) {
+    return recordCompositionPins({
+      sourceRoot: sessionSourcePath(session),
+      connections: await readSessionConnectedRepositories(session),
+      pins
+    });
   }
 
   async function inspectWorkspaceSetup({ session, projectRoot = sessionSourcePath(session), environment = env } = {}) {
@@ -370,6 +392,8 @@ function createProjectRepositories({
     runConnectedAdapterStep,
     syncConnectedRepositories: syncSessionConnectedRepositories,
     readSessionConnectedRepositories,
+    planCompositionPins: planSessionCompositionPins,
+    recordCompositionPins: recordSessionCompositionPins,
     readRepositoryWorkflow,
     saveRepositoryWorkflow,
     refreshGithub,

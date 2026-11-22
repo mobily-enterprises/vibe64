@@ -167,3 +167,25 @@ test("connected development step errors describe its own grammar, never Workspac
   }
   assert.match(rejection("- Verify `Check` with `shell` if `ready.txt` exists: `sh` `check.sh`"), /must run unconditionally/u);
 });
+
+test("Save entries come after Prepare and Verify, need the Sources file and join the recipe only when declared", () => {
+  const save = "- Save `Record release state` with `nodejs`: `node` `tooling/record-release.mjs` `.development/connected-sources.json`";
+  const inspected = vibe64ConnectedDevelopmentInspection({ status: "ready", lines: [...lines, save] });
+  assert.equal(inspected.status, "ready");
+  assert.deepEqual(inspected.saveSteps, [{ label: "Record release state", argv: ["node", "tooling/record-release.mjs", ".development/connected-sources.json"],
+    runtimeRequirements: ["nodejs"], workdir: "." }]);
+  // Preparation never runs them; Save has their runtimes through the recipe's.
+  assert.equal(inspected.steps.length, 2);
+  assert.deepEqual(inspected.runtimeRequirements, ["nodejs", "shell"]);
+  const without = vibe64ConnectedDevelopmentInspection({ status: "ready", lines });
+  assert.deepEqual(without.saveSteps, []);
+  assert.notEqual(inspected.recipeHash, without.recipeHash);
+  for (const candidate of [
+    [lines[0], save, lines[1]],
+    [lines[0], save, lines[2]],
+    ["- Default package type: `npm`", save],
+    [lines[0], save.replace("`nodejs`:", "`nodejs` if `release` exists:")]
+  ]) {
+    assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: candidate }), { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
+  }
+});

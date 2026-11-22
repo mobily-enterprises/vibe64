@@ -7,6 +7,8 @@ import {
 import { cleanupBackgroundTaskHelper, runBackgroundTaskHelperTurn } from "./assistantHelperTurn.js";
 import { SESSION_SAVE_TASK_ID } from "./sessionWorkTasks.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 const MAX_COMMIT_SUBJECT_LENGTH = 72;
 const MAX_PROMPT_FILES = 40;
@@ -142,10 +144,52 @@ async function generateSessionSaveCommitMessage({ agent, agentContext = {}, chan
   return { executionProfile: result.executionProfile, subject: parseSessionSaveCommitMessage(result.text) };
 }
 
+/**
+ * The version name for one Save: the assistant's, or a checkpoint-based one when naming is unavailable.
+ * @param {{ changes: object, checkpoint: { checkpointTree: string } }} prepared
+ * @param {object} options
+ * @param {SessionAgentManager} options.agent
+ * @param {object} options.agentContext
+ * @param {RuntimeLogger} options.logger
+ * @param {Function} [options.onProgress]
+ * @param {string} options.operationId
+ * @param {string} options.sessionId
+ */
+async function nameSessionSave(prepared, { agent, agentContext, logger, onProgress = doNothing, operationId, sessionId }) {
+  try {
+    return await generateSessionSaveCommitMessage({
+      agent,
+      agentContext,
+      changes: prepared.changes
+    });
+  } catch (error) {
+    // Naming is optional. Leave failed thread ownership intact and let the
+    // repository owner enforce the normal checkpoint and publish checks.
+    logOperationalEvent(logger, "warn", {
+      code: error.code || "vibe64_session_save_message_failed",
+      component: "vibe64.session_save",
+      event: "vibe64.session_save.message_fallback",
+      operationId,
+      sessionId
+    }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
+    await onProgress({
+      code: error.code || "vibe64_session_save_message_failed",
+      kind: "message",
+      message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
+      stage: "message-fallback"
+    });
+    return {
+      executionProfile: null,
+      subject: `Save work ${prepared.checkpoint.checkpointTree.slice(0, 12)}`
+    };
+  }
+}
+
 const __testables = Object.freeze({ normalizeSessionSaveCommitMessage, sessionSaveCommitMessagePrompt });
 
 export {
   cleanupSessionSaveCommitMessage,
   generateSessionSaveCommitMessage,
+  nameSessionSave,
   __testables
 };

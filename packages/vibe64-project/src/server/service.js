@@ -474,6 +474,8 @@ function createService({
     runConnectedAdapterStep: repositories.runConnectedAdapterStep,
     syncConnectedRepositories: repositories.syncConnectedRepositories,
     readSessionConnectedRepositories: repositories.readSessionConnectedRepositories,
+    planCompositionPins: repositories.planCompositionPins,
+    recordCompositionPins: repositories.recordCompositionPins,
     readRepositoryWorkflow: repositories.readRepositoryWorkflow,
     saveRepositoryWorkflow: repositories.saveRepositoryWorkflow,
     refreshGithub: repositories.refreshGithub,

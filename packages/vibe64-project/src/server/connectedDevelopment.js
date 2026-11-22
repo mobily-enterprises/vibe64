@@ -61,7 +61,7 @@ function connectedCopyFor(session, connection) {
  */
 function connectedDevelopmentApplies(inspection, repositories) {
   return repositories.length > 0 || (inspection?.status === "ready" &&
-    (inspection.steps?.length > 0 || Boolean(inspection.customRunner)));
+    (inspection.steps?.length > 0 || inspection.saveSteps?.length > 0 || Boolean(inspection.customRunner)));
 }
 
 /**
@@ -202,6 +202,8 @@ async function inspectConnectedWorkspaceSetup({
   if (!["ready", "unconfigured"].includes(setup.status)) return setup;
   const steps = inspection.status === "ready" ? inspection.steps : [];
   const customRunner = inspection.status === "ready" ? inspection.customRunner : null;
+  // Save runs these, not preparation; their runtimes join the recipe's so Save has them.
+  const saveSteps = inspection.status === "ready" ? inspection.saveSteps : [];
   try {
     if (!["ready", "unconfigured"].includes(inspection.status)) {
       throw vibe64Error(
@@ -280,13 +282,14 @@ async function inspectConnectedWorkspaceSetup({
       ...setup,
       status: "ready",
       steps: recipeSteps,
-      runtimeRequirements: [...new Set(recipeSteps.flatMap(step => step.runtimeRequirements))].sort(),
+      runtimeRequirements: [...new Set([...recipeSteps, ...saveSteps].flatMap(step => step.runtimeRequirements))].sort(),
       recipeHash: connectedDevelopmentHash({ workspace: setup.recipeHash, connected: inspection.recipeHash || "", inputs: inputsHash }),
       connectedDevelopment: {
         sourcesFile: inspection.sourcesFile || "",
         inputsHash,
         recipeHash: inspection.recipeHash || "",
-        adapters: adapterSteps.some(step => step.connectedAdapter.action === "proof")
+        adapters: adapterSteps.some(step => step.connectedAdapter.action === "proof"),
+        saveSteps
       }
     };
   } catch (error) {
