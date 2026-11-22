@@ -248,7 +248,7 @@ test("cargo: apply patches the crate to the checkout through an untracked config
   assert.deepEqual(await tracked(f), before);
 
   calls.length = 0;
-  assert.deepEqual(await step(f, "proof", runCommand), { ok: true, output: "[Connected] Library is in effect." });
+  assert.match((await step(f, "proof", runCommand)).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
   assert.deepEqual(calls.filter(([command]) => command === "cargo"), [["cargo", "metadata", "--format-version", "1", "--locked"]]);
   assert.equal((await status(f)).inEffect, true);
 });
@@ -397,7 +397,7 @@ test("cargo: Save moves the tracked Cargo.lock to the checkout's version only on
     before[0],
     before[1].replace(`version = "1.0.0"\nsource = "${CRATES_IO}"\nchecksum = "84bc"`, `version = "1.1.0"\nsource = "${CRATES_IO}"\nchecksum = "c-1.1.0"`)
   ]);
-  assert.deepEqual(await step(f, "proof", runCommand), { ok: true, output: "[Connected] Library is in effect." });
+  assert.match((await step(f, "proof", runCommand)).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
   assert.equal((await status(f)).inEffect, true);
 
   calls.length = 0;

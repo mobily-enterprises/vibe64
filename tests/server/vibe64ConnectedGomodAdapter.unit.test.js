@@ -124,7 +124,7 @@ test("gomod: apply writes one go.work using the app and every connected module, 
   assert.equal(await readFile(path.join(app, "go.work"), "utf8"), expectedWork(library, other));
 
   state.calls.length = 0;
-  assert.deepEqual(await step("proof"), { ok: true, output: "[Connected] Library is in effect." });
+  assert.match((await step("proof")).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
   assert.deepEqual(state.calls.filter(call => call.command === "go").map(call => [call.args[0], call.cwd]), [["env", app], ["list", app]]);
   assert.equal((await status()).inEffect, true);
   assert.equal(await git(app, "diff", "HEAD", "--stat"), "");

@@ -130,9 +130,7 @@ async function runConnectedAdapterStep({ action, repository, repositories, sessi
     }
     const proof = await adapter.proof(context);
     if (!proof.inEffect) return { ok: false, error: `Connected ${connection.name} is not in effect: ${proof.reason}` };
-    const head = await runCommand({ command: "git", args: ["rev-parse", "--short=12", "HEAD"], cwd: connection.sourceRoot, timeout: 60_000 });
-    const commit = head?.ok === true ? String(head.stdout || "").trim() : "";
-    const gaps = (await lockedVersions(connection, context)).map(entry => releaseGapLine(connection, entry, commit));
+    const gaps = (await lockedVersions(connection, context)).map(entry => releaseGapLine(connection, entry));
     return { ok: true, output: [`[Connected] ${connection.name} is in effect.`, ...gaps].join("\n") };
   } catch (error) {
     return { ok: false, error: String(error?.message || error), code: error?.code };
@@ -232,8 +230,8 @@ async function syncConnectedRepositories({ sessionId, repositories, sessionSourc
 }
 
 /** The visible gap between what the session runs and what Staging and Production install. */
-function releaseGapLine(connection, entry, commit = "") {
-  const runs = `[Connected] ${connection.name}: this session runs the connected ${entry.package}${commit ? ` at ${commit}` : ""}`;
+function releaseGapLine(connection, entry) {
+  const runs = `[Connected] ${connection.name}: this session runs the connected ${entry.package}`;
   if (!entry.locked) return `${runs}; Vibe64 cannot tell which published version Staging and Production use.`;
   return entry.connected && entry.connected !== entry.locked
     ? `${runs}; Staging and Production use the published ${entry.locked} until ${entry.connected} is published, which Save then moves this project to.`

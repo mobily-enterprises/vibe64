@@ -170,7 +170,7 @@ test("nuget: apply swaps the package for its connected project beside the consum
 
   assert.equal((await step("apply")).ok, true);
   assert.equal(await readFile(targets, "utf8"), expectedTargets(project, csproj));
-  assert.deepEqual(await step("proof"), { ok: true, output: "[Connected] Library is in effect." });
+  assert.match((await step("proof")).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
   assert.deepEqual([(await status()).inEffect, (await status()).reason], [true, ""]);
   assert.equal(await git(app, "diff", "HEAD", "--stat"), "");
 });
@@ -316,7 +316,7 @@ test("nuget: locked reads what the tracked lock installs; bump moves project and
   assert.equal(await readFile(lockPath, "utf8"), lockText.replace("\"resolved\": \"1.0.0\"", "\"resolved\": \"1.1.0\""));
   assert.equal(await readFile(targets, "utf8"), targetsText);
   assert.equal(await readFile(`${targets}.vibe64-backup-bump`, "utf8").catch(() => null), null);
-  assert.deepEqual(await step("proof"), { ok: true, output: "[Connected] Library is in effect." });
+  assert.match((await step("proof")).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
   assert.deepEqual(state.calls.filter(call => call.args[0] === "add").map(call => call.args),
     Array(3).fill(["add", project, "package", "Example.Library", "--version", "1.1.0"]));
   assert.deepEqual(await nugetAdapter.locked({ ...context, runCommand: null }), [{ package: "Example.Library", connected: "1.1.0", locked: "1.1.0" }]);

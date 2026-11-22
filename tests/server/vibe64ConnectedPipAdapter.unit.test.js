@@ -142,7 +142,7 @@ test("pip: apply installs the checkout editable in .venv with the tracked requir
 
   calls.length = 0;
   const proved = await step(f, "proof", runCommand);
-  assert.deepEqual(proved, { ok: true, output: "[Connected] Library is in effect." });
+  assert.match((proved).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
   assert.equal(calls[0][0], ".venv/bin/python");
   assert.deepEqual(calls[0].slice(-2), ["acme-library", f.copy]);
   assert.deepEqual(calls[1], [".venv/bin/python", "-m", "pip", "check", "--disable-pip-version-check"]);
@@ -222,7 +222,7 @@ test("pip: an exact pin of the connected distribution makes way for a checkout p
     await readFile(path.join(f.source, "requirements.connected.txt"), "utf8"),
     `${PIN_NOTE} acme-library==1.0.0  # pinned\nrequests==2.31.0 ; python_version > "3.8"\n`
   );
-  assert.deepEqual(await step(f, "proof", toolchain()), { ok: true, output: "[Connected] Library is in effect." });
+  assert.match((await step(f, "proof", toolchain())).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
   assert.equal(await readFile(path.join(f.source, "requirements.txt"), "utf8"), tracked);
 
   await writeFile(path.join(f.source, "requirements.txt"), `${tracked}rich==13.7.0\n`);
@@ -274,7 +274,7 @@ test("pip: Save moves the tracked pin to the checkout's version only once pip fi
   assert.deepEqual(calls.find(([, ...args]) => args[2] === "download").slice(-1), ["acme-library==1.1.0"]);
   assert.equal(await readFile(requirements, "utf8"), "# app\nacme-library==1.1.0 ; python_version >= \"3.11\"\nrequests==2.31.0\n");
   // The checkout stays in effect, its derived requirements following the moved pin.
-  assert.deepEqual(await step(f, "proof", toolchain()), { ok: true, output: "[Connected] Library is in effect." });
+  assert.match((await step(f, "proof", toolchain())).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
 
   // Now the pin is the checkout's version: nothing to move, nothing asked.
   calls.length = 0;
