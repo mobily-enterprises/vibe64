@@ -4,9 +4,9 @@
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 declare -A needs=(
-  [npm]="node npm" [composer]="php composer" [pip]="python3" [bundler]="ruby bundle"
-  [gomod]="go" [cargo]="cargo rustc" [maven]="java mvn" [gradle]="java gradle"
-  [nuget]="dotnet" [custom-cmake]="cmake c++ git"
+  [npm]="node npm tar git" [composer]="node git php composer" [pip]="node git python3" [bundler]="node git ruby bundle"
+  [gomod]="node git go zip" [cargo]="node git cargo rustc" [maven]="node git java mvn" [gradle]="node git java javac gradle"
+  [nuget]="node git dotnet" [custom-cmake]="cmake c++ git"
 )
 types=("$@")
 [ ${#types[@]} -gt 0 ] || for d in "$here"/*/prove.sh; do types+=("$(basename "$(dirname "$d")")"); done
