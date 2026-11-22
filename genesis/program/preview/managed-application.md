@@ -81,6 +81,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `tests/server/vibe64OutputActionTools.unit.test.js`
 - `tests/server/vibe64OutputTools.integration.test.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
+- `packages/vibe64-genesis/src/shared/resourceKinds.js`
 - Main: `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminalState.js`
@@ -280,6 +281,15 @@ known preview destination, while Reload can recheck output status without one.
 A blocked Outputs declaration with no targets reports its actionable
 inspection diagnostic instead of claiming that the project has no output.
 Declared targets blocked by missing resources remain visible but disabled.
+Outputs run in development, so only the resources development needs block them:
+`vibe64OutputsInspection` drops Genesis's `STACK_RESOURCE_MISSING` for a declared
+resource that `resourceRequiredInDevelopment` says development does without (a
+bucket, matched by its id among the Stack's resources, which Genesis keeps
+unique), and the application then uses its own default storage. A missing
+database, Redis or any other resource still disables every target, its reason
+naming that resource alone, and every other environment diagnostic is kept as
+before. The current-app inspection and the editor's Preview text read the same
+targets, so they follow it.
 Targets may declare up to sixteen named text parameters with labels, defaults,
 descriptions, and required flags. Prepare, Build, and Run arguments reference
 these values with `{parameter:id}`; the executable stays fixed. Vibe64 rejects

@@ -13,6 +13,7 @@ host provide managed system values separately.
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/resourceEnvironment.js`
+- `packages/vibe64-genesis/src/shared/resourceKinds.js`
 - `tests/server/redisBucketResources.unit.test.js`
 - `packages/vibe64-project/src/server/savedEnvValues.js`
 - Main: `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
@@ -277,6 +278,12 @@ resource environment boundary leaves it to the person's Env, and
 `bucketDeclarations` gives a host the exact names to ask for, with which may
 stay empty and which are secret. Development never asks for a
 bucket's settings (`resourceRequiredInDevelopment`): Env lists no rows for
-them, onboarding and session status do not count them as missing, and without
-them the application uses its own default storage, usually its own disk. A
-person who wants a development bucket adds the same names to Development Env.
+them, onboarding and session status do not count them as missing, Preview and
+every other Output start without them, and without them the application uses
+its own default storage, usually its own disk. A person who wants a development
+bucket adds the same names to Development Env. That rule has one owner,
+`@local/vibe64-genesis/shared/resourceKinds` (`BUCKET_RESOURCE_KIND`,
+`resourceKindIsPersonSupplied`, `resourceRequiredInDevelopment`), below both
+the project's Env (`resourceEnvironment.js` re-exports it for its callers) and
+the Outputs inspection, which reads Genesis's own resource diagnostics: Genesis
+counts every declared resource as required, a bucket too.

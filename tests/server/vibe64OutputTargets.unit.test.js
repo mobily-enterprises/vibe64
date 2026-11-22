@@ -360,6 +360,51 @@ test("a missing Stack resource says what to set and where, or that Vibe64 is sti
     "Vibe64 is still setting up this app's database. Preview can start when workspace setup finishes; then press Check again.");
 });
 
+test("a missing bucket leaves Outputs runnable in development, while a missing database still blocks them", async (t) => {
+  const context = await outputContext(t);
+  const section = { diagnostics: [], stackHash: "sha256:unit", status: "ready", source: "project",
+    lines: ["### Target `app`: Run app", "- Default.", "- Mode: `interactive`", "- Runtimes: `nodejs`", "- Run `Start`: `npm` `run` `dev`",
+      "#### Presentation", "- Kind: `web`", "- Ready when: `GET` `/` returns `200`"] };
+  const declaration = (id, kind, bindings) => ({ component: "project", resource: { id, kind, optionalBindings: {},
+    environmentAlternatives: [{ allowEmpty: [], bindings, preferred: true }] } });
+  const files = declaration("files", "bucket", { accessKeyId: "MERCBOT_FILES_S3_ACCESS_KEY_ID", bucket: "MERCBOT_FILES_S3_BUCKET",
+    endpoint: "MERCBOT_FILES_S3_ENDPOINT", region: "MERCBOT_FILES_S3_REGION", secretAccessKey: "MERCBOT_FILES_S3_SECRET_ACCESS_KEY" });
+  const database = declaration("database", "postgresql", { url: "DATABASE_URL" });
+  // Genesis's STACK_RESOURCE_MISSING for a declaration none of whose names is set.
+  const missing = ({ component, resource }) => {
+    const names = Object.values(resource.environmentAlternatives[0].bindings);
+    return { code: "STACK_RESOURCE_MISSING", message: `Stack component ${component} requires ${resource.id}: ${names.join(" + ")}.`,
+      details: { alternatives: [names.join(" + ")], component, missing: [names], resource: resource.id } };
+  };
+  const inspect = (resources, diagnostics = resources.map(missing)) => vibe64OutputsInspection({
+    environment: { diagnostics, resources, stackHash: "sha256:unit" },
+    section
+  });
+
+  const withoutBucket = inspect([files]);
+  assert.equal(withoutBucket.status, "ready");
+  assert.deepEqual(withoutBucket.diagnostics, []);
+  assert.equal(withoutBucket.targets[0].available, true);
+  assert.equal(withoutBucket.targets[0].disabledReason, null);
+  assert.deepEqual(withoutBucket.resources, [files], "the bucket is still declared");
+  assert.deepEqual(await listVibe64OutputTargets(context, { inspect: () => withoutBucket }), [outputTargetView()]);
+
+  const databaseDisabledReason = "This app needs its database before Preview can start: set DATABASE_URL in Env (in Dash, under Development), then press Check again.";
+  for (const resources of [[database], [database, files], [files, database]]) {
+    const blocked = inspect(resources);
+    assert.equal(blocked.status, "blocked");
+    assert.deepEqual(blocked.diagnostics.map(({ details }) => details.resource), ["database"]);
+    assert.equal(blocked.targets[0].available, false);
+    assert.equal(blocked.targets[0].disabledReason, databaseDisabledReason, "the reason names the database alone");
+    assert.deepEqual(await createVibe64OutputTargetTerminalSpec({ context, outputTargetId: "app" }, { inspect: () => blocked }),
+      { ok: false, message: databaseDisabledReason });
+  }
+
+  // Only a missing bucket is dropped: another diagnostic naming its id still blocks.
+  const other = { code: "UNIT_OTHER_DIAGNOSTIC", message: "Something else about files.", details: { resource: "files" } };
+  assert.deepEqual(inspect([files], [other]).diagnostics, [other]);
+});
+
 test("configured blocked Outputs keep disabled targets without exposing private inputs", async (t) => {
   const context = await outputContext(t);
   const disabledReason = "MySQL needs one of: DB_PASSWORD.";

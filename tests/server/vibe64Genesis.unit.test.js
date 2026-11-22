@@ -619,6 +619,41 @@ test("Vibe64 owns deployment interpretation while Genesis exposes its opaque Sta
   });
 });
 
+test("Outputs in development need the Stack's missing database but not its missing bucket", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await initializeGit(projectRoot);
+    await initializeGenesisProject({ projectRoot });
+    const resource = (declaration) => ["```json genesis-resource", JSON.stringify(declaration, null, 2), "```", ""];
+    await writeFile(path.join(projectRoot, "genesis", "stack.md"), [
+      "# Stack", "", "## Components", "", "## Resources", "",
+      ...resource({ id: "database", kind: "postgresql", environmentAlternatives: [{ preferred: true, bindings: { url: "DATABASE_URL" } }] }),
+      ...resource({ id: "files", kind: "bucket", environmentAlternatives: [{ preferred: true, bindings: {
+        accessKeyId: "FILES_S3_ACCESS_KEY_ID", bucket: "FILES_S3_BUCKET", endpoint: "FILES_S3_ENDPOINT",
+        region: "FILES_S3_REGION", secretAccessKey: "FILES_S3_SECRET_ACCESS_KEY"
+      } }] }),
+      "## Outputs", "",
+      "### Target `app`: Run app", "", "- Default.", "- Mode: `interactive`", "- Runtimes: `nodejs`", "- Run `Develop`: `npm` `run` `develop`", "",
+      "#### Presentation", "", "- Kind: `web`", "- Ready when: `GET` `/api/health` returns `200`", ""
+    ].join("\n"), "utf8");
+
+    // Genesis reports both missing; Outputs, which run in development, keep the database alone.
+    const environment = await inspectGenesisEnvironment({ environment: {}, projectRoot });
+    assert.deepEqual(environment.diagnostics.map(({ details }) => details.resource), ["database", "files"]);
+    const blocked = await inspectVibe64Outputs({ environment: {}, projectRoot });
+    assert.equal(blocked.status, "blocked");
+    assert.deepEqual(blocked.diagnostics.map(({ details }) => details.resource), ["database"]);
+    assert.equal(blocked.targets[0].available, false);
+    assert.equal(blocked.targets[0].disabledReason,
+      "This app needs its database before Preview can start: set DATABASE_URL in Env (in Dash, under Development), then press Check again.");
+
+    const ready = await inspectVibe64Outputs({ environment: { DATABASE_URL: "postgres://127.0.0.1/app" }, projectRoot });
+    assert.equal(ready.status, "ready");
+    assert.deepEqual(ready.diagnostics, []);
+    assert.equal(ready.targets[0].available, true);
+    assert.deepEqual(ready.resources.map(({ resource }) => resource.kind), ["postgresql", "bucket"]);
+  });
+});
+
 test("Vibe64 rejects unsafe Deployment content that Genesis deliberately leaves opaque", () => {
   const invalid = [
     ["- Runtimes: `nodejs`", "- Serve `Start`: `npm` `start`"],

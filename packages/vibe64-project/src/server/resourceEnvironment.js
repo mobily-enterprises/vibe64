@@ -8,6 +8,11 @@ import {
 } from "@local/vibe64-execution/server";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import {
+  BUCKET_RESOURCE_KIND,
+  resourceKindIsPersonSupplied,
+  resourceRequiredInDevelopment
+} from "@local/vibe64-genesis/shared/resourceKinds";
 import { codedError } from "./codedError.js";
 
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
@@ -21,11 +26,6 @@ const DATABASE_RESOURCE_KINDS = new Set(["mysql", "postgresql", "sqlite"]);
 // Redis: what an application's servers share live updates and other short-lived
 // state through. A host may serve one.
 const REDIS_RESOURCE_KIND = "redis";
-// Object storage speaking the S3 API, in an account the person holds with a
-// provider of their own choosing. For development and a workspace's own release
-// the person enters its settings (development without them uses the app's own
-// default storage); a host may make one for a separate deployment it runs.
-const BUCKET_RESOURCE_KIND = "bucket";
 // What a bucket's optional `driver` binding receives: the API every bucket speaks.
 const BUCKET_STORAGE_DRIVER = "s3";
 // The semantics a kind's preferred alternative binds: every required one, and
@@ -219,23 +219,6 @@ function resourceDeclarationDiagnostics(resources = []) {
     }
   }
   return diagnostics;
-}
-
-/**
- * Whether only the person supplies a resource of this kind, never a host: a
- * bucket is theirs, so its values come only from the Env they enter.
- */
-function resourceKindIsPersonSupplied(kind = "") {
-  return kind === BUCKET_RESOURCE_KIND;
-}
-
-/**
- * Whether development needs a declared resource's values before the
- * application runs. A bucket does not: without its settings the application
- * uses its own default storage.
- */
-function resourceRequiredInDevelopment(resource = {}) {
-  return !resourceKindIsPersonSupplied(resource.kind);
 }
 
 /**

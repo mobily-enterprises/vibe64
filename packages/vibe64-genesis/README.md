@@ -18,6 +18,18 @@ its `package.json` declares; only Genesis's own source repository serves its
 own skills), and preservation of customizations. Callers
 own source-write exclusion and the assistant's context refresh lifecycle.
 
+## Resources a Development run needs
+
+`./shared/resourceKinds` owns which declared Stack resources development needs
+before the application runs: every kind but a `bucket`, without whose settings
+the application uses its own default storage (`resourceRequiredInDevelopment`;
+`resourceKindIsPersonSupplied` says a bucket is always the person's own). The
+project's Env reads it through `@local/vibe64-project/server/resourceEnvironment`.
+Genesis counts every declared resource as required, so the Outputs inspection
+drops Genesis's `STACK_RESOURCE_MISSING` for a resource development does without,
+by its id among the Stack's resources; every other diagnostic still disables the
+targets.
+
 ## Resource estimates
 
 `inspectVibe64ResourceEstimates()` reads the optional project-owned

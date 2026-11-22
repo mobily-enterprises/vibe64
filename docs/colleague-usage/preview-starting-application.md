@@ -27,6 +27,12 @@ DB_DATABASE in Env (in Dash, under Development)": open **Dash → Env**, choose
 **Development**, add the value (see [Development Env](development-env.md)) and
 press **Check again**.
 
+A files bucket never holds Preview back. Without its settings the app keeps its
+files in its own default storage, usually its own disk; when something else is
+missing too, such as the database, Preview names only that. To try your own
+bucket in development, add its settings in Development Env yourself (see
+[Development Env](development-env.md)).
+
 For recurring **Preview could not load an application resource** errors, enable
 Preview diagnostics in the affected Studio browser before reproducing: add
 `vibe64_preview_debug=1` to the page URL, or set

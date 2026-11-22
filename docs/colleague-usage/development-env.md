@@ -27,8 +27,8 @@ yourself, such as Valkey, and enter its address in that row, just as for a
 database. A **bucket** (kind `bucket`) is
 object storage you hold with an S3-compatible provider. Development never asks
 for a bucket's settings: no rows appear for it, the setup message does not list
-them, and the app keeps its files in its own default storage, usually its own
-disk. To try your real bucket in development, add the same names yourself (for
+them, Preview starts without them, and the app keeps its files in its own
+default storage, usually its own disk. To try your real bucket in development, add the same names yourself (for
 a JSKIT app `JSKIT_STORAGE_DRIVER` set to `s3`, plus `JSKIT_STORAGE_S3_BUCKET`,
 `JSKIT_STORAGE_S3_REGION`, `JSKIT_STORAGE_S3_ENDPOINT`,
 `JSKIT_STORAGE_S3_ACCESS_KEY_ID` and `JSKIT_STORAGE_S3_SECRET_ACCESS_KEY`, the

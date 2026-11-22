@@ -10,7 +10,8 @@
     "./server/packaging": "./src/server/packaging.js",
     "./server/promptContext": "./src/server/promptContext.js",
     "./shared/connectedPackageTypes": "./src/shared/connectedPackageTypes.js",
-    "./shared/deploymentServiceNames": "./src/shared/deploymentServiceNames.js"
+    "./shared/deploymentServiceNames": "./src/shared/deploymentServiceNames.js",
+    "./shared/resourceKinds": "./src/shared/resourceKinds.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -48,6 +49,10 @@
           {
             "subpath": "./shared/deploymentServiceNames",
             "summary": "Owns a Deployment service's id grammar and the most services a Deployment has, shared by the Deployment parser, Add a service and its form."
+          },
+          {
+            "subpath": "./shared/resourceKinds",
+            "summary": "Owns which declared Stack resources a Development run needs (a bucket is not one: the app uses its own default storage), shared by Env, workspace setup and Preview's start check."
           }
         ]
       }

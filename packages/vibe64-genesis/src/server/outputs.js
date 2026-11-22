@@ -20,6 +20,7 @@ import {
   parsePreviewLine,
   previewDraft
 } from "./outputsPreviewIdentity.js";
+import { resourceRequiredInDevelopment } from "../shared/resourceKinds.js";
 
 const VIBE64_OUTPUTS_CONTRACT = "vibe64.outputs.v1";
 const VIBE64_OUTPUTS_SECTION = "Outputs";
@@ -600,10 +601,25 @@ function resourceReason(diagnostic, options = {}) {
   return `This app needs its ${resource} before Preview can start: set ${alternatives.join(", or ")} in Env (in Dash, under Development), then press Check again.`;
 }
 
+/**
+ * Genesis's environment diagnostics that stop an Output, which always runs in
+ * development: every one but a missing resource development does without (a
+ * bucket: the app uses its own default storage), found by its id among the
+ * Stack's declared resources, which Genesis keeps unique.
+ */
+function developmentEnvironmentDiagnostics(environment = {}) {
+  const notNeeded = new Set((environment.resources || [])
+    .filter((declaration) => declaration?.resource && !resourceRequiredInDevelopment(declaration.resource))
+    .map((declaration) => declaration.resource.id));
+  return (environment.diagnostics || []).filter((diagnostic) => !(
+    diagnostic?.code === "STACK_RESOURCE_MISSING" && notNeeded.has(diagnostic.details?.resource)
+  ));
+}
+
 function vibe64OutputsInspection({ environment = {}, section = {}, resourcesPreparing = false } = {}) {
   assertMatchingStackInspections(section, environment, "Outputs section");
   const sectionDiagnostics = [...(section.diagnostics || [])];
-  const environmentDiagnostics = [...(environment.diagnostics || [])];
+  const environmentDiagnostics = developmentEnvironmentDiagnostics(environment);
   let parsed = { version: 1, targets: [] };
   if (section.status === "ready") parsed = parseVibe64OutputsLines(section.lines);
   const disabledReason = environmentDiagnostics.length === 0

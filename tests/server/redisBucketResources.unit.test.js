@@ -4,15 +4,13 @@ import path from "node:path";
 import test from "node:test";
 
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
-import {
-  bucketDeclarations,
-  normalizeResourceEnvironment,
-  resourceDeclarationDiagnostics,
-  resourceRequiredInDevelopment
-} from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
+import * as resourceKinds from "@local/vibe64-genesis/shared/resourceKinds";
+import * as resourceEnvironment from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { projectServiceCollaborators, sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
+const { bucketDeclarations, normalizeResourceEnvironment, resourceDeclarationDiagnostics, resourceRequiredInDevelopment } =
+  resourceEnvironment;
 const CONTRACT = "vibe64.resource-environment.v2";
 
 function redisResource(bindings = { url: "REALTIME_REDIS_URL" }, extra = {}) {
@@ -102,6 +100,20 @@ test("a bucket's names come from its preferred alternative, with which may stay 
   assert.equal(bucketDeclarations([bucketResource(withoutDriver)])[0].driver, "");
   assert.equal(resourceRequiredInDevelopment(bucketResource().resource), false);
   assert.equal(resourceRequiredInDevelopment(redisResource().resource), true);
+});
+
+test("which resources development needs has one owner, vibe64-genesis, whose rule the Env reads", () => {
+  for (const name of ["BUCKET_RESOURCE_KIND", "resourceKindIsPersonSupplied", "resourceRequiredInDevelopment"]) {
+    assert.equal(resourceEnvironment[name], resourceKinds[name], `${name} is vibe64-genesis's own, not a copy`);
+  }
+  assert.equal(resourceKinds.BUCKET_RESOURCE_KIND, "bucket");
+  for (const kind of ["mysql", "postgresql", "sqlite", "redis", "voice"]) {
+    assert.equal(resourceKinds.resourceKindIsPersonSupplied(kind), false, kind);
+    assert.equal(resourceKinds.resourceRequiredInDevelopment({ id: kind, kind }), true, kind);
+  }
+  assert.equal(resourceKinds.resourceKindIsPersonSupplied("bucket"), true);
+  assert.equal(resourceKinds.resourceRequiredInDevelopment(bucketResource().resource), false);
+  assert.equal(resourceKinds.resourceRequiredInDevelopment(), true, "an undeclared kind is required");
 });
 
 test("development asks for no bucket settings and stays ready without them, while a redis url is still needed", async () => {

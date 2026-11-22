@@ -81,6 +81,13 @@ together. Later checks reread changes to those declarations. Invalid resource
 estimates retain their diagnostic and generic fallback; they do not by themselves
 make an otherwise valid output unavailable.
 
+A resource the app needs and doesn't have yet, such as its database or Redis,
+keeps Preview from starting: Preview names the values to set in **Dash → Env**
+under **Development**, or says Vibe64 is still setting the resource up, then you
+press **Check again** (see [Choose a starting application](preview-starting-application.md)).
+A files bucket is never one of them: without its settings the app uses its own
+default storage, and Preview starts.
+
 If the previewed application shows its own login screen, enter that application's
 credentials. Its login and realtime connection run through the Preview address.
 HTTPS previews retain the HTTPS scheme for applications that use it to set
