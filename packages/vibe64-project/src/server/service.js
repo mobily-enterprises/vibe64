@@ -469,6 +469,7 @@ function createService({
     inspectWorkspaceSetup: repositories.inspectWorkspaceSetup,
     inspectConnectedDevelopmentInputs: repositories.inspectConnectedDevelopmentInputs,
     inspectConnectedAdapters: repositories.inspectConnectedAdapters,
+    bumpConnectedDependencies: repositories.bumpConnectedDependencies,
     prepareConnectedDevelopmentInputs: repositories.prepareConnectedDevelopmentInputs,
     runConnectedAdapterStep: repositories.runConnectedAdapterStep,
     syncConnectedRepositories: repositories.syncConnectedRepositories,

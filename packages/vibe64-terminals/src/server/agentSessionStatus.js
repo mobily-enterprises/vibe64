@@ -77,7 +77,15 @@ async function readAgentSessionStatus({ descriptor, project, projectRecord, sess
       path: copyPath,
       behind,
       unsaved,
-      ...(proof ? { type: proof.type, inEffect: proof.inEffect, ...(proof.inEffect ? {} : { reason: proof.reason }) } : {}),
+      ...(proof
+        ? {
+          type: proof.type,
+          inEffect: proof.inEffect,
+          ...(proof.inEffect ? {} : { reason: proof.reason }),
+          // What Staging and Production use instead: the published versions the project's lockfiles name.
+          ...(proof.published?.length ? { published: proof.published } : {})
+        }
+        : {}),
       ...(!Array.isArray(proofs) ? { inEffect: false, reason: proofs.error || "Vibe64 could not check it." } : {})
     };
   });

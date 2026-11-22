@@ -7,6 +7,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
+  bumpConnectedDependencies,
   inspectConnectedAdapters,
   restoreDisconnected,
   runConnectedAdapterStep,
@@ -136,6 +137,9 @@ test("npm: every installed copy, nested ones included, becomes exactly what the 
   assert.deepEqual(await f.proof(), { name: "Lib", repository, type: "npm", sourceRoot: f.copy, inEffect: true, reason: "" });
   const proved = await f.step("proof");
   assert.equal(proved.ok, true, proved.error);
+  // The gap is never hidden: the check says what Staging and Production use until a release.
+  assert.match(proved.output,
+    /Lib: this session runs the connected @proof\/lib(?: at [0-9a-f]{12})?; Staging and Production use the published 1\.0\.0 until 1\.1\.0 is published/u);
 
   // Applying again changes nothing and installs nothing.
   f.calls.length = 0;
@@ -270,6 +274,47 @@ test("npm: a Save after the swap commits none of it, so Production's package (an
   await exec("git", ["clone", "-q", f.app, fresh]);
   await exec("npm", ["ci"], { cwd: fresh, env: f.registry.env });
   assert.equal(await installedVersion(path.join(fresh, "node_modules", "@proof", "lib")), "1.0.0");
+});
+
+test("npm: Save moves the project to the connected version once it is published, never before, and the swap stays", { timeout: 120_000 }, async t => {
+  const f = await fixture(t);
+  assert.equal((await f.step("apply")).ok, true);
+  const before = await f.tracked();
+  const lockedVersion = async () => JSON.parse(await readFile(path.join(f.app, "package-lock.json"), "utf8")).packages["node_modules/@proof/lib"];
+
+  // Not reachable: nothing changes and the line says it could not check.
+  const offline = commandRunner({ ...f.registry.env, npm_config_registry: "http://127.0.0.1:9/", npm_config_fetch_retries: "0" }, []);
+  const unreachable = await bumpConnectedDependencies({ repositories: f.repositories, sessionSourceRoot: f.app, runCommand: offline });
+  assert.deepEqual(unreachable.bumped, []);
+  assert.match(unreachable.lines.join("\n"), /Lib: could not check whether @proof\/lib@1\.1\.0 is published/u);
+  assert.deepEqual(await f.tracked(), before);
+
+  // Not published yet: nothing changes, and the gap is shown.
+  const unpublished = await bumpConnectedDependencies({ repositories: f.repositories, sessionSourceRoot: f.app, runCommand: f.runCommand });
+  assert.deepEqual(unpublished.bumped, []);
+  assert.deepEqual(unpublished.lines, [
+    "[Connected] Lib: this session runs the connected @proof/lib; Staging and Production use the published 1.0.0 until 1.1.0 is published, which Save then moves this project to."
+  ]);
+  assert.deepEqual(await f.tracked(), before);
+  assert.deepEqual((await f.proof()).published, [{ package: "@proof/lib", connected: "1.1.0", locked: "1.0.0" }]);
+
+  // Published: package.json (keeping its exact style) and the lockfile move to the registry's 1.1.0; node_modules keeps the swap.
+  await f.registry.publish(f.libDir);
+  const moved = await bumpConnectedDependencies({ repositories: f.repositories, sessionSourceRoot: f.app, runCommand: f.runCommand });
+  assert.deepEqual(moved.bumped, [{ name: "Lib", package: "@proof/lib", from: "1.0.0", to: "1.1.0" }]);
+  assert.deepEqual(moved.lines, [
+    "[Connected] Lib: Staging and Production now use the published @proof/lib@1.1.0.",
+    "[Connected] Lib: this session runs the connected @proof/lib; Staging and Production use the published 1.1.0."
+  ]);
+  assert.equal(JSON.parse(await readFile(path.join(f.app, "package.json"), "utf8")).dependencies["@proof/lib"], "1.1.0");
+  assert.equal((await lockedVersion()).version, "1.1.0");
+  assert.match((await lockedVersion()).resolved, /^http:\/\/127\.0\.0\.1:\d+\/-\/proof-lib-1\.1\.0\.tgz$/u);
+  assert.equal((await f.proof()).inEffect, true);
+  assert.equal(await f.node("console.log(require('@proof/lib').message)"), "connected 1.1.0");
+
+  // Already there: nothing to do.
+  const again = await bumpConnectedDependencies({ repositories: f.repositories, sessionSourceRoot: f.app, runCommand: f.runCommand });
+  assert.deepEqual(again.bumped, []);
 });
 
 test("npm: a dependency no registry version satisfies refuses the swap and says which", { timeout: 120_000 }, async t => {

@@ -110,6 +110,9 @@ test("connected development rejects missing proof, conditional success, unsafe p
   assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: [lines[0], "", "- Verify `Bad` with `Shell`: `sh` `check.sh`"] }),
     error => error.code === "VIBE64_CONNECTED_DEVELOPMENT_INVALID"
       && error.details.path === "genesis/stack.md#Connected development" && error.details.line === 3);
+  // Project commands read the Sources file, so a Default package type does not stand in for it.
+  assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: ["- Default package type: `npm`", ...lines.slice(1)] }),
+    error => error.code === "VIBE64_CONNECTED_DEVELOPMENT_INVALID" && /read the Sources file: declare it too/u.test(error.message));
   // A Sources file alone, or with Prepare entries only, is a declaration: Vibe64 proves typed
   // dependencies itself, and preparation asks for a Verify entry where a composition needs one.
   for (const candidate of [lines.slice(0, 1), lines.slice(0, 2)]) {

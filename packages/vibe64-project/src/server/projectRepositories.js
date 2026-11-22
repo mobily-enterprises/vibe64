@@ -5,7 +5,12 @@ import {
   inspectConnectedWorkspaceSetup,
   materializeConnectedDevelopmentInputs
 } from "./connectedDevelopment.js";
-import { inspectConnectedAdapters, runConnectedAdapterStep, syncConnectedRepositories } from "./connectedAdapters/index.js";
+import {
+  bumpConnectedDependencies,
+  inspectConnectedAdapters,
+  runConnectedAdapterStep,
+  syncConnectedRepositories
+} from "./connectedAdapters/index.js";
 import { requireGithubRepository } from "./githubApi.js";
 import { githubIssues } from "./githubIssues.js";
 import {
@@ -119,6 +124,17 @@ function createProjectRepositories({
       runCommand,
       onEvent
     });
+  }
+
+  /**
+   * Save's part for the session's typed dependencies: moves the project's tracked manifests and
+   * lockfiles to versions their registries have published, and says what Staging and Production use.
+   * `runCommand` runs a managed command in the session's trees.
+   */
+  async function bumpSessionConnectedDependencies({ session, environment = env, runCommand } = {}) {
+    const inputs = await inspectSessionConnectedInputs({ session, environment });
+    if (inputs.status === "unconfigured") return { bumped: [], lines: [] };
+    return bumpConnectedDependencies({ repositories: inputs.repositories, sessionSourceRoot: sessionSourcePath(session), runCommand });
   }
 
   async function prepareConnectedDevelopmentInputs({ session, environment = env } = {}) {
@@ -349,6 +365,7 @@ function createProjectRepositories({
     inspectWorkspaceSetup,
     inspectConnectedDevelopmentInputs: inspectSessionConnectedInputs,
     inspectConnectedAdapters: inspectSessionConnectedAdapters,
+    bumpConnectedDependencies: bumpSessionConnectedDependencies,
     prepareConnectedDevelopmentInputs,
     runConnectedAdapterStep,
     syncConnectedRepositories: syncSessionConnectedRepositories,

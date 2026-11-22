@@ -10,6 +10,16 @@
 //   proof(context)       whether it is in effect; resolves to { inEffect, reason }. It reads files
 //                        only when context.runCommand is null (session status); in preparation it
 //                        may also ask the toolchain
+//   locked(context)      files only: [{ package, connected, locked }], the version the connected copy
+//                        carries and the published one the project's tracked lockfile installs (what
+//                        Staging and Production use); the gap Vibe64 shows comes from it
+//   bump(context)        on Save, with runCommand: moves the project's tracked manifest and lockfile to
+//                        `connected` once its registry has published it, never to an unpublished
+//                        commit; resolves to { bumped: [{ package, from, to }], lines }; never throws
+//                        for "not published" or "could not check"
+//   watch                optional, for a type that is not live by nature (npm copies files):
+//                        { sources(context) -> Map<sourceDir, repository>, sync(context + { repository,
+//                        sourceDir }) -> changed count, or null to apply again }
 //   restore(input)       optional: takes back what it generated for connections that are gone;
 //                        input { connections (those of its type that remain), sessionSourceRoot, trees,
 //                        writeGitExcludes }, resolves to lines. It runs when the Sources file is written,
@@ -119,9 +129,11 @@ async function runConnectedAdapterStep({ action, repository, repositories, sessi
       return { ok: true, output: lines.join("\n") };
     }
     const proof = await adapter.proof(context);
-    return proof.inEffect
-      ? { ok: true, output: `[Connected] ${connection.name} is in effect.` }
-      : { ok: false, error: `Connected ${connection.name} is not in effect: ${proof.reason}` };
+    if (!proof.inEffect) return { ok: false, error: `Connected ${connection.name} is not in effect: ${proof.reason}` };
+    const head = await runCommand({ command: "git", args: ["rev-parse", "--short=12", "HEAD"], cwd: connection.sourceRoot, timeout: 60_000 });
+    const commit = head?.ok === true ? String(head.stdout || "").trim() : "";
+    const gaps = (await lockedVersions(connection, context)).map(entry => releaseGapLine(connection, entry, commit));
+    return { ok: true, output: [`[Connected] ${connection.name} is in effect.`, ...gaps].join("\n") };
   } catch (error) {
     return { ok: false, error: String(error?.message || error), code: error?.code };
   }
@@ -141,13 +153,15 @@ async function inspectConnectedAdapters({ repositories, sessionSourceRoot }) {
     } catch (error) {
       proof = { inEffect: false, reason: String(error?.message || error) };
     }
+    const published = await lockedVersions(connection, adapterContext({ connection, repositories, sessionSourceRoot })).catch(() => []);
     results.push({
       name: connection.name,
       repository: connection.repository,
       type: connection.type,
       sourceRoot: connection.sourceRoot,
       inEffect: proof.inEffect === true,
-      reason: proof.inEffect === true ? "" : String(proof.reason || "")
+      reason: proof.inEffect === true ? "" : String(proof.reason || ""),
+      published
     });
   }
   return results;
@@ -185,24 +199,82 @@ async function restoreDisconnected({ repositories, sessionSourceRoot }) {
  * @param {(event: object) => void} [input.onEvent]
  */
 async function syncConnectedRepositories({ sessionId, repositories, sessionSourceRoot, runCommand, onEvent }) {
-  if (!typedDependencies(repositories, "npm").length) {
+  const watching = typedDependencies(repositories).filter(connection => connectedAdapterFor(connection.type).watch);
+  if (!watching.length) {
     await stopConnectedSync(sessionId);
     return null;
   }
+  const contextFor = connection => adapterContext({ connection, repositories, sessionSourceRoot, runCommand });
+  const connectionOf = repository => watching.find(entry => entry.repository === repository);
   return startConnectedSync({
     sessionId,
     sessionSourceRoot,
-    trees: sessionTrees(sessionSourceRoot, repositories),
+    watched: async () => {
+      const all = new Map();
+      for (const connection of watching) {
+        for (const [dir, repository] of await connectedAdapterFor(connection.type).watch.sources(contextFor(connection))) {
+          if (repository === connection.repository) all.set(dir, repository);
+        }
+      }
+      return all;
+    },
+    sync: async (repository, sourceDir) => {
+      const connection = connectionOf(repository);
+      return connection ? connectedAdapterFor(connection.type).watch.sync({ ...contextFor(connection), repository, sourceDir }) : 0;
+    },
     // Already inside the trees' queue.
     reapply: async (repository) => {
-      const connection = typedDependencies(repositories, "npm").find(entry => entry.repository === repository);
-      if (connection) await npmAdapter.apply(adapterContext({ connection, repositories, sessionSourceRoot, runCommand }));
+      const connection = connectionOf(repository);
+      if (connection) await connectedAdapterFor(connection.type).apply(contextFor(connection));
     },
     onEvent
   });
 }
 
+/** The visible gap between what the session runs and what Staging and Production install. */
+function releaseGapLine(connection, entry, commit = "") {
+  const runs = `[Connected] ${connection.name}: this session runs the connected ${entry.package}${commit ? ` at ${commit}` : ""}`;
+  if (!entry.locked) return `${runs}; Vibe64 cannot tell which published version Staging and Production use.`;
+  return entry.connected && entry.connected !== entry.locked
+    ? `${runs}; Staging and Production use the published ${entry.locked} until ${entry.connected} is published, which Save then moves this project to.`
+    : `${runs}; Staging and Production use the published ${entry.locked}.`;
+}
+
+async function lockedVersions(connection, context) {
+  const adapter = connectedAdapterFor(connection.type);
+  return adapter.locked ? adapter.locked(context) : [];
+}
+
+/**
+ * Save's part for typed dependencies: they get no pin, they move by published versions. Each
+ * adapter's `bump` moves the project's tracked manifest and lockfile to a version the connected copy
+ * carries once its registry has published it; the lines then say what Staging and Production use.
+ * Never throws: a failure to check is a line, and Save goes on.
+ * @param {{ repositories: Array<object>, sessionSourceRoot: string, runCommand: Function }} input
+ * @returns {Promise<{ lines: string[], bumped: Array<{ name: string, package: string, from: string | null, to: string }> }>}
+ */
+async function bumpConnectedDependencies({ repositories, sessionSourceRoot, runCommand }) {
+  const lines = [];
+  const bumped = [];
+  for (const connection of typedDependencies(repositories)) {
+    const adapter = connectedAdapterFor(connection.type);
+    const context = adapterContext({ connection, repositories, sessionSourceRoot, runCommand });
+    try {
+      if (adapter.bump) {
+        const result = await serializeForTrees(sessionSourceRoot, () => adapter.bump(context));
+        lines.push(...result.lines);
+        bumped.push(...result.bumped.map(entry => ({ name: connection.name, ...entry })));
+      }
+      for (const entry of await lockedVersions(connection, context)) lines.push(releaseGapLine(connection, entry));
+    } catch (error) {
+      lines.push(`[Connected] ${connection.name}: could not check for a published version: ${String(error?.message || error)}`);
+    }
+  }
+  return { bumped, lines };
+}
+
 export {
+  bumpConnectedDependencies,
   CONNECTED_ADAPTERS,
   connectedAdapterFor,
   connectedSyncRunning,

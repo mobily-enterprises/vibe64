@@ -365,14 +365,16 @@ test("session status lists this session's connected copies with whether each is 
       async runInProjectContext(_slug, operation) { return operation(); }
     }
   });
-  let proofs = [{ name: "Library", repository: "https://github.com/example/library", type: "npm", sourceRoot: copy, inEffect: true, reason: "" }];
+  // The gap is never hidden: the published version Staging and Production install comes with it.
+  const published = [{ package: "library", connected: "1.1.0", locked: "1.0.0" }];
+  let proofs = [{ name: "Library", repository: "https://github.com/example/library", type: "npm", sourceRoot: copy, inEffect: true, reason: "", published }];
   await service.bindSession("session-1", { wrapperHostDir: path.join(temporaryRoot, "wrappers") });
   assert.deepEqual((await service.sessionStatus("session-1")).repository, {
     needsHelp: false,
-    connected: [{ name: "library", path: copy, behind: 0, unsaved: false, type: "npm", inEffect: true }]
+    connected: [{ name: "library", path: copy, behind: 0, unsaved: false, type: "npm", inEffect: true, published }]
   });
   await writeFile(path.join(copy, "notes.md"), "unsaved\n");
-  proofs = [{ ...proofs[0], inEffect: false, reason: "node_modules/library is the published library 1.0.0; prepare the workspace to swap it." }];
+  proofs = [{ ...proofs[0], inEffect: false, reason: "node_modules/library is the published library 1.0.0; prepare the workspace to swap it.", published: [] }];
   assert.deepEqual((await service.sessionStatus("session-1")).repository.connected, [{ name: "library", path: copy, behind: 0, unsaved: true,
     type: "npm", inEffect: false, reason: "node_modules/library is the published library 1.0.0; prepare the workspace to swap it." }]);
   // A connection with no adapter (custom, or a composition) reports no proof.

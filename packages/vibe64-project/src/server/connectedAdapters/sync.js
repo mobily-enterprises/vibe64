@@ -1,11 +1,11 @@
-// Keeps a session's swapped npm packages in step with its connected copies while the session runs:
-// a saved file reaches every installed copy at once, and a change npm's packlist depends on (a file
-// added or removed, package.json) puts the whole connection in effect again. A watcher per session;
+// Keeps what a session's adapters put in effect in step with its connected copies while the session
+// runs, for the types that are not live by nature (an adapter's `watch`): a saved file reaches what
+// the adapter derived at once (npm: every installed copy), and a change its sync cannot follow
+// alone (sync resolves to null) puts the whole connection in effect again. A watcher per session;
 // the server forgets them on restart, and the next preparation or Preview start begins them again.
 import path from "node:path";
 import { watch } from "chokidar";
 import { serializeByKey } from "@local/vibe64-core/server/atomicFile";
-import { swappedNpmSources, syncNpmCopies } from "./npm.js";
 
 const SETTLE_MS = 40;
 const IGNORED = /(?:^|[\\/])(?:node_modules|\.git)(?:[\\/]|$)/u;
@@ -19,17 +19,18 @@ function serializeForTrees(sessionSourceRoot, operation) {
 }
 
 /**
- * Starts (or restarts) the session's watcher over the package folders its swaps copied from.
+ * Starts (or restarts) the session's watcher over the source folders its adapters watch.
  * @param {object} input
  * @param {string} input.sessionId
  * @param {string} input.sessionSourceRoot
- * @param {string[]} input.trees the session's trees
+ * @param {() => Promise<Map<string, string>>} input.watched each watched source folder, with its connection's repository
+ * @param {(repository: string, sourceDir: string) => Promise<number | null>} input.sync follows a change; null to apply again
  * @param {(repository: string) => Promise<void>} input.reapply puts one connection in effect again
  * @param {(event: { kind: "synced" | "reapplied" | "failed", repository: string, ms: number, message?: string }) => void} [input.onEvent]
  */
-async function startConnectedSync({ sessionId, sessionSourceRoot, trees, reapply, onEvent = () => {} }) {
+async function startConnectedSync({ sessionId, sessionSourceRoot, watched, sync: follow, reapply, onEvent = () => {} }) {
   await stopConnectedSync(sessionId);
-  const sources = await swappedNpmSources(trees);
+  const sources = await watched();
   if (!sources.size) return null;
   const timers = new Map();
   const watcher = watch([...sources.keys()], {
@@ -44,11 +45,11 @@ async function startConnectedSync({ sessionId, sessionSourceRoot, trees, reapply
     try {
       await serializeForTrees(sessionSourceRoot, async () => {
         if (entry.closed) return;
-        const synced = await syncNpmCopies({ repository, sourceDir, trees });
+        const synced = await follow(repository, sourceDir);
         if (synced === null) {
           await reapply(repository);
-          // The connection may swap other packages now.
-          for (const [dir, owner] of await swappedNpmSources(trees)) {
+          // The connection may put other folders in effect now.
+          for (const [dir, owner] of await watched()) {
             if (!sources.has(dir)) {
               sources.set(dir, owner);
               watcher.add(dir);

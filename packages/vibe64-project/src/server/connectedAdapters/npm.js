@@ -513,11 +513,110 @@ async function swappedNpmSources(trees) {
   return sources;
 }
 
+/** A file the project may not have: null when it does not. */
+async function optionalJson(filePath) {
+  return readJsonFile(filePath).catch(error => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+}
+
+/** The project's own declaration of a package (`dependencies` first), or "". */
+function declaredSpec(manifest, name) {
+  for (const field of ["dependencies", "devDependencies", "optionalDependencies"]) {
+    if (manifest?.[field] && Object.hasOwn(manifest[field], name)) return String(manifest[field][name]);
+  }
+  return "";
+}
+
+/**
+ * The versions behind the gap Vibe64 shows: each package of the connection the project declares,
+ * with the version the connected copy carries and the one the project's tracked lockfile installs
+ * (what Staging and Production install). Files only.
+ */
+async function lockedNpm({ connection, sessionSourceRoot }) {
+  const manifest = await optionalJson(path.join(sessionSourceRoot, "package.json"));
+  if (!manifest) return [];
+  const lock = await optionalJson(path.join(sessionSourceRoot, "package-lock.json"));
+  return (await connectedNpmPackages(connection))
+    .filter(entry => declaredSpec(manifest, entry.name))
+    .map(entry => ({
+      package: entry.name,
+      connected: entry.version || null,
+      locked: lock?.packages?.[`node_modules/${entry.name}`]?.version || null
+    }));
+}
+
+/**
+ * On Save: when the connected copy carries a version the registry has published and the project's
+ * lockfile names another, the project's package.json and lockfile move to it. `--package-lock-only`
+ * leaves node_modules (and so the swap) as it is. An unpublished version changes nothing.
+ */
+async function bumpNpm(context) {
+  const { connection, sessionSourceRoot, runCommand } = context;
+  const lines = [];
+  const bumped = [];
+  const manifest = await optionalJson(path.join(sessionSourceRoot, "package.json"));
+  for (const entry of await lockedNpm(context)) {
+    if (!entry.connected || entry.connected === entry.locked) continue;
+    const wanted = `${entry.package}@${entry.connected}`;
+    const view = await runCommand({
+      command: "npm",
+      // A publish check asks the registry, never a cached answer.
+      args: ["view", wanted, "version", "--json", "--prefer-online"],
+      cwd: sessionSourceRoot,
+      timeout: NPM_TIMEOUT_MS
+    });
+    const said = `${String(view?.stderr || "")} ${String(view?.error || "")}`;
+    if (view?.ok !== true && !/\bE404\b/u.test(said)) {
+      lines.push(`[Connected] ${connection.name}: could not check whether ${wanted} is published: ${said.trim().slice(-300)}`);
+      continue;
+    }
+    let published = null;
+    try {
+      published = JSON.parse(String(view?.stdout || "").trim() || "null");
+    } catch {
+      published = null;
+    }
+    if ((Array.isArray(published) ? published : [published]).includes(entry.connected) !== true) continue;
+    const exact = Boolean(semver.valid(declaredSpec(manifest, entry.package)));
+    const installed = await runCommand({
+      command: "npm",
+      args: [
+        "install",
+        "--package-lock-only",
+        "--prefer-online",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        ...(exact ? ["--save-exact"] : []),
+        wanted
+      ],
+      cwd: sessionSourceRoot,
+      timeout: NPM_TIMEOUT_MS
+    });
+    if (installed?.ok !== true) {
+      lines.push(`[Connected] ${connection.name}: could not move this project to the published ${wanted}: ${String(installed?.stderr || installed?.error || "").trim().slice(-300)}`);
+      continue;
+    }
+    bumped.push({ package: entry.package, from: entry.locked, to: entry.connected });
+    lines.push(`[Connected] ${connection.name}: Staging and Production now use the published ${wanted}.`);
+  }
+  return { bumped, lines };
+}
+
 const npmAdapter = Object.freeze({
   type: "npm",
   runtimeRequirements: Object.freeze(["nodejs", "git"]),
   apply: applyNpm,
   proof: proveNpm,
+  locked: lockedNpm,
+  bump: bumpNpm,
+  // The installed copies are copies, so a save reaches them only through the watcher.
+  watch: Object.freeze({
+    sources: ({ trees }) => swappedNpmSources(trees),
+    sync: ({ repository, sourceDir, trees }) => syncNpmCopies({ repository, sourceDir, trees })
+  }),
   restore: ({ connections, trees }) => restoreNpm({ keep: connections.map(entry => entry.repository), trees })
 });
 
