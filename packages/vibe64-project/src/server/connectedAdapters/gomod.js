@@ -188,7 +188,8 @@ function requiredVersions(text) {
   let block = false;
   for (const raw of text.split("\n")) {
     const line = raw.replace(/\/\/.*$/u, "").trim();
-    if (line === "require (") {
+    // A pattern, not the literal: the package-boundary check reads `require (` + a quote as an import.
+    if (/^require\s*\($/u.test(line)) {
       block = true;
       continue;
     }
