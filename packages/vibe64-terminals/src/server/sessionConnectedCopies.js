@@ -415,7 +415,7 @@ function updateFirstError(name) {
  * that has work, in order, and records its new commit before the next one; a
  * refusal stops there. The caller saves the session's own repository last.
  * @param {object} input
- * @param {(ready: Array<object>) => Promise<void>} [input.beforePush] given the copies about to push
+ * @param {() => Promise<void>} [input.beforePush]
  * @param {object[]} input.copies
  * @param {string[]} input.derivedArtifactPaths
  * @param {(copy: object) => Promise<{ commandOptions: object, runCommand: Function }>} input.executionFor
@@ -467,8 +467,7 @@ async function saveConnectedCopies({
     }
     if (unsaved) ready.push({ copy, options });
   }
-  // The copies about to push, so the caller can refuse first what this Save would then need.
-  await beforePush(ready.map(({ copy }) => copy));
+  await beforePush();
   const saved = [];
   for (const { copy, options } of ready) {
     let result;
@@ -720,7 +719,6 @@ async function recoverConnectedCopySaves({
 export {
   checkConnectedCopies,
   connectedCopyActorSession,
-  connectedCopyError,
   connectedCopyRemoteUrl,
   connectedCopyWork,
   inspectConnectedCopies,

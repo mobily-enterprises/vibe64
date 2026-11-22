@@ -1,10 +1,8 @@
 # Connected development: Composer (PHP)
 
-Proves Vibe64's own `composer` treatment: a consuming PHP app uses an
-unpublished local checkout of a Composer library during connected development,
-without touching its tracked `composer.json` or `composer.lock`; and on Save the
-project moves to the version the checkout declares only once a registry
-publishes it.
+Proves that a consuming PHP app can use an unpublished local checkout of a
+Composer library during connected development, without touching its tracked
+`composer.json` or `composer.lock`.
 
 ## Layout
 
@@ -12,121 +10,124 @@ publishes it.
   marker string `library 1.0.0`.
 - `app/` — `acme/app`, requiring `acme/library: ^1.0`. Its tracked
   `composer.lock` is the published-style lock (locked `acme/library` 1.0.0 from
-  a zip dist URL on a registry). `bin/app.php` prints the marker.
-  - `genesis/stack.md` — `## Connected development` with only
-    `- Default package type: composer`. No project commands: Vibe64 prepares
-    and proves the connection itself.
+  a zip dist URL on a registry; the URL is `.invalid` because this fixture
+  never installs the published copy). `bin/app.php` prints the marker.
+  - `tooling/connected.php` — `prepare <sourcesFile>` / `verify <sourcesFile>`
+    in plain PHP, no Node.
+  - `genesis/stack.md` — the `## Connected development` section.
   - `.gitignore` — `vendor/`, `.development/`, `composer.connected.json`,
     `composer.connected.lock`.
-- `prove.sh` — the reproducible acceptance run. It calls Vibe64's adapter
-  through `../vibe64-adapter.mjs` (`apply`, `proof`) and Save's version move
-  through `../vibe64-adapter.mjs bump`, as workspace preparation and Save do.
+- `prove.sh` — the reproducible acceptance run.
 
-## Vibe64's treatment
+## Native mechanism
 
-`packages/vibe64-project/src/server/connectedAdapters/composer.js`, through
 Composer's [`path` repository](https://getcomposer.org/doc/05-repositories.md#path)
-and the [`COMPOSER` environment variable](https://getcomposer.org/doc/03-cli.md#composer).
+combined with the [`COMPOSER` environment variable](https://getcomposer.org/doc/03-cli.md#composer).
 
-Apply (after the project's own Workspace setup):
+`prepare`:
 
-1. Reads each connected copy's `composer.json` for its package name, and refuses
-   a package the session's `composer.json` and `composer.lock` do not use.
-2. Writes the untracked derived manifest `composer.connected.json`: the tracked
-   `composer.json` plus, first in `repositories`, one entry per connected copy:
+1. Reads the sources map and, for each `type: composer` project, its
+   `sourceRoot/composer.json` (for the package name).
+2. Writes the untracked derived manifest `composer.connected.json`: the
+   tracked `composer.json` plus, first in `repositories`, one entry per source:
    ```json
-   {"type": "path", "url": "<connected copy>",
+   {"type": "path", "url": "<sourceRoot>",
     "options": {"symlink": true, "versions": {"acme/library": "1.0.0"}}}
    ```
-   `symlink: true` makes `vendor/acme/library` a link to the copy, so saved
-   files are live without a watcher. `versions` presents the copy under the
-   version the app has locked (a checkout on a branch would otherwise be
-   `dev-<branch>`). Path repositories listed first win over Packagist.
+   `symlink: true` makes `vendor/acme/library` a symlink to the checkout, so
+   edits are live without reinstalling. `versions` presents the checkout under
+   the version the app has locked (or the library's declared `version`):
+   a real checkout on a branch would otherwise appear as `dev-<branch>` and not
+   satisfy `^1.0`. Path repositories are canonical, so they win over Packagist.
 3. Copies the tracked `composer.lock` to `composer.connected.lock`, then runs
-   `COMPOSER=composer.connected.json composer update --no-interaction --no-progress acme/library`,
-   a partial update: every other dependency keeps its locked version.
-4. Refuses a derived file or `vendor/<package>` that Git tracks, and keeps
-   `composer.connected.json`, `composer.connected.lock` and `vendor` out of Git
-   (`.git/info/exclude`).
+   `COMPOSER=composer.connected.json composer update --no-interaction --no-progress acme/library`
+   — a partial update, so every other dependency keeps its tracked locked
+   version and only the connected packages are re-resolved. (Without a
+   tracked lock it runs a full `composer update`.)
 
-Proof (after the project's own Verify steps, and in session status from files
-alone): the derived manifest matches `composer.json` and the copies now, the
-derived lock locks each package to its copy with `dist.type = path`,
-`vendor/<package>` is a link to the copy, and (in preparation)
-`Composer\InstalledVersions::getInstallPath()` resolves there. Each failure says
-which, for example after an ordinary `composer install`:
-`vendor/acme/library is not a link to the connected copy (an ordinary composer install puts the published package back); prepare the workspace again.`
+Composer names the lock file after the manifest (`composer.connected.lock`),
+so the tracked `composer.json` and `composer.lock` are never written. The
+derived files and `vendor/` are git-ignored.
 
-Save (`bump`): when the copy's `composer.json` declares a `version` that
-differs from the tracked lock's, `composer show --all --format=json` (with the
-tracked `composer.json`, never the derived one) checks the registries it names.
-Once that version is published, `composer require acme/library:<version> --no-install`
-moves `composer.json` and `composer.lock` to exactly it, and the connection is
-applied again on top. An unpublished version moves nothing; a registry that
-cannot be checked is reported. Staging and Production install from the tracked
-files only.
+`verify` loads `vendor/autoload.php` and proves for each connected package:
+`Composer\InstalledVersions::getInstallPath()` resolves to `sourceRoot`,
+`vendor/<name>` is a symlink to `sourceRoot`, the derived lock locks it with
+`dist.type = path` and `url = sourceRoot`, and `git status` reports the tracked
+`composer.json`/`composer.lock` unmodified. It fails if any of these is false,
+including when the sources map points at a different checkout than the one
+prepared.
 
-When the connection goes, Vibe64 removes the derived files and the
-`vendor/<package>` links; the project's next `composer install` puts the
-published packages back.
+The app runs exactly as normal (`php bin/app.php`): it uses the shared
+`vendor/` directory prepared from the derived manifest.
 
 ## Commands
 
 ```
-node ../vibe64-adapter.mjs apply .development/connected.json
-node ../vibe64-adapter.mjs proof .development/connected.json
-node ../vibe64-adapter.mjs bump .development/connected.json
+php tooling/connected.php prepare .development/connected.json
+php tooling/connected.php verify  .development/connected.json
 php bin/app.php
 ```
 
 `./prove.sh` copies `library/` and `app/` to a fresh temporary directory,
-gives the app an artifact repository (a folder of package zips) holding the
-published 1.0.0 in place of Packagist, commits the app, changes the library
-copy's marker, writes the sources map, applies twice, proves, runs the app
-(asserting the changed marker), checks the tracked hashes and
-`git status --porcelain`; then declares 1.1.0 in the copy and runs Save's
-bump (nothing moves), publishes 1.1.0 to the artifact repository and runs it
-again (the tracked files name exactly the published 1.1.0, the proof still
-passes and the app still prints the connected marker); finally replaces the
-link as `composer install` would and shows the proof refusing.
+commits the app, changes the library copy's marker, writes the sources map,
+runs prepare twice, verify, the app (asserting the changed marker), checks
+that `composer.json`/`composer.lock` hashes are unchanged and
+`git status --porcelain` is empty, and removes the directory.
 
 ## Network
 
-None. `prove.sh` sets `COMPOSER_DISABLE_NETWORK=1`, `COMPOSER_NO_AUDIT=1`,
-`COMPOSER_HOME` and `COMPOSER_CACHE_DIR` inside the temporary directory, and
-disables Packagist in the app copy's manifest. In a real app the partial update
-keeps the other dependencies at their locked versions; they still need
-Composer's normal download or cache to be installed in the first place.
+None. `prove.sh` sets `COMPOSER_DISABLE_NETWORK=1` (and `COMPOSER_NO_AUDIT=1`,
+since the security audit needs Packagist) with `COMPOSER_HOME` and
+`COMPOSER_CACHE_DIR` inside the temporary directory. In a real app the
+partial update keeps the other dependencies at their locked versions; they
+still need Composer's normal download/cache to be installed in the first place.
 
-## Evidence
+## Tool versions
 
-Run `cad-phpruby-3` on usone (2026-11-23), through Nix: PHP 8.5.13 (zip
-extension), Composer 2.11.2, Git 2.53.0, Node v26.5.0. 3 s.
-
-```
-[Connected] Library: acme/library 1.0.0 in effect from its connected copy.
-[Connected] Library: acme/library 1.0.0 in effect from its connected copy.
-[Connected] Library is in effect.
-app prints: library 1.0.0 + local change
-[Connected] Library: Staging and Production now use the published acme/library 1.1.0.
-[Connected] Library: acme/library 1.1.0 in effect from its connected copy.
-tracked: requires 1.1.0, locks 1.1.0 from the zip registry
-[Connected] Library is in effect.
-proof refused: connected proof: Connected Library is not in effect: vendor/acme/library is not a link to the connected copy (an ordinary composer install puts the published package back); prepare the workspace again.
-PASS composer
-```
-
-The first bump (1.1.0 declared, not yet in the registry) printed nothing and
-left `composer.json` and `composer.lock` byte for byte as committed.
+PHP 8.3.6, Composer 2.7.1, Git 2.43.0. Path repository `options.versions`
+needs Composer 2.x.
 
 ## Limitations
 
-- `composer.json` usually omits `version` (Composer reads it from VCS tags).
-  A copy that declares none has no version for Save to move to.
-- The bump pins `composer.json` to exactly the published version
-  (`composer require <package>:<version>`). A package required only through
-  another package is reported and left at its locked version.
-- `vendor/` is shared between normal and connected installs; an ordinary
-  `composer install` replaces the link (the proof reports it).
+- Prepare re-copies the tracked lock each run, so Composer always reports the
+  connected package as "Upgrading 1.0.0 => 1.0.0 <hash>" in the lock; the
+  install itself is a no-op on the second run. Result is deterministic.
+- `vendor/` is shared between normal and connected installs. Leaving connected
+  mode requires a normal `composer install` to replace the symlink.
 - If the connected checkout's own requirements conflict with the app's lock,
-  the partial update fails and preparation says so.
+  the partial update fails; add `--with-dependencies` if the project wants the
+  connected package's dependencies re-resolved too.
+- Symlinks need a filesystem that supports them; Composer falls back to
+  copying otherwise (`symlink: true` makes that fallback an error instead).
+
+## Composition relationship
+
+When the connected repository is a Composer package that is part of the app
+(a module, plugin or theme installed through Composer, e.g. via
+`composer/installers` into a custom directory), the same path repository
+mechanism applies unchanged. When it is raw source composed into the app tree
+without being a Composer package, Composer has no native mechanism; the
+project's script needs custom treatment (for example linking the checkout into
+the expected directory). This fixture proves only the `dependency` case.
+
+## Transcript (second from-scratch run, temp path shortened to `$WORK`)
+
+```
++ COMPOSER=composer.connected.json composer update --no-interaction --no-progress acme/library
+Loading composer repositories with package information
+Updating dependencies
+Lock file operations: 0 installs, 1 update, 0 removals
+  - Upgrading acme/library (1.0.0 => 1.0.0 36a7122)
+Writing lock file
+Installing dependencies from lock file (including require-dev)
+Package operations: 1 install, 0 updates, 0 removals
+  - Installing acme/library (1.0.0): Symlinking from $WORK/library
+Generating autoload files
++ COMPOSER=composer.connected.json composer update --no-interaction --no-progress acme/library
+...
+Nothing to install, update or remove
+Generating autoload files
+verified acme/library 1.0.0 -> $WORK/library
+app prints: library 1.0.0 + local change
+PASS composer
+```

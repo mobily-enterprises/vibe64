@@ -61,8 +61,6 @@ function setupStep(step = {}, index = 0, sourcePath = "") {
     cwd,
     label: toText(step.label) || `Workspace preparation step ${index + 1}`,
     runtimeRequirements,
-    // A connected adapter's step: Vibe64 runs it itself, with the step's runtimes.
-    ...(step.connectedAdapter ? { connectedAdapter: { ...step.connectedAdapter } } : {}),
     ...(inputs ? { inputs, recordKey: sha256(JSON.stringify({ argv, inputs, runtimeRequirements, workdir })) } : {})
   };
 }
@@ -199,7 +197,6 @@ export {
   preparedRecipe,
   resourceIdentityMatches,
   safeSetupLabel,
-  setupStep,
   stepRecordValue,
   stepStatus,
   workspaceSetupRunKey

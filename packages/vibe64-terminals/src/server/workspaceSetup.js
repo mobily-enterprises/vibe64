@@ -8,8 +8,6 @@ import { createWorkspaceSetupMigration } from "./workspaceSetupMigration.js";
 import { createWorkspaceSetupStart } from "./workspaceSetupStart.js";
 import { createWorkspaceSetupStatus } from "./workspaceSetupStatus.js";
 import { readPreparedTree, readStepInputs } from "./workspaceSetupTree.js";
-import { preparedRecipe } from "./workspaceSetupRules.js";
-import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
@@ -66,33 +64,8 @@ function createWorkspaceSetupRunner({
     setupExecution
   });
 
-  /**
-   * Keeps a prepared session's swapped connected packages in step with its connected copies, when
-   * nothing does yet (after a restart). Preparation starts it itself.
-   */
-  async function keepConnectedInSync({ runtime, session }) {
-    const sourcePath = sessionSourcePath(session);
-    const setup = await runnerState.inspect({ session, environment: await runtime.resolvePromptEnvironment(), projectRoot: sourcePath });
-    if (setup?.status !== "ready" || !setup.connectedDevelopment?.adapters) return;
-    await setupExecution.ensureConnectedSync({ runtime, session, setup, runtimes: preparedRecipe(setup, sourcePath).runtimes, sourcePath });
-  }
-
-  /**
-   * What Save runs for a session whose ready recipe has connected development (its typed
-   * dependencies' published versions and the Stack's Save entries); null when it has none.
-   */
-  async function connectedSaveRunner({ runtime, session }) {
-    const sourcePath = sessionSourcePath(session);
-    const setup = await runnerState.inspect({ session, environment: await runtime.resolvePromptEnvironment(), projectRoot: sourcePath });
-    if (setup?.status !== "ready" || !setup.connectedDevelopment) return null;
-    const { runtimes } = preparedRecipe(setup, sourcePath);
-    return setupExecution.connectedSaveCommand({ runtime, session, setup, runtimes, sourcePath });
-  }
-
   return Object.freeze({
-    connectedSaveRunner,
     invalidate: setupStatus.invalidate,
-    keepConnectedInSync,
     isPrepared: setupStatus.isPrepared,
     isRunning: setupStatus.isRunning,
     start: setupStart.start,

@@ -79,9 +79,6 @@ function createWorkspaceSetupStatus({
     } catch {
       return false;
     }
-    // A typed connected dependency that is no longer in effect (an install put the published
-    // package back) needs its adapter's steps again.
-    if (!(await setupExecution.connectedInEffect(setup, session)).inEffect) return false;
     const environmentStatus = await project.projectEnvironmentStatus({ sessionId: session.sessionId, session });
     return setup.status === "ready" &&
       previous.status === "succeeded" &&

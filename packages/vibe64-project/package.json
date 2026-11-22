@@ -16,7 +16,6 @@
     "./server/project-archive": "./src/server/projectArchive.js",
     "./server/projectSourceMutationLock": "./src/server/projectSourceMutationLock.js",
     "./server/projectEnvironmentFiles": "./src/server/projectEnvironmentFiles.js",
-    "./server/connectedSync": "./src/server/connectedAdapters/sync.js",
     "./server/types": "./src/server/types.js"
   },
   "jskit": {
@@ -82,10 +81,6 @@
             "summary": "Archives a project into a validated bundle, or removes a practice project, through one resumable deletion lifecycle; hosts add their own resources."
           },
           {
-            "subpath": "./server/connectedSync",
-            "summary": "Whether a session's swapped connected packages are kept in step with its connected copies, and stopping that when the session closes."
-          },
-          {
             "subpath": "./server/projectEnvironmentFiles",
             "summary": "Writes generated environment files and keeps named generated paths out of Git through a managed block in the clone's own exclude file."
           }
@@ -102,8 +97,6 @@
     "@local/vibe64-execution": "0.1.0",
     "@local/vibe64-genesis": "0.1.0",
     "@local/vibe64-runtime": "0.1.0",
-    "chokidar": "5.0.0",
-    "json-rest-schema": "^1.0.17",
-    "semver": "7.8.5"
+    "json-rest-schema": "^1.0.17"
   }
 }

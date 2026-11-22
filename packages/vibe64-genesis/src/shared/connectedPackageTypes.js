@@ -1,16 +1,11 @@
 // The one Vibe64-owned vocabulary of connected-repository package types. A type
-// is recorded in vibe64.connections.json, the Stack default and the prepared
-// vibe64.connected-sources.v2 map. Every type but `custom` names a treatment
-// Vibe64 owns: workspace preparation puts a `dependency` connection of that type
-// in effect in the session's own trees with that ecosystem's adapter, keeps it in
-// effect and proves it, with no project command. `custom` runs the consuming
-// project's per-connection script, for what no adapter covers.
+// is a declared label recorded in vibe64.connections.json, the Stack default and
+// the prepared vibe64.connected-sources.v2 map. Vibe64 never derives or runs a
+// package-manager command from it: the consuming project's own Connected
+// development Prepare/Verify commands give the source that ecosystem's native
+// treatment. Only `custom` selects a per-connection project script.
 const CONNECTED_CUSTOM_PACKAGE_TYPE = "custom";
 const CONNECTED_SOURCES_CONTRACT = "vibe64.connected-sources.v2";
-// The tracked pin of each composition connection, beside vibe64.connections.json: Save writes the
-// commit (and tree) of every composition copy it saved, in the same commit as the project's own work.
-const CONNECTIONS_LOCK_FILE = "vibe64.connections.lock.json";
-const CONNECTIONS_LOCK_SCHEMA = "vibe64.connections-lock.v1";
 
 const CONNECTED_PACKAGE_TYPES = Object.freeze([
   Object.freeze({ value: "npm", label: "npm (Node.js)" }),
@@ -35,19 +30,11 @@ function isConnectedPackageType(value) {
 }
 
 /**
- * Only custom connections carry a per-connection project script.
+ * Every listed type except custom is treated by the project's declared Verify
+ * command and cannot carry a per-connection script.
  */
 function connectedPackageTypeUsesScript(type) {
   return type === CONNECTED_CUSTOM_PACKAGE_TYPE;
-}
-
-/**
- * Whether Vibe64 itself puts a connection of this type in effect: every listed
- * type except custom, for a dependency. A composition's raw source stays the
- * consuming project's own treatment.
- */
-function connectedPackageTypeHasAdapter(type) {
-  return isConnectedPackageType(type) && type !== CONNECTED_CUSTOM_PACKAGE_TYPE;
 }
 
 function connectedPackageTypeListText(conjunction = "or") {
@@ -60,9 +47,6 @@ export {
   CONNECTED_PACKAGE_TYPES,
   CONNECTED_PACKAGE_TYPE_VALUES,
   CONNECTED_SOURCES_CONTRACT,
-  CONNECTIONS_LOCK_FILE,
-  CONNECTIONS_LOCK_SCHEMA,
-  connectedPackageTypeHasAdapter,
   connectedPackageTypeListText,
   connectedPackageTypeUsesScript,
   isConnectedPackageType

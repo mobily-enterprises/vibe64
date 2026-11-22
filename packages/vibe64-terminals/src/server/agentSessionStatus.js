@@ -31,10 +31,12 @@ async function readAgentSessionStatus({ descriptor, project, projectRecord, sess
     sessionId,
     session: { ...descriptor, sessionId }
   });
-  const session = await (await project.createRuntimeWithoutSource()).getSessionWithoutSource(sessionId);
   let setup;
   try {
-    setup = await project.inspectWorkspaceSetup({ projectRoot: sourceRoot, session });
+    setup = await project.inspectWorkspaceSetup({
+      projectRoot: sourceRoot,
+      session: await (await project.createRuntimeWithoutSource()).getSessionWithoutSource(sessionId)
+    });
   } catch (error) {
     // The agent repairing or deciding a project contract still needs status;
     // report Genesis's actionable message instead of failing the command.
@@ -60,35 +62,12 @@ async function readAgentSessionStatus({ descriptor, project, projectRecord, sess
     store.readMetadataValue(sessionId, "connected_copies"),
     store.readMetadataValue(sessionId, "source_path")
   ]);
-  const copies = sessionConnectedCopies({ metadata: { connected_copies: connectedCopies, source_path: recordedSourcePath } });
-  // Whether Vibe64 has each typed dependency in effect in this session's trees, or why not.
-  const proofs = copies.length
-    ? await project.inspectConnectedAdapters({ session }).catch((error) => ({ error: toText(error?.message) }))
-    : [];
   const connected = (await inspectConnectedCopies({
-    copies,
+    copies: sessionConnectedCopies({ metadata: { connected_copies: connectedCopies, source_path: recordedSourcePath } }),
     derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
     project: projectRecord,
     session: { sessionId }
-  })).map(({ behind, name, path: copyPath, unsaved }) => {
-    const proof = Array.isArray(proofs) ? proofs.find(entry => entry.sourceRoot === copyPath) : null;
-    return {
-      name,
-      path: copyPath,
-      behind,
-      unsaved,
-      ...(proof
-        ? {
-            type: proof.type,
-            inEffect: proof.inEffect,
-            ...(proof.inEffect ? {} : { reason: proof.reason }),
-            // What Staging and Production use instead: the published versions the project's lockfiles name.
-            ...(proof.published?.length ? { published: proof.published } : {})
-          }
-        : {}),
-      ...(!Array.isArray(proofs) ? { inEffect: false, reason: proofs.error || "Vibe64 could not check it." } : {})
-    };
-  });
+  })).map(({ behind, name, path: copyPath, unsaved }) => ({ name, path: copyPath, behind, unsaved }));
   return {
     ok: true,
     sessionId,

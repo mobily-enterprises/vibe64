@@ -20,11 +20,7 @@ brings in its main.
 
 `vibe64-helper session status --json` lists the copies under
 `repository.connected`, each with its `name`, `path`, how many commits it is
-`behind` its main and whether it holds `unsaved` work. A typed `dependency`
-copy also has its package `type` and `inEffect`: `true` when the session's app
-uses this copy instead of the published package, otherwise `false` with the
-`reason` (for example `node_modules/library/index.js no longer holds the
-connected source.`); **Prepare workspace** puts it in effect again.
+`behind` its main and whether it holds `unsaved` work.
 
 ## Prepare workspace makes the missing copies
 
@@ -57,9 +53,8 @@ The output has one line per repository:
   that copy's commits and files; the next preparation then removes it. For work
   Save does not take, such as a stash, apply or drop it, or move the folder away.
 
-Preparation then writes the Stack's `Sources file` pointing at the copies (when
-Stack names one), puts each typed dependency copy in effect, proves it, and
-runs any declared connected Prepare and Verify commands; see
+Preparation then writes the Stack's `Sources file` pointing at the copies and
+runs the declared connected Prepare and Verify commands; see
 [Configure connected repositories](connected-projects.md).
 
 Preparation stops, naming the repository, when:
@@ -110,13 +105,6 @@ repository is. When Update had not yet reached the session's own repository, the
 notice says the update can be retried: choose **Update this session (rebase)**
 again.
 
-When another session saved a Composition copy, the project's main pins that
-newer commit in `vibe64.connections.lock.json` (see the Save section below):
-after Update this session's copy is on that repository's main and its source
-holds the same pin. A pin an unfinished Save of this session left in the file is
-put back before Update, so it never conflicts; the next Save writes the copies'
-commits again.
-
 The session's regular check for newer saved work also watches each copy's main,
 so the session asks for an Update when any of them moves. The session's AI runs
 this same Update itself when the session is behind, before building on the old
@@ -130,8 +118,7 @@ session badge shows **Unsaved changes** when any copy has work, even when the
 session's own repository is clean.
 
 1. Before pushing anything, Save checks every copy against its main, and the
-   session's own repository too when it has work or this Save will pin a
-   Composition copy (step 3). If any of them is behind, even
+   session's own repository too when it has work. If any of them is behind, even
    a copy with nothing to save, Save stops with an **Update first** refusal, for
    example `library has newer saved work. Update this session before saving its
    work.`, and pushes nothing. Choose **Update this session (rebase)**, then Save.
@@ -139,26 +126,8 @@ session's own repository is clean.
    one commit, named like any Save, pushed straight to that repository's main.
    Each copy's new commit is recorded before the next copy is saved, and the
    output shows `[Connected] library saved at 6e0b7a2c91d4.`
-3. It records the connections in the session's own source:
-   - each **Composition** copy's saved commit and tree go into
-     `vibe64.connections.lock.json` beside `vibe64.connections.json`, with the
-     line `[Connected] vibe64.connections.lock.json pins example/library at
-     6e0b7a2c91d4.`; a Composition this session has no copy of keeps its earlier
-     pin. The project's composer, and so Staging and Production, assemble exactly
-     the pinned commit. Vibe64 writes this file; do not edit it;
-   - a **Dependency** has no pin: it reaches Staging and Production as a
-     published version. When its copy declares a version the registry has
-     published, Save moves the project's manifest and lock to it and says so in
-     a `[Connected]` line naming the package and version; until then they keep
-     the version the manifest and lock name. A check that cannot reach the registry is
-     reported as `[Connected] Vibe64 could not check the connected dependencies
-     for published versions: ...` and never stops Save;
-   - the Stack's Connected development **Save** entries run, in order; one that
-     fails stops Save before the session's own commit, with `The connected Save
-     step <label> failed: <reason>.`
-4. Last, it saves the session's own repository, as usual, in one commit with
-   what step 3 changed. When only copies have work and nothing changed in step 3,
-   Save saves them and leaves the session's own repository as it is.
+3. Last, it saves the session's own repository, as usual. When only copies have
+   work, Save saves them and leaves the session's own repository as it is.
 
 The Save result lists the connected repositories it saved, with their commits.
 When Main chat's AI saves a finished stage itself, with **Automatically save
@@ -173,14 +142,6 @@ pushed. Any other refusal, for example a branch rule that requires a pull
 request, is reported as GitHub gave it and also stops Save before the session's
 own repository. Copies are only ever saved straight to their main, so work in a
 copy of a repository that requires pull requests cannot be saved from here.
-
-If Save stops after it pushed a copy (step 3 or 4 failed, or the session's own
-main moved meanwhile), the copy stays saved and the refusal says so, for example
-`Saved library at 6e0b7a2c91d4 to its main, but this project's own source is not
-saved, so its main still pins the earlier commit of library. The saved branch
-has changed. Update this session before saving its work. Save again to finish.`
-Do what the reason asks, then Save again: the copy has nothing left to push, and
-this Save records its pin.
 
 If Vibe64 stops while saving, for example on a restart, recovery records each
 copy whose push landed and never pushes it again; a copy that was not pushed

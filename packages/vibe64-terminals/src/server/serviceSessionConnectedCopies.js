@@ -119,7 +119,7 @@ async function prepareConnectedRepositories({
   const inputs = await project.prepareConnectedDevelopmentInputs({
     session: await runtime.getSessionWithoutSource(session.sessionId)
   });
-  return { ...inputs, lines: [...lines, ...(inputs?.lines || [])] };
+  return { ...inputs, lines };
 }
 
 /**
