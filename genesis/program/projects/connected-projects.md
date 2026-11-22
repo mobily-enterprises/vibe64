@@ -105,6 +105,22 @@ goes only when Prepare finds it holds no work. The map grants no authority.
 A section with only a Default package type writes no map; the adapters read the
 same resolved repositories from the inspection.
 
+## One lifecycle
+
+Every connection goes through the same phases; the type decides only the
+mechanism. Staging and Production never read session trees.
+
+| Relationship | In the session | On Save | Staging and Production |
+|---|---|---|---|
+| dependency, npm | adapter swap of every installed copy; watcher sync | adapter `bump` to a published version | tracked package.json and lockfile |
+| dependency, composer, pip, bundler, gomod, cargo, maven, gradle, nuget | adapter `apply` (derived, untracked files; maven: watcher re-install) | adapter `bump` to a published version | tracked manifests and lockfiles |
+| dependency, custom | project Custom runner (prepare, verify) | project `Save` entries | tracked files |
+| composition, any type | the project's composer (Verify required) plus npm swaps in the composed trees | Vibe64's pin in `vibe64.connections.lock.json` | the project's build reads the pin |
+
+Until a connected version is published, preparation's check, Save and session
+status show the gap: what the session runs and the published version Staging
+and Production use (`releaseGapLine` from each adapter's `locked`).
+
 ## Adapters
 
 `connectedAdapters/index.js` registers one adapter per non-custom type with the

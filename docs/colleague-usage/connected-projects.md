@@ -121,9 +121,22 @@ deployment, uses the published packages.
   (Vite) keeps what it bundled until it restarts: Vibe64 clears Vite's
   dependency metadata, so restarting Preview shows client changes. A connected
   package no tree installs is refused by name, and a package marked `private`
-  is never a candidate.
+  is never a candidate. On **Save**, once the registry has published the
+  version the connected copy carries, Vibe64 moves the project's
+  `package.json` and `package-lock.json` to it (`npm install
+  --package-lock-only`, so the swap stays); until then it changes nothing.
 
 CONNECTED_TYPES_PLACEHOLDER
+
+Staging and Production never use a session's copy: they build from the saved
+commit, so they install the published versions the project's tracked manifests
+and lockfiles name. Vibe64 shows that gap instead of hiding it: the preparation's
+check and **Save** print, for each package, for example `[Connected] Library:
+this session runs the connected library at 4f2a9c1e7b30; Staging and Production
+use the published 1.0.0 until 1.1.0 is published, which Save then moves this
+project to.`, and session status lists it under `published`. A Composition
+connection is not a package: **Save** records the commit it saved in
+`vibe64.connections.lock.json`, and the project's build reads that pin.
 
 When a connection is removed from the list, the next preparation gives the
 published package back (npm restores the installed copies; the other types

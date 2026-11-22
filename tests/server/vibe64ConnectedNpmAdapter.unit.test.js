@@ -134,7 +134,15 @@ test("npm: every installed copy, nested ones included, becomes exactly what the 
   assert.deepEqual(await f.tracked(), before);
   assert.equal((await exec("git", ["status", "--porcelain", "--ignored=no"], { cwd: f.app })).stdout, "");
 
-  assert.deepEqual(await f.proof(), { name: "Lib", repository, type: "npm", sourceRoot: f.copy, inEffect: true, reason: "" });
+  assert.deepEqual(await f.proof(), {
+    name: "Lib",
+    repository,
+    type: "npm",
+    sourceRoot: f.copy,
+    inEffect: true,
+    reason: "",
+    published: [{ package: "@proof/lib", connected: "1.1.0", locked: "1.0.0" }]
+  });
   const proved = await f.step("proof");
   assert.equal(proved.ok, true, proved.error);
   // The gap is never hidden: the check says what Staging and Production use until a release.
