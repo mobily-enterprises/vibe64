@@ -163,7 +163,7 @@ Staging and Production never use a session's copy: they build from the saved
 commit, so they install the published versions the project's tracked manifests
 and lockfiles name. Vibe64 shows that gap instead of hiding it: the preparation's
 check and **Save** print, for each package, for example `[Connected] Library:
-this session runs the connected library at 4f2a9c1e7b30; Staging and Production
+this session runs the connected library; Staging and Production
 use the published 1.0.0 until 1.1.0 is published, which Save then moves this
 project to.`, and session status lists it under `published`. A Composition
 connection is not a package: **Save** records the commit it saved in

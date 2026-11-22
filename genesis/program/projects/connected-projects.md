@@ -126,7 +126,8 @@ and Production use (`releaseGapLine` from each adapter's `locked`).
 
 `connectedAdapters/index.js` registers one adapter per non-custom type with the
 contract `{ type, runtimeRequirements, apply(context), proof(context),
-restore?(input) }` documented at its top, and turns each typed dependency into
+locked(context), bump(context), watch?, restore?(input) }` documented at its
+top, and turns each typed dependency into
 two workspace preparation steps. `runConnectedAdapterStep` serializes applies
 (and syncs) per session source and returns a command-shaped result;
 `inspectConnectedAdapters` runs every proof without a command runner, from files
