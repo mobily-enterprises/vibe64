@@ -68,6 +68,18 @@ async function writeDerivedFiles({ connection, tree, files, runCommand, writeGit
   return changed;
 }
 
+/**
+ * The patterns the type's exclude block holds in a tree: what its adapter last generated there.
+ * Empty when it never generated anything, so a restore can stop without searching the tree.
+ */
+async function excludedDerivedPatterns(tree, type) {
+  const text = await readFile(path.join(tree, ".git", "info", "exclude"), "utf8").catch(() => "");
+  const lines = text.split(/\r?\n/u);
+  const begin = lines.indexOf(`# BEGIN Vibe64 managed connected ${type} packages files`);
+  const end = lines.indexOf(`# END Vibe64 managed connected ${type} packages files`);
+  return begin >= 0 && end > begin ? lines.slice(begin + 1, end).filter(Boolean) : [];
+}
+
 /** Removes derived files (when no connection of the type remains) and the type's exclude block. */
 async function removeDerivedFiles({ tree, paths, writeGitExcludes }) {
   const removed = [];
@@ -81,4 +93,4 @@ async function removeDerivedFiles({ tree, paths, writeGitExcludes }) {
   return removed;
 }
 
-export { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles };
+export { excludedDerivedPatterns, readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles };

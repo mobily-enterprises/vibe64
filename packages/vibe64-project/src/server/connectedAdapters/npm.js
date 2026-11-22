@@ -304,8 +304,9 @@ async function keepCopiesOutOfGit({ connection, copies, runCommand, writeGitExcl
         "vibe64_connected_npm_tracked"
       );
     }
-    const ignored = await runCommand({ command: "git", args: ["check-ignore", "-z", "--", ...relative], cwd: tree, timeout: 60_000 });
-    const ignoredPaths = new Set(String(ignored?.stdout || "").split("\0").filter(Boolean));
+    // `-z` needs --stdin; installed package paths hold no newline. Exit 1 means none is ignored.
+    const ignored = await runCommand({ command: "git", args: ["check-ignore", "--", ...relative], cwd: tree, timeout: 60_000 });
+    const ignoredPaths = new Set(String(ignored?.stdout || "").split("\n").filter(Boolean));
     // A tree that does not ignore its installed packages would commit the swapped files with its work.
     if (relative.some(entry => !ignoredPaths.has(entry))) await writeGitExcludes(tree, ["node_modules"]);
   }
