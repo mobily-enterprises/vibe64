@@ -4,8 +4,10 @@ import {
   assistantRoutingFromMetadata,
   assistantRoutingGoalFromMetadata,
   assistantWorkflowStateIsSupported,
-  assistantWorkflowMessageIds
+  assistantWorkflowMessageIds,
+  assistantWorkflowRole
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -16,6 +18,27 @@ const CANCELLED_KEY = "assistant_cancelled_messages";
 const MAX_CANCELLED_MESSAGES = 50;
 
 const activeMessage = state => state.followup || state.input;
+/**
+ * The role the plan command acts as for the request's running turn: "" (read only) for an answer-only turn, a pass or
+ * task, or no working request; "review" for Auto's Senior check in a review follow-up; otherwise the routed role, so a
+ * Junior or Custom chat's agent keeps its own.
+ * @param {object | null} request the saved routing request
+ */
+function assistantPlanRole(request) {
+  if (request?.reason === "conversation" || assistantTaskPurpose(request?.task) || request?.stage === "pass" ||
+      request?.status !== "working" || request.delivery !== "accepted") return "";
+  return request.stage === "review" && request.followup && assistantWorkflowRole(request) === "senior" ? "review" : request.resolvedMode;
+}
+/**
+ * Whether the request's running turn hands a plan change its role may not make to Senior's planning turn: in Auto
+ * only, for a routed turn that is not Senior's (an answer-only turn or Junior's), never for a pass or task.
+ * @param {object | null} request the saved routing request
+ */
+function assistantPlanHandsOff(request) {
+  return request?.mode === "auto" && !request.stopped && Boolean(request.turnId) && !assistantTaskPurpose(request.task) &&
+    request.stage !== "pass" && request.status === "working" && request.delivery === "accepted" &&
+    !["senior", "review"].includes(assistantPlanRole(request));
+}
 const usesWorkPlan = state => state.planInvolved === true;
 function failure(message, code) {
   return new AppError(409, message, { code });
@@ -128,6 +151,8 @@ export {
   STATE_KEY,
   activeMessage,
   assistantCancelledMessageIds,
+  assistantPlanHandsOff,
+  assistantPlanRole,
   assistantRoutingRequestForMessage,
   failure,
   prepareCopiedAssistantRouting,

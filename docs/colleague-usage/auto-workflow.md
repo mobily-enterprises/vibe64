@@ -8,8 +8,13 @@ for that request. For example, “Junior developer: say hello” needs no plan, 
 “Senior, implement the current plan” uses Senior for implementation.
 
 Without an explicit role, Senior handles discussing, writing and improving plans,
-review, Deslop and the [UI pass](ui-pass.md). Junior implements an existing plan: say “Execute the plan” or
-ask it to continue implementation. Answering the plan's open questions so coding
+review, Deslop and the [UI pass](ui-pass.md). Any request to make, write, save,
+update or extend a plan goes to Senior as planning, including "Yes, make a plan
+from it" as the answer to a numbered question, "OK make the plan!", a plan built
+from the conversation so far, and "in the same plan" to add work to the current
+or a completed plan. Agreeing to make a plan never starts implementing it.
+Junior implements an existing plan: say “Execute the plan” or ask it to continue
+implementation. Answering the plan's open questions so coding
 can proceed also defaults to Junior; recording accepted choices or implementation
 progress does not change that default. An explicit Senior or Junior request
 always takes precedence. Junior also handles other questions and work, including
@@ -22,6 +27,20 @@ Router chooses a role and one of conversation, planning, implementation or revie
 only for a new Auto request. It does not decide what happens after each turn.
 A conversation request only gets an answer: its agent reports no outcome, Vibe64
 records the reply as finished when the turn ends, and no Status message appears.
+
+A request that needs a plan always gets one, and you never have to ask for
+Senior. If Router sends such a request to Junior (or treats it as conversation),
+the agent still writes the plan and sends it to the plan helper; creating a plan,
+changing its scope, reopening or archiving it is Senior's, so the helper hands
+the same request, with that draft, to Senior instead of saving it. A **Senior is
+saving the plan.** notice appears, the chat shows the automatic **Senior saves
+the plan.** message, and as soon as the first turn ends Senior saves or corrects
+the plan in a Planning turn of its own, asking first when a current plan exists
+and you haven't said whether to update it or archive and replace it. Planning
+then waits for your go-ahead as usual. Router's mistake costs one extra turn.
+**Stop** during the first turn hands nothing on. This happens only in Auto: in a
+Junior chat, which you chose, Junior still can't create a plan and tells you to
+switch **Chat mode** to **Senior** or **Auto** and ask again.
 
 At planning, implementation and review, the working agent reports one of four
 outcomes:
@@ -97,6 +116,11 @@ the existing chat action; an explanation or offer alone does not authorise it.
 
 The composer's **Stop** pauses the current workflow and interrupts active work
 or request preparation. Auto retains the stage, plan and completed changes.
+Stop ends the turn: the next message you send is a new request, which Router
+routes afresh as usual (naming **Senior** or **Junior** in it still chooses the
+role). It never joins the stopped turn; sent while that turn is still ending, it
+waits a few seconds for it to end, and if it is still ending after that, the
+message is left unsent for you to send again.
 A late successful result cannot undo Stop. Select the stage-specific **Continue** action when ready;
 this starts a fresh turn at that stage. A failed or interrupted turn, or
 one ending without a confirmed outcome, leaves **Waiting** with a concrete reason.

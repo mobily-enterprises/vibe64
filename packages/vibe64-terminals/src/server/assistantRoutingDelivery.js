@@ -186,7 +186,7 @@ function createAssistantRoutingDelivery({
       browserReview: assistantPlanCompletionFollows(state),
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
-      planInstructions: includePlanInstructions ? workPlanInstructions(role, { autoOutcome }) : ""
+      planInstructions: includePlanInstructions ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto" }) : ""
     });
     // A pass renders its own Genesis task, and a review Genesis's review task. Senior's
     // check of a plan Junior implemented is not a pass: it renders no task of its own.

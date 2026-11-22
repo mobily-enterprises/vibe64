@@ -40,6 +40,7 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {AssistantRouting["recordOutcome"]} dependencies.recordWorkflowOutcome
+ * @param {AssistantRouting["handPlanToSenior"]} dependencies.handPlanToSenior
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks
  * @param {ServiceAssistant["sendAgentMessage"]} dependencies.sendAgentMessage
@@ -57,6 +58,7 @@ function createServiceCommandServices({
   publishAgentSessionChanged,
   publishSessionChanged,
   recordWorkflowOutcome,
+  handPlanToSenior,
   runCodexGitGatewayCommand,
   savedEnvValueLinks,
   sendAgentMessage,
@@ -187,6 +189,7 @@ function createServiceCommandServices({
       }, "Accepted project message failed during asynchronous delivery.")
     }),
     reportWorkflowOutcome: recordWorkflowOutcome,
+    handPlanToSenior,
     logger,
     publishSessionChanged: publishAgentSessionChanged,
     project

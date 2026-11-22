@@ -72,8 +72,8 @@ import {
   waitForCommandResult
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
-import { assistantWorkflowRole } from "@local/vibe64-runtime/shared/assistantRouting";
-import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
+import { assistantPlanRole } from "./assistantRoutingRequests.js";
+import { refusedPlanChange } from "./assistantPlanHandoff.js";
 import { commandLineFailure } from "./commandFailure.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
 
@@ -193,6 +193,8 @@ const commandServers = createSessionCommandServers({
  * @param {(request: object) => Promise<object>} dependencies.sendProjectMessage
  * @param {(request: object) => Promise<object>} dependencies.readProjectPreview
  * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.reportWorkflowOutcome
+ * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.handPlanToSenior Records,
+ *   for Auto's running turn, a plan change only Senior may make, which routing hands to Senior once the turn ends
  * @param {(sessionId: string) => Promise<object>} dependencies.retryWorkspaceSetup
  * @param {(sessionId: string, input: object) => Promise<object>} dependencies.updateSessionWork the session's own Update
  * @param {(sessionId: string, input: object) => Promise<object>} dependencies.saveSessionWork the session's own Save, to
@@ -211,6 +213,7 @@ function createAgentSessionCommandService({
   sendProjectMessage,
   readProjectPreview,
   reportWorkflowOutcome,
+  handPlanToSenior,
   retryWorkspaceSetup,
   updateSessionWork,
   saveSessionWork,
@@ -427,18 +430,14 @@ function createAgentSessionCommandService({
       if (input.operation === "outcome") {
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
       }
-      let role = "";
       // A pass, an after-plan one too, works like a task: it never manages the plan.
-      if (request?.reason !== "conversation" &&
-          !assistantTaskPurpose(request?.task) &&
-          request?.stage !== "pass" &&
-          request?.status === "working" &&
-          request.delivery === "accepted") {
-        // Auto's Senior checks a plan in a review follow-up; a Junior or Custom chat's agent keeps its own role.
-        role = request.stage === "review" && request.followup && assistantWorkflowRole(request) === "senior"
-          ? "review" : request.resolvedMode;
+      const role = assistantPlanRole(request);
+      let result;
+      try {
+        result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, input, role);
+      } catch (error) {
+        throw await refusedPlanChange({ sessionId, request, input, error, handPlanToSenior, logger });
       }
-      const result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, input, role);
       // A plan becoming current marks where its after-plan passes start, unless a base is recorded.
       if (["new", "reopen"].includes(input.operation)) {
         await rememberAfterPlanBase(store, { ...descriptor, sessionId }, { onlyWhenUnset: true });
