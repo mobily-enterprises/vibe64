@@ -117,6 +117,46 @@ test("prepared previews launch while the assistant lock is occupied and concurre
   } finally { await release(); }
 });
 
+// A tab decides a start on the status it last read, which may predate a run another start began (a
+// tab still showing Stop's "Start preview" while an agent's `preview ensure` boots the Preview). That
+// start returns the run, starting or running; only a start naming the running run replaces it.
+test("a start decided on an outdated view returns the run another start began and replaces only the run it names", { timeout: 20_000 }, async (t) => {
+  const f = await fixture(t);
+  await f.prepare();
+  const hold = path.join(f.sourceRoot, "hold-preview");
+  await writeFile(hold, "hold");
+  let first;
+  try {
+    first = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.equal((await f.terminals.outputTargetStatus(f.sessionId)).preview.state, "starting");
+    for (const outdated of [
+      // Start preview, from a tab that still shows the Preview stopped.
+      { forceRestart: true, replacesTerminalSessionId: "" },
+      // The tab's own restart of a failed run it saw, an older one.
+      { automatic: true, forceRestart: true, replacesTerminalSessionId: "an-older-run" },
+      // An automatic start that names no run saw none.
+      { automatic: true, forceRestart: true }
+    ]) {
+      const kept = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app", ...outdated });
+      assert.equal(kept.id, first.id, `${JSON.stringify(outdated)} replaced the starting Preview`);
+    }
+    assert.deepEqual(runningPreviewIds(f.sessionId), [first.id]);
+  } finally { await rm(hold, { force: true }); }
+  await assertServes(first);
+  const restarted = await f.terminals.startOutputTargetTerminal(f.sessionId, {
+    forceRestart: true, outputTargetId: "app", replacesTerminalSessionId: first.id
+  });
+  assert.notEqual(restarted.id, first.id);
+  await assertServes(restarted);
+  const late = await f.terminals.startOutputTargetTerminal(f.sessionId, {
+    forceRestart: true, outputTargetId: "app", replacesTerminalSessionId: first.id
+  });
+  assert.equal(late.id, restarted.id, "A restart of the run already replaced replaced its replacement");
+  assert.deepEqual(runningPreviewIds(f.sessionId), [restarted.id]);
+  assert.deepEqual(await startedPreviewIds(f), [first.id, restarted.id]);
+});
+
 for (const change of ["environment value", "missing environment file", "Git excludes", "setup recipe"]) {
   test(`changed ${change} waits for the assistant lock, then prepares and serves a real preview`, { timeout: 15_000 }, async (t) => {
     const environmentWaiting = Promise.withResolvers();

@@ -50,6 +50,8 @@ const outputTargetFields = {
   },
   outputTargetId: requiredText,
   originId: optionalText,
+  // The run the start's view showed ("" for none): another one running is returned, not replaced.
+  replacesTerminalSessionId: { ...optionalText, maxLength: 200 },
   vibe64User: {
     type: "object",
     additionalProperties: true,

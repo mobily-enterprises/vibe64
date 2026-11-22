@@ -475,7 +475,7 @@ function createServiceSessionTerminals({
     if (status?.ok === false || !terminal || !launchTerminalIsRunning(terminal) || terminal.metadata?.outputPresentationKind !== "web") {
       return { ok: true, running: false };
     }
-    const waited = await waitForPreviewReady(outputTarget, sessionId, { terminalSessionId: terminal.id, signal });
+    const waited = await waitForPreviewReady(outputTarget, sessionId, { terminal, signal });
     if (waited.ok) return { ok: true, running: true };
     return {
       ok: false,

@@ -112,6 +112,11 @@ function createAgentPreviewCommandLine({
   previewOpenTimeoutMs,
   readSessionUiState
 }) {
+  /** The project of the session's editor or managed browser, when known. */
+  function sessionProjectSlug(sessionId) {
+    return workerRegistry.sessionProjectSlug(sessionId) || normalizeText(readSessionUiState(sessionId)?.projectSlug);
+  }
+
   async function authorizeBrowserIdentity(sessionId = "", identity = "") {
     const normalizedSessionId = normalizeText(sessionId);
     const requested = normalizeText(identity).toLowerCase();
@@ -243,7 +248,7 @@ function createAgentPreviewCommandLine({
         { exitCode: 1 }
       );
     }
-    const projectSlug = workerRegistry.sessionProjectSlug(sessionId) || normalizeText(readSessionUiState(sessionId)?.projectSlug);
+    const projectSlug = sessionProjectSlug(sessionId);
     const answers = projectSlug
       ? await collectSessionPreviewOpenAnswers({
         projectSlug,
@@ -402,10 +407,16 @@ function createAgentPreviewCommandLine({
         stderr: `${started.error || (ensuring ? "Vibe64 managed preview could not start." : "Vibe64 preview restart failed.")}\n`
       });
     }
+    // Open editor tabs hear of this start as of one made in the editor, so none keeps showing the run
+    // before it, or Stop's "Start preview", and starts again over it.
+    await publishSessionChanged(sessionId, {
+      projectSlug: sessionProjectSlug(sessionId),
+      reason: "output-target-started"
+    });
     let status = await launchTarget.launchStatus(sessionId);
     if (parsed.wait) {
       const waited = await waitForPreviewReady(launchTarget, sessionId, {
-        terminalSessionId: started.id,
+        terminal: started,
         timeoutMs: parsed.timeoutMs
       });
       status = waited.status || status;

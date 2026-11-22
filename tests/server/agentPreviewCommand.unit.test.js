@@ -881,6 +881,73 @@ test("agent preview command ensures the managed preview and waits for readiness"
   });
 });
 
+/** A launch status whose active run is `id`, started at `createdAt`, of `outputTargetId`; ready once `ready`. */
+function previewRunStatus(id, createdAt, { outputTargetId = "dev", ready = false } = {}) {
+  return {
+    activeTerminal: { createdAt, id, metadata: { outputTargetId }, running: true, status: "running" },
+    lastOutputTarget: { agentHref: "http://vibe64-launch-agent:4100/", id: outputTargetId },
+    previewTarget: ready
+      ? { available: true, href: "http://127.0.0.1:49100/", targetHref: "http://127.0.0.1:4100/" }
+      : { available: false, href: "" }
+  };
+}
+
+/** A Preview command whose ensure starts `run-1` and whose launch status then reads `statuses` in turn. */
+function replacedPreviewCommand(statuses, published = []) {
+  let index = 0;
+  return createAgentPreviewCommandService({ logger: silentLogger,
+    publishSessionChanged: async (sessionId, change) => { published.push([sessionId, change.reason]); return null; },
+    launchTarget: {
+      async ensurePreview() {
+        return { createdAt: "2026-11-22T16:06:28.000Z", id: "run-1", metadata: { outputTargetId: "dev" }, ok: true };
+      },
+      async restartPreview() {
+        return { createdAt: "2026-11-22T16:06:29.000Z", id: "run-1", metadata: { outputTargetId: "dev" }, ok: true };
+      },
+      async launchStatus() {
+        return statuses[Math.min(index++, statuses.length - 1)];
+      }
+    }
+  });
+}
+
+test("preview ensure --wait follows a newer run of its target that replaced its own to readiness", async () => {
+  const command = replacedPreviewCommand([
+    previewRunStatus("run-1", "2026-11-22T16:06:28.000Z"),
+    // Another start replaced it 20 s later, still starting, then ready.
+    previewRunStatus("run-2", "2026-11-22T16:06:48.000Z"),
+    previewRunStatus("run-2", "2026-11-22T16:06:48.000Z", { ready: true })
+  ]);
+  const result = await command.run({ args: ["ensure", "--wait", "--timeout-ms", "4000", "--json"], sessionId: "preview-replaced" });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(JSON.parse(result.stdout).terminal.id, "run-2");
+  assert.equal(JSON.parse(result.stdout).ready, true);
+});
+
+test("preview ensure --wait fails at once when its run went and nothing of its target replaced it", async () => {
+  const gone = { activeTerminal: null, preview: { state: "stopped", stoppedIntent: true }, previewTarget: { available: false, href: "" } };
+  for (const [label, after] of [
+    ["Stop ended it", gone],
+    ["another target replaced it", previewRunStatus("run-2", "2026-11-22T16:06:48.000Z", { outputTargetId: "test-app" })]
+  ]) {
+    const command = replacedPreviewCommand([previewRunStatus("run-1", "2026-11-22T16:06:28.000Z"), after]);
+    const started = Date.now();
+    const result = await command.run({ args: ["ensure", "--wait", "--timeout-ms", "4000", "--json"], sessionId: "preview-gone" });
+    assert.equal(result.ok, false, label);
+    assert.equal(result.code, "vibe64_agent_preview_command_not_ready", `${label}: ${result.code}`);
+    assert.ok(Date.now() - started < 3000, `${label}: waited ${Date.now() - started} ms for a run that was gone`);
+  }
+});
+
+test("an agent's preview ensure and restart tell the session's open editor tabs a Preview started", async () => {
+  const published = [];
+  const command = replacedPreviewCommand([previewRunStatus("run-1", "2026-11-22T16:06:28.000Z", { ready: true })], published);
+  assert.equal((await command.run({ args: ["ensure", "--json"], sessionId: "preview-announced" })).ok, true);
+  assert.equal((await command.run({ args: ["restart", "--json"], sessionId: "preview-announced" })).ok, true);
+  assert.deepEqual(published.filter(([, reason]) => reason === "output-target-started"),
+    [["preview-announced", "output-target-started"], ["preview-announced", "output-target-started"]]);
+});
+
 test("agent preview command delegates restart to the managed launch controller", async () => {
   const sessionId = "preview-command-session";
   const restartCalls = [];

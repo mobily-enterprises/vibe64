@@ -22,6 +22,15 @@ results still use the ordinary Preview controls.
 
 Start can replace a running output, even without forcing restart. Colleague must
 inspect current state before starting and must not repeat an uncertain start.
+A start decided from a view names the run that view showed
+(`replacesTerminalSessionId`, empty when it showed none); an automatic start that
+names none saw none. When another run is starting or running by then, the view is
+out of date: the start returns that run unchanged, as ensure does, and logs
+`start_kept_running` in place of starting one. Only a start naming the running run
+replaces it; agent ensure/restart and the restart after workspace setup name none
+and keep their own rules. Tabs send it with every start, so a **Start preview**,
+restart or automatic start pressed on an older status never ends a Preview that an
+agent's ensure or another tab began meanwhile.
 An unchanged target, parameters and configured environment reuse the original
 running terminal and resource workflow. The web spec supplies an allocation-free
 environment fingerprint: generated loopback ports do not change that identity,
@@ -114,6 +123,9 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
 - `tests/server/agentPreviewCommand.unit.test.js`
 - `tests/server/agentPreviewOpenCommand.unit.test.js`
+- `tests/server/previewPreparation.integration.test.js`
+- `tests/client/vibe64OutputControls.vitest.js`
+- `tests/client/vibe64OutputControlsSurface.vitest.js`
 - `tests/server/launchPreviewCrossSiteCookies.unit.test.js`
 - `tests/server/launchPreviewHeldSessions.unit.test.js`
 - `tests/server/previewCrossSiteFrame.browser.test.js`
@@ -211,6 +223,8 @@ their original lifecycle retains control. Before recovery the same output owner
 refreshes status and rechecks the current project/session, health, load errors,
 editing, source operations and admission holds. A preview already started by the
 person's retry is retained rather than force-restarted from stale browser state.
+That recovery is an automatic start naming the run it read, so a run begun after
+that read is returned rather than replaced.
 
 Output targets may declare `Data: test` or `Data: development` in the Vibe64-owned
 Outputs grammar. This optional field reaches target views unchanged. Test-data
@@ -415,6 +429,13 @@ Preview; status and reads remain available. An ordinary ensure can reuse that
 exact running test target but cannot restart its fixtures during the suite.
 `vibe64-helper preview ensure --target <id> --wait --json` is deliberate persistent
 selection and does not arrange automatic restoration.
+An agent's ensure or restart announces `output-target-started` to the session's
+open tabs, as a start from the editor does, so none keeps showing the state
+before it. Its `--wait` (and the wait after a check's workspace preparation) waits
+for the run the start returned and follows a newer run of the same target that
+replaced it, to readiness; it fails at once, without waiting out its timeout, when
+that run exited or went with nothing of its target in its place (Stop, another
+target, no run).
 
 Target selection does not change managed environment values or certify data
 safety. Application-owned scripts must select the designated disposable data,

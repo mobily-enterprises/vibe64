@@ -141,7 +141,7 @@ function createAgentPreviewBrowserTests({
       },
       waitUntilReady: async (terminal, { restoring = false } = {}) => {
         const waited = await waitForPreviewReady(launchTarget, sessionId, {
-          terminalSessionId: terminal.id,
+          terminal,
           signal: restoring ? null : options.signal
         });
         if (!waited.ok) {

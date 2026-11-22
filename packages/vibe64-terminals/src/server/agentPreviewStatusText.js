@@ -317,13 +317,37 @@ function outputTargetIdFromStatus(status = {}) {
   return normalizeText(lastOutputTarget.id || activeMetadata.outputTargetId);
 }
 
+/**
+ * The run a Preview wait follows: its id, when it started and its target.
+ * @param {object | null} terminal
+ * @param {string} fallbackCreatedAt when the run's own start time is unknown
+ */
+function followedPreviewRun(terminal, fallbackCreatedAt = "") {
+  return {
+    createdAt: normalizeText(terminal?.createdAt) || fallbackCreatedAt,
+    id: normalizeText(terminal?.id),
+    outputTargetId: normalizeText(terminal?.metadata?.outputTargetId)
+  };
+}
+
+/**
+ * Waits for the session's Preview to be ready. Given the run a start returned, it waits for that run, and
+ * follows a newer run of the same target that replaced it (another start's) to readiness. It fails at once
+ * when its run exited, or went with no such replacement (Stop, another target, nothing running), and on
+ * a timeout only while a run it follows is still starting.
+ * @param {object} launchTarget
+ * @param {string} sessionId
+ * @param {{ signal?: AbortSignal | null, terminal?: object | null, timeoutMs?: number }} [options]
+ *   terminal: the run the start returned (its id, createdAt and metadata.outputTargetId)
+ */
 async function waitForPreviewReady(launchTarget, sessionId = "", options = {}) {
   const {
-    terminalSessionId = "",
+    terminal = null,
     signal = null,
     timeoutMs = DEFAULT_PREVIEW_WAIT_TIMEOUT_MS
   } = options;
   const deadline = Date.now() + timeoutMs;
+  let followed = followedPreviewRun(terminal, new Date().toISOString());
   let latestStatus = null;
   while (Date.now() <= deadline) {
     signal?.throwIfAborted();
@@ -334,13 +358,26 @@ async function waitForPreviewReady(launchTarget, sessionId = "", options = {}) {
         status: latestStatus
       };
     }
-    if (previewReady(latestStatus) && (!terminalSessionId || latestStatus.activeTerminal?.id === terminalSessionId)) {
+    const active = isRecord(latestStatus?.activeTerminal) ? latestStatus.activeTerminal : null;
+    const activeId = normalizeText(active?.id);
+    if (followed.id && activeId !== followed.id && (activeId || !active)) {
+      const replacement = followedPreviewRun(active);
+      if (!activeId || replacement.createdAt <= followed.createdAt ||
+          (followed.outputTargetId && replacement.outputTargetId !== followed.outputTargetId)) {
+        return {
+          ok: false,
+          status: latestStatus
+        };
+      }
+      followed = { ...replacement, outputTargetId: replacement.outputTargetId || followed.outputTargetId };
+    }
+    if (previewReady(latestStatus) && (!followed.id || activeId === followed.id)) {
       return {
         ok: true,
         status: latestStatus
       };
     }
-    if (activeTerminalExited(latestStatus, terminalSessionId)) {
+    if (activeTerminalExited(latestStatus, followed.id)) {
       return {
         ok: false,
         status: latestStatus

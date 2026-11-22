@@ -2,10 +2,10 @@ import { computed, nextTick, ref, watch } from "vue";
 
 /**
  * Getting the embedded Preview running again. A stale or failed Preview is
- * restarted once by itself when nothing else is busy; until then the toolbar
- * says a restart is coming. It also starts, restarts or retries the Preview
- * by hand, rechecks a refused resource admission, and retries status loads and
- * workspace setup.
+ * restarted once by itself when nothing else is busy, as an automatic start
+ * naming the run it saw; until then the toolbar says a restart is coming. It
+ * also starts, restarts or retries the Preview by hand, rechecks a refused
+ * resource admission, and retries status loads and workspace setup.
  * @param {{
  *   outputs: import("@/types.js").Vibe64OutputControls,
  *   projectSlug: import("vue").Ref<string>,
@@ -68,13 +68,17 @@ function useVibe64PreviewRecovery({ outputs, projectSlug, props, targets }) {
           previewStoppedIntent.value || resourceAdmissionId.value || testApproval.value || previewTestNotice.value ||
           !["stale", "failed"].includes(previewState.value) ||
           !(terminalCanRestart.value || terminalCanRetry.value || previewCanRestart.value)) return;
-      await recoverEmbeddedPreview();
+      await recoverEmbeddedPreview({ automatic: true });
     } finally {
       if (props.session?.sessionId === sessionId) previewRestartPending.value = false;
     }
   });
 
-  async function forceStartEmbeddedPreview() {
+  /**
+   * Starts the embedded Preview over the run this tab shows. A button passes its click event; the
+   * restart this composable makes by itself passes `{ automatic: true }`.
+   */
+  async function forceStartEmbeddedPreview(options) {
     if (operationBusy.value) {
       return false;
     }
@@ -83,11 +87,12 @@ function useVibe64PreviewRecovery({ outputs, projectSlug, props, targets }) {
     }
     return run(embeddedStartTarget.value, {
       applyDefaultDisplay: false,
+      automatic: options?.automatic === true,
       forceRestart: true
     });
   }
 
-  async function recoverEmbeddedPreview() {
+  async function recoverEmbeddedPreview(options) {
     if (operationBusy.value) {
       return false;
     }
@@ -96,7 +101,7 @@ function useVibe64PreviewRecovery({ outputs, projectSlug, props, targets }) {
       embeddedStartTarget.value.available !== false &&
       (previewCanRestart.value || previewCanStart.value || terminalCanRestart.value || terminalCanRetry.value)
     ) {
-      return forceStartEmbeddedPreview();
+      return forceStartEmbeddedPreview(options);
     }
     if (terminalCanRestart.value) {
       return restartTerminal();

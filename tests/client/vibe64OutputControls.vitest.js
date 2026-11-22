@@ -1049,6 +1049,52 @@ it.each([
   }
 });
 
+it("a start names the Preview run the tab shows, or none, so the server keeps a run the tab has not seen", async () => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const target = { id: "app", available: true, default: true, mode: "interactive", presentation: { kind: "web" } };
+  const running = { id: "run-1", status: "running", metadata: { outputTargetId: "app", launchReady: true } };
+  let shown = { ok: true, outputTargets: [target], activeTerminal: null, preview: { state: "stopped", stoppedIntent: true } };
+  const posts = [];
+  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/named-run"),
+    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  vi.stubGlobal("WebSocket", class { static OPEN = 1; readyState = 3; addEventListener() {} send() {} close() {} });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  configureHttpWebClient({ request(url, options) {
+    if (options.method === "POST") { posts.push(options.body); return Promise.resolve({ ok: true, ...running }); }
+    return Promise.resolve(shown);
+  } });
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  let controls;
+  const app = renderer.createApp({ setup() {
+    controls = useVibe64OutputControls({ session: Vue.ref({ sessionId: "named-run", metadata: { source_kind: "session_clone",
+      source_path: "/controlled/named/sessions/active/named-run/source", source_path_authority: "managed_session_source" },
+    sourcePath: "/controlled/named/sessions/active/named-run/source" }) });
+    return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide(routeLocationKey, { path: "/", params: {} });
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await vi.waitFor(() => expect(controls.loading.value).toBe(false));
+    // Start preview on a tab still showing Stop: it saw no run.
+    await expect(controls.run(target, { applyDefaultDisplay: false, forceRestart: true })).resolves.toBe(true);
+    shown = { ...shown, activeTerminal: running, preview: { state: "ready", href: "http://127.0.0.1:3000/" } };
+    await controls.refresh();
+    await vi.waitFor(() => expect(controls.terminalSessionId.value).toBe("run-1"));
+    // Restart of the run it shows.
+    await expect(controls.run(target, { applyDefaultDisplay: false, forceRestart: true })).resolves.toBe(true);
+    expect(posts.map(body => [body.replacesTerminalSessionId, body.forceRestart, body.automatic])).toEqual([
+      ["", true, undefined],
+      ["run-1", true, undefined]
+    ]);
+  } finally { app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
+});
+
 it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup and exposes the %s outcome", async outcome => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");

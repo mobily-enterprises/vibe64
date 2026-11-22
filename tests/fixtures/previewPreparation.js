@@ -81,10 +81,13 @@ check();
   await writeFile(path.join(sourceRoot, "preview.cjs"), `
 const fs = require("node:fs");
 const installed = fs.existsSync("installed.txt") ? fs.readFileSync("installed.txt", "utf8") : "nothing";
-require("node:http").createServer((request, response) => {
+const server = require("node:http").createServer((request, response) => {
   response.setHeader("content-type", "text/html");
   response.end(request.url === "/installed" ? installed : "<h1>Preview works: " + process.env.PREVIEW_VALUE + "</h1>");
-}).listen(Number(process.argv[3]), process.argv[2]);
+});
+// While hold-preview exists the server is still starting, as a slow dev server is.
+const listen = () => fs.existsSync("hold-preview") ? setTimeout(listen, 20) : server.listen(Number(process.argv[3]), process.argv[2]);
+listen();
 `);
   const project = createProjectService({ ...projectServiceCollaborators(), logger,
     env: {},

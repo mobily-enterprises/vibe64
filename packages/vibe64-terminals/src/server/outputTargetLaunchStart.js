@@ -210,6 +210,28 @@ function createOutputTargetLaunchStart({
           }
         }
         const cwd = context.sessionSourceRoot;
+        // A start decided from what a view showed names the run it saw, "" when it saw none; an automatic one
+        // that names none saw none. Another run starting or running now means that view is out of date: the
+        // run is returned as it is, as ensure returns it, never replaced. The restart after setup is deliberate.
+        const seenTerminalId = input.replacesTerminalSessionId ??
+          (input.automatic === true && input.restartPreview !== true ? "" : undefined);
+        const runningTerminal = latestLaunchTerminal(sessionId);
+        if (seenTerminalId !== undefined && runningTerminal && launchTerminalIsRunning(runningTerminal) &&
+            runningTerminal.id !== normalizeText(seenTerminalId)) {
+          await writePreviewDiagnostic(context.session, {
+            cwd,
+            details: {
+              replacesTerminalSessionId: normalizeText(seenTerminalId),
+              requestedOutputTargetId: normalizeText(input.outputTargetId)
+            },
+            outputTargetId: runningTerminal.metadata?.outputTargetId,
+            reason: "start_kept_running",
+            sessionId,
+            status: "running",
+            terminalSessionId: runningTerminal.id
+          }, { latest: false });
+          return runningTerminal;
+        }
         let forceRestart = input.forceRestart === true;
         let outputTargetId = normalizeText(input.outputTargetId);
         let outputTargets = null;

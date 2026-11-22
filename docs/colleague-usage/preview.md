@@ -237,6 +237,12 @@ Retrying the same output reuses its running application when its settings and
 environment still match. It does not start another process merely because a
 new Preview address could be allocated. Use **Restart preview** when you intend
 to replace that run.
+When the coding agent starts the Preview, open tabs update to show it starting.
+A **Start preview** or **Restart preview** pressed in a tab that still shows an
+older state, such as **Preview stopped** while the agent's start is booting the
+app, and the tab's own automatic start or recovery, show the run that is
+starting or running instead of replacing it. Press **Restart preview** on that
+run to restart it.
 Stopping or restarting a Preview includes processes in its child groups,
 that are owned by that output. Wait for cleanup to finish before starting
 another run. If cleanup fails, open **Resources** for the reported operation

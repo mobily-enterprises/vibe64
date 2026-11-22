@@ -84,7 +84,8 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
       ...(context.automatic === true ? { automatic: true } : {}),
       ...(context.forceRestart === true ? { forceRestart: true } : {}),
       ...(context.outputParameters === undefined ? {} : { outputParameters: context.outputParameters }),
-      outputTargetId: String(context.outputTargetId || "")
+      outputTargetId: String(context.outputTargetId || ""),
+      replacesTerminalSessionId: String(context.replacesTerminalSessionId || "")
     }),
     fallbackRunError: "Output target could not be started.",
     messages: {
@@ -183,9 +184,14 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
     ]));
   }
 
+  /**
+   * Starts a target. The start names the run this tab shows, or none, so the server returns a run another
+   * start began meanwhile instead of replacing it; `automatic` marks a start the person did not ask for.
+   */
   async function run(outputTarget = {}, {
     applyDefaultDisplay = true,
     autoStartAttemptKey = "",
+    automatic = false,
     forceRestart = false,
     ignoreExternalBusy = false,
     outputParameters
@@ -223,10 +229,11 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
       const missing = outputTarget.parameters?.find((parameter) => parameter.required && !parameters[parameter.id]?.trim());
       if (missing) throw new Error(`${missing.label} is required. Open Preview options to set it.`);
       const terminalSession = await startTerminalCommand.run({
-        automatic: Boolean(normalizedAutoStartAttemptKey),
+        automatic: automatic === true || Boolean(normalizedAutoStartAttemptKey),
         forceRestart,
         ...(parameters ? { outputParameters: parameters } : {}),
         outputTargetId: outputTarget.id,
+        replacesTerminalSessionId: terminalSessionId.value || "",
         sessionId: currentSessionId
       });
       if (

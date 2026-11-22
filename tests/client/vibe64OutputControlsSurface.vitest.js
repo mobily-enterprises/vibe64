@@ -679,8 +679,17 @@ it("queues generic preview recovery until edits stop, including an interruption"
   f.props.sourceOperationsSuspended = false;
   await nextTick(); await nextTick(); await nextTick();
   expect(f.outputs.run).toHaveBeenCalledTimes(1);
+  // A restart nobody asked for is automatic, so the server keeps a run started since its read.
   expect(f.outputs.run).toHaveBeenCalledWith(expect.objectContaining({ id: "app" }),
-    expect.objectContaining({ forceRestart: true }));
+    expect.objectContaining({ automatic: true, forceRestart: true }));
+});
+
+it("a person's Start preview is not an automatic start", async () => {
+  const f = mountPreviewSurface();
+  // The button passes its click event.
+  await f.state.forceStartEmbeddedPreview({ type: "click" });
+  expect(f.outputs.run).toHaveBeenCalledWith(expect.objectContaining({ id: "app" }),
+    expect.objectContaining({ automatic: false, forceRestart: true }));
 });
 
 it("does not loop after a failed recovery or interfere with managed browser tests", async () => {
