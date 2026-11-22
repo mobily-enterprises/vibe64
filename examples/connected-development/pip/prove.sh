@@ -4,7 +4,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 adapter="$here/../vibe64-adapter.mjs"
-save="$here/../vibe64-bump.mjs"
+save="$here/../vibe64-adapter.mjs"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 fail() { echo "FAIL: $*"; exit 1; }
 # Caches stay in the throwaway directory; no package index may be used: the

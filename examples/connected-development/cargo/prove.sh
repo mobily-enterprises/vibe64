@@ -9,7 +9,7 @@ set -euo pipefail
 
 FIXTURE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ADAPTER="$FIXTURE/../vibe64-adapter.mjs"
-SAVE="$FIXTURE/../vibe64-bump.mjs"
+SAVE="$FIXTURE/../vibe64-adapter.mjs"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/connected-cargo.XXXXXX")
 trap 'rm -rf -- "$WORK"' EXIT
 

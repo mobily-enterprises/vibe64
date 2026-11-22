@@ -15,7 +15,7 @@ the registry source and checksum. `app/genesis/stack.md` declares only
 ``- Default package type: `cargo` ``: Vibe64 itself puts the connection in
 effect, and the project writes no Prepare or Verify command. `prove.sh` calls
 `../vibe64-adapter.mjs` (the adapter steps workspace preparation runs) and
-`../vibe64-bump.mjs` (what Save asks of the adapter).
+`../vibe64-adapter.mjs bump` (what Save asks of the adapter).
 
 **Apply** (after the project's Prepare steps):
 

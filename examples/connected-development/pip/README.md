@@ -17,7 +17,7 @@ checkout's version is published.
   the project writes no Prepare or Verify command.
 - `prove.sh` — the reproducible acceptance run. It calls
   `../vibe64-adapter.mjs` (the adapter steps workspace preparation runs) and
-  `../vibe64-bump.mjs` (what Save asks of the adapter).
+  `../vibe64-adapter.mjs bump` (what Save asks of the adapter).
 
 ## Vibe64's pip treatment
 
