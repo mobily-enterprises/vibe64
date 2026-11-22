@@ -303,10 +303,12 @@ function createWorkspaceSetupStart({
       return { completion: null, state };
     }
     let preparedEnvironment;
+    // A typed connected dependency no longer in effect runs the recipe again, whatever it last did.
+    const connected = await setupExecution.connectedInEffect(setup, session);
     // Update marks preparation required before it changes the source. When it left the very tree a
     // successful preparation recorded (nothing came in, or it was undone), that preparation still holds:
     // only its resources are checked, as for any succeeded one.
-    const samePrepared = !migrationTranscript && retry !== true && stateBase.status === "required" &&
+    const samePrepared = connected.inEffect && !migrationTranscript && retry !== true && stateBase.status === "required" &&
       stateBase.preparedTree?.recipeHash === recipe.recipeHash &&
       samePreparedTree(await setupExecution.currentTree({ runtime, session, setup, sourcePath }), stateBase.preparedTree);
     if (samePrepared) stateBase = { ...stateBase, diagnostic: "", recipeHash: recipe.recipeHash, status: "succeeded" };
@@ -324,7 +326,7 @@ function createWorkspaceSetupStart({
       !migrationTranscript &&
       retry !== true &&
       stateBase.recipeHash === recipe.recipeHash &&
-      (stateBase.status === "succeeded" || (stateBase.status === "failed" && rerunFailed !== true))
+      ((stateBase.status === "succeeded" && connected.inEffect) || (stateBase.status === "failed" && rerunFailed !== true))
     ) {
       if (stateBase.status === "failed") {
         return { completion: null, state: stateBase };
@@ -379,13 +381,16 @@ function createWorkspaceSetupStart({
     }
     const startedAt = migrationStartedAt || new Date().toISOString();
     const currentLabel = safeSetupLabel(recipe.steps[0].label);
+    const startedAgain = !connected.inEffect && retry !== true && stateBase.recipeHash === recipe.recipeHash;
     const attemptLabel = migrationTranscript || attemptStarted
       ? ""
-      : stateBase.transcript
-        ? (retry === true || (rerunFailed === true && stateBase.status === "failed")
-            ? "Workspace preparation retry started."
-            : "Workspace preparation started for updated configuration.")
-        : "Workspace preparation started.";
+      : startedAgain
+        ? `Workspace preparation started again. ${connected.reason}`
+        : stateBase.transcript
+          ? (retry === true || (rerunFailed === true && stateBase.status === "failed")
+              ? "Workspace preparation retry started."
+              : "Workspace preparation started for updated configuration.")
+          : "Workspace preparation started.";
     const transcript = appendWorkspaceSetupTranscript(
       stateBase.transcript,
       attemptLabel,

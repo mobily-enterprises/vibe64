@@ -69,7 +69,11 @@ function createServiceWorkspacePreparation({
     const running = workspaceSetup.wait(sessionId);
     if (running) return { completion: running, state: null };
     const context = await sessionAccess.sessionContext(sessionId, input);
-    if (await workspaceSetup.isPrepared(context)) return { completion: null, state: context.session.workspaceSetup };
+    if (await workspaceSetup.isPrepared(context)) {
+      // A save in a connected copy reaches the session's swapped packages at once, after a restart too.
+      await workspaceSetup.keepConnectedInSync(context).catch(() => {});
+      return { completion: null, state: context.session.workspaceSetup };
+    }
     return prepareWorkspaceSetup(sessionId, { ...options, publish: true });
   }
 

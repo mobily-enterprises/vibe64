@@ -49,10 +49,13 @@ test("Stack declares a package default independently of command runtimes", () =>
   assert.deepEqual(npm.runtimeRequirements, ["shell"]);
   assert.notEqual(npm.recipeHash, custom.recipeHash);
   assert.equal(vibe64ConnectedDevelopmentInspection({ status: "ready", lines }).defaultPackageType, "");
+  // Vibe64 puts a typed dependency in effect itself: a default alone is a whole declaration.
   const defaultOnly = vibe64ConnectedDevelopmentInspection({ status: "ready", lines: ["- Default package type: `npm`"] });
   assert.equal(defaultOnly.defaultPackageType, "npm");
-  assert.equal(defaultOnly.status, "unconfigured");
-  assert.equal(defaultOnly.recipeHash, "");
+  assert.equal(defaultOnly.status, "ready");
+  assert.equal(defaultOnly.sourcesFile, "");
+  assert.deepEqual(defaultOnly.steps, []);
+  assert.match(defaultOnly.recipeHash, /^sha256:[a-f0-9]{64}$/u);
   assert.throws(() => inspect("nodejs"), { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
   assert.deepEqual(CONNECTED_PACKAGE_TYPE_VALUES,
     ["npm", "composer", "pip", "bundler", "gomod", "cargo", "maven", "gradle", "nuget", "custom"]);
@@ -93,7 +96,7 @@ test("connected development rejects missing proof, conditional success, unsafe p
   const invalid = candidate => assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: candidate }),
     { code: "VIBE64_CONNECTED_DEVELOPMENT_INVALID" });
   for (const candidate of [
-    [], lines.slice(1), lines.slice(0, 2), [...lines, lines[0]], [lines[0], lines[2], lines[1]],
+    [], lines.slice(1), lines.slice(1, 2), [...lines, lines[0]], [lines[0], lines[2], lines[1]],
     [...lines, "- Nothing."], [lines[0], "- arbitrary command"],
     [lines[0], lines[2].replace("`shell`:", "`shell` if `proof` exists:")],
     [lines[0], lines[2].replace("`shell`:", "`shell` when `proof` exists:")],
@@ -107,6 +110,13 @@ test("connected development rejects missing proof, conditional success, unsafe p
   assert.throws(() => vibe64ConnectedDevelopmentInspection({ status: "ready", lines: [lines[0], "", "- Verify `Bad` with `Shell`: `sh` `check.sh`"] }),
     error => error.code === "VIBE64_CONNECTED_DEVELOPMENT_INVALID"
       && error.details.path === "genesis/stack.md#Connected development" && error.details.line === 3);
+  // A Sources file alone, or with Prepare entries only, is a declaration: Vibe64 proves typed
+  // dependencies itself, and preparation asks for a Verify entry where a composition needs one.
+  for (const candidate of [lines.slice(0, 1), lines.slice(0, 2)]) {
+    const inspected = vibe64ConnectedDevelopmentInspection({ status: "ready", lines: candidate });
+    assert.equal(inspected.status, "ready");
+    assert.equal(inspected.sourcesFile, ".development/connected-sources.json");
+  }
   assert.equal(vibe64ConnectedDevelopmentInspection({}).status, "unconfigured");
   assert.equal(vibe64ConnectedDevelopmentInspection({ status: "ready", lines: ["- Nothing."] }).status, "unconfigured");
   const blocked = vibe64ConnectedDevelopmentInspection({ status: "blocked", diagnostics: [{ code: "STACK_INVALID" }] });

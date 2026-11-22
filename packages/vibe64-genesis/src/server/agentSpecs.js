@@ -441,16 +441,13 @@ ${list([...VIBE64_RESOURCE_ESTIMATE_FIELDS.keys()].map((field) => `- ${field}: \
 Entries:
 ${list(CONNECTED_DEVELOPMENT_ENTRY_FORMS)}
 
-- Declare a Default package type alone, or a Sources file with Verify entries or a Custom runner (keeping any Default package type). All Prepare entries precede Verify entries. Steps run unconditionally (no \`when\`/\`if\`); at most one Custom runner.
-- Package types: ${CONNECTED_PACKAGE_TYPES.map(({ value }) => `\`${value}\``).join(", ")}. A type is a declared label: Vibe64 never runs a package manager for it. This project's own Prepare/Verify commands give each connected source its ecosystem's treatment, and Verify must prove that the source is consumed.
+- Declare a Default package type, a Sources file, or both. Prepare and Verify entries and a Custom runner need the Sources file. All Prepare entries precede Verify entries. Steps run unconditionally (no \`when\`/\`if\`); at most one Custom runner.
+- Package types: ${CONNECTED_PACKAGE_TYPES.map(({ value }) => `\`${value}\``).join(", ")}. For every type but \`custom\`, Vibe64 itself puts each \`dependency\` connection in effect in the session (its own step after every Prepare entry) and proves it (its own check after every Verify entry), with no project command; \`- Default package type: <type>\` alone is enough. Project Prepare/Verify entries are for what Vibe64 does not do: a \`composition\` connection needs a Verify entry proving the project assembles it.
 - The Sources file is a development-only path outside \`.git\`, never tracked; Vibe64 writes it when it prepares the session's connected repositories and excludes it from Git. Its JSON: \`{"schema":"${CONNECTED_SOURCES_CONTRACT}","sessionId":"…","repositories":[{"name":"…","repository":"https://github.com/owner/repo","relationship":"dependency|composition","type":"npm","sourceRoot":"/absolute/session/connected/repo"}]}\`; each \`sourceRoot\` is this session's own copy of that repository, and a custom connection also carries \`"script"\`.
 - Custom connections: ${CONNECTED_CUSTOM_RUNNER_CONTRACT}
 `,
     example: `
 - Default package type: \`npm\`
-- Sources file: \`.connected-sources.json\`
-- Prepare \`Link connected packages\` with \`nodejs\`: \`node\` \`tools/link-connected.mjs\`
-- Verify \`Check connected packages\` with \`nodejs\`: \`node\` \`tools/verify-connected.mjs\`
 `
   }),
   sectionSpec({

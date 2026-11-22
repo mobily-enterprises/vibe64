@@ -1,9 +1,11 @@
 import { githubRepositoryFullName, readConnectedProjects } from "./connectedProjects.js";
 import {
+  connectedDevelopmentApplies,
   inspectConnectedDevelopmentInputs,
   inspectConnectedWorkspaceSetup,
   materializeConnectedDevelopmentInputs
 } from "./connectedDevelopment.js";
+import { inspectConnectedAdapters, runConnectedAdapterStep, syncConnectedRepositories } from "./connectedAdapters/index.js";
 import { requireGithubRepository } from "./githubApi.js";
 import { githubIssues } from "./githubIssues.js";
 import {
@@ -87,10 +89,36 @@ function createProjectRepositories({
       projectRoot: sessionSourcePath(session),
       environment
     });
-    if (inspection.status === "unconfigured" && !(await readSessionConnectedRepositories(session)).length) {
+    if (!connectedDevelopmentApplies(inspection, await readSessionConnectedRepositories(session))) {
       return { status: "unconfigured" };
     }
     return inspectConnectedDevelopmentInputs({ session, inspection, env: environment });
+  }
+
+  /**
+   * Whether each typed connected dependency of this session is in effect now: [] when it has none.
+   * Reads its trees; runs nothing.
+   */
+  async function inspectSessionConnectedAdapters({ session, environment = env } = {}) {
+    const inputs = await inspectSessionConnectedInputs({ session, environment });
+    if (inputs.status === "unconfigured") return [];
+    return inspectConnectedAdapters({ repositories: inputs.repositories, sessionSourceRoot: sessionSourcePath(session) });
+  }
+
+  /**
+   * Keeps this session's swapped packages in step with its connected copies while it runs; nothing
+   * when it has no typed npm dependency. `runCommand` runs a managed command in the session's trees.
+   */
+  async function syncSessionConnectedRepositories({ session, environment = env, runCommand, onEvent } = {}) {
+    const inputs = await inspectSessionConnectedInputs({ session, environment });
+    if (inputs.status === "unconfigured") return null;
+    return syncConnectedRepositories({
+      sessionId: session.sessionId,
+      repositories: inputs.repositories,
+      sessionSourceRoot: sessionSourcePath(session),
+      runCommand,
+      onEvent
+    });
   }
 
   async function prepareConnectedDevelopmentInputs({ session, environment = env } = {}) {
@@ -98,7 +126,7 @@ function createProjectRepositories({
       projectRoot: sessionSourcePath(session),
       environment
     });
-    if (inspection.status === "unconfigured" && !(await readSessionConnectedRepositories(session)).length) {
+    if (!connectedDevelopmentApplies(inspection, await readSessionConnectedRepositories(session))) {
       return { status: "unconfigured" };
     }
     return runProjectSourceExclusive(
@@ -320,7 +348,10 @@ function createProjectRepositories({
     resolveSessionBranch,
     inspectWorkspaceSetup,
     inspectConnectedDevelopmentInputs: inspectSessionConnectedInputs,
+    inspectConnectedAdapters: inspectSessionConnectedAdapters,
     prepareConnectedDevelopmentInputs,
+    runConnectedAdapterStep,
+    syncConnectedRepositories: syncSessionConnectedRepositories,
     readSessionConnectedRepositories,
     readRepositoryWorkflow,
     saveRepositoryWorkflow,

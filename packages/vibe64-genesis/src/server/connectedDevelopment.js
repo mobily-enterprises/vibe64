@@ -117,17 +117,25 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
         steps.push({ ...step, phase });
       }
     }
-    const defaultOnly = defaultPackageType && !sourcesFile && !steps.length && !customRunner;
-    if (!defaultOnly && (!sourcesFile || (!steps.some(step => step.phase === "verify") && !customRunner))) {
+    // Vibe64 puts a typed dependency in effect itself, so a default package type alone is a whole
+    // declaration. Project commands read the Sources file, so they need one.
+    if ((steps.length || customRunner) && !sourcesFile) {
       invalidStackOperation(
         ERROR_CODE,
         OPERATION_PATH,
-        "Declare a default package type alone, or a Sources file with Verify entries or a Custom runner; use `- Nothing.` for no declaration."
+        "Prepare and Verify entries and a Custom runner read the Sources file: declare it too."
+      );
+    }
+    if (!defaultPackageType && !sourcesFile) {
+      invalidStackOperation(
+        ERROR_CODE,
+        OPERATION_PATH,
+        "Declare a default package type, a Sources file, or both; use `- Nothing.` for no declaration."
       );
     }
   }
   const status = section.status === "blocked" || diagnostics.length
-    ? "blocked" : steps.length || customRunner ? "ready" : "unconfigured";
+    ? "blocked" : declared && (defaultPackageType || sourcesFile) ? "ready" : "unconfigured";
   return {
     contract: VIBE64_CONNECTED_DEVELOPMENT_CONTRACT,
     declared,

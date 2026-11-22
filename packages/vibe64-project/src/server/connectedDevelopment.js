@@ -10,9 +10,11 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {
   CONNECTED_SOURCES_CONTRACT,
+  connectedPackageTypeHasAdapter,
   connectedPackageTypeUsesScript,
   isConnectedPackageType
 } from "@local/vibe64-genesis/shared/connectedPackageTypes";
+import { connectedAdapterSteps, restoreDisconnected } from "./connectedAdapters/index.js";
 import { githubRepositoryFullName, readConnectedProjects } from "./connectedProjects.js";
 import { assertProjectionPath, writeManagedGitExcludes } from "./projectEnvironmentFiles.js";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
@@ -52,8 +54,20 @@ function connectedCopyFor(session, connection) {
 }
 
 /**
+ * Whether preparation has connected work: a listed repository, or project commands the Stack
+ * declares. A Stack piece's default package type alone, with nothing listed, changes nothing.
+ * @param {object} inspection the Connected development inspection
+ * @param {Array<object>} repositories the listed connections
+ */
+function connectedDevelopmentApplies(inspection, repositories) {
+  return repositories.length > 0 || (inspection?.status === "ready" &&
+    (inspection.steps?.length > 0 || Boolean(inspection.customRunner)));
+}
+
+/**
  * The Sources file value for this session: every listed connected repository
  * with its effective package type and this session's own copy as its source.
+ * A Stack without a Sources file gets no file; the value still identifies the selection.
  */
 async function readConnectedDevelopmentInputs({
   session,
@@ -62,13 +76,13 @@ async function readConnectedDevelopmentInputs({
   runCommand = runVibe64Command
 } = {}) {
   const sourceRoot = sessionSourcePath(session);
-  if (!sourceRoot || inspection?.status !== "ready") {
+  const configured = sourceRoot ? await readConnectedProjects(sourceRoot) : { repositories: [] };
+  if (!sourceRoot || !(inspection?.status === "ready" || (inspection?.status === "unconfigured" && configured.repositories.length))) {
     throw vibe64Error(
       "Declare Connected development in this project's Stack before preparing its connected repositories.",
       "vibe64_connected_development_required"
     );
   }
-  const configured = await readConnectedProjects(sourceRoot);
   const resolved = [];
   for (const connection of configured.repositories) {
     const copy = connectedCopyFor(session, connection);
@@ -85,15 +99,15 @@ async function readConnectedDevelopmentInputs({
       sourceRoot: copy.path
     });
   }
-  const relativePath = inspection.sourcesFile;
-  const { filePath, existing } = await readConnectedSourceProjection({
+  const relativePath = inspection.sourcesFile || "";
+  const value = { schema: CONNECTED_SOURCES_CONTRACT, sessionId: session.sessionId, repositories: resolved };
+  const { filePath, existing } = relativePath ? await readConnectedSourceProjection({
     sourceRoot,
     sessionId: session.sessionId,
     relativePath,
     env,
     runCommand
-  });
-  const value = { schema: CONNECTED_SOURCES_CONTRACT, sessionId: session.sessionId, repositories: resolved };
+  }) : { filePath: "", existing: value };
   return {
     sourceRoot,
     relativePath,
@@ -184,44 +198,47 @@ async function inspectConnectedWorkspaceSetup({
 } = {}) {
   const sourceRoot = sessionSourcePath(session);
   const configured = await readConnectedProjects(sourceRoot);
-  if (configured.repositories.length === 0 && inspection.status === "unconfigured") return setup;
+  if (!connectedDevelopmentApplies(inspection, configured.repositories)) return setup;
   if (!["ready", "unconfigured"].includes(setup.status)) return setup;
+  const steps = inspection.status === "ready" ? inspection.steps : [];
+  const customRunner = inspection.status === "ready" ? inspection.customRunner : null;
   try {
-    if (inspection.status !== "ready") {
+    if (!["ready", "unconfigured"].includes(inspection.status)) {
       throw vibe64Error(
         "Declare Connected development in Stack to prepare this session's connected repositories.",
         "vibe64_connected_development_setup_required"
       );
     }
-    const { existing } = await readConnectedSourceProjection({
+    const expected = configured.repositories.map(connection => {
+      const copy = connectedCopyFor(session, connection);
+      return copy ? { ...connection, type: connectedPackageType(connection, inspection), sourceRoot: copy.path } : null;
+    });
+    const value = { schema: CONNECTED_SOURCES_CONTRACT, sessionId: session.sessionId, repositories: expected };
+    const { existing } = inspection.sourcesFile ? await readConnectedSourceProjection({
       sourceRoot,
       sessionId: session.sessionId,
       relativePath: inspection.sourcesFile,
       env,
       runCommand
-    });
-    const expected = configured.repositories.map(connection => {
-      const copy = connectedCopyFor(session, connection);
-      return copy ? { ...connection, type: connectedPackageType(connection, inspection), sourceRoot: copy.path } : null;
-    });
+    }) : { existing: value };
     if (!existing || expected.some(entry => entry === null) || !isDeepStrictEqual(existing.repositories, expected)) {
       throw vibe64Error("Prepare this session's connected repositories for its current list.", "vibe64_connected_inputs_required");
     }
     const inputsHash = connectedDevelopmentHash(existing);
     const custom = expected.filter(connection => connection.type === "custom");
-    if (custom.length && !inspection.customRunner) {
+    if (custom.length && !customRunner) {
       throw vibe64Error(
         "Declare a Custom runner in Connected development to run this project's custom scripts.",
         "vibe64_connected_custom_runner_required"
       );
     }
-    // Vibe64 runs no package manager for a declared type; the project's own
-    // Verify command must prove each non-custom ecosystem's treatment.
-    const declaredTypes = [...new Set(expected.map(connection => connection.type)
-      .filter(type => !connectedPackageTypeUsesScript(type)))];
-    if (declaredTypes.length && !inspection.steps.some(step => step.phase === "verify")) {
+    // Vibe64 puts each typed dependency in effect itself. A composition is raw
+    // source the project assembles, so its own Verify command must prove it.
+    const compositionTypes = [...new Set(expected.filter(connection => connection.relationship === "composition")
+      .map(connection => connection.type).filter(type => !connectedPackageTypeUsesScript(type)))];
+    if (compositionTypes.length && !steps.some(step => step.phase === "verify")) {
       throw vibe64Error(
-        `Declare a Verify command for the connected ${declaredTypes.join(" and ")} packages.`,
+        `Declare a Verify command for the connected ${compositionTypes.join(" and ")} composition.`,
         "vibe64_connected_verification_required"
       );
     }
@@ -240,25 +257,37 @@ async function inspectConnectedWorkspaceSetup({
       }
       for (const phase of ["prepare", "verify"]) {
         customSteps.push({
-          ...inspection.customRunner,
+          ...customRunner,
           phase,
           label: `${phase === "prepare" ? "Prepare" : "Verify"} custom connection: ${connection.name}`,
-          argv: [...inspection.customRunner.argv, script, "--phase", phase, "--source-root", connection.sourceRoot,
+          argv: [...customRunner.argv, script, "--phase", phase, "--source-root", connection.sourceRoot,
             "--project-root", sourceRoot, "--sources-file", path.join(sourceRoot, inspection.sourcesFile),
             "--repository", connection.repository]
         });
       }
     }
-    const connectedSteps = [...inspection.steps, ...customSteps];
-    const steps = [...setup.steps, ...connectedSteps.filter(step => step.phase === "prepare"),
-      ...connectedSteps.filter(step => step.phase === "verify")];
+    // Each typed dependency gets Vibe64's own steps: put in effect after every Prepare step (the
+    // project's install would undo it), proved after every Verify step.
+    const adapterSteps = connectedAdapterSteps(expected.filter(connection =>
+      connection.relationship === "dependency" && connectedPackageTypeHasAdapter(connection.type)));
+    const connectedSteps = [...steps, ...customSteps, ...adapterSteps];
+    const recipeSteps = [...setup.steps,
+      ...connectedSteps.filter(step => step.phase === "prepare" && !step.connectedAdapter),
+      ...connectedSteps.filter(step => step.phase === "prepare" && step.connectedAdapter),
+      ...connectedSteps.filter(step => step.phase === "verify" && !step.connectedAdapter),
+      ...connectedSteps.filter(step => step.phase === "verify" && step.connectedAdapter)];
     return {
       ...setup,
       status: "ready",
-      steps,
-      runtimeRequirements: [...new Set(steps.flatMap(step => step.runtimeRequirements))].sort(),
-      recipeHash: connectedDevelopmentHash({ workspace: setup.recipeHash, connected: inspection.recipeHash, inputs: inputsHash }),
-      connectedDevelopment: { sourcesFile: inspection.sourcesFile, inputsHash, recipeHash: inspection.recipeHash }
+      steps: recipeSteps,
+      runtimeRequirements: [...new Set(recipeSteps.flatMap(step => step.runtimeRequirements))].sort(),
+      recipeHash: connectedDevelopmentHash({ workspace: setup.recipeHash, connected: inspection.recipeHash || "", inputs: inputsHash }),
+      connectedDevelopment: {
+        sourcesFile: inspection.sourcesFile || "",
+        inputsHash,
+        recipeHash: inspection.recipeHash || "",
+        adapters: adapterSteps.some(step => step.connectedAdapter.action === "proof")
+      }
     };
   } catch (error) {
     return {
@@ -266,10 +295,11 @@ async function inspectConnectedWorkspaceSetup({
       status: "blocked",
       recipeHash: "",
       steps: [],
-      ...(inspection.status === "ready" ? {
+      // Preparation makes the copies a blocked recipe is missing, then inspects it again.
+      ...(["ready", "unconfigured"].includes(inspection.status) ? {
         connectedDevelopment: {
-          sourcesFile: inspection.sourcesFile,
-          recipeHash: inspection.recipeHash
+          sourcesFile: inspection.sourcesFile || "",
+          recipeHash: inspection.recipeHash || ""
         }
       } : {}),
       diagnostics: [...setup.diagnostics, { code: error.code || "vibe64_connected_inputs_required", message: error.message }]
@@ -277,8 +307,14 @@ async function inspectConnectedWorkspaceSetup({
   }
 }
 
+/**
+ * Writes this session's Sources file, when the Stack declares one, and puts back what an adapter
+ * changed for a repository that is no longer a typed dependency. `lines` are the preparation's.
+ */
 async function materializeConnectedDevelopmentInputs(input = {}) {
   const { sourceRoot, relativePath, filePath, existing, value, result } = await readConnectedDevelopmentInputs(input);
+  const lines = await restoreDisconnected({ repositories: value.repositories, sessionSourceRoot: sourceRoot });
+  if (!relativePath) return { ...result, lines };
   await writeManagedGitExcludes(sourceRoot, [relativePath], { section: "connected source", atomicJson: true });
   if (!isDeepStrictEqual(existing, value)) {
     await writeJsonFileAtomic(filePath, value, {
@@ -286,7 +322,7 @@ async function materializeConnectedDevelopmentInputs(input = {}) {
       fileMode: vibe64SharedModes().file
     });
   }
-  return result;
+  return { ...result, lines };
 }
 
 async function inspectConnectedDevelopmentInputs(input = {}) {
@@ -300,8 +336,14 @@ async function inspectConnectedDevelopmentInputs(input = {}) {
   return {
     ...result,
     inputsHash: connectedDevelopmentHash(value),
+    repositories: value.repositories,
     sourceRoots: value.repositories.map(entry => entry.sourceRoot)
   };
 }
 
-export { inspectConnectedDevelopmentInputs, inspectConnectedWorkspaceSetup, materializeConnectedDevelopmentInputs };
+export {
+  connectedDevelopmentApplies,
+  inspectConnectedDevelopmentInputs,
+  inspectConnectedWorkspaceSetup,
+  materializeConnectedDevelopmentInputs
+};

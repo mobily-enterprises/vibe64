@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { appendFile, cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -18,6 +18,12 @@ import {
   inspectConnectedWorkspaceSetup,
   materializeConnectedDevelopmentInputs
 } from "../../packages/vibe64-project/src/server/connectedDevelopment.js";
+import {
+  inspectConnectedAdapters,
+  runConnectedAdapterStep,
+  stopConnectedSync,
+  syncConnectedRepositories
+} from "../../packages/vibe64-project/src/server/connectedAdapters/index.js";
 import { createWorkspaceSetupRunner } from "../../packages/vibe64-terminals/src/server/workspaceSetup.js";
 import { vibe64RuntimePacks } from "../../packages/vibe64-terminals/src/server/vibe64OutputTargets.js";
 import { projectRuntimeRoot, sourceMetadata, sourcePath } from "./vibe64TestHelpers.js";
@@ -27,29 +33,6 @@ const packageName = "@connected-proof/library";
 const repository = "https://github.com/example/library";
 const npmOptions = ["--offline", "--ignore-scripts", "--no-audit", "--no-fund"];
 
-// These are project-owned commands, declared by this fixture's Stack. Product
-// code supplies the source map and argv runner, without knowing npm's grammar.
-const prepareScript = `import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-const map = JSON.parse(readFileSync('.development/connected.json', 'utf8'));
-assert.equal(map.schema, 'vibe64.connected-sources.v2');
-const selected = map.repositories.find(project => project.repository === '${repository}');
-assert.ok(selected);
-execFileSync('npm', ['install', '--no-save', '--package-lock=false', '--install-links=false',
-  '--ignore-scripts', '--offline', '--no-audit', '--no-fund', selected.sourceRoot], { stdio: 'inherit' });
-`;
-const verifyScript = `import assert from 'node:assert/strict';
-import { readFileSync, realpathSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { message } from '${packageName}';
-const map = JSON.parse(readFileSync('.development/connected.json', 'utf8'));
-const selected = map.repositories.find(project => project.repository === '${repository}');
-assert.equal(realpathSync(fileURLToPath(import.meta.resolve('${packageName}'))),
-  realpathSync(path.join(selected.sourceRoot, 'index.js')));
-console.log(message());
-`;
 const consumeScript = `import { message } from '${packageName}'; console.log(message());\n`;
 
 async function writeLibrary(root, message) {
@@ -68,16 +51,12 @@ async function createTask(target, name, releaseRoot, env) {
   await exec("git", ["init", "--initial-branch=main"], { cwd: root, env });
   await initializeGenesisProject({ projectRoot: root });
   await appendFile(path.join(root, ".gitignore"), "\nnode_modules/\n");
-  await writeFile(path.join(root, "prepare-connected.mjs"), prepareScript);
-  await writeFile(path.join(root, "verify-connected.mjs"), verifyScript);
+  // Vibe64 puts a typed dependency in effect itself: the Stack only names the default type.
   await writeFile(path.join(root, "genesis/stack.md"), [
     "# Stack", "", "## Components", "", "## Workspace setup", "",
     "- Prepare `Install normal dependencies` with `nodejs`: `npm` `ci` `--offline` `--ignore-scripts` `--no-audit` `--no-fund`",
     "", "## Connected development", "",
-    "- Sources file: `.development/connected.json`",
-    "- Default package type: `npm`",
-    "- Prepare `Select connected library` with `nodejs`: `node` `prepare-connected.mjs`",
-    "- Verify `Import selected library` with `nodejs`: `node` `verify-connected.mjs`", ""
+    "- Default package type: `npm`", ""
   ].join("\n"));
   const connection = { name: "Library", repository, relationship: "dependency" };
   await writeFile(path.join(root, "vibe64.connections.json"), JSON.stringify({ repositories: [connection] }));
@@ -100,6 +79,8 @@ async function createTask(target, name, releaseRoot, env) {
 }
 
 function connectedWorkspaceRunner(tasks) {
+  const taskOf = session => tasks.find(candidate => candidate.session.sessionId === session.sessionId);
+  const repositoriesOf = async session => (await inspectConnectedDevelopmentInputs({ ...taskOf(session).inputs, session })).repositories;
   return createWorkspaceSetupRunner({
     project: {
       async inspectWorkspaceSetup({ projectRoot, session, environment }) {
@@ -108,7 +89,17 @@ function connectedWorkspaceRunner(tasks) {
         return inspectConnectedWorkspaceSetup({ session, env: environment,
           setup: await inspectVibe64WorkspaceSetup({ projectRoot }),
           inspection: await inspectVibe64ConnectedDevelopment({ projectRoot }) });
-      }
+      },
+      // As the project service offers Vibe64's connected adapters.
+      runConnectedAdapterStep,
+      async inspectConnectedAdapters({ session }) {
+        return inspectConnectedAdapters({ repositories: await repositoriesOf(session), sessionSourceRoot: taskOf(session).root });
+      },
+      async syncConnectedRepositories({ session, runCommand }) {
+        return syncConnectedRepositories({ sessionId: session.sessionId, repositories: await repositoriesOf(session),
+          sessionSourceRoot: taskOf(session).root, runCommand });
+      },
+      projectEnvironmentStatus: async () => ({ status: "ready" })
     },
     async connectedPreparation({ mode, session }) {
       assert.ok(["prepare", "inspect"].includes(mode));
@@ -119,7 +110,7 @@ function connectedWorkspaceRunner(tasks) {
   });
 }
 
-test("Stack preparation imports connected Node packages through task-local node_modules without changing release inputs", { timeout: 120_000 }, async t => {
+test("Vibe64 swaps a typed npm dependency into each task's own tree, keeps it in step and blocks preparation when it is not in effect", { timeout: 180_000 }, async t => {
   const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = "connected-node-proof";
   t.after(() => {
@@ -145,17 +136,23 @@ test("Stack preparation imports connected Node packages through task-local node_
   const target = path.join(tempRoot, "project");
   const first = await createTask(target, "task-a", releaseRoot, env);
   const second = await createTask(target, "task-b", releaseRoot, env);
+  for (const task of [first, second]) t.after(() => stopConnectedSync(task.session.sessionId));
   const runner = connectedWorkspaceRunner([first, second]);
+  const installed = task => path.join(task.root, "node_modules", packageName);
   for (const task of [first, second]) {
-    await inspectConnectedDevelopmentInputs(task.inputs);
     const started = await runner.start({ runtime: task.runtime, session: task.session });
     const state = await started.completion;
     assert.equal(state?.status, "succeeded", JSON.stringify(state || started.state));
-    assert.match(state.transcript, new RegExp(`${task.session.sessionId} original source`, "u"));
-    assert.equal(await realpath(path.join(task.root, "node_modules", packageName)), await realpath(task.copyRoot));
+    assert.match(state.transcript, /Put connected Library in effect \(npm\)/u);
+    assert.match(state.transcript, /@connected-proof\/library 1\.0\.0 in effect in 1 installed copy/u);
+    assert.match(state.transcript, /\[Connected\] Library is in effect\./u);
+    // A copy in the task's own tree, never a link to the checkout.
+    assert.equal((await lstat(installed(task))).isSymbolicLink(), false);
+    assert.equal(await realpath(installed(task)), installed(task));
+    assert.equal(await runner.isPrepared({ runtime: task.runtime, session: await task.runtime.getSessionWithoutSource(task.session.sessionId) }), true);
   }
   const consume = async task => {
-    const result = await runVibe64Command({ actor: "app", command: "node", args: ["verify-connected.mjs"],
+    const result = await runVibe64Command({ actor: "app", command: "node", args: ["consume.mjs"],
       cwd: task.root, allowedRoots: [task.root, task.copyRoot], baseEnv: env,
       envPolicy: "session", mode: "capture", purpose: "source",
       runtimes: vibe64RuntimePacks(["nodejs"]).runtimes, timeout: 30_000 });
@@ -163,16 +160,55 @@ test("Stack preparation imports connected Node packages through task-local node_
     return result.stdout.trim();
   };
   assert.equal(await consume(first), "task-a original source");
+  assert.equal(await consume(second), "task-b original source");
+
+  // A save in the task's connected copy reaches its tree while the session runs.
   await writeLibrary(first.copyRoot, "task-a changed source");
-  assert.equal(await consume(first), "task-a changed source", "A fresh ordinary package import observes the selected source edit.");
+  let seen = "";
+  for (let attempt = 0; attempt < 100 && seen !== "task-a changed source"; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    seen = await consume(first);
+  }
+  assert.equal(seen, "task-a changed source", "A saved connected source reaches the installed copy.");
   assert.equal(await consume(second), "task-b original source", "Another task retains its own selected checkout.");
   for (const task of [first, second]) {
     assert.deepEqual(await Promise.all(["package.json", "package-lock.json"].map(file => readFile(path.join(task.root, file), "utf8"))), releaseInputs);
     assert.equal((await exec("git", ["diff", "--name-only"], { cwd: task.root, env })).stdout, "");
     assert.equal((await exec("git", ["ls-files", "--others", "--exclude-standard"], { cwd: task.root, env })).stdout, "");
   }
-  // A fresh normal installation still resolves the release artifact, with no
-  // connected source map and no task-specific path in its manifest or lockfile.
+
+  // Undone (an install put a published copy back): the session is not prepared, and preparing it puts it back.
+  await stopConnectedSync(first.session.sessionId);
+  await writeFile(path.join(installed(first), "index.js"), "export function message() { return 'published again'; }\n");
+  const undone = await first.runtime.getSessionWithoutSource(first.session.sessionId);
+  assert.equal(await runner.isPrepared({ runtime: first.runtime, session: undone }), false);
+  const again = await runner.start({ runtime: first.runtime, session: undone });
+  const reapplied = await again.completion;
+  assert.equal(reapplied?.status, "succeeded", JSON.stringify(reapplied || again.state));
+  assert.match(reapplied.transcript, /Workspace preparation started again\. Connected Library is not in effect/u);
+  assert.equal(await consume(first), "task-a changed source");
+
+  // A project step after the swap that undoes it: the proof fails and the preparation with it.
+  await writeFile(path.join(first.root, "undo-swap.mjs"),
+    `import { writeFileSync } from 'node:fs'; writeFileSync('node_modules/${packageName}/index.js', 'export const message = () => "undone";\\n');\n`);
+  await writeFile(path.join(first.root, "genesis/stack.md"), [
+    "# Stack", "", "## Components", "", "## Workspace setup", "",
+    "- Prepare `Install normal dependencies` with `nodejs`: `npm` `ci` `--offline` `--ignore-scripts` `--no-audit` `--no-fund`",
+    "", "## Connected development", "",
+    "- Sources file: `.development/connected.json`",
+    "- Default package type: `npm`",
+    "- Verify `Undo the swap` with `nodejs`: `node` `undo-swap.mjs`", ""
+  ].join("\n"));
+  first.inputs.inspection = await inspectVibe64ConnectedDevelopment({ projectRoot: first.root });
+  await materializeConnectedDevelopmentInputs(first.inputs);
+  const blocked = await runner.start({ runtime: first.runtime, session: await first.runtime.getSessionWithoutSource(first.session.sessionId) });
+  const failed = await blocked.completion;
+  assert.equal(failed?.status, "failed", JSON.stringify(failed || blocked.state));
+  assert.equal(failed.currentLabel, "Check connected Library is in effect (npm)");
+  assert.match(failed.diagnostic, /Connected Library is not in effect: .*index\.js no longer holds the connected source/u);
+  assert.equal(await runner.isPrepared({ runtime: first.runtime, session: await first.runtime.getSessionWithoutSource(first.session.sessionId) }), false);
+
+  // A fresh normal installation (what Staging and Production build from) resolves the release artifact.
   const freshRelease = path.join(tempRoot, "fresh-release");
   await cp(releaseRoot, freshRelease, { recursive: true, filter: source => path.basename(source) !== "node_modules" });
   await exec("npm", ["ci", ...npmOptions], { cwd: freshRelease, env });
