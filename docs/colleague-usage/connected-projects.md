@@ -124,7 +124,8 @@ deployment, uses the published packages.
   is never a candidate. On **Save**, once the registry has published the
   version the connected copy carries, Vibe64 moves the project's
   `package.json` and `package-lock.json` to it (`npm install
-  --package-lock-only`, so the swap stays); until then it changes nothing.
+  --package-lock-only`, so the swap stays) and keeps the registry's copy of
+  that version aside for a later disconnection; until then it changes nothing.
 
 - **composer**: Vibe64 writes `composer.connected.json` and
   `composer.connected.lock` (the tracked manifest with a first `path`
@@ -177,7 +178,16 @@ and lockfiles name. Vibe64 shows that gap instead of hiding it: the preparation'
 check and **Save** print, for each package, for example `[Connected] Library:
 this session runs the connected library; Staging and Production
 use the published 1.0.0 until 1.1.0 is published, which Save then moves this
-project to.`, and session status lists it under `published`. A Composition
+project to.`, and session status lists it under `published`. When the copy
+carries the very version Staging and Production use but differs from what was
+published at it, the line says `the connected copy has unreleased changes at the
+same version: publish a new version, which Save then moves this project to.`
+(status: `unreleased: true`). npm compares the files the session runs with the
+published copy it keeps aside; Go modules and Composer ask Git whether the copy
+differs from the published commit (the version's tag or pseudo-version commit,
+or the commit `composer.lock` names). pip, Bundler, Cargo, Maven, Gradle and
+NuGet cannot tell, because their registries publish built archives that name
+no commit to compare with. A Composition
 connection is not a package: **Save** records the commit it saved in
 `vibe64.connections.lock.json`, and the project's build reads that pin.
 

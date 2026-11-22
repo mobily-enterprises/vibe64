@@ -10,9 +10,12 @@
 //   proof(context)       whether it is in effect; resolves to { inEffect, reason }. It reads files
 //                        only when context.runCommand is null (session status); in preparation it
 //                        may also ask the toolchain
-//   locked(context)      files only: [{ package, connected, locked }], the version the connected copy
+//   locked(context)      [{ package, connected, locked, unreleased? }], the version the connected copy
 //                        carries and the published one the project's tracked lockfile installs (what
-//                        Staging and Production use); the gap Vibe64 shows comes from it
+//                        Staging and Production use); the gap Vibe64 shows comes from it. `unreleased`,
+//                        only from a type that can tell, says whether the copy differs from what was
+//                        published at the locked version (npm from files; Go modules and Composer ask
+//                        Git, so only with a runCommand, which never runs a toolchain here)
 //   bump(context)        on Save, with runCommand: moves the project's tracked manifest and lockfile to
 //                        `connected` once its registry has published it, never to an unpublished
 //                        commit; resolves to { bumped: [{ package, from, to }], lines }; never throws
@@ -138,11 +141,13 @@ async function runConnectedAdapterStep({ action, repository, repositories, sessi
 }
 
 /**
- * Whether each typed dependency is in effect now, read from the trees without running anything.
- * @param {{ repositories: Array<object>, sessionSourceRoot: string }} input
- * @returns {Promise<Array<{ name: string, repository: string, type: string, sourceRoot: string, inEffect: boolean, reason: string }>>}
+ * Whether each typed dependency is in effect now, read from the trees without running anything,
+ * and what Staging and Production use instead. `runCommand`, when given, is only for the read-only
+ * Git questions of `locked` (has the copy changed since the published commit); proofs never get it.
+ * @param {{ repositories: Array<object>, sessionSourceRoot: string, runCommand?: Function | null }} input
+ * @returns {Promise<Array<{ name: string, repository: string, type: string, sourceRoot: string, inEffect: boolean, reason: string, published: Array<object> }>>}
  */
-async function inspectConnectedAdapters({ repositories, sessionSourceRoot }) {
+async function inspectConnectedAdapters({ repositories, sessionSourceRoot, runCommand = null }) {
   const results = [];
   for (const connection of typedDependencies(repositories)) {
     let proof;
@@ -151,7 +156,8 @@ async function inspectConnectedAdapters({ repositories, sessionSourceRoot }) {
     } catch (error) {
       proof = { inEffect: false, reason: String(error?.message || error) };
     }
-    const published = await lockedVersions(connection, adapterContext({ connection, repositories, sessionSourceRoot })).catch(() => []);
+    const published = await lockedVersions(connection, adapterContext({ connection, repositories, sessionSourceRoot, runCommand }))
+      .catch(() => []);
     results.push({
       name: connection.name,
       repository: connection.repository,
@@ -233,8 +239,12 @@ async function syncConnectedRepositories({ sessionId, repositories, sessionSourc
 function releaseGapLine(connection, entry) {
   const runs = `[Connected] ${connection.name}: this session runs the connected ${entry.package}`;
   if (!entry.locked) return `${runs}; Vibe64 cannot tell which published version Staging and Production use.`;
-  return entry.connected && entry.connected !== entry.locked
-    ? `${runs}; Staging and Production use the published ${entry.locked} until ${entry.connected} is published, which Save then moves this project to.`
+  if (entry.connected && entry.connected !== entry.locked) {
+    return `${runs}; Staging and Production use the published ${entry.locked} until ${entry.connected} is published, which Save then moves this project to.`;
+  }
+  return entry.unreleased === true
+    ? `${runs}; Staging and Production use the published ${entry.locked}, and the connected copy has unreleased changes at the same version: ` +
+      "publish a new version, which Save then moves this project to."
     : `${runs}; Staging and Production use the published ${entry.locked}.`;
 }
 

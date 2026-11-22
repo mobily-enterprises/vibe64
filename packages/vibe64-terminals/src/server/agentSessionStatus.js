@@ -10,6 +10,7 @@ import {
   workspaceSetupStateFromMetadata
 } from "@local/vibe64-runtime/server/workspaceSetupState";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { runVibe64Command } from "@local/vibe64-execution/server";
 import { sessionWorkProblem } from "../shared/sessionWorkProblem.js";
 import { inspectConnectedCopies } from "./sessionConnectedCopies.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
@@ -63,7 +64,8 @@ async function readAgentSessionStatus({ descriptor, project, projectRecord, sess
   const copies = sessionConnectedCopies({ metadata: { connected_copies: connectedCopies, source_path: recordedSourcePath } });
   // Whether Vibe64 has each typed dependency in effect in this session's trees, or why not.
   const proofs = copies.length
-    ? await project.inspectConnectedAdapters({ session }).catch((error) => ({ error: toText(error?.message) }))
+    // Git answers whether a copy differs from what was published at the locked version.
+    ? await project.inspectConnectedAdapters({ session, runCommand: runVibe64Command }).catch((error) => ({ error: toText(error?.message) }))
     : [];
   const connected = (await inspectConnectedCopies({
     copies,

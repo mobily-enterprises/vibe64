@@ -16,6 +16,7 @@ import path from "node:path";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { connectionError, notInEffect } from "./adapterResults.js";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
+import { copyDiffersFromRevision } from "./publishedSource.js";
 import { existingEntry, readJsonFile } from "./npmPackages.js";
 
 const DERIVED_MANIFEST = "composer.connected.json";
@@ -251,19 +252,27 @@ function normalVersion(version) {
  * The version the connected copy declares and the one the tracked composer.lock (what Staging and
  * Production install) holds, for this connection's package when the project uses it. Reads files only.
  */
-async function lockedComposer({ connection, sessionSourceRoot }) {
-  const own = await optionalJson(path.join(await realRoot(connection), "composer.json"));
+async function lockedComposer({ connection, sessionSourceRoot, runCommand = null }) {
+  const sourceDir = await realRoot(connection);
+  const own = await optionalJson(path.join(sourceDir, "composer.json"));
   if (typeof own?.name !== "string" || !own.name) return [];
   const manifest = await optionalJson(path.join(sessionSourceRoot, "composer.json"));
   const lockText = await readDerivedFile(sessionSourceRoot, "composer.lock");
   const entry = lockedPackages(lockText === null ? null : JSON.parse(lockText)).find(candidate => candidate.name === own.name);
   const required = Object.hasOwn(manifest?.require || {}, own.name) || Object.hasOwn(manifest?.["require-dev"] || {}, own.name);
   if (!entry && !required) return [];
-  return [{
+  const versions = {
     package: own.name,
     connected: normalVersion(own.version),
     locked: normalVersion(entry?.version)
-  }];
+  };
+  // The lock names the commit the registry published at that version; a copy carrying another
+  // version is Save's to move to, not a change at the same one.
+  const revision = entry?.source?.reference || entry?.dist?.reference || "";
+  const unreleased = versions.locked && (!versions.connected || versions.connected === versions.locked)
+    ? await copyDiffersFromRevision({ sourceDir, revision: /^[0-9a-f]{7,64}$/u.test(revision) ? revision : "", runCommand })
+    : null;
+  return [unreleased === null ? versions : { ...versions, unreleased }];
 }
 
 /** Composer's own words for a failure: its first message line, past exception names and file locations. */

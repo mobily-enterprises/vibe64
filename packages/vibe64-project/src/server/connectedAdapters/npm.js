@@ -535,17 +535,44 @@ function declaredSpec(manifest, name) {
  * with the version the connected copy carries and the one the project's tracked lockfile installs
  * (what Staging and Production install). Files only.
  */
+/**
+ * Whether the session runs other files than the registry published at the locked version: the swap
+ * keeps the published copy it replaced (what `npm ci` installed from the lockfile), so the session
+ * tree's own copy is compared file by file with it. Null when the tree holds no swapped copy of it.
+ */
+async function npmUnreleased(sessionSourceRoot, name, locked) {
+  const record = (await readState(sessionSourceRoot)).copies.find(copy => copy.path === path.join("node_modules", name));
+  if (!record?.backup || !record.files) return null;
+  const backupDir = path.join(stateDirectory(sessionSourceRoot), record.backup);
+  // The copy kept aside must be the version the lockfile names.
+  if ((await optionalJson(path.join(backupDir, "package.json")))?.version !== locked) return null;
+  const published = (await listFiles(backupDir)).sort();
+  // A bundled dependency stays in the copy's node_modules, which neither side lists.
+  const running = Object.keys(record.files).filter(file => !file.startsWith("node_modules/")).sort();
+  if (!published.length) return null;
+  if (published.join("\0") !== running.join("\0")) return true;
+  for (const file of published) {
+    if (await fileDigest(path.join(backupDir, file)) !== record.files[file].sha256) return true;
+  }
+  return false;
+}
+
 async function lockedNpm({ connection, sessionSourceRoot }) {
   const manifest = await optionalJson(path.join(sessionSourceRoot, "package.json"));
   if (!manifest) return [];
   const lock = await optionalJson(path.join(sessionSourceRoot, "package-lock.json"));
-  return (await connectedNpmPackages(connection))
-    .filter(entry => declaredSpec(manifest, entry.name))
-    .map(entry => ({
+  const entries = [];
+  for (const entry of await connectedNpmPackages(connection)) {
+    if (!declaredSpec(manifest, entry.name)) continue;
+    const versions = {
       package: entry.name,
       connected: entry.version || null,
       locked: lock?.packages?.[`node_modules/${entry.name}`]?.version || null
-    }));
+    };
+    const unreleased = versions.locked && versions.connected === versions.locked ? await npmUnreleased(sessionSourceRoot, entry.name, versions.locked) : null;
+    entries.push(unreleased === null ? versions : { ...versions, unreleased });
+  }
+  return entries;
 }
 
 /**
@@ -602,8 +629,43 @@ async function bumpNpm(context) {
     }
     bumped.push({ package: entry.package, from: entry.locked, to: entry.connected });
     lines.push(`[Connected] ${connection.name}: Staging and Production now use the published ${entry.package} ${entry.connected}.`);
+    const kept = await keepPublishedCopy({ sessionSourceRoot, name: entry.package, spec: wanted, runCommand });
+    if (kept) lines.push(`[Connected] ${connection.name}: ${kept}`);
   }
   return { bumped, lines };
+}
+
+/**
+ * After Save moved the lockfile, the published copy the swap keeps aside is the one the lockfile
+ * now names, downloaded from the registry: what a disconnection puts back, and what the session's
+ * copy is compared with for unreleased changes at the same version. Resolves to a line on failure.
+ */
+async function keepPublishedCopy({ sessionSourceRoot, name, spec, runCommand }) {
+  const state = await readState(sessionSourceRoot);
+  const record = state.copies.find(copy => copy.path === path.join("node_modules", name));
+  if (!record?.backup) return "";
+  const backupDir = path.join(stateDirectory(sessionSourceRoot), record.backup);
+  const download = `${backupDir}.${randomUUID()}.download`;
+  const failed = result => `could not keep the published ${spec} aside: ${String(result?.stderr || result?.error || "").trim().slice(-300)}`;
+  try {
+    await mkdir(download, { recursive: true, mode: vibe64SharedModes().inheritingDirectory });
+    const packed = await runCommand({
+      command: "npm",
+      args: ["pack", spec, "--json", "--pack-destination", download],
+      cwd: sessionSourceRoot,
+      timeout: NPM_TIMEOUT_MS
+    });
+    const filename = packed?.ok === true ? JSON.parse(String(packed.stdout || "[]"))[0]?.filename : "";
+    if (!filename) return failed(packed);
+    const extracted = await runCommand({ command: "tar", args: ["-xzf", path.join(download, filename), "-C", download], cwd: download, timeout: NPM_TIMEOUT_MS });
+    if (extracted?.ok !== true) return failed(extracted);
+    await rm(backupDir, { recursive: true, force: true });
+    // npm's tarballs hold the package below `package/`.
+    await rename(path.join(download, "package"), backupDir);
+    return "";
+  } finally {
+    await rm(download, { recursive: true, force: true });
+  }
 }
 
 const npmAdapter = Object.freeze({

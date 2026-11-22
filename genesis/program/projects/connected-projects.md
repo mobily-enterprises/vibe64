@@ -21,6 +21,7 @@ file as ordinary source editing.
 - `packages/vibe64-project/src/server/connectedAdapters/derivedFiles.js`
 - `packages/vibe64-project/src/server/connectedAdapters/adapterResults.js`
 - `packages/vibe64-project/src/server/connectedAdapters/commandOutput.js`
+- `packages/vibe64-project/src/server/connectedAdapters/publishedSource.js`
 - `packages/vibe64-project/src/server/connectedAdapters/composer.js`
 - `packages/vibe64-project/src/server/connectedAdapters/pip.js`
 - `packages/vibe64-project/src/server/connectedAdapters/bundler.js`
@@ -123,7 +124,22 @@ mechanism. Staging and Production never read session trees.
 
 Until a connected version is published, preparation's check, Save and session
 status show the gap: what the session runs and the published version Staging
-and Production use (`releaseGapLine` from each adapter's `locked`).
+and Production use (`releaseGapLine` from each adapter's `locked`). At the same
+version, `locked` also says whether the copy has unreleased changes
+(`unreleased`), where the registry makes that comparable:
+
+| Type | How it tells a change at the published version |
+|---|---|
+| npm | the swapped files against the published copy kept aside, which Save replaces with the registry's tarball after a bump (files only, so status too) |
+| gomod | Git: the copy against the version's tag (when it is the copy's newest version tag) or a pseudo-version's commit |
+| composer | Git: the copy against the commit `composer.lock` names (`source` or `dist` reference) |
+| pip, bundler, cargo, maven, gradle, nuget | cannot tell: their registries publish built archives a checkout does not reproduce byte for byte, and record no commit to compare with |
+| custom | the project's own steps |
+
+The Git comparisons (`publishedSource.js`) need a command runner: status passes
+the managed runner for `locked` only, never for proofs, and the preparation
+check and Save have one; preparation's `isPrepared` check reads files only, so
+it leaves them out.
 
 ## Adapters
 

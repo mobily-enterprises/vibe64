@@ -324,3 +324,33 @@ test("composer: an unpublished version, an unknown package, an unreachable regis
   assert.deepEqual(await composerAdapter.bump(lifecycle(same, fakeToolchain(same.app, sameCalls, { versions: ["1.0.0"] }))), { bumped: [], lines: [] });
   assert.equal(sameCalls.length, 0);
 });
+
+test("composer: at the locked version, the copy is compared with the commit composer.lock names, so unreleased changes show", async t => {
+  const fixture = await composerFixture(t, { libraryVersion: "" });
+  const gitOnly = async ({ command, args, cwd }) => {
+    assert.equal(command, "git");
+    try {
+      const { stdout, stderr } = await exec("git", args, { cwd });
+      return { ok: true, stdout, stderr, exitCode: 0 };
+    } catch (error) {
+      return { ok: false, stdout: String(error.stdout || ""), stderr: String(error.stderr || ""), exitCode: error.code };
+    }
+  };
+  await git(fixture.library, "init", "-q");
+  await git(fixture.library, "add", "-A");
+  await git(fixture.library, "-c", "user.name=proof", "-c", "user.email=proof@example.com", "commit", "-qm", "1.0.0");
+  const reference = (await git(fixture.library, "rev-parse", "HEAD")).stdout.trim();
+  const lock = structuredClone(trackedLock);
+  lock.packages[0].source = { type: "git", url: repository, reference };
+  await writeFile(path.join(fixture.app, "composer.lock"), `${JSON.stringify(lock, null, 4)}\n`);
+
+  const locked = { package: "acme/library", connected: null, locked: "1.0.0" };
+  assert.deepEqual(await composerAdapter.locked(lifecycle(fixture, gitOnly)), [{ ...locked, unreleased: false }]);
+  // Without Git nothing is claimed.
+  assert.deepEqual(await composerAdapter.locked(lifecycle(fixture, null)), [locked]);
+  await writeFile(path.join(fixture.library, "src.php"), "<?php\n");
+  assert.deepEqual(await composerAdapter.locked(lifecycle(fixture, gitOnly)), [{ ...locked, unreleased: true }]);
+  // A copy that declares another version is Save's to move to, not a change at the same one.
+  await writeFile(path.join(fixture.library, "composer.json"), `${JSON.stringify({ name: "acme/library", version: "1.1.0", type: "library" }, null, 2)}\n`);
+  assert.deepEqual(await composerAdapter.locked(lifecycle(fixture, gitOnly)), [{ ...locked, connected: "1.1.0" }]);
+});

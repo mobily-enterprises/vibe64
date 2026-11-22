@@ -126,10 +126,11 @@ function createProjectRepositories({
    * Whether each typed connected dependency of this session is in effect now: [] when it has none.
    * Reads its trees; runs nothing.
    */
-  async function inspectSessionConnectedAdapters({ session, environment = env } = {}) {
+  /** `runCommand` (status) answers only the read-only Git questions of each adapter's `locked`. */
+  async function inspectSessionConnectedAdapters({ session, environment = env, runCommand = null } = {}) {
     const inputs = await inspectSessionConnectedInputs({ session, environment });
     if (inputs.status === "unconfigured") return [];
-    return inspectConnectedAdapters({ repositories: inputs.repositories, sessionSourceRoot: sessionSourcePath(session) });
+    return inspectConnectedAdapters({ repositories: inputs.repositories, sessionSourceRoot: sessionSourcePath(session), runCommand });
   }
 
   /**

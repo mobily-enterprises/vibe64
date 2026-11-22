@@ -325,6 +325,45 @@ test("npm: Save moves the project to the connected version once it is published,
   assert.deepEqual(again.bumped, []);
 });
 
+test("npm: at the published version the gap shows unreleased changes in the connected copy, and disconnecting gives back the version the lockfile names", { timeout: 120_000 }, async t => {
+  const f = await fixture(t);
+  assert.equal((await f.step("apply")).ok, true);
+  await f.registry.publish(f.libDir);
+  assert.deepEqual((await bumpConnectedDependencies({ repositories: f.repositories, sessionSourceRoot: f.app, runCommand: f.runCommand })).bumped,
+    [{ name: "Lib", package: "@proof/lib", from: "1.0.0", to: "1.1.0" }]);
+  // Exactly what the registry published at 1.1.0: no unreleased changes.
+  assert.deepEqual((await f.proof()).published, [{ package: "@proof/lib", connected: "1.1.0", locked: "1.1.0", unreleased: false }]);
+
+  // A change after the publish, at the same version: status, the check and Save all say so.
+  await writeFile(path.join(f.libDir, "lib", "message.js"), "module.exports = 'changed after 1.1.0';\n");
+  assert.equal((await f.step("apply")).ok, true);
+  assert.deepEqual((await f.proof()).published, [{ package: "@proof/lib", connected: "1.1.0", locked: "1.1.0", unreleased: true }]);
+  const gap = "[Connected] Lib: this session runs the connected @proof/lib; Staging and Production use the published 1.1.0, " +
+    "and the connected copy has unreleased changes at the same version: publish a new version, which Save then moves this project to.";
+  assert.equal((await f.step("proof")).output, `[Connected] Lib is in effect.\n${gap}`);
+  assert.deepEqual((await bumpConnectedDependencies({ repositories: f.repositories, sessionSourceRoot: f.app, runCommand: f.runCommand })).lines, [gap]);
+
+  // The published copy kept aside is the lockfile's 1.1.0 now, not the 1.0.0 the first swap replaced.
+  await restoreDisconnected({ repositories: [], sessionSourceRoot: f.app });
+  assert.equal(await installedVersion(path.join(f.app, "node_modules", "@proof", "lib")), "1.1.0");
+  assert.equal(await f.node("console.log(require('@proof/lib').message)"), "connected 1.1.0");
+});
+
+test("npm: when Save cannot keep the newly locked published copy aside it says so, and claims nothing about unreleased changes", { timeout: 120_000 }, async t => {
+  const f = await fixture(t);
+  assert.equal((await f.step("apply")).ok, true);
+  await f.registry.publish(f.libDir);
+  const noTar = request => (request.command === "tar" ? Promise.resolve({ ok: false, stdout: "", stderr: "tar: not found" }) : f.runCommand(request));
+  const { lines } = await bumpConnectedDependencies({ repositories: f.repositories, sessionSourceRoot: f.app, runCommand: noTar });
+  assert.deepEqual(lines, [
+    "[Connected] Lib: Staging and Production now use the published @proof/lib 1.1.0.",
+    "[Connected] Lib: could not keep the published @proof/lib@1.1.0 aside: tar: not found",
+    "[Connected] Lib: this session runs the connected @proof/lib; Staging and Production use the published 1.1.0."
+  ]);
+  // The copy kept aside is still the 1.0.0 the swap replaced, so it is no measure of 1.1.0.
+  assert.deepEqual((await f.proof()).published, [{ package: "@proof/lib", connected: "1.1.0", locked: "1.1.0" }]);
+});
+
 test("npm: a dependency no registry version satisfies refuses the swap and says which", { timeout: 120_000 }, async t => {
   const f = await fixture(t, { libDependencies: { shared: "^2.0.0" } });
   const before = await f.tracked();

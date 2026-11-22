@@ -24,7 +24,12 @@ brings in its main.
 copy also has its package `type` and `inEffect`: `true` when the session's app
 uses this copy instead of the published package, otherwise `false` with the
 `reason` (for example `node_modules/library/index.js no longer holds the
-connected source.`); **Prepare workspace** puts it in effect again.
+connected source.`); **Prepare workspace** puts it in effect again. Its
+`published` list names, per package, the version the copy carries
+(`connected`) and the published one Staging and Production use (`locked`);
+`unreleased: true` means the copy differs from what was published at that same
+version, so publish a new version (npm, Go modules and Composer can tell; the
+other types leave it out).
 
 ## Prepare workspace makes the missing copies
 

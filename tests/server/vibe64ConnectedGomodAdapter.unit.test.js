@@ -283,3 +283,39 @@ test("gomod: locked reads what go.mod requires; bump moves go.mod and go.sum onl
   assert.deepEqual(await gomodAdapter.locked({ ...context, runCommand: null }), [{ package: "example.com/library", connected: null, locked: "v1.1.0" }]);
   assert.deepEqual(await gomodAdapter.bump(context), { bumped: [], lines: [] });
 });
+
+test("gomod: at the locked version's tag or pseudo-version commit, the gap shows unreleased changes in the connected copy", async (t) => {
+  const { app, library, repositories, state, step } = await fixture(t);
+  const runCommand = toolchain(state);
+  const published = async (withGit = runCommand) =>
+    (await inspectConnectedAdapters({ repositories, sessionSourceRoot: app, runCommand: withGit }))[0].published;
+  await git(library, "init", "-q", "--initial-branch=main");
+  await git(library, "add", "--all");
+  await git(library, "commit", "-qm", "library");
+  await git(library, "tag", "v1.0.0");
+  assert.equal((await step("apply")).ok, true);
+  // At the tag the proxy serves: nothing unreleased; without Git (the isPrepared check) nothing is claimed.
+  assert.deepEqual(await published(), [{ package: "example.com/library", connected: null, locked: "v1.0.0", unreleased: false }]);
+  assert.deepEqual(await published(null), [{ package: "example.com/library", connected: null, locked: "v1.0.0" }]);
+
+  const gap = "[Connected] Library: this session runs the connected example.com/library; Staging and Production use the published v1.0.0, " +
+    "and the connected copy has unreleased changes at the same version: publish a new version, which Save then moves this project to.";
+  // An untracked file, then a commit past the tag, both differ from what v1.0.0 published.
+  await writeFile(path.join(library, "lib.go"), "package library\n");
+  assert.deepEqual(await published(), [{ package: "example.com/library", connected: null, locked: "v1.0.0", unreleased: true }]);
+  await git(library, "add", "--all");
+  await git(library, "commit", "-qm", "after v1.0.0");
+  assert.deepEqual(await published(), [{ package: "example.com/library", connected: null, locked: "v1.0.0", unreleased: true }]);
+  assert.equal((await step("proof", repositories[0].repository, runCommand)).output, `[Connected] Library is in effect.\n${gap}`);
+  // A newer version tag is Save's to move to, not a change at the same version.
+  await git(library, "tag", "v1.1.0");
+  assert.deepEqual(await published(), [{ package: "example.com/library", connected: null, locked: "v1.0.0" }]);
+
+  // A pseudo-version names its commit.
+  const head = (await exec("git", ["rev-parse", "HEAD"], { cwd: library })).stdout.trim();
+  const goMod = await readFile(path.join(app, "go.mod"), "utf8");
+  await writeFile(path.join(app, "go.mod"), goMod.replace("example.com/library v1.0.0", `example.com/library v1.0.1-0.20261123000000-${head.slice(0, 12)}`));
+  assert.equal((await published())[0].unreleased, false);
+  await writeFile(path.join(library, "lib.go"), "package library // changed\n");
+  assert.equal((await published())[0].unreleased, true);
+});

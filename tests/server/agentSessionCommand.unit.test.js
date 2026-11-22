@@ -359,14 +359,18 @@ test("session status lists this session's connected copies with whether each is 
       createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async inspectWorkspaceSetup() { return { status: "ready", steps: [], diagnostics: [] }; },
       // What Vibe64's adapter proves of each typed dependency, read from the session's trees.
-      async inspectConnectedAdapters() { return proofs; },
+      async inspectConnectedAdapters({ runCommand }) {
+        // Status gives the adapters a runner for their read-only Git comparisons.
+        assert.equal(typeof runCommand, "function");
+        return proofs;
+      },
       async projectEnvironmentStatus() { return { status: "ready", keys: [], resources: [] }; },
       async readCurrentProject() { return { projectRoot: path.join(temporaryRoot, "project"), slug: "project-1" }; },
       async runInProjectContext(_slug, operation) { return operation(); }
     }
   });
   // The gap is never hidden: the published version Staging and Production install comes with it.
-  const published = [{ package: "library", connected: "1.1.0", locked: "1.0.0" }];
+  const published = [{ package: "library", connected: "1.1.0", locked: "1.0.0" }, { package: "other", connected: "1.0.0", locked: "1.0.0", unreleased: true }];
   let proofs = [{ name: "Library", repository: "https://github.com/example/library", type: "npm", sourceRoot: copy, inEffect: true, reason: "", published }];
   await service.bindSession("session-1", { wrapperHostDir: path.join(temporaryRoot, "wrappers") });
   assert.deepEqual((await service.sessionStatus("session-1")).repository, {

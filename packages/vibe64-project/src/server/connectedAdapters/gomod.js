@@ -13,6 +13,7 @@ import path from "node:path";
 import semver from "semver";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
+import { copyDiffersFromRevision } from "./publishedSource.js";
 
 const WORK_FILE = "go.work";
 const WORK_SUM_FILE = "go.work.sum";
@@ -209,12 +210,35 @@ function requiredVersions(text) {
  * What Staging and Production install for this connection: the version the tracked go.mod requires.
  * Go versions are tags, so the connected copy's files name none. Reads files only.
  */
-async function lockedGomod({ connection, sessionSourceRoot }) {
-  const info = await readGoMod(await realpath(connection.sourceRoot));
+// A pseudo-version names its commit: vX.Y.Z-[pre.]0.yyyymmddhhmmss-<12 hex>, or vX.0.0-yyyymmddhhmmss-<12 hex>.
+const PSEUDO_VERSION = /-(?:[0-9A-Za-z.-]*\.)?\d{14}-([0-9a-f]{12})(?:\+incompatible)?$/u;
+
+/**
+ * Whether the copy differs from what the module proxy serves at the locked version: that tag's
+ * commit (or a pseudo-version's), as long as the copy's newest version tag is that version (a newer
+ * one is Save's to move to). Null without Git or when the copy lacks the commit.
+ */
+async function gomodUnreleased({ sourceDir, locked, runCommand }) {
+  if (!runCommand) return null;
+  const pseudo = PSEUDO_VERSION.exec(locked);
+  const tag = locked.replace(/\+incompatible$/u, "");
+  if (!pseudo) {
+    const newest = await runCommand({ command: "git", args: ["describe", "--tags", "--abbrev=0", "--match", "v*"], cwd: sourceDir, timeout: GIT_TIMEOUT_MS });
+    if (newest?.ok !== true || String(newest.stdout || "").trim() !== tag) return null;
+  }
+  return copyDiffersFromRevision({ sourceDir, revision: pseudo ? pseudo[1] : `refs/tags/${tag}`, runCommand });
+}
+
+async function lockedGomod({ connection, sessionSourceRoot, runCommand = null }) {
+  const sourceDir = await realpath(connection.sourceRoot);
+  const info = await readGoMod(sourceDir);
   const goMod = await readFile(path.join(await realpath(sessionSourceRoot), "go.mod"), "utf8").catch(() => null);
   if (!info || goMod === null) return [];
   const locked = requiredVersions(goMod).get(info.modulePath);
-  return locked === undefined ? [] : [{ package: info.modulePath, connected: null, locked }];
+  if (locked === undefined) return [];
+  const entry = { package: info.modulePath, connected: null, locked };
+  const unreleased = await gomodUnreleased({ sourceDir, locked, runCommand });
+  return [unreleased === null ? entry : { ...entry, unreleased }];
 }
 
 async function snapshot(files) {
