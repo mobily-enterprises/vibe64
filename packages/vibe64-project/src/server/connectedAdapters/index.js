@@ -11,7 +11,10 @@
 //                        only when context.runCommand is null (session status); in preparation it
 //                        may also ask the toolchain
 //   restore(input)       optional: takes back what it generated for connections that are gone;
-//                        input { connections (those of its type that remain), trees }, resolves to lines
+//                        input { connections (those of its type that remain), sessionSourceRoot, trees,
+//                        writeGitExcludes }, resolves to lines. It runs when the Sources file is written,
+//                        with no command runner
+// Adapters other than npm write their derived files through ./derivedFiles.js.
 // The context: the connection ({ name, repository, relationship, type, sourceRoot }), `connections`
 // (every dependency connection of the same type), the session source, its trees (the session source
 // and every connected copy), `runCommand({ command, args, cwd, timeout?, env? })` (a managed command
@@ -61,7 +64,8 @@ function connectedAdapterSteps(connections) {
     });
     return [
       step("apply", "prepare", `Put connected ${connection.name} in effect (${connection.type})`, adapter.runtimeRequirements),
-      step("proof", "verify", `Check connected ${connection.name} is in effect (${connection.type})`, [])
+      // The proof may ask the toolchain how the build resolves the connection.
+      step("proof", "verify", `Check connected ${connection.name} is in effect (${connection.type})`, adapter.runtimeRequirements)
     ];
   });
 }
@@ -162,7 +166,8 @@ async function restoreDisconnected({ repositories, sessionSourceRoot }) {
       lines.push(...await adapter.restore({
         connections: typedDependencies(repositories, adapter.type),
         sessionSourceRoot,
-        trees: sessionTrees(sessionSourceRoot, repositories)
+        trees: sessionTrees(sessionSourceRoot, repositories),
+        writeGitExcludes: (tree, paths) => writeManagedGitExcludes(tree, paths, { section: `connected ${adapter.type} packages` })
       }));
     }
     return lines;
