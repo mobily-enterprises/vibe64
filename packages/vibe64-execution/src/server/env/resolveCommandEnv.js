@@ -33,6 +33,7 @@ import {
 import {
   sharedToolEnv
 } from "./sharedToolEnv.js";
+import { connectedGradleEnv, withoutStaleConnectedGradleHome } from "./connectedGradleEnv.js";
 import {
   npmToolBinDirs,
   npmToolEnv
@@ -185,7 +186,7 @@ function commandEnvWithoutGitIdentity({
   // environment never names HOME, USER or XDG folders (commandBaseEnv).
   const login = homeEnvForUser(actor.user);
   const tools = actor.stagingAccount ? { env: {}, path: [] } : loginToolEnv(login.USER);
-  const env = {
+  const env = withoutStaleConnectedGradleHome({
     ...login,
     ...commandBaseEnv(baseEnv),
     ...tools.env,
@@ -196,11 +197,13 @@ function commandEnvWithoutGitIdentity({
     ...databaseEnv(...databaseEnvRecordsForPolicy(baseEnv, request)),
     ...commandProjectEnv(request),
     ...gitEnv({ actor, request }),
+    // A session with a gradle connection runs Gradle in its own user home; a command's own env still wins.
+    ...connectedGradleEnv(request.cwd),
     ...callerEnv,
     ...credentialEnv({ actor, request }),
     ...sharedEnv,
     ...sessionAppEnv(request)
-  };
+  });
   const finalEnv = {
     ...env,
     ...npmToolEnv({ env }),

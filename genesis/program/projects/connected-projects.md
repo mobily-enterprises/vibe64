@@ -30,6 +30,7 @@ file as ordinary source editing.
 - `packages/vibe64-project/src/server/connectedAdapters/maven.js`
 - `packages/vibe64-project/src/server/connectedAdapters/mavenPom.js`
 - `packages/vibe64-project/src/server/connectedAdapters/gradle.js`
+- `packages/vibe64-execution/src/server/env/connectedGradleEnv.js`
 - `packages/vibe64-project/src/server/connectedAdapters/nuget.js`
 - `packages/vibe64-terminals/src/server/agentSessionStatus.js`
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
@@ -165,7 +166,17 @@ record with the connected source. `sync.js` watches the copied package folders
 with chokidar; a content save copies the changed files, and a packlist change
 applies the connection again. The other adapters write their derived files
 through `derivedFiles.js`, in their type's own Git exclude block, and run their
-toolchain through the managed command function.
+toolchain through the managed command function. The gradle adapter writes its
+init script into the session's own Gradle user home (`.development/gradle-home`,
+excluded whole, its `init.d`), which links the default home's `gradle.properties`
+and init scripts; `connectedGradleEnv` gives every command whose tree holds that
+script the home as `GRADLE_USER_HOME`, so the session's ordinary Gradle commands
+take the connection with no flag, and the shared read-only cache
+(`GRADLE_RO_DEP_CACHE`): generations copied from the default home's
+`caches/modules-2` without its locks and `gc.properties`, published whole under
+`current` at most once a day and removed after a week; a command gets the
+generation `current` names when it starts. The published check and
+`--write-locks` run in the default home, whose `init.d` has no connection.
 
 The internal connected-input inspection compares the map with the session's
 recorded copies through the shared projection reader, which rejects missing,

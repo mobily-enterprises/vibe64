@@ -47,9 +47,10 @@ async function refuseTracked({ connection, tree, paths, runCommand }) {
  * @param {Record<string, string>} input.files every derived file of the type in this tree, by relative path
  * @param {(request: object) => Promise<object>} input.runCommand
  * @param {(tree: string, paths: string[]) => Promise<void>} input.writeGitExcludes
+ * @param {string[]} [input.excludes] more paths the type keeps out of Git, such as a folder its toolchain writes
  * @returns {Promise<string[]>} the paths whose text changed
  */
-async function writeDerivedFiles({ connection, tree, files, runCommand, writeGitExcludes }) {
+async function writeDerivedFiles({ connection, tree, files, runCommand, writeGitExcludes, excludes = [] }) {
   const paths = Object.keys(files).sort();
   await refuseTracked({ connection, tree, paths, runCommand });
   const changed = [];
@@ -64,7 +65,7 @@ async function writeDerivedFiles({ connection, tree, files, runCommand, writeGit
     await writeFileAtomic(target, files[relative], { directoryMode: modes.inheritingDirectory, fileMode: modes.file });
     changed.push(relative);
   }
-  await writeGitExcludes(tree, paths);
+  await writeGitExcludes(tree, [...paths, ...excludes]);
   return changed;
 }
 

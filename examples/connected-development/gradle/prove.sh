@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# Proves Vibe64's gradle treatment with real Gradle, offline: the init script Vibe64 writes makes the
-# consumer a composite that builds the connected checkout from source in every command that passes
-# it, no tracked file changes, the proof fails when the wiring is removed or the checkout's module
-# does not match, and on Save a version the build's repository publishes moves into the build script
-# while an unpublished one does not.
+# Proves Vibe64's gradle treatment with real Gradle, offline: the init script Vibe64 writes into the
+# session's own Gradle user home makes the consumer a composite that builds the connected checkout
+# from source in every ordinary Gradle command of the session (Vibe64 gives each one that home as
+# GRADLE_USER_HOME; no flag), the person's gradle.properties still applies there, the shared
+# read-only dependency cache is a lock-free copy of the default home's, no tracked file changes, the
+# proof fails when the wiring is removed or the checkout's module does not match, and on Save a
+# version the build's repository publishes moves into the build script while an unpublished one does not.
 #
 # Requirements: a full JDK (javac; Gradle refuses a JRE), gradle (9.x tested), node and git on PATH.
-# PROOF_CACHE_DIR  persistent cache: GRADLE_USER_HOME and the Maven repository mavenLocal() reads,
-#                  standing in for the published library. Nothing downloads anything.
+# PROOF_CACHE_DIR  persistent cache: the default GRADLE_USER_HOME and the Maven repository mavenLocal()
+#                  reads, standing in for the published library. Nothing is downloaded from the
+#                  internet: a localhost repository stands in for a remote one.
 #                  Default: ${TMPDIR:-/tmp}/vibe64-connected-proof-cache/gradle-adapter
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADAPTER="$HERE/../vibe64-adapter.mjs"
+GRADLE_ENV="$HERE/../../../packages/vibe64-execution/src/server/env/connectedGradleEnv.js"
 CACHE="${PROOF_CACHE_DIR:-${TMPDIR:-/tmp}/vibe64-connected-proof-cache/gradle-adapter}"
 PUBLISHED_REPO="$CACHE/m2"
 export GRADLE_USER_HOME="$CACHE/user-home"
@@ -23,15 +27,22 @@ org.gradle.daemon=false
 systemProp.maven.repo.local=$PUBLISHED_REPO
 PROPS
 G=(gradle --offline -q --console=plain)
-INIT=.development/connected.init.gradle.kts
+SESSION_HOME=.development/gradle-home
+INIT=$SESSION_HOME/init.d/vibe64-connected.init.gradle.kts
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/connected-gradle-proof.XXXXXX")"
 cleanup() { rm -rf "$WORK"; }
 trap cleanup EXIT
+# The shared read-only dependency cache follows the login's cache folder: this proof's own.
+export XDG_CACHE_HOME="$WORK/xdg-cache"
 
 step() { printf '\n== %s\n' "$*"; }
 fail() { printf 'PROVE FAIL: %s\n' "$*" >&2; exit 1; }
 connected() { node "$ADAPTER" "$@" .development/connected.json; }
+# What Vibe64 adds to every command of the session (vibe64-execution's connectedGradleEnv), one NAME=value a line.
+session_env() { node --input-type=module -e "const { connectedGradleEnv } = await import('$GRADLE_ENV'); for (const [k, v] of Object.entries(connectedGradleEnv(process.cwd()))) console.log(k + '=' + v);"; }
+# An ordinary Gradle command of the session: no flag, only the environment Vibe64 gives it.
+session_gradle() { local -a env_args; mapfile -t env_args < <(session_env); env "${env_args[@]}" "${G[@]}" "$@"; }
 
 java -version 2>&1 | head -1
 gradle --version | grep -E '^(Gradle|Kotlin|Launcher JVM)'
@@ -69,6 +80,37 @@ cat > "$APP/.development/connected.json" <<JSON
 ]}
 JSON
 
+step "the default home downloads a module from a remote repository (localhost), which the shared read-only cache will hold"
+# A tiny Maven repository served over HTTP stands in for a remote one: Gradle caches what it downloads
+# from it in the default home's caches/modules-2, as from Maven Central.
+REPO="$WORK/http-repo"; mkdir -p "$REPO/com/example/extra/1.0.0"
+python3 - "$REPO/com/example/extra/1.0.0" <<'PY'
+import sys, zipfile, os
+d = sys.argv[1]
+with zipfile.ZipFile(os.path.join(d, "extra-1.0.0.jar"), "w") as z: z.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\n")
+open(os.path.join(d, "extra-1.0.0.pom"), "w").write('<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>'
+  '<groupId>com.example</groupId><artifactId>extra</artifactId><version>1.0.0</version></project>\n')
+PY
+python3 -c 'import http.server, functools, sys, socketserver
+h = functools.partial(http.server.SimpleHTTPRequestHandler, directory=sys.argv[1])
+s = socketserver.TCPServer(("127.0.0.1", 0), h); print(s.server_address[1], flush=True); s.serve_forever()' "$REPO" > "$WORK/http.port" 2>/dev/null &
+HTTP_PID=$!
+trap 'kill $HTTP_PID 2>/dev/null; cleanup' EXIT
+for _ in $(seq 50); do [[ -s "$WORK/http.port" ]] && break; sleep 0.1; done
+PORT="$(head -1 "$WORK/http.port")"
+mkdir -p "$WORK/seeder"
+echo 'rootProject.name = "seeder"' > "$WORK/seeder/settings.gradle.kts"
+cat > "$WORK/seeder/build.gradle.kts" <<'KTS'
+repositories { maven { url = uri(providers.gradleProperty("repo").get()); isAllowInsecureProtocol = true } }
+val seed by configurations.creating
+dependencies { seed("com.example:extra:1.0.0") }
+tasks.register("resolveExtra") { val files: FileCollection = seed; doLast { println("EXTRA " + files.singleFile.name) } }
+KTS
+gradle -q --console=plain -p "$WORK/seeder" -Prepo="http://127.0.0.1:$PORT/" resolveExtra | grep -qx "EXTRA extra-1.0.0.jar" ||
+  fail "the default home did not download the remote module"
+kill $HTTP_PID; wait $HTTP_PID 2>/dev/null || true
+trap cleanup EXIT
+
 step "apply (1st)"
 connected apply
 step "apply (2nd, idempotent)"
@@ -79,8 +121,21 @@ cat "$INIT"
 step "proof"
 connected proof
 
-step "run the app with the connected init script"
-out="$("${G[@]}" -I "$INIT" run)"
+step "the session's commands get its Gradle home, with the person's settings and the shared read-only cache"
+session_env | tee "$WORK/session.env"
+grep -qx "GRADLE_USER_HOME=$APP/$SESSION_HOME" "$WORK/session.env" || fail "a session command does not get the session's Gradle home"
+RO="$(sed -n 's/^GRADLE_RO_DEP_CACHE=//p' "$WORK/session.env")"
+[[ -n "$RO" && -d "$RO/modules-2/files-2.1" ]] || fail "a session command does not get the shared read-only cache"
+[[ -z "$(find -L "$RO/modules-2" \( -name '*.lock' -o -name gc.properties \) -print -quit)" ]] || fail "the read-only cache carries locks or cleanup state"
+[[ "$(readlink "$SESSION_HOME/gradle.properties")" == "$GRADLE_USER_HOME/gradle.properties" ]] || fail "the default home's gradle.properties is not linked"
+(cd "$WORK" && [[ -z "$(session_env)" ]]) || fail "a command outside the session got its Gradle home"
+# The repository is gone and Gradle is offline: the session's Gradle finds the module only in the shared cache.
+out="$(session_gradle -p "$WORK/seeder" -Prepo="http://127.0.0.1:$PORT/" resolveExtra)"
+grep -qx "EXTRA extra-1.0.0.jar" <<<"$out" || fail "a session command did not read the module from the shared read-only cache"
+[[ -z "$(find "$SESSION_HOME" -path '*files-2.1/com.example/extra*' -print -quit)" ]] || fail "the session downloaded the module again"
+
+step "run the app with the ordinary gradle command, as a session command"
+out="$(session_gradle run)"
 echo "$out"
 grep -qx "APP USES $MARK1" <<<"$out" || fail "app did not use the connected library"
 
@@ -88,13 +143,14 @@ step "edit the connected source again: the composite rebuilds it without another
 MARK2="LIBRARY-MARKER-CONNECTED-AGAIN-$RANDOM$RANDOM"
 sed -i "s/$MARK1/$MARK2/" "$LIB/src/main/java/com/example/library/Library.java"
 connected proof
-out="$("${G[@]}" -I "$INIT" run)"
+out="$(session_gradle run)"
 echo "$out"
 grep -qx "APP USES $MARK2" <<<"$out" || fail "app did not pick up the edited connected source"
 
 step "negative: the proof fails when the wiring is removed"
 mv "$INIT" "$WORK/init.saved"
 if connected proof; then fail "the proof passed without wiring"; fi
+[[ -z "$(session_env)" ]] || fail "without the init script the session's commands still got its Gradle home"
 mv "$WORK/init.saved" "$INIT"
 
 step "negative: the proof fails when the included build does not provide the requested module"
@@ -123,9 +179,10 @@ grep -qx "\[Connected\] Library: this session runs the connected com.example:lib
 [[ "$(git diff --unified=0 -- build.gradle.kts | grep '^[-+] ')" == "$(printf -- '-    implementation("com.example:library:1.0.0")\n+    implementation("com.example:library:1.1.0")')" ]] ||
   { git diff; fail "bump changed more than the dependency's version"; }
 connected proof
-out="$("${G[@]}" -I "$INIT" run)"
+out="$(session_gradle run)"
 echo "$out"
 grep -qx "APP USES $MARK2" <<<"$out" || fail "after the bump the app no longer used the connected checkout"
+# Staging's view: the default home, which has no connection.
 out="$("${G[@]}" run)"
 echo "$out"
 grep -qx "APP USES LIBRARY-MARKER-RELEASED-1.1.0" <<<"$out" || fail "without the init script the build did not use the published 1.1.0"

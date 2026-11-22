@@ -8,6 +8,7 @@
     ".": "./src/server/index.js",
     "./server": "./src/server/index.js",
     "./server/hostProfile": "./src/server/hostProfile.js",
+    "./server/connectedGradleEnv": "./src/server/env/connectedGradleEnv.js",
     "./server/editorPrivateState": "./src/host/editorPrivateState.js",
     "./server/hostSettings": "./src/host/hostSettings.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
@@ -37,6 +38,10 @@
           {
             "subpath": "./server/hostProfile",
             "summary": "What the machine running Vibe64 provides: tool packs, shared caches, a privileged helper and shared group access."
+          },
+          {
+            "subpath": "./server/connectedGradleEnv",
+            "summary": "A session's own Gradle user home and the shared read-only dependency cache, which every Gradle command in a session with a gradle connection gets."
           },
           {
             "subpath": "./server/hostSettings",

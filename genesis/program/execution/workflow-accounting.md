@@ -198,6 +198,15 @@ whose `AUTH_*` would turn on or redirect a project's own JSKIT sign-in, so a
 command's `AUTH_*` come only from the project's Env, the launch's or caller's
 own env or its Staging Env. A Claude Code process, started from the editor's
 env, gets its project's Env as the project's for the same reason.
+A command whose folder is in a tree holding the gradle adapter's init script, in
+`.development/gradle-home/init.d`, gets that session's own Gradle user home as
+`GRADLE_USER_HOME` and the shared read-only dependency cache as
+`GRADLE_RO_DEP_CACHE` when one is published
+(`packages/vibe64-execution/src/server/env/connectedGradleEnv.js`), over the
+login's tool homes and the project's Env, unless the command's own environment
+names them, so every Gradle command of a session with a gradle connection takes
+it with no flag. A session home whose connection is gone is dropped from whatever
+environment still names it, such as an agent's started while it was connected.
 On a host whose homes cannot start programs, the host profile's
 `loginEnvironment` names the tool homes the host gives each login, `%u` standing
 for the login (`packages/vibe64-execution/src/server/env/loginToolEnv.js`): a

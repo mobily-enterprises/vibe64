@@ -159,12 +159,18 @@ deployment, uses the published packages.
   selects it for every `mvn` in the session. On **Save** it changes the
   dependency's `<version>` (or the one property that holds it) in `pom.xml` once
   the project's repositories publish the version; a `-SNAPSHOT` never moves.
-- **gradle**: Vibe64 writes an untracked init script,
-  `.development/connected.init.gradle.kts`, that includes each copy as a
-  composite build. Gradle reads it only when a command passes
-  `-I .development/connected.init.gradle.kts`, so the project's Gradle commands
-  in Stack add that flag. On **Save** it changes the dependency's version in the
-  build scripts once the build's repositories publish it, and rewrites
+- **gradle**: the session gets its own Gradle user home,
+  `.development/gradle-home` (untracked), whose `init.d` holds Vibe64's init
+  script that includes each copy as a composite build. Vibe64 gives every
+  command of the session that home as `GRADLE_USER_HOME`, so the project's
+  ordinary Gradle commands use the copies with no flag. The home links your
+  default Gradle home's `gradle.properties` and init scripts, and reads
+  dependencies first from a read-only cache every session shares
+  (`GRADLE_RO_DEP_CACHE`, a copy of the default home's dependency cache, renewed
+  at most once a day), so a session does not download again what the machine
+  already has. A terminal opened before **Prepare workspace** keeps its old
+  environment: open a new one. On **Save** it changes the dependency's version
+  in the build scripts once the build's repositories publish it, and rewrites
   `gradle.lockfile` when the build locks.
 
 Every type except npm reads the session's copy in place, so a save takes effect
