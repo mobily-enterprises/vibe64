@@ -204,8 +204,9 @@ Wait for Stop to finish; a cleanup failure is not a successful stop.
 Stopping Preview closes its browser process but keeps the coding assistant's
 managed-browser registration. The same assistant can run another managed browser
 check or test suite afterward without reopening its conversation.
-It stays stopped after navigation, reload or reopening the session. Use the
-toolbar's **Start preview** or **Restart preview** deliberately to run it again.
+It stays stopped after navigation, reload or reopening the session. The pane
+then shows **Preview stopped**, and both its button and the toolbar's read
+**Start preview**; use either to run it again deliberately.
 
 A Preview also stops when the platform restarts, for example during an update.
 The pane then removes the old page instead of leaving it looking alive. It shows

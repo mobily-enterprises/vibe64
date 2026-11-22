@@ -234,6 +234,7 @@ function startTerminalSession({
     status: "running",
     stopHookCompletion: null,
     scopeDrainCompletion: null,
+    exitSettledCompletion: null,
     namespace,
     subscribers: new Set(),
     terminal
@@ -280,7 +281,7 @@ function startTerminalSession({
     });
     beginTerminalCloseHook(session, session.stopReason || "exit");
     session.resolveExitCompletion();
-    void settleTerminalExitStatus(session);
+    session.exitSettledCompletion = settleTerminalExitStatus(session);
   });
 
   startedSessionsForNamespace(namespace).set(id, session);
@@ -417,6 +418,9 @@ async function stopTerminalSessionAndWait(id, options = {}) {
   }
   await session.exitCompletion;
   await session.scopeDrainCompletion;
+  // A run is exited only once its close and stop hooks finish; until then it reads closing, so a stop that returned
+  // earlier would leave its caller looking at a run that still runs.
+  await session.exitSettledCompletion;
   return terminalSessionResponse(session);
 }
 

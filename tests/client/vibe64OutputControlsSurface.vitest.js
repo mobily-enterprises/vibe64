@@ -44,6 +44,7 @@ import {
   launchPreviewInFlightText,
   launchPreviewIssue,
   launchPreviewNotice,
+  launchPreviewRecoveryLabel,
   launchPreviewStatusText
 } from "../../src/lib/vibe64PreviewStatusText.js";
 import { useVibe64OutputControlsSurface } from "../../src/composables/useVibe64OutputControlsSurface.js";
@@ -282,6 +283,13 @@ describe("Vibe64 launch controls surface", () => {
       message: "The preview process exited with code 1.",
       title: "Preview could not be opened"
     });
+  });
+
+  it("offers Start preview for a Preview stopped on purpose, and Restart or Retry otherwise", () => {
+    // The stopped notice says to start it; its own status can also restart, and Start must still win.
+    expect(launchPreviewRecoveryLabel({ state: "stopped", canStart: true, canRestart: true })).toBe("Start preview");
+    expect(launchPreviewRecoveryLabel({ state: "failed", canStart: true, canRestart: true })).toBe("Restart preview");
+    expect(launchPreviewRecoveryLabel({ state: "failed", terminalCanRetry: true })).toBe("Retry preview");
   });
 
   it("shows a recovered preview after an overlapping start request failed", () => {

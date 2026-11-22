@@ -193,10 +193,31 @@ function launchPreviewNotice({
   return null;
 }
 
+/**
+ * The label of the Preview's recovery button, in the pane's notice and the toolbar alike: Start preview for a Preview
+ * stopped on purpose (its notice says to start it), Retry preview when only the last run can be tried again, and
+ * Restart preview otherwise.
+ */
+function launchPreviewRecoveryLabel({
+  canRestart = false,
+  canStart = false,
+  state = "idle",
+  terminalCanRestart = false,
+  terminalCanRetry = false
+} = {}) {
+  if (state === "stopped") {
+    return "Start preview";
+  }
+  return terminalCanRetry && !canRestart && !canStart && !terminalCanRestart
+    ? "Retry preview"
+    : "Restart preview";
+}
+
 export {
   launchPreviewEmptyText,
   launchPreviewInFlightText,
   launchPreviewIssue,
   launchPreviewNotice,
+  launchPreviewRecoveryLabel,
   launchPreviewStatusText
 };

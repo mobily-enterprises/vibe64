@@ -147,12 +147,12 @@
 
           <v-btn
             v-if="previewToolbarRecoveryVisible"
-            aria-label="Restart preview"
+            :aria-label="previewRecoveryLabel"
             :disabled="operationBusy"
             icon="$restartAlt"
             size="small"
             density="comfortable"
-            title="Restart preview"
+            :title="previewRecoveryLabel"
             variant="text"
             @click="recoverEmbeddedPreview"
           />
@@ -342,6 +342,7 @@ const {
   outputOptionsAvailable,
   outputTargets,
   previewBrowserControlsVisible,
+  previewRecoveryLabel,
   previewToolbarExpanded,
   previewToolbarPosition,
   previewToolbarRecoveryVisible,

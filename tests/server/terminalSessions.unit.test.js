@@ -1134,6 +1134,39 @@ test("awaited terminal stop proves exit and keeps the run log", async () => {
   }
 });
 
+test("awaited terminal stop returns only once the run's close hook has finished", async () => {
+  const namespace = `terminal-awaited-stop-hook-${crypto.randomUUID()}`;
+  let finishClose;
+  const closeHook = new Promise((resolve) => { finishClose = resolve; });
+  const session = startTerminalSession({
+    args: ["-e", "process.stdin.resume(); setInterval(() => {}, 1000);"],
+    command: process.execPath,
+    commandPreview: "node awaited stop with a slow close hook",
+    namespace,
+    onClose: () => closeHook
+  });
+  try {
+    let returned = false;
+    const stopping = stopTerminalSessionAndWait(session.id, { namespace }).then((result) => {
+      returned = true;
+      return result;
+    });
+    // The process exits and its group drains while the close hook still runs: the run is closing, the stop waits.
+    await waitFor(() => readTerminalSession(session.id, { namespace }).exitCode !== null &&
+      readTerminalSession(session.id, { namespace }).exitCode !== undefined);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(readTerminalSession(session.id, { namespace }).status, "closing");
+    assert.equal(returned, false);
+    finishClose();
+    const stopped = await stopping;
+    assert.equal(stopped.ok, true);
+    assert.equal(stopped.status, "exited");
+  } finally {
+    finishClose();
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
 test("terminal sessions surface close hook failures", async () => {
   const namespace = `terminal-close-hook-failure-test-${crypto.randomUUID()}`;
   const messages = [];

@@ -5,6 +5,7 @@ import {
   launchPreviewInFlightText,
   launchPreviewIssue,
   launchPreviewNotice,
+  launchPreviewRecoveryLabel,
   launchPreviewStatusText
 } from "@/lib/vibe64PreviewStatusText.js";
 
@@ -179,14 +180,13 @@ function useVibe64PreviewPresentation({ address, frame, identity, outputs, props
       terminalCanRetry.value
     )
   ));
-  const previewRecoveryLabel = computed(() => (
-    terminalCanRetry.value &&
-    !previewCanRestart.value &&
-    !previewCanStart.value &&
-    !terminalCanRestart.value
-      ? "Retry preview"
-      : "Restart preview"
-  ));
+  const previewRecoveryLabel = computed(() => launchPreviewRecoveryLabel({
+    canRestart: previewCanRestart.value,
+    canStart: previewCanStart.value,
+    state: previewState.value,
+    terminalCanRestart: terminalCanRestart.value,
+    terminalCanRetry: terminalCanRetry.value
+  }));
   const launchToolbarDockVisible = computed(() => launchToolbarDockShouldShow({
     embeddedPreview: props.embeddedPreview,
     embeddedTerminalVisible: embeddedTerminalFrameVisible.value,
