@@ -1,20 +1,24 @@
 #!/usr/bin/env node
-// Runs Vibe64's own adapter for a session's typed connected dependencies, as workspace preparation
-// does, from the consuming checkout: `apply` puts each in effect, `proof` proves it (with the
-// toolchain checks preparation runs). The proofs call it in place of a project's own commands.
+// Runs Vibe64's own adapter for a session's typed connected dependencies from the consuming checkout,
+// as Vibe64 does: `apply` puts each in effect and `proof` proves it (with the toolchain checks
+// preparation runs), `bump` is Save's part (the tracked manifest and lockfile move to a connected
+// version once it is published; the lines say what Staging and Production use). The proofs call it
+// in place of a project's own commands.
 //
-//   node <this file> apply|proof <sourcesFile>
+//   node <this file> apply|proof|bump <sourcesFile>
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { runConnectedAdapterStep } = await import(path.join(here, "../../packages/vibe64-project/src/server/connectedAdapters/index.js"));
+const { bumpConnectedDependencies, runConnectedAdapterStep } = await import(
+  path.join(here, "../../packages/vibe64-project/src/server/connectedAdapters/index.js")
+);
 
 const [action, sourcesFile] = process.argv.slice(2);
-if (!["apply", "proof"].includes(action) || !sourcesFile) {
-  console.error("usage: node vibe64-adapter.mjs apply|proof <sourcesFile>");
+if (!["apply", "proof", "bump"].includes(action) || !sourcesFile) {
+  console.error("usage: node vibe64-adapter.mjs apply|proof|bump <sourcesFile>");
   process.exit(2);
 }
 const sessionSourceRoot = process.cwd();
@@ -32,6 +36,11 @@ function runCommand({ command, args, cwd, timeout, env }) {
   });
 }
 
+if (action === "bump") {
+  const { lines } = await bumpConnectedDependencies({ repositories, sessionSourceRoot, runCommand });
+  for (const line of lines) console.log(line);
+  process.exit(0);
+}
 let failed = false;
 for (const connection of repositories) {
   if (connection.relationship !== "dependency" || connection.type === "custom") continue;

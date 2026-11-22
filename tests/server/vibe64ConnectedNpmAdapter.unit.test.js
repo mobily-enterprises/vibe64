@@ -311,7 +311,7 @@ test("npm: Save moves the project to the connected version once it is published,
   const moved = await bumpConnectedDependencies({ repositories: f.repositories, sessionSourceRoot: f.app, runCommand: f.runCommand });
   assert.deepEqual(moved.bumped, [{ name: "Lib", package: "@proof/lib", from: "1.0.0", to: "1.1.0" }]);
   assert.deepEqual(moved.lines, [
-    "[Connected] Lib: Staging and Production now use the published @proof/lib@1.1.0.",
+    "[Connected] Lib: Staging and Production now use the published @proof/lib 1.1.0.",
     "[Connected] Lib: this session runs the connected @proof/lib; Staging and Production use the published 1.1.0."
   ]);
   assert.equal(JSON.parse(await readFile(path.join(f.app, "package.json"), "utf8")).dependencies["@proof/lib"], "1.1.0");

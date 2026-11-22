@@ -38,11 +38,11 @@ out="$(php bin/app.php)"; echo "app prints: $out"
 [ -z "$(git status --porcelain)" ] || { echo "FAIL: working tree not clean:"; git status --porcelain; exit 1; }
 # Save: the connected copy now declares 1.1.0. Until the registry publishes it, Save moves nothing.
 sed -i 's/"version": "1.0.0"/"version": "1.1.0"/' "$work/library/composer.json"
-node "$here/../vibe64-bump.mjs" .development/connected.json | tee "$work/bump-unpublished.log"
+node "$here/../vibe64-adapter.mjs" bump .development/connected.json | tee "$work/bump-unpublished.log"
 [ "$before" = "$(sha256sum composer.json composer.lock)" ] || { echo "FAIL: Save moved the project to an unpublished version"; exit 1; }
 # Once 1.1.0 is published, Save moves the tracked manifest and lock to exactly it, and the swap holds.
 publish "$work/library" "$work/registry/acme-library-1.1.0.zip"
-node "$here/../vibe64-bump.mjs" .development/connected.json | tee "$work/bump-published.log"
+node "$here/../vibe64-adapter.mjs" bump .development/connected.json | tee "$work/bump-published.log"
 grep -qx '\[Connected\] Library: Staging and Production now use the published acme/library 1.1.0.' "$work/bump-published.log" || { echo "FAIL: no bump line"; exit 1; }
 node -e 'const fs = require("fs"); const manifest = JSON.parse(fs.readFileSync("composer.json", "utf8"));
 const locked = JSON.parse(fs.readFileSync("composer.lock", "utf8")).packages.find(entry => entry.name === "acme/library");

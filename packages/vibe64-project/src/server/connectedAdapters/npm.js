@@ -600,7 +600,7 @@ async function bumpNpm(context) {
       continue;
     }
     bumped.push({ package: entry.package, from: entry.locked, to: entry.connected });
-    lines.push(`[Connected] ${connection.name}: Staging and Production now use the published ${wanted}.`);
+    lines.push(`[Connected] ${connection.name}: Staging and Production now use the published ${entry.package} ${entry.connected}.`);
   }
   return { bumped, lines };
 }

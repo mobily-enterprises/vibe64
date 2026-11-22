@@ -20,7 +20,7 @@ publishes it.
     `composer.connected.lock`.
 - `prove.sh` — the reproducible acceptance run. It calls Vibe64's adapter
   through `../vibe64-adapter.mjs` (`apply`, `proof`) and Save's version move
-  through `../vibe64-bump.mjs`, as workspace preparation and Save do.
+  through `../vibe64-adapter.mjs bump`, as workspace preparation and Save do.
 
 ## Vibe64's treatment
 
@@ -75,7 +75,7 @@ published packages back.
 ```
 node ../vibe64-adapter.mjs apply .development/connected.json
 node ../vibe64-adapter.mjs proof .development/connected.json
-node ../vibe64-bump.mjs .development/connected.json
+node ../vibe64-adapter.mjs bump .development/connected.json
 php bin/app.php
 ```
 
