@@ -451,6 +451,12 @@ measure slow startup before retrying. The web readiness probe allows five minute
 the managed waiter has another thirty seconds to observe its final status and
 cleanup instead of racing the probe's deadline. The probe stops when its launch
 process exits, including when that process exits before the probe starts.
+The launch then ends with the launch's own exit status, or the probe's when the
+probe failed: the launch runs in a login shell, whose `exit` reads
+`~/.bash_logout`, so the wrapper turns errexit off before each exit and a
+command failing there (Ubuntu's `clear_console`, without a console) does not
+replace the status (`commandWithHttpReadiness` in `launchTargetTerminal.js`,
+`tests/server/outputTargetTerminal.unit.test.js`).
 Host resource diagnostics also reach the browser command caller after a failed
 test. Shared guidance retains task-denial evidence and its incident ID, and asks
 for an operator capacity review before retrying or changing test timeouts.
