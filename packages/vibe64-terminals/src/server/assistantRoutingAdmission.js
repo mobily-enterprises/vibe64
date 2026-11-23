@@ -1,6 +1,6 @@
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { workPlanAtPasses } from "../shared/assistantWorkPlan.js";
-import { applyPlanPasses, nextPlanPass, planPassRequest } from "./planPasses.js";
+import { applyPlanPasses, nextPlanPass, readPassRequest } from "./planPasses.js";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
   assistantRoutingRequestCanBeReplaced,
@@ -245,13 +245,9 @@ function createAssistantRoutingAdmission({
       // Temporary chats, Fix it with AI and lessons run a pass the person starts as its own turn.
       const plansPasses = routingState.allowAuto && !context.runtime?.learningScope && !options.purpose &&
         Boolean(preferences) && preferences.mode !== "fix" && input.reviewAction !== "retry";
-      let passListing = null;
-      let passRequest = null;
-      if (plansPasses) {
-        passListing = await listPasses({ projectRoot: sessionSourcePath(context.session) });
-        // A steer joins the running turn as written, even when its words name a pass.
-        passRequest = planPassRequest(input, passListing, { typed: input.submissionKind !== "steer" });
-      }
+      // A steer joins the running turn as written, even when its words name a pass.
+      const { listing: passListing, request: passRequest } = plansPasses
+        ? await readPassRequest(input, context, listPasses, { typed: input.submissionKind !== "steer" }) : {};
       if (passRequest) {
         explicitTask = "";
         const one = passRequest.ids?.length === 1 ? passRequest.ids[0] : "";

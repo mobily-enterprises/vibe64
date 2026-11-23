@@ -112,6 +112,11 @@ const RUN_SUFFIXES = Object.freeze([
 ]);
 const ALL_PASSES = /^(?:all(?:\s+the)?\s+passes|every\s+pass)$/iu;
 const MASTER_PASS = /^(?:the\s+)?master\s+pass$/iu;
+// The shapes of a typed request for passes (passesInMessage), checked before Genesis's list is read:
+// run, do or start; the word pass; or the start of a request Genesis writes for Review, Deslop or
+// Visual identity, whose titles hold no "pass".
+const TYPED_PASSES = /^(?:please\s+)?(?:run|do|start)\s|\bpass(?:es)?\b|^(?:deslop|review)\b|\bvisual identity\b/iu;
+
 
 /**
  * The passes a typed message asks to run: "Run Security, Data and Deslop", "Do the UX and UI
@@ -209,6 +214,32 @@ function planPassRequest(input, listing, { typed = true } = {}) {
     }
   }
   return { action: "add", ...asked };
+}
+
+/**
+ * What a message asks of the plan's passes (planPassRequest), with Genesis's list it was read
+ * against. The list is read only for a message that may ask for passes: one with the Passes list's
+ * own fields, or typed words shaped like a request for them. Typed words that can't be checked
+ * against an unreadable list are an ordinary message; the fields are refused.
+ * @param {object} input the message as sent
+ * @param {{ session: object }} context
+ * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} listPasses
+ * @param {{ typed?: boolean }} [options] typed: false reads only the Passes list's fields
+ * @returns {Promise<{ listing: object | null, request: object | null }>}
+ */
+async function readPassRequest(input, context, listPasses, { typed = true } = {}) {
+  const fields = input.passAction !== undefined || Array.isArray(input.passes) || typeof input.genesisTask === "string" && input.genesisTask;
+  if (!fields && !(typed && TYPED_PASSES.test(String(input.message || "").trim()))) {
+    return { listing: null, request: null };
+  }
+  let listing;
+  try {
+    listing = await listPasses({ projectRoot: sessionSourcePath(context.session) });
+  } catch (error) {
+    if (fields) throw error;
+    return { listing: null, request: null };
+  }
+  return { listing, request: planPassRequest(input, listing, { typed }) };
 }
 
 /**
@@ -324,6 +355,7 @@ export {
   passesInMessage,
   planPassRequest,
   planPassesView,
+  readPassRequest,
   resolvePlanPass,
   withAfterPlanPasses
 };

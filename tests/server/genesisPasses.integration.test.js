@@ -154,27 +154,8 @@ test("Passes read Genesis's own list for a fresh project: never run, then a reco
   assert.equal(later.recommendation, "deslop", "a snooze ends after a week");
   assert.equal(later.byId["ui-pass"].dismissed, true, "a dismissal lasts until the pass completes again");
 
-  // A Master pass records itself last, with the passes it ran; once committed, it offers the changes since it, sized
-  // by the files they touch.
-  await run(path.join(genesisPackageBinDirectory(), "genesis"), ["passes", "done", "master-pass", "deslop", "security-pass"], { cwd: source });
-  await git(["add", "genesis"]);
-  await git(["commit", "-q", "-m", "Master pass"]);
-  await writeFile(path.join(source, "notes.txt"), "one\ntwo\n");
-  await git(["add", "notes.txt"]);
-  await git(["commit", "-q", "-m", "A change"]);
-  const mastered = await read();
-  assert.deepEqual(mastered.master.lastPasses, ["security-pass", "deslop"], "in the Master order");
-  const [, masterSince] = mastered.master.runs;
-  assert.deepEqual(masterSince, {
-    id: "since-last",
-    label: `Since last completed (${masterSince.commit}, 1 commit; 1 files, 2 lines)`,
-    request: `Master pass: the changes since commit ${masterSince.commit}, judged against the whole app.`,
-    commit: masterSince.commit,
-    commitsSince: 1,
-    selectedRequest: `Master pass ({passes}): the changes since commit ${masterSince.commit}, judged against the whole app.`,
-    files: 1,
-    lines: 2
-  });
+  // Of Genesis's Master pass the list keeps only the order several passes run in: Several passes replaces its row.
+  assert.deepEqual(later.master, { passes: GENESIS_MASTER_PASS.passes });
 });
 
 test("a project that declares an older genesis-compiler is served the Genesis Vibe64 runs: every pass runs, and one is suggested", async (t) => {
@@ -217,6 +198,6 @@ test("a project that declares an older genesis-compiler is served the Genesis Vi
   }
   assert.ok(result.passes.every(({ commitsSince }) => commitsSince >= 30), "every pass is due by its commits");
   assert.notEqual(result.recommendation, "", "so one is suggested");
-  assert.deepEqual([result.master.unavailable, result.master.passes], [null, GENESIS_MASTER_PASS.passes], "and the Master pass runs them all");
+  assert.deepEqual(result.master, { passes: GENESIS_MASTER_PASS.passes }, "and several passes run in Genesis's order");
   assert.doesNotMatch(JSON.stringify(result), /npm install|genesis-compiler@|commit the change/u, "nothing asks the project to change its dependencies");
 });
