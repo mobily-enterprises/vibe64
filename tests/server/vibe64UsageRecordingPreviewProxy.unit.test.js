@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -147,8 +149,37 @@ test("the Preview proxy numbers recorded requests and no request content reaches
     { id: "r_000002", method: "POST", path: "/api/items", status: 200, interaction: null }
   ]);
 
+  // The write that records the stop is held at its rename: until recording.json
+  // says stopped, the recording reads as stopping, so the walk below, made once
+  // it reads as stopped, finds every file final (it once opened that write's
+  // temporary file just as the rename took it away).
+  const recordFile = path.join(directory, "recording.json");
+  const fsPromises = createRequire(import.meta.url)("node:fs/promises");
+  const { rename } = fsPromises;
+  const restoreRename = () => {
+    fsPromises.rename = rename;
+    syncBuiltinESMExports();
+  };
+  let heldStop = null;
+  let releaseStop;
+  const stopReleased = new Promise((resolve) => { releaseStop = resolve; });
+  fsPromises.rename = async (from, to) => {
+    if (to === recordFile && JSON.parse(readFileSync(from, "utf8")).state === "stopped") {
+      heldStop = from;
+      await stopReleased;
+    }
+    return rename(from, to);
+  };
+  syncBuiltinESMExports();
+  t.after(restoreRename);
   await call("stop", { recordingId: recording.id });
+  await waitFor(async () => heldStop, Boolean, "the write that records the stop");
+  assert.equal((await call("readCurrent")).recording.state, "stopping", "a recording reads as stopped only once its file says so");
+  assert.equal(JSON.parse(await readFile(recordFile, "utf8")).state, "stopping");
+  releaseStop();
+  restoreRename();
   await waitFor(async () => (await call("readCurrent")).recording?.state, (state) => state === "stopped", "the stopped recording");
+  assert.equal(JSON.parse(await readFile(recordFile, "utf8")).state, "stopped");
   const after = await send("/api/ping", { headers: forged });
   assert.equal(after[USAGE_RECORDING_REQUEST_HEADER], undefined);
 
