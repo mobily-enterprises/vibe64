@@ -43,6 +43,8 @@
       "tests/server/vibe64Colleague.unit.test.js": 1160000,
       "tests/server/vibe64ConnectedCopies.unit.test.js": 570000,
       "tests/server/vibe64ConnectedNodeConsumption.unit.test.js": 70000,
+      "tests/server/vibe64ConnectedNpmAdapter.unit.test.js": 480000,
+      "tests/server/vibe64ConnectedSavePins.unit.test.js": 380000,
       "tests/server/vibe64FileTransfers.unit.test.js": 110000,
       "tests/server/vibe64Genesis.unit.test.js": 180000,
       "tests/server/vibe64IntegrationsService.unit.test.js": 90000,
