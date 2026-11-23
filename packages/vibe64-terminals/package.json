@@ -36,6 +36,7 @@
     "./server/temporaryRepairChatsUpgrade": "./src/server/temporaryRepairChatsUpgrade.js",
     "./server/chatFinishingStepsUpgrade": "./src/server/chatFinishingStepsUpgrade.js",
     "./server/afterPlanPassesUpgrade": "./src/server/afterPlanPassesUpgrade.js",
+    "./server/passesInPlansUpgrade": "./src/server/passesInPlansUpgrade.js",
     "./server/archivedClosingChatsUpgrade": "./src/server/archivedClosingChatsUpgrade.js",
     "./server/sessionWorkTasks": "./src/server/sessionWorkTasks.js",
     "./server/sessionRenewalHandover": "./src/server/sessionRenewalHandover.js",

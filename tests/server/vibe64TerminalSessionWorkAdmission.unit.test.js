@@ -354,7 +354,7 @@ test("native replacement rejects active work and pending routing before changing
   f.session.agentRuns = [{ id: "run", state: "active" }];
   await assert.rejects(f.service.replaceAgentConversation("session-1", input, { runtime: f.runtime }), /idle, open session/);
   f.session.agentRuns = [];
-  f.session.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 6, status: "working", delivery: "routing" });
+  f.session.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 7, status: "working", delivery: "routing" });
   await assert.rejects(f.service.replaceAgentConversation("session-1", input, { runtime: f.runtime }), /pending routing/);
   assert.equal(f.session.metadata.agent_identity_conversation_id, "pre-existing-thread");
   assert.equal(f.session.metadata.assistant_changeover, undefined);
@@ -2300,7 +2300,7 @@ test("source read retains original active turn and native goal guards without st
 
 test("source read and renewal admit a direct chat's waiting reply, which the next message would replace", async t => {
   const f = await exclusiveSourceReadFixture(t);
-  f.session.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 6, mode: "senior", stage: "review", status: "waiting",
+  f.session.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 7, mode: "senior", stage: "review", status: "waiting",
     delivery: "pending", followup: { messageId: "followup-1" }, error: "Which colour should the button be?" });
   assert.equal(await f.service.runSessionSourceReadExclusive(f.session.sessionId, () => "admitted"), "admitted");
 });
@@ -2308,14 +2308,14 @@ test("source read and renewal admit a direct chat's waiting reply, which the nex
 test("source read preserves pending routing, helper and replacement guards before source acquisition", async t => {
   const f = await exclusiveSourceReadFixture(t);
   const read = () => f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("Unfinished coordination must retain source."));
-  for (const request of [{ schemaVersion: 6, status: "working", delivery: "routing" }, { schemaVersion: 6, status: "working", delivery: "pending", stage: "review" }, { status: "complete", helper: { conversationId: "helper-cleanup" } }]) {
+  for (const request of [{ schemaVersion: 7, status: "working", delivery: "routing" }, { schemaVersion: 7, status: "working", delivery: "pending", stage: "review" }, { status: "complete", helper: { conversationId: "helper-cleanup" } }]) {
     f.session.metadata.assistant_routing_request = JSON.stringify(request);
     await assert.rejects(read(), { code: "vibe64_assistant_routing_pending", retryable: true });
     assert.deepEqual(JSON.parse(f.session.metadata.assistant_routing_request), request);
   }
   delete f.session.metadata.assistant_routing_request;
   await f.runtime.store.writeSessionConversation(f.session.sessionId, "pending-review", {
-    routingMetadata: { assistant_routing_request: JSON.stringify({ schemaVersion: 6, status: "working", delivery: "pending", stage: "review" }) }
+    routingMetadata: { assistant_routing_request: JSON.stringify({ schemaVersion: 7, status: "working", delivery: "pending", stage: "review" }) }
   });
   try {
     await assert.rejects(read(), { code: "vibe64_assistant_routing_pending" });

@@ -34,6 +34,50 @@
         <p v-if="afterPlanShown && afterPlanStatus" class="text-body-small vibe64-passes__note" role="status">{{ afterPlanStatus }}</p>
         <v-alert v-if="afterPlanError" class="mb-2" density="compact" type="error" variant="tonal">{{ afterPlanError }}</v-alert>
         <v-alert v-if="passes.unavailable.value" class="mb-2" density="compact" type="warning" variant="tonal">{{ passes.unavailable.value }}</v-alert>
+        <section v-if="plansPasses && plan" class="vibe64-passes__plan" aria-labelledby="vibe64-passes-plan-title">
+          <div id="vibe64-passes-plan-title" class="text-title-small">This plan's passes</div>
+          <p class="text-body-small" role="status">{{ planLine }}</p>
+          <p v-if="!plan.atPasses" class="text-body-small vibe64-passes__muted">{{ PLAN_PENDING_NOTE }}</p>
+          <div v-else class="vibe64-passes__runs">
+            <v-btn
+              v-if="!planDone"
+              class="vibe64-passes__run"
+              color="primary"
+              :disabled="Boolean(blockedReason) || Boolean(passes.starting.value)"
+              :loading="passes.starting.value === 'plan:continue:'"
+              size="small"
+              variant="flat"
+              @click="act('continue')"
+            >
+              Continue
+            </v-btn>
+            <v-btn
+              class="vibe64-passes__run"
+              :disabled="Boolean(blockedReason) || Boolean(passes.starting.value)"
+              :loading="passes.starting.value === 'plan:restart:'"
+              size="small"
+              variant="tonal"
+              @click="act('restart')"
+            >
+              Restart from the first pass
+            </v-btn>
+          </div>
+          <ul v-if="plan.atPasses && donePasses.length" class="vibe64-passes__again">
+            <li v-for="pass in donePasses" :key="pass.item">
+              <v-btn
+                :aria-label="`Run ${pass.title} again`"
+                :disabled="Boolean(blockedReason) || Boolean(passes.starting.value) || !pass.id"
+                :loading="passes.starting.value === `plan:again:${pass.id}`"
+                size="small"
+                variant="text"
+                @click="act('again', pass)"
+              >
+                Run {{ pass.title }} again
+              </v-btn>
+            </li>
+          </ul>
+        </section>
+        <p v-if="plansPasses && list.length" class="text-body-small vibe64-passes__note">{{ plan ? RUN_IN_PLAN_NOTE : RUN_NOTE }}</p>
         <v-alert v-if="passes.error.value" class="mb-2" density="compact" type="error" variant="tonal">{{ passes.error.value }}</v-alert>
         <v-alert v-if="passes.loadError.value && !list.length" density="compact" type="error" variant="tonal">
           {{ passes.loadError.value }}
@@ -87,48 +131,44 @@
                 :model-value="afterPlanDeep.includes(pass.id)"
                 @update:model-value="tickDeep(pass.id, $event)"
               />
-              <span v-if="mandatory(pass.id)" class="text-body-small vibe64-passes__muted">Always runs after a plan.</span>
+              <span v-if="mandatory(pass.id)" class="text-body-small vibe64-passes__muted">Always in a new plan's Passes.</span>
             </div>
           </li>
-          <li v-if="master" class="vibe64-passes__row">
+          <li v-if="plansPasses && runnable.length > 1" class="vibe64-passes__row">
             <div class="vibe64-passes__text">
-              <div class="text-title-small">{{ master.title }}</div>
-              <div class="text-body-small vibe64-passes__muted">{{ master.description }}</div>
-              <div class="text-label-small vibe64-passes__muted">{{ lastRunLabel(master) }}</div>
-              <div v-if="master.unavailable && !passes.unavailable.value" class="text-body-small vibe64-passes__muted">{{ master.unavailable }}</div>
+              <div class="text-title-small">Several passes</div>
+              <div class="text-body-small vibe64-passes__muted">{{ SERIES_NOTE }}</div>
             </div>
-            <template v-if="master.runs.length">
-              <fieldset class="vibe64-passes__ticks">
-                <legend class="text-label-small vibe64-passes__muted">Passes to run, in this order</legend>
-                <v-checkbox
-                  v-for="id in master.passes"
-                  :key="id"
-                  v-model="ticked"
-                  class="vibe64-passes__tick"
-                  density="compact"
-                  hide-details
-                  :label="titleOf(id)"
-                  :value="id"
-                />
-              </fieldset>
-              <div class="vibe64-passes__runs">
-                <v-btn
-                  v-for="masterRun in master.runs"
-                  :key="masterRun.id"
-                  :aria-label="`Run ${master.title}: ${masterRun.label}`"
-                  class="vibe64-passes__run"
-                  color="primary"
-                  :disabled="Boolean(blockedReason) || Boolean(passes.starting.value) || !ticked.length"
-                  :loading="passes.starting.value === runKey(master, masterRun)"
-                  size="small"
-                  variant="tonal"
-                  @click="startMaster(masterRun)"
-                >
-                  {{ masterRun.label }}
-                </v-btn>
-              </div>
-              <p class="text-body-small vibe64-passes__muted">{{ MASTER_NOTE }}</p>
-            </template>
+            <fieldset class="vibe64-passes__ticks">
+              <legend class="text-label-small vibe64-passes__muted">Passes to run, in this order</legend>
+              <v-checkbox
+                v-for="id in runnable"
+                :key="id"
+                v-model="ticked"
+                class="vibe64-passes__tick"
+                density="compact"
+                hide-details
+                :label="titleOf(id)"
+                :value="id"
+              />
+            </fieldset>
+            <div class="vibe64-passes__runs">
+              <v-btn
+                v-for="seriesRun in seriesRuns"
+                :key="seriesRun.id"
+                :aria-label="`Run the ticked passes: ${seriesRun.label}`"
+                class="vibe64-passes__run"
+                color="primary"
+                :disabled="Boolean(blockedReason) || Boolean(passes.starting.value) || !ticked.length"
+                :loading="passes.starting.value === `series:${seriesRun.id}`"
+                size="small"
+                variant="tonal"
+                @click="startSeries(seriesRun.id)"
+              >
+                {{ seriesRun.label }}
+              </v-btn>
+            </div>
+            <p v-if="seriesRuns.some(({ id }) => id === 'deep')" class="text-body-small vibe64-passes__muted">{{ DEEP_NOTE }}</p>
           </li>
         </ul>
       </v-card-text>
@@ -137,11 +177,14 @@
 </template>
 
 <script setup>
-// The chat's Passes list: each pass Genesis offers, when it last completed in this project, and a
-// button for each run Genesis offers for it, or why the Genesis serving the project cannot run it; then the
-// Master pass, with a tick box for each pass it runs, all ticked until the person unticks one.
-// Main chat's own list also holds its After a plan and Deeply ticks: the passes that run, each in
-// its own turn, once a plan is completed, saved with the chat's settings.
+// The chat's Passes list: the open plan's passes with their states and Continue, Run this pass again
+// and Restart from the first pass; each pass Genesis offers, when it last completed in this project,
+// and a button for each run Genesis offers for it, or why the Genesis serving the project cannot run
+// it; then Several passes, with a tick box for each pass and one run for all of them (Whole app,
+// Since last completed, Deep), offered when every ticked pass offers it. In a chat whose plans run
+// passes, each run joins the open plan's Passes, or a plan of its own; a lesson or Fix it with AI
+// runs a pass as its own turn, and has no plan's passes or Several passes. Main chat's own list also holds its After a plan and Deeply
+// ticks: the passes each new plan's Passes section starts with, saved with the chat's settings.
 import { computed, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { VBottomSheet, VMenu } from "vuetify/components";
@@ -155,11 +198,21 @@ import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 const runDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-// A deep run reads every file, and a Master pass runs pass after pass that way: say what that costs.
+// A deep run reads every file: say what that costs.
 const DEEP_NOTE = "Deep reads every file: it takes much longer and uses far more of your AI's allowance.";
-const MASTER_NOTE = "Runs each ticked pass deeply, one after another: it takes much longer and uses far more of your AI's allowance.";
-const AFTER_PLAN_NOTE = "After a plan: when a plan is completed, each ticked pass checks the plan's changes in its own turn, " +
-  "in Master pass order, then Automatically save changes runs if it is on. Nothing runs after a request without a plan.";
+const SERIES_NOTE = "Tick passes and choose one run for all of them. They join the plan's Passes and run one after another, each in its own turn.";
+const AFTER_PLAN_NOTE = "After a plan: each new plan's Passes section starts with the ticked passes, which check the plan's changes, " +
+  "each in its own turn, once Senior has reviewed the plan. To change one plan's passes, change that plan.";
+const RUN_NOTE = "A run starts a small plan of its own with that pass, which runs at once.";
+const RUN_IN_PLAN_NOTE = "A run joins this plan's Passes.";
+const PLAN_PENDING_NOTE = "These run once Senior has reviewed the plan.";
+const STATE_WORDS = Object.freeze({ done: " ✓", running: ": running", "needs-you": ": needs you", paused: ": paused", blocked: ": can't run", waiting: ": waiting" });
+// The runs several passes can share, in the order the list offers them.
+const SERIES_RUNS = Object.freeze([
+  { id: "whole", label: "Whole app" },
+  { id: "since-last", label: "Since last completed" },
+  { id: "deep", label: "Deep" }
+]);
 
 const props = defineProps({
   passes: { type: /** @type {import("vue").PropType<import("@/types.js").Vibe64Passes>} */ (Object), required: true },
@@ -174,7 +227,11 @@ const props = defineProps({
 const { xs: mobile } = useDisplay();
 const opened = ref(false);
 const list = computed(() => props.passes.passes.value);
-const master = computed(() => props.passes.master.value);
+const plan = computed(() => props.passes.plan.value);
+// "Review ✓ · Security pass ✓ · Data pass: needs you · Quality pass"
+const planLine = computed(() => plan.value?.passes.map((pass) => pass.title + (STATE_WORDS[pass.state] || "")).join(" · ") || "");
+const planDone = computed(() => Boolean(plan.value?.passes.every((pass) => pass.done)));
+const donePasses = computed(() => plan.value?.passes.filter((pass) => pass.done) || []);
 
 // The chat's saved choice; a chat with no mode yet runs the defaults, and a lesson or Fix it with
 // AI runs no pass after a plan, so shows no tick.
@@ -185,7 +242,11 @@ const preferences = computed(() => {
     return null;
   }
 });
+// Only a chat whose plans run passes shows After a plan, the plan's passes and Several passes: a lesson or
+// Fix it with AI runs each pass as its own turn.
 const afterPlanShown = computed(() => Boolean(props.session) && props.session.purpose !== "learning" && preferences.value?.mode !== "fix");
+// A chat with no mode yet sends each message as it is, so its passes run as their own turns too.
+const plansPasses = computed(() => afterPlanShown.value && Boolean(preferences.value));
 const afterPlan = ref(/** @type {string[]} */ ([]));
 const afterPlanDeep = ref(/** @type {string[]} */ ([]));
 const afterPlanSaving = ref(false);
@@ -248,11 +309,15 @@ function tickAfterPlan(id, ticked) {
 function tickDeep(id, ticked) {
   void saveAfterPlan(afterPlan.value, ticked ? [...afterPlanDeep.value, id] : afterPlanDeep.value.filter((other) => other !== id));
 }
-// The passes the Master pass runs: all of them until the person unticks one, again whenever the list changes.
+// The passes Several passes can run, in Genesis's order: none until the person ticks them.
+const runnable = computed(() => props.passes.order.value.filter((id) => list.value.some((pass) => pass.id === id && pass.runs.length)));
 const ticked = ref(/** @type {string[]} */ ([]));
-watch(() => master.value?.passes.join(",") || "", () => {
-  ticked.value = [...(master.value?.passes || [])];
-}, { immediate: true });
+watch(() => runnable.value.join(","), () => {
+  ticked.value = ticked.value.filter((id) => runnable.value.includes(id));
+});
+// Whole app always; Since last completed and Deep when every ticked pass offers them.
+const seriesRuns = computed(() => SERIES_RUNS.filter(({ id }) => id === "whole" ||
+  ticked.value.every((ticks) => list.value.find((pass) => pass.id === ticks)?.runs.some((passRun) => passRun.id === id))));
 
 /** @param {string} id */
 const titleOf = (id) => list.value.find((pass) => pass.id === id)?.title || id;
@@ -272,8 +337,13 @@ async function start(pass, passRun) {
   if (await props.passes.run(pass, passRun)) opened.value = false;
 }
 
-async function startMaster(masterRun) {
-  if (await props.passes.runMaster(masterRun, ticked.value)) opened.value = false;
+async function startSeries(runId) {
+  if (await props.passes.runSeries(ticked.value, runId)) opened.value = false;
+}
+
+/** @param {"continue" | "again" | "restart"} action @param {{ id: string, title: string }} [pass] */
+async function act(action, pass) {
+  if (await props.passes.planAction(action, pass)) opened.value = false;
 }
 </script>
 
@@ -369,6 +439,24 @@ async function startMaster(masterRun) {
 
 .vibe64-passes__run :deep(.v-btn__content) {
   white-space: normal;
+}
+
+.vibe64-passes__plan {
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.625rem;
+}
+
+.vibe64-passes__again {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .vibe64-passes__muted {

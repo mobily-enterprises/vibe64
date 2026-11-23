@@ -4,8 +4,8 @@ import path from "node:path";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import {
-  assistantAfterPlanPass,
   assistantModeLabel,
+  assistantPlanPass,
   assistantRoutingGoalFromMetadata,
   assistantWorkflowMessageIds
 } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -14,7 +14,7 @@ import {
   ASSISTANT_SENIOR_VERIFICATION_MESSAGE
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { STATE_KEY, failure, usesWorkPlan, recentVisibleMessages } from "./assistantRoutingRequests.js";
-import { ASSISTANT_PLAN_HANDOFF_MESSAGE } from "./assistantPlanHandoff.js";
+import { ASSISTANT_PLAN_CHANGE_MESSAGE, ASSISTANT_PLAN_HANDOFF_MESSAGE } from "./assistantPlanHandoff.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -120,27 +120,31 @@ function createAssistantRoutingRecords({
   }
 
   /**
-   * The request's next automatic turn: an after-plan pass sends Genesis's request for the
-   * changes since the chain's base, word for word, so Genesis recognises it as that pass's run;
-   * Senior's planning turn after a plan handoff saves the plan from the refused turn's draft;
+   * The request's next automatic turn: a plan's pass sends Genesis's request for its Passes item,
+   * word for word, so Genesis recognises it as that pass's run;
+   * Senior's planning turn after a plan handoff writes the plan from the request and the conversation;
    * every other stage continues the request's own work.
    */
   async function prepareFollowup(context, state, stage) {
     state.stage = stage;
     const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
-    const pass = assistantAfterPlanPass(state);
+    const pass = assistantPlanPass(state);
     const handoff = stage === "planning" ? state.planHandoff : null;
     const reviewer = state.mode === "auto" ? "Senior" : assistantModeLabel(state.resolvedMode);
-    // Auto's Senior checks and completes a plan Junior implemented; without one it verifies a review.
+    // Auto's Senior reviews a plan Junior implemented; without one it verifies a review.
     const checksPlan = stage === "review" && state.mode === "auto" && state.planInvolved;
     let displayMessage = stage === "planning" ? "Continue planning." : "Continue implementation.";
-    if (handoff) displayMessage = "Senior saves the plan.";
-    if (stage === "review") displayMessage = checksPlan ? "Senior checks and completes the plan." : `Continue ${reviewer} review.`;
+    if (handoff) displayMessage = handoff.implementing ? "Senior changes the plan." : "Senior makes the plan.";
+    if (stage === "review") displayMessage = checksPlan ? "Senior reviews the plan." : `Continue ${reviewer} review.`;
     let lead = "Continue the authorised work from its current state; preserve completed work and do not reduce scope.";
-    if (handoff) lead = ASSISTANT_PLAN_HANDOFF_MESSAGE;
+    // Senior changed the plan being implemented: the implementation goes on from the plan as it now is.
+    if (stage === "implementation" && state.resumeImplementation) {
+      lead = "Continue implementing the current plan: Senior has changed it, so read it again and work its remaining items in the plan's order. Preserve completed work and do not reduce scope.";
+    }
+    if (handoff) lead = handoff.implementing ? ASSISTANT_PLAN_CHANGE_MESSAGE : ASSISTANT_PLAN_HANDOFF_MESSAGE;
     if (stage === "review") lead = checksPlan ? ASSISTANT_PLAN_COMPLETION_MESSAGE : ASSISTANT_SENIOR_VERIFICATION_MESSAGE;
     const previous = handoff
-      ? `The previous turn's draft (plan ${handoff.operation}):\n${handoff.draft || "(none: it sent no plan text)"}`
+      ? `The previous turn (${assistantModeLabel(handoff.role)}) handed this request to Senior and wrote no plan.`
       : `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`;
     state.followup = {
       messageId: randomUUID(),

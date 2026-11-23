@@ -9,6 +9,8 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runSourceCommand } from "@local/vibe64-runtime/server/sourceCommand";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { vibe64Result } from "./terminalShared.js";
+import { readWorkPlan } from "./assistantWorkPlan.js";
+import { planPassesView } from "./planPasses.js";
 
 /** @typedef {Awaited<ReturnType<typeof listGenesisPasses>>["passes"][number]} GenesisPass */
 /**
@@ -113,9 +115,9 @@ async function countSessionCommits(sourceRoot, since = "") {
 
 /**
  * The chat's Passes list: the passes Genesis offers with when each last completed in this project, the
- * runs Genesis offers for each, the commits since, the Master pass that runs them deeply in turn, why
- * the Genesis serving the project runs none (when it cannot), and the one suggestion the rule picks; and the
- * suggestion's Later and Dismiss.
+ * runs Genesis offers for each, the commits since, the order several passes run in, the open plan's
+ * passes and their states, why the Genesis serving the project runs none (when it cannot), and the one
+ * suggestion the rule picks; and the suggestion's Later and Dismiss.
  * Each answers as a route does: a refusal is a failure result, not a thrown error.
  * @param {object} dependencies
  * @param {(sessionId: string) => Promise<{ runtime: { stateRoot: string }, session: object }>} dependencies.sessionContext
@@ -158,13 +160,22 @@ function createProjectPasses({
       };
     }));
     const recommended = passRecommendation(passes, now());
-    // The Master pass is listed with its own commits since, and never suggested.
+    // The open plan's passes and their states; an unreadable plan or request shows none.
+    const plan = await readWorkPlan({ runtime, session: { sessionId } }).catch(() => null);
+    let request = null;
+    try {
+      request = JSON.parse(session.metadata?.assistant_routing_request || "null");
+    } catch {
+      // An unreadable request runs no pass; the chat says why.
+    }
+    // Genesis's Master pass gives the order several passes run in; it is never suggested.
     return {
       ok: true,
       sessionId,
       unavailable,
       passes,
-      master: { ...master, commitsSince: await commitsSince(master.lastRun || "") },
+      master: { passes: master?.passes || [] },
+      plan: planPassesView(plan, request, { passes }),
       recommendation: recommended ? recommended.id : ""
     };
   }

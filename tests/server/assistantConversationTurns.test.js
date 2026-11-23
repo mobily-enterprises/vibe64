@@ -246,6 +246,6 @@ test("Auto's Senior check of a plan says that an unfinished check reports contin
   await reportOutcome(f, "handoff", { involved: true });
   replied(f, "Added the check.");
   await f.service.afterTurn("session-1", ended(f.state()), f.context);
-  assert.equal(f.state().stage, "review"); assert.match(f.sends[1].input.message, /Plan completion:/u);
+  assert.equal(f.state().stage, "review"); assert.match(f.sends[1].input.message, /Senior review of the plan:/u);
   assert.ok(f.sends[1].input.message.includes(AUTO_CONTINUE));
 });

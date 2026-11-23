@@ -127,6 +127,7 @@ function createAssistantRouting({
     interrupt,
     writesWhileAssistantWorks,
     listPasses,
+    publish,
     onTiming,
     logger
   });

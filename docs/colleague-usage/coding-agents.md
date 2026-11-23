@@ -229,9 +229,9 @@ fails, the control reports the error; retry after resolving it. Colleague can
 explain or perform a supported selection change when you explicitly ask.
 The chat mode only chooses who works. Below the modes, **Chat settings** chooses
 whether finished work is saved automatically, in every mode, and the **After a
-plan** ticks in [Passes](passes.md#choose-the-passes-that-run-after-a-plan)
-choose the passes that run once a plan is completed; see [Choose what happens
-once work is finished](chat-settings.md).
+plan** ticks in [Passes](passes.md#choose-the-passes-each-new-plan-starts-with)
+choose the passes each new plan's Passes section starts with; see [Choose what
+happens once work is finished](chat-settings.md).
 
 A message sent while a turn is still running joins that turn, with that turn's
 mode and model. This includes a Claude turn whose reply is ready while a

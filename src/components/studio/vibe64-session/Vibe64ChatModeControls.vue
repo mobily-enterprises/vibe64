@@ -31,12 +31,12 @@ const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
 // Automatically save changes follows the shared default unless this chat changed it. The passes
-// that run after a completed plan are ticked in Passes (After a plan); this control leaves them as saved.
+// each new plan's Passes section starts with are ticked in Passes (After a plan); this control leaves them as saved.
 const autoSave = ref(ASSISTANT_FINISHING_DEFAULTS.autoSave);
 // What the switch's help line, mode label and off confirmation say.
 const autoSaveText = {
   on: "Automatic save on", offTitle: "Turn off automatic save?", offAction: "Turn off automatic save",
-  what: "Automatic save runs Save once a request's work is finished, and after the passes that run when a plan is completed.",
+  what: "Automatic save runs Save once a request's work is finished; for a plan, once its last pass is done.",
   lost: "Without it, finished work stays only in this session until you choose Save.",
   after: "Archiving a session never saves its work."
 };
@@ -69,7 +69,7 @@ const ownerOnly = computed(() => !props.temporary && decisions.value.senior?.app
 const finishingShown = computed(() => !props.temporary && props.session?.purpose !== "learning" &&
   Boolean(mode.value) && mode.value !== "fix");
 const switchesAvailable = computed(() => finishingShown.value && !ownerOnly.value && !hasGoal.value);
-// The server keeps the chat's after-plan passes; a temporary chat saves no finishing choice.
+// The server keeps the chat's After a plan ticks; a temporary chat saves no finishing choice.
 const updatedPreferences = computed(() => ({ mode: mode.value,
   ...(props.temporary ? {} : { autoSave: autoSave.value }),
   ...(modelOverride.value ? { override: modelOverride.value } : {}) }));
@@ -228,7 +228,7 @@ function configure() {
                 :model-value="shownAutoSave" :disabled="disabled || saving || connecting || !switchesAvailable"
                 :label="AUTO_SAVE_SETTING" hide-details color="primary" density="compact" @update:model-value="changeAutoSave($event)"
               />
-              <p class="text-body-small">Saves once a request's work is finished. When a plan is completed, the passes ticked in Passes (After a plan) run first, each in its own turn; Review and Security pass always do.</p>
+              <p class="text-body-small">Saves once a request's work is finished. A plan's work is finished once its last pass is done: each new plan's Passes start with the passes ticked in Passes (After a plan), each run in its own turn; Review and Security pass always are.</p>
               <p v-if="switchesDescription" class="text-body-small">{{ switchesDescription }}</p>
             </template>
           </div>

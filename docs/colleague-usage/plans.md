@@ -27,11 +27,17 @@ items as the work goes: a half tick once an item is built, a full tick once the
 plan's final checks prove it (see [Checklist marks](#checklist-marks)); Senior
 owns agreed Plan scope changes. Creating,
 reopening, archiving and completing a plan still require Senior. In **Auto**, a
-plan request that reached Junior is handed to Senior automatically with Junior's
-draft, so the plan is still saved without you asking (see [Auto](auto-workflow.md));
-in a **Junior** chat, Junior says so and asks you to switch **Chat mode** to
-**Senior** or **Auto**. An unsuccessful save must be reported, and a chat outline
-alone is not a saved plan.
+plan request is always Senior's: one that reached Junior is handed over without
+Junior writing anything, the chat says **Senior is making the plan.**, and
+Senior writes the plan from your request and the conversation without you
+asking again (see [Auto](auto-workflow.md)). In a **Junior** chat, Junior writes
+nothing and tells you that plans need **Senior** or **Auto**. An unsuccessful
+save must be reported, and a chat outline alone is not a saved plan.
+
+The plan's last section, **Passes**, lists the passes that run once Senior has
+reviewed it, one item each, such as **Security pass: the plan's changes**. It
+starts with the passes ticked under **After a plan** in [Passes](passes.md);
+ask Senior to change it, or start a pass from the Passes list to add one.
 
 ## Read the current plan
 
@@ -47,7 +53,8 @@ alone is not a saved plan.
 4. Select **Technical details** below the summary and checklist to expand the
    implementation instructions. Select it again to collapse them. These details
    start collapsed when opening a different document or plan; a Progress update
-   does not collapse the same Plan you are reading.
+   does not collapse the same Plan you are reading. A **Passes** section after
+   them stays shown.
 
 New plans use a **Technical details** heading to identify that section. Older
 plans without that heading remain fully visible; opening a plan never rewrites
@@ -83,38 +90,88 @@ such item and its mark, so Senior proves it or leaves the plan active with the g
 Progress. A finished turn or a fully ticked checklist alone does not complete a
 plan. Updates appear while the viewer is open.
 
+## A plan's steps
+
+A plan goes through four steps: **Implementation**, **Senior review**,
+**Passes** and **Completed**. Once you approve it (**Implement plan**, or by
+asking in chat), it runs to the end on its own; only a question for you or
+**Stop** pauses it.
+
+- **Implementation**: the plan stays here until every item outside Passes is
+  built (`- [~]`). Junior works the items in the plan's order; it does one
+  earlier only when the plan says another depends on it, and records why in
+  Progress. It never starts the plan's final checks (the whole-project checks,
+  such as one whole run of the test suite): those belong to Senior's review.
+  Vibe64 refuses Junior's report that it has finished while an item is still
+  not done, naming the item. When the plan changes during Implementation,
+  because Junior hands an item to Senior to correct, you ask for a change, or
+  Senior corrects one, the chat says **Senior is changing the plan.
+  Implementation continues once the change is saved.**, shows **Senior changes
+  the plan.**, and once Senior has saved the change Vibe64 continues the
+  implementation in a new turn without you asking. After **Stop**, a change you
+  ask for waits for **Continue** like any other paused work.
+- **Senior review**: Senior runs the plan's final checks once, reads and records
+  their result in Progress, verifies every item outside Passes against the code
+  as it is now, fixes what it finds within the plan, each fix proven by a test
+  that failed first, and full-ticks each item the proof covers. It ends **Done**
+  or **Needs you** (numbered questions with a recommended answer each), or hands
+  substantial rework back to Junior.
+- **Passes**: each item in the plan's Passes section runs in its own Senior
+  turn, in order; see [A plan's passes](passes.md#a-plans-passes).
+- **Completed**: once every item and every pass is ticked and no question is
+  open, Vibe64 completes the plan and archives it.
+
+**Continue** resumes a paused plan from the plan as it now is, including after
+items changed while it was paused.
+
+### The plan's status line
+
+While a plan is open, one line above the message box says where it is, read
+from the plan itself each time it changes:
+
+| The line says | When |
+|---|---|
+| **Plan: implementing item 2 of 6, Replies join their thread** | Item 2 is the first one not built yet |
+| **Plan: Senior review** | Every item is built, not every one proven yet |
+| **Plan: pass Security (3 of 6)** | The plan is at its third pass of six |
+| **Plan: needs you (2 questions)** | The chat waits for your answers |
+| **Plan: paused, Continue to resume** | Stopped, or waiting for **Continue** |
+| **Plan: ready, Implement plan to start** | Senior made the plan; it waits for your go-ahead |
+| **Plan: completed** | The plan is completed and not yet archived |
+
+The line updates as items are ticked. A plan with no checklist items shows no
+line.
+
 ## Automatic completion and archival
 
-Only Senior marks a plan Completed, once it has verified every agreed
-requirement and every checklist item is ticked as proven: in Auto, in the turn in which Senior checks the plan Junior
+A plan is completed only when every item outside Passes is proven, every pass is
+done and no question is open. A plan without passes is completed by Senior in
+its review: in Auto, in the turn in which Senior reviews the plan Junior
 implemented; in a Senior chat, or when Senior implemented it, in Senior's own
-work on it. A Junior or Custom
-chat leaves the plan active for Senior to complete, and its work is saved as
-usual. Once the final explanation has been delivered and that turn finishes, the
-passes ticked under **After a plan** in [Passes](passes.md#choose-the-passes-that-run-after-a-plan)
-run, each in its own turn over the plan's changes. After the last one, Vibe64
-moves that exact Plan and Progress pair into History. Chat shows **Completed
-plan archived** with **View plan history**, which opens this session's existing
-viewer. The plan icon remains available and opens History when there is no
-current plan. With **Automatically save changes** on (the default; see [Choose
-what happens once work is finished](chat-settings.md)), Vibe64 then runs the
-ordinary **Save** once and notes the result in chat. When a pass after the plan
-is stopped or fails, the completed plan stays current, unarchived, and nothing
-is saved automatically.
+work on it. A plan with passes is completed by Vibe64 after its last pass. A
+Junior or Custom chat leaves the plan active for Senior, and its work is saved
+as usual. Vibe64 then moves that exact Plan and Progress pair into History.
+Chat shows **Completed plan archived** with **View plan history**, which opens
+this session's existing viewer. The plan icon remains available and opens
+History when there is no current plan. With **Automatically save changes** on
+(the default; see [Choose what happens once work is finished](chat-settings.md)),
+Vibe64 then runs the ordinary **Save** once and notes the result in chat. When
+a pass is stopped, needs you or can't run, the plan stays current and active at
+that pass, and nothing is saved automatically.
 
-Senior's check of a plan runs only when Junior implemented it in Auto and the
-plan is still active afterwards; it is not a pass, has no setting and runs no
-pass. Work done without a plan is no longer reviewed, deslopped or UI-passed
-automatically: ask for those from [Passes](passes.md), through the Master pass,
-or by typing the request in chat.
+Senior's review of a plan runs only when Junior implemented it in Auto and the
+plan is still active afterwards; it is not a pass and runs no pass. Work done
+without a plan is not reviewed, deslopped or UI-passed automatically: ask for
+those from [Passes](passes.md) or by typing the request in chat, and they run in
+a small plan of their own.
 
-Senior can update checklist ticks and Progress while checking the plan without preventing
+Senior can update checklist ticks and Progress while reviewing the plan without preventing
 completion. The agreed plan wording must still match the checked scope, and
 completion uses the latest saved Plan and Progress together.
 
 A finished implementation or an agent's handoff explanation is not completion.
 Interrupted checks, unfinished plans and unrelated requests do not archive a
-plan. A different plan created while Senior checks one is not archived by that check.
+plan. A different plan created while Senior reviews one is not archived by that review.
 If automatic archival cannot be confirmed, the notice explains the problem;
 inspect Current plan and History before retrying Archive. Older completed plans
 are not moved retroactively just by opening or restoring a session.

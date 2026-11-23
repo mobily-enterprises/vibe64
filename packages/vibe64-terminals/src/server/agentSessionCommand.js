@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { manageWorkPlan } from "./assistantWorkPlan.js";
+import { withAfterPlanPasses } from "./planPasses.js";
 import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { readAgentSessionStatus } from "./agentSessionStatus.js";
@@ -73,7 +74,7 @@ import {
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
-import { refusedPlanChange } from "./assistantPlanHandoff.js";
+import { handPlanOver, refusedPlanChange } from "./assistantPlanHandoff.js";
 import { commandLineFailure } from "./commandFailure.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
 
@@ -430,15 +431,20 @@ function createAgentSessionCommandService({
       if (input.operation === "outcome") {
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
       }
-      // A pass, an after-plan one too, works like a task: it never manages the plan.
+      if (input.operation === "handoff") {
+        return { ok: true, ...await handPlanOver({ sessionId, request, handPlanToSenior }) };
+      }
+      // A plan's pass ticks only its own Passes item, and a new plan in a chat whose plans run passes gets them.
       const role = assistantPlanRole(request);
+      const planInput = input.operation === "new" && request?.afterPlan && ["senior", "review"].includes(role)
+        ? { ...input, text: await withAfterPlanPasses(input.text, store, sessionId) } : input;
       let result;
       try {
-        result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, input, role);
+        result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, planInput, role, role === "pass" ? { passItem: request.pass.item } : {});
       } catch (error) {
         throw await refusedPlanChange({ sessionId, request, input, error, handPlanToSenior, logger });
       }
-      // A plan becoming current marks where its after-plan passes start, unless a base is recorded.
+      // A plan becoming current marks where its changes start, unless a base is recorded.
       if (["new", "reopen"].includes(input.operation)) {
         await rememberAfterPlanBase(store, { ...descriptor, sessionId }, { onlyWhenUnset: true });
       }

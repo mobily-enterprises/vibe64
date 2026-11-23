@@ -538,7 +538,7 @@ test("archive routing cleanup can finish a closing temporary chat without reopen
     const helper = { conversationId: "router", runId: "router-turn", selection: f.selection,
       scope: { id: "saved-router", runtimeRoot: path.join(helperRoot, "runtime"), workdir: path.join(helperRoot, "workdir") } };
     await f.store.writeSessionConversation("one", "chat", { state: "closing", routingMetadata: { ...record.routingMetadata,
-      assistant_routing_request: JSON.stringify({ schemaVersion: 6, status: "waiting", delivery: "failed", messageId: "owned-helper",
+      assistant_routing_request: JSON.stringify({ schemaVersion: 7, status: "waiting", delivery: "failed", messageId: "owned-helper",
         input: { message: "Preserved request" }, mode: "auto", helper }) } });
     await assert.rejects(f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "other" }), /routing request changed/);
     await assert.rejects(f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "owned-helper" }), /helper could not be closed/);
@@ -569,7 +569,7 @@ test("Close retains a temporary chat when its saved helper cannot be cleaned up"
     const helper = { conversationId: "router", runId: "router-turn", selection: f.selection,
       scope: { id: "saved-router", runtimeRoot: path.join(helperRoot, "runtime"), workdir: path.join(helperRoot, "workdir") } };
     await f.store.writeSessionConversation("one", "chat", { routingMetadata: { ...record.routingMetadata,
-      assistant_routing_request: JSON.stringify({ schemaVersion: 6, status: "waiting", delivery: "failed", messageId: "owned-helper", input: { message: "Preserved request" }, mode: "auto", helper }) } });
+      assistant_routing_request: JSON.stringify({ schemaVersion: 7, status: "waiting", delivery: "failed", messageId: "owned-helper", input: { message: "Preserved request" }, mode: "auto", helper }) } });
     await assert.rejects(f.service.deleteTemporaryConversation("one", { conversationId: "chat" }), /routing helper could not be closed/);
     const retained = await f.store.readSessionConversation("one", "chat");
     assert.equal(retained.state, "open");

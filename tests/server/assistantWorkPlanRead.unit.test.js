@@ -50,11 +50,11 @@ test("plan service reads the actual session without AI and preserves private ren
   const stale = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: "f".repeat(64) });
   assert.equal(stale.code, "vibe64_work_plan_changed");
   assert.equal((await service.readSessionWorkPlan(sessionId)).available, true);
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 6, status: "working", delivery: "pending", stage: "review", workflow: true }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 7, status: "working", delivery: "pending", stage: "review", workflow: true }));
   const busy = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: first.revision });
   assert.equal(busy.ok, false);
   assert.match(busy.error, /review to finish/);
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 6, status: "complete", delivery: "accepted" }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 7, status: "complete", delivery: "accepted" }));
   const archived = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: first.revision });
   assert.equal(archived.ok, true);
   assert.equal(archived.available, false);
@@ -63,10 +63,10 @@ test("plan service reads the actual session without AI and preserves private ren
   assert.equal(archived.history[0].status, "active", "archiving is not completion");
   assert.equal((await service.readSessionWorkPlan(sessionId, { archiveId: archived.history[0].id })).text,
     "Status: active\nKeep whitespace 🙂\n  ");
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 6, status: "working", delivery: "pending", stage: "review", workflow: true }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 7, status: "working", delivery: "pending", stage: "review", workflow: true }));
   assert.match((await service.restoreSessionWorkPlan(sessionId, { archiveId: archived.history[0].id })).error, /review to finish/);
   assert.equal((await service.readSessionWorkPlan(sessionId)).current, null);
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 6, status: "complete", delivery: "accepted" }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 7, status: "complete", delivery: "accepted" }));
   const restored = await service.restoreSessionWorkPlan(sessionId, { archiveId: archived.history[0].id });
   assert.equal(restored.ok, true);
   assert.equal(restored.status, "active");
@@ -99,7 +99,7 @@ async function archivedPlanFixture(t, sessionId) {
     const destination = path.join(path.dirname(file), patch.name);
     if (patch.text !== null) { await mkdir(path.dirname(destination), { recursive: true }); await writeFile(destination, patch.text); }
   }
-  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 6, status: "complete", delivery: "accepted" }));
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ schemaVersion: 7, status: "complete", delivery: "accepted" }));
   return { file, service, text };
 }
 
@@ -133,13 +133,14 @@ test("plan history reads an archived plan in full once and again only when its f
   }
 });
 
-test("a plan summary read names the current plan and history without the plan's text", async (t) => {
+test("a plan summary read names the current plan, its step and history without the plan's text", async (t) => {
   const sessionId = "plan-summary";
   const { service } = await archivedPlanFixture(t, sessionId);
   const current = await service.readSessionWorkPlan(sessionId);
   assert.deepEqual(await service.readSessionWorkPlan(sessionId, { summary: true }), {
     ok: true, sessionId, available: true, history: [],
-    current: { title: "Keep the tally", status: "completed", revision: current.revision, progressRevision: current.progressRevision }
+    current: { title: "Keep the tally", status: "completed", revision: current.revision, progressRevision: current.progressRevision,
+      step: { step: "completed" } }
   });
   const archived = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: current.revision });
   assert.deepEqual(await service.readSessionWorkPlan(sessionId, { summary: true }),

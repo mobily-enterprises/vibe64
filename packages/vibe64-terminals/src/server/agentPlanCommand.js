@@ -8,7 +8,7 @@ import http from "node:http";
 
 const [operation, ...extra] = process.argv.slice(2);
 if (!operation || ["--help", "-h"].includes(operation)) {
-  console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|complete|archive|reopen|outcome>\\n'
+  console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|complete|archive|reopen|outcome|handoff>\\n'
     + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven).\\n'
     + 'For read pagination or archive selection, use read --input with JSON on stdin. Bare read/history never wait for stdin.\\n'
     + 'Mutations require expectedRevision and expectedProgressRevision from the current paired read, unless no current plan exists.\\n'
@@ -17,13 +17,13 @@ if (!operation || ["--help", "-h"].includes(operation)) {
     + 'If a current plan exists, ask whether to update it or archive and replace it unless the user already chose. Explain that the archive remains accessible; pass archiveCurrent:true only after replacement is authorized.\\n'
     + 'Auto read also returns workflow identity. outcome takes {messageId,turnId,stage,decision,explanation,progress} and paired revisions when this plan is involved. Decisions: continue, handoff, wait, complete. Only Senior review can report complete.\\n'
     + 'Only Senior can create, complete, reopen or archive; complete needs every checklist item - [x]. Junior can update Progress with progress-write and existing checklist ticks with write; all other Plan content stays unchanged.\\n'
-    + 'In Auto, a new, reopen or archive refused to Junior, or a new, write, reopen or archive refused to an answer-only turn, goes to Senior: Senior saves it from your draft in its own turn right after yours. Junior sends a scope change as new with the complete plan.');
+    + 'In Auto, a turn that may not make the plan change asked for (Junior making, changing, reopening or archiving a plan, or an answer-only turn) writes nothing and runs handoff (no input): Senior makes the plan from the request and the conversation in its own turn right after yours. A plan change refused to such a turn is handed over the same way, without its text.');
   process.exit(0);
 }
 try {
-  if (extra.some(arg => arg !== '--input') || !['read', 'history', 'new', 'write', 'progress-write', 'complete', 'archive', 'reopen', 'outcome'].includes(operation)) throw new Error('Use vibe64-helper plan --help.');
+  if (extra.some(arg => arg !== '--input') || !['read', 'history', 'new', 'write', 'progress-write', 'complete', 'archive', 'reopen', 'outcome', 'handoff'].includes(operation)) throw new Error('Use vibe64-helper plan --help.');
   let text = '';
-  if ((!['read', 'history'].includes(operation) || extra.includes('--input')) && !process.stdin.isTTY) for await (const chunk of process.stdin) {
+  if ((!['read', 'history', 'handoff'].includes(operation) || extra.includes('--input')) && !process.stdin.isTTY) for await (const chunk of process.stdin) {
     text += chunk;
     if (Buffer.byteLength(text) > 512 * 1024) throw new Error('Plan input is too large.');
   }

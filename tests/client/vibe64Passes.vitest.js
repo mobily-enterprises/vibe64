@@ -21,7 +21,7 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 }));
 
 import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "../fixtures/genesisPasses.js";
-import { masterRequest, runKey, useVibe64Passes } from "../../src/composables/useVibe64Passes.js";
+import { runKey, seriesMessage, useVibe64Passes } from "../../src/composables/useVibe64Passes.js";
 import Vibe64PassesMenu from "../../src/components/studio/vibe64-session/Vibe64PassesMenu.vue";
 import Vibe64PassSuggestion from "../../src/components/studio/vibe64-session/Vibe64PassSuggestion.vue";
 
@@ -49,7 +49,8 @@ function passes({ idle = ref(true), send = vi.fn(async () => ({ ok: true })) } =
 }
 beforeEach(() => {
   mocks.resource = {
-    data: ref({ ok: true, passes: listed(), master: { ...GENESIS_MASTER_PASS, commitsSince: 12 }, recommendation: "" }),
+    // The order Genesis runs several passes in, and the open plan's passes (none).
+    data: ref({ ok: true, passes: listed(), master: { passes: GENESIS_MASTER_PASS.passes }, plan: null, recommendation: "" }),
     isLoading: ref(false),
     loadError: ref(""),
     reload: vi.fn(async () => {}),
@@ -77,7 +78,7 @@ it("lists Genesis's passes from the session's read, each with when it last compl
   expect(state.unavailable.value, "a read without a reason runs passes").toBe("");
 });
 
-it("each run Genesis offers sends its own request verbatim to Main chat as the person's message for Genesis's task", async () => {
+it("each run Genesis offers sends its own request verbatim to Main chat as the person's message for Genesis's task, naming the run", async () => {
   const since = {
     id: "since-last",
     label: "Since last completed (abc1234, 42 commits)",
@@ -97,7 +98,7 @@ it("each run Genesis offers sends its own request verbatim to Main chat as the p
   for (const passRun of pass.runs) {
     menu.opened = true;
     await menu.start(pass, passRun);
-    expect(send).toHaveBeenLastCalledWith({ message: passRun.request, genesisTask: "quality-pass", submissionKind: "send" });
+    expect(send).toHaveBeenLastCalledWith({ message: passRun.request, genesisTask: "quality-pass", passRun: passRun.id, submissionKind: "send" });
     expect(menu.opened).toBe(false);
   }
   expect(send.mock.calls.map(([input]) => input.message)).toEqual(["Quality pass the whole app.", since.request, "Quality pass the whole app deeply."]);
@@ -175,52 +176,61 @@ it("each pass offers Genesis's Deep run with its size, sends it verbatim and say
     const deep = pass.runs.find(({ id }) => id === "deep");
     expect(deep.label).toBe("Deep (212 files, 18,450 lines)");
     await menu.start(pass, deep);
-    expect(send).toHaveBeenLastCalledWith({ message: deep.request, genesisTask: pass.id, submissionKind: "send" });
+    expect(send).toHaveBeenLastCalledWith({ message: deep.request, genesisTask: pass.id, passRun: "deep", submissionKind: "send" });
   }
   expect(send.mock.calls.find(([input]) => input.genesisTask === "security-pass")[0].message).toBe("Security pass the whole app deeply.");
   expect(menu.DEEP_NOTE).toBe("Deep reads every file: it takes much longer and uses far more of your AI's allowance.");
 });
 
-it("the Master pass ticks every pass it runs, and Start sends Genesis's request for all of them, with its size and cost", async () => {
+it("Several passes runs the ticked passes in Genesis's order, with one run all of them offer; nothing ticked sends nothing", async () => {
+  const quality = GENESIS_PASSES.find(({ id }) => id === "quality-pass");
+  const since = { id: "since-last", label: "Since last completed (abc1234, 3 commits)", request: "Quality pass: the changes since commit abc1234, judged against the whole app." };
+  mocks.resource.data.value.passes = listed({ "quality-pass": { lastRun: new Date().toISOString(), runs: [...quality.runs, since] } });
   const { state, send } = passes();
-  const menu = mount(Vibe64PassesMenu, { passes: state });
-  expect(menu.master.title).toBe("Master pass");
-  expect(menu.ticked).toEqual(GENESIS_MASTER_PASS.passes);
-  expect(GENESIS_MASTER_PASS.passes.map(menu.titleOf)).toEqual(["Review", "Security pass", "Data pass", "Quality pass", "Speed pass",
-    "User experience pass", "Visual identity", "UI pass", "Deslop"]);
-  const [whole] = menu.master.runs;
-  expect(whole.label).toBe("Whole app (212 files, 18,450 lines)");
-  expect(menu.lastRunLabel(menu.master)).toBe("Never completed");
-  expect(menu.MASTER_NOTE).toBe("Runs each ticked pass deeply, one after another: it takes much longer and uses far more of your AI's allowance.");
+  const menu = mount(Vibe64PassesMenu, { passes: state, session: mainChat() });
+  expect(menu.ticked, "none until the person ticks them").toEqual([]);
+  expect(menu.SERIES_NOTE).toBe("Tick passes and choose one run for all of them. They join the plan's Passes and run one after another, each in its own turn.");
+  expect(state.order.value).toEqual(GENESIS_MASTER_PASS.passes);
+  menu.ticked = ["quality-pass"];
+  expect(menu.seriesRuns.map(({ id }) => id)).toEqual(["whole", "since-last", "deep"]);
+  menu.ticked = ["deslop", "ux-pass", "quality-pass"];
+  expect(menu.seriesRuns.map(({ id }) => id), "Since last completed only when every ticked pass offers it").toEqual(["whole", "deep"]);
   menu.opened = true;
-  await menu.startMaster(whole);
-  expect(send).toHaveBeenCalledWith({ message: "Master pass the whole app.", genesisTask: "master-pass", submissionKind: "send" });
+  await menu.startSeries("deep");
+  expect(send).toHaveBeenLastCalledWith({ message: "Run Quality pass, User experience pass and Deslop deeply.",
+    passes: ["quality-pass", "ux-pass", "deslop"], passRun: "deep", submissionKind: "send" });
   expect(menu.opened).toBe(false);
+  expect(seriesMessage(["Review"], "since-last")).toBe("Run Review since their last completed run.");
+  expect(seriesMessage(["Review", "Data pass"], "whole")).toBe("Run Review and Data pass on the whole app.");
+  send.mockClear();
+  menu.ticked = [];
+  await menu.startSeries("whole");
+  expect(await state.runSeries([], "whole")).toBe(false);
+  expect(send).not.toHaveBeenCalled();
 });
 
-it("an unticked pass is not run: Start names only the ticked passes, in the Master order, and nothing ticked sends nothing", async () => {
+it("the open plan's passes show each one's state, and Continue, Run this pass again and Restart send the person's message for them", async () => {
+  mocks.resource.data.value.plan = { title: "Bookings", atPasses: true, passes: [
+    { id: "review", title: "Review", scope: "the plan's changes", item: "Review: the plan's changes", done: true, state: "done" },
+    { id: "data-pass", title: "Data pass", scope: "the plan's changes", item: "Data pass: the plan's changes", done: false, state: "needs-you" },
+    { id: "deslop", title: "Deslop", scope: "whole app", item: "Deslop: whole app", done: false, state: "" }
+  ] };
   const { state, send } = passes();
-  const menu = mount(Vibe64PassesMenu, { passes: state });
-  menu.ticked = ["deslop", "ux-pass", "security-pass"];
-  await menu.startMaster(menu.master.runs[0]);
-  const [{ message }] = send.mock.calls.at(-1);
-  expect(message).toBe("Master pass (Security pass, User experience pass, Deslop) the whole app.");
-  for (const left of ["Review", "Data pass", "Quality pass", "Speed pass", "Visual identity", "UI pass"]) expect(message).not.toContain(left);
-  // A run since the last completed Master pass names them the same way.
-  const since = {
-    id: "since-last",
-    label: "Since last completed (abc1234, 3 commits; 4 files, 120 lines)",
-    request: "Master pass: the changes since commit abc1234, judged against the whole app.",
-    selectedRequest: "Master pass ({passes}): the changes since commit abc1234, judged against the whole app."
-  };
-  expect(masterRequest(GENESIS_MASTER_PASS, since, ["data-pass"], state.passes.value))
-    .toBe("Master pass (Data pass): the changes since commit abc1234, judged against the whole app.");
-  expect(masterRequest(GENESIS_MASTER_PASS, since, [...GENESIS_MASTER_PASS.passes], state.passes.value)).toBe(since.request);
-  menu.ticked = [];
-  send.mockClear();
-  expect(await menu.startMaster(menu.master.runs[0])).toBeUndefined();
-  expect(await state.runMaster(menu.master.runs[0], [])).toBe(false);
-  expect(send).not.toHaveBeenCalled();
+  const menu = mount(Vibe64PassesMenu, { passes: state, session: mainChat() });
+  expect(menu.plansPasses).toBe(true);
+  expect(menu.planLine).toBe("Review ✓ · Data pass: needs you · Deslop");
+  expect(menu.planDone).toBe(false);
+  expect(menu.donePasses.map(({ id }) => id)).toEqual(["review"]);
+  await menu.act("continue");
+  expect(send).toHaveBeenLastCalledWith({ message: "Continue the plan's passes.", passAction: "continue", submissionKind: "send" });
+  await menu.act("again", menu.donePasses[0]);
+  expect(send).toHaveBeenLastCalledWith({ message: "Run Review again.", passAction: "again", passId: "review", submissionKind: "send" });
+  await menu.act("restart");
+  expect(send).toHaveBeenLastCalledWith({ message: "Restart the plan's passes from the first one.", passAction: "restart", submissionKind: "send" });
+  // A lesson, Fix it with AI and a chat with no mode yet run each pass as its own turn: no plan's passes, no Several passes.
+  expect(mount(Vibe64PassesMenu, { passes: state, session: mainChat({}, { purpose: "learning" }) }).plansPasses).toBe(false);
+  expect(mount(Vibe64PassesMenu, { passes: state, session: mainChat({ mode: "fix", afterPlan: ["review", "security-pass"] }) }).plansPasses).toBe(false);
+  expect(mount(Vibe64PassesMenu, { passes: state, session: { sessionId: "session-1", metadata: {} } }).plansPasses).toBe(false);
 });
 
 it("a suggestion offers the pass's ordinary runs; its deep run stays in Passes beside its cost", () => {
@@ -230,8 +240,7 @@ it("a suggestion offers the pass's ordinary runs; its deep run stays in Passes b
   const suggestion = mount(Vibe64PassSuggestion, { passes: state, pass: state.recommendation.value });
   expect(state.recommendation.value.runs.map(({ id }) => id)).toEqual(["whole", "deep"]);
   expect(suggestion.runs.map(({ id }) => id)).toEqual(["whole"]);
-  const menu = mount(Vibe64PassesMenu, { passes: state });
-  expect(menu.master, "a read without the Master pass shows none").toBe(null);
+  expect(state.order.value, "a read without Genesis's order keeps its list order").toEqual(GENESIS_PASSES.map(({ id }) => id));
 });
 
 // Lets a save started by a tick finish.
@@ -242,12 +251,13 @@ const mainChat = (preferences = {}, session = {}) => ({ sessionId: "session-1", 
   mode: "auto", afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"], afterPlanDeep: [], autoSave: false, ...preferences
 }) } });
 
-it("Main chat's Passes tick the passes that run after a plan: Review and Security always, the rest saved through Chat settings in Master order", async () => {
+it("Main chat's Passes tick the passes each new plan's Passes start with: Review and Security always, the rest saved through Chat settings in Master order", async () => {
   const { state } = passes();
   const menu = mount(Vibe64PassesMenu, { passes: state, session: mainChat(), sessionsApiPath: "/api/sessions" });
   expect(menu.afterPlanShown).toBe(true);
   expect(menu.afterPlanChangeable).toBe(true);
-  expect(menu.AFTER_PLAN_NOTE).toMatch(/^After a plan: when a plan is completed, each ticked pass checks the plan's changes in its own turn/u);
+  expect(menu.AFTER_PLAN_NOTE).toBe("After a plan: each new plan's Passes section starts with the ticked passes, which check the plan's changes, " +
+    "each in its own turn, once Senior has reviewed the plan. To change one plan's passes, change that plan.");
   expect(menu.afterPlan).toEqual(["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"]);
   // The mandatory pair is ticked and can't be unticked: its tick is disabled, and nothing is sent.
   expect(["review", "security-pass"].filter(menu.mandatory)).toEqual(["review", "security-pass"]);

@@ -11,16 +11,16 @@ When Junior implements a plan in **Auto**, it runs focused code checks and
 basic smoke checks of startup, routes and API responses. It may briefly check
 that the changed page renders and its main control is present. Full browser
 end-to-end tests, multi-step user journeys and visual inspection belong to
-**Senior**, which checks the plan next. Senior exercises the
+**Senior**, which reviews the plan next. Senior exercises the
 requested user flow and reports results or remaining gaps. For work without a plan, in **Custom** or a
 direct role, the same agent remains responsible for
 browser verification. A stopped or unavailable check must be reported as
 unverified; an invitation to try the app does not replace verification.
 
 Auto shows Working, Waiting or Complete with a separate Planning, Implementation
-or Review stage. Senior continues an unfinished check of the plan or saves necessary in-scope
-rework for Junior, then checks the plan again. The **After a plan** ticks in
-[Passes](passes.md) choose the passes, such as the [UI pass](ui-pass.md), that run once a plan is completed, and [Chat settings](chat-settings.md) chooses
+or Review stage. Senior continues an unfinished review of the plan or saves necessary in-scope
+rework for Junior, then reviews the plan again. The **After a plan** ticks in
+[Passes](passes.md) choose the passes, such as the [UI pass](ui-pass.md), that each new plan's Passes section starts with, and [Chat settings](chat-settings.md) chooses
 whether finished work is saved, in every chat mode. Waiting retains the stage: use its stage-specific **Continue** action when the blocker is
 resolved, or **Retry** for an uncertain message. Stop remains respected.
 See [plans and workflow recovery](plans.md) for the full steps.

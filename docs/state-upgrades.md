@@ -2046,16 +2046,47 @@ that missed `20261114-staging-env-scope` still fail to read.
 Focused evidence: `stagingFoldersUpgrade.unit.test.js` and
 `stateUpgrades.unit.test.js`.
 
+## Passes in plans (`20261123-passes-in-plans`)
+
+A plan's passes now live in the plan: its last section, `## Passes`, lists one
+checklist item per pass (`- [ ] Security pass: the plan's changes`), written
+when the plan is made from the chat's After a plan ticks, and passes the person
+starts join it (or a small plan of their own). The plan's next pass is its
+first unticked Passes item, read from the plan each time, so the routing
+request no longer carries a list of passes: a pass turn's request holds only
+`pass: {id, title, item, request}`. The owner is Terminals'
+`passesInPlansUpgrade.js`, supplied by the candidate CLI; the script refuses to
+run without it.
+
+Through the stopped session store and the same verified backup publisher as
+`20261114-after-plan-passes`, it moves every active, closing and archived
+session's saved routing request (`assistant_routing_request`, main chat's and
+each temporary chat's) from schema version 6 to 7: `passChain` is dropped, and
+an Auto plan handoff's `draft` is dropped (Senior now writes the plan from the
+request and the conversation). A request still at one of its after-plan passes
+(`stage: "pass"`) is marked complete and stopped, with its follow-up and error
+removed: its plan was completed before its passes ran, so it has no Passes
+section to continue from, and nothing is replayed. The person can run any of
+those passes from Passes. Plans are not changed: an active plan made before the
+upgrade has no Passes section, so completing it runs no passes; the next plan
+gets one.
+
+A request already at version 7 is current and left alone, so a retry changes
+nothing. An unreadable request, or one at any other version, stops the upgrade
+before anything is written. A request at another version refuses with
+`vibe64_assistant_workflow_upgrade_required`; there is no lazy backfill.
+Focused evidence: `passesInPlansUpgrade.unit.test.js` and
+`stateUpgrades.unit.test.js`.
+
 ## Auto plan handoff (no upgrade)
 
-The saved Auto request (`assistant_routing_request`, schema version 6) may hold
-an optional `planHandoff`: `{turnId, role, reason, operation, draft}`, the
-draft at most 32,000 characters. Only the plan command writes it, when it
-refuses a running Auto turn a plan change only Senior may make. Only the turn
-it names uses it, and only when that turn completes unstopped: its end removes
-the field and makes the request Senior's planning turn. A stopped turn leaves it
-unused, the next turn of the same request drops it, and a new request replaces
-the whole record. No existing record changes and nothing is backfilled: a
-request without it behaves as before. A release without the field reads the
-record as it always did (only status and delivery are validated) and ignores
-it. Focused evidence: `assistantWorkflow.test.js`.
+The saved Auto request (`assistant_routing_request`, schema version 7) may hold
+an optional `planHandoff`: `{turnId, role, reason, operation}`. Only the plan
+command writes it: when Junior in Auto runs `vibe64-helper plan handoff`, or
+when it refuses a running Auto turn a plan change only Senior may make. It
+carries no draft: Senior's planning turn writes the plan from the request and
+the conversation. Only the turn it names uses it, and only when that turn
+completes unstopped: its end removes the field and makes the request Senior's
+planning turn. A stopped turn leaves it unused, the next turn of the same
+request drops it, and a new request replaces the whole record. Focused
+evidence: `assistantWorkflow.test.js`.

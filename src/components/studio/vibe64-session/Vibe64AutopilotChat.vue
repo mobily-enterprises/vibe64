@@ -76,6 +76,7 @@
           @view-plan="workPlanViewer?.showPlan('current')"
           @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
         />
+        <div v-if="planStatusLine" class="vibe64-plan-status text-body-small mb-1 px-2" role="status" data-testid="vibe64-plan-status">{{ planStatusLine }}</div>
         <Vibe64PassSuggestion v-if="passSuggestionVisible" :passes="passes" :pass="passes.recommendation.value" />
         <Vibe64AutopilotPromptTextarea
           ref="composerInput"
@@ -261,6 +262,7 @@
 
 <script setup>
 import { assistantGoalIsActive, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { workPlanStatusLine } from "@local/vibe64-terminals/shared/assistantWorkPlan";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, nextTick, ref, useId, watch } from "vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
@@ -314,6 +316,11 @@ const composerSendButton = ref(null);
 const composerSettingsOpen = ref(false);
 const composerSettingsButton = ref(null);
 const workPlanViewer = ref(null);
+// While a plan is open, one line says where it is: read from the plan itself, with the chat's waiting request and questions.
+const planStatusLine = computed(() => workPlanStatusLine(workPlanViewer.value?.step || null, {
+  questions: agentActive.value ? 0 : numberedQuestions.value.length,
+  request: routingRequest.value
+}));
 const thinkingStatusId = `studio-autopilot-thinking-${useId()}`;
 const composerAttachmentState = ref({
   count: 0,

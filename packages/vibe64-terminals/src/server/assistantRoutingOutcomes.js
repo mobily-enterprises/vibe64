@@ -1,28 +1,19 @@
-import { workPlanScope } from "../shared/assistantWorkPlan.js";
+import { parseWorkPlanLines, workPlanAtPasses, workPlanPassItems, workPlanScope, workPlanStep } from "../shared/assistantWorkPlan.js";
 import { readWorkPlan, manageWorkPlan } from "./assistantWorkPlan.js";
-import { afterPlanBase, rememberAfterPlanBase } from "./afterPlanBase.js";
-import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { rememberAfterPlanBase } from "./afterPlanBase.js";
+import { nextPlanPass } from "./planPasses.js";
+import { assistantRoutingOutcomeNotice, assistantWorkflowRole } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
-  assistantAfterPlanPass,
-  assistantRoutingFromMetadata,
-  assistantRoutingOutcomeNotice,
-  assistantWorkflowRole
-} from "@local/vibe64-runtime/shared/assistantRouting";
-import {
-  AFTER_PLAN_PASS_ORDER,
-  AFTER_PLAN_PASS_TITLES,
-  ASSISTANT_FINISHING_DEFAULTS,
-  afterPlanPassNotice,
   assistantAutoSaveNotice,
   assistantPlanCompletionFollows,
-  planCompletedDuringRequest
+  planPassNotice
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   assistantReplyAsksPerson,
   latestAssistantQuestionsAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { read, failure, activeMessage, assistantPlanHandsOff, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
-import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffDraft, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
+import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -33,9 +24,26 @@ import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffDraft, assistantPlanHandof
 /** @typedef {ReturnType<typeof import("./assistantRoutingAdmission.js").createAssistantRoutingAdmission>} AssistantRoutingAdmission */
 
 const MAX_WORKFLOW_STEPS = 8;
+// The items a plan has built: a turn that builds one more starts a fresh allowance of steps.
+const builtItems = (plan) => typeof plan?.text === "string"
+  ? parseWorkPlanLines(plan.text).filter((entry) => !entry.passes && entry.built).length : 0;
 // Whether a plan completed during a request asks only for a readable plan: an
 // unreadable one is none, so a request that never used the plan finishes as it did.
 const readablePlan = context => readWorkPlan(context).catch(() => null);
+
+/**
+ * Whether this request brought its plan to its passes, or completed it: a request the chat runs a
+ * plan's passes for, whose plan reached its Passes step or completed during it rather than being
+ * found that way when it was admitted. Only Senior's review brings a plan to its passes: Junior's
+ * ticks leave it for that review.
+ * @param {object} request the saved routing request
+ * @param {{ status: string, revision: string, text: string } | null} plan the current plan
+ */
+function planFinishedDuringRequest(request, plan) {
+  return Boolean(request?.afterPlan) && Boolean(plan) &&
+    (plan.status === "completed" || workPlanAtPasses(plan) && assistantWorkflowRole(request) === "senior") &&
+    request.afterPlan.planAtAdmission?.revision !== plan.revision;
+}
 
 /**
  * What follows a workflow turn: the outcome its agent reports, the next automatic step, and the
@@ -53,7 +61,7 @@ const readablePlan = context => readWorkPlan(context).catch(() => null);
  * @param {PublishSessionChanged} dependencies.publish
  * @param {(sessionId: string, details: object) => unknown} dependencies.onPlanCompleted
  * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} dependencies.listPasses The passes
- *   Genesis offers for the session's source, read once as a completed plan's passes start.
+ *   Genesis offers for the session's source, read as each of a plan's passes starts.
  */
 function createAssistantRoutingOutcomes({
   routingState,
@@ -74,8 +82,7 @@ function createAssistantRoutingOutcomes({
   async function recordOutcome(sessionId, input, options) {
     return exclusiveAfterWrites(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);
-      // An after-plan pass reports nothing: its turn ending starts the next pass.
-      if (!state || (!state.workflow && state.stage !== "planning") || state.stage === "pass" || state.stopped ||
+      if (!state || (!state.workflow && state.stage !== "planning") || state.stopped ||
           state.status !== "working" || state.delivery !== "accepted" || input.messageId !== state.messageId ||
           input.turnId !== state.turnId || input.stage !== state.stage) {
         throw failure("The workflow outcome does not match the active request and turn.", "vibe64_assistant_workflow_outcome_mismatch");
@@ -89,14 +96,20 @@ function createAssistantRoutingOutcomes({
           typeof input.explanation !== "string" || !input.explanation.trim() || input.explanation.length > 2000 || typeof input.progress !== "boolean") {
         throw failure("Report continue, handoff, wait or complete with a concrete explanation and progress boolean.", "vibe64_assistant_workflow_outcome_invalid");
       }
-      if (state.stage === "planning" && !["continue", "wait"].includes(input.decision)) {
+      // A plan change made while the plan is being implemented hands the implementation back once it is saved.
+      const resumes = state.stage === "planning" && state.resumeImplementation === true && input.decision === "handoff";
+      if (state.stage === "planning" && !["continue", "wait"].includes(input.decision) && !resumes) {
         throw failure("Planning alone does not authorise implementation or plan completion.", "vibe64_assistant_workflow_planning_outcome_refused");
       }
-      const involvesPlan = input.expectedRevision !== undefined || state.planInvolved;
+      const pass = state.stage === "pass" ? state.pass : null;
+      if (pass && input.decision === "handoff") {
+        throw failure("A pass reports continue, wait or complete: it fixes what it finds itself.", "vibe64_assistant_workflow_pass_handoff_refused");
+      }
+      const involvesPlan = Boolean(pass) || resumes || input.expectedRevision !== undefined || state.planInvolved;
       // Only Senior completes a plan, and in Auto only Senior completes the work
       // at all. A direct chat's Junior or Custom completes only work that changed
-      // no files and involves no plan.
-      const senior = assistantWorkflowRole(state) === "senior";
+      // no files and involves no plan; a plan's pass, a Custom chat's too, completes its own item.
+      const senior = assistantWorkflowRole(state) === "senior" || Boolean(pass);
       if (input.decision === "complete" && !senior) {
         if (state.mode === "auto") throw failure("Only Senior can complete the work.", "vibe64_assistant_workflow_completion_senior_only");
         if (involvesPlan) {
@@ -108,13 +121,37 @@ function createAssistantRoutingOutcomes({
           (input.expectedProgressRevision || null) !== plan.progressRevision)) {
         throw failure("Read the complete current Plan and Progress before reporting this outcome.", "vibe64_assistant_workflow_plan_unread");
       }
-      if (involvesPlan && input.decision === "complete" && (plan.status !== "completed" || state.workPlan &&
-          workPlanScope(plan.text) !== workPlanScope(state.workPlan.text))) {
-        throw failure("Senior must explicitly complete the exact agreed plan before completing the workflow.", "vibe64_assistant_workflow_plan_incomplete");
+      // A plan stays in Implementation until every item outside its Passes is built: Auto's
+      // implementation reaches Senior's review only then.
+      const open = state.mode === "auto" && state.stage === "implementation" && input.decision === "handoff" &&
+        involvesPlan && plan.status === "active" ? workPlanStep(plan) : null;
+      if (open?.step === "implementation") {
+        const message = `The plan stays in Implementation until every item is built: item ${open.item} of ${open.items}, ` +
+          `“${open.title}”, is still - [ ]. Implement it in the plan's order and half-tick it, then report handoff; ` +
+          "report wait with numbered questions if it needs the person.";
+        throw failure(message, "vibe64_assistant_workflow_plan_items_open");
+      }
+      // A pass is Done once its own Passes item is ticked; the plan stays active for the next one.
+      if (pass && input.decision === "complete" &&
+          !(plan.status === "active" && workPlanPassItems(plan.text).some((item) => item.text === pass.item && item.checked))) {
+        const message = `Full-tick this pass's Passes item (- [x] ${pass.item}) once everything in its scope is fixed and proven, ` +
+          "then report complete.";
+        throw failure(message, "vibe64_assistant_workflow_pass_unticked");
+      }
+      // Senior's review is Done once every item outside Passes is ticked: a plan with passes then
+      // moves on to them, and one without is completed by Senior.
+      const scope = (text) => workPlanScope(text, { passes: false });
+      if (!pass && involvesPlan && input.decision === "complete" && (!(plan.status === "completed" || workPlanAtPasses(plan)) ||
+          state.workPlan && scope(plan.text) !== scope(state.workPlan.text))) {
+        const message = "Senior must verify and full-tick every item of the exact agreed plan outside its Passes, " +
+          "and explicitly complete a plan that has no Passes items, before completing the workflow.";
+        throw failure(message, "vibe64_assistant_workflow_plan_incomplete");
       }
       if (involvesPlan && input.decision !== "complete" && plan.status !== "active") {
         throw failure("The involved plan is no longer active.", "vibe64_assistant_workflow_plan_inactive");
       }
+      // A turn that built another of the plan's items has made progress: its next steps get a fresh allowance.
+      if (involvesPlan && builtItems(plan) > builtItems(state.workPlan)) state.steps = 0;
       state.planInvolved = involvesPlan;
       state.workPlan = involvesPlan ? plan : null;
       state.outcome = {
@@ -133,7 +170,7 @@ function createAssistantRoutingOutcomes({
 
   /**
    * The plan command refused Auto's running turn a plan change only Senior may make (creating a plan, changing its
-   * scope, reopening or archiving it): the request is Senior's once this turn ends. The latest refused draft wins.
+   * scope, reopening or archiving it), or the turn handed it over itself: the request is Senior's once this turn ends.
    */
   async function handPlanToSenior(sessionId, input, options) {
     return exclusiveAfterWrites(sessionId, options, async context => {
@@ -151,7 +188,9 @@ function createAssistantRoutingOutcomes({
         role: state.resolvedMode,
         reason: state.reason,
         operation: input.operation,
-        draft: assistantPlanHandoffDraft(input.draft)
+        // Handed over while implementing the plan: once Senior saves the change, the implementation goes on.
+        // A request Router took for implementation that never worked on the plan is planning, which waits.
+        ...(state.stage === "implementation" && state.planInvolved ? { implementing: true } : {})
       };
       await records.save(context, state);
       return { ok: true, handedTo: "senior" };
@@ -160,10 +199,12 @@ function createAssistantRoutingOutcomes({
 
   /**
    * The turn whose plan change only Senior may make ended: the same request continues as Senior's planning turn, with
-   * that turn's draft and the conversation, and then follows planning's own outcomes.
+   * the conversation, and then follows planning's own outcomes. Handed over while implementing, the implementation
+   * goes on once Senior saves the change.
    */
   async function continueWithSeniorPlan(context, state, { recovered, live }) {
     Object.assign(state, { resolvedMode: "senior", reason: "planning", workflow: false, review: false, planInvolved: false });
+    if (state.planHandoff.implementing) state.resumeImplementation = true;
     state.steps = (state.steps || 0) + 1;
     state.stalledTurns = 0;
     delete state.outcome;
@@ -228,62 +269,37 @@ function createAssistantRoutingOutcomes({
   }
 
   /**
-   * A plan completed during this request: the passes the chat ticks in Passes (After a plan) run
-   * one after another in Genesis's Master pass order, each its own Senior turn over the changes
-   * since the session's after-plan base. A pass the Genesis serving this project cannot run is skipped with
-   * its reason, and with no base none runs. Genesis's list and the ticks are read once, here.
+   * A plan that reached its Passes step, or whose pass is Done: Vibe64 starts its next pass, the
+   * first Passes item not yet ticked, read from the plan, in a Senior turn of its own. A pass the
+   * Genesis serving this project cannot run, or the plan's changes without a start in the session's
+   * history, leaves the plan waiting at that pass with the reason. With every pass ticked the plan
+   * is completed.
    * @returns {Promise<{ context: object, state: object } | null>} the finished work to save, if any
    */
-  async function startAfterPlanPasses(context, state, plan, schedule) {
-    let choice = ASSISTANT_FINISHING_DEFAULTS;
-    try {
-      choice = assistantRoutingFromMetadata(context.session.metadata) || choice;
-    } catch {
-      // Unreadable preferences run the defaults; the chat's settings say why when opened.
+  async function continuePlanPasses(context, state, { recovered, live }) {
+    const plan = await readablePlan(context);
+    const atPasses = workPlanAtPasses(plan);
+    const next = atPasses ? await nextPlanPass(context, plan, listPasses) : null;
+    if (!next && (atPasses || plan?.status === "completed")) return finishPlan(context, state, plan);
+    // The plan changed under the request (an item was unticked, say): its work ends here, and Senior
+    // or Passes takes it on from what the plan now says.
+    if (!next) {
+      state.status = "complete";
+      await records.save(context, state);
+      return null;
     }
     // The passes are this request's workflow, whatever its own turn was.
-    state.workflow = true;
-    state.stage = "pass";
-    state.passChain = {
-      base: "",
-      plan: { title: plan.title, revision: plan.revision, progressRevision: plan.progressRevision || null },
-      passes: [],
-      index: 0
-    };
-    const notice = (id, text) => records.writeNotice(context, state, { messageId: `assistant-after-plan-skipped:${state.turnId}:${id}`, text });
-    let listing;
-    try {
-      listing = await listPasses({ projectRoot: sessionSourcePath(context.session) });
-    } catch (error) {
-      await notice("all", `The passes didn't run after the plan: ${error.message} Run them from Passes.`);
-      return finishAfterPlanPasses(context, state);
+    Object.assign(state, { workflow: true, stage: "pass", planInvolved: true, steps: 0, stalledTurns: 0 });
+    for (const field of ["outcome", "awaitingAnswer", "passReply", "error"]) delete state[field];
+    state.pass = { id: next.id, title: next.title, item: next.item, request: next.request };
+    if (next.problem) {
+      state.pass = { title: next.title, item: next.item };
+      state.status = "waiting";
+      state.error = `${next.title} can't run: ${next.problem} Change the plan's Passes, or put it right and choose Continue in Passes.`;
+      await records.save(context, state);
+      await records.writeNotice(context, state, { messageId: `assistant-plan-pass-blocked:${state.turnId}:${next.item}`, text: state.error });
+      return null;
     }
-    state.passChain.base = await afterPlanBase(context.session);
-    if (!state.passChain.base) {
-      await notice("all", "The passes didn't run after the plan: Vibe64 can't tell where this plan's work started in the session's history. Run them from Passes.");
-      return finishAfterPlanPasses(context, state);
-    }
-    for (const id of AFTER_PLAN_PASS_ORDER.filter((pass) => choice.afterPlan.includes(pass))) {
-      const pass = listing.passes.find((entry) => entry.id === id);
-      if (!pass?.sinceBase) {
-        await notice(id, `${pass?.title || AFTER_PLAN_PASS_TITLES[id]} skipped after the plan: ${pass?.unavailable || "the Genesis serving this project doesn't offer it."}`);
-        continue;
-      }
-      const deep = choice.afterPlanDeep.includes(id) && Boolean(pass.sinceBase.deep);
-      state.passChain.passes.push({
-        id,
-        title: pass.title,
-        deep,
-        request: (deep ? pass.sinceBase.deep : pass.sinceBase.request).replace("{base}", state.passChain.base)
-      });
-    }
-    return continueAfterPlanPasses(context, state, schedule);
-  }
-
-  /** Starts the chain's current pass, or finishes the chain after its last one. */
-  async function continueAfterPlanPasses(context, state, { recovered, live }) {
-    const pass = assistantAfterPlanPass(state);
-    if (!pass) return finishAfterPlanPasses(context, state);
     await records.prepareFollowup(context, state, "pass");
     state.status = "working";
     await records.save(context, state);
@@ -293,7 +309,7 @@ function createAssistantRoutingOutcomes({
       await records.save(context, state);
       return null;
     }
-    await records.writeNotice(context, state, afterPlanPassNotice(pass.title, state.followup.messageId, { deep: pass.deep }));
+    await records.writeNotice(context, state, planPassNotice(state.pass, state.followup.messageId));
     try {
       await delivery.deliver(context.session.sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
     } catch (error) {
@@ -306,33 +322,32 @@ function createAssistantRoutingOutcomes({
   }
 
   /**
-   * After the last pass: the completed plan is archived, the next passes' base moves to the
-   * session's HEAD, and the finished work is saved when Automatically save changes is on.
+   * Every step of the plan is Done: Vibe64 completes it (Senior completed a plan without passes
+   * already), archives it, moves the next passes' base to the session's HEAD, and saves the finished
+   * work when Automatically save changes is on.
    */
-  async function finishAfterPlanPasses(context, state) {
-    const plan = await readablePlan(context);
-    if (plan?.status === "completed" && !await archiveCompletedPlan(context, state, plan)) return null;
+  async function finishPlan(context, state, plan) {
+    let current = plan;
+    if (current?.status === "active") {
+      try {
+        await manageWorkPlan(context, {
+          operation: "complete",
+          expectedRevision: current.revision,
+          expectedProgressRevision: current.progressRevision || ""
+        }, "review");
+        current = await readWorkPlan(context);
+      } catch (error) {
+        state.status = "waiting";
+        state.error = `The plan's steps are done, but the plan could not be completed: ${error.message}`;
+        await records.save(context, state);
+        return null;
+      }
+    }
+    if (current?.status === "completed" && !await archiveCompletedPlan(context, state, current)) return null;
     await rememberAfterPlanBase(context.runtime.store, context.session);
     state.status = "complete";
     await records.save(context, state);
     return saveAfter(context, state);
-  }
-
-  /**
-   * A pass turn that was stopped, failed or was interrupted ends the chain: the passes after it
-   * never start, nothing is saved automatically, and the plan stays completed for the person.
-   */
-  async function stopAfterPlanPasses(context, state, ending) {
-    const pass = assistantAfterPlanPass(state);
-    const unfinished = state.passChain.passes.slice(state.passChain.index).map(({ title }) => title);
-    state.passChain.stopped = true;
-    state.status = "complete";
-    await records.save(context, state);
-    await records.writeNotice(context, state, {
-      messageId: `assistant-after-plan-stopped:${state.followup?.messageId || state.turnId}`,
-      text: `The passes after the plan stopped: ${pass.title} ${ending === "stopped" ? "was stopped" : `ended (${ending})`}, so ` +
-        `${unfinished.join(", ")} didn't finish and nothing was saved automatically. Run them from Passes.`
-    });
   }
 
   async function afterTurn(sessionId, payload, routingOptions, options = {}) {
@@ -344,12 +359,7 @@ function createAssistantRoutingOutcomes({
       const key = records.keyFor(sessionId, context);
       if (admission.isClosing() || routingState.running.has(key)) return;
       const state = await read(context.runtime.store, sessionId);
-      // Stop ends the after-plan passes once the stopped pass's turn ends.
-      if (state?.stage === "pass" && state.stopped && !state.passChain.stopped && state.delivery === "accepted" &&
-          state.turnId && state.turnId === (run.providerTurnId || run.turnId)) {
-        await stopAfterPlanPasses(context, state, "stopped");
-        return;
-      }
+      // A stopped turn, a plan's pass too, is already paused: it waits for Continue.
       if (!state || state.status !== "working" || state.delivery !== "accepted") return;
       if (!routingState.allowAuto && state.mode === "auto") {
         state.status = "waiting";
@@ -385,31 +395,21 @@ function createAssistantRoutingOutcomes({
         delete state.planHandoff;
       }
       if (!state.workflow && state.stage !== "planning") {
-        // An answer in which Senior completed the plan (asked to, say) starts the passes too.
+        // An answer in which Senior reviewed or completed the plan (asked to, say) moves it on too.
         const current = run.state === "completed" && !state.stopped && state.afterPlan ? await readablePlan(context) : null;
-        if (planCompletedDuringRequest(state, current)) {
-          completed = await startAfterPlanPasses(context, state, current, { recovered, live });
+        if (planFinishedDuringRequest(state, current)) {
+          completed = await continuePlanPasses(context, state, { recovered, live });
           return;
         }
         state.status = run.state === "completed" ? "complete" : "waiting";
         await records.save(context, state);
         return;
       }
-      // Each after-plan pass's turn ending starts the next pass; one that did not complete ends them.
-      if (state.stage === "pass") {
-        if (state.stopped || run.state !== "completed") {
-          await stopAfterPlanPasses(context, state, state.stopped ? "stopped" : run.state || "stopped");
-          return;
-        }
-        state.passChain.index += 1;
-        completed = await continueAfterPlanPasses(context, state, { recovered, live });
-        return;
-      }
       // Questions the composer offers answer controls for wait for the person's
       // answer, whatever outcome was reported, also when the AI added a short
       // message after them. The tail holds every message since the person's latest
-      // one, as far as the lookback can read. Their reply is a new request;
-      // nothing resumes this one.
+      // one, as far as the lookback can read. Their reply is a new request, which
+      // goes straight back to a plan's waiting pass; nothing resumes any other.
       if (!state.stopped && run.state === "completed" && assistantReplyAsksPerson(latestAssistantQuestionsAwaitingUserReply(
         await context.runtime.store.readConversationTail(sessionId, { userLimit: 1 })
       ))) {
@@ -420,13 +420,13 @@ function createAssistantRoutingOutcomes({
       const outcome = state.outcome;
       const schedule = { recovered, live };
       // A direct chat's implementation turn that ends without reporting is an
-      // ordinary reply: nothing is saved, unless Senior completed a plan in it,
-      // which starts the after-plan passes like a reported completion.
+      // ordinary reply: nothing is saved, unless Senior reviewed or completed a
+      // plan in it, which moves the plan on like a reported completion.
       if (state.mode !== "auto" && state.stage === "implementation" && !state.stopped && run.state === "completed" &&
           outcome?.turnId !== state.turnId) {
         const current = state.afterPlan ? await readablePlan(context) : null;
-        if (planCompletedDuringRequest(state, current)) {
-          completed = await startAfterPlanPasses(context, state, current, schedule);
+        if (planFinishedDuringRequest(state, current)) {
+          completed = await continuePlanPasses(context, state, schedule);
           return;
         }
         state.status = "complete";
@@ -457,11 +457,11 @@ function createAssistantRoutingOutcomes({
           return;
         }
       }
-      // A plan completed during this request starts the after-plan passes,
-      // which archive it and save the work once the last one ends.
+      // A Done pass, or a plan this request reviewed or completed, moves the plan on: its next
+      // pass starts, or, after the last, the plan is completed, archived and the work saved.
       const current = ["complete", "handoff"].includes(outcome.decision) && state.afterPlan ? plan || await readablePlan(context) : null;
-      if (planCompletedDuringRequest(state, current)) {
-        completed = await startAfterPlanPasses(context, state, current, schedule);
+      if (state.stage === "pass" && outcome.decision === "complete" || planFinishedDuringRequest(state, current)) {
+        completed = await continuePlanPasses(context, state, schedule);
         return;
       }
       if (outcome.decision === "complete") {
@@ -477,6 +477,12 @@ function createAssistantRoutingOutcomes({
         state.status = "waiting";
         state.error = outcome.explanation;
         await records.prepareFollowup(context, state, state.stage);
+        // A pass that needs the person waits for their reply, which goes straight back to it.
+        if (state.stage === "pass") {
+          Object.assign(state, { awaitingAnswer: true, error: "Waiting for your answer. Reply in chat to continue." });
+          await records.save(context, state);
+          return;
+        }
         await records.save(context, state);
         await records.writeNotice(context, state, assistantRoutingOutcomeNotice(state));
         return;
@@ -492,7 +498,11 @@ function createAssistantRoutingOutcomes({
         return;
       }
       let nextStage = state.stage;
-      if (outcome.decision === "handoff") {
+      if (outcome.decision === "handoff" && state.stage === "planning") {
+        // Senior saved a change to the plan being implemented: the implementation goes on, Junior's in Auto.
+        nextStage = "implementation";
+        Object.assign(state, { resolvedMode: "junior", reason: "implementation", workflow: true, review: true, planInvolved: true });
+      } else if (outcome.decision === "handoff") {
         // Rework returns to implementation: Junior's in Auto, the same agent's otherwise.
         const auto = state.mode === "auto";
         const returning = state.stage === "review" && (!auto || assistantWorkflowRole(state) === "senior");
@@ -511,6 +521,7 @@ function createAssistantRoutingOutcomes({
       }
       state.steps = (state.steps || 0) + 1;
       await records.prepareFollowup(context, state, nextStage);
+      if (nextStage === "implementation") delete state.resumeImplementation;
       state.status = "working";
       await records.save(context, state);
       await records.writeNotice(context, state, assistantRoutingOutcomeNotice(state));
