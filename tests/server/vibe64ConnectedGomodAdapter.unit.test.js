@@ -185,12 +185,33 @@ test("gomod: the proof says exactly why a connected module is not in effect", as
   assert.equal((await step("proof")).error,
     `Connected Library is not in effect: example.com/library package example.com/library is built from ${cached}, not the connected checkout ${library}.`);
 
+  // A build that imports none of it does not use it: preparation goes on and says so.
   state.list = `example.com/app\t${app}\texample.com/app\t${app}\n`;
-  assert.equal((await step("proof")).error,
-    "Connected Library is not in effect: No package of example.com/library is in the build of ./..., so the session does not use it.");
+  assert.deepEqual(await step("proof"), { ok: true, output: "[Connected] Library is connected, but nothing here installs it: " +
+    "remove it or install it. No package of example.com/library is in the build of ./..., so the session does not use it." });
 
   delete state.list;
   assert.equal((await step("proof")).ok, true);
+});
+
+test("gomod: a module go.mod does not require, or a session source with no Go module, leaves preparation going and says to remove or install it", async (t) => {
+  const { app, state, step, status } = await fixture(t);
+  await writeFile(path.join(app, "go.mod"), "module example.com/app\n\ngo 1.22\n\nrequire example.com/other v1.0.0\n");
+  const notRequired = "Library is connected, but nothing here installs it: remove it or install it. " +
+    "The session's go.mod does not require example.com/library.";
+  assert.deepEqual(await step("apply"), { ok: true, output: `[Connected] ${notRequired}` });
+  state.calls.length = 0;
+  assert.deepEqual(await step("proof"), { ok: true, output: `[Connected] ${notRequired}` });
+  assert.deepEqual(state.calls.filter(call => call.command === "go"), [], "go.mod alone says so");
+  const proof = await status();
+  assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, notRequired]);
+
+  await rm(path.join(app, "go.mod"));
+  const noModule = "Library is connected, but nothing here installs it: remove it or install it. " +
+    `The session source ${app} has no go.mod with a module line at its root, so no Go build uses it.`;
+  assert.deepEqual(await step("apply"), { ok: true, output: `[Connected] ${noModule}` });
+  assert.deepEqual(await step("proof"), { ok: true, output: `[Connected] ${noModule}` });
+  assert.deepEqual([(await status()).unused, (await status()).reason], [true, noModule]);
 });
 
 test("gomod: restore removes Vibe64's go.work and go.work.sum once no Go module is connected, and keeps a person's own", async (t) => {

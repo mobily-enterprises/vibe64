@@ -84,6 +84,8 @@ async function readAgentSessionStatus({ descriptor, project, projectRecord, sess
         ? {
             type: proof.type,
             inEffect: proof.inEffect,
+            // Connected, but nothing in the session installs it: the reason says to remove or install it.
+            ...(proof.unused ? { unused: true } : {}),
             ...(proof.inEffect ? {} : { reason: proof.reason }),
             // What Staging and Production use instead: the published versions the project's lockfiles name.
             ...(proof.published?.length ? { published: proof.published } : {})

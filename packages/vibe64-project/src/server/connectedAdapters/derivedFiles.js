@@ -26,6 +26,8 @@ async function readDerivedFile(tree, relative) {
 
 /** Refuses when the tree tracks any of these paths: a derived file never replaces a tracked one. */
 async function refuseTracked({ connection, tree, paths, runCommand }) {
+  // `git ls-files --` with no path lists every tracked file.
+  if (!paths.length) return;
   const tracked = await runCommand({ command: "git", args: ["ls-files", "-z", "--", ...paths], cwd: tree, timeout: 60_000 });
   if (tracked?.ok !== true) {
     throw vibe64Error(`Connected ${connection.name}: Git could not say whether ${tree} tracks ${paths.join(", ")}.`, "vibe64_connected_git_unavailable");

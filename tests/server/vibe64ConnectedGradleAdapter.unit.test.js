@@ -296,8 +296,8 @@ test("gradle: the proof says why the connection is not in effect, and preparing 
   assert.equal((await step("proof")).ok, true);
 });
 
-test("gradle: apply refuses a tracked or project-owned init script and a session that is not a Gradle build", async t => {
-  const { app, step } = await fixture(t);
+test("gradle: apply refuses a tracked or project-owned init script, and goes on for a session that is not a Gradle build", async t => {
+  const { app, step, status } = await fixture(t);
   await mkdir(path.dirname(path.join(app, INIT)), { recursive: true });
   await writeFile(path.join(app, INIT), "settingsEvaluated { }\n");
   const foreign = await step("apply");
@@ -312,9 +312,15 @@ test("gradle: apply refuses a tracked or project-owned init script and a session
   assert.equal(tracked.code, "vibe64_connected_derived_tracked", tracked.error);
   assert.match(tracked.error, /tracks \.development\/gradle-home\/gradle\.properties in Git/u);
 
+  // No Gradle build here uses the checkout: preparation goes on and says so.
   await rm(path.join(app, "settings.gradle.kts"));
   await rm(path.join(app, "build.gradle.kts"));
-  assert.equal((await step("apply")).code, "vibe64_connected_gradle_consumer");
+  const said = "[Connected] Library is connected, but nothing here installs it: remove it or install it. " +
+    "The session source is not a Gradle build, so no Gradle build uses it.";
+  assert.deepEqual(await step("apply"), { ok: true, output: said });
+  assert.deepEqual(await step("proof"), { ok: true, output: said });
+  const proof = await status();
+  assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, said.slice("[Connected] ".length)]);
 });
 
 test("gradle: restore takes the session's Gradle home and the scripts back once no gradle connection remains", async t => {

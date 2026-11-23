@@ -65,7 +65,9 @@ The output has one line per repository:
 Preparation then writes the Stack's `Sources file` pointing at the copies (when
 Stack names one), puts each typed dependency copy in effect, proves it, and
 runs any declared connected Prepare and Verify commands; see
-[Configure connected repositories](connected-projects.md).
+[Configure connected repositories](connected-projects.md). A typed dependency
+nothing in the session installs does not stop it: preparation says `<name> is
+connected, but nothing here installs it: remove it or install it.` and goes on.
 
 Preparation stops, naming the repository, when:
 

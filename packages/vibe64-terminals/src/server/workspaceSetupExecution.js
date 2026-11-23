@@ -134,13 +134,13 @@ function createWorkspaceSetupExecution({
 
   /**
    * Whether every typed connected dependency of a ready recipe is in effect in the session's trees
-   * now; the first that is not, with why.
+   * now; the first that is not, with why. One nothing in the session installs needs no preparation.
    */
   async function connectedInEffect(setup, session) {
     if (!setup?.connectedDevelopment?.adapters) return { inEffect: true, reason: "" };
     try {
       const proofs = await project.inspectConnectedAdapters({ session });
-      const missing = proofs.find(proof => !proof.inEffect);
+      const missing = proofs.find(proof => !proof.inEffect && !proof.unused);
       return missing
         ? { inEffect: false, reason: `Connected ${missing.name} is not in effect: ${missing.reason}` }
         : { inEffect: true, reason: "" };

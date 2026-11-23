@@ -23,7 +23,10 @@ copy in place of the published package (for npm, every installed copy becomes
 exactly what npm would publish from it, kept in step on save while the session
 runs) and proves it is in effect; a connection that is not in effect blocks
 preparation with the reason, never falling back silently, and session status
-shows each copy's state. Nothing Vibe64 generates for it is committed, so a
+shows each copy's state. A connection nothing in the session installs blocks
+neither preparation nor Preview: preparation, session status and Connected
+repositories say it is connected, but nothing here installs it, so remove it
+or install it. Nothing Vibe64 generates for it is committed, so a
 saved commit, and everything built from one, uses published packages. Update brings every copy onto
 its repository's main with the session's own repository; a copy that conflicts
 stays as it was and its conflict is reviewed and repaired like the session's own,

@@ -5,6 +5,7 @@ import test from "node:test";
 import { normalizeConnectedProjects, readConnectedProjects, saveConnectedProjects } from "../../packages/vibe64-project/src/server/connectedProjects.js";
 import { CONNECTED_PACKAGE_TYPE_VALUES } from "../../packages/vibe64-genesis/src/shared/connectedPackageTypes.js";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
+import { createProjectSettings } from "../../packages/vibe64-project/src/server/projectSettings.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { withTemporaryRoot, projectServiceCollaborators } from "./vibe64TestHelpers.js";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "@local/vibe64-core/server/sessionSourcePath";
@@ -184,5 +185,37 @@ test("catalogue settings change only the exact session source, preserving the ot
     assert.deepEqual((await project.readSettings({ sessionId: "first" })).connectedProjects.repositories, [library]);
     await project.saveConnectedProjects({ sessionId: "first", repositories: [], revision: first.connectedProjects.revision });
     assert.deepEqual((await project.readSettings({ sessionId: "second" })).connectedProjects.repositories, [composition]);
+  });
+});
+
+test("the page's state names each connection nothing in the session installs, with the sentence that says to remove or install it", async () => {
+  await withTemporaryRoot(async (root) => {
+    await saveConnectedProjects(root, { repositories: [library, composition] }, "");
+    const session = { sessionId: "s1" };
+    const unused = "Example library is connected, but nothing here installs it: remove it or install it. " +
+      "No tree of this session installs any of its packages (@example/library).";
+    let proofs = [
+      { repository: library.repository, inEffect: false, unused: true, reason: unused },
+      { repository: composition.repository, inEffect: false, unused: false, reason: "prepare the workspace" }
+    ];
+    const seen = [];
+    const settings = createProjectSettings({
+      inspectConnectedAdapters: async (input) => {
+        seen.push(input.session);
+        if (proofs instanceof Error) throw proofs;
+        return proofs;
+      },
+      selection: {
+        genesisSettingsSourceForInput: async () => ({ rootKind: "session-source", sessionId: "s1", sourceRoot: root }),
+        sessionForInput: async (_input, sessionId) => (sessionId === "s1" ? session : null)
+      }
+    });
+    const state = await settings.connectedProjectsState({});
+    assert.deepEqual(state.unused, [{ repository: library.repository, reason: unused }]);
+    assert.deepEqual(state.repositories, [library, composition]);
+    assert.deepEqual(seen, [session], "it reads the selected session's own connections");
+    // A session it cannot check shows none, and the list still reads.
+    proofs = new Error("Stack unreadable");
+    assert.deepEqual((await settings.connectedProjectsState({})).unused, []);
   });
 });

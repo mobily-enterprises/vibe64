@@ -22,6 +22,9 @@ Gradle, NuGet (.NET) or custom; it is independent of the relationship.
 Custom requires a Preparation script path relative to this project, with its
 runtime declared in Stack. Every other type disables and clears the script; the
 project's own declared Verify command, not Vibe64, treats that source.
+An entry nothing in the selected session installs shows `<name> is connected,
+but nothing here installs it: remove it or install it.` with why; preparation
+and Preview carry on without it.
 Use **Save connected repositories** for the list; ordinary project Save pushes
 that source edit. See **Configure connected repositories** for access and recovery.
 

@@ -151,7 +151,30 @@ top, and turns each typed dependency into
 two workspace preparation steps. `runConnectedAdapterStep` serializes applies
 (and syncs) per session source and returns a command-shaped result;
 `inspectConnectedAdapters` runs every proof without a command runner, from files
-only, for `isPrepared` and session status. The npm adapter (`npm.js`,
+only, for `isPrepared` and session status.
+
+A connection nothing in the session installs is unused, not a failure: apply
+resolves to `{ lines, unused }` and the proof to `notUsed(reason)`
+(`adapterResults.js`, `{ inEffect: false, unused: true, reason }`). Both steps
+then succeed with `[Connected] <name> is connected, but nothing here installs
+it: remove it or install it. <reason>`, `inspectConnectedAdapters` reports
+`unused: true` with that sentence as the reason, `connectedInEffect` in
+`workspaceSetupExecution.js` does not count it (so Preview does not prepare
+again for it), session status passes `unused`, and `connectedProjectsState`
+gives the page its `unused` list. Each adapter decides from the same input in
+apply and in its files-only proof, so status agrees with preparation: npm, no
+installed copy; composer and bundler, the manifest and tracked lock (their
+plans leave unused connections out, and with none used apply runs the type's
+restore); cargo, no workspace member declares the crate (`cargo metadata
+--no-deps`), which the files-only proof reads from the derived lock's
+source-less packages (`dependedOnInLock`); nuget, no evaluated
+`PackageReference` (files-only: no Vibe64 import and no project file names
+it); gomod, no session `go.mod` or no `require` of the module (only
+preparation's `go list -deps` finds a required module no package imports);
+maven and gradle, a session source that is no Maven project or Gradle build.
+pip installs every connection, so it has none.
+
+The npm adapter (`npm.js`,
 `npmPackages.js`) finds the connected copy's publishable packages (npm
 workspaces and in-repository `file:` packages, never `private` ones), every
 installed copy of them in the session's trees, and replaces each with the

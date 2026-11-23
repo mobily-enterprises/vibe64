@@ -15,7 +15,7 @@ import { readdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
-import { connectionError, notInEffect } from "./adapterResults.js";
+import { connectionError, notInEffect, notUsed } from "./adapterResults.js";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 import { existingEntry } from "./npmPackages.js";
 
@@ -90,17 +90,20 @@ async function realRoot(connection) {
 }
 
 /**
- * What the session's bundle must look like for every connected Bundler dependency. A connected
- * copy holds exactly one gemspec, named after its gem.
+ * What the session's bundle must look like for every connected Bundler dependency it uses; `unused`
+ * holds why, by repository, for each one it does not. A connected copy holds exactly one gemspec,
+ * named after its gem.
  * @param {{ connections: Array<object>, sessionSourceRoot: string }} input
  */
 async function bundlerPlan({ connections, sessionSourceRoot }) {
+  const gems = [];
+  const unused = new Map();
   if (!(await existingEntry(path.join(sessionSourceRoot, GEMFILE)))?.isFile()) {
-    throw connectionError(connections[0], "the session source has no Gemfile, so no bundle uses it.", "vibe64_connected_bundler_unused");
+    for (const connection of connections) unused.set(connection.repository, "The session source has no Gemfile, so no bundle uses it.");
+    return { gemfileText: derivedGemfile(gems), gems, lockText: null, unused };
   }
   const lockText = await readDerivedFile(sessionSourceRoot, "Gemfile.lock");
   const locked = lockedGems(lockText);
-  const gems = [];
   for (const connection of connections) {
     const root = await realRoot(connection);
     const gemspecs = (await readdir(root)).filter(entry => entry.endsWith(".gemspec"));
@@ -113,11 +116,8 @@ async function bundlerPlan({ connections, sessionSourceRoot }) {
     }
     const name = gemspecs[0].slice(0, -".gemspec".length);
     if (lockText !== null && !locked.has(name)) {
-      throw connectionError(
-        connection,
-        `the session's Gemfile.lock does not use ${name}, so nothing would take it from the connected copy.`,
-        "vibe64_connected_bundler_unused"
-      );
+      unused.set(connection.repository, `The session's Gemfile.lock does not use ${name}, so nothing would take it from the connected copy.`);
+      continue;
     }
     gems.push({
       connection,
@@ -129,7 +129,8 @@ async function bundlerPlan({ connections, sessionSourceRoot }) {
   return {
     gemfileText: derivedGemfile(gems),
     gems,
-    lockText
+    lockText,
+    unused
   };
 }
 
@@ -141,9 +142,16 @@ function failure(result) {
   return String(result?.stderr || result?.error || "").trim().split("\n").slice(-8).join("\n");
 }
 
-/** Puts every connected Bundler dependency in effect in the session source. */
+/**
+ * Puts every connected Bundler dependency the session uses in effect in the session source. With
+ * none used, Vibe64's derived Gemfile and the setting selecting it go, as once none is connected.
+ */
 async function applyBundler({ connection, connections, sessionSourceRoot, runCommand, writeGitExcludes }) {
   const plan = await bundlerPlan({ connections, sessionSourceRoot });
+  if (plan.unused.has(connection.repository)) {
+    const lines = plan.gems.length ? [] : await restoreBundler({ connections: [], sessionSourceRoot, writeGitExcludes });
+    return { lines, unused: plan.unused.get(connection.repository) };
+  }
   for (const gem of plan.gems) {
     const named = await runCommand({
       command: "ruby",
@@ -234,6 +242,7 @@ function inside(root, candidate) {
 /** Whether this connection's gem loads from its connected copy. */
 async function proveBundler({ connection, connections, sessionSourceRoot, runCommand }) {
   const plan = await bundlerPlan({ connections, sessionSourceRoot });
+  if (plan.unused.has(connection.repository)) return notUsed(plan.unused.get(connection.repository));
   const own = planEntry(plan, connection);
   const gemfile = await readDerivedFile(sessionSourceRoot, DERIVED_GEMFILE);
   if (gemfile === null) {

@@ -6,10 +6,13 @@
 // The contract every adapter implements (one module per type):
 //   type                 the package type it treats
 //   runtimeRequirements  the Stack runtime ids its commands need
-//   apply(context)       puts the connection in effect, idempotently; resolves to { lines }
-//   proof(context)       whether it is in effect; resolves to { inEffect, reason }. It reads files
-//                        only when context.runCommand is null (session status); in preparation it
-//                        may also ask the toolchain
+//   apply(context)       puts the connection in effect, idempotently; resolves to { lines }, with
+//                        `unused` (why) when nothing in the session installs the connection, which
+//                        is no failure: the other connections of its type still apply
+//   proof(context)       whether it is in effect; resolves to { inEffect, reason }, or notUsed(reason)
+//                        ({ unused: true }) for a connection nothing installs. It reads files only
+//                        when context.runCommand is null (session status), and says unused from the
+//                        files whenever its apply would; in preparation it may also ask the toolchain
 //   locked(context)      [{ package, connected, locked, unreleased? }], the version the connected copy
 //                        carries and the published one the project's tracked lockfile installs (what
 //                        Staging and Production use); the gap Vibe64 shows comes from it. `unreleased`,
@@ -108,9 +111,15 @@ function adapterContext({ connection, repositories, sessionSourceRoot, runComman
   };
 }
 
+/** What preparation and status say of a connection nothing in the session installs. */
+function unusedText(connection, reason) {
+  return `${connection.name} is connected, but nothing here installs it: remove it or install it. ${reason}`.trim();
+}
+
 /**
  * Runs one adapter step for the runner, with a command-shaped result: `output` for the
- * preparation's transcript, `error` its failure.
+ * preparation's transcript, `error` its failure. A connection nothing installs is no failure:
+ * preparation goes on, and the output says so.
  * @param {object} input
  * @param {"apply" | "proof"} input.action
  * @param {string} input.repository the step's connection
@@ -128,10 +137,11 @@ async function runConnectedAdapterStep({ action, repository, repositories, sessi
     const context = adapterContext({ connection, repositories, sessionSourceRoot, runCommand });
     if (action === "apply") {
       // A sync of the same trees waits for the swap, and the swap for it.
-      const { lines = [] } = await serializeForTrees(sessionSourceRoot, () => adapter.apply(context));
-      return { ok: true, output: lines.join("\n") };
+      const { lines = [], unused } = await serializeForTrees(sessionSourceRoot, () => adapter.apply(context));
+      return { ok: true, output: [...lines, ...(unused ? [`[Connected] ${unusedText(connection, unused)}`] : [])].join("\n") };
     }
     const proof = await adapter.proof(context);
+    if (proof.unused) return { ok: true, output: `[Connected] ${unusedText(connection, proof.reason)}` };
     if (!proof.inEffect) return { ok: false, error: `Connected ${connection.name} is not in effect: ${proof.reason}` };
     const gaps = (await lockedVersions(connection, context)).map(entry => releaseGapLine(connection, entry));
     return { ok: true, output: [`[Connected] ${connection.name} is in effect.`, ...gaps].join("\n") };
@@ -145,7 +155,8 @@ async function runConnectedAdapterStep({ action, repository, repositories, sessi
  * and what Staging and Production use instead. `runCommand`, when given, is only for the read-only
  * Git questions of `locked` (has the copy changed since the published commit); proofs never get it.
  * @param {{ repositories: Array<object>, sessionSourceRoot: string, runCommand?: Function | null }} input
- * @returns {Promise<Array<{ name: string, repository: string, type: string, sourceRoot: string, inEffect: boolean, reason: string, published: Array<object> }>>}
+ * A connection nothing installs is `unused`, its reason the sentence status shows.
+ * @returns {Promise<Array<{ name: string, repository: string, type: string, sourceRoot: string, inEffect: boolean, unused: boolean, reason: string, published: Array<object> }>>}
  */
 async function inspectConnectedAdapters({ repositories, sessionSourceRoot, runCommand = null }) {
   const results = [];
@@ -164,7 +175,8 @@ async function inspectConnectedAdapters({ repositories, sessionSourceRoot, runCo
       type: connection.type,
       sourceRoot: connection.sourceRoot,
       inEffect: proof.inEffect === true,
-      reason: proof.inEffect === true ? "" : String(proof.reason || ""),
+      unused: proof.inEffect !== true && proof.unused === true,
+      reason: proof.inEffect === true ? "" : proof.unused === true ? unusedText(connection, String(proof.reason || "")) : String(proof.reason || ""),
       published
     });
   }

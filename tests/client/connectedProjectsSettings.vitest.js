@@ -6,10 +6,10 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({ useCommand:
 import ConnectedProjectsSettings from "../../src/components/studio/ConnectedProjectsSettings.vue";
 
 let app;
-function mount(repositories) {
+function mount(repositories, extra = {}) {
   const renderer = createRenderer({ createComment: (text) => ({ text }), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   app = renderer.createApp({ ...ConnectedProjectsSettings, render: () => null }, { projectSlug: "books", state: {
-    available: true, canEdit: true, exists: true, revision: "r1", source: { sessionId: "s1" }, repositories
+    available: true, canEdit: true, exists: true, revision: "r1", source: { sessionId: "s1" }, repositories, ...extra
   } });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
@@ -51,4 +51,13 @@ it("binds the script field's disabled state to the shared type rule", () => {
   expect(component).toContain("saving || !scriptAllowed(entry)\"");
   expect(component).toContain("@local/vibe64-genesis/shared/connectedPackageTypes");
   expect(component).not.toMatch(/entry\.type === 'npm'/u);
+});
+
+it("says beside each connection nothing in the session installs that it is connected but unused, and nothing beside the others", () => {
+  const other = { name: "Other", repository: "https://github.com/example/other", relationship: "dependency" };
+  const reason = "Library is connected, but nothing here installs it: remove it or install it. No tree of this session installs any of its packages (library).";
+  const state = mount([library, other], { unused: [{ repository: library.repository, reason }] });
+  expect(state.draft.map((entry) => state.unusedReason(entry))).toEqual([reason, ""]);
+  const component = readFileSync(new URL("../../src/components/studio/ConnectedProjectsSettings.vue", import.meta.url), "utf8");
+  expect(component).toContain('<v-alert v-if="unusedReason(entry)" type="info" variant="tonal" density="compact">{{ unusedReason(entry) }}</v-alert>');
 });

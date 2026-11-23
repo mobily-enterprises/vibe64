@@ -120,8 +120,8 @@ deployment, uses the published packages.
   connection in effect again. A development server that bundles packages ahead
   (Vite) keeps what it bundled until it restarts: Vibe64 clears Vite's
   dependency metadata, so restarting Preview shows client changes. A connected
-  package no tree installs is refused by name, and a package marked `private`
-  is never a candidate. On **Save**, once the registry has published the
+  repository none of whose packages any tree installs is unused (see below),
+  and a package marked `private` is never a candidate. On **Save**, once the registry has published the
   version the connected copy carries, Vibe64 moves the project's
   `package.json` and `package-lock.json` to it (`npm install
   --package-lock-only`, so the swap stays) and keeps the registry's copy of
@@ -229,6 +229,34 @@ the next Preview start or **Prepare workspace** shows `Workspace preparation
 started again. Connected <name> is not in effect: <reason>` and puts it back.
 The session status (`vibe64-helper session status --json`) shows each copy's
 `inEffect` and `reason`.
+
+A typed Dependency that nothing in the session installs is unused, and it never
+fails preparation or Preview: its steps print `[Connected] <name> is connected,
+but nothing here installs it: remove it or install it.` followed by why, and
+preparation goes on with the other steps. Each type decides from the project's
+own files and toolchain:
+
+- **npm**: no tree installs any of the repository's packages;
+- **composer**: no `composer.json`, or neither it nor `composer.lock` names the
+  package;
+- **bundler**: no `Gemfile`, or `Gemfile.lock` does not lock the gem;
+- **gomod**: the session source has no `go.mod`, or its `go.mod` does not
+  require the module; preparation's check also finds a module no package of the
+  build of `./...` imports, which session status, reading files only, still
+  shows in effect;
+- **cargo**: no package of the session depends on the crate (it gets no patch);
+- **nuget**: no project references a package the copy builds;
+- **maven** and **gradle**: the session source is not a Maven project
+  (`pom.xml`) or a Gradle build.
+
+Other connections of the same type still go into effect, and once none of a
+type is used Vibe64 takes back what it derived for it (for example
+`Gemfile.connected` or `composer.connected.json`), as when the connection is
+removed. Session status shows the copy with `unused: true` and the same
+sentence as its `reason`, and **Connected repositories** shows that sentence
+under the entry. Remove the connection from the list, or declare and install
+the package the project uses; the next preparation then puts it in effect. A
+pip connection is always installed, so it is never unused.
 
 A Composition connection is assembled by the project itself, so a non-custom
 composition still needs a project Verify command: without one, preparation is

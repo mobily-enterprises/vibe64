@@ -12,6 +12,7 @@ import { readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import semver from "semver";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { notUsed } from "./adapterResults.js";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 import { copyDiffersFromRevision } from "./publishedSource.js";
 
@@ -59,17 +60,13 @@ function within(dir, root) {
 
 /**
  * The workspace the session source needs now: its module, every connected module and the go.work
- * text that uses them. Refuses a connection that is not one distinct Go module.
+ * text that uses them; `unused` (why) when the session source is no Go module, so none is used.
+ * Refuses a connection that is not one distinct Go module.
  */
 async function goWorkspace({ connections, sessionSourceRoot }) {
   const root = await realpath(sessionSourceRoot);
   const app = await readGoMod(root);
-  if (!app) {
-    throw vibe64Error(
-      `The session source ${root} has no go.mod at its root, so Vibe64 cannot connect Go modules to it.`,
-      "vibe64_connected_gomod_no_module"
-    );
-  }
+  if (!app) return { root, unused: `The session source ${root} has no go.mod with a module line at its root, so no Go build uses it.` };
   const modules = [];
   for (const connection of connections) {
     const sourceRoot = await realpath(connection.sourceRoot);
@@ -122,8 +119,15 @@ async function go(runCommand, root, args) {
   return { output: "", failed: `go ${args.join(" ")} failed${detail ? `: ${detail}` : ""}` };
 }
 
+/** Why the session uses the connected module nowhere, from its go.mod alone; "" when it requires it. */
+async function notRequired(root, modulePath) {
+  const goMod = await readFile(path.join(root, "go.mod"), "utf8").catch(() => "");
+  return requiredVersions(goMod).has(modulePath) ? "" : `The session's go.mod does not require ${modulePath}.`;
+}
+
 async function applyGomod({ connection, connections, sessionSourceRoot, runCommand, writeGitExcludes }) {
-  const { root, modules, text } = await goWorkspace({ connections, sessionSourceRoot });
+  const { root, modules, text, unused: noModule } = await goWorkspace({ connections, sessionSourceRoot });
+  if (noModule) return { lines: [], unused: noModule };
   const existing = await readDerivedFile(root, WORK_FILE);
   if (existing !== null && !ours(existing)) {
     throw vibe64Error(
@@ -136,6 +140,9 @@ async function applyGomod({ connection, connections, sessionSourceRoot, runComma
   await writeDerivedFiles({ connection, tree: root, files: { [WORK_FILE]: text }, runCommand, writeGitExcludes });
   await writeGitExcludes(root, [WORK_FILE, WORK_SUM_FILE]);
   const own = modules.find(entry => entry.repository === connection.repository);
+  // The go.work still uses it, which changes no build.
+  const unused = await notRequired(root, own.modulePath);
+  if (unused) return { lines: [], unused };
   return { lines: [`[Connected] ${connection.name}: ${own.modulePath} in effect from ${own.sourceRoot} through ${WORK_FILE}.`] };
 }
 
@@ -146,8 +153,11 @@ async function proveGomod({ connection, connections, sessionSourceRoot, runComma
   } catch (error) {
     return { inEffect: false, reason: String(error?.message || error) };
   }
+  if (workspace.unused) return notUsed(workspace.unused);
   const { root, modules, text } = workspace;
   const own = modules.find(entry => entry.repository === connection.repository);
+  const unused = await notRequired(root, own.modulePath);
+  if (unused) return notUsed(unused);
   const workPath = path.join(root, WORK_FILE);
   const current = await readDerivedFile(root, WORK_FILE);
   if (current === null) return { inEffect: false, reason: `${workPath} is missing; prepare the workspace to write it.` };
@@ -177,9 +187,7 @@ async function proveGomod({ connection, connections, sessionSourceRoot, runComma
     }
     used += 1;
   }
-  if (!used) {
-    return { inEffect: false, reason: `No package of ${own.modulePath} is in the build of ./..., so the session does not use it.` };
-  }
+  if (!used) return notUsed(`No package of ${own.modulePath} is in the build of ./..., so the session does not use it.`);
   return { inEffect: true, reason: "" };
 }
 

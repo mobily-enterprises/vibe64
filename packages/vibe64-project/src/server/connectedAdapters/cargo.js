@@ -10,6 +10,7 @@ import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import semver from "semver";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { notUsed } from "./adapterResults.js";
 import { errorSummary, lastLine } from "./commandOutput.js";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 
@@ -136,9 +137,27 @@ function patchKey(source) {
   return source.startsWith("git+") ? tomlString(source.slice(4).split(/[?#]/u)[0]) : "";
 }
 
-/** The [patch] table each crate belongs in, from where the session's packages declare it. */
+/** Why a crate no package of the session depends on is unused. */
+function unusedReason(crate) {
+  return `No package of this session depends on the crate ${crate.name}, so there is nothing to patch.`;
+}
+
+/**
+ * Whether one of the session's own packages (those without a source in the lock) depends on the
+ * crate: what the derived lock records of the declarations `cargo metadata --no-deps` read.
+ */
+function dependedOnInLock(text, name) {
+  return String(text).split(/^\[\[package\]\]$/mu).slice(1).some(block => !/^source = /mu.test(block) &&
+    [...(/^dependencies = \[([\s\S]*?)^\]/mu.exec(block)?.[1] || "").matchAll(/"([^"\s]+)[^"]*"/gu)].some(match => match[1] === name));
+}
+
+/**
+ * The [patch] table each crate belongs in, from where the session's packages declare it; `unused`
+ * names the crates no package of the session depends on, which get none.
+ */
 function patchTables(connection, crates, metadata) {
   const tables = new Map();
+  const unused = new Set();
   for (const crate of crates) {
     const sources = new Set();
     for (const entry of metadata.packages || []) {
@@ -147,10 +166,8 @@ function patchTables(connection, crates, metadata) {
       }
     }
     if (!sources.size) {
-      throw vibe64Error(
-        `Connected ${crate.connection.name}: no package of this session depends on the crate ${crate.name}, so there is nothing to patch.`,
-        "vibe64_connected_cargo_unused"
-      );
+      unused.add(crate.name);
+      continue;
     }
     if (sources.size > 1) {
       throw vibe64Error(
@@ -168,7 +185,7 @@ function patchTables(connection, crates, metadata) {
     }
     tables.set(key, [...(tables.get(key) || []), crate]);
   }
-  return tables;
+  return { tables, unused };
 }
 
 function configText(sessionSourceRoot, tables) {
@@ -192,12 +209,13 @@ async function applyCargo({ connection, connections, sessionSourceRoot, runComma
     cwd: sessionSourceRoot
   });
   const trackedLock = await readDerivedFile(sessionSourceRoot, "Cargo.lock");
+  const { tables, unused } = patchTables(connection, crates, declared);
   // Every apply starts the derived lock from the tracked one, so the two differ only by the patched crates.
   await writeDerivedFiles({
     connection,
     tree: sessionSourceRoot,
     files: {
-      [CONFIG]: configText(sessionSourceRoot, patchTables(connection, crates, declared)),
+      [CONFIG]: configText(sessionSourceRoot, tables),
       ...(trackedLock === null ? {} : { [LOCK]: trackedLock })
     },
     runCommand,
@@ -205,7 +223,7 @@ async function applyCargo({ connection, connections, sessionSourceRoot, runComma
   });
   // A lock entry at another version holds Cargo to it and leaves the patch unused: move the derived
   // lock's entry to the checkout's version, which only the patch provides.
-  for (const crate of crates) {
+  for (const crate of crates.filter(entry => !unused.has(entry.name))) {
     const entries = trackedLock === null ? [] : lockEntries(trackedLock, crate.name);
     if (!entries.length || entries.some(entry => entry.version === crate.version)) continue;
     const moved = await runCommand({
@@ -232,6 +250,7 @@ async function applyCargo({ connection, connections, sessionSourceRoot, runComma
     );
   }
   const own = crates.find(entry => entry.connection.repository === connection.repository);
+  if (unused.has(own.name)) return { lines: [], unused: unusedReason(own) };
   return { lines: [`[Connected] ${connection.name}: crate ${own.name} ${own.version} patched to ${own.root} through ${CONFIG}.`] };
 }
 
@@ -294,10 +313,16 @@ async function proveCargo({ connection, sessionSourceRoot, runCommand }) {
   if (config === null) return { inEffect: false, reason: `${CONFIG} is missing in the session source; prepare the workspace to write it.` };
   const lines = config.split("\n");
   if (lines[0] !== MARKER) return { inEffect: false, reason: `${CONFIG} in the session source was not written by Vibe64.` };
+  const lock = await readDerivedFile(sessionSourceRoot, LOCK);
+  // Cargo resolved the derived lock in the preparation that left the crate unpatched, and again in
+  // every build since: a package of the session that depends on the crate now needs the patch.
+  if (lock !== null && lines.includes(lockfileLine(sessionSourceRoot)) && !lines.includes(patchLine(crate)) &&
+      !dependedOnInLock(lock, crate.name)) {
+    return notUsed(unusedReason(crate));
+  }
   if (!lines.includes(patchLine(crate)) || !lines.includes(lockfileLine(sessionSourceRoot))) {
     return { inEffect: false, reason: `${CONFIG} does not patch ${crate.name} to this session's copy ${crate.root}; prepare the workspace again.` };
   }
-  const lock = await readDerivedFile(sessionSourceRoot, LOCK);
   if (lock === null) return { inEffect: false, reason: `the derived lock ${LOCK} is missing; prepare the workspace again.` };
   // In preparation Cargo itself answers, and says why.
   if (runCommand) {

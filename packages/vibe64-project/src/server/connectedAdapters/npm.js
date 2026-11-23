@@ -13,6 +13,7 @@ import semver from "semver";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { notUsed } from "./adapterResults.js";
 import { connectedNpmPackages, existingEntry, installedCopies, readJsonFile, resolveFromCopy } from "./npmPackages.js";
 
 const STATE_DIRECTORY = ".vibe64-connected";
@@ -331,19 +332,20 @@ async function connectedVersionsOf(npmConnections) {
   return versions;
 }
 
+/** Why a connection nothing installs is unused: what a tree would have to install. */
+function unusedReason(packages) {
+  return `No tree of this session installs any of its packages (${packages.map(entry => entry.name).join(", ")}).`;
+}
+
 /**
- * Puts the connection's packages in effect in every tree, idempotently.
+ * Puts the connection's packages in effect in every tree, idempotently; a connection no tree
+ * installs is unused.
  * @param {NpmAdapterContext} context
  */
 async function applyNpm({ connection, npmConnections, trees, runCommand, writeGitExcludes }) {
   const packages = await connectedNpmPackages(connection);
   let copies = await copiesByPackage(packages, trees);
-  if (!copies.length) {
-    throw vibe64Error(
-      `Connected ${connection.name}: no tree of this session installs any of its packages (${packages.map(entry => entry.name).join(", ")}). Declare the one you use in package.json and install it.`,
-      "vibe64_connected_npm_unused"
-    );
-  }
+  if (!copies.length) return { lines: [], unused: unusedReason(packages) };
   const lines = [];
   const needs = await missingDependencies({ connectedVersions: await connectedVersionsOf(npmConnections), copies, packages });
   if (needs.length) {
@@ -404,9 +406,7 @@ async function applyNpm({ connection, npmConnections, trees, runCommand, writeGi
 async function proveNpm({ connection, npmConnections, trees }) {
   const packages = await connectedNpmPackages(connection);
   const copies = await copiesByPackage(packages, trees);
-  if (!copies.length) {
-    return { inEffect: false, reason: `No tree of this session installs any of ${connection.name}'s packages (${packages.map(entry => entry.name).join(", ")}).` };
-  }
+  if (!copies.length) return notUsed(unusedReason(packages));
   const states = new Map();
   for (const tree of trees) states.set(tree, await readState(tree));
   for (const copy of copies) {

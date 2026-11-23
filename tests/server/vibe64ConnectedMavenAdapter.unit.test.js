@@ -244,6 +244,18 @@ test("maven: apply refuses a tracked or project-owned maven.config and a Maven w
   assert.equal(await git(app, "status", "--porcelain"), "");
 });
 
+test("maven: a session source with no pom.xml leaves preparation going and says to remove or install it", async t => {
+  const { app, calls, step, status } = await fixture(t);
+  await rm(path.join(app, "pom.xml"));
+  const said = "[Connected] Library is connected, but nothing here installs it: remove it or install it. " +
+    "The session source has no pom.xml, so no Maven build uses it.";
+  assert.deepEqual(await step("apply"), { ok: true, output: said });
+  assert.deepEqual(await step("proof"), { ok: true, output: said });
+  assert.deepEqual(calls, [], "Maven runs for nothing");
+  const proof = await status();
+  assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, said.slice("[Connected] ".length)]);
+});
+
 test("maven: restore takes the derived files and the connected repository back once no maven connection remains", async t => {
   const { app, repositories, step } = await fixture(t);
   assert.equal((await step("apply")).ok, true);

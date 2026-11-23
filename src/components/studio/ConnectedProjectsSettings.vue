@@ -15,6 +15,7 @@
         </v-alert>
         <fieldset v-for="(entry, index) in draft" :key="index" class="connection-entry" :disabled="!state.canEdit || saving">
           <legend class="text-label-large">Connected repository {{ index + 1 }}</legend>
+          <v-alert v-if="unusedReason(entry)" type="info" variant="tonal" density="compact">{{ unusedReason(entry) }}</v-alert>
           <v-text-field :disabled="!state.canEdit || saving" v-model="entry.name" label="Name" maxlength="100" variant="outlined" hide-details="auto" />
           <v-text-field :disabled="!state.canEdit || saving" v-model="entry.repository" label="GitHub repository URL" placeholder="https://github.com/owner/repository" variant="outlined" hide-details="auto" />
           <v-select :disabled="!state.canEdit || saving" v-model="entry.relationship" label="Relationship" :items="relationships" item-title="label" item-value="value" variant="outlined" hide-details="auto" />
@@ -65,6 +66,10 @@ function setPackageType(entry, value) {
   if (value) entry.type = value;
   else delete entry.type;
   if (!scriptAllowed(entry)) delete entry.script;
+}
+// The session's connections nothing in it installs, which preparation leaves out and goes on.
+function unusedReason(entry) {
+  return (props.state.unused || []).find((item) => item.repository === entry.repository)?.reason || "";
 }
 function setScript(entry, value) {
   if (value) entry.script = value;

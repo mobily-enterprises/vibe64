@@ -152,6 +152,7 @@ test("pip: apply installs the checkout editable in .venv with the tracked requir
     type: "pip",
     sourceRoot: f.repositories[0].sourceRoot,
     inEffect: true,
+    unused: false,
     reason: "",
     // The example's requirement is a range, so no published version is pinned.
     published: [{ package: "acme-library", connected: "1.0.0", locked: null }]

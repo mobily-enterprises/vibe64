@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { notInEffect } from "./adapterResults.js";
+import { notInEffect, notUsed } from "./adapterResults.js";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 import { connectedArtifacts, dependencyVersion } from "./mavenPom.js";
 
@@ -160,13 +160,10 @@ async function isMavenProject(dir) {
   return (await stat(path.join(dir, "pom.xml")).catch(() => null))?.isFile() === true;
 }
 
-async function requireProjects({ connection, connections, sessionSourceRoot }) {
-  if (!(await isMavenProject(sessionSourceRoot))) {
-    throw vibe64Error(
-      `Connected ${connection.name}: the session source has no pom.xml, so Maven cannot use a connected checkout there.`,
-      "vibe64_connected_maven_consumer"
-    );
-  }
+/** A session source that is no Maven project uses no connected checkout: the connection is unused. */
+const NO_PROJECT = "The session source has no pom.xml, so no Maven build uses it.";
+
+async function requireProjects({ connections, sessionSourceRoot }) {
   const consumer = await realpath(sessionSourceRoot);
   for (const entry of connections) {
     if (!(await isMavenProject(entry.sourceRoot))) {
@@ -246,7 +243,8 @@ async function staleness({ record, connections, sessionSourceRoot, tail }) {
 
 /** Installs every connected checkout of the type, in the Sources file's order, then selects them. */
 async function applyMaven({ connection, connections, sessionSourceRoot, runCommand, writeGitExcludes }) {
-  await requireProjects({ connection, connections, sessionSourceRoot });
+  if (!(await isMavenProject(sessionSourceRoot))) return { lines: [], unused: NO_PROJECT };
+  await requireProjects({ connections, sessionSourceRoot });
   await requireMaven({ connection, sessionSourceRoot, runCommand });
   const tail = await userRepository({ connection, sessionSourceRoot, runCommand });
   await refuseTracked({ connection, tree: sessionSourceRoot, paths: [...GENERATED], runCommand });
@@ -333,6 +331,7 @@ async function applyMaven({ connection, connections, sessionSourceRoot, runComma
 }
 
 async function proveMaven({ connection, sessionSourceRoot, runCommand }) {
+  if (!(await isMavenProject(sessionSourceRoot))) return notUsed(NO_PROJECT);
   const config = await readDerivedFile(sessionSourceRoot, CONFIG);
   if (config === null) return notInEffect(`${CONFIG} is missing; prepare the workspace to install the connected checkout.`);
   const record = await readRecord(sessionSourceRoot);

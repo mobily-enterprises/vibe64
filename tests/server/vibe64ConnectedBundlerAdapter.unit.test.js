@@ -210,7 +210,7 @@ test("bundler: the proof says exactly why once the connection is undone", async 
   assert.equal((await status(fixture)).reason, "Gemfile.connected is missing; prepare the workspace to take acme_library from the connected copy.");
 });
 
-test("bundler: a tracked local setting, a gemspec named for another gem and a gem the app does not use are refused", async t => {
+test("bundler: a tracked local setting and a gemspec named for another gem are refused", async t => {
   const fixture = await bundlerFixture(t);
   await mkdir(path.join(fixture.app, ".bundle"), { recursive: true });
   await writeFile(path.join(fixture.app, ".bundle", "config"), "---\nBUNDLE_PATH: \"vendor/bundle\"\n");
@@ -225,12 +225,60 @@ test("bundler: a tracked local setting, a gemspec named for another gem and a ge
   assert.equal(wrong.code, "vibe64_connected_bundler_gemspec_invalid");
   assert.equal(wrong.error, "Connected Library: acme_library.gemspec names the gem acme-library; Vibe64 needs the gemspec file named after its gem.");
 
-  const unused = await bundlerFixture(t, { gemspec: "acme_other.gemspec" });
+});
+
+test("bundler: a gem the app does not use leaves preparation going and says to remove or install it, while the gem it uses still applies", async t => {
+  const fixture = await bundlerFixture(t);
+  const other = path.join(path.dirname(fixture.library), "other");
+  await mkdir(other, { recursive: true });
+  await writeFile(path.join(other, "acme_other.gemspec"), "Gem::Specification.new { |spec| spec.name = 'acme_other' }\n");
+  const otherRepository = "https://github.com/example/other";
+  fixture.repositories.push({ name: "Other", repository: otherRepository, relationship: "dependency", type: "bundler", sourceRoot: other });
+  const said = "Other is connected, but nothing here installs it: remove it or install it. " +
+    "The session's Gemfile.lock does not use acme_other, so nothing would take it from the connected copy.";
   const calls = [];
-  const result = await step(unused, "apply", fakeToolchain(calls));
-  assert.equal(result.code, "vibe64_connected_bundler_unused");
-  assert.equal(result.error, "Connected Library: the session's Gemfile.lock does not use acme_other, so nothing would take it from the connected copy.");
-  assert.equal(calls.length, 0);
+  const runCommand = fakeToolchain(calls);
+  const otherStep = action => runConnectedAdapterStep({ action, repository: otherRepository, repositories: fixture.repositories,
+    sessionSourceRoot: fixture.app, runCommand });
+
+  assert.deepEqual(await otherStep("apply"), { ok: true, output: `[Connected] ${said}` });
+  assert.deepEqual(calls, [], "the unused gem runs nothing");
+  assert.equal((await step(fixture, "apply", runCommand)).output, "[Connected] Library: gem acme_library in effect from its connected copy.");
+  assert.match(await readFile(path.join(fixture.app, "Gemfile.connected"), "utf8"), /^connected = \{ 'acme_library' => '[^']+' \}\.freeze$/mu);
+  assert.deepEqual(await otherStep("proof"), { ok: true, output: `[Connected] ${said}` });
+  assertInEffect(await step(fixture, "proof", runCommand));
+  const [library, unused] = await inspectConnectedAdapters({ repositories: fixture.repositories, sessionSourceRoot: fixture.app });
+  assert.deepEqual([library.inEffect, library.unused], [true, false]);
+  assert.deepEqual([unused.inEffect, unused.unused, unused.reason], [false, true, said]);
+});
+
+test("bundler: once the app uses no connected gem, preparing takes the derived files and their setting back and goes on", async t => {
+  const fixture = await bundlerFixture(t);
+  const runCommand = fakeToolchain([]);
+  assert.equal((await step(fixture, "apply", runCommand)).ok, true);
+  // The copy now builds a gem the app does not bundle.
+  await rm(path.join(fixture.library, "acme_library.gemspec"));
+  await writeFile(path.join(fixture.library, "acme_other.gemspec"), "Gem::Specification.new { |spec| spec.name = 'acme_other' }\n");
+  const applied = await step(fixture, "apply", runCommand);
+  assert.deepEqual(applied.output.split("\n"), [
+    "[Connected] bundler: removed Gemfile.connected, Gemfile.connected.lock, the gemfile setting in .bundle/config.",
+    "[Connected] Library is connected, but nothing here installs it: remove it or install it. " +
+      "The session's Gemfile.lock does not use acme_other, so nothing would take it from the connected copy."
+  ]);
+  assert.equal(applied.ok, true);
+  for (const file of ["Gemfile.connected", "Gemfile.connected.lock", ".bundle/config"]) {
+    await assert.rejects(readFile(path.join(fixture.app, file)), { code: "ENOENT" }, `${file} is gone`);
+  }
+  assert.equal((await status(fixture)).unused, true);
+});
+
+test("bundler: a session source without a Gemfile leaves preparation going", async t => {
+  const fixture = await bundlerFixture(t);
+  await rm(path.join(fixture.app, "Gemfile"));
+  const said = "[Connected] Library is connected, but nothing here installs it: remove it or install it. " +
+    "The session source has no Gemfile, so no bundle uses it.";
+  assert.deepEqual(await step(fixture, "apply", fakeToolchain([])), { ok: true, output: said });
+  assert.deepEqual(await step(fixture, "proof", fakeToolchain([])), { ok: true, output: said });
 });
 
 test("bundler: once no Bundler connection remains, the derived files and the setting selecting them go, and the project's own settings stay", async t => {

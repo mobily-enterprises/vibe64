@@ -140,6 +140,7 @@ test("npm: every installed copy, nested ones included, becomes exactly what the 
     type: "npm",
     sourceRoot: f.copy,
     inEffect: true,
+    unused: false,
     reason: "",
     published: [{ package: "@proof/lib", connected: "1.1.0", locked: "1.0.0" }]
   });
@@ -377,11 +378,18 @@ test("npm: a dependency no registry version satisfies refuses the swap and says 
   assert.equal(proof.inEffect, false);
 });
 
-test("npm: a connection no tree installs is refused by name", { timeout: 60_000 }, async t => {
+test("npm: a connection no tree installs leaves preparation going, and status says to remove or install it", { timeout: 60_000 }, async t => {
   const f = await fixture(t);
   await writeFile(path.join(f.libDir, "package.json"), JSON.stringify({ name: "@proof/unused", version: "1.0.0" }));
-  const applied = await f.step("apply");
-  assert.equal(applied.ok, false);
-  assert.equal(applied.code, "vibe64_connected_npm_unused");
-  assert.match(applied.error, /no tree of this session installs any of its packages \(@proof\/unused\)/u);
+  const said = "Lib is connected, but nothing here installs it: remove it or install it. " +
+    "No tree of this session installs any of its packages (@proof/unused).";
+  const before = await f.tracked();
+  assert.deepEqual(await f.step("apply"), { ok: true, output: `[Connected] ${said}` });
+  assert.deepEqual(await f.step("proof"), { ok: true, output: `[Connected] ${said}` });
+  const proof = await f.proof();
+  assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, said]);
+  // Nothing was swapped or installed for it.
+  assert.deepEqual(await f.tracked(), before);
+  assert.equal(await installedVersion(path.join(f.app, "node_modules", "@proof", "lib")), "1.0.0");
+  assert.deepEqual(f.calls, []);
 });

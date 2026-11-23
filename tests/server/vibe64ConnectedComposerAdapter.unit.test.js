@@ -209,7 +209,7 @@ test("composer: the proof says exactly why once the connection is undone", async
   assert.equal((await status(fixture)).reason, "composer.connected.json is missing; prepare the workspace to take acme/library from the connected copy.");
 });
 
-test("composer: a derived file or installed package that Git tracks is refused, and so is a package the app does not use", async t => {
+test("composer: a derived file or installed package that Git tracks is refused", async t => {
   const fixture = await composerFixture(t);
   const runCommand = fakeToolchain(fixture.app, []);
   await writeFile(path.join(fixture.app, "composer.connected.json"), "{}\n");
@@ -226,15 +226,36 @@ test("composer: a derived file or installed package that Git tracks is refused, 
   await git(vendored.app, "-c", "user.name=proof", "-c", "user.email=proof@example.com", "commit", "-qm", "vendor");
   assert.equal((await step(vendored, "apply", fakeToolchain(vendored.app, []))).code, "vibe64_connected_derived_tracked");
 
+});
+
+test("composer: a package the app does not use leaves preparation going and says to remove or install it", async t => {
   const unused = await composerFixture(t, { libraryName: "acme/other" });
   const calls = [];
-  const result = await step(unused, "apply", fakeToolchain(unused.app, calls));
-  assert.equal(result.code, "vibe64_connected_composer_unused");
-  assert.equal(
-    result.error,
-    "Connected Library: the session's composer.json and composer.lock do not use acme/other, so nothing would take it from the connected copy."
-  );
-  assert.equal(calls.length, 0);
+  const said = "[Connected] Library is connected, but nothing here installs it: remove it or install it. " +
+    "The session's composer.json and composer.lock do not use acme/other, so nothing would take it from the connected copy.";
+  assert.deepEqual(await step(unused, "apply", fakeToolchain(unused.app, calls)), { ok: true, output: said });
+  assert.deepEqual(await step(unused, "proof", fakeToolchain(unused.app, calls)), { ok: true, output: said });
+  assert.deepEqual(calls, [], "nothing runs for it");
+  const proof = await status(unused);
+  assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, said.slice("[Connected] ".length)]);
+
+  // Once the app uses none, preparing takes back what an earlier one derived.
+  const fixture = await composerFixture(t);
+  assert.equal((await step(fixture, "apply", fakeToolchain(fixture.app, []))).ok, true);
+  await writeFile(path.join(fixture.library, "composer.json"), `${JSON.stringify({ name: "acme/other" })}\n`);
+  const applied = await step(fixture, "apply", fakeToolchain(fixture.app, []));
+  assert.equal(applied.ok, true);
+  assert.deepEqual(applied.output.split("\n"), [
+    "[Connected] composer: removed composer.connected.json, composer.connected.lock, vendor/acme/library; "
+      + "the next composer install puts the published packages back.",
+    said
+  ]);
+
+  const noManifest = await composerFixture(t);
+  await rm(path.join(noManifest.app, "composer.json"));
+  assert.deepEqual(await step(noManifest, "apply", fakeToolchain(noManifest.app, [])), { ok: true, output:
+    "[Connected] Library is connected, but nothing here installs it: remove it or install it. " +
+    "The session source has no composer.json, so no Composer install uses it." });
 });
 
 test("composer: once no Composer connection remains, the derived files and the links go", async t => {

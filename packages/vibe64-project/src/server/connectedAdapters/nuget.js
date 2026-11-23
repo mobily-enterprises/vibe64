@@ -13,6 +13,7 @@
 import { readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { notUsed } from "./adapterResults.js";
 import { excludedDerivedPatterns, readDerivedFile, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 
 const TARGETS_FILE = "Directory.Build.targets";
@@ -192,15 +193,18 @@ async function nugetPlan({ connections, sessionSourceRoot, runCommand }) {
       references: ids.map(id => ({ id, csproj: packages.get(id.toLowerCase()).csproj }))
     });
   }
+  // A connection no project references is unused: it gets no import.
+  const unused = new Map();
   for (const connection of connected) {
     if (!affected.some(entry => entry.references.some(reference => within(reference.csproj, connection.sourceRoot)))) {
-      throw vibe64Error(
-        `Connected ${connection.name}: no project in ${root} references a package ${connection.sourceRoot} builds.`,
-        "vibe64_connected_nuget_unused"
-      );
+      unused.set(connection.repository, unusedReason(root, connection.sourceRoot));
     }
   }
-  return { root, affected, stale };
+  return { root, affected, stale, unused };
+}
+
+function unusedReason(root, sourceRoot) {
+  return `No project in ${root} references a package ${sourceRoot} builds.`;
 }
 
 async function restoreProject(runCommand, root, project) {
@@ -231,10 +235,12 @@ async function keepBuildOutputOutOfGit({ connection, affected, runCommand, write
 }
 
 async function applyNuget({ connection, connections, sessionSourceRoot, runCommand, writeGitExcludes }) {
-  const { root, affected, stale } = await nugetPlan({ connections, sessionSourceRoot, runCommand });
+  const { root, affected, stale, unused } = await nugetPlan({ connections, sessionSourceRoot, runCommand });
   if (stale.length) await removeDerivedFiles({ tree: root, paths: stale, writeGitExcludes });
   const files = Object.fromEntries(affected.map(entry => [entry.targets, renderTargets(entry)]));
   await writeDerivedFiles({ connection, tree: root, files, runCommand, writeGitExcludes });
+  // The connections the session uses restore in their own steps.
+  if (unused.has(connection.repository)) return { lines: [], unused: unused.get(connection.repository) };
   await keepBuildOutputOutOfGit({ connection, affected, runCommand, writeGitExcludes });
   const lines = [];
   const sourceRoot = await realpath(connection.sourceRoot);
@@ -247,7 +253,10 @@ async function applyNuget({ connection, connections, sessionSourceRoot, runComma
   return { lines };
 }
 
-/** Whether restore resolved each of the connection's packages as its connected project, from the files alone. */
+/**
+ * Whether restore resolved each of the connection's packages as its connected project, from the
+ * files alone; `unused` when no Vibe64 import swaps one and no project file references one.
+ */
 async function proveFromFiles({ connection, root }) {
   const sourceRoot = await realpath(connection.sourceRoot).catch(() => connection.sourceRoot);
   const uses = [];
@@ -261,7 +270,10 @@ async function proveFromFiles({ connection, root }) {
       if (within(reference.csproj, sourceRoot)) uses.push({ ...parsed, ...reference, relative });
     }
   }
-  if (!uses.length) return { reason: `No project in ${root} uses a package built from ${sourceRoot}; prepare the workspace.` };
+  if (!uses.length) {
+    if (!(await nugetUses({ connection, sessionSourceRoot: root })).uses.length) return { unused: unusedReason(root, sourceRoot) };
+    return { reason: `No project in ${root} uses a package built from ${sourceRoot}; prepare the workspace.` };
+  }
   for (const { project, objDir, id, csproj } of uses) {
     const name = path.relative(root, project);
     const assetsText = await readFile(path.join(objDir, "project.assets.json"), "utf8").catch(() => null);
@@ -287,7 +299,8 @@ async function proveNuget({ connection, connections, sessionSourceRoot, runComma
   try {
     const root = await realpath(sessionSourceRoot);
     if (runCommand) {
-      const { affected } = await nugetPlan({ connections, sessionSourceRoot, runCommand });
+      const { affected, unused } = await nugetPlan({ connections, sessionSourceRoot, runCommand });
+      if (unused.has(connection.repository)) return notUsed(unused.get(connection.repository));
       for (const entry of affected) {
         if (await readDerivedFile(root, entry.targets) !== renderTargets(entry)) {
           return {
@@ -299,7 +312,8 @@ async function proveNuget({ connection, connections, sessionSourceRoot, runComma
       // What a build resolves now, with the imports as they are.
       for (const entry of affected) await restoreProject(runCommand, root, entry.project);
     }
-    const { reason } = await proveFromFiles({ connection, root });
+    const { reason, unused } = await proveFromFiles({ connection, root });
+    if (unused) return notUsed(unused);
     return { inEffect: !reason, reason };
   } catch (error) {
     return { inEffect: false, reason: String(error?.message || error) };

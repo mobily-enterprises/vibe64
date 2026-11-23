@@ -175,8 +175,8 @@ test("nuget: apply swaps the package for its connected project beside the consum
   assert.equal(await git(app, "diff", "HEAD", "--stat"), "");
 });
 
-test("nuget: apply refuses an import it did not write, a tracked one, an unused connection and a checkout that builds no package", async (t) => {
-  const { app, csproj, library, project, step, targets } = await fixture(t);
+test("nuget: apply refuses an import it did not write, a tracked one and a checkout that builds no package", async (t) => {
+  const { app, csproj, project, step, targets } = await fixture(t);
   await writeFile(targets, "<Project />\n");
   const foreign = await step("apply");
   assert.equal(foreign.code, "vibe64_connected_nuget_targets_foreign");
@@ -189,15 +189,30 @@ test("nuget: apply refuses an import it did not write, a tracked one, an unused 
   await git(app, "rm", "-q", "src/App/Directory.Build.targets");
   await git(app, "commit", "-qm", "untrack");
 
-  const original = await readFile(project, "utf8");
-  await writeFile(project, original.replace("Example.Library", "Unrelated.Package"));
-  const unused = await step("apply");
-  assert.equal(unused.code, "vibe64_connected_nuget_unused");
-  assert.equal(unused.error, `Connected Library: no project in ${app} references a package ${library} builds.`);
-  await writeFile(project, original);
-
   await writeFile(csproj, "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <IsPackable>false</IsPackable>\n  </PropertyGroup>\n</Project>\n");
   assert.equal((await step("apply")).code, "vibe64_connected_nuget_no_package");
+});
+
+test("nuget: a connection no project references leaves preparation going, takes its import back and says to remove or install it", async (t) => {
+  const { app, library, project, state, step, status, targets } = await fixture(t);
+  assert.equal((await step("apply")).ok, true);
+  const original = await readFile(project, "utf8");
+  await writeFile(project, original.replace("Example.Library", "Unrelated.Package"));
+  const said = "[Connected] Library is connected, but nothing here installs it: remove it or install it. " +
+    `No project in ${app} references a package ${library} builds.`;
+  const restores = () => state.calls.filter(call => call.command === "dotnet" && call.args[0] === "restore").length;
+  const before = restores();
+  assert.deepEqual(await step("apply"), { ok: true, output: said });
+  await assert.rejects(readFile(targets), { code: "ENOENT" }, "the import nothing needs is gone");
+  assert.equal(restores(), before, "nothing restores for it");
+  assert.deepEqual(await step("proof"), { ok: true, output: said });
+  const proof = await status();
+  assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, said.slice("[Connected] ".length)]);
+
+  // Referenced again, it needs preparing.
+  await writeFile(project, original);
+  const referenced = await status();
+  assert.deepEqual([referenced.unused, referenced.reason], [false, `No project in ${app} uses a package built from ${library}; prepare the workspace.`]);
 });
 
 test("nuget: the proof says exactly why a connected package is not in effect", async (t) => {

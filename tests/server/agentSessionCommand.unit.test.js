@@ -381,6 +381,12 @@ test("session status lists this session's connected copies with whether each is 
   proofs = [{ ...proofs[0], inEffect: false, reason: "node_modules/library is the published library 1.0.0; prepare the workspace to swap it.", published: [] }];
   assert.deepEqual((await service.sessionStatus("session-1")).repository.connected, [{ name: "library", path: copy, behind: 0, unsaved: true,
     type: "npm", inEffect: false, reason: "node_modules/library is the published library 1.0.0; prepare the workspace to swap it." }]);
+  // Connected, but nothing in the session installs it: status says to remove or install it.
+  const unused = "Library is connected, but nothing here installs it: remove it or install it. " +
+    "No tree of this session installs any of its packages (library).";
+  proofs = [{ ...proofs[0], inEffect: false, unused: true, reason: unused, published: [] }];
+  assert.deepEqual((await service.sessionStatus("session-1")).repository.connected, [{ name: "library", path: copy, behind: 0, unsaved: true,
+    type: "npm", inEffect: false, unused: true, reason: unused }]);
   // A connection with no adapter (custom, or a composition) reports no proof.
   proofs = [];
   assert.deepEqual((await service.sessionStatus("session-1")).repository.connected,

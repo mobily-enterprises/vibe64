@@ -111,6 +111,8 @@ function createService({
   });
   const projectSettings = createProjectSettings({
     inspectCollaboration,
+    // The repositories service is created below; the page reads it only once both exist.
+    inspectConnectedAdapters: input => repositories.inspectConnectedAdapters(input),
     inspectConnectedRepository,
     inspectEngineering,
     logger,

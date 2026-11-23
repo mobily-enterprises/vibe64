@@ -23,6 +23,8 @@ import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
  * who may edit them.
  * @param {object} dependencies
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisCollaboration} dependencies.inspectCollaboration
+ * @param {(input: { session: object }) => Promise<Array<{ repository: string, unused: boolean, reason: string }>>} dependencies.inspectConnectedAdapters
+ *   whether each typed connected dependency of a session is in effect, from its files
  * @param {(fullName: string, input: object) => Promise<object>} dependencies.inspectConnectedRepository
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisEngineering} dependencies.inspectEngineering
  * @param {RuntimeLogger} dependencies.logger
@@ -33,6 +35,7 @@ import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
  */
 function createProjectSettings({
   inspectCollaboration,
+  inspectConnectedAdapters,
   inspectConnectedRepository,
   inspectEngineering,
   logger,
@@ -62,11 +65,26 @@ function createProjectSettings({
         ...(await readConnectedProjects(source.sourceRoot)),
         available: true,
         canEdit: canEditProjectSettings(input),
-        source: scope
+        source: scope,
+        unused: await unusedConnections(input, source.sessionId)
       };
     } catch (error) {
       if (error.code !== "vibe64_connections_invalid") throw error;
       return { available: false, canEdit: false, source: scope, unavailableReason: error.message };
+    }
+  }
+
+  /**
+   * The session's connections nothing in it installs, each with the sentence that says to remove or
+   * install it. The page only shows them, so a session it cannot check shows none.
+   */
+  async function unusedConnections(input, sessionId) {
+    if (!sessionId) return [];
+    try {
+      const proofs = await inspectConnectedAdapters({ session: await selection.sessionForInput(input, sessionId) });
+      return proofs.filter(proof => proof.unused).map(({ repository, reason }) => ({ repository, reason }));
+    } catch {
+      return [];
     }
   }
 

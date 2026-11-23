@@ -14,7 +14,7 @@
 import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { connectionError, notInEffect } from "./adapterResults.js";
+import { connectionError, notInEffect, notUsed } from "./adapterResults.js";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 import { copyDiffersFromRevision } from "./publishedSource.js";
 import { existingEntry, readJsonFile } from "./npmPackages.js";
@@ -54,18 +54,19 @@ async function realRoot(connection) {
 }
 
 /**
- * What the session's Composer install must look like for every connected Composer dependency.
+ * What the session's Composer install must look like for every connected Composer dependency it
+ * uses; `unused` holds why, by repository, for each one it does not.
  * @param {{ connections: Array<object>, sessionSourceRoot: string }} input
  */
 async function composerPlan({ connections, sessionSourceRoot }) {
   const manifestPath = path.join(sessionSourceRoot, "composer.json");
   const manifest = await optionalJson(manifestPath);
+  const unused = new Map();
   if (!manifest) {
-    throw connectionError(
-      connections[0],
-      "the session source has no composer.json, so no Composer install uses it.",
-      "vibe64_connected_composer_unused"
-    );
+    for (const connection of connections) {
+      unused.set(connection.repository, "The session source has no composer.json, so no Composer install uses it.");
+    }
+    return { lockText: null, manifestText: "", packages: [], unused, vendorDir: "vendor" };
   }
   const lockText = await readDerivedFile(sessionSourceRoot, "composer.lock");
   const lock = lockText === null ? null : JSON.parse(lockText);
@@ -83,11 +84,9 @@ async function composerPlan({ connections, sessionSourceRoot }) {
       );
     }
     if (!locked.has(own.name) && !required.has(own.name)) {
-      throw connectionError(
-        connection,
-        `the session's composer.json and composer.lock do not use ${own.name}, so nothing would take it from the connected copy.`,
-        "vibe64_connected_composer_unused"
-      );
+      const why = `The session's composer.json and composer.lock do not use ${own.name}, so nothing would take it from the connected copy.`;
+      unused.set(connection.repository, why);
+      continue;
     }
     // A checkout on a branch would be dev-<branch>: present it as the version the app locked.
     const version = locked.get(own.name) || (typeof own.version === "string" ? own.version : "");
@@ -117,6 +116,7 @@ async function composerPlan({ connections, sessionSourceRoot }) {
     lockText,
     manifestText: `${JSON.stringify(derived, null, 4)}\n`,
     packages,
+    unused,
     vendorDir: String(manifest.config?.["vendor-dir"] || "vendor").replace(/\/+$/u, "")
   };
 }
@@ -125,9 +125,16 @@ function planEntry(plan, connection) {
   return plan.packages.find(entry => entry.connection.repository === connection.repository);
 }
 
-/** Puts every connected Composer dependency in effect in the session source. */
+/**
+ * Puts every connected Composer dependency the session uses in effect in the session source. With
+ * none used, Vibe64's derived manifest, its lock and links go, as once none is connected.
+ */
 async function applyComposer({ connection, connections, sessionSourceRoot, runCommand, writeGitExcludes }) {
   const plan = await composerPlan({ connections, sessionSourceRoot });
+  if (plan.unused.has(connection.repository)) {
+    const lines = plan.packages.length ? [] : await restoreComposer({ connections: [], sessionSourceRoot, writeGitExcludes });
+    return { lines, unused: plan.unused.get(connection.repository) };
+  }
   const installed = plan.packages.map(entry => `${plan.vendorDir}/${entry.name}`);
   // Composer writes the derived lock itself when there is no tracked one to start it from.
   await refuseTracked({
@@ -180,6 +187,7 @@ async function linkTarget(filePath) {
 /** Whether this connection's package is installed from its connected copy. */
 async function proveComposer({ connection, connections, sessionSourceRoot, runCommand }) {
   const plan = await composerPlan({ connections, sessionSourceRoot });
+  if (plan.unused.has(connection.repository)) return notUsed(plan.unused.get(connection.repository));
   const own = planEntry(plan, connection);
   const manifest = await readDerivedFile(sessionSourceRoot, DERIVED_MANIFEST);
   if (manifest === null) {

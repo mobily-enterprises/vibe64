@@ -20,7 +20,7 @@ import {
   connectedGradleEnv,
   connectedGradleReadOnlyCacheRoot
 } from "@local/vibe64-execution/server/connectedGradleEnv";
-import { notInEffect } from "./adapterResults.js";
+import { notInEffect, notUsed } from "./adapterResults.js";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 
 const INIT = path.posix.join(CONNECTED_GRADLE_HOME, CONNECTED_GRADLE_INIT);
@@ -106,13 +106,10 @@ async function isGradleBuild(dir) {
   return false;
 }
 
-async function requireBuilds({ connection, connections, sessionSourceRoot }) {
-  if (!(await isGradleBuild(sessionSourceRoot))) {
-    throw vibe64Error(
-      `Connected ${connection.name}: the session source is not a Gradle build, so Gradle cannot include a connected checkout.`,
-      "vibe64_connected_gradle_consumer"
-    );
-  }
+/** A session source that is no Gradle build includes no connected checkout: the connection is unused. */
+const NO_BUILD = "The session source is not a Gradle build, so no Gradle build uses it.";
+
+async function requireBuilds({ connections, sessionSourceRoot }) {
   const consumer = await realpath(sessionSourceRoot);
   for (const entry of connections) {
     if (!(await isGradleBuild(entry.sourceRoot))) {
@@ -215,7 +212,8 @@ async function refreshReadOnlyCache(defaultHome) {
  * home, links the default home's settings there, and the proof's scripts beside it. No Gradle runs.
  */
 async function applyGradle({ connection, connections, sessionSourceRoot, runCommand, writeGitExcludes }) {
-  await requireBuilds({ connection, connections, sessionSourceRoot });
+  if (!(await isGradleBuild(sessionSourceRoot))) return { lines: [], unused: NO_BUILD };
+  await requireBuilds({ connections, sessionSourceRoot });
   const existing = await readDerivedFile(sessionSourceRoot, INIT);
   if (existing !== null && !ours(existing)) {
     throw vibe64Error(
@@ -253,6 +251,7 @@ async function applyGradle({ connection, connections, sessionSourceRoot, runComm
 }
 
 async function proveGradle({ connection, connections, sessionSourceRoot, runCommand }) {
+  if (!(await isGradleBuild(sessionSourceRoot))) return notUsed(NO_BUILD);
   const script = await readDerivedFile(sessionSourceRoot, INIT);
   if (script === null) return notInEffect(`${INIT} is missing; prepare the workspace to include the connected checkout.`);
   if (script !== initScript(connections)) {

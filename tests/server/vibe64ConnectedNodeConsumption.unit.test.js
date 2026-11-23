@@ -216,6 +216,42 @@ test("Vibe64 swaps a typed npm dependency into each task's own tree, keeps it in
   assert.deepEqual(await Promise.all(["package.json", "package-lock.json"].map(file => readFile(path.join(freshRelease, file), "utf8"))), releaseInputs);
 });
 
+test("a typed npm dependency nothing installs leaves preparation succeeding, says to remove or install it, and keeps the session prepared", { timeout: 120_000 }, async t => {
+  const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
+  process.env.VIBE64_RUNTIME_NAMESPACE = "connected-node-unused-proof";
+  t.after(() => {
+    if (previousNamespace === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE;
+    else process.env.VIBE64_RUNTIME_NAMESPACE = previousNamespace;
+  });
+  const tempRoot = await mkdtemp(path.join(tmpdir(), "vibe64-connected-node-unused-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const env = { ...process.env, npm_config_cache: path.join(tempRoot, "npm-cache") };
+  // The app installs nothing of the connected repository (Genesis connected, no genesis-compiler).
+  const releaseRoot = path.join(tempRoot, "release");
+  await mkdir(releaseRoot, { recursive: true });
+  await writeFile(path.join(releaseRoot, "package.json"), JSON.stringify({ name: "connected-unused-proof", version: "1.0.0", private: true }));
+  await exec("npm", ["install", ...npmOptions], { cwd: releaseRoot, env });
+  const task = await createTask(path.join(tempRoot, "project"), "task-u", releaseRoot, env);
+  t.after(() => stopConnectedSync(task.session.sessionId));
+  const runner = connectedWorkspaceRunner([task]);
+  const said = "[Connected] Library is connected, but nothing here installs it: remove it or install it. " +
+    `No tree of this session installs any of its packages (${packageName}).`;
+
+  const started = await runner.start({ runtime: task.runtime, session: task.session });
+  const state = await started.completion;
+  assert.equal(state?.status, "succeeded", JSON.stringify(state || started.state));
+  assert.equal(state.transcript.split("\n").filter(line => line === said).length, 2, "the apply and the proof each say so");
+  const session = await task.runtime.getSessionWithoutSource(task.session.sessionId);
+  assert.equal(await runner.isPrepared({ runtime: task.runtime, session }), true, "an unused connection needs no preparation again");
+  const [proof] = await connectedProofs(task);
+  assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, said.slice("[Connected] ".length)]);
+});
+
+async function connectedProofs(task) {
+  const { repositories } = await inspectConnectedDevelopmentInputs({ ...task.inputs, session: task.session });
+  return inspectConnectedAdapters({ repositories, sessionSourceRoot: task.root });
+}
+
 test("custom connected scripts run prepare and verify through the Stack runner with literal source arguments", { timeout: 60_000 }, async t => {
   const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = "connected-custom-proof";
