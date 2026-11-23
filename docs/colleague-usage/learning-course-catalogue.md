@@ -82,6 +82,17 @@ After an update:
   since**, so you can see you finished the earlier version. Completing the new
   version records new progress; the earlier record stays.
 
+### Fix releases
+
+A fix release changes only the last number of the release you have (`0.5.3` →
+`0.5.4`). A host can install fix releases by itself, exactly as **Update**
+does, with the results above: a lesson in progress keeps its release (its
+**Restart** restarts that release too), and lessons started afterwards use the
+fix. Its own guide says when it checks. A release that changes the first or
+second number still waits for **Update**, and a course disabled on the server
+stays as it is. Local Vibe64 does not check by itself: its courses update, fix
+releases included, only with **Update**.
+
 ## Errors and recovery
 
 The message appears on the course row, and the button becomes **Retry install**

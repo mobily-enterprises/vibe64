@@ -78,6 +78,13 @@ function compareReleases(left, right) {
   return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
 }
 
+// A fix release keeps the installed release's first two numbers and raises its last one (0.5.3 → 0.5.4).
+function isFixRelease(installed, available) {
+  const a = installed.split(".").map(Number);
+  const b = available.split(".").map(Number);
+  return a[0] === b[0] && a[1] === b[1] && b[2] > a[2];
+}
+
 function invalid(message) {
   return causedFailure(
     `The official course catalogue is invalid: ${message} Nothing was installed. Ask the catalogue maintainers to publish a corrected catalogue.`,
@@ -469,11 +476,41 @@ function createTrainingCourseInstaller({
     return shared;
   }
 
+  /**
+   * Installs, exactly as each course's Update would, every fix release the
+   * official catalogue has for an enabled installed course: the same first two
+   * numbers with a higher last one (0.5.3 → 0.5.4). A saved lesson keeps its
+   * pinned release, and new starts use the fix. A minor or major release waits
+   * for a person's Update, and a course the operator disabled stays as it is.
+   * A course that cannot install is reported with its error while the others
+   * still install; an unreadable catalogue rejects, as it does the Update.
+   */
+  async function installFixReleases() {
+    const available = await readAvailable({ fresh: true });
+    const installed = await catalogue.readCatalogue();
+    const updated = [];
+    const failed = [];
+    for (const { course } of available.courses) {
+      const newest = installed.courses.filter(entry => entry.course.courseId === course.courseId)
+        .sort((left, right) => compareReleases(left.course.release, right.course.release)).at(-1);
+      if (!newest?.enabled || !isFixRelease(newest.course.release, course.release)) continue;
+      const change = { courseId: course.courseId, from: newest.course.release, release: course.release };
+      try {
+        await installCourse({ courseId: course.courseId, release: course.release });
+        updated.push(change);
+      } catch (error) {
+        failed.push({ ...change, code: String(error?.code || ""), error: String(error?.message || error) });
+      }
+    }
+    return { catalogueCommit: available.commit, updated, failed };
+  }
+
   return Object.freeze({
     repository: catalogueRepository,
     readAvailable,
     listAvailable,
-    installCourse
+    installCourse,
+    installFixReleases
   });
 }
 

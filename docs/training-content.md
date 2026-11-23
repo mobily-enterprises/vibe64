@@ -934,6 +934,17 @@ attempts keep their pin, installed content and resume. Installs run one at a tim
 share one operation. Git runs through `runVibe64Command` as the daemon with
 hooks disabled; no fetched file is executed.
 
+`installFixReleases()` rereads the catalogue and installs, through
+`installCourse`, each fix release of an enabled installed course: a catalogue
+release with the newest installed release's first two numbers and a higher last
+one (`0.5.3` → `0.5.4`). Minor and major releases, disabled courses and courses
+the catalogue does not list are left for a person's Update. It returns
+`{catalogueCommit, updated, failed}`, each change as `{courseId, from,
+release}` and each failure with its `code` and `error`; one course's failure
+does not stop the others, and an unreachable or invalid catalogue rejects as
+`listAvailable` does. Public Vibe64 never calls it by itself; a host that
+composes the installer decides when, for example at each start.
+
 Scratch sources live in `<systemRoot>/training-sources/(catalogue|topic)-<uuid>`
 (mode 0700), beside the `training/` namespace that `installTopic` keeps separate
 from sources, and are removed in `finally`. The managed exec helper admits the

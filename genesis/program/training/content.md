@@ -293,7 +293,10 @@ branch), and delegates to the original
 lock) and `enableCourse` (catalogue lock, expected revision; one retry on
 conflict). Older releases of the course are then removed through
 `removeCourse`, freeing their places and reported in `retired`; saved attempts
-resume from their pins and installed content. The 16-release limit, counted
+resume from their pins and installed content. `installFixReleases` runs that same
+install for each enabled installed course whose catalogue release is a fix
+release (same first two numbers, higher last one), reporting each update and
+each course's failure; a host chooses when to call it. The 16-release limit, counted
 before the older release is removed, fails closed before downloading. Installs are serialized in
 process and identical requests share one operation. Scratch directories are
 removed in `finally`; the managed exec helper admits Git only in exactly that

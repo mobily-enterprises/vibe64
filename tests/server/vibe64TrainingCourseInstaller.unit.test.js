@@ -322,6 +322,77 @@ test("an update installs the newer release and removes the older one, freeing it
   assert.equal((await f.make().installCourse({ courseId: "first-course", release: "0.2.0" })).changed, false);
 });
 
+test("a fix release of an installed course installs itself as its Update would; other releases wait for a person", async (t) => {
+  const f = await fixture(t);
+  await f.make().installCourse({ courseId: "first-course", release: "0.1.0" });
+  // A learner is in the middle of the 0.1.0 lesson.
+  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot, content });
+  const actor = { uid: 42, username: "member", role: "member" };
+  const oldLesson = f.lock.topics[0].lessons[0];
+  const oldPin = { course: { courseId: "first-course", release: "0.1.0" },
+    topic: { schemaVersion: 1, topicId: f.resolved.topicId, release: "0.1.0", repository: f.resolved.repository, commit: f.resolved.commit, topicHash: f.resolved.topicHash },
+    lesson: { code: oldLesson.code, hash: oldLesson.hash } };
+  const reserved = await learners.reserveAttempt({ actor, requestId: "start-old", expectedRevision: 0, pin: oldPin });
+  // The catalogue publishes the topic and course at `release`, the lesson's step reading `step`.
+  const publishRelease = async (release, step, lockTopic = value => value) => {
+    const metadata = JSON.parse(git(f.topicRoot, "show", "HEAD:package.json"));
+    await write(f.topicRoot, "package.json", { ...metadata, version: release });
+    await write(f.topicRoot, "training/lessons/USE-ONE/steps/try.md", `${step}\n`);
+    git(f.topicRoot, "commit", "-q", "-am", `Topic ${release}`);
+    const next = await readPinnedTopic(f.topicRoot);
+    const course = { ...f.course, release, topics: [{ topicId: next.topicId, release }] };
+    const lock = createCourseLock(course, [next]);
+    await f.publishCatalogue({ courseValue: course, lockValue: { ...lock, topics: lock.topics.map(lockTopic) } });
+  };
+  const installedReleases = async () => (await f.catalogue.readCatalogue()).courses.map(entry => [entry.course.release, entry.enabled]);
+
+  // A minor release waits for the person's Update, which the catalogue still offers.
+  await publishRelease("0.2.0", "Try the application in a new way.");
+  assert.deepEqual((await f.make().installFixReleases()).updated, []);
+  assert.deepEqual(await installedReleases(), [["0.1.0", true]]);
+  assert.equal((await f.make().listAvailable()).courses[0].updateFrom, "0.1.0");
+
+  // A fix release installs itself and retires the release it fixes.
+  await publishRelease("0.1.1", "Try the application, then describe it in one sentence.");
+  const fixed = await f.make().installFixReleases();
+  assert.deepEqual(fixed.updated, [{ courseId: "first-course", from: "0.1.0", release: "0.1.1" }]);
+  assert.deepEqual(fixed.failed, []);
+  assert.match(fixed.catalogueCommit, /^[a-f0-9]{40}$/u);
+  assert.deepEqual(await installedReleases(), [["0.1.1", true]]);
+  assert.deepEqual(await f.scratch(), []);
+  // The learner in the middle of a lesson keeps it exactly: its pin, its content and its resume.
+  const state = await learners.readState({ actor, includeCompletion: true });
+  assert.deepEqual(state.active.pin, oldPin);
+  const lesson = await content.readLesson({ ...oldPin.topic, lessonCode: oldPin.lesson.code, lessonHash: oldPin.lesson.hash });
+  assert.equal(lesson.hash, oldLesson.hash);
+  assert.equal((await learners.resumeAttempt({ actor, attemptId: reserved.attempt.attemptId })).attempt.attemptId, reserved.attempt.attemptId);
+  // A second pass finds nothing to do and changes nothing.
+  const revision = (await f.catalogue.readCatalogue()).revision;
+  assert.deepEqual((await f.make().installFixReleases()).updated, []);
+  assert.equal((await f.catalogue.readCatalogue()).revision, revision);
+
+  // A fix release that cannot install is reported for its course and changes nothing.
+  await publishRelease("0.1.2", "Try it once more.", topic => ({ ...topic, commit: "e".repeat(40) }));
+  const unreachable = await f.make().installFixReleases();
+  assert.deepEqual(unreachable.updated, []);
+  assert.deepEqual(unreachable.failed.map(({ courseId, from, release, code }) => ({ courseId, from, release, code })),
+    [{ courseId: "first-course", from: "0.1.1", release: "0.1.2", code: "VIBE64_TRAINING_TOPIC_UNREACHABLE" }]);
+  assert.deepEqual(await installedReleases(), [["0.1.1", true]]);
+  assert.deepEqual(await f.scratch(), []);
+
+  // A course the operator disabled is never brought back by a fix release.
+  await f.catalogue.disableCourse({ courseId: "first-course", release: "0.1.1", expectedRevision: revision });
+  await publishRelease("0.1.3", "Try it, carefully.");
+  assert.deepEqual(await f.make().installFixReleases(), { catalogueCommit: (await f.make().listAvailable()).commit, updated: [], failed: [] });
+  assert.deepEqual(await installedReleases(), [["0.1.1", false]]);
+
+  // An unreadable catalogue rejects the pass, as it does the Update.
+  await assert.rejects(f.make({ remoteUrl: () => `file://${path.join(f.root, "missing")}` }).installFixReleases(),
+    { code: "VIBE64_TRAINING_AVAILABLE_UNREACHABLE" });
+  assert.deepEqual(await installedReleases(), [["0.1.1", false]]);
+});
+
 test("an install or update that would exceed the installed release limit fails closed", async (t) => {
   const f = await fixture(t);
   const filler = Array.from({ length: 16 }, (_, index) => ({ course: { courseId: `filler-${index}`, release: "1.0.0" }, enabled: false }));
