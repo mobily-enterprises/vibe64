@@ -44,9 +44,41 @@ never creates application accounts or changes roles, and then signs in as each
 name in Preview to verify access. The saved list appears here and in Preview's
 identity menu; use the session's normal Save to keep it.
 
-Colleague can read the available identity metadata and make an explicitly requested
-configuration change, including a selective removal, through the native owner.
+Colleague can read the available identity metadata, including each invalid entry
+and its reason, and make an explicitly requested configuration change, including a
+selective removal or a rename of an invalid entry, through the native owner.
 It can open App access and delegate application-account investigation to a coding
 agent. It must not claim that an identity was created in the app or that Preview
 is signed in just because configuration was saved. If the browser-exchange task
 has no supported Colleague operation, the person completes it using the visible UI.
+
+## When an identity is invalid
+
+Each identity needs a unique **Name** that starts with a letter a-z and has only
+letters a-z, digits, `_` and `-` (at most 64 characters; `default`, `guest` and
+`you` are reserved), an **App identifier** of Email, Login name or User ID, and
+an **Application value** (an email needs an `@`). At most 32 identities are
+allowed. Two identities with the same name are both invalid.
+
+The page always loads, even when `.vibe64/preview-identities.json` breaks these
+rules, for example after a hand edit or a merge:
+
+- Every entry appears in its place. An invalid one is marked in red with its
+  reason, such as **The name "you" is reserved by Vibe64**, and a warning above
+  the list says Preview skips it until it is fixed.
+- Rename it, change its identifier or value, or choose **Remove**. The mark
+  clears as soon as the entry is valid. **Save** stays disabled while any entry
+  is invalid, and says which: **Fix or remove identity 1 ("you") to save.**
+- An entry whose only problem is extra fields (for example `vibe64User`) looks
+  normal here; the warning says so, and **Save** stores it without them.
+- When the file is not an identity list at all (not valid JSON, another
+  version, no list), the warning says what is wrong and the list is empty. Add
+  the identities you need and choose **Save** to replace the file.
+
+The valid identities keep working the whole time. Preview starts with them and
+shows a notice naming each skipped identity and its reason, with **Open App
+access**. Asking Preview for a skipped name, as the coding agent may, gets the
+same reason and where to fix it. Every save, from this page, Colleague or the
+coding agent, refuses an invalid entry and names it and the reason, for example
+**Managed app identity 2 ("you") is not valid. The name "you" is reserved by
+Vibe64**; nothing is written.

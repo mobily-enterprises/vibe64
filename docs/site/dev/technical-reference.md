@@ -315,6 +315,10 @@ Git and the Genesis files. Each entry contains a Vibe64-facing name plus one
 application selector such as email, login, or user ID; the first entry is the
 default. Managed Preview and Playwright select a configured entry by name or
 request guest mode. Callers cannot submit arbitrary application identities.
+An invalid stored entry (a reserved name such as `you`, a bad selector, a
+duplicated name) is skipped and reported with its reason, never fatal: Preview
+starts with the valid entries and App access shows and fixes the invalid ones.
+Every save refuses an invalid entry, naming it and the reason.
 
 For an enabled web output run, Vibe64 supplies `true` and a fresh per-run
 secret only through the application-specific environment names declared by

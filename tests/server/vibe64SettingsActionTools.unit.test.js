@@ -82,7 +82,9 @@ async function withSettingsTools(run) {
       },
       async readPreviewApplicationIdentities(input) {
         record("preview-identities.read", input);
-        return { ok: true, identities: state.identities, filePath: "/private/source/.vibe64/preview-identities.json" };
+        return { ok: true, identities: state.identities, filePath: "/private/source/.vibe64/preview-identities.json",
+          ...(state.invalidIdentities ? { invalidIdentities: state.invalidIdentities } : {}),
+          ...(state.identityFileProblem ? { fileProblem: state.identityFileProblem } : {}) };
       },
       async savePreviewApplicationIdentities(input) {
         record("preview-identities.save", input);
@@ -329,6 +331,28 @@ test("preview identity tools preserve the full ordered list and share API source
     const failed = await execute("preview-identities.save", { identities: [] });
     assert.deepEqual(failed.result, { ok: false, code: "source_busy", error: "Another conversation is editing this source." });
     assert.equal(state.identities.length, 32);
+  });
+});
+
+test("Colleague's identity read names each invalid entry and the file's problem, so a replacement can fix them", async () => {
+  await withSettingsTools(async ({ execute, state }) => {
+    const reason = "The name \"you\" is reserved by Vibe64 (default, guest and you are). Choose another, such as admin or user.";
+    state.invalidIdentities = [{ code: "vibe64_application_identity_name_reserved", name: "you", position: 2, reason, type: "login", value: "merc" }];
+    const read = await execute("preview-identities.read");
+    assert.equal(read.ok, true, JSON.stringify(read));
+    assert.deepEqual(read.result, {
+      ok: true,
+      identities: state.identities,
+      invalidIdentities: [{ name: "you", position: 2, reason, type: "login", value: "merc" }]
+    });
+    state.identities = [];
+    state.invalidIdentities = null;
+    state.identityFileProblem = ".vibe64/preview-identities.json is not valid JSON (Unexpected end of JSON input).";
+    assert.deepEqual((await execute("preview-identities.read")).result, {
+      ok: true,
+      identities: [],
+      fileProblem: state.identityFileProblem
+    });
   });
 });
 

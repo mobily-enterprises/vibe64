@@ -14,6 +14,7 @@ import {
   previewAuthSecretPath,
   readPreviewAuthSecret
 } from "@local/vibe64-core/server/previewAuth";
+import { previewApplicationIdentityLabel } from "@local/vibe64-core/shared/previewIdentity";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { createPreviewIdentityCommandRunner } from "./previewIdentityCommand.js";
 
@@ -64,8 +65,16 @@ function previewAuthForLaunchTerminal(terminal = {}, options = {}) {
   };
 }
 
+/**
+ * What the Preview offers for signing in: the configured identities its
+ * application accepts, the default, and why switching is unavailable. The
+ * project's invalid entries are skipped, never fatal: skippedIdentities names
+ * each with its position and reason, and fileProblem says why a file that is
+ * not an identity list gave none.
+ */
 function previewIdentityCapability({
   previewApplicationIdentities = [],
+  previewApplicationIdentityProblems = {},
   preview = {},
   terminal = null
 } = {}) {
@@ -101,16 +110,22 @@ function previewIdentityCapability({
               ? "This preview does not advertise a supported application user identifier."
               : "Preview identity authorization is unavailable. Restart the preview."
             : "This preview does not support application identity switching.",
+    fileProblem: String(previewApplicationIdentityProblems.fileProblem || ""),
     identities,
     identityTypes,
     rejectedIdentities: configuredIdentities
       .filter((identity) => !identityTypes.includes(identity.type))
-      .map((identity) => identity.name)
+      .map((identity) => identity.name),
+    skippedIdentities: (Array.isArray(previewApplicationIdentityProblems.invalidIdentities)
+      ? previewApplicationIdentityProblems.invalidIdentities
+      : [])
+      .map(({ name = "", position = 0, reason = "" }) => ({ name, position, reason }))
   };
 }
 
 function previewIdentitySelection(input = {}, {
-  identities = []
+  identities = [],
+  skippedIdentities = []
 } = {}) {
   const mode = String(input.mode || "identity").trim();
   if (!["identity", "guest"].includes(mode)) {
@@ -130,6 +145,17 @@ function previewIdentitySelection(input = {}, {
   const identity = requestedName && requestedName !== "default"
     ? identities.find((entry) => entry.name === requestedName)
     : identities[0];
+  const skipped = !identity && requestedName
+    ? skippedIdentities.find((entry) => String(entry?.name || "").trim().toLowerCase() === requestedName)
+    : null;
+  if (skipped) {
+    throw vibe64Error(
+      `Managed app ${previewApplicationIdentityLabel(skipped)} is skipped. ${skipped.reason} ` +
+        "Rename or remove it in Dashboard > App access.",
+      "vibe64_preview_identity_name_skipped",
+      { params: { identityName: requestedName } }
+    );
+  }
   if (!identity) {
     const availableNames = identities.map((entry) => entry.name).join(", ");
     throw requestedName && availableNames

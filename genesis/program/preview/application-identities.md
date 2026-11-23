@@ -20,6 +20,12 @@ production app.
 - `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-core/src/server/previewAuth.js`
+- `packages/vibe64-core/src/shared/previewIdentity.js`
+- `packages/vibe64-terminals/src/server/outputTargetLaunchContext.js`
+- `src/lib/vibe64LaunchPreview.js`
+- `src/components/studio/Vibe64OutputControls.vue`
+- `tests/server/previewApplicationIdentityRules.unit.test.js`
+- `tests/server/previewSkippedIdentities.unit.test.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchStatus.js`
 - `packages/vibe64-terminals/src/server/launchPreviewAuth.js`
@@ -56,6 +62,22 @@ the existing owner validates unique names, supported selectors and the 32-entry
 limit. Responses contain selectors without filesystem paths or authentication
 secrets. Configuring this list does not prove account existence, application
 support or an authenticated browser session.
+One owner, `inspectPreviewApplicationIdentities` in the shared
+`previewIdentity.js`, checks each entry on its own (name, reserved names
+`default`, `guest` and `you`, selector, extra fields, the limit) and gives the
+position, the rule's code and the reason in plain words; every entry sharing a
+name is invalid, so nothing guesses which was meant. Reads are tolerant: an
+invalid entry, or a file that is not a version-1 identity list, never fails the
+read. Project reads return the valid `identities` plus `invalidIdentities` and
+`fileProblem`; Preview starts with the valid ones, its status carries
+`skippedIdentities` and `fileProblem`, the Preview shows a notice with **Open
+App access**, choosing a skipped name explains why, and the agent's status
+lists each skipped entry. Writes are strict: every save (App access, Colleague,
+the agent's helper) refuses the first invalid entry, naming its position, name
+and reason, and writes nothing. App access shows every saved entry in its place,
+marks each invalid one with its reason, keeps Save disabled until all are valid,
+and lets an unchanged list be saved to replace an invalid file
+(`tests/server/previewSkippedIdentities.unit.test.js`).
 App access keeps an unsaved draft per project source (project and selected
 session). A newer saved list from another tab, Colleague or the agent replaces
 the draft only while it has no edits; under edits the page shows that the saved

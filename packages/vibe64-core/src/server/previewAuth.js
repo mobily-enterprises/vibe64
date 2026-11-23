@@ -2,9 +2,12 @@ import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  PREVIEW_IDENTITY_SELECTOR_EMAIL,
-  PREVIEW_IDENTITY_SELECTOR_LOGIN,
-  PREVIEW_IDENTITY_SELECTOR_TYPES
+  PREVIEW_APPLICATION_IDENTITY_LIMIT,
+  PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES,
+  PREVIEW_IDENTITY_SELECTOR_TYPES,
+  checkPreviewIdentitySelector,
+  inspectPreviewApplicationIdentities,
+  previewApplicationIdentityLabel
 } from "../shared/previewIdentity.js";
 import { vibe64Error as previewIdentityError } from "./core.js";
 
@@ -18,14 +21,14 @@ const PREVIEW_IDENTITY_GRANT_SECRET = crypto.randomBytes(32);
 const PREVIEW_IDENTITY_LOGIN_OPERATION = "login-as";
 const PREVIEW_IDENTITY_LOGOUT_OPERATION = "logout";
 const PREVIEW_IDENTITY_SUBJECT_SELECTOR = "selector";
-const PREVIEW_APPLICATION_IDENTITY_NAME_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/u;
-const PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES = new Set([
-  "default",
-  "guest",
-  "you"
-]);
-const PREVIEW_APPLICATION_IDENTITY_FIELDS = new Set(["name", "type", "value"]);
-const PREVIEW_APPLICATION_IDENTITY_LIMIT = 32;
+// A grant's selector refusal, by the rule it breaks.
+const PREVIEW_IDENTITY_SELECTOR_MESSAGES = Object.freeze({
+  vibe64_preview_identity_email_invalid: "Preview identity email is invalid.",
+  vibe64_preview_identity_login_invalid: "Preview identity login is invalid.",
+  vibe64_preview_identity_selector_missing: "Preview identity selector is missing.",
+  vibe64_preview_identity_selector_type_invalid: "Preview identity selector type is invalid.",
+  vibe64_preview_identity_user_id_invalid: "Preview identity user id is invalid."
+});
 const PREVIEW_IDENTITY_GRANT_SCOPE_KEYS = Object.freeze([
   "projectScope",
   "sessionSourceRoot",
@@ -106,67 +109,23 @@ function previewApplicationIdentityEntries(value = []) {
   );
 }
 
+/**
+ * A managed app identity list as it is stored, or the refusal of its first
+ * invalid entry, naming that entry and the reason (the rules are
+ * inspectPreviewApplicationIdentities'). Every write goes through it.
+ * @param {unknown} value
+ */
 function normalizePreviewApplicationIdentities(value = []) {
-  const entries = previewApplicationIdentityEntries(value);
-  if (entries.length > PREVIEW_APPLICATION_IDENTITY_LIMIT) {
+  const rows = inspectPreviewApplicationIdentities(previewApplicationIdentityEntries(value));
+  const refused = rows.find((row) => row.problem);
+  if (refused) {
     throw previewApplicationIdentitiesError(
-      `Managed app identities cannot contain more than ${PREVIEW_APPLICATION_IDENTITY_LIMIT} entries.`,
-      "vibe64_application_identities_too_many",
-      { limit: PREVIEW_APPLICATION_IDENTITY_LIMIT }
+      `Managed app ${previewApplicationIdentityLabel(refused)} is not valid. ${refused.problem.reason}`,
+      refused.problem.code,
+      { name: refused.name, position: refused.position }
     );
   }
-  const names = new Set();
-  return entries.map((entry, index) => {
-    if (
-      !entry ||
-      typeof entry !== "object" ||
-      Array.isArray(entry) ||
-      Object.keys(entry).some((key) => !PREVIEW_APPLICATION_IDENTITY_FIELDS.has(key))
-    ) {
-      throw previewApplicationIdentitiesError(
-        `Managed app identity ${index + 1} must contain only name, type, and value.`,
-        "vibe64_application_identity_fields_unsupported",
-        { position: index + 1 }
-      );
-    }
-    const name = String(entry.name || "").trim().toLowerCase();
-    if (
-      !PREVIEW_APPLICATION_IDENTITY_NAME_PATTERN.test(name) ||
-      PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES.has(name)
-    ) {
-      throw previewApplicationIdentitiesError(
-        `Managed app identity ${index + 1} has an invalid name. Use a short name such as admin or user.`,
-        "vibe64_application_identity_name_invalid",
-        { position: index + 1 }
-      );
-    }
-    let selector;
-    try {
-      selector = normalizePreviewIdentitySelector({
-        type: entry.type,
-        value: entry.value
-      });
-    } catch {
-      throw previewApplicationIdentitiesError(
-        `Managed app identity ${name} has an invalid application selector.`,
-        "vibe64_application_identity_selector_invalid",
-        { name }
-      );
-    }
-    if (names.has(name)) {
-      throw previewApplicationIdentitiesError(
-        `Managed app identity name ${name} is duplicated.`,
-        "vibe64_application_identity_name_duplicated",
-        { name }
-      );
-    }
-    names.add(name);
-    return {
-      name,
-      type: selector.type,
-      value: selector.value
-    };
-  });
+  return rows.map(({ name, type, value: selectorValue }) => ({ name, type, value: selectorValue }));
 }
 
 /**
@@ -200,47 +159,11 @@ function previewAuthIdentityTypes({
 }
 
 function normalizePreviewIdentitySelector(value = {}) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  const type = String(source.type || "").trim();
-  if (!PREVIEW_IDENTITY_SELECTOR_TYPES.includes(type)) {
-    throw previewIdentityError(
-      "Preview identity selector type is invalid.",
-      "vibe64_preview_identity_selector_type_invalid"
-    );
+  const checked = checkPreviewIdentitySelector(value && typeof value === "object" && !Array.isArray(value) ? value : {});
+  if (checked.problem) {
+    throw previewIdentityError(PREVIEW_IDENTITY_SELECTOR_MESSAGES[checked.problem.code], checked.problem.code);
   }
-  const rawValue = String(source.value || "").trim();
-  const normalizedValue = type === PREVIEW_IDENTITY_SELECTOR_EMAIL
-    ? rawValue.toLowerCase()
-    : rawValue;
-  if (!normalizedValue) {
-    throw previewIdentityError(
-      "Preview identity selector is missing.",
-      "vibe64_preview_identity_selector_missing"
-    );
-  }
-  if (
-    type === PREVIEW_IDENTITY_SELECTOR_EMAIL &&
-    (!normalizedValue.includes("@") || normalizedValue.length > 320)
-  ) {
-    throw previewIdentityError(
-      "Preview identity email is invalid.",
-      "vibe64_preview_identity_email_invalid"
-    );
-  }
-  if (type !== PREVIEW_IDENTITY_SELECTOR_EMAIL && normalizedValue.length > 256) {
-    throw previewIdentityError(
-      type === PREVIEW_IDENTITY_SELECTOR_LOGIN
-        ? "Preview identity login is invalid."
-        : "Preview identity user id is invalid.",
-      type === PREVIEW_IDENTITY_SELECTOR_LOGIN
-        ? "vibe64_preview_identity_login_invalid"
-        : "vibe64_preview_identity_user_id_invalid"
-    );
-  }
-  return {
-    type,
-    value: normalizedValue
-  };
+  return checked.selector;
 }
 
 function normalizePreviewIdentitySelection(value = {}) {

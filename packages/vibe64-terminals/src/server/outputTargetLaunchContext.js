@@ -49,7 +49,14 @@ async function launchContextFor(project, runtime, session, prepareEnvironment) {
   }
   return {
     project,
+    // Preview uses the valid identities and says which it skips and why.
     previewApplicationIdentities: previewIdentitySettings.identities || [],
+    previewApplicationIdentityProblems: {
+      fileProblem: String(previewIdentitySettings.fileProblem || ""),
+      invalidIdentities: Array.isArray(previewIdentitySettings.invalidIdentities)
+        ? previewIdentitySettings.invalidIdentities
+        : []
+    },
     projectEnvironment,
     projectsRoot: project.selectedProject?.projectsRoot || "",
     projectContextRoot,

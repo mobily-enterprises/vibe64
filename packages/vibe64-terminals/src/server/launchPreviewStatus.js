@@ -152,7 +152,8 @@ function outputStatusResponseFromPreviewStatus({
   outputRuns = [],
   outputTargets = [],
   previewStatus = {},
-  previewApplicationIdentities = []
+  previewApplicationIdentities = [],
+  previewApplicationIdentityProblems = {}
 } = {}) {
   const preview = normalizeLaunchPreview(previewStatus.preview || {});
   const previewTarget = previewTargetFromLaunchPreview(preview);
@@ -168,6 +169,7 @@ function outputStatusResponseFromPreviewStatus({
     preview,
     previewIdentity: previewIdentityCapability({
       previewApplicationIdentities,
+      previewApplicationIdentityProblems,
       preview,
       terminal: previewStatus.activeTerminal
     }),

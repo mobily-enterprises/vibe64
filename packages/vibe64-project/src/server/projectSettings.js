@@ -325,13 +325,20 @@ function createProjectSettings({
     return source;
   }
 
+  /**
+   * The source's managed app identities: the valid ones, and, when there are
+   * any, the invalid entries (each with its position and reason) and the
+   * file's own problem. A wrong file still reads, so App access can fix it.
+   */
   async function previewApplicationIdentitiesState(input = {}) {
     const source = await previewApplicationIdentitySource(input);
-    const { identities } = await readPreviewApplicationIdentities({
+    const { fileProblem, identities, invalidIdentities } = await readPreviewApplicationIdentities({
       sourceRoot: source.sourceRoot
     });
     return {
       identities,
+      ...(invalidIdentities.length > 0 ? { invalidIdentities } : {}),
+      ...(fileProblem ? { fileProblem } : {}),
       ok: true
     };
   }

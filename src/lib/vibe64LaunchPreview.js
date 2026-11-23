@@ -1,5 +1,6 @@
 // A session's Preview as its outputs status reports it.
 import { isRecord, normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+import { previewApplicationIdentityLabel } from "@local/vibe64-core/shared/previewIdentity";
 
 function normalizeLaunchPreview(preview = {}) {
   const source = normalizeObject(preview);
@@ -54,6 +55,42 @@ function launchPreviewTestNotice(status = {}, activeTarget = null) {
   return null;
 }
 
+const SKIPPED_IDENTITIES_LISTED = 3;
+
+/**
+ * The notice over the Preview when the project's managed app identities are
+ * not all usable: each identity it skips, with the reason, or why their file
+ * gave none. Preview still runs; the notice points to App access to fix them.
+ * @param {object} status the outputs status
+ */
+function launchPreviewIdentityNotice(status = {}) {
+  const capability = normalizeObject(normalizeObject(status).previewIdentity);
+  const fileProblem = String(capability.fileProblem || "").trim();
+  if (fileProblem) {
+    return {
+      message: `${fileProblem} Preview runs without managed app identities until the file is fixed in App access.`,
+      title: "Preview can't read its app identities"
+    };
+  }
+  const skipped = (Array.isArray(capability.skippedIdentities) ? capability.skippedIdentities : []).filter(isRecord);
+  if (skipped.length < 1) {
+    return null;
+  }
+  const many = skipped.length > 1;
+  const listed = skipped.slice(0, SKIPPED_IDENTITIES_LISTED).map((identity) => (
+    `${previewApplicationIdentityLabel(identity, { sentenceStart: true })}: ${String(identity.reason || "").trim()}`
+  ));
+  const more = skipped.length - listed.length;
+  return {
+    message: [
+      ...listed,
+      more > 0 ? `And ${more} more.` : "",
+      `Preview can't sign in as ${many ? "them" : "it"} until ${many ? "they are" : "it is"} renamed or removed in App access.`
+    ].filter(Boolean).join(" "),
+    title: many ? `Preview skips ${skipped.length} app identities` : "Preview skips an app identity"
+  };
+}
+
 function launchPreviewFromStatus(status = {}) {
   const source = normalizeObject(status);
   const previewSource = normalizeObject(source.preview);
@@ -91,6 +128,7 @@ function launchPreviewRequiresProxy(metadata = {}) {
 
 export {
   launchPreviewFromStatus,
+  launchPreviewIdentityNotice,
   launchPreviewRequiresProxy,
   launchPreviewTestNotice,
   launchTerminalIsReady,

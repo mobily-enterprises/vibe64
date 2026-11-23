@@ -133,6 +133,8 @@ test("printed entry forms are the parsers' own tables, and unknown entries list 
   assert.match(identities, new RegExp(`At most ${PREVIEW_APPLICATION_IDENTITY_LIMIT} entries`, "u"));
   assert.match(identities, /vibe64-helper preview identities save < identities\.json/u);
   assert.match(identities, /Never create application accounts or change roles/u);
+  assert.match(identities, /lists each skipped entry under `invalidIdentities`/u);
+  assert.match(identities, /an invalid one is refused, naming it and the reason/u);
 });
 
 test("the Deployment spec states the APP_ENV contract and keeps Prepare and Build free of the database", async () => {

@@ -196,6 +196,9 @@ If the page opens while the application has not answered yet, or stays
 unreachable for longer than that, Preview shows **Starting preview.** and waits.
 It checks about once a second and opens the page by itself, in its default
 identity, as soon as the application answers, so you do not need to reload.
+If a managed app identity is invalid, Preview still starts with the valid ones
+and a notice above the page names each skipped identity and its reason, with
+**Open App access** to fix it (see [Managed app access](managed-app-access.md)).
 If it keeps waiting, the application is not answering: use **Show run output** to
 see why.
 

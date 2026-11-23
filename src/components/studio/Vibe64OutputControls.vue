@@ -26,12 +26,17 @@
     <div
       v-if="embeddedPreview"
       class="vibe64-launch-controls__preview"
-      :class="{ 'vibe64-launch-controls__preview--notice': previewTestNotice || previewWorkNotice }"
+      :class="{ 'vibe64-launch-controls__preview--notice': previewTestNotice || previewWorkNotice || previewIdentityNotice }"
     >
-      <div v-if="previewTestNotice || previewWorkNotice" class="vibe64-launch-controls__notices">
+      <div v-if="previewTestNotice || previewWorkNotice || previewIdentityNotice" class="vibe64-launch-controls__notices">
         <div v-if="previewTestNotice" class="vibe64-launch-controls__test-notice" :class="{ 'vibe64-launch-controls__test-notice--error': previewTestNotice.error }" :role="previewTestNotice.error ? 'alert' : 'status'">
           <strong>{{ previewTestNotice.title }}</strong>
           <span>{{ previewTestNotice.message }}</span>
+        </div>
+        <div v-if="previewIdentityNotice" class="vibe64-launch-controls__test-notice vibe64-launch-controls__identity-notice" role="status">
+          <strong>{{ previewIdentityNotice.title }}</strong>
+          <span>{{ previewIdentityNotice.message }}</span>
+          <router-link class="vibe64-launch-controls__identity-notice-link" :to="previewIdentityNotice.appAccessPath">Open App access</router-link>
         </div>
         <div v-if="previewWorkNotice" class="vibe64-launch-controls__work-notice" role="status">{{ previewWorkNotice }}</div>
       </div>
@@ -262,6 +267,7 @@ const {
   previewPicking,
   previewResourceNoticeText,
   previewResourceNoticeVisible,
+  previewIdentityNotice,
   previewTerminalRecoveryVisible,
   previewTestNotice,
   previewUrl,
@@ -416,6 +422,10 @@ onBeforeUnmount(() => {
   background: rgb(var(--v-theme-warning));
   color: rgb(var(--v-theme-on-warning));
   font-size: 13px;
+}
+.vibe64-launch-controls__identity-notice-link {
+  color: inherit;
+  font-weight: 600;
 }
 .vibe64-launch-controls__test-notice--error {
   background: rgb(var(--v-theme-error));

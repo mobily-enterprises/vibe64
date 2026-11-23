@@ -21,6 +21,7 @@ import {
   waitForPreviewReady
 } from "./agentPreviewStatusText.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { previewApplicationIdentityLabel } from "@local/vibe64-core/shared/previewIdentity";
 import { commandFailure } from "./commandFailure.js";
 
 /** @typedef {import("./types.js").AgentPreviewWorkerRegistry} AgentPreviewWorkerRegistry */
@@ -184,11 +185,18 @@ function createAgentPreviewCommandLine({
             { exitCode: 64 }
           );
         }
-        const undeclared = identities.filter((identity) => !identityTypes.includes(normalizeText(identity?.type)));
+        const undeclared = identities
+          .map((identity, index) => ({ name: identity?.name, position: index + 1, type: normalizeText(identity?.type) }))
+          .filter((identity) => !identityTypes.includes(identity.type));
         if (undeclared.length) {
+          const named = undeclared.slice(0, 5).map((identity) => (
+            `${previewApplicationIdentityLabel(identity, { sentenceStart: true })} ${identity.type
+              ? `uses the app identifier "${identity.type.slice(0, 60)}", which this project's Stack does not declare`
+              : "has no app identifier"}`
+          )).join("; ");
           return commandFailure(
             identityTypes.length
-              ? `Identity types must be ones this project's Stack declares in #### Preview identity: ${identityTypes.join(", ")}.`
+              ? `${named}. Identity types must be ones this project's Stack declares in #### Preview identity: ${identityTypes.join(", ")}.`
               : "This project's Stack declares no #### Preview identity types; add the application's Preview identity command first (vibe64-helper spec outputs).",
             "vibe64_agent_preview_identities_type_undeclared"
           );
@@ -197,10 +205,17 @@ function createAgentPreviewCommandLine({
       } else {
         result = await project.readPreviewApplicationIdentities({ sessionId });
       }
+      // A read also shows each entry Preview skips and why, and a file that is not an identity list; a
+      // complete replacement must rename or remove them, since a save refuses an invalid entry.
       return result?.ok === false ? result : {
         exitCode: 0,
         ok: true,
-        stdout: `${JSON.stringify({ identities: result.identities, identityTypes }, null, 2)}\n`
+        stdout: `${JSON.stringify({
+          identities: result.identities,
+          identityTypes,
+          ...(result.invalidIdentities?.length ? { invalidIdentities: result.invalidIdentities } : {}),
+          ...(result.fileProblem ? { fileProblem: result.fileProblem } : {})
+        }, null, 2)}\n`
       };
     });
   }
