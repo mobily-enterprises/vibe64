@@ -4,6 +4,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { normalizeText } from "@local/vibe64-execution/server";
 import { codexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
+import { CODEX_GIT_COMMAND_FORWARDED_ENV_NAMES } from "./codexGitCommandPlaces.js";
 import { writeExecutableFileIfChanged } from "./writeExecutableFileIfChanged.js";
 import { shortCommandHash, unixCommandSocketPath } from "./unixJsonCommand.js";
 
@@ -172,6 +173,11 @@ const response = await requestSocket({
     args: process.argv.slice(2),
     command,
     cwd: process.cwd(),
+    // Where Git's repository is and who its commits name, as the command's
+    // own environment says: the service decides by the repository a command acts on.
+    env: Object.fromEntries(${JSON.stringify(CODEX_GIT_COMMAND_FORWARDED_ENV_NAMES)}
+      .filter((name) => typeof process.env[name] === "string")
+      .map((name) => [name, process.env[name]])),
     generationId,
     inputBase64,
     sessionId,

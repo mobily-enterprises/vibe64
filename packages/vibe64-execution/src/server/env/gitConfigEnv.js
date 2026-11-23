@@ -113,10 +113,17 @@ function githubTokenGitTransportEnv(env = {}) {
   return githubTokenCredentialHelperGitEnv(githubSshToHttpsGitEnv(env));
 }
 
+// An empty credential.helper, given last at command scope, clears every helper
+// Git's own config files name, its URL-specific ones too.
+function gitCredentialHelpersClearedEnv(env = {}) {
+  return applyGitConfigEntriesToEnv(env, [{ key: "credential.helper", value: "" }]);
+}
+
 const __testables = Object.freeze({ applyGitConfigEntriesToEnv, githubSshToHttpsGitEnv, gitSafeDirectoryArgs });
 
 export {
   applyGitSafeDirectoriesToEnv,
+  gitCredentialHelpersClearedEnv,
   githubGitNonInteractiveEnv,
   githubHttpsGitTransportEnv,
   githubTokenGitTransportEnv,

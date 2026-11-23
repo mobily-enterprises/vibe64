@@ -59,8 +59,8 @@ import {
   readBoundedFile,
   sanitizedCommandEnvironment,
   SESSION_RENAME_CONTROL_ENV,
+  sessionCommandCwd,
   sessionRenameCommandSource,
-  validateCommandCwd,
   VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV,
@@ -476,7 +476,7 @@ function createAgentSessionCommandService({
         { exitCode: 2 }
       );
     }
-    const cwd = validateCommandCwd(input.cwd, context.sourceRoot);
+    const cwd = await sessionCommandCwd(input.cwd, context.sourceRoot);
     if (cwd.ok === false) {
       return cwd;
     }
@@ -491,10 +491,7 @@ function createAgentSessionCommandService({
     );
     const outputPath = path.join(runRoot, "output.log");
     const resultPath = path.join(runRoot, "result.txt");
-    await mkdir(runRoot, {
-      mode: 0o700,
-      recursive: true
-    });
+    await mkdir(runRoot, { mode: 0o700, recursive: true });
     const childEnv = {
       ...sanitizedCommandEnvironment(input.env),
       ...genesisParserEnvironment(),
@@ -506,7 +503,7 @@ function createAgentSessionCommandService({
     input.signal?.throwIfAborted();
     const started = await runCommand({
       actor: "app",
-      allowedRoots: [context.sourceRoot],
+      allowedRoots: cwd.allowedRoots,
       args: [],
       baseEnv: childEnv,
       command: runnerHostPath(context.binding.wrapperHostDir),
@@ -536,6 +533,7 @@ function createAgentSessionCommandService({
         sourcePath: context.sourceRoot
       },
       shimDirs: withGenesisCommandShim([context.binding.wrapperHostDir]),
+      tempDirectory: cwd.tempDirectory,
       timeout: AGENT_SESSION_COMMAND_TIMEOUT_MS
     });
     const executionId = toText(started?.execution?.id);

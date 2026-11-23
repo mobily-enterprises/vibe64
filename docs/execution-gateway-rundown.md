@@ -454,6 +454,12 @@ from, and the exec helper keeps the folders the command names when it runs it as
 the person. It cannot name `HOME`, `LOGNAME`, `PATH`, `TMPDIR`, `USER` or
 `XDG_RUNTIME_DIR`, which the resolver and the helper own.
 
+A session's AI command names its session's temporary folder as `tempDirectory`
+(`tmp` beside the source); the resolver makes it the command's `TMPDIR`, and the
+exec helper keeps it only for the workspace's own commands and only when it is
+a real `projects/<project>/sessions/active/<id>/tmp` folder of that workspace
+(`sessionTempDirectory`), otherwise the workspace's temporary folder.
+
 The host's program folders take `~/.local/bin`'s place on PATH: no login's `~/.local/bin`
 is on the command's PATH, not even one the server's own PATH inherited from a
 login shell's profile, since a program found there would refuse to start.
@@ -658,6 +664,25 @@ await runVibe64Command({
 
 This is the path that should prevent Codex from losing GitHub credentials or
 using the wrong HOME.
+
+The service decides by the repository a command acts on, not its working
+directory alone (`codexGitCommandPlaces.js`): `-C`, `--git-dir`, `--work-tree`,
+the `GIT_DIR` and `GIT_WORK_TREE` the wrapper forwards, and what `init` and
+`clone` make. The source and each connected copy keep the request above; a
+repository in the session's temporary folder runs as plain local Git:
+
+```js
+await runVibe64Command({
+  actor: "app",
+  command: "git",
+  allowedRoots: [tempRoot, cwdRoot],
+  env: { GIT_CEILING_DIRECTORIES: sessionFolder, /* the command's GIT_DIR, GIT_WORK_TREE, GIT_AUTHOR_*, GIT_COMMITTER_* */ },
+  gitIdentity: "none",     // no person's Git identity
+  gitTransport: "anonymous", // no credential, Git's credential helpers cleared
+  purpose: "codex",
+  session: { sessionId }   // no metadata, user key or token
+});
+```
 
 ## What New Code Should Do
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -149,7 +149,19 @@ test("agent shell commands run as session-owned managed executions and drain on 
     assert.equal(request.execution.projectSlug, projectSlug);
     assert.equal(request.execution.sessionId, sessionId);
     assert.equal(request.cwd, sourceRoot);
-    assert.deepEqual(request.allowedRoots, [sourceRoot]);
+    // The session's own temporary folder, beside its source, is its commands' TMPDIR.
+    const tempRoot = path.join(path.dirname(sourceRoot), "tmp");
+    assert.deepEqual(request.allowedRoots, [sourceRoot, tempRoot]);
+    assert.equal(request.tempDirectory, tempRoot);
+    assert.equal((await stat(tempRoot)).mode & 0o777, 0o770 & ~process.umask());
+    assert.equal(resolveCommandEnv({ baseEnv: { ...request.baseEnv, TMPDIR: "/tmp" }, request }).TMPDIR, tempRoot);
+    const inTemp = await service.run({ commandBase64: Buffer.from("pwd").toString("base64url"), cwd: tempRoot, sessionId });
+    assert.equal(inTemp.ok, true);
+    assert.equal(runCalls.at(-1).cwd, tempRoot);
+    const beside = await service.run({ commandBase64: Buffer.from("pwd").toString("base64url"), cwd: path.dirname(sourceRoot), sessionId });
+    assert.equal(beside.code, "vibe64_agent_session_command_cwd_invalid");
+    assert.match(beside.error || beside.stderr || "", /inside the active session source or its temporary folder/u);
+    runCalls.length = 1;
     assert.deepEqual(request.shimDirs, [
       wrapperHostDir,
       genesisCommandShimDirectory()

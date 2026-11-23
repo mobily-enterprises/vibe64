@@ -51,6 +51,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-runtime/src/server/currentSessionRecords.js`
 - `packages/vibe64-runtime/src/server/sessionLocks.js`
 - `packages/vibe64-runtime/src/server/sessionWorktreeArchive.js`
+- `packages/vibe64-runtime/src/server/sessionTempFolder.js`
 - `packages/vibe64-runtime/src/server/connectedRepositoryCopiesUpgrade.js`
 - `tests/server/vibe64Runtime.unit.test.js`
 - `tests/server/vibe64SessionStore.unit.test.js`
@@ -186,8 +187,11 @@ source. Renewal requires every copy clean, saved and current, because the
 renewal rules read the session's own inspection and update check, which include
 the copies. It keeps their recovery, stages the `connected` folder beside the
 source as `connected.renewal-<id>`, restores it when the renewal fails and
-removes it once the predecessor's archive is published. Archive, the archive of
-a session whose source creation failed, and renewal's removal then remove the
+removes it once the predecessor's archive is published. The session's temporary
+folder, `tmp` beside the source (`sessionTempFolder.js`), is the TMPDIR of the
+AI's commands, made on its first shell command; it is never part of a recovery,
+and archive, renewal's removal and the archive of a session whose source creation
+failed remove it with `removeSessionTempFolder`. They then remove the
 session's own folder around them with `removeEmptySessionSourceFolder`, a plain
 `rmdir`: only once nothing is left in it, so anything else there stays. The
 successor carries no `connected_copies`; its preparation copies the

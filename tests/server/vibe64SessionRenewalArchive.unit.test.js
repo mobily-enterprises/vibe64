@@ -309,7 +309,7 @@ test("renewal stages a clean source reversibly before committing removal", async
   });
 });
 
-test("renewal stages the connected copies with the source, restores them on failure and removes them once committed", async () => {
+test("renewal stages the connected copies with the source, restores them on failure and removes them and the temporary folder once committed", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const fixture = await createRenewalFixture(targetRoot, { connectedCopies: ["library", "tools"] });
     const options = { renewalId: fixture.renewalId };
@@ -345,6 +345,8 @@ test("renewal stages the connected copies with the source, restores them on fail
     await fixture.runtime.store.prepareRenewalSessionArchive(fixture);
     await activateSuccessor(fixture);
     await commitPreparedRenewal(fixture);
+    // The predecessor's throwaway files end with it.
+    await writeProjectFile(path.join(path.dirname(fixture.sourcePath), "tmp"), "throwaway.txt", "test output\n");
     await fixture.runtime.commitRenewalSessionSourceRemoval(fixture.sourceSessionId, options);
     assert.equal(await pathExists(stagedRoot), false);
     assert.equal(await pathExists(connectedRoot), false);

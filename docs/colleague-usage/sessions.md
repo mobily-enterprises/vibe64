@@ -178,6 +178,30 @@ apply on desktop and mobile.
 [Archive a session](session-archive.md) covers archiving, unsaved work, and
 retrying a cleanup that fails.
 
+## The session's temporary folder
+
+Each session has its own temporary folder, `tmp` beside its source and its
+connected copies. The AI's shell commands, and every program they start, get it
+as `TMPDIR`, so their throwaway files, and the Git repositories tests make, stay
+in this session, apart from every other session's. Commands can also run in it.
+Vibe64 makes it on the AI's first command and empties it when the session is
+archived or renewed; nothing in it is saved or kept in the session's archive.
+
+The AI's Git decides by the repository a command acts on: the folder it names
+with `-C`, `--git-dir`, `--work-tree`, `GIT_DIR` or `GIT_WORK_TREE`, not just the
+folder it runs from. A repository in the temporary folder gets plain local Git:
+`init`, `clone`, `commit`, `log`, and `push` or `fetch` between repositories in
+that folder all work, with none of the session's GitHub sign-in and not your Git
+name and email (a test names its commits' author itself, with `GIT_AUTHOR_NAME`
+and the like or `git -c user.name=...`). From the temporary folder Git can read
+the session's source and connected repositories, for example
+`git -C <source> rev-parse --show-toplevel` or a clone of the source; a command
+that changes them follows their own rules, as when it runs inside them, and one
+that would change them from the temporary folder (a clone into the source, a
+push to it) is refused. Git on another session's folder, another project or a
+temporary folder all sessions share is refused too, with a message naming this
+session's temporary folder for throwaway repositories.
+
 ## Chat availability
 
 The chat checks which modes you can use and shows the effective assistant or an

@@ -202,6 +202,8 @@ function commandEnvWithoutGitIdentity({
     ...callerEnv,
     ...credentialEnv({ actor, request }),
     ...sharedEnv,
+    // A session's own temporary folder, which the gateway owns as it owns HOME.
+    ...(request.tempDirectory ? { TMPDIR: request.tempDirectory } : {}),
     ...sessionAppEnv(request)
   });
   const finalEnv = {
@@ -256,12 +258,22 @@ function gitIdentityInput({
  */
 
 /**
+ * Plain local Git (`gitIdentity: "none"`) names no one: its commits take the
+ * GIT_AUTHOR_* and GIT_COMMITTER_* its own Env gives, or Git's own configuration.
+ * @param {CommandEnvOptions} options
+ */
+function commandHasOwnGitIdentity(options) {
+  return options.request?.gitIdentity === "none";
+}
+
+/**
  * The command env, awaiting the person's Git identity without holding the
  * server's thread. The execution gateway resolves every command with this.
  * @param {CommandEnvOptions} options
  */
 async function resolveCommandEnvAsync(options) {
   const commandEnv = commandEnvWithoutGitIdentity(options);
+  if (commandHasOwnGitIdentity(options)) return commandEnv;
   return { ...commandEnv, ...await gitIdentityEnv(gitIdentityInput(options, commandEnv)) };
 }
 
@@ -274,6 +286,7 @@ async function resolveCommandEnvAsync(options) {
  */
 function resolveCommandEnv(options) {
   const commandEnv = commandEnvWithoutGitIdentity(options);
+  if (commandHasOwnGitIdentity(options)) return commandEnv;
   return {
     ...commandEnv,
     ...(options.resolvedGitIdentityEnv || gitIdentityEnvSync(gitIdentityInput(options, commandEnv)))

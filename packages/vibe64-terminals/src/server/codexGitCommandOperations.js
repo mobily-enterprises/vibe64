@@ -88,11 +88,54 @@ const CODEX_LOCAL_GIT_OPERATIONS = new Set([
 const GIT_GLOBAL_OPTIONS_WITH_VALUES = new Set([
   "-C",
   "-c",
+  "--attr-source",
+  "--config-env",
   "--exec-path",
   "--git-dir",
   "--namespace",
   "--super-prefix",
   "--work-tree"
+]);
+const GIT_GLOBAL_OPTION_VALUE_PREFIXES = Object.freeze([
+  "--attr-source=",
+  "--config-env=",
+  "--exec-path=",
+  "--git-dir=",
+  "--list-cmds=",
+  "--namespace=",
+  "--super-prefix=",
+  "--work-tree="
+]);
+// Subcommands that only read their repository: one that reads the session's
+// source or a connected copy along with its temporary folder runs as the
+// temporary folder's plain Git (codexGitCommandPlaces.js); any other changes it.
+const GIT_READ_ONLY_OPERATIONS = new Set([
+  "blame",
+  "cat-file",
+  "check-attr",
+  "check-ignore",
+  "cherry",
+  "count-objects",
+  "describe",
+  "diff",
+  "diff-files",
+  "diff-index",
+  "diff-tree",
+  "for-each-ref",
+  "grep",
+  "log",
+  "ls-files",
+  "ls-tree",
+  "merge-base",
+  "name-rev",
+  "rev-list",
+  "rev-parse",
+  "shortlog",
+  "show",
+  "show-branch",
+  "show-ref",
+  "status",
+  "whatchanged"
 ]);
 
 
@@ -101,6 +144,28 @@ function commandOutput(result = {}) {
   return normalizeText(captured
     ? Buffer.from(captured, result.outputEncoding === "base64" ? "base64" : "utf8").toString("utf8")
     : result.error || result.output);
+}
+
+/** What the wrapper receives for a command that ran. */
+function commandResultPayload(result = {}, { commandSubmitted = false } = {}) {
+  let error = "";
+  if (result.timedOut && commandSubmitted) {
+    error = "Managed Git command timed out.";
+  } else if (!result.ok) {
+    error = commandOutput(result);
+  }
+  return {
+    code: result.ok ? "" : result.code || "vibe64_codex_git_command_failed",
+    error,
+    executionId: result.execution?.id,
+    exitCode: Number(result.exitCode ?? (result.ok ? 0 : 1)),
+    ok: result.ok === true,
+    outputEncoding: result.outputEncoding || "utf8",
+    signal: result.signal || "",
+    stderr: result.stderr || "",
+    stdout: result.stdout || "",
+    timedOut: result.timedOut === true
+  };
 }
 
 function commandOutputTail(value = "", limit = 1000) {
@@ -196,30 +261,49 @@ function gatewayGitIdentityUserKey(session = {}, actor = {}, toolHome = {}) {
     : normalizeText(toolHome.ownerUserKey || actor.actorUserKey);
 }
 
-function gitOperation(args = []) {
+/**
+ * Git's own options before its subcommand: each `-C` in order, the last
+ * `--git-dir` and `--work-tree` (null when not given), `--bare`, and the
+ * subcommand with its index. The paths are exactly as given.
+ * @param {string[]} args
+ */
+function parseGitInvocation(args = []) {
   const values = Array.isArray(args) ? args.map((arg) => String(arg)) : [];
+  const invocation = { bare: false, chdirs: [], gitDir: null, operation: "", operationIndex: values.length, workTree: null };
   for (let index = 0; index < values.length; index += 1) {
     const value = normalizeText(values[index]);
     if (!value) {
       continue;
     }
     if (GIT_GLOBAL_OPTIONS_WITH_VALUES.has(value)) {
+      const given = values[index + 1] ?? "";
+      if (value === "-C") invocation.chdirs.push(given);
+      if (value === "--git-dir") invocation.gitDir = given;
+      if (value === "--work-tree") invocation.workTree = given;
       index += 1;
       continue;
     }
-    if (value.startsWith("--git-dir=") ||
-      value.startsWith("--work-tree=") ||
-      value.startsWith("--namespace=") ||
-      value.startsWith("--exec-path=") ||
-      value.startsWith("--super-prefix=")) {
+    const prefix = GIT_GLOBAL_OPTION_VALUE_PREFIXES.find((candidate) => value.startsWith(candidate));
+    if (prefix) {
+      const given = values[index].slice(values[index].indexOf("=") + 1);
+      if (prefix === "--git-dir=") invocation.gitDir = given;
+      if (prefix === "--work-tree=") invocation.workTree = given;
+      continue;
+    }
+    if (value === "--bare") {
+      invocation.bare = true;
       continue;
     }
     if (value.startsWith("-")) {
       continue;
     }
-    return value;
+    return { ...invocation, operation: value, operationIndex: index };
   }
-  return "";
+  return invocation;
+}
+
+function gitOperation(args = []) {
+  return parseGitInvocation(args).operation;
 }
 
 function commandRequiresGithubToken(command = "", args = []) {
@@ -414,10 +498,13 @@ export {
   CODEX_GIT_COMMAND_TIMEOUT_MS,
   commandOutput,
   commandRequiresGithubToken,
+  commandResultPayload,
   commitAuthorOptions,
   createActorCredentialCache,
   gatewayGitIdentityUserKey,
   githubAuthenticationRejected,
+  GIT_READ_ONLY_OPERATIONS,
   logGitCommandResult,
+  parseGitInvocation,
   readGithubToken
 };

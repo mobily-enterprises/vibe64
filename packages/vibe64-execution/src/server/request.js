@@ -53,10 +53,21 @@ const VIBE64_COMMAND_ENV_POLICIES = Object.freeze([
   "auth",
   "staging"
 ]);
+// "anonymous" reaches a remote with no credential: no Vibe64 one and none of
+// Git's own credential helpers.
 const VIBE64_COMMAND_GIT_TRANSPORTS = Object.freeze([
   "none",
+  "anonymous",
   "github-https",
   "github-token"
+]);
+// Who a command's Git commits name: the session's person, as every command
+// gets by default, or "none" for plain local Git in a session's temporary
+// folder, where the command's own GIT_AUTHOR_* and GIT_COMMITTER_* (or Git's
+// own configuration) decide.
+const VIBE64_COMMAND_GIT_IDENTITIES = Object.freeze([
+  "session",
+  "none"
 ]);
 const VIBE64_EXECUTION_KINDS = Object.freeze([
   "assistant",
@@ -383,6 +394,16 @@ function normalizeVibe64CommandRequest(input = {}) {
       "vibe64_command_sandbox_allowances_invalid"
     );
   }
+  // A session's own temporary folder, the command's TMPDIR; the gateway and
+  // the host helper own TMPDIR, so no caller Env can name it.
+  const tempDirectory = request.tempDirectory ?? "";
+  if (typeof tempDirectory !== "string" || (tempDirectory && (!tempDirectory.startsWith("/") ||
+      /[\r\n\0]/u.test(tempDirectory) || stagingAccount || request.envPolicy === "staging"))) {
+    throw commandRequestError(
+      "A temporary folder belongs only to a session's own commands and must be an absolute path.",
+      "vibe64_command_temp_directory_invalid"
+    );
+  }
   return {
     actor: normalizeEnum(request.actor, VIBE64_COMMAND_ACTORS, "daemon", "actor"),
     stagingAccount,
@@ -398,6 +419,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     envPolicy: normalizeEnum(request.envPolicy, VIBE64_COMMAND_ENV_POLICIES, "session", "env_policy"),
     stagingEnvironmentFile,
     sandboxAllowances: [...sandboxAllowances],
+    tempDirectory: normalizeAbsolutePath(tempDirectory),
     execution: normalizeExecutionDescriptor(request.execution, {
       mode,
       project,
@@ -406,6 +428,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     }),
     credentialHome: normalizeCredentialHome(request.credentialHome),
     gitAuthToken: normalizeText(request.gitAuthToken),
+    gitIdentity: normalizeEnum(request.gitIdentity, VIBE64_COMMAND_GIT_IDENTITIES, "session", "git_identity"),
     gitSafeDirectories: normalizeAbsolutePaths(request.gitSafeDirectories),
     personGitIdentity: {
       email: normalizeText(request.personGitIdentity?.email),

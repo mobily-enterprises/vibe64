@@ -15,7 +15,8 @@ Rust links with the computer's C compiler (`cc`). Projects needing native
 extensions or Go C integration also declare their required build toolchain.
 Every Java program a managed command starts keeps its temporary files, among
 them the native libraries of SQLite's JDBC driver, Netty or JNA, in the
-command's temporary folder rather than `/tmp`; a project's own
+command's temporary folder (for the AI's commands, the session's own) rather
+than `/tmp`; a project's own
 `-Djava.io.tmpdir` still wins.
 JSKIT, Vue, Laravel, Django, Rails, Spring Boot, Express and Next.js use the
 tools specified by their project commands rather than a separate framework
