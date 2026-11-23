@@ -4,6 +4,8 @@
 // under the crate's ordinary name while the tracked Cargo.toml and Cargo.lock stay as they are
 // (Cargo 1.97 or later; the treatment examples/connected-development/cargo proves). Ordinary cargo
 // commands run in the session source then use the checkout, and rebuild when it changes; no watcher.
+// A crate no package of the session declares gets no patch: the config names it unused, with a
+// digest of the session's Cargo.toml files, and session status trusts that only while they are unchanged.
 // On Save, `bump` moves the tracked Cargo.lock (and Cargo.toml's requirement, if it must) to the
 // checkout's version once that version is published.
 import { readFile, realpath, writeFile } from "node:fs/promises";
@@ -12,7 +14,7 @@ import semver from "semver";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { notUsed } from "./adapterResults.js";
 import { errorSummary, lastLine } from "./commandOutput.js";
-import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
+import { inputsDigest, readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 
 const CONFIG = ".cargo/config.toml";
 const LOCK = ".development/cargo/Cargo.lock";
@@ -22,6 +24,7 @@ const CARGO_TIMEOUT_MS = 15 * 60_000;
 const CRATES_IO = new Set(["registry+https://github.com/rust-lang/crates.io-index", "sparse+https://index.crates.io/"]);
 const UNPUBLISHED = /failed to select a version for the requirement|no matching package named|did not match any packages/u;
 const DEPENDENCY_TABLE = /^\[(?:workspace\.)?(?:target\..+\.)?(?:dev-|build-)?dependencies\]$/u;
+const UNUSED_LINE = /^# Not patched, as no package of this session depends on them \(Cargo\.toml files ([0-9a-f]{64})\): (.+)$/u;
 
 
 /** A TOML basic string: JSON's escapes are all valid TOML ones. */
@@ -142,13 +145,15 @@ function unusedReason(crate) {
   return `No package of this session depends on the crate ${crate.name}, so there is nothing to patch.`;
 }
 
-/**
- * Whether one of the session's own packages (those without a source in the lock) depends on the
- * crate: what the derived lock records of the declarations `cargo metadata --no-deps` read.
- */
-function dependedOnInLock(text, name) {
-  return String(text).split(/^\[\[package\]\]$/mu).slice(1).some(block => !/^source = /mu.test(block) &&
-    [...(/^dependencies = \[([\s\S]*?)^\]/mu.exec(block)?.[1] || "").matchAll(/"([^"\s]+)[^"]*"/gu)].some(match => match[1] === name));
+/** What `cargo metadata --no-deps` reads to say which crates the session's packages declare: its Cargo.toml files. */
+function manifestsInputs(sessionSourceRoot) {
+  return inputsDigest({ roots: [sessionSourceRoot], wanted: name => name === "Cargo.toml", skipped: new Set(["target", "node_modules"]) });
+}
+
+/** The crates the config says preparation found unused, and the Cargo.toml files it found that in; null without. */
+function recordedUnused(lines) {
+  const match = lines.map(line => UNUSED_LINE.exec(line)).find(Boolean);
+  return match ? { inputs: match[1], crates: match[2].split(", ") } : null;
 }
 
 /**
@@ -188,9 +193,17 @@ function patchTables(connection, crates, metadata) {
   return { tables, unused };
 }
 
-function configText(sessionSourceRoot, tables) {
+function configText(sessionSourceRoot, tables, unused, inputs) {
   const keys = [...tables.keys()].sort((a, b) => Number(b === "crates-io") - Number(a === "crates-io") || a.localeCompare(b));
-  const lines = [MARKER, "", "[resolver]", lockfileLine(sessionSourceRoot)];
+  const lines = [
+    MARKER,
+    ...(unused.size
+      ? [`# Not patched, as no package of this session depends on them (Cargo.toml files ${inputs}): ${[...unused].sort().join(", ")}`]
+      : []),
+    "",
+    "[resolver]",
+    lockfileLine(sessionSourceRoot)
+  ];
   for (const key of keys) {
     lines.push("", `[patch.${key}]`, ...tables.get(key).sort((a, b) => a.name.localeCompare(b.name)).map(patchLine));
   }
@@ -202,6 +215,8 @@ async function applyCargo({ connection, connections, sessionSourceRoot, runComma
   refuseForeignConfig(connection, sessionSourceRoot, await readDerivedFile(sessionSourceRoot, CONFIG));
   await refuseTracked({ connection, tree: sessionSourceRoot, paths: [CONFIG, LOCK], runCommand });
   await refuseOldCargo({ connection, runCommand, cwd: sessionSourceRoot });
+  // What the declarations are read from, before Cargo reads them.
+  const inputs = await manifestsInputs(sessionSourceRoot);
   const declared = await cargoJson({
     connection,
     runCommand,
@@ -215,7 +230,7 @@ async function applyCargo({ connection, connections, sessionSourceRoot, runComma
     connection,
     tree: sessionSourceRoot,
     files: {
-      [CONFIG]: configText(sessionSourceRoot, tables),
+      [CONFIG]: configText(sessionSourceRoot, tables, unused, inputs),
       ...(trackedLock === null ? {} : { [LOCK]: trackedLock })
     },
     runCommand,
@@ -314,10 +329,11 @@ async function proveCargo({ connection, sessionSourceRoot, runCommand }) {
   const lines = config.split("\n");
   if (lines[0] !== MARKER) return { inEffect: false, reason: `${CONFIG} in the session source was not written by Vibe64.` };
   const lock = await readDerivedFile(sessionSourceRoot, LOCK);
-  // Cargo resolved the derived lock in the preparation that left the crate unpatched, and again in
-  // every build since: a package of the session that depends on the crate now needs the patch.
-  if (lock !== null && lines.includes(lockfileLine(sessionSourceRoot)) && !lines.includes(patchLine(crate)) &&
-      !dependedOnInLock(lock, crate.name)) {
+  // Preparation found no package of the session declaring the crate, in Cargo.toml files still as it read them;
+  // once one changes, preparation must look again.
+  const recorded = recordedUnused(lines);
+  if (recorded?.crates.includes(crate.name) && !lines.includes(patchLine(crate)) && lines.includes(lockfileLine(sessionSourceRoot)) &&
+      recorded.inputs === await manifestsInputs(sessionSourceRoot)) {
     return notUsed(unusedReason(crate));
   }
   if (!lines.includes(patchLine(crate)) || !lines.includes(lockfileLine(sessionSourceRoot))) {

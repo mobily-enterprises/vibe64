@@ -9,10 +9,12 @@
 //   apply(context)       puts the connection in effect, idempotently; resolves to { lines }, with
 //                        `unused` (why) when nothing in the session installs the connection, which
 //                        is no failure: the other connections of its type still apply
-//   proof(context)       whether it is in effect; resolves to { inEffect, reason }, or notUsed(reason)
-//                        ({ unused: true }) for a connection nothing installs. It reads files only
-//                        when context.runCommand is null (session status), and says unused from the
-//                        files whenever its apply would; in preparation it may also ask the toolchain
+//   proof(context)       whether it is in effect; resolves to { inEffect, reason, note? }, or
+//                        notUsed(reason) ({ unused: true }) for a connection nothing installs. It reads
+//                        files only when context.runCommand is null (session status), and says unused
+//                        exactly when preparation's would, from the files or from what preparation
+//                        recorded beside them; in preparation it may also ask the toolchain, and
+//                        `note` says what that could not check
 //   locked(context)      [{ package, connected, locked, unreleased? }], the version the connected copy
 //                        carries and the published one the project's tracked lockfile installs (what
 //                        Staging and Production use); the gap Vibe64 shows comes from it. `unreleased`,
@@ -144,7 +146,8 @@ async function runConnectedAdapterStep({ action, repository, repositories, sessi
     if (proof.unused) return { ok: true, output: `[Connected] ${unusedText(connection, proof.reason)}` };
     if (!proof.inEffect) return { ok: false, error: `Connected ${connection.name} is not in effect: ${proof.reason}` };
     const gaps = (await lockedVersions(connection, context)).map(entry => releaseGapLine(connection, entry));
-    return { ok: true, output: [`[Connected] ${connection.name} is in effect.`, ...gaps].join("\n") };
+    const note = proof.note ? [`[Connected] ${connection.name}: ${proof.note}`] : [];
+    return { ok: true, output: [`[Connected] ${connection.name} is in effect.`, ...note, ...gaps].join("\n") };
   } catch (error) {
     return { ok: false, error: String(error?.message || error), code: error?.code };
   }

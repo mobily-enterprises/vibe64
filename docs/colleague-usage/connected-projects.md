@@ -233,19 +233,29 @@ The session status (`vibe64-helper session status --json`) shows each copy's
 A typed Dependency that nothing in the session installs is unused, and it never
 fails preparation or Preview: its steps print `[Connected] <name> is connected,
 but nothing here installs it: remove it or install it.` followed by why, and
-preparation goes on with the other steps. Each type decides from the project's
-own files and toolchain:
+preparation goes on with the other steps. Session status and **Connected
+repositories** say unused exactly when preparation does. Each type decides from
+the project's own files and toolchain:
 
 - **npm**: no tree installs any of the repository's packages;
 - **composer**: no `composer.json`, or neither it nor `composer.lock` names the
   package;
 - **bundler**: no `Gemfile`, or `Gemfile.lock` does not lock the gem;
 - **gomod**: the session source has no `go.mod`, or its `go.mod` does not
-  require the module; preparation's check also finds a module no package of the
-  build of `./...` imports, which session status, reading files only, still
-  shows in effect;
-- **cargo**: no package of the session depends on the crate (it gets no patch);
-- **nuget**: no project references a package the copy builds;
+  require the module. A module `go.mod` requires stays in effect, even when no
+  package of this host's build or tests imports it (another platform's build may);
+  preparation then says it saw no build of it;
+- **cargo**: no package of the session declares the crate, so it gets no patch.
+  A crate the session uses only through another crate (a path dependency outside
+  the workspace, or a published crate) counts as unused until a package of the
+  session declares it;
+- **nuget**: MSBuild's evaluation finds no project referencing a package the copy
+  builds, wherever the reference is (`Directory.Build.props` and imports
+  included). Only preparation can evaluate, so it keeps its finding in
+  `.development/nuget/unused.json`. Status shows unused only while the project
+  files are as preparation read them; after a change, it asks to prepare again.
+  A package the session gets only through another package counts as unused
+  until a project references it;
 - **maven** and **gradle**: the session source is not a Maven project
   (`pom.xml`) or a Gradle build.
 
@@ -255,8 +265,16 @@ type is used Vibe64 takes back what it derived for it (for example
 removed. Session status shows the copy with `unused: true` and the same
 sentence as its `reason`, and **Connected repositories** shows that sentence
 under the entry. Remove the connection from the list, or declare and install
-the package the project uses; the next preparation then puts it in effect. A
-pip connection is always installed, so it is never unused.
+the package the project uses; the next preparation then puts it in effect.
+
+A pip connection is never unused. Vibe64 installs the copy editable into the
+session's `.venv` itself, so there is always something for the session to import,
+whether or not `requirements.txt` names it. The other types only redirect a
+package the project already installs, so for them nothing can be left to do.
+When `requirements.txt` does not name the distribution, status shows no
+published version beside it: what Staging and Production install comes from the
+project's own requirements, so add it there if the app needs it, or remove the
+connection.
 
 A Composition connection is assembled by the project itself, so a non-custom
 composition still needs a project Verify command: without one, preparation is

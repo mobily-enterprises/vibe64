@@ -2,7 +2,8 @@
 // a Cargo config) so the toolchain reads the connected checkout in place of the published package.
 // Each is untracked, kept out of Git through the type's own exclude block, and rewritten only when
 // its text changes.
-import { lstat, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64Error } from "@local/vibe64-core/server/core";
@@ -96,4 +97,30 @@ async function removeDerivedFiles({ tree, paths, writeGitExcludes }) {
   return removed;
 }
 
-export { excludedDerivedPatterns, readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles };
+/**
+ * A digest of what a toolchain decision was made from: the text of each file below the roots whose
+ * name `wanted` accepts, outside dot-folders and the `skipped` folders, with the files `counted`
+ * refuses (one an adapter generated) left out. A files-only proof trusts what preparation recorded
+ * only while this is unchanged.
+ * @param {{ roots: string[], wanted: (name: string) => boolean, skipped?: Set<string>, counted?: (text: string) => boolean }} input
+ */
+async function inputsDigest({ roots, wanted, skipped = new Set(), counted = () => true }) {
+  const hash = createHash("sha256");
+  for (const [index, root] of roots.entries()) {
+    const files = [];
+    const walk = async (dir) => {
+      for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        if (entry.isDirectory() && !entry.name.startsWith(".") && !skipped.has(entry.name)) await walk(path.join(dir, entry.name));
+        else if (entry.isFile() && wanted(entry.name)) files.push(path.join(dir, entry.name));
+      }
+    };
+    await walk(root);
+    for (const file of files.sort()) {
+      const text = await readFile(file, "utf8").catch(() => null);
+      if (text !== null && counted(text)) hash.update(`${index}\0${path.relative(root, file)}\0${text}\0`);
+    }
+  }
+  return hash.digest("hex");
+}
+
+export { excludedDerivedPatterns, inputsDigest, readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles };

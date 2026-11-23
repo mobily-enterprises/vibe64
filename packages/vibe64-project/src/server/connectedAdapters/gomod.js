@@ -2,8 +2,11 @@
 // module root `use`s the module and every connected Go module checkout, so each connected module
 // replaces its required version and go.mod and go.sum stay unchanged; Go keeps any other checksums
 // the workspace needs in go.work.sum, which is kept out of Git as well. The proof asks Go which
-// workspace it uses and where each connected module's packages are built from. No watcher is
-// needed: Go reads a workspace module's source in place, so a save takes effect at the next build.
+// workspace it uses and where each connected module's packages are built from, tests included. No
+// watcher is needed: Go reads a workspace module's source in place, so a save takes effect at the
+// next build. A connection is unused only when go.mod does not require it, which session status
+// reads from the same file: a required module no package here builds is still in effect, for
+// whatever build takes it (another platform's, or one after an import is added).
 //
 // Staging and Production build without the workspace, from the tracked go.mod and go.sum: `locked`
 // reads the version they record, and on Save `bump` moves them to the connected copy's latest
@@ -171,7 +174,8 @@ async function proveGomod({ connection, connections, sessionSourceRoot, runComma
   if (await realpath(active).catch(() => active) !== workPath) {
     return { inEffect: false, reason: `Go uses the workspace "${active}", not ${workPath}; unset GOWORK.` };
   }
-  const listed = await go(runCommand, root, ["list", "-deps", "-f", LIST_FORMAT, "./..."]);
+  // With -test: a module only the tests import is in their build.
+  const listed = await go(runCommand, root, ["list", "-deps", "-test", "-f", LIST_FORMAT, "./..."]);
   if (listed.failed) return { inEffect: false, reason: listed.failed };
   let used = 0;
   for (const line of listed.output.split("\n")) {
@@ -187,7 +191,14 @@ async function proveGomod({ connection, connections, sessionSourceRoot, runComma
     }
     used += 1;
   }
-  if (!used) return notUsed(`No package of ${own.modulePath} is in the build of ./..., so the session does not use it.`);
+  if (!used) {
+    return {
+      inEffect: true,
+      reason: "",
+      note: `go.mod requires ${own.modulePath}, but no package of it is in this host's build or tests of ./..., so no build here `
+        + `shows where Go takes it from; any build that needs it takes the connected checkout through ${WORK_FILE}.`
+    };
+  }
   return { inEffect: true, reason: "" };
 }
 

@@ -23,7 +23,9 @@ async function git(cwd, ...args) {
 
 /**
  * Answers like Git (really) and like the .NET SDK: `dotnet msbuild` evaluates PackageId,
- * IsPackable and PackageReference from the project file, and `dotnet restore` writes
+ * IsPackable and PackageReference from the project file and the nearest Directory.Build.props above
+ * it, leaving out an ItemGroup with a Condition (as the outer evaluation of a project that targets
+ * several frameworks does for one that names a framework), and `dotnet restore` writes
  * obj/project.assets.json resolving a package as the project its Directory.Build.targets
  * references while that import is active, else as the package.
  */
@@ -51,7 +53,12 @@ function toolchain(state) {
     }
     if (verb === "msbuild") {
       assert.ok(args.includes("-p:Vibe64ConnectedDisabled=true"));
-      const references = [...text.matchAll(/<PackageReference Include="([^"]*)" Version="([^"]*)"/gu)]
+      let props = "";
+      for (let folder = dir; folder.startsWith(cwd) && !props; folder = path.dirname(folder)) {
+        props = await readFile(path.join(folder, "Directory.Build.props"), "utf8").catch(() => "");
+      }
+      const evaluated = `${props}\n${text}`.replace(/<ItemGroup Condition="[^"]*">[\s\S]*?<\/ItemGroup>/gu, "");
+      const references = [...evaluated.matchAll(/<PackageReference Include="([^"]*)" Version="([^"]*)"/gu)]
         .map(([, Identity, Version]) => ({ Identity, Version }));
       const evaluation = { Items: { PackageReference: references }, Properties: { MSBuildProjectExtensionsPath: `${dir}/obj/` } };
       return { ok: true, stdout: JSON.stringify(evaluation), exitCode: 0 };
@@ -213,6 +220,53 @@ test("nuget: a connection no project references leaves preparation going, takes 
   await writeFile(project, original);
   const referenced = await status();
   assert.deepEqual([referenced.unused, referenced.reason], [false, `No project in ${app} uses a package built from ${library}; prepare the workspace.`]);
+});
+
+/** The app referencing Example.Library only where `edit` puts the reference, and the sentences status says. */
+async function statusFixture(t) {
+  const f = await fixture(t);
+  const original = await readFile(f.project, "utf8");
+  const reference = "<PackageReference Include=\"Example.Library\" Version=\"1.0.0\" />";
+  const props = path.join(f.app, "src", "Directory.Build.props");
+  return {
+    ...f,
+    original,
+    reference,
+    props,
+    unrelated: original.replace(reference, ""),
+    inProps: `<Project>\n  <ItemGroup>\n    ${reference}\n  </ItemGroup>\n</Project>\n`,
+    prepare: `No project in ${f.app} uses a package built from ${f.library}; prepare the workspace.`,
+    said: "Library is connected, but nothing here installs it: remove it or install it. " +
+      `No project in ${f.app} references a package ${f.library} builds.`
+  };
+}
+
+test("nuget: a reference only MSBuild sees, in Directory.Build.props, needs preparing in status, not unused", async (t) => {
+  const f = await statusFixture(t);
+  await writeFile(f.project, f.unrelated);
+  await writeFile(f.props, f.inProps);
+  assert.deepEqual([(await f.status()).unused, (await f.status()).reason], [false, f.prepare]);
+  assert.equal((await f.step("apply")).ok, true);
+  assert.match((await f.step("proof")).output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
+  assert.deepEqual([(await f.status()).inEffect, (await f.status()).unused], [true, false]);
+});
+
+test("nuget: once preparation found a connection unused, a reference only MSBuild sees makes status ask to prepare again", async (t) => {
+  const f = await statusFixture(t);
+  await writeFile(f.project, f.unrelated);
+  assert.deepEqual(await f.step("apply"), { ok: true, output: `[Connected] ${f.said}` });
+  assert.deepEqual([(await f.status()).unused, (await f.status()).reason], [true, f.said]);
+  await writeFile(f.props, f.inProps);
+  assert.deepEqual([(await f.status()).unused, (await f.status()).reason], [false, f.prepare]);
+});
+
+test("nuget: a reference MSBuild's evaluation leaves out is unused in status, as in preparation", async (t) => {
+  const f = await statusFixture(t);
+  await writeFile(f.project, f.unrelated
+    .replace("</Project>", `  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">\n    ${f.reference}\n  </ItemGroup>\n</Project>`));
+  assert.deepEqual(await f.step("apply"), { ok: true, output: `[Connected] ${f.said}` });
+  assert.deepEqual(await f.step("proof"), { ok: true, output: `[Connected] ${f.said}` });
+  assert.deepEqual([(await f.status()).unused, (await f.status()).reason], [true, f.said]);
 });
 
 test("nuget: the proof says exactly why a connected package is not in effect", async (t) => {

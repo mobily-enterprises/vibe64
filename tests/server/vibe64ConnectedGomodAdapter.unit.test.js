@@ -24,7 +24,8 @@ async function git(cwd, ...args) {
 /**
  * Answers like Git (really) and like Go: `go env GOWORK` names the go.work in the folder (or the
  * test's override), and `go list -deps` reports each module of the build from the folder go.work
- * uses, or from the module cache when go.work does not use it.
+ * uses, or from the module cache when go.work does not use it; a module in `state.testOnly` is in
+ * the build only with -test.
  */
 function toolchain(state) {
   return async ({ command, args, cwd, env }) => {
@@ -60,14 +61,15 @@ function toolchain(state) {
     }
     const work = await readFile(path.join(cwd, "go.work"), "utf8").catch(() => "");
     if (args[0] === "env") return { ok: true, stdout: `${state.gowork ?? (work ? path.join(cwd, "go.work") : "")}\n`, exitCode: 0 };
-    assert.deepEqual(args.slice(0, 3), ["list", "-deps", "-f"]);
+    assert.deepEqual([args[0], args[1], args.at(-3), args.at(-1)], ["list", "-deps", "-f", "./..."]);
     if (state.list) return { ok: true, stdout: state.list, exitCode: 0 };
+    const built = modulePath => !state.testOnly?.includes(modulePath) || args.includes("-test");
     const used = new Map();
     for (const [, dir] of work.matchAll(/^\t"(.*)" \/\/ /gmu)) {
       used.set(/^module (\S+)/u.exec(await readFile(path.join(dir, "go.mod"), "utf8"))[1], dir);
     }
     const lines = [`example.com/app\t${cwd}\texample.com/app\t${cwd}`];
-    for (const modulePath of ["example.com/library", "example.com/other"]) {
+    for (const modulePath of ["example.com/library", "example.com/other"].filter(built)) {
       const dir = used.get(modulePath) || path.join(state.modcache, `${modulePath}@v1.0.0`);
       lines.push(`${modulePath}\t${dir}\t${modulePath}\t${dir}`);
     }
@@ -185,13 +187,35 @@ test("gomod: the proof says exactly why a connected module is not in effect", as
   assert.equal((await step("proof")).error,
     `Connected Library is not in effect: example.com/library package example.com/library is built from ${cached}, not the connected checkout ${library}.`);
 
-  // A build that imports none of it does not use it: preparation goes on and says so.
+  // go.mod requires it, but no package of it is built here: in effect for any build that takes it, as status says,
+  // and preparation says what it could not check.
   state.list = `example.com/app\t${app}\texample.com/app\t${app}\n`;
-  assert.deepEqual(await step("proof"), { ok: true, output: "[Connected] Library is connected, but nothing here installs it: " +
-    "remove it or install it. No package of example.com/library is in the build of ./..., so the session does not use it." });
+  const proof = await step("proof");
+  assert.equal(proof.ok, true, proof.error);
+  assert.match(proof.output, new RegExp(`^\\[Connected\\] Library is in effect\\.\\n\\[Connected\\] Library: go\\.mod requires example\\.com/library, ` +
+    "but no package of it is in this host's build or tests of \\./\\.\\.\\., so no build here shows where Go takes it from; " +
+    "any build that needs it takes the connected checkout through go\\.work\\.(?:\\n|$)", "u"));
+  assert.deepEqual([(await status()).inEffect, (await status()).unused], [true, false]);
 
   delete state.list;
   assert.equal((await step("proof")).ok, true);
+});
+
+test("gomod: a module only the tests import is checked in the tests' build, and is in effect", async (t) => {
+  const { library, state, step, status } = await fixture(t);
+  state.testOnly = ["example.com/library"];
+  assert.equal((await step("apply")).ok, true);
+  const proof = await step("proof");
+  assert.equal(proof.ok, true, proof.error);
+  assert.doesNotMatch(proof.output, /no package of it|nothing here installs it/u);
+  assert.match(proof.output, /^\[Connected\] Library is in effect\.(?:\n|$)/u);
+  const listed = state.calls.filter(call => call.command === "go" && call.args[0] === "list");
+  assert.ok(listed.length && listed.every(call => call.args.includes("-test")), "the build Go lists includes the tests");
+  // Built from the module cache in the tests' build, it is not in effect.
+  const cached = path.join(state.modcache, "example.com/library@v1.0.0");
+  state.list = `example.com/library\t${cached}\texample.com/library [example.com/app.test]\t${cached}\n`;
+  assert.match((await step("proof")).error, new RegExp(`is built from ${cached}, not the connected checkout ${library}`, "u"));
+  assert.deepEqual([(await status()).inEffect, (await status()).unused], [true, false]);
 });
 
 test("gomod: a module go.mod does not require, or a session source with no Go module, leaves preparation going and says to remove or install it", async (t) => {

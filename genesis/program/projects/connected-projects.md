@@ -161,18 +161,26 @@ it: remove it or install it. <reason>`, `inspectConnectedAdapters` reports
 `unused: true` with that sentence as the reason, `connectedInEffect` in
 `workspaceSetupExecution.js` does not count it (so Preview does not prepare
 again for it), session status passes `unused`, and `connectedProjectsState`
-gives the page its `unused` list. Each adapter decides from the same input in
-apply and in its files-only proof, so status agrees with preparation: npm, no
-installed copy; composer and bundler, the manifest and tracked lock (their
-plans leave unused connections out, and with none used apply runs the type's
-restore); cargo, no workspace member declares the crate (`cargo metadata
---no-deps`), which the files-only proof reads from the derived lock's
-source-less packages (`dependedOnInLock`); nuget, no evaluated
-`PackageReference` (files-only: no Vibe64 import and no project file names
-it); gomod, no session `go.mod` or no `require` of the module (only
-preparation's `go list -deps` finds a required module no package imports);
-maven and gradle, a session source that is no Maven project or Gradle build.
-pip installs every connection, so it has none.
+gives the page its `unused` list. The files-only proof says unused exactly
+when preparation's would. Most adapters decide from the same files in apply and
+in it: npm, no installed copy; composer and bundler, the manifest and tracked
+lock (their plans leave unused connections out, and with none used apply runs
+the type's restore); gomod, no session `go.mod` or no `require` of the module
+(the proof lists `go list -deps -test ./...`, and a required module none of
+whose packages it lists is in effect, with the proof's `note` saying no build
+here shows it); maven and gradle, a session source that is no Maven project or
+Gradle build. Two adapters decide in the toolchain and record the decision:
+cargo, no workspace member declares the crate (`cargo metadata --no-deps`); and
+nuget, no evaluated `PackageReference`. Each records the decision with
+`inputsDigest` (`derivedFiles.js`), a digest of the files the decision read.
+Cargo keeps it in a line of its `.cargo/config.toml` and digests the session's
+`Cargo.toml` files. NuGet keeps it in `.development/nuget/unused.json` and
+digests the session's and the checkouts' `.csproj`, `.props` and `.targets`
+files, its own imports left out. The files-only proof trusts the record only
+while that digest is unchanged, and otherwise says to prepare again. A
+crate or package the session reaches only through another one counts as unused
+until the session declares it. pip installs every connection editable into
+`.venv` itself, so it has nothing that can be unused.
 
 The npm adapter (`npm.js`,
 `npmPackages.js`) finds the connected copy's publishable packages (npm

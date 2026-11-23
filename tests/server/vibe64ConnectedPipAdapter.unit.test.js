@@ -34,7 +34,7 @@ async function fixture(t, { requirements = "acme-library>=1.0,<2\n", version = "
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "session", "source");
   await mkdir(source, { recursive: true });
-  await writeFile(path.join(source, "requirements.txt"), requirements);
+  if (requirements !== null) await writeFile(path.join(source, "requirements.txt"), requirements);
   await writeFile(path.join(source, "app.py"), "import acme_library\n");
   await git(source, "init", "-q", "--initial-branch=main");
   await git(source, "add", "--all");
@@ -157,6 +157,21 @@ test("pip: apply installs the checkout editable in .venv with the tracked requir
     // The example's requirement is a range, so no published version is pinned.
     published: [{ package: "acme-library", connected: "1.0.0", locked: null }]
   });
+});
+
+test("pip: a connection the requirements do not name is still installed editable and in effect, so pip has no unused one", async t => {
+  // pip installs every connection into .venv itself: unlike the other types, nothing has to install it first.
+  for (const requirements of ["requests==2.31.0\n", null]) {
+    const f = await fixture(t, { requirements });
+    const runCommand = toolchain();
+    const applied = await step(f, "apply", runCommand);
+    assert.equal(applied.ok, true, applied.error);
+    assert.match(applied.output, new RegExp(`\\[Connected\\] Library: acme-library installed editable from ${f.copy} in \\.venv\\.$`, "u"));
+    assert.match((await step(f, "proof", runCommand)).output, /^\[Connected\] Library is in effect\.$/u);
+    const proof = await status(f);
+    // No published version: the project's requirements name none for Staging and Production.
+    assert.deepEqual([proof.inEffect, proof.unused, proof.reason, proof.published], [true, false, "", []]);
+  }
 });
 
 test("pip: a tracked .venv is refused before anything is installed", async t => {

@@ -43,9 +43,12 @@ The project declares no Prepare or Verify command. For every `gomod`
    its own block in `.git/info/exclude`; the project's `.gitignore` need not
    name them.
 3. **Proof** checks that `go.work` is the one apply would write now, that
-   `go env GOWORK` names it, and that `go list -deps ./...` builds every package
-   of the connected module from inside its checkout (`Module.Dir` and the
-   package `Dir`). Session status runs the file check alone.
+   `go env GOWORK` names it, and that `go list -deps -test ./...` builds every
+   package of the connected module from inside its checkout (`Module.Dir` and
+   the package `Dir`), tests included. A required module none of whose packages
+   that lists stays in effect, and the proof says no build here shows it.
+   Session status runs the file check alone; both say unused only when `go.mod`
+   does not require the module.
 4. After apply, ordinary `go build`, `go run` and `go test` commands use the
    connected checkout. Go reads it in place, so a saved edit is in the next
    build; no watcher is needed.
