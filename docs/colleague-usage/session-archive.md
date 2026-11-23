@@ -5,7 +5,8 @@ This continues [Create and switch sessions](sessions.md).
 Select the session, choose **Archive session**, and confirm **Archive session**
 in the dialog. This stops its assistant and terminals, preserves the session and
 removes its active workspace. Desktop and mobile use the same confirmation.
-Archiving does not Save. Work the project does not have yet, such as an added
+Archiving does not Save, and it empties the session's
+[temporary folder](sessions.md#the-sessions-temporary-folder). Work the project does not have yet, such as an added
 starter, stays only in the session archive, and archived sessions cannot restore
 source to the project. When the session has unsaved changes, the dialog says how
 many and its button reads **Archive without saving**; choose **Cancel**, then

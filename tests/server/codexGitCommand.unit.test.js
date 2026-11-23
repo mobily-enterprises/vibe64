@@ -2,7 +2,7 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -1033,6 +1033,242 @@ test("the AI's Git runs local commands in a connected copy without a credential,
   });
 });
 
+// A session's source with one commit, a connected copy, its own temporary
+// folder, and another session beside it, with the generated wrapper running
+// through the real gateway.
+async function temporaryFolderFixture(root, { identity = {} } = {}) {
+  const session = sessionSource(root, "temp-session");
+  const source = session.metadata.source_path;
+  const sessionRoot = path.dirname(source);
+  const temp = path.join(sessionRoot, "tmp");
+  const copy = path.join(sessionRoot, "connected", "library");
+  const otherSource = path.join(root, "managed", "sessions", "active", "other-session", "source");
+  const sharedTemp = path.join(root, "workspace-tmp");
+  const commit = "a".repeat(40);
+  session.metadata.connected_copies = JSON.stringify({
+    library: { repository: "acme/library", branch: "main", path: copy, baseCommit: commit, canonicalCommit: commit }
+  });
+  const plain = { GIT_CONFIG_NOSYSTEM: "1", HOME: root, PATH: process.env.PATH,
+    GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+    GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" };
+  for (const folder of [source, copy, otherSource]) {
+    await mkdir(folder, { recursive: true });
+    for (const args of [["init", "--quiet", "-b", "main"], ["commit", "--quiet", "--allow-empty", "-m", path.basename(folder)]]) {
+      const result = await runProcessWithInput("git", args, { cwd: folder, env: plain });
+      assert.equal(result.exitCode, 0, result.stderr);
+    }
+  }
+  await mkdir(temp, { mode: 0o770 });
+  await mkdir(sharedTemp);
+  const calls = [];
+  const service = serviceForSession(session, {
+    runGatewayCommand: (request) => {
+      calls.push(request);
+      return runVibe64Command(request);
+    }
+  });
+  const prepared = await prepareCodexGitCommand({
+    commandService: service,
+    env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") },
+    sessionId: session.sessionId,
+    stateRoot: root
+  });
+  const baseEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")));
+  const git = (args, { cwd = temp, env = {} } = {}) => runProcessWithInput(path.join(prepared.hostWrapperDir, "git"), args, {
+    cwd,
+    env: { ...baseEnv, ...prepared.env, ...identity, ...env }
+  });
+  return { calls, copy, git, otherSource, plain, session, sharedTemp, source, temp };
+}
+
+test("the AI's Git runs plain local Git in the session's temporary folder and reads the source and its copies from there", async () => {
+  await withTemporaryRoot(async (root) => {
+    const fixture = await temporaryFolderFixture(root, { identity: {
+      GIT_AUTHOR_NAME: "Throwaway Tester", GIT_AUTHOR_EMAIL: "throwaway@example.invalid",
+      GIT_COMMITTER_NAME: "Throwaway Tester", GIT_COMMITTER_EMAIL: "throwaway@example.invalid"
+    } });
+    const { calls, copy, git, source, temp } = fixture;
+    const ok = async (args, options) => {
+      const result = await git(args, options);
+      assert.equal(result.exitCode, 0, `git ${args.join(" ")}: ${result.stderr}`);
+      return result.stdout.trim();
+    };
+
+    await ok(["init", "--bare", "--quiet", "-b", "main", "remote.git"]);
+    await ok(["clone", "--quiet", "remote.git", "work"]);
+    const work = path.join(temp, "work");
+    await ok(["commit", "--quiet", "--allow-empty", "-m", "first"], { cwd: work });
+    assert.equal(await ok(["log", "--format=%an <%ae> %s"], { cwd: work }), "Throwaway Tester <throwaway@example.invalid> first");
+    await ok(["push", "--quiet", "origin", "HEAD:main"], { cwd: work });
+    assert.equal(await ok(["--git-dir=remote.git", "log", "--format=%s", "main"]), "first");
+    // A test makes its repository below TMPDIR from the source, too.
+    await ok(["-C", "../tmp/work", "commit", "--quiet", "--allow-empty", "-m", "second"], { cwd: source });
+    assert.equal(await ok(["-C", work, "rev-list", "--count", "HEAD"], { cwd: source }), "2");
+
+    // From the temporary folder Git reads the session's source and its copies.
+    assert.equal(await ok(["-C", source, "rev-parse", "--show-toplevel"]), await realpath(source));
+    assert.equal(await ok(["-c", `safe.directory=${copy}`, "-C", copy, "rev-parse", "--show-toplevel"]), await realpath(copy));
+    await ok(["clone", "--quiet", source, "source-copy"]);
+    assert.equal(await ok(["-C", "source-copy", "log", "--format=%s"]), "source");
+
+    const plainRuns = calls.filter((request) => request.gitTransport === "anonymous");
+    assert.ok(plainRuns.length > 0);
+    for (const request of plainRuns) {
+      assert.equal(request.gitIdentity, "none");
+      assert.equal(request.gitAuthToken, undefined);
+      assert.equal(request.userKey, undefined);
+      assert.equal(request.session.metadata, undefined);
+    }
+  });
+});
+
+test("the AI's Git refuses repositories outside the session, whatever -C, --git-dir, GIT_DIR, a link or a .git file names", async () => {
+  await withTemporaryRoot(async (root) => {
+    const fixture = await temporaryFolderFixture(root);
+    const { calls, copy, git, otherSource, plain, sharedTemp, source, temp } = fixture;
+    const otherHead = (await runProcessWithInput("git", ["rev-parse", "HEAD"], { cwd: otherSource, env: plain })).stdout;
+    const refused = async (args, code, { cwd = temp, env = {} } = {}) => {
+      const before = calls.length;
+      const result = await git(args, { cwd, env });
+      assert.notEqual(result.exitCode, 0, `git ${args.join(" ")} ran`);
+      assert.match(result.stderr, new RegExp(`${code}:`, "u"), `git ${args.join(" ")}: ${result.stderr}`);
+      assert.ok(calls.slice(before).every((request) => request.args.includes("--path-format=absolute") ||
+        request.args.at(-2) === "remote"), `git ${args.join(" ")} reached the gateway`);
+      return result.stderr;
+    };
+
+    const message = await refused(["-C", otherSource, "status"], "vibe64_codex_git_command_place_invalid");
+    assert.ok(message.includes(`Make throwaway repositories in ${temp}, this session's temporary folder (its TMPDIR).`), message);
+    await refused(["-C", otherSource, "commit", "--allow-empty", "-m", "x"], "vibe64_codex_git_command_place_invalid", { cwd: source });
+    await refused(["init", path.join(sharedTemp, "x")], "vibe64_codex_git_command_place_invalid");
+    await refused(["-C", sharedTemp, "init", "x"], "vibe64_codex_git_command_place_invalid", { cwd: source });
+    await refused(["clone", otherSource, "stolen"], "vibe64_codex_git_command_place_invalid");
+    await refused([`--git-dir=${otherSource}/.git`, "log"], "vibe64_codex_git_command_place_invalid");
+    await refused(["--work-tree", otherSource, "status"], "vibe64_codex_git_command_place_invalid", { cwd: source });
+    await refused(["log"], "vibe64_codex_git_command_place_invalid", { env: { GIT_DIR: `${otherSource}/.git` } });
+    await refused(["status"], "vibe64_codex_git_command_place_invalid", { cwd: source, env: { GIT_WORK_TREE: otherSource } });
+    await symlink(otherSource, path.join(temp, "link"));
+    await refused(["-C", "link", "status"], "vibe64_codex_git_command_place_invalid");
+    // `..` after a link leaves from where the link leads, as the operating system resolves it.
+    await refused(["-C", "link/../source", "status"], "vibe64_codex_git_command_place_invalid");
+    // A repository made through a link is made where the link leads.
+    await refused(["init", "--quiet", "link/made-elsewhere"], "vibe64_codex_git_command_place_invalid");
+    await refused(["init", "--quiet", "link/../source/made-elsewhere"], "vibe64_codex_git_command_place_invalid");
+    // What Git itself finds in the temporary folder must stay in the session too.
+    await mkdir(path.join(temp, "gitfile"));
+    await writeFile(path.join(temp, "gitfile", ".git"), `gitdir: ${otherSource}/.git\n`);
+    await refused(["-C", "gitfile", "log"], "vibe64_codex_git_command_place_invalid");
+    const worktreeTrick = path.join(temp, "worktree-trick");
+    assert.equal((await git(["init", "--quiet", worktreeTrick])).exitCode, 0);
+    assert.equal((await git(["-C", worktreeTrick, "config", "core.worktree", otherSource])).exitCode, 0);
+    await refused(["-C", worktreeTrick, "status"], "vibe64_codex_git_command_place_invalid");
+    // A remote on this computer is a place too.
+    assert.equal((await git(["init", "--quiet", "pusher"])).exitCode, 0);
+    await refused(["-C", "pusher", "push", otherSource, "HEAD:main"], "vibe64_codex_git_command_place_invalid");
+    assert.equal((await git(["-C", "pusher", "remote", "add", "elsewhere", otherSource])).exitCode, 0);
+    await refused(["-C", "pusher", "fetch", "elsewhere"], "vibe64_codex_git_command_place_invalid");
+
+    // The source and the copies change only by their own rules, never from outside them.
+    assert.equal((await git(["init", "--quiet", "seed"])).exitCode, 0);
+    await refused(["clone", "--quiet", "seed", path.join(source, "nested")], "vibe64_codex_git_command_place_mixed");
+    await refused(["-C", "pusher", "push", source, "HEAD:refs/heads/from-temp"], "vibe64_codex_git_command_place_mixed");
+    await refused([`--git-dir=${copy}/.git`, "log"], "vibe64_codex_git_command_place_mixed", { cwd: source });
+    // Before, -C from the source sent a copy's push through the source's rules.
+    await refused(["-C", "../connected/library", "push", "origin", "HEAD:main"], "vibe64_codex_git_command_connected_remote", { cwd: source });
+
+    assert.equal((await runProcessWithInput("git", ["rev-parse", "HEAD"], { cwd: otherSource, env: plain })).stdout, otherHead);
+    for (const made of [path.join(temp, "stolen"), path.join(otherSource, "made-elsewhere"), path.join(source, "nested")]) {
+      assert.equal(await stat(made).then(() => true, () => false), false, made);
+    }
+  });
+});
+
+test("the AI's Git reaches a remote from the temporary folder with no credential, token or identity of the session", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    const temp = path.join(path.dirname(session.metadata.source_path), "tmp");
+    await mkdir(session.metadata.source_path, { recursive: true });
+    await mkdir(path.join(temp, "work"), { recursive: true });
+    const gatewayCalls = [];
+    const service = serviceForSession(session, {
+      authorizeActorAccess: async () => {
+        throw new Error("Plain local Git must not ask for GitHub access.");
+      },
+      async runGatewayCommand(request) {
+        gatewayCalls.push(request);
+        if (request.command === "gh") return { exitCode: 0, ok: true, stdout: "secret-github-token\n" };
+        return { exitCode: 0, ok: true, stdout: "" };
+      }
+    });
+
+    for (const args of [["push", "https://github.com/owner/repo.git", "HEAD:main"], ["fetch", "origin"], ["ls-remote", "origin"]]) {
+      gatewayCalls.length = 0;
+      const result = await service.run({ args, command: "git", cwd: path.join(temp, "work"), sessionId: session.sessionId,
+        env: { GIT_AUTHOR_NAME: "Throwaway Tester" } });
+      assert.equal(result.ok, true, `${args[0]}: ${result.error}`);
+      assert.equal(gatewayCalls.some((request) => request.command === "gh"), false, `${args[0]} read the GitHub token`);
+      const command = gatewayCalls.at(-1);
+      assert.deepEqual(command.args, args);
+      assert.equal(command.gitTransport, "anonymous");
+      assert.equal(command.gitIdentity, "none");
+      assert.equal(command.gitAuthToken, undefined);
+      assert.equal(command.userKey, undefined);
+      assert.equal(command.project.ownerUserKey, undefined);
+      const env = resolveCommandEnv({
+        actor: { actor: "app", requiresRealUser: false, user: { home: root, username: currentOsUser().username } },
+        baseEnv: { PATH: process.env.PATH, GH_TOKEN: "ambient", GIT_ASKPASS: "/ambient" },
+        request: normalizeVibe64CommandRequest(command)
+      });
+      const config = Object.fromEntries(Array.from({ length: Number(env.GIT_CONFIG_COUNT || 0) }, (_, index) =>
+        [env[`GIT_CONFIG_KEY_${index}`], env[`GIT_CONFIG_VALUE_${index}`]]));
+      assert.equal(config["credential.helper"], "");
+      for (const name of ["GH_TOKEN", "GIT_ASKPASS", "VIBE64_GIT_AUTH_TOKEN", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME"]) {
+        assert.equal(env[name], undefined, `${args[0]} env ${name}`);
+      }
+      assert.equal(env.GIT_AUTHOR_NAME, "Throwaway Tester");
+      assert.equal(env.GIT_TERMINAL_PROMPT, "0");
+    }
+  });
+});
+
+test("-C and --git-dir from the source no longer take the session's GitHub token to another repository", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    const sessionRoot = path.dirname(session.metadata.source_path);
+    const copyPath = path.join(sessionRoot, "connected", "library");
+    const commit = "a".repeat(40);
+    session.metadata.connected_copies = JSON.stringify({
+      library: { repository: "acme/library", branch: "main", path: copyPath, baseCommit: commit, canonicalCommit: commit }
+    });
+    const otherSource = path.join(root, "managed", "sessions", "active", "other-session", "source");
+    for (const folder of [session.metadata.source_path, copyPath, otherSource]) await mkdir(folder, { recursive: true });
+    const gatewayCalls = [];
+    const service = serviceForSession(session, {
+      async runGatewayCommand(request) {
+        gatewayCalls.push(request);
+        return request.command === "gh"
+          ? { exitCode: 0, ok: true, stdout: "secret-github-token\n" }
+          : { exitCode: 0, ok: true, stdout: "" };
+      }
+    });
+    for (const [args, code] of [
+      [["-C", "../connected/library", "push", "origin", "HEAD:main"], "vibe64_codex_git_command_connected_remote"],
+      [["--git-dir", "../connected/library/.git", "--work-tree", "../connected/library", "fetch"], "vibe64_codex_git_command_connected_remote"],
+      [["-C", otherSource, "push", "origin", "HEAD:main"], "vibe64_codex_git_command_place_invalid"],
+      [[`--git-dir=${otherSource}/.git`, "fetch", "origin"], "vibe64_codex_git_command_place_invalid"]
+    ]) {
+      const result = await service.run({ args, command: "git", cwd: session.metadata.source_path, sessionId: session.sessionId });
+      assert.equal(result.code, code, args.join(" "));
+    }
+    assert.deepEqual(gatewayCalls, [], "nothing ran and no token was read");
+
+    // The source's own remote work keeps its rules.
+    const fetched = await service.run({ args: ["fetch", "origin"], command: "git", cwd: session.metadata.source_path, sessionId: session.sessionId });
+    assert.equal(fetched.ok, true);
+    assert.equal(gatewayCalls.at(-1).gitTransport, "github-token");
+  });
+});
+
 // A gateway whose owner-user `git config` read runs git as the person, in the
 // person's own home.
 function personHomeGateway(personHome, calls = []) {
@@ -1418,7 +1654,7 @@ test("the real Git gateway and generated wrapper preserve bytes and command fail
     assert.equal(silentFailure.stderr, "");
     const denied = await service.run({ command: "git", args: ["status"], sessionId: session.sessionId, cwd: path.dirname(cwd) });
     assert.equal(denied.ok, false);
-    assert.match(denied.error, /inside the active project/u);
+    assert.match(denied.error, /works in this session's source, its connected copies and its own temporary folder/u);
     commandOverride = { command: path.join(root, "missing-git") };
     const unavailable = await git(["status"]);
     assert.equal(unavailable.exitCode, 1);

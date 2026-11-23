@@ -1,5 +1,6 @@
 import {
   applyGitSafeDirectoriesToEnv,
+  gitCredentialHelpersClearedEnv,
   githubGitNonInteractiveEnv,
   githubHttpsGitTransportEnv,
   githubTokenGitTransportEnv
@@ -25,7 +26,10 @@ function gitEnv({ request = {} } = {}) {
     GIT_TERMINAL_PROMPT: "0"
   };
   let transportEnv = base;
-  if (request.gitTransport === "github-token") {
+  if (request.gitTransport === "anonymous") {
+    // Plain local Git: a remote is reached with no credential at all.
+    transportEnv = gitCredentialHelpersClearedEnv(base);
+  } else if (request.gitTransport === "github-token") {
     transportEnv = githubTokenTransportEnv(request);
   } else if (request.gitTransport === "github-https" || request.purpose === "github") {
     transportEnv = githubHttpsGitTransportEnv({

@@ -32,12 +32,16 @@ const RESERVED_CALLER_ENV_NAMES = new Set([
   "XDG_RUNTIME_DIR"
 ]);
 
-const POLICY_OWNED_CALLER_ENV_NAMES = new Set([
-  ...DATABASE_ENV_NAMES,
+const GIT_IDENTITY_CALLER_ENV_NAMES = new Set([
   GIT_AUTHOR_EMAIL_ENV,
   GIT_AUTHOR_NAME_ENV,
   GIT_COMMITTER_EMAIL_ENV,
-  GIT_COMMITTER_NAME_ENV,
+  GIT_COMMITTER_NAME_ENV
+]);
+
+const POLICY_OWNED_CALLER_ENV_NAMES = new Set([
+  ...DATABASE_ENV_NAMES,
+  ...GIT_IDENTITY_CALLER_ENV_NAMES,
   PLAYWRIGHT_BROWSERS_PATH_ENV,
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV,
   VIBE64_PLAYWRIGHT_VERSION_ENV,
@@ -56,12 +60,16 @@ function rejectCallerEnvPolicy(env = {}) {
 
 function commandCallerEnv(env = {}, options = {}) {
   const {
-    envPolicy = "session"
+    envPolicy = "session",
+    gitIdentity = "session"
   } = options;
   const callerEnv = envRecord(env);
   rejectCallerEnvPolicy(callerEnv);
+  // Plain local Git keeps the identity its caller names; every other command
+  // gets the session's person (gitIdentityEnv).
   const passthrough = Object.fromEntries(Object.entries(callerEnv)
-    .filter(([key]) => !POLICY_OWNED_CALLER_ENV_NAMES.has(key)));
+    .filter(([key]) => !POLICY_OWNED_CALLER_ENV_NAMES.has(key) ||
+      (gitIdentity === "none" && GIT_IDENTITY_CALLER_ENV_NAMES.has(key))));
   if (envPolicy === "staging") {
     return passthrough;
   }

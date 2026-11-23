@@ -64,6 +64,17 @@ function sessionHasSource(session = {}) {
   return Boolean(sessionSourcePath(session));
 }
 
+/**
+ * The session's own temporary folder, beside its source and its connected
+ * copies (`sessions/active/<id>/tmp`): the TMPDIR of its AI's commands, where
+ * the AI's Git runs plain local Git. Archive removes it with the session's folder.
+ * @param {string} sourcePath the session's managed source
+ */
+function sessionTempPath(sourcePath = "") {
+  const normalizedSourcePath = normalizedSessionPath(sourcePath);
+  return normalizedSourcePath ? path.join(path.dirname(normalizedSourcePath), "tmp") : "";
+}
+
 const __testables = Object.freeze({ explicitSessionSourcePath });
 
 export {
@@ -72,5 +83,6 @@ export {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
   sessionHasSource,
   sessionSourcePath,
+  sessionTempPath,
   __testables
 };

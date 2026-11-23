@@ -140,7 +140,8 @@ function sessionDriverOutput(input) {
         ]),
     "Do not edit Vibe64 runtime/session state or artifacts.",
     ...(hostGuidance ? [hostGuidance] : []),
-    "Runtime-state exceptions: you may create, read, write and delete files in the VIBE64_DROP_ZONE, VIBE64_PROJECT_DROP_ZONE and VIBE64_PROJECT_BACKUPS directories, all outside Git.",
+    "Runtime-state exceptions: you may create, read, write and delete files in TMPDIR and in the VIBE64_DROP_ZONE, VIBE64_PROJECT_DROP_ZONE and VIBE64_PROJECT_BACKUPS directories, all outside Git.",
+    "TMPDIR is this session's own temporary folder, beside its source (`../tmp`): put throwaway files there, and tests make their throwaway Git repositories below it, never in /tmp or another session's folder. Commands may also run in it. It is emptied when the session is archived; keep nothing there that must last.",
     "VIBE64_DROP_ZONE exchanges files with the user, who can upload, download and delete them in Files > Session Dropzone. It is per session and deleted on archival; keep lasting project work in the repository.",
     "VIBE64_PROJECT_DROP_ZONE exchanges files shared by all sessions of this project, shown in the project Dashboard's Project files > Project Dropzone. Files stay until someone deletes them.",
     "VIBE64_PROJECT_BACKUPS holds temporary backups shared by all sessions of this project, shown in the project Dashboard's Project files > Project Backups. Files expire 14 days after their last write or filesystem change; write complete backups atomically and keep permanent work elsewhere.",
@@ -174,6 +175,7 @@ function sessionDriverOutput(input) {
       : []),
     ...(session.managedGit ? [
       "Use the managed `git` and `gh` commands on PATH. Do not bypass them with host binaries, a stripped PATH, or alternate credentials.",
+      "The managed `git` decides by the repository a command acts on (its folder with `-C`, `--git-dir`, `--work-tree`, GIT_DIR and GIT_WORK_TREE), not by the folder it is run from. A repository in TMPDIR gets plain local Git, with none of this session's GitHub credentials or Git identity: name one for its commits with GIT_AUTHOR_*/GIT_COMMITTER_* or `-c user.name=... -c user.email=...`. From TMPDIR it may read this session's source and connected repositories, but changes them only by their own rules, so run those commands in them (`git -C <path> ...`). Git on anything else (another session, another project, a temporary folder all sessions share) is refused.",
       "For attachments and inline images that GitHub stores for issues (tickets), pull requests or comments, use authenticated managed `gh api` with the original attachment URL, save the response to a local file and inspect it before reporting its contents. Never use unauthenticated curl/wget, User-Agent experiments or extracted credentials; an unauthenticated 404 does not prove a private attachment is missing.",
       "After changing GitHub issues, comments, labels or pull requests, run `vibe64-helper github refresh` once so Vibe64's Issues/PR view reflects it.",
       "When linking an issue in this project's repository, run `vibe64-helper github issue-link <number>` and use its returned Vibe64 path exactly, including the /app prefix, as the primary Markdown link destination; it navigates in-app. You may include the GitHub URL as a secondary link. Never guess the project slug or host; issues in other repositories keep their GitHub links.",

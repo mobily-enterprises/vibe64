@@ -371,7 +371,7 @@ test("archive saves each connected copy's commits and unsaved work, removes the 
   });
 });
 
-test("archive keeps the session's folder while anything else is still in it", async () => {
+test("archive removes the session's temporary folder and keeps its folder while anything else is still in it", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);
     const runtime = new Vibe64SessionRuntime({
@@ -392,10 +392,13 @@ test("archive keeps the session's folder while anything else is still in it", as
     await createSessionClone({ baseCommit, branch: `vibe64/${sessionId}`, sourcePath: worktreePath, targetRoot });
     const besideSource = path.join(path.dirname(worktreePath), "notes.txt");
     await writeFile(besideSource, "not the archive's\n", "utf8");
+    const temp = path.join(path.dirname(worktreePath), "tmp");
+    await writeProjectFile(path.join(temp, "throwaway.git"), "HEAD", "ref: refs/heads/main\n");
 
     const archiveResult = await runtime.archiveSessionSource(await runtime.getSession(sessionId), { reason: "archived" });
     assert.equal(archiveResult.removed, true);
     assert.equal(await pathExists(worktreePath), false);
+    assert.equal(await pathExists(temp), false, "throwaway files end with the session");
     assert.equal(await readFile(besideSource, "utf8"), "not the archive's\n");
   });
 });
@@ -415,6 +418,7 @@ test("archiving a session whose source creation failed removes its emptied folde
     });
     await assert.rejects(() => runtime.createSession({ metadata: {}, sessionId }), /clone failed/u);
     assert.equal(await pathExists(worktreePath), true);
+    await writeProjectFile(path.join(path.dirname(worktreePath), "tmp"), "throwaway.txt", "made before the failure was seen\n");
 
     await runtime.archiveSession(sessionId);
     assert.equal((await runtime.store.readSession(sessionId)).status, "archived");

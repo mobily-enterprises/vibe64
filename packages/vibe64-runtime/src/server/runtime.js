@@ -31,6 +31,7 @@ import {
 } from "./sessionLifecycle.js";
 import { archiveSessionSource as archiveStoredSessionSource } from "./sessionWorktreeArchive.js";
 import { removeEmptySessionSourceFolder } from "./sessionWorktreeGit.js";
+import { removeSessionTempFolder } from "./sessionTempFolder.js";
 import {
   commitRenewalSessionSourceRemoval,
   createRenewalSession,
@@ -486,6 +487,7 @@ class Vibe64SessionRuntime {
             force: true,
             recursive: true
           });
+          await removeSessionTempFolder(failedSourcePath);
           await removeEmptySessionSourceFolder(failedSourcePath);
         }
       } else if (!learningSessionBinding(session.metadata, this.learningScope, session.sessionId)?.noExercise) {

@@ -12,11 +12,15 @@ the repository's `owner/name`, in lower case. You, Main chat and the coding
 agent edit a copy like any other files. Other sessions never see this session's
 copies, and no session of another project is involved.
 
-The AI's Git works in a copy too: inside `connected/<name>` it runs Git's local
-commands, such as `status`, `diff`, `log` and `show`. It does not run the ones
-that reach the repository on GitHub, such as `fetch`, `pull` and `push`, or
-`gh`, there: **Save** publishes the copy and **Update this session (rebase)**
-brings in its main.
+The AI's Git works in a copy too: on `connected/<name>`, whether it runs inside
+the copy or names it with `-C`, `--git-dir` or `--work-tree` from elsewhere in
+the session, it runs Git's local commands, such as `status`, `diff`, `log` and
+`show`. It does not run the ones that reach the repository on GitHub, such as
+`fetch`, `pull` and `push`, or `gh`, there: **Save** publishes the copy and
+**Update this session (rebase)** brings in its main. From the session's
+[temporary folder](sessions.md#the-sessions-temporary-folder) it can read a copy,
+for example `git -C ../connected/<name> rev-parse --show-toplevel`, but one
+command never works on two of the session's repositories at once.
 
 `vibe64-helper session status --json` lists the copies under
 `repository.connected`, each with its `name`, `path`, how many commits it is

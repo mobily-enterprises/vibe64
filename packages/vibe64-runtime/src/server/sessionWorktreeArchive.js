@@ -28,6 +28,7 @@ import {
   saveSessionSourceRecovery,
   validateRecoveryBundle
 } from "./sessionSourceRecovery.js";
+import { removeSessionTempFolder } from "./sessionTempFolder.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
@@ -400,6 +401,8 @@ async function commitRenewalSessionSourceStage({
     recursive: true,
     retryDelay: 100
   });
+  // The predecessor's throwaway files end with it; the successor has its own.
+  await removeSessionTempFolder(sourcePath);
   await removeEmptySessionSourceFolder(sourcePath);
   return {
     changed: stageExists || deletionExists,
@@ -467,6 +470,8 @@ async function archiveSessionSource({
       recursive: true,
       retryDelay: 100
     });
+    // Throwaway files are not work: the recovery archive leaves them out.
+    await removeSessionTempFolder(worktreePath);
     await removeEmptySessionSourceFolder(worktreePath);
   }
   await writeMetadataValues(store, sessionId, {

@@ -10,7 +10,6 @@ import {
   sessionRequiresGithubActor
 } from "./sessionGitCommandActor.js";
 import { prepareCodexAttachmentRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
-import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import {
   sessionSourcePath
@@ -30,7 +29,7 @@ import {
 import {
   actorCredentialKey,
   CODEX_GIT_COMMAND_TIMEOUT_MS,
-  commandOutput,
+  commandResultPayload,
   commandRequiresGithubToken,
   commitAuthorOptions,
   createActorCredentialCache,
@@ -40,6 +39,7 @@ import {
   readGithubToken
 } from "./codexGitCommandOperations.js";
 import { commandFailure } from "./commandFailure.js";
+import { createSessionGitPlaces, forwardedGitEnv, placeGitCommand, placeGithubCommand } from "./codexGitCommandPlaces.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -176,38 +176,17 @@ function normalizeHostCwd(cwd = "", actor = {}) {
   return normalizedCwd;
 }
 
-function validateCommandCwd(cwd = "", actor = {}) {
-  const resolvedCwd = path.resolve(normalizeHostCwd(cwd, actor));
-  const sourceRoot = path.resolve(actor.sourceRoot);
-  if (!pathInsideOrEqual(sourceRoot, resolvedCwd)) {
-    return commandFailure(
-      "Codex git commands must run inside the active project.",
-      "vibe64_codex_git_command_cwd_invalid",
-      {
-        cwd: resolvedCwd,
-        sourceRoot
-      }
-    );
-  }
-  return {
-    cwd: resolvedCwd,
-    ok: true
-  };
-}
-
 /**
- * The session's connected copy (beside its source, at `../connected/<name>`)
- * that a working directory outside the source is in. Only such a directory
- * reads the copies, so the hot path reads no more metadata.
+ * The session's connected copies (beside its source, at `../connected/<name>`),
+ * read only for a command that reaches outside the source, so the hot path
+ * reads no more metadata.
  * @param {ProjectService} project
  * @param {object} session
- * @param {string} cwd
  */
-async function connectedCopyAtCwd(project, session, cwd) {
+async function readSessionCopies(project, session) {
   const store = await project.createSessionStore({ sessionId: session.sessionId });
   const recorded = await store.readMetadataValue(session.sessionId, "connected_copies");
-  const copies = sessionConnectedCopies({ metadata: { ...session.metadata, connected_copies: recorded } });
-  return copies.find(copy => pathInsideOrEqual(path.resolve(copy.path), cwd)) || null;
+  return sessionConnectedCopies({ metadata: { ...session.metadata, connected_copies: recorded } });
 }
 
 function localGitCommandToolHome() {
@@ -469,27 +448,83 @@ function createCodexGitCommandService({
         actor
       );
     }
-    let cwd = validateCommandCwd(input.cwd, actor);
-    let copy = null;
-    if (cwd.ok === false) {
-      try {
-        copy = await connectedCopyAtCwd(project, session, cwd.cwd);
-      } catch (error) {
-        return finish(commandFailure(error.message, error.code || "vibe64_connected_copies_invalid"), actor);
-      }
-      if (!copy) return finish(cwd, actor);
-      // Save publishes a copy and Update brings in its main, so only Git's
-      // local commands run in it, with no credential.
-      if (command !== "git" || commandRequiresGithubToken(command, args)) {
-        return finish(commandFailure(
-          `In connected repository ${copy.name} the AI's Git works on the copy only: Save publishes it and Update brings in its main.`,
-          "vibe64_codex_git_command_connected_remote",
-          { statusCode: 403 }
-        ), actor);
-      }
-      cwd = { cwd: cwd.cwd, ok: true };
+    // A command runs by the place it acts on (its repository, not its working
+    // directory alone): the source, a connected copy, or the session's own
+    // temporary folder, where it is plain local Git (codexGitCommandPlaces.js).
+    const commandCwd = path.resolve(normalizeHostCwd(input.cwd, actor));
+    const places = createSessionGitPlaces({
+      readCopies: () => readSessionCopies(project, session),
+      sourceRoot: path.resolve(actor.sourceRoot)
+    });
+    const projectSlug = currentProjectSlug(project);
+    const plainGitRequest = (request) => ({
+      actor: "app",
+      args: request.args,
+      command: "git",
+      cwd: commandCwd,
+      env: request.env,
+      envPolicy: "auth",
+      execution: { label: "Running Git for the AI", operationId: "agent-git", projectSlug },
+      gitIdentity: "none",
+      gitSafeDirectories: [commandCwd, ...(request.readRoots || [])],
+      gitTransport: "anonymous",
+      input: request.input,
+      mode: "capture",
+      outputEncoding: "base64",
+      project: { workspace: env.VIBE64_WORKSPACE || env.VIBE64_RUNTIME_NAMESPACE || "" },
+      purpose: "codex",
+      runtimes: ["git"],
+      session: { sessionId }
+    });
+    // The root of the place the command runs from, which the gateway lets it start in.
+    const cwdRoots = async () => [
+      places.insideSource(commandCwd) ? places.sourceRoot : (await places.placeOf(commandCwd)).root
+    ].filter(Boolean);
+    let placed;
+    try {
+      placed = command === "git"
+        ? await placeGitCommand({
+          args,
+          cwd: commandCwd,
+          env: forwardedGitEnv(input.env),
+          places,
+          runPlainGit: async (probeArgs, probeEnv) => runWithinBudget({
+            ...plainGitRequest({ args: probeArgs, env: probeEnv }),
+            allowedRoots: await cwdRoots()
+          })
+        })
+        : await placeGithubCommand(places, commandCwd);
+    } catch (error) {
+      return finish(commandFailure(error.message, error.code || "vibe64_connected_copies_invalid"), actor);
     }
-    const commandRoot = copy?.path || actor.sourceRoot;
+    if (placed.failure) return finish(placed.failure, { ...actor, cwd: commandCwd });
+    const commandRoot = placed.place.root;
+    const commandRoots = [...new Set([commandRoot, ...await cwdRoots()])];
+    if (placed.place.kind === "temp") {
+      // Plain local Git: no credential, no GitHub token and no person's
+      // identity, so it needs no access to the project's GitHub either.
+      stage = "command";
+      const result = await runWithinBudget({
+        ...plainGitRequest({
+          args,
+          env: placed.env,
+          input: normalizeText(input.inputBase64) ? Buffer.from(normalizeText(input.inputBase64), "base64") : undefined,
+          readRoots: placed.readRoots
+        }),
+        allowedRoots: commandRoots
+      });
+      return finish(commandResultPayload(result, { commandSubmitted }), { ...actor, cwd: commandCwd });
+    }
+    const copy = placed.place.kind === "copy" ? placed.place.copy : null;
+    // Save publishes a copy and Update brings in its main, so only Git's local
+    // commands run in it, with no credential.
+    if (copy && (command !== "git" || commandRequiresGithubToken(command, args))) {
+      return finish(commandFailure(
+        `In connected repository ${copy.name} the AI's Git works on the copy only: Save publishes it and Update brings in its main.`,
+        "vibe64_codex_git_command_connected_remote",
+        { statusCode: 403 }
+      ), actor);
+    }
     const authorize = actor.githubRequired !== false && authorizeActorAccess;
     if (authorize) {
       stage = "authorization";
@@ -497,12 +532,12 @@ function createCodexGitCommandService({
         actor,
         deniedMessage: "This Codex GitHub actor no longer has access to this project session.",
         session,
-        workdir: cwd.cwd
+        workdir: commandCwd
       });
       if (refusal) {
         return finish(refusal, {
           ...actor,
-          cwd: cwd.cwd
+          cwd: commandCwd
         });
       }
     }
@@ -566,28 +601,25 @@ function createCodexGitCommandService({
       : undefined;
     const gatewayUserKey = gatewayGitIdentityUserKey(session, actor, toolHome);
     // Resources show the AI's command under the project whose session store
-    // was just read, and its session. Reading the slug lists no projects.
-    const projectSlug = currentProjectSlug(project);
+    // was just read, and its session (projectSlug above: reading it lists no projects).
     stage = "command";
     if (phaseElapsedMs) phaseElapsedMs.commandStarted = Math.round(performance.now() - startedAt);
     const result = await runWithinBudget({
       actor: "app",
-      allowedRoots: [
-        commandRoot
-      ],
+      allowedRoots: commandRoots,
       args,
       command,
-      cwd: cwd.cwd,
+      cwd: commandCwd,
       env: command === "gh" && githubToken.token
         ? { GH_TOKEN: githubToken.token }
-        : {},
+        : placed.env,
       envPolicy: "auth",
       execution: command === "gh"
         ? { label: "Running GitHub CLI for the AI", operationId: "agent-gh", projectSlug }
         : { label: "Running Git for the AI", operationId: "agent-git", projectSlug },
       gitSafeDirectories: [
         commandRoot,
-        cwd.cwd
+        commandCwd
       ],
       gitAuthToken: command === "git" ? githubToken.token : "",
       gitTransport: command === "git" && githubToken.token ? "github-token" : "none",
@@ -611,26 +643,9 @@ function createCodexGitCommandService({
     });
     if (githubToken.token) dropRejectedCredentials(credentialKey, result);
     if (phaseElapsedMs) phaseElapsedMs.commandFinished = Math.round(performance.now() - startedAt);
-    let error = "";
-    if (result.timedOut && commandSubmitted) {
-      error = "Managed Git command timed out.";
-    } else if (!result.ok) {
-      error = commandOutput(result);
-    }
-    return finish({
-      code: result.ok ? "" : result.code || "vibe64_codex_git_command_failed",
-      error,
-      executionId: result.execution?.id,
-      exitCode: Number(result.exitCode ?? (result.ok ? 0 : 1)),
-      ok: result.ok === true,
-      outputEncoding: result.outputEncoding || "utf8",
-      signal: result.signal || "",
-      stderr: result.stderr || "",
-      stdout: result.stdout || "",
-      timedOut: result.timedOut === true
-    }, {
+    return finish(commandResultPayload(result, { commandSubmitted }), {
       ...actor,
-      cwd: cwd.cwd
+      cwd: commandCwd
     });
   }
 

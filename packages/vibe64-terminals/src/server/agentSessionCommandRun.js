@@ -4,6 +4,7 @@
 import { open, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { prepareSessionTempFolder } from "@local/vibe64-runtime/server/sessionTempFolder";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandLineFailure } from "./commandFailure.js";
 
@@ -284,11 +285,18 @@ function decodedCommand(value = "") {
   }
 }
 
-function validateCommandCwd(cwd = "", sourceRoot = "") {
+/**
+ * Where an agent command runs: in the session's source or in its own
+ * temporary folder, which this makes when missing and which is the command's
+ * TMPDIR, so its throwaway files and repositories stay in the session.
+ * @param {string} cwd @param {string} sourceRoot
+ */
+async function sessionCommandCwd(cwd = "", sourceRoot = "") {
   const resolvedCwd = path.resolve(toText(cwd) || sourceRoot);
-  if (!sourceRoot || !pathInsideOrEqual(sourceRoot, resolvedCwd)) {
+  const tempDirectory = sourceRoot ? await prepareSessionTempFolder(sourceRoot) : "";
+  if (!sourceRoot || !(pathInsideOrEqual(sourceRoot, resolvedCwd) || (tempDirectory && pathInsideOrEqual(tempDirectory, resolvedCwd)))) {
     return commandLineFailure(
-      "Agent commands must run inside the active session source.",
+      "Agent commands must run inside the active session source or its temporary folder.",
       "vibe64_agent_session_command_cwd_invalid",
       {
         cwd: resolvedCwd,
@@ -297,8 +305,10 @@ function validateCommandCwd(cwd = "", sourceRoot = "") {
     );
   }
   return {
+    allowedRoots: [sourceRoot, tempDirectory].filter(Boolean),
     cwd: resolvedCwd,
-    ok: true
+    ok: true,
+    tempDirectory
   };
 }
 
@@ -354,8 +364,8 @@ export {
   readBoundedFile,
   sanitizedCommandEnvironment,
   SESSION_RENAME_CONTROL_ENV,
+  sessionCommandCwd,
   sessionRenameCommandSource,
-  validateCommandCwd,
   VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV,

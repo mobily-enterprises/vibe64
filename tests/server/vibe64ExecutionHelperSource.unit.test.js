@@ -647,13 +647,13 @@ test("execution helper creates collaborative files instead of repairing them lat
   assert.doesNotMatch(source, /handleManagedProjectPermissionRepair/u);
 });
 
-test("execution helper centrally assigns the shared workspace TMPDIR, and an application its own", async () => {
+test("execution helper centrally assigns the shared workspace TMPDIR, a session's commands the session's own, and an application its own", async () => {
   const source = await helperSource();
 
   assert.match(source, /const MANAGED_ROOT = "\/var\/lib\/vibe64"/u);
   assert.match(source, /helperChildEnv\(payload\.env \|\| \{\}, targetUser, owner\.username, operation\)/u);
   assert.match(source, /helperChildEnv\(payload\.env \|\| \{\}, targetUser, owner\.username, commandOperation\)/u);
-  assert.match(source, /env\.TMPDIR = targetUser\.stagingAccount \? "\/tmp" : workspaceTempRoot\(ownerUsername\)/u);
+  assert.match(source, /env\.TMPDIR = targetUser\.stagingAccount\s+\? "\/tmp"\s+: sessionTempDirectory\(input\.TMPDIR, targetUser, ownerUsername\) \|\| workspaceTempRoot\(ownerUsername\)/u);
   assert.equal(
     source.match(/Environment=TMPDIR=\$\{systemdUnitSafeValue\(workspaceTempRoot\(owner\.username\)\)\}/gu)?.length,
     1,

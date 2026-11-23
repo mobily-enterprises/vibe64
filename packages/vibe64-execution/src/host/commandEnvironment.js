@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import {
   closeSync,
   existsSync,
+  lstatSync,
   readFileSync,
   realpathSync,
   statSync
@@ -12,7 +13,13 @@ import {
 import path from "node:path";
 import process from "node:process";
 
-import { HOST_SETTINGS_ROOT, safeUsername, workspaceFromDaemonUsername, workspaceTempRoot } from "./hostAccounts.js";
+import {
+  HOST_SETTINGS_ROOT,
+  MANAGED_ROOT,
+  safeUsername,
+  workspaceFromDaemonUsername,
+  workspaceTempRoot
+} from "./hostAccounts.js";
 import { canonicalPath, openRootOwnedDirectory, readOwnedFile, relativePathParts } from "./hostFiles.js";
 
 const ALLOWED_COMMANDS = new Set([
@@ -353,6 +360,27 @@ function usageRecordingNodeOptions(preload = "", helperPath = process.argv[1]) {
   throw new Error("Vibe64 exec helper rejected a usage recording preload outside its runtime.");
 }
 
+// A session's own temporary folder, which the editor names as the TMPDIR of
+// the session's commands: `sessions/active/<id>/tmp` below the workspace's
+// projects root, a real folder reached through no link. Anything else, and
+// any command of another user, keeps the workspace's temporary folder.
+function sessionTempDirectory(requested = "", targetUser = {}, ownerUsername = "", { managedRoot = MANAGED_ROOT } = {}) {
+  const value = typeof requested === "string" ? requested : "";
+  if (!value || targetUser.stagingAccount || targetUser.username !== ownerUsername ||
+      !path.isAbsolute(value) || path.resolve(value) !== value) {
+    return "";
+  }
+  try {
+    const projectsRoot = canonicalPath(path.join(managedRoot, workspaceFromDaemonUsername(safeUsername(ownerUsername)), "projects"));
+    const parts = relativePathParts(projectsRoot, value);
+    const sessionFolder = parts.length >= 5 && parts.at(-1) === "tmp" && /^[A-Za-z0-9_-]+$/u.test(parts.at(-2)) &&
+      parts.at(-3) === "active" && parts.at(-4) === "sessions";
+    return sessionFolder && canonicalPath(value) === value && lstatSync(value).isDirectory() ? value : "";
+  } catch {
+    return "";
+  }
+}
+
 function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operation = "", settings = undefined) {
   const env = {
     TERM: process.env.TERM || "xterm-256color"
@@ -398,8 +426,10 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   env.LOGNAME = targetUser.username;
   env.USER = targetUser.username;
   // An application has its own private temporary directory, and no access to
-  // the workspace's.
-  env.TMPDIR = targetUser.stagingAccount ? "/tmp" : workspaceTempRoot(ownerUsername);
+  // the workspace's. A session's AI commands have the session's own.
+  env.TMPDIR = targetUser.stagingAccount
+    ? "/tmp"
+    : sessionTempDirectory(input.TMPDIR, targetUser, ownerUsername) || workspaceTempRoot(ownerUsername);
   // A JVM ignores TMPDIR: its temporary files, among them the native libraries a Java library unpacks to load
   // (SQLite's JDBC driver, Netty, Jansi), go to java.io.tmpdir, /tmp, and JNA's to ~/.cache. Where /tmp and the homes
   // are noexec (mobilynet) each load fails with "failed to map segment from shared object". Every JVM a command
@@ -424,5 +454,6 @@ export {
   resolveAllowedCwd,
   resolveAllowedUserHomePath,
   runUserCommand,
+  sessionTempDirectory,
   usageRecordingNodeOptions
 };

@@ -240,17 +240,43 @@ records each copy's observed main. Work inspection includes every copy
 (`readAgentSessionStatus`) lists them
 under `repository.connected` with `name`, `path`, `behind` and `unsaved`. Each
 outer assistant turn's checkpoint is also taken in every copy. The AI's managed
-`git` runs in a copy as in the session's source: a working directory outside the
-source that is inside a recorded copy (`connectedCopyAtCwd` in
-`codexGitCommand.js`, which reads the copies only for such a directory) runs
-Git's local commands there with no credential, confined to that copy. Commands
+`git` decides by the repository a command acts on, not its working directory
+alone (`placeGitCommand` in `codexGitCommandPlaces.js`): its working directory
+with each `-C`, `--git-dir`, `--work-tree` and the `GIT_DIR` and `GIT_WORK_TREE`
+the wrapper forwards, the repository `init` or `clone` makes and the one `clone`
+reads, each resolved as the operating system resolves it. A command wholly in
+the source keeps the source's rules; one wholly in a recorded copy runs Git's
+local commands there with no credential, confined to that copy, and commands
 that reach the remote, and `gh`, are refused there
 (`vibe64_codex_git_command_connected_remote`), because Save publishes copies and
-Update brings in their main; any other directory stays refused. Sources:
+Update brings in their main. Before, only the working directory was checked, so
+`git -C ../connected/<name> push` from the source pushed a copy with the
+session's token and `-C` or `--git-dir` reached any repository; a command now
+naming two of the session's repositories is refused
+(`vibe64_codex_git_command_place_mixed`). The session's temporary folder
+(`sessionTempPath`, `tmp` beside the source, made by `prepareSessionTempFolder`
+on the AI's first shell command and its TMPDIR) gets plain local Git: a command
+that changes only that folder and reads at most the source or one copy runs with
+`gitTransport: "anonymous"` (no credential and none of Git's credential
+helpers), `gitIdentity: "none"` (the command's own GIT_AUTHOR_* and
+GIT_COMMITTER_*), no user key or session metadata, `GIT_CEILING_DIRECTORIES` at
+the session's folder and, while it reads the source or a copy,
+`GIT_OPTIONAL_LOCKS=0`. A `rev-parse` probe follows what Git itself finds there
+(a `.git` file or `core.worktree`) and the local remotes push and fetch reach;
+a change to the source or a copy from the temporary folder is refused
+(`vibe64_codex_git_command_place_mixed`), and anything outside the session
+(another session or project, a shared temporary folder) is refused with a
+message naming the session's temporary folder
+(`vibe64_codex_git_command_place_invalid`, or
+`vibe64_codex_git_command_cwd_invalid` for the working directory). Archive,
+renewal and a failed source's archive remove the temporary folder
+(`removeSessionTempFolder`). Sources:
 `tests/server/vibe64ConnectedCopies.unit.test.js`,
 `tests/server/codexGitCommand.unit.test.js`,
 `tests/server/vibe64RepositoryUpdateProbe.unit.test.js`,
-`tests/server/codexOuterTurnCheckpoint.unit.test.js` and
+`tests/server/codexOuterTurnCheckpoint.unit.test.js`,
+`tests/server/sessionTempFolder.unit.test.js`,
+`tests/server/vibe64SessionWorktreeArchive.unit.test.js` and
 `tests/server/agentSessionCommand.unit.test.js`.
 
 Native Save confirms a lost push acknowledgement when the remote contains its

@@ -88,6 +88,13 @@ namespace. The daemon hands it a staging release's source and Staging Env
 through that area's handover directory, which only the staging account's group
 may read.
 
+A session's temporary folder, `tmp` beside its source and connected copies, is
+the `TMPDIR` of the session's AI commands and part of its namespace. Vibe64
+makes it inside the session's folder with mode `0770`, so it takes `vibe64`,
+setgid and the inherited default ACL from that folder as it is made and the
+writers' umask `0007` leaves it `2770`. Nothing repairs it afterwards; archive
+and renewal remove it with the session's folder.
+
 The ACL contract must survive or be re-established before exposing a path
 created by clone, copy, atomic replacement, checkout, reset, move, archive
 restore, or session-source recovery. A path must not become visible to a live
