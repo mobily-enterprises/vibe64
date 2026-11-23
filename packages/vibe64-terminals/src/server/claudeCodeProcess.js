@@ -18,7 +18,13 @@ import { engineProcessTimeline } from "./sessionTurnTimeline.js";
 const CLAUDE_CODE_VERSION = "2.1.289";
 
 
-function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {}) {
+/**
+ * The settings Vibe64 passes to Claude Code. A chat's agent never gets ScheduleWakeup: the tool is /loop's, Monitor
+ * and background commands already wake it, and a wakeup would start work outside routing that nobody asked for. The
+ * person's own terminal keeps it for their /loop.
+ * @param {{ toolFree?: boolean, effort?: string, providerEnv?: Record<string, string>, terminal?: boolean }} [options]
+ */
+function claudeFlagSettings({ toolFree = false, effort = "", providerEnv, terminal = false } = {}) {
   const commandHook = {
     timeout: 30,
     command: [process.execPath, fileURLToPath(import.meta.resolve("@local/vibe64-runtime/server/agentSessionCommandHook"))].map(shellQuote)
@@ -35,7 +41,8 @@ function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {})
       ...(!toolFree ? { commandHook } : {})
     }),
     includeGitInstructions: false,
-    bashEditDiffEnabled: false
+    bashEditDiffEnabled: false,
+    ...(!terminal ? { permissions: { deny: ["ScheduleWakeup"] } } : {})
   };
 }
 

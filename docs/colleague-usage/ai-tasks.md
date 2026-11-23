@@ -348,8 +348,9 @@ update. Prompt suggestions wait for a five-second typing pause and at least thir
 between suggestions; refocusing doesn't generate new ones.
 
 Messages and replies appear together in time order, including guidance sent while the AI
-is working, on desktop and phone. Reopening or reloading shows the same history without
-resending anything.
+is working, on desktop and phone. With Claude, the assistant is told such guidance is yours
+and to answer it in its next reply before carrying on; the chat shows it exactly as you
+typed it. Reopening or reloading shows the same history without resending anything.
 
 Colleague can explain any of this. Choosing a model, stopping work and closing a task stay
 your actions in the window, or separate requests to Colleague.

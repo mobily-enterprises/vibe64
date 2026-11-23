@@ -263,7 +263,7 @@ function createClaudeConversationEnvironment({
        * The terminal opens in Vibe64's bypass mode; skip Claude's warning for it.
        */
       get settings() {
-        return { ...claudeFlagSettings(), skipDangerousModePermissionPrompt: true };
+        return { ...claudeFlagSettings({ terminal: true }), skipDangerousModePermissionPrompt: true };
       },
       permissionMode: "bypassPermissions",
       get env() {
