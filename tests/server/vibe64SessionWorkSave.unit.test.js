@@ -58,6 +58,12 @@ async function git(cwd, args, input = undefined) {
   return String(result.stdout || "").trim();
 }
 
+// Git with the token reaches GitHub over HTTPS only (githubTokenGit.js); these
+// tests' GitHub is a repository on this computer.
+function localGithub(request = {}) {
+  return { ...request, env: { ...(request.env || {}), GIT_ALLOW_PROTOCOL: "https:file" } };
+}
+
 async function commandRunner(request = {}) {
   return new Promise((resolve) => {
     const child = spawn(request.command, request.args || [], {
@@ -1975,7 +1981,7 @@ test("verified GitHub Saves refresh cold, warm, and stale mirrors only after rem
     const token = "save-private-token";
     const runCommand = async (request) => {
       requests.push(request);
-      return commandRunner(request);
+      return commandRunner(localGithub(request));
     };
     const save = async (operationId, filename) => {
       await writeFile(path.join(session.sourcePath, filename), `${operationId}\n`, "utf8");
@@ -3427,7 +3433,7 @@ test("Save reports when its commit carries the stand-in Git identity", async () 
         commandOptions: { gitAuthToken: "identity-token", gitTransport: "github-token" },
         operationId,
         project,
-        runCommand: (request) => commandRunner({ ...request, env: { ...(request.env || {}), ...env } }),
+        runCommand: (request) => commandRunner(localGithub({ ...request, env: { ...(request.env || {}), ...env } })),
         session
       });
       session.metadata.base_commit = result.saveCommit;

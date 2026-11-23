@@ -357,7 +357,10 @@ test("the probe reads heads through the same gateway request as the update check
   const heads = await readSessionAuthorityHeads({ executionFor: async () => ({ commandOptions, ok: true, runCommand }), project, sessions: [session] });
   assert.deepEqual(heads.get("alpha-1"), { head: H1 });
   await assert.rejects(checkSessionUpdates({ commandOptions, project, runCommand, session }));
-  const [probe, check] = requests;
+  // Before each, a read of the repository's config with no token (githubTokenGit.js).
+  const configReads = requests.filter((request) => request.args?.[0] === "config");
+  assert.deepEqual(configReads.map(({ gitAuthToken, gitTransport }) => [gitAuthToken, gitTransport]), [["", "none"], ["", "none"]]);
+  const [probe, check] = requests.filter((request) => !configReads.includes(request));
   assert.deepEqual([probe.command, check.command], ["git", "node"]);
   const gateway = ({ actor, cwd, envPolicy, execution, gitAuthToken, gitTransport, mode, project: target, purpose, session: owner, userKey }) => ({
     actor, cwd, envPolicy, execution: { ...execution, operationId: undefined }, gitAuthToken, gitTransport, mode, project: target, purpose, session: owner, userKey

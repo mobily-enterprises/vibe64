@@ -38,9 +38,8 @@ import {
 } from "./codexGitCommandOperations.js";
 import { commandFailure } from "./commandFailure.js";
 import { createSessionGitPlaces, forwardedGitEnv, placeGitCommand, placeGithubCommand } from "./codexGitCommandPlaces.js";
-import {
-  commandRequiresGithubToken, GITHUB_TOKEN_COMMAND_ENV, githubTokenCommandRefusal, githubTokenConfigRefusal
-} from "./codexGitCommandToken.js";
+import { commandRequiresGithubToken, githubTokenCommandRefusal } from "./codexGitCommandToken.js";
+import { GITHUB_TOKEN_COMMAND_ENV, githubTokenConfigRefusal } from "./githubTokenGit.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */

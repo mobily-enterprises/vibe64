@@ -226,17 +226,29 @@ reaches GitHub only over HTTPS, uses only Vibe64's own credential, and does not
 enter submodules. It refuses, saying what to do instead, when the command or
 the AI's shell names a program or Git setting it would hand the token to (such
 as `-c credential.helper=...`, `--upload-pack`, `--exec-path`, `--config-env` or
-`GIT_SSH_COMMAND`), when the repository's own Git config sets one (a filter,
-merge or diff program, or a setting that turns off checking GitHub's
-certificate), and for `gh auth`, `gh alias`, `gh extension`, `gh config`,
-`gh codespace` or a gh command that is not one of gh's own. The AI then leaves
-the option out or removes the setting and tries again; you need do nothing.
+`GIT_SSH_COMMAND`), when the repository's own Git config sets one it would
+run (a filter, merge or diff program for a `pull` or a `gh` command, which
+check out and compare files, or a setting that turns off checking GitHub's
+certificate for any of them), and for `gh auth`, `gh alias`, `gh extension`,
+`gh config`, `gh codespace` or a gh command that is not one of gh's own. The AI
+then leaves the option out or tries again once the setting is gone; it asks you
+before removing a setting it did not add.
 
-Every other Git command, such as `commit`, `log`, `merge` or `rebase`, runs
-without your sign-in and keeps the repository's hooks and settings, as does a
-`fetch` or `push` that names a folder on this computer. Your own and the
-computer's Git settings are left alone. Colleague can explain such a refusal;
-the AI itself chooses what to run. The same applies on desktop and mobile.
+**Save**, **Update this session (rebase)** and the checks that show whether
+the session is behind reach GitHub the same way: their Git runs none of the
+repository's hooks, reaches GitHub only over HTTPS, uses only Vibe64's own
+credential and signs no commits. When the repository's own Git config sets a
+filter, merge or diff program or turns off checking GitHub's certificate,
+Save and Update stop before reaching GitHub and name the setting, its file and
+the `git config ... --unset-all` command that removes it; remove it, or ask
+Colleague or the session's AI to, then try again.
+
+Every other Git command of the AI, such as `commit`, `log`, `merge` or
+`rebase`, runs without your sign-in and keeps the repository's hooks and
+settings, as does a `fetch` or `push` that names a folder on this computer.
+Your own and the computer's Git settings are left alone. Colleague can explain
+such a refusal; the AI itself chooses what to run. The same applies on desktop
+and mobile.
 
 ## When the repository needs help
 
