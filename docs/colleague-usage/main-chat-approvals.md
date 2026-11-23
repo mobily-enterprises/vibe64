@@ -140,8 +140,8 @@ declining and withdrawing are human-only: Colleague cannot do them, so it should
 point the person to the buttons above.
 
 Main chat's **Chat mode** (Senior, Junior, Auto, Custom), its **Automatically
-save changes** [Chat setting](chat-settings.md) and the passes it runs after a
-completed plan ([Passes](passes.md), **After a plan**) are the owner's too. A
+save changes** [Chat setting](chat-settings.md) and the passes each new plan
+starts with ([Passes](passes.md), **After a plan**) are the owner's too. A
 team member's **Chat mode** menu doesn't list the modes, its **Custom** model
 choice and the switch are disabled, and **Passes** isn't shown to them. A
 member's or their Colleague's request to change them is refused with "Only the

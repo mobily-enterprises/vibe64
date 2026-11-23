@@ -12,7 +12,7 @@ import {
   ROUTING_REASONS,
   assistantRoutingPrompt,
   parseRoutingDecision,
-  assistantAfterPlanPass,
+  assistantPlanPass,
   assistantWorkflowRole
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
@@ -183,10 +183,10 @@ function createAssistantRoutingDecisions({
 
   async function resolve(context, state, followup = false) {
     let purpose = state.mode;
-    const pass = assistantAfterPlanPass(state);
+    const pass = assistantPlanPass(state);
     if (pass) {
-      // An after-plan pass runs on Senior with its own purpose, like a pass the person starts.
-      purpose = assistantTaskPurpose(pass.id);
+      // A plan's pass runs on Senior with its own purpose; a Custom chat's on its own model.
+      purpose = state.mode === "custom" ? "custom" : assistantTaskPurpose(pass.id);
     } else if (followup) {
       // A direct chat's agent continues its own work on its own purpose.
       purpose = state.stage === "review" && state.mode === "auto" ? "review" : assistantWorkflowRole(state);

@@ -2438,7 +2438,7 @@ for (const width of [390, 1280]) {
     await mockDirectChat(page);
     const session = { ...directSession(), metadata: {
       assistant_routing: JSON.stringify({ mode: "auto", ...AFTER_PLAN_DEFAULTS }),
-      assistant_routing_request: JSON.stringify({ schemaVersion: 6, messageId, input: { message },
+      assistant_routing_request: JSON.stringify({ schemaVersion: 7, messageId, input: { message },
         mode: "auto", resolvedMode: "senior", status: "waiting", delivery: "accepted", stage: "review",
         workflow: true, followup: { messageId: "review-followup", message: "Continue review." } })
     } };
@@ -2557,7 +2557,7 @@ for (const width of [390, 820, 1280]) {
       for (const retired of ["Automatically review changes", "Automatically deslop changes", "Automatically UI pass changes"]) {
         await expect(page.getByRole("checkbox", { name: retired, exact: true })).toHaveCount(0);
       }
-      await expect(page.getByText(/the passes ticked in Passes \(After a plan\) run first/u)).toBeVisible();
+      await expect(page.getByText(/each new plan's Passes start with the passes ticked in Passes \(After a plan\)/u)).toBeVisible();
       await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
       await modes.getByRole("button", { name: /^Auto/ }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Auto\./);
@@ -2607,8 +2607,8 @@ for (const width of [390, 820, 1280]) {
   });
 }
 
-// The passes after a plan and the UI pass end to end in the browser: the Passes
-// After a plan and Deeply ticks, an after-plan pass's start notice, an explicit
+// The passes a plan runs and the UI pass end to end in the browser: the Passes
+// After a plan and Deeply ticks, a plan's pass start notice, an explicit
 // UI pass's reply, and the refusals main chat shows when a turn started or a goal
 // is open. What the server decides from these messages is tested in
 // tests/server/assistantRoutingLifecycle.test.js and assistantWorkflow.test.js.
@@ -2654,7 +2654,7 @@ async function uiPassWorld(page: Page, { width, preferences }: { width: number; 
 }
 
 for (const width of [390, 1280]) {
-  test(`@after-plan Passes tick the passes that run after a plan: Review and Security always, the rest saved for the chat at ${width}px`, async ({ page }, info) => {
+  test(`@after-plan Passes tick the passes each new plan's Passes start with: Review and Security always, the rest saved for the chat at ${width}px`, async ({ page }, info) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     const { server, session, saves } = await uiPassWorld(page, { width, preferences: { mode: "auto", ...AFTER_PLAN_DEFAULTS } });
@@ -2663,7 +2663,7 @@ for (const width of [390, 1280]) {
       await expect(page.getByLabel("Message AI assistant")).toBeVisible();
       await page.getByRole("button", { name: "Passes", exact: true }).click();
       const list = page.getByRole("dialog", { name: "Passes" });
-      await expect(list).toContainText("After a plan: when a plan is completed, each ticked pass checks the plan's changes in its own turn");
+      await expect(list).toContainText("After a plan: each new plan's Passes section starts with the ticked passes, which check the plan's changes");
       const tick = (title: string) => list.getByRole("checkbox", { name: `${title}: After a plan`, exact: true });
       const deeply = (title: string) => list.getByRole("checkbox", { name: `${title}: Deeply after a plan`, exact: true });
       // The mandatory pair: ticked, disabled, and saying why.
@@ -2671,7 +2671,7 @@ for (const width of [390, 1280]) {
         await expect(tick(title)).toBeChecked();
         await expect(tick(title)).toBeDisabled();
       }
-      await expect(list.getByText("Always runs after a plan.", { exact: true })).toHaveCount(2);
+      await expect(list.getByText("Always in a new plan's Passes.", { exact: true })).toHaveCount(2);
       // The defaults: Data, Quality, UI pass and Deslop on; User experience, Speed and Visual identity off; none deeply.
       for (const title of ["Data pass", "Quality pass", "UI pass", "Deslop"]) await expect(tick(title)).toBeChecked();
       for (const title of ["User experience pass", "Speed pass", "Visual identity"]) await expect(tick(title)).not.toBeChecked();
@@ -2729,10 +2729,10 @@ for (const width of [390, 1280]) {
       await expect(chat.getByText("Aligned the bookings list spacing and checked it at 390 and 1280 px.", { exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: /^Chat mode:/ })).toHaveAttribute("aria-label", /Automatic save on$/);
 
-      // An after-plan UI pass's notice, published as routing writes it when a completed plan starts the pass.
-      const notice = "UI pass started automatically after the plan (Passes: After a plan)";
+      // A plan's UI pass notice, published as routing writes it when the plan reaches that pass.
+      const notice = "UI pass started: the plan's next pass (UI pass: the plan's changes)";
       server.sessionChanged("assistant-routing-changed", { conversationLogPatch: { type: "upsert-turn",
-        turn: { turnId: "000002", system: { role: "system", messageId: "assistant-after-plan:followup-1", text: notice } } } });
+        turn: { turnId: "000002", system: { role: "system", messageId: "assistant-plan-pass:followup-1", text: notice } } } });
       await expect(page.locator(".assistant-transcript__system").filter({ hasText: notice })).toHaveCount(1);
 
       // Starting one is typing it: the words go to routing as typed, which picks the task and its scope.
@@ -2828,7 +2828,7 @@ for (const width of [390, 820, 1280]) {
         draft: "Keep this unsent question", agentSettings: {} }]);
       await mockDirectChat(page);
       // A request the person cancelled before it was sent.
-      const routingRequest = { schemaVersion: 6, messageId: "old-request", mode: "senior", resolvedMode: "senior",
+      const routingRequest = { schemaVersion: 7, messageId: "old-request", mode: "senior", resolvedMode: "senior",
         status: "waiting", delivery: "failed", stopped: true, stage: null, workflow: false,
         input: { message: "Earlier request", displayMessage: "Earlier request" },
         error: "This Codex conversation is stored in a separate provider home. Renew the session to use the models chosen in Models." };
@@ -3119,7 +3119,7 @@ test("@helper-hydration delayed history opens at the failed request and reports 
     server.state.conversationLog = Array.from({ length: 24 }, (_, index) => scrollTestTurn(index + 1));
     server.state.beforeConversationRead = () => historyReady;
     await mockDirectChat(page);
-    const request = { schemaVersion: 6, messageId: "failed-send", mode: "auto", status: "waiting", delivery: "failed",
+    const request = { schemaVersion: 7, messageId: "failed-send", mode: "auto", status: "waiting", delivery: "failed",
       stage: null, workflow: false, input: { message: "Keep this unsent request", displayMessage: "Keep this unsent request" },
       error: "The routing connection needs attention." };
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {

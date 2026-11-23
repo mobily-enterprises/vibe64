@@ -83,7 +83,7 @@ function createServiceAgentConversations({
           }, "user");
       if (restoring) {
         result.notice = "The archived plan is now current and active. Ask in chat to continue its work.";
-        // A plan becoming current marks where its after-plan passes start, unless a base is recorded.
+        // A plan becoming current marks where its changes start, unless a base is recorded.
         await rememberAfterPlanBase(context.runtime.store, context.session, { onlyWhenUnset: true });
       }
       await publishAgentSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice } });

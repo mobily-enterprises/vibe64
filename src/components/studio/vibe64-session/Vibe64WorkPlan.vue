@@ -99,7 +99,9 @@ function showPlan(requestedView = "default") {
   view.value = requestedView === "default" ? (overview.value?.current ? "current" : "history") : requestedView;
   open.value = true;
 }
-defineExpose({ showPlan });
+// The current plan's step, read from the plan on each change, for the chat's status line.
+const step = computed(() => overview.value?.current?.step || null);
+defineExpose({ showPlan, step });
 
 /** @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof planViewer>} */
 const colleaguePlan = inject(VIBE64_COLLEAGUE_PLAN_KEY);
@@ -179,6 +181,11 @@ const sections = computed(() => {
       flush();
       technical = true;
       continue;
+    }
+    // The plan's Passes section follows Technical details but is the person's to read: it stays shown.
+    if (technical && line.passes && planDocument.value === "plan") {
+      flush();
+      technical = false;
     }
     if (line.checked !== undefined) {
       flush();

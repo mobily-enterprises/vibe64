@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { __testables as assistantWorkPlanTestables, manageWorkPlan, readWorkPlan, readWorkPlanPage, workPlanInstructions, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
-import { parseWorkPlanLines } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
+import { parseWorkPlanLines, workPlanAtPasses, workPlanPassItems, workPlanScope, withWorkPlanPasses, withWorkPlanPassesUnticked } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { upgradePlanProgress } from "../../packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js";
 import { __testables as assistantPlanUpgradeTestables, upgradeAssistantPlans } from "../../packages/vibe64-terminals/src/server/assistantPlanUpgrade.js";
@@ -171,6 +171,52 @@ test("Senior completes a plan only when every checklist item is proven, and the 
   assert.doesNotMatch(long.message, /Built item 9/);
 });
 
+test("a plan's Passes section is its last: its items are read in order, the plan reaches them once every other item is proven, and Vibe64 adds and unticks them", () => {
+  const text = "# Bookings\n\n- [x] Book a slot\n\n## Passes\n\n- [x] Review: the plan's changes\n- [ ] Data pass: the plan's changes, deeply\n- [ ] Deslop\n";
+  assert.deepEqual(workPlanPassItems(text), [
+    { line: 6, text: "Review: the plan's changes", title: "Review", scope: "the plan's changes", checked: true, built: true },
+    { line: 7, text: "Data pass: the plan's changes, deeply", title: "Data pass", scope: "the plan's changes, deeply", checked: false, built: false },
+    { line: 8, text: "Deslop", title: "Deslop", scope: "", checked: false, built: false }
+  ]);
+  assert.deepEqual(parseWorkPlanLines(text).map((line) => Boolean(line.passes)), [false, false, false, false, true, true, true, true, true, true]);
+  const fenced = "# P\n\n## Passes\n\n```markdown\n## Notes\n- [ ] Example only\n```\n- [ ] Review: whole app\n\n## Notes\n- [ ] Not a pass\n";
+  assert.deepEqual(workPlanPassItems(fenced).map(({ text }) => text), ["Review: whole app"], "a fence keeps its lines in Passes; the next heading ends it");
+  assert.equal(workPlanAtPasses({ status: "active", text }), true);
+  for (const plan of [{ status: "completed", text }, { status: "active", text: text.replace("- [x] Book", "- [~] Book") },
+    { status: "active", text: "# Bookings\n\n- [x] Book a slot\n" }, null]) assert.equal(workPlanAtPasses(plan), false, JSON.stringify(plan));
+  // The scope a plan agreed to build leaves its passes out only when asked.
+  assert.equal(workPlanScope(text, { passes: false }), "# Bookings\n\n- [ ] Book a slot\n");
+  assert.notEqual(workPlanScope(text), workPlanScope(withWorkPlanPasses(text, ["- [ ] Speed pass: whole app"])));
+  assert.equal(workPlanScope(text, { passes: false }), workPlanScope(withWorkPlanPasses(text, ["- [ ] Speed pass: whole app"]), { passes: false }));
+  assert.equal(withWorkPlanPasses(text, ["- [ ] Speed pass: whole app"]), text.replace("- [ ] Deslop\n", "- [ ] Deslop\n- [ ] Speed pass: whole app\n"));
+  assert.equal(withWorkPlanPasses("# Bookings\n\n- [x] Book a slot\n", ["- [ ] Review: whole app"]), "# Bookings\n\n- [x] Book a slot\n\n## Passes\n\n- [ ] Review: whole app\n");
+  assert.equal(withWorkPlanPasses("# Bookings\n\n- [x] Book a slot\n\n## Passes\n", ["- [ ] Review: whole app"]), "# Bookings\n\n- [x] Book a slot\n\n## Passes\n\n- [ ] Review: whole app\n");
+  assert.equal(withWorkPlanPasses(text, []), text);
+  assert.equal(withWorkPlanPassesUnticked(text, () => true), text.replace("- [x] Review", "- [ ] Review"), "only Passes items are unticked");
+  assert.equal(withWorkPlanPassesUnticked(text, ({ title }) => title === "Deslop"), text);
+});
+
+test("a plan's pass changes only its own Passes item's tick, and Junior only the ticks outside Passes", async t => {
+  const f = await fixture(t);
+  const text = "# Bookings\n\n- [~] Book a slot\n\n## Passes\n\n- [ ] Review: the plan's changes\n- [ ] Deslop: whole app\n";
+  await f.change("new", "senior", { text });
+  const pass = async (next, passItem = "Review: the plan's changes", operation = "write") => {
+    const current = await readWorkPlan(f.context);
+    return manageWorkPlan(f.context, { operation, text: next, expectedRevision: current.revision, expectedProgressRevision: current.progressRevision }, "pass", { passItem });
+  };
+  for (const next of [text.replace("- [ ] Deslop", "- [x] Deslop"), text.replace("- [~] Book", "- [x] Book"),
+    text.replace("- [ ] Review", "- [x] Review").replace("whole app", "the bookings pages"), text + "- [ ] Speed pass: whole app\n"]) {
+    await assert.rejects(pass(next), { code: "vibe64_work_plan_pass_item_only" }, next);
+  }
+  for (const operation of ["new", "complete", "archive", "reopen"]) await assert.rejects(pass(text, undefined, operation), /Only Senior/u, operation);
+  assert.equal((await pass("# Progress\nReview found nothing to fix.\n", undefined, "progress-write")).progressText, "# Progress\nReview found nothing to fix.\n");
+  assert.equal((await pass(text.replace("- [ ] Review", "- [x] Review"))).checked, 1);
+  await assert.rejects(f.change("write", "junior", { text: text.replace("- [ ] Review", "- [x] Review").replace("- [ ] Deslop", "- [x] Deslop") }),
+    { code: "vibe64_work_plan_pass_ticks_refused" });
+  await assert.rejects(f.change("write", "junior", { text }), { code: "vibe64_work_plan_pass_ticks_refused" }, "nor untick one");
+  assert.equal((await f.change("write", "junior", { text: text.replace("- [~] Book", "- [x] Book").replace("- [ ] Review", "- [x] Review") })).checked, 2);
+});
+
 test("plan guidance asks for a half tick once an item is built and a full tick once the plan's final proof covers it", () => {
   for (const role of ["senior", "junior", "review"]) {
     const guidance = workPlanInstructions(role);
@@ -181,7 +227,7 @@ test("plan guidance asks for a half tick once an item is built and a full tick o
     assert.match(guidance, /moves back to - \[~\] or - \[ \]/);
     assert.doesNotMatch(guidance, /Leave partial or unverified items unchecked/);
   }
-  assert.match(workPlanInstructions("junior"), /change existing checklist marks among - \[ \], - \[~\] and - \[x\] only/);
+  assert.match(workPlanInstructions("junior"), /change existing checklist marks among - \[ \], - \[~\] and - \[x\] outside the Passes section only/);
   for (const role of ["senior", "review"]) {
     assert.match(workPlanInstructions(role), /complete ONLY when every checklist item is - \[x\]/);
     assert.match(workPlanInstructions(role), /move unsupported or regressed claims back to - \[~\] or - \[ \]/);
@@ -255,7 +301,7 @@ test("concurrent updates cannot overwrite newer evidence and invalid plan writes
 
 test("the installed plan command uses the admitted role, emits live changes and ignores a forged role", async t => {
   const f = await fixture(t);
-  let request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "senior" };
+  let request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "senior" };
   const events = [];
   // The session source, whose HEAD a plan becoming current records as where its after-plan passes start.
   const source = path.join(f.root, "sessions", "active", f.context.session.sessionId, "source");
@@ -281,12 +327,12 @@ test("the installed plan command uses the admitted role, emits live changes and 
   const command = (operation, input = {}) => new Promise((resolve, reject) => {
     const child = execFile(path.join(wrapperHostDir, "vibe64-plan"), [operation, ...(["read", "history"].includes(operation) && Object.keys(input).length ? ["--input"] : [])], { env: { ...process.env, ...prepared.env }, timeout: 5000 },
       (error, stdout, stderr) => error ? reject(new Error(stderr)) : resolve(JSON.parse(stdout)));
-    if (!["read", "history"].includes(operation) || Object.keys(input).length) child.stdin.end(JSON.stringify(input));
+    if (!["read", "history", "handoff"].includes(operation) || Object.keys(input).length) child.stdin.end(JSON.stringify(input));
   });
   const first = await command("new", { text: openText });
   assert.equal(metadata.get("after_plan_base"), startHead, "a new plan records where its after-plan passes start");
   assert.equal(first.status, "active");
-  request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "junior" };
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "junior" };
   await assert.rejects(command("complete", { role: "senior", expectedRevision: first.revision }), /Only Senior/);
   const ticked = await command("progress-write", { text: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision });
   assert.equal(ticked.checked, 0);
@@ -294,25 +340,28 @@ test("the installed plan command uses the admitted role, emits live changes and 
   const proven = await command("write", { text: provenText, expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision });
   assert.equal(proven.checked, 2);
   // A Junior chat's own review (one upgraded in flight) records Progress but leaves the plan active for Senior.
-  request = { schemaVersion: 6, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
   await assert.rejects(command("complete", { expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision }), /Only Senior/);
   const reviewed = await command("progress-write", { text: `${checkedText}Review found no gaps.\n`,
     expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision });
   assert.equal((await command("read")).status, "active");
   // In Auto, Senior's check of the plan completes it.
-  request = { schemaVersion: 6, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "auto", resolvedMode: "junior" };
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "auto", resolvedMode: "junior" };
   assert.equal((await command("complete", { expectedRevision: reviewed.revision, expectedProgressRevision: reviewed.progressRevision })).status, "completed");
-  request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "senior", reason: "conversation" };
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "senior", reason: "conversation" };
   await assert.rejects(command("reopen", { expectedRevision: (await command("read")).revision }), /Only Senior/);
   assert.equal(events.filter(event => event.reason === "work-plan-changed").length, 5);
   assert.deepEqual((await command("history")).history, [], "read-only commands finish even with stdin open");
+  // Handoff takes no input either; a Junior chat has no Senior to hand the plan to.
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", mode: "junior", resolvedMode: "junior" };
+  await assert.rejects(command("handoff"), /This is a Junior chat, with no Senior to hand the plan to/u);
   const laterHead = await commit();
   metadata.delete("after_plan_base");
-  request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "senior" };
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "senior" };
   const reopened = await command("reopen", { expectedRevision: (await command("read")).revision,
     expectedProgressRevision: (await command("read")).progressRevision });
   assert.equal(metadata.get("after_plan_base"), laterHead, "a plan reopened with no base recorded records one");
-  request = { schemaVersion: 6, status: "working", delivery: "accepted", resolvedMode: "junior" };
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "junior" };
   const expectedProgress = "# Progress\n" + "native helper evidence 🙂\n".repeat(1200);
   await command("progress-write", { text: expectedProgress, expectedRevision: reopened.revision, expectedProgressRevision: reopened.progressRevision });
   let page = await command("read"); const readRevision = page.revision; const progressRevision = page.progressRevision;

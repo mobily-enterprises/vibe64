@@ -28,26 +28,30 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 const runKey = (pass, passRun) => `${pass.id}:${passRun.id}`;
 
 /**
- * The request a Master run sends for the ticked passes: the run's own request when every pass it
- * offers is ticked; otherwise its selectedRequest, naming the ticked passes by title in the Master
- * order. Empty when none is ticked.
- * @param {{ passes: string[] }} master the Master pass Genesis lists
- * @param {{ request: string, selectedRequest: string }} masterRun
- * @param {string[]} ticked the ids of the ticked passes
- * @param {Vibe64Pass[]} passes
+ * The open plan's passes as its Passes section lists them, each with its state now: done, running,
+ * needs you (it waits for the person's answer), paused (the person stopped it), blocked (it can't
+ * run, with the reason in chat) or "" (not run yet). atPasses is true once Senior has reviewed the
+ * plan, so its passes run.
+ * @typedef {{ title: string, atPasses: boolean, passes: { id: string, title: string, scope: string, item: string,
+ *   done: boolean, state: "" | "done" | "running" | "needs-you" | "paused" | "blocked" | "waiting" }[] }} Vibe64PlanPasses
  */
-function masterRequest(master, masterRun, ticked, passes) {
-  const chosen = master.passes.filter((id) => ticked.includes(id));
-  if (!chosen.length) return "";
-  if (chosen.length === master.passes.length) return masterRun.request;
-  const titles = chosen.map((id) => passes.find((pass) => pass.id === id)?.title || id);
-  return masterRun.selectedRequest.replace("{passes}", titles.join(", "));
-}
+
+const SERIES_WORDS = Object.freeze({ whole: "on the whole app", "since-last": "since their last completed run", deep: "deeply" });
+const titleList = (titles) => titles.length < 2 ? titles.join("") : `${titles.slice(0, -1).join(", ")} and ${titles.at(-1)}`;
 
 /**
- * The chat's Passes: the passes Genesis offers with their runs, the one the server's rule suggests
- * now, Run, and the suggestion's Later and Dismiss. Run sends one of a pass's runs to Main chat as the
- * person's own message; nothing here ever runs a pass by itself.
+ * The message a series of passes sends: "Run Security pass, Data pass and Deslop deeply."
+ * @param {string[]} titles in the order they run
+ * @param {"whole" | "since-last" | "deep"} runId the one run all of them take
+ */
+const seriesMessage = (titles, runId) => `Run ${titleList(titles)} ${SERIES_WORDS[runId]}.`;
+
+/**
+ * The chat's Passes: the passes Genesis offers with their runs, the open plan's passes, the one the
+ * server's rule suggests now, and the suggestion's Later and Dismiss. Run, a series of ticked passes,
+ * Continue, Run this pass again and Restart from the first pass each send the person's own message to
+ * Main chat, which adds the passes to the open plan (or a plan of its own) and runs the plan's next
+ * pass once the plan is at its Passes step; nothing here ever runs a pass by itself.
  * @param {{
  *   session: import("vue").MaybeRefOrGetter<object | null>,
  *   sessionsApiPath: import("vue").MaybeRefOrGetter<string>,
@@ -81,29 +85,35 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   // Why the Genesis serving the project runs no pass; empty when it runs them.
   const unavailable = computed(() => resource.data.value?.unavailable || "");
   const recommendation = computed(() => passes.value.find(({ id }) => id === resource.data.value?.recommendation) || null);
-  // The Master pass, which runs the passes in its own order deeply, one after another; null before the read.
-  const master = computed(() => resource.data.value?.master || null);
+  // Genesis's order for running several passes (its Master pass order), each pass's id once.
+  const order = computed(() => {
+    const ids = resource.data.value?.master?.passes || [];
+    return [...ids.filter((id) => passes.value.some((pass) => pass.id === id)),
+      ...passes.value.map(({ id }) => id).filter((id) => !ids.includes(id))];
+  });
+  /** @type {import("vue").ComputedRef<Vibe64PlanPasses | null>} */
+  const plan = computed(() => resource.data.value?.plan || null);
   const starting = ref("");
   const changing = ref("");
   const error = ref("");
 
   /**
-   * Starts one of a pass's runs with the request Genesis wrote for it, as if the person had sent it:
-   * it shows in the chat, Stop ends it, and Main chat refuses it while a turn or goal is running.
-   * starting holds the run's key (runKey) while it is being sent.
-   * @param {Vibe64Pass} pass
-   * @param {Vibe64PassRun} passRun
+   * Sends one Passes message as the person's own: it shows in the chat, Stop pauses the pass it
+   * runs, and Main chat refuses it while a turn or goal is running. starting holds key meanwhile.
+   * @param {string} key
+   * @param {object} input
+   * @param {string} failed what the error says when the server gives no reason
    */
-  async function run(pass, passRun) {
+  async function sendPasses(key, input, failed) {
     if (starting.value) return false;
-    starting.value = runKey(pass, passRun);
+    starting.value = key;
     error.value = "";
     try {
-      const result = await send({ message: passRun.request, genesisTask: pass.id, submissionKind: "send" });
-      if (result === false || result?.ok === false) throw new Error(result?.error || `${pass.title} did not start.`);
+      const result = await send({ ...input, submissionKind: "send" });
+      if (result === false || result?.ok === false) throw new Error(result?.error || failed);
       return true;
     } catch (failure) {
-      error.value = failure?.message || `${pass.title} did not start.`;
+      error.value = failure?.message || failed;
       return false;
     } finally {
       starting.value = "";
@@ -112,14 +122,41 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   }
 
   /**
-   * Starts one of the Master pass's runs for the ticked passes, as run starts a pass's run.
-   * @param {{ id: string, request: string, selectedRequest: string }} masterRun
-   * @param {string[]} ticked the ids of the ticked passes
+   * Adds one of a pass's runs to the open plan's Passes, or to a plan of its own, with the request
+   * Genesis wrote for it as the message.
+   * @param {Vibe64Pass} pass
+   * @param {Vibe64PassRun} passRun
    */
-  function runMaster(masterRun, ticked) {
-    const request = master.value ? masterRequest(master.value, masterRun, ticked, passes.value) : "";
-    if (!request) return Promise.resolve(false);
-    return run(master.value, { ...masterRun, request });
+  function run(pass, passRun) {
+    return sendPasses(runKey(pass, passRun), { message: passRun.request, genesisTask: pass.id, passRun: passRun.id },
+      `${pass.title} did not start.`);
+  }
+
+  /**
+   * Adds the ticked passes, in Genesis's order, each with the same run.
+   * @param {string[]} ticked pass ids
+   * @param {"whole" | "since-last" | "deep"} runId
+   */
+  function runSeries(ticked, runId) {
+    const ids = order.value.filter((id) => ticked.includes(id));
+    if (!ids.length) return Promise.resolve(false);
+    const titles = ids.map((id) => passes.value.find((pass) => pass.id === id).title);
+    return sendPasses(`series:${runId}`, { message: seriesMessage(titles, runId), passes: ids, passRun: runId }, "The passes did not start.");
+  }
+
+  /**
+   * The open plan's Continue, Run this pass again and Restart from the first pass.
+   * @param {"continue" | "again" | "restart"} action
+   * @param {{ id: string, title: string }} [pass] the pass to run again
+   */
+  function planAction(action, pass) {
+    const message = {
+      continue: "Continue the plan's passes.",
+      again: `Run ${pass?.title} again.`,
+      restart: "Restart the plan's passes from the first one."
+    }[action];
+    return sendPasses(`plan:${action}:${pass?.id || ""}`, { message, passAction: action, ...(pass ? { passId: pass.id } : {}) },
+      "The plan's passes did not continue.");
   }
 
   /**
@@ -145,18 +182,20 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
     passes,
     unavailable,
     recommendation,
-    master,
+    order,
+    plan,
     loading: resource.isLoading,
     loadError: resource.loadError,
     starting,
     changing,
     error,
     run,
-    runMaster,
+    runSeries,
+    planAction,
     snooze: (pass) => changeRecommendation(pass, "snooze"),
     dismiss: (pass) => changeRecommendation(pass, "dismiss"),
     reload: () => resource.reload()
   };
 }
 
-export { masterRequest, runKey, useVibe64Passes };
+export { runKey, seriesMessage, useVibe64Passes };

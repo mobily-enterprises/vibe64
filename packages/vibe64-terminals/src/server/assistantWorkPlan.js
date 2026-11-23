@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
-import { parseWorkPlanLines, workPlanScope } from "../shared/assistantWorkPlan.js";
+import { parseWorkPlanLines, workPlanScope, workPlanStep } from "../shared/assistantWorkPlan.js";
 import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
@@ -44,6 +44,20 @@ function unprovenItemsError(items) {
     "vibe64_work_plan_items_unproven",
     { count: items.length }
   );
+}
+
+/**
+ * Whether the next plan text differs from the current one only in the
+ * checklist ticks the role may change (the caller compares their scope).
+ * @param {string} current
+ * @param {string} next
+ * @param {(item: { text: string, passes?: boolean }) => boolean} mayTick
+ */
+function changesOnlyTicks(current, next, mayTick) {
+  const before = parseWorkPlanLines(current);
+  const after = parseWorkPlanLines(next);
+  return before.every((line, index) => line.checked === undefined || mayTick(line) ||
+    line.checked === after[index].checked && line.built === after[index].built);
 }
 
 function workPlanPath(context) {
@@ -223,12 +237,14 @@ async function readWorkPlanHistoryUnlocked(context) {
   const history = await Promise.all([...ids].map(id => readArchivedSummary(context, id)));
   return history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
 }
+// The current plan's summary carries its step, read from the plan each time, for the chat's status line.
 function currentPlanSummary(current) {
   return current ? {
     title: current.title,
     status: current.status,
     revision: current.revision,
-    progressRevision: current.progressRevision || ""
+    progressRevision: current.progressRevision || "",
+    step: workPlanStep(current)
   } : null;
 }
 async function readWorkPlanPageUnlocked(context, options = {}) {
@@ -358,9 +374,15 @@ function readWorkPlanPage(context, options) {
 }
 
 /**
- * The helper derives role from the admitted turn, never from command payloads.
+ * The helper derives role from the admitted turn, never from command payloads. A plan's pass turn
+ * ("pass") may write Progress and change only its own Passes item's tick (passItem); Junior may
+ * change the ticks outside Passes.
+ * @param {object} context
+ * @param {object} input
+ * @param {string} role senior, review, junior, pass or user
+ * @param {{ passItem?: string }} [options]
  */
-async function manageWorkPlan(context, input, role) {
+async function manageWorkPlan(context, input, role, { passItem = "" } = {}) {
   return withWorkPlan(context, async () => {
     const {
       operation,
@@ -374,7 +396,7 @@ async function manageWorkPlan(context, input, role) {
     if (!["new", "write", "progress-write", "complete", "archive", "reopen"].includes(operation)) {
       throw planError("Unknown plan operation.", "vibe64_work_plan_operation_unknown");
     }
-    const canEdit = ["senior", "review"].includes(role) || (role === "junior" && ["write", "progress-write"].includes(operation)) ||
+    const canEdit = ["senior", "review"].includes(role) || (["junior", "pass"].includes(role) && ["write", "progress-write"].includes(operation)) ||
       (role === "user" && (operation === "archive" || (operation === "reopen" && Boolean(archiveId))));
     if (!canEdit) {
       throw planError(
@@ -409,12 +431,25 @@ async function manageWorkPlan(context, input, role) {
         }
         next = "Status: active\n" + body + "\n";
         if (Buffer.byteLength(next) > PLAN_LIMIT) throw planError("The plan is too large.", "vibe64_work_plan_too_large");
+        if (role === "pass" && (workPlanScope(current.text) !== workPlanScope(next) ||
+            !changesOnlyTicks(current.text, next, (item) => item.passes && item.text === passItem))) {
+          throw planError(
+            "A pass changes only its own Passes item's tick in Plan. Record findings, questions, choices and Leftovers in Progress.",
+            "vibe64_work_plan_pass_item_only"
+          );
+        }
         if (role === "junior") {
-          const scopes = [current.text, next].map(workPlanScope);
+          const scopes = [current.text, next].map((text) => workPlanScope(text));
           if (scopes[0] !== scopes[1]) {
             throw planError(
               "Only Senior can change Plan content. Junior may change existing checklist ticks only (- [ ], - [~] or - [x]); record evidence in Progress.",
               "vibe64_work_plan_content_senior_only"
+            );
+          }
+          if (!changesOnlyTicks(current.text, next, (item) => !item.passes)) {
+            throw planError(
+              "Only a plan's own pass turn ticks its Passes items. Junior may change the other checklist ticks; record evidence in Progress.",
+              "vibe64_work_plan_pass_ticks_refused"
             );
           }
         }
@@ -470,7 +505,7 @@ async function manageWorkPlan(context, input, role) {
  * @param {{ autoOutcome?: boolean, auto?: boolean }} [options] autoOutcome: the turn is Auto's and reports a
  *   workflow outcome (planning, implementation or review), the only turns Senior's line about
  *   reporting unfinished review through the workflow outcome command applies to; auto: the turn is
- *   Auto's, where a plan change Junior may not make goes to Senior rather than back to the person
+ *   Auto's, where Junior hands a plan change it may not make to Senior (plan handoff) rather than back to the person
  */
 function workPlanInstructions(role, { autoOutcome = false, auto = false } = {}) {
   const common = [
@@ -481,19 +516,21 @@ function workPlanInstructions(role, { autoOutcome = false, auto = false } = {}) 
     "Plan commands take a JSON object on stdin. Writes require expectedRevision and expectedProgressRevision from the latest paired read. Read every page of BOTH text and progressText before working; a link is not a read. New/write take text containing a Markdown title and checklists (- [ ] / - [~] / - [x]); other headings and structure are your choice.",
     "Keep the agreed Plan scope stable: start with a short summary of the proposed changes written for a nontechnical user, followed by a checklist of agreed deliverables and acceptance requirements. Then include a ## Technical details section containing a VERY detailed technical implementation plan that Junior can follow carefully: actual owners/files, ordered steps, constraints, edge cases and verification. The viewer collapses Technical details for the person, who can expand them; this is presentation only. Junior and review MUST read and follow the complete technical section, not just the summary/checklist. Each checklist item carries one of three marks: - [ ] not done yet, - [~] built (implemented, and its own focused checks pass) and - [x] proven by the plan's final checks. Update checklist ticks with write as you go; do not wait until the whole plan or turn is finished. Half-tick each item (- [~]) as soon as it is implemented and its own focused checks pass, and full-tick it (- [x]) when the plan's final proof covers it: the whole run, the review or the proof the plan states. Never leave a built item empty. A partial item stays - [ ]; an item whose evidence is missing or that regressed moves back to - [~] or - [ ], including when review finds it. Keep checklist wording and technical scope unchanged when updating ticks. Record supporting evidence and blockers in the paired Progress document with progress-write, then use its returned paired revisions for the checklist write. Do not append progress logs or evidence to Plan. The optional link in Plan is only a convenience; Plan and Progress are one artifact.",
     "Human instructions take precedence. Keep agreed scope and completed evidence; do not invent additional requirements. Discussion alone never changes plan status.",
-    "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan. Once Senior explicitly completes the plan and that turn ends, Vibe64 runs the passes the chat ticks in Passes (After a plan), each in its own turn, then archives the exact completed Plan and Progress; do not archive it yourself.",
+    "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan.",
+    "A plan's steps are Implementation, Senior review, Passes and Completed. Its last section, ## Passes, lists the passes it runs after Senior's review, one checklist item each (- [ ] <pass title>: <scope>, such as - [ ] Security pass: the plan's changes). Vibe64 writes it from the chat's After a plan ticks when the plan is created and adds the passes the person starts; keep it last, and change it only when the person asks to change this plan's passes. Once every item outside Passes is - [x], Vibe64 runs each unticked Passes item in its own Senior turn, then completes and archives the exact Plan and Progress; do not archive it yourself.",
+    "Progress holds the plan's one Leftovers list: what is outside the plan's scope or can't be done here, never fixed or mixed in. When the person says not to ask and to pick your recommendation, for this plan or this run, record that in Progress with the time: every later step reads it, picks the recommended answer and records the choice in Progress instead of waiting.",
     "Only report a plan created or updated after the helper succeeds and its returned current plan confirms the requested checklist. If it fails, report the failure; a plan written only in chat is not a saved Vibe64 plan."
   ].join(" ");
   if (role === "junior") {
     return common +
-      " You are Junior. When asked to implement the active plan, read all pages of BOTH Plan and Progress first, preserve delivered work, and record actual evidence using progress-write. You may use write to change existing checklist marks among - [ ], - [~] and - [x] only; the server rejects any other Plan content change. You cannot retarget the agreed Plan scope. Complete the authorised scope rather than stopping after a useful slice. Context compaction and task size do not reduce that scope. Continue independent work when one item needs a user decision. Record incomplete or failed work and exact blockers in Progress; lead a partial final response with Implementation incomplete, not Done. You cannot create, archive, reopen or complete the plan." +
+      " You are Junior. When asked to implement the active plan, read all pages of BOTH Plan and Progress first, preserve delivered work, and record actual evidence using progress-write. You may use write to change existing checklist marks among - [ ], - [~] and - [x] outside the Passes section only; the server rejects any other Plan content change. You cannot retarget the agreed Plan scope. Complete the authorised scope rather than stopping after a useful slice. Context compaction and task size do not reduce that scope. Continue independent work when one item needs a user decision. Record incomplete or failed work and exact blockers in Progress; lead a partial final response with Implementation incomplete, not Done. You cannot create, archive, reopen or complete the plan." +
       (auto
-        ? " In Auto, when the person asks to create, extend, reopen or archive a plan or to change its scope, send it through vibe64-helper plan anyway (new with the complete plan they asked for, also to extend or change the current plan; reopen or archive): the helper hands this request and your draft to Senior, who saves the plan in its own turn right after yours. Then end your turn with a short reply saying Senior is saving the plan. Never tell the person to switch modes or to ask Senior, and do not substitute a chat-only outline for a saved plan. Senior also checks and completes the plan in its own turn after your implementation."
-        : " In a Junior chat, if asked for those operations, explain that this Junior chat cannot make them and that switching Chat mode to Senior or Auto does; do not substitute a chat-only outline for a saved plan. Leave the plan active for Senior to complete.") +
+        ? " In Auto, when the request asks to make, change, extend, reopen or archive a plan, write nothing, not even a draft or an outline: run vibe64-helper plan handoff and end your turn with one short line saying Senior is making the plan. Vibe64 continues this request as Senior's planning turn, which writes the plan from the request and the conversation. Never tell the person to switch modes or to ask Senior. Senior also checks the plan in its own turn after your implementation."
+        : " In a Junior chat, if asked for those operations, write nothing, not even a chat-only outline, and tell the person that plans need Senior or Auto, which they choose in Chat mode. Leave the plan active for Senior to review.") +
       " Do not ask the user to request that check or final completion. Stop for changed scope or unresolved product decisions; do not start a planning/review loop yourself.";
   }
   return common +
-    " You are Senior and own the plan's scope and lifecycle. Read all pages of BOTH current Plan and Progress first. If none exists, use new. If a current plan exists and the user has not clearly chosen, ask whether to update it or archive it and start a new plan; wait for their answer before replacing it. Use write for an agreed update, reopen for an agreed return to a completed plan, archive when requested, and complete ONLY when every checklist item is - [x] and every required acceptance item is supported by evidence; the server refuses completion while any item is - [ ] or - [~]. Before new or reopening an archived plan replaces a current plan, identify the plan that will be archived and explain that it remains accessible. Pass archiveCurrent:true only after the user authorizes that replacement; an explicit instruction to archive and replace already counts, so do not ask again. Reopening an archive moves it back to current as active, removing that entry from History while retaining the exact Plan and Progress pair. Replacement archives BOTH old documents and begins fresh Progress. During review, verify each agreed acceptance requirement against actual implementation and evidence. Reconcile checklist ticks against the evidence: full-tick what the plan's final proof covers, and move unsupported or regressed claims back to - [~] or - [ ]. Record missing verification and blockers in Progress without rewriting scope; fix in-scope defects and verify them. If review or checks remain unfinished, leave the plan active and continue authorised review." +
+    " You are Senior and own the plan's scope and lifecycle. Read all pages of BOTH current Plan and Progress first. If none exists, use new. If a current plan exists and the user has not clearly chosen, ask whether to update it or archive it and start a new plan; wait for their answer before replacing it. Use write for an agreed update, reopen for an agreed return to a completed plan, archive when requested, and complete ONLY when every checklist item is - [x] and every required acceptance item is supported by evidence; the server refuses completion while any item is - [ ] or - [~]. A plan with Passes items is never yours to complete: your review ends with every item outside Passes - [x] and the plan active, and Vibe64 runs its passes and completes it. Before new or reopening an archived plan replaces a current plan, identify the plan that will be archived and explain that it remains accessible. Pass archiveCurrent:true only after the user authorizes that replacement; an explicit instruction to archive and replace already counts, so do not ask again. Reopening an archive moves it back to current as active, removing that entry from History while retaining the exact Plan and Progress pair. Replacement archives BOTH old documents and begins fresh Progress. During review, verify each agreed acceptance requirement against actual implementation and evidence. Reconcile checklist ticks against the evidence: full-tick what the plan's final proof covers, and move unsupported or regressed claims back to - [~] or - [ ]. Record missing verification and blockers in Progress without rewriting scope; fix in-scope defects and verify them. If review or checks remain unfinished, leave the plan active and continue authorised review." +
     (autoOutcome ? " In Auto, report continue through the workflow outcome command." : "") +
     " For substantial necessary rework within the agreed outcome, update the Technical details and Progress, then report handoff so Junior implements and Senior checks the plan again. Ask only when a genuinely changed product requirement or required decision blocks progress. Explicit pauses and Stops remain respected. Never invent requirements or mark unverified work completed. In a Senior chat the same workflow outcomes apply: you implement, verify and complete the plan yourself.";
 }

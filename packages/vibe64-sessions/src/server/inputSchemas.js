@@ -143,14 +143,23 @@ const agentMessageFields = {
     },
     required: false
   },
-  // A pass to run in its own Senior turn: the Genesis task's id. Admission accepts only a pass
-  // Genesis lists.
+  // A pass to run: the Genesis task's id. Admission accepts only a pass Genesis lists. In Main
+  // chat it joins the plan's Passes, with its run (passRun); passes names several, one run for all.
   genesisTask: {
     type: "string",
     pattern: /^[a-z][a-z0-9-]{0,63}$/u,
     noTrim: false,
     required: false
   },
+  passes: {
+    type: "array",
+    items: { type: "string", pattern: /^[a-z][a-z0-9-]{0,63}$/u, noTrim: false },
+    required: false
+  },
+  passRun: { type: "string", enum: ["whole", "since-last", "deep"], required: false },
+  // The open plan's Continue, Run this pass again (passId) and Restart from the first pass.
+  passAction: { type: "string", enum: ["continue", "again", "restart"], required: false },
+  passId: { type: "string", pattern: /^[a-z][a-z0-9-]{0,63}$/u, noTrim: false, required: false },
   message: {
     type: "string",
     noTrim: false,
@@ -391,7 +400,7 @@ const assistantRoutingField = {
   required: false,
   schema: createSchema({
     mode: { type: "string", enum: ASSISTANT_MODES.map(({ id }) => id), required: true },
-    // The passes that run after a completed plan, and those run deeply; the
+    // The passes each new plan's Passes section starts with, and those run deeply; the
     // routing preferences refuse an unknown pass, or one leaving Review or Security out.
     afterPlan: { type: "array", items: { type: "string", maxLength: 64 }, maxItems: 16, required: false },
     afterPlanDeep: { type: "array", items: { type: "string", maxLength: 64 }, maxItems: 16, required: false },

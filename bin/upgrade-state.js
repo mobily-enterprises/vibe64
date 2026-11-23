@@ -27,6 +27,7 @@ import { retireArchivedClosingChats } from "@local/vibe64-terminals/server/archi
 import { removeConnectedSessionLinks } from "@local/vibe64-runtime/server/connectedRepositoryCopiesUpgrade";
 import { upgradeChatFinishingSteps } from "@local/vibe64-terminals/server/chatFinishingStepsUpgrade";
 import { upgradeAfterPlanPasses } from "@local/vibe64-terminals/server/afterPlanPassesUpgrade";
+import { upgradePassesInPlans } from "@local/vibe64-terminals/server/passesInPlansUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -92,6 +93,7 @@ try {
     removeConnectedSessionLinks,
     upgradeChatFinishingSteps,
     upgradeAfterPlanPasses,
+    upgradePassesInPlans,
     retireArchivedClosingChats,
     report
   });

@@ -11,7 +11,7 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug:
 import WorkPlan from "../../src/components/studio/vibe64-session/Vibe64WorkPlan.vue";
 import WorkPlanSections from "../../src/components/studio/vibe64-session/Vibe64WorkPlanSections.vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PLAN_KEY } from "../../src/lib/vibe64AssistantHost.js";
-import { parseWorkPlanLines } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
+import { parseWorkPlanLines, workPlanStatusLine } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 
 let app;
@@ -30,7 +30,7 @@ function mount(data) {
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, actor);
   app.provide(VIBE64_COLLEAGUE_PLAN_KEY, colleague);
   app.mount({});
-  return { props, actor, colleague, state: () => notice.value.$.setupState };
+  return { props, actor, colleague, state: () => notice.value.$.setupState, exposed: () => notice.value };
 }
 const active = { available: true, status: "active", current: { status: "active" }, history: [],
   built: 0, checked: 0, total: 1, text: "Status: active\n# Reporting\n- [ ] Prove privacy\n\nEvidence will appear here." };
@@ -53,6 +53,20 @@ it("keeps the document open while live ticks and unticks arrive, and keeps compl
   expect(f.state().visible).toBe(true);
   expect(f.state().open).toBe(true);
   expect(f.state().label).toBe("View plan and history");
+});
+
+it("exposes the current plan's step from its summary read, for the chat's status line, as the plan changes", async () => {
+  const implementing = { step: "implementation", item: 1, items: 1, title: "Prove privacy" };
+  const f = mount({ ...active, current: { status: "active", step: implementing } });
+  expect(f.exposed().step).toEqual(implementing);
+  expect(workPlanStatusLine(f.exposed().step)).toBe("Plan: implementing item 1 of 1, Prove privacy");
+  mocks.resource.data.value = { ...active, current: { status: "active", step: { step: "pass", item: 2, items: 3, title: "Security pass" } } };
+  await nextTick();
+  expect(workPlanStatusLine(f.exposed().step)).toBe("Plan: pass Security (2 of 3)");
+  mocks.resource.data.value = { available: false, current: null, history: [] };
+  await nextTick();
+  expect(f.exposed().step).toBe(null);
+  expect(workPlanStatusLine(f.exposed().step)).toBe("");
 });
 
 it("shows history with no current plan and keeps code examples separate from checklist claims", async () => {
@@ -264,6 +278,15 @@ it("keeps the summary and checklist visible while retaining the complete technic
   mocks.resource.data.value = { ...mocks.resource.data.value, revision: "c".repeat(64) };
   await nextTick();
   expect(f.state().technicalPanel).toBe(null);
+});
+
+it("shows the plan's Passes section, which follows Technical details, with the summary rather than collapsed", () => {
+  const text = "# Reporting\nShort user summary\n- [x] Prove privacy\n\n## Technical details\nUse the existing authorization owner.\n\n## Passes\n\n- [x] Review: the plan's changes\n- [ ] Deslop: whole app";
+  const f = mount({ ...active, revision: "b".repeat(64), text });
+  expect(f.state().overviewSections.map(section => section.checked)).toEqual([undefined, true, undefined, undefined, true, false]);
+  expect(JSON.stringify(f.state().overviewSections)).toContain("Deslop: whole app");
+  expect(JSON.stringify(f.state().technicalSections)).toContain("authorization owner");
+  expect(JSON.stringify(f.state().technicalSections)).not.toContain("Review: the plan");
 });
 
 it("never mistakes a fenced heading for the technical boundary or hides unmarked legacy content", () => {

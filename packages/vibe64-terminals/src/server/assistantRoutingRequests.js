@@ -12,6 +12,8 @@ import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExpl
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
 const STATE_KEY = "assistant_routing_request";
+// Since 20261123-passes-in-plans: a plan's passes live in the plan, the request holds only the running pass.
+const ASSISTANT_ROUTING_REQUEST_SCHEMA = 7;
 // Messages the person cancelled in this chat, newest last and bounded. A send
 // never admits one again, and a snapshot never offers one for recovery.
 const CANCELLED_KEY = "assistant_cancelled_messages";
@@ -19,14 +21,15 @@ const MAX_CANCELLED_MESSAGES = 50;
 
 const activeMessage = state => state.followup || state.input;
 /**
- * The role the plan command acts as for the request's running turn: "" (read only) for an answer-only turn, a pass or
- * task, or no working request; "review" for Auto's Senior check in a review follow-up; otherwise the routed role, so a
- * Junior or Custom chat's agent keeps its own.
+ * The role the plan command acts as for the request's running turn: "" (read only) for an answer-only turn, a task, or
+ * no working request; "pass" for a plan's pass, which ticks only its own Passes item; "review" for Auto's Senior check
+ * in a review follow-up; otherwise the routed role, so a Junior or Custom chat's agent keeps its own.
  * @param {object | null} request the saved routing request
  */
 function assistantPlanRole(request) {
-  if (request?.reason === "conversation" || assistantTaskPurpose(request?.task) || request?.stage === "pass" ||
+  if (request?.reason === "conversation" || assistantTaskPurpose(request?.task) ||
       request?.status !== "working" || request.delivery !== "accepted") return "";
+  if (request.stage === "pass") return request.pass ? "pass" : "";
   return request.stage === "review" && request.followup && assistantWorkflowRole(request) === "senior" ? "review" : request.resolvedMode;
 }
 /**
@@ -56,7 +59,7 @@ function savesAutomatically(metadata) {
 }
 function parseRequest(value) {
   const request = value ? JSON.parse(value) : null;
-  if (request && request.schemaVersion !== 6) {
+  if (request && request.schemaVersion !== ASSISTANT_ROUTING_REQUEST_SCHEMA) {
     throw failure("Saved workflow needs the candidate stopped-service state upgrade.", "vibe64_assistant_workflow_upgrade_required");
   }
   if (request && !assistantWorkflowStateIsSupported(request)) {
@@ -146,6 +149,7 @@ function withSelection(context, selection) {
 }
 
 export {
+  ASSISTANT_ROUTING_REQUEST_SCHEMA,
   CANCELLED_KEY,
   MAX_CANCELLED_MESSAGES,
   STATE_KEY,

@@ -47,8 +47,8 @@ fail once with a GitHub authentication error; retry it and it uses the new login
 
 In every main-chat mode, **Automatically save changes** (on by default under
 **Chat settings** in the chat mode menu) runs this same Save once a finished
-piece of work's last turn ends: after a completed plan, once the passes ticked
-under **After a plan** in [Passes](passes.md) are done.
+piece of work's last turn ends: for a plan, once the last pass in its Passes
+section is done (see [Passes](passes.md)).
 Its progress, result and recovery are the ordinary Save's; when it cannot save,
 chat shows **Automatic save didn't run:** with the reason, and nothing changes.
 While it is on, the main chat's AI also runs this same Save itself at each

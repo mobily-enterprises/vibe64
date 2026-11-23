@@ -1,4 +1,6 @@
 import { readWorkPlan } from "./assistantWorkPlan.js";
+import { workPlanAtPasses } from "../shared/assistantWorkPlan.js";
+import { applyPlanPasses, nextPlanPass, planPassRequest } from "./planPasses.js";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
   assistantRoutingRequestCanBeReplaced,
@@ -7,7 +9,7 @@ import {
   assistantGoalIsActive
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantExplicitTask, assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
-import { failure, readCancelled, read, usesWorkPlan, STATE_KEY } from "./assistantRoutingRequests.js";
+import { ASSISTANT_ROUTING_REQUEST_SCHEMA, failure, readCancelled, read, usesWorkPlan, STATE_KEY } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
@@ -78,6 +80,8 @@ function isStoppedTurn(request, native) {
  * @param {(sessionId: string, input: object, context: object) => Promise<object>} dependencies.dispatch
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
  * @param {import("./types.js").WritesWhileAssistantWorks} dependencies.writesWhileAssistantWorks
+ * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} dependencies.listPasses
+ * @param {import("@local/vibe64-core/server/types").PublishSessionChanged} dependencies.publish
  * @param {(timing: object) => void} dependencies.onTiming
  */
 function createAssistantRoutingAdmission({
@@ -93,6 +97,7 @@ function createAssistantRoutingAdmission({
   interrupt,
   writesWhileAssistantWorks,
   listPasses,
+  publish,
   onTiming,
   logger
 }) {
@@ -192,11 +197,14 @@ function createAssistantRoutingAdmission({
   async function route(sessionId, input, options) {
     if (options.purpose && options.purpose !== "junior") throw new TypeError("Generated main-chat work must declare Junior.");
     // Each pass, Deslop and the UI pass among them, runs in its own Senior turn.
-    const explicitTask = options.purpose ? "" : assistantExplicitTask(input);
+    let explicitTask = options.purpose ? "" : assistantExplicitTask(input);
     let explicit = null;
     let context;
     let state;
     let direct;
+    // Auto was implementing a plan, waiting (for an answer, say) rather than stopped: a plan change this
+    // message asks for lets that implementation go on once Senior has saved it.
+    let implementing = false;
     const task = { cancelled: false, finished: Promise.withResolvers() };
     let key;
     // A new message refused here, including while the lock is busy, has not
@@ -213,7 +221,6 @@ function createAssistantRoutingAdmission({
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.", "vibe64_assistant_routing_unavailable");
       context = current;
       key = records.keyFor(sessionId, context);
-      explicit = await explicitPass(input, explicitTask, context, listPasses);
       // Finish earlier cancels' cleanup first; it never blocks this admission.
       await cancellation.settle(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {
         component: "vibe64.assistant_routing",
@@ -233,6 +240,26 @@ function createAssistantRoutingAdmission({
       if (!routingState.allowAuto && preferences?.mode === "auto") {
         throw failure("Auto is available in Main chat only. Choose Senior or Junior.", "vibe64_assistant_routing_auto_main_chat_only");
       }
+      // Main chat's own passes live in its plan: a pass the person starts (from Passes or by typing)
+      // joins the plan, and so do Continue, Run this pass again and Restart from the first pass.
+      // Temporary chats, Fix it with AI and lessons run a pass the person starts as its own turn.
+      const plansPasses = routingState.allowAuto && !context.runtime?.learningScope && !options.purpose &&
+        Boolean(preferences) && preferences.mode !== "fix" && input.reviewAction !== "retry";
+      let passListing = null;
+      let passRequest = null;
+      if (plansPasses) {
+        passListing = await listPasses({ projectRoot: sessionSourcePath(context.session) });
+        // A steer joins the running turn as written, even when its words name a pass.
+        passRequest = planPassRequest(input, passListing, { typed: input.submissionKind !== "steer" });
+      }
+      if (passRequest) {
+        explicitTask = "";
+        const one = passRequest.ids?.length === 1 ? passRequest.ids[0] : "";
+        explicit = one ? { name: passListing.passes.find((pass) => pass.id === one).title, code: assistantTaskPurpose(one) }
+          : { name: "The plan's passes", code: "pass" };
+      } else {
+        explicit = await explicitPass(input, explicitTask, context, listPasses);
+      }
       if (input.reviewAction === "retry") {
         if (routingState.running.has(key)) throw failure("Wait for request preparation to finish, or stop it.", "vibe64_assistant_routing_preparation_running");
         state = await read(context.runtime.store, sessionId);
@@ -246,14 +273,22 @@ function createAssistantRoutingAdmission({
           throw failure("There is no pending workflow to resume.", "vibe64_assistant_routing_nothing_to_resume");
         }
         if (state.awaitingAnswer) throw failure("Answer the question in chat. Your reply starts the next step.", "vibe64_assistant_routing_answer_required");
-        // Stop ends the after-plan passes; the person runs the rest from Passes.
-        if (state.stage === "pass" && state.stopped) {
-          throw failure("The after-plan passes were stopped. Run the rest from Passes.", "vibe64_assistant_routing_after_plan_stopped");
-        }
         if (state.delivery !== "uncertain") {
-          if (state.delivery === "accepted" || state.followup && !Array.isArray(state.followup.messages)) {
+          // Continuing a plan's passes, after Stop too, runs the plan's next pass as the plan now says.
+          if (state.stage === "pass") {
+            const plan = await readWorkPlan(context);
+            const next = workPlanAtPasses(plan) ? await nextPlanPass(context, plan, listPasses) : null;
+            if (!next) throw failure("This plan has no pass left to run. Open the plan to check it.", "vibe64_assistant_routing_plan_passes_done");
+            if (next.problem) throw failure(`${next.title} can't run: ${next.problem}`, "vibe64_assistant_routing_plan_pass_blocked");
+            state.pass = { id: next.id, title: next.title, item: next.item, request: next.request };
+            state.planInvolved = true;
+            for (const field of ["outcome", "passReply", "planPassNote"]) delete state[field];
+            await records.prepareFollowup(context, state, "pass");
+          } else if (state.delivery === "accepted" || state.followup && !Array.isArray(state.followup.messages)) {
             const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
-            if (usesWorkPlan(state) && plan?.revision !== (state.followup?.planRevision || state.workPlan?.revision)) {
+            // Continue resumes an implementation from the plan as it now is; another stage needs the plan it left.
+            if (usesWorkPlan(state) && plan?.revision !== (state.followup?.planRevision || state.workPlan?.revision) &&
+                !(state.stage === "implementation" && plan?.status === "active")) {
               throw failure("The retained plan changed. Inspect it and send a fresh request.", "vibe64_assistant_routing_retained_plan_changed");
             }
             await records.prepareFollowup(context, state, state.stage);
@@ -283,6 +318,9 @@ function createAssistantRoutingAdmission({
       const store = context.runtime.store;
       state = await read(store, sessionId);
       if (state?.messageId === input.messageId) refusedBeforeAdmission = false;
+      // A plan's pass waiting for the person's answer: their next message goes straight back to it.
+      const waitingPass = state?.messageId !== input.messageId && state?.stage === "pass" && state.status === "waiting" &&
+        state.awaitingAnswer === true && !state.stopped && state.pass?.request ? state.pass : null;
       const duplicate = await store.conversationMessageIdExists(sessionId, input.messageId);
       records.mark(input.messageId, "duplicate-checked");
       if (duplicate) {
@@ -341,6 +379,8 @@ function createAssistantRoutingAdmission({
       if (routingState.running.has(key)) {
         throw failure("This conversation is preparing a request. Cancel it or wait before sending another.", "vibe64_assistant_routing_request_preparing");
       }
+      implementing = state?.messageId !== input.messageId && state?.mode === "auto" && state.stage === "implementation" &&
+        state.planInvolved === true && state.status === "waiting" && !state.stopped;
       if (state?.messageId !== input.messageId && assistantRoutingRequestCanBeReplaced(state)) {
         state.stopped = true;
         state.review = false;
@@ -396,14 +436,51 @@ function createAssistantRoutingAdmission({
         }
         const mode = pinnedGoal?.mode || options.purpose || preferences.mode;
         const hasPlanRevision = Boolean(input.planRevision);
-        // Main chat's own requests are workflows whose completed plan starts the
-        // chat's after-plan passes; an explicit task, generated work, a goal,
+        // Main chat's own requests are workflows whose plan runs its passes once
+        // Senior has reviewed it; an explicit task, generated work, a goal,
         // temporary chats and lessons never are. Deslop must never rewrite a
         // learner's code, and a lesson teaches Save.
         const finishes = routingState.allowAuto && !context.runtime?.learningScope && mode !== "fix" && !explicitTask &&
           !options.purpose && !assistantGoalIsActive(goal);
-        // The plan as this request found it: only a plan completed during the
-        // request starts the after-plan passes, never one already completed.
+        // A pass the person asks for joins the plan's Passes (a plan of its own when none is open) and,
+        // once the plan is at its Passes step, this message runs the plan's next pass. A reply to a
+        // waiting pass runs that pass again, on Senior, with the reply. Passes that can't start yet
+        // leave Senior to say so.
+        let planPass = null;
+        let planPassNote = "";
+        if (finishes && (passRequest || waitingPass)) {
+          let current = await readWorkPlan(context);
+          if (passRequest && passRequest.action !== "add" && current && !workPlanAtPasses(current)) {
+            throw failure("This plan's passes start once Senior has reviewed the plan.", "vibe64_assistant_routing_plan_passes_not_yet");
+          }
+          let added = [];
+          if (passRequest) {
+            const applied = await applyPlanPasses(context, passRequest, passListing);
+            added = applied.added;
+            current = await readWorkPlan(context);
+            if (applied.notice) {
+              await records.writeNotice(context, state, { messageId: `assistant-plan-passes:${input.messageId}`, text: applied.notice });
+            }
+            await publish(sessionId, { reason: "work-plan-changed", payload: { planNotice: applied.plan?.notice || "" } });
+          }
+          const next = workPlanAtPasses(current) ? await nextPlanPass(context, current, listPasses) : null;
+          // A message that only answers goes back to the pass that asked, while that pass is still the plan's next;
+          // otherwise it is an ordinary request.
+          if (next && !next.problem && (passRequest || next.item === waitingPass.item)) {
+            planPass = { id: next.id, title: next.title, item: next.item, request: next.request };
+            if (waitingPass && added.length) planPassNote = `Vibe64 added ${added.join(", ")} to the plan's Passes for this message: each runs after this pass, in its own turn, so don't run it here.`;
+          } else if (passRequest && next) {
+            planPassNote = `${next.title} can't run: ${next.problem}`;
+          } else if (passRequest) {
+            planPassNote = current?.status === "active" && added.length
+              ? `Vibe64 added ${added.join(", ")} to the current plan's Passes: they run once Senior has reviewed the plan.`
+              : "The plan has no pass left to run.";
+          }
+        }
+        const answering = Boolean(planPass && waitingPass && planPass.item === waitingPass.item &&
+          (!passRequest || passRequest.action === "add"));
+        // The plan as this request found it: only a plan reviewed or completed
+        // during the request moves on to its passes, never one already there.
         // Auto works from its plan; a direct chat only notes it, and an
         // unreadable one is none there, as before passes ran after plans.
         const plan = mode === "auto" ? await readWorkPlan(context)
@@ -413,12 +490,12 @@ function createAssistantRoutingAdmission({
           throw failure("The active plan changed. Read the current plan before sending your request.", "vibe64_assistant_routing_plan_changed");
         }
         let resolvedMode = mode;
-        if (explicitTask) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
+        if (explicitTask || planPass || planPassNote) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
-        const review = mode === "auto" && finishes;
+        const review = mode === "auto" && finishes && !planPass && !planPassNote;
         // A Senior, Junior or Custom chat's request is its agent's work from the
         // start; Auto's becomes a workflow when Router classifies it.
-        const direct = finishes && mode !== "auto";
+        const direct = finishes && mode !== "auto" && !planPassNote;
         state = {
           messageId: input.messageId,
           input: {
@@ -436,10 +513,13 @@ function createAssistantRoutingAdmission({
           mode,
           resolvedMode,
           ...(explicitTask ? { task: explicitTask } : {}),
-          reason: explicitTask ? "review" : "",
+          ...(planPass ? { pass: planPass } : {}),
+          ...(answering ? { passReply: true } : {}),
+          ...(planPassNote ? { planPassNote } : {}),
+          reason: explicitTask || planPass ? "review" : planPassNote ? "conversation" : "",
           afterPlan: finishes ? { planAtAdmission: plan ? { status: plan.status, revision: plan.revision } : null } : null,
-          workPlan: mode === "auto" ? plan : null,
-          schemaVersion: 6,
+          workPlan: mode === "auto" || planPass ? plan : null,
+          schemaVersion: ASSISTANT_ROUTING_REQUEST_SCHEMA,
           observedSelection: selection,
           configuration: pinnedGoal?.configuration || { revision: saved.revision, owner: saved.owner, nonOwner: saved.nonOwner },
           override: pinnedGoal ? pinnedGoal.override || (!pinnedGoal.configuration ? {
@@ -452,12 +532,12 @@ function createAssistantRoutingAdmission({
           delivery: resolvedMode ? "sending" : "routing",
           createdAt: new Date().toISOString(),
           review,
-          workflow: direct,
-          stage: direct ? "implementation" : null,
+          workflow: direct || Boolean(planPass),
+          stage: planPass ? "pass" : direct ? "implementation" : null,
           steps: 0,
           stalledTurns: 0,
           steering: [],
-          planInvolved: hasPlanRevision,
+          planInvolved: hasPlanRevision || Boolean(planPass),
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
             .map((name) => [name, context.vibe64User[name]])) : null
@@ -531,10 +611,12 @@ function createAssistantRoutingAdmission({
         // exact plan revision. Do not ask Router to reinterpret that approval.
         const decision = state.input.planRevision ? { mode: "junior", reason: "implementation" }
           : await decisions.classify(sessionId, context, state, task, options);
-        // An addressed role is an instruction, not a classifier suggestion.
+        // An addressed role is an instruction, not a classifier suggestion; only Senior makes a plan, so
+        // planning is Senior's whatever role the Router or the message names.
         const requestedRole = /^\s*(senior|junior)(?:\s+developer)?\s*[:,]\s*\S/iu.exec(state.input.message)?.[1]?.toLowerCase();
-        state.resolvedMode = requestedRole || decision.mode;
+        state.resolvedMode = decision.reason === "planning" ? "senior" : requestedRole || decision.mode;
         state.reason = decision.reason;
+        if (decision.reason === "planning" && implementing && state.mode === "auto") state.resumeImplementation = true;
         state.stage = decision.reason === "conversation" ? null : decision.reason;
         state.workflow = ["implementation", "review"].includes(decision.reason);
         state.review = state.workflow;

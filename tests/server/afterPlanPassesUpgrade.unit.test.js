@@ -8,6 +8,7 @@ import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assis
 import { assistantRoutingRequestForMessage } from "../../packages/vibe64-terminals/src/server/assistantRoutingRequests.js";
 import afterPlanPasses from "../../packages/vibe64-core/src/server/stateUpgrades/20261114-after-plan-passes.js";
 import { __testables, upgradeAfterPlanPasses } from "../../packages/vibe64-terminals/src/server/afterPlanPassesUpgrade.js";
+import { __testables as passesInPlans } from "../../packages/vibe64-terminals/src/server/passesInPlansUpgrade.js";
 
 const { afterPlanPassesChanges } = __testables;
 
@@ -109,7 +110,7 @@ test("current values are left alone, so a retry changes nothing, and unreadable,
   assert.throws(() => afterPlanPassesChanges({ metadata: { assistant_routing_request: "{" } }), /unreadable/u);
 });
 
-test("every converted value reads back at runtime: the chat's choices as saved, and its request without an upgrade refusal", () => {
+test("every converted value reads back at runtime: the chat's choices as saved, and its request once 20261123 has run too", () => {
   for (const saved of [{ mode: "auto", ...finishing(false, true) }, { mode: "senior", ...finishing(true, false) },
     { mode: "junior", ...finishing(true, true) }, { mode: "fix", ...finishing(false, false, false) }]) {
     const raw = afterPlanPassesChanges({ metadata: { assistant_routing: JSON.stringify(saved) } }).metadata.assistant_routing;
@@ -118,7 +119,10 @@ test("every converted value reads back at runtime: the chat's choices as saved, 
   assert.throws(() => assistantRoutingFromMetadata({ assistant_routing: JSON.stringify({ mode: "auto", ...finishing(true, true) }) }),
     (error) => error.code === "vibe64_assistant_routing_upgrade_required", "a chat that missed the upgrade is refused, never read as the defaults");
   const raw = afterPlanPassesChanges({ metadata: { assistant_routing_request: request({}) } }).metadata.assistant_routing_request;
-  assert.equal(assistantRoutingRequestForMessage({ assistant_routing_request: raw }, (id) => id === "m1").messageId, "m1");
+  assert.throws(() => assistantRoutingRequestForMessage({ assistant_routing_request: raw }, () => true),
+    (error) => error.code === "vibe64_assistant_workflow_upgrade_required", "version 6 waits for 20261123-passes-in-plans");
+  const current = passesInPlans.passesInPlansRequest(raw);
+  assert.equal(assistantRoutingRequestForMessage({ assistant_routing_request: current }, (id) => id === "m1").messageId, "m1");
   assert.throws(() => assistantRoutingRequestForMessage({ assistant_routing_request: request({}) }, () => true),
     (error) => error.code === "vibe64_assistant_workflow_upgrade_required");
 });

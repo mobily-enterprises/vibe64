@@ -1,9 +1,11 @@
 /**
- * How a chat's work finishes: the passes that run after a completed plan
- * (Passes: After a plan), and Automatically save changes, which runs after
- * them. A turn ending never starts a pass, and neither does Save: only a plan
- * completed during a request does, or a person asking (Passes, the Master pass,
- * or a typed request).
+ * How a chat's work finishes. A plan's steps are Implementation, Senior review,
+ * Passes and Completed: its final Passes section lists the passes it runs, one
+ * Senior turn each, written when the plan is made from the chat's After a plan
+ * ticks (or added by the person from Passes, or by typing). Once every item is
+ * ticked and no question is open the plan is completed and archived, and
+ * Automatically save changes runs. A turn ending never starts a pass of its
+ * own, and neither does Save.
  */
 
 // The order the after-plan passes run in, Genesis's Master pass order: Review
@@ -66,16 +68,12 @@ function afterPlanChoiceProblem(afterPlan, afterPlanDeep) {
 const inAfterPlanOrder = (ids) => AFTER_PLAN_PASS_ORDER.filter((id) => ids.includes(id));
 
 /**
- * The system notice a pass's automatic start after a completed plan writes.
- * @param {string} title the pass's title, as Genesis lists it
+ * The system notice a plan's pass writes when Vibe64 starts it.
+ * @param {{ title: string, item: string }} pass the pass and its Passes item
  * @param {string} key the follow-up it belongs to
- * @param {{ deep?: boolean }} [options]
  */
-function afterPlanPassNotice(title, key, options = {}) {
-  return {
-    messageId: `assistant-after-plan:${key}`,
-    text: `${title}${options.deep ? " deeply" : ""} started automatically after the plan (Passes: After a plan)`
-  };
+function planPassNotice(pass, key) {
+  return { messageId: `assistant-plan-pass:${key}`, text: `${pass.title} started: the plan's next pass (${pass.item})` };
 }
 
 /** The notice Save's automatic start writes. */
@@ -117,7 +115,7 @@ function assistantContinuationInstruction(request) {
  */
 function assistantSaveInstruction(autoSave) {
   return autoSave
-    ? "Vibe64 saves this work automatically once it is finished, after any plan-completion turn and after-plan passes. Before then, save each finished and checked stage of a plan, or a finished piece of work, yourself with `vibe64-helper session save`, never mid-edit, running `vibe64-helper session update` first when session status says this session is behind; once it has saved, tell the other sessions you are working with, so they update before building on the old code. After your complete reply, say what you saved or that the work will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
+    ? "Vibe64 saves this work automatically once it is finished, after any Senior review of the plan and the plan's passes. Before then, save each finished and checked stage of a plan, or a finished piece of work, yourself with `vibe64-helper session save`, never mid-edit, running `vibe64-helper session update` first when session status says this session is behind; once it has saved, tell the other sessions you are working with, so they update before building on the old code. After your complete reply, say what you saved or that the work will be saved automatically, as a note that never replaces the reply, since the person reads only your final response; never ask the person to press Save."
     : "This chat's settings turn automatic save off: the person saves finished work with the Save button, and `vibe64-helper session save` refuses in this chat.";
 }
 
@@ -132,35 +130,52 @@ function assistantWorkflowEnding(request, autoSave) {
   return [assistantContinuationInstruction(request), assistantSaveInstruction(autoSave)].filter(Boolean).map(line => `\n${line}`).join("");
 }
 
+// What the person reads once a plan's last step is Done: one message for the whole plan.
+const PLAN_CLOSING_MESSAGE = "one line per step (Senior review and each pass) saying what it fixed, from Progress; the choices made for the person; and the Leftovers from Progress, followed by the one question “Make a plan for these?” (no question when there are none).";
+
+// How every step of a plan ends, Senior review and each pass alike.
+const PLAN_STEP_ENDINGS = "Never end with partial, for later, not run here or worth knowing: when you run out of room, report continue and carry on in your next turn; a check that can't run here is made to run or becomes a question (for example: these browser tests run only in CI; accept CI as their proof?); a broken setup is a blocker question. An answer becomes a rule written into Plan or Progress, never a footnote. What is outside the scope, or can't be done here (another repository, a setting only the owner can change), goes on the plan's one Leftovers list in Progress: not fixed and not mixed in. When Progress records that the person said to pick your recommendation, pick it for every question, record each choice in Progress with the time, and never wait.";
+
 /**
- * Senior's turn after Auto's Junior implemented an involved plan: it verifies
- * the plan and completes it, or leaves it active, or hands substantial rework
- * back. It is not a pass and runs none.
+ * Senior's review of a plan Auto's Junior implemented: it verifies every item,
+ * then the plan moves on to its passes, or, with none, Senior completes it. It
+ * is not a pass and runs none.
  */
 const ASSISTANT_PLAN_COMPLETION_MESSAGE = [
-  "Plan completion:",
-  "Read every page of BOTH Plan and Progress, including the complete technical implementation plan; checklist marks do not establish completion.",
-  "Verify each agreed requirement against the preceding implementation, my request, accepted steering and the recorded evidence. Inspect the implementation, fix in-scope gaps and run relevant checks. Leave unrelated plans unchanged.",
-  "Full-tick (- [x]) each item the final proof covers and move unsupported or regressed ones back to - [~] or - [ ]. Then explicitly complete the plan with the plan helper when every requirement is verified and every checklist item is - [x], and report complete with the returned revisions; otherwise leave Plan active, record the specific gaps and verification evidence in its paired Progress document, and report wait, or report handoff for substantial necessary rework.",
-  "This turn checks the plan only: run no Deslop, UI pass or other pass. Once the plan is completed, Vibe64 runs the passes this chat ticks in Passes (After a plan) as their own turns.",
-  "Do not ask for permission merely to verify or complete verified work. Report findings, fixes, actual checks and anything unverified."
+  "Senior review of the plan:",
+  "Read every page of BOTH Plan and Progress, including the complete technical implementation plan, and follow the rules and choices recorded there.",
+  "Verify EVERY checklist item outside the plan's Passes section against the code as it is now, not only the open ones: marks and earlier records do not establish completion. Check each against my request, accepted steering and the evidence, inspect the implementation, fix what you find within the plan's scope, each fix proven by a test that failed first, and run relevant checks. Leave unrelated plans unchanged.",
+  "Run the plan's final checks once, now: the whole-project checks the plan or project states, such as one whole run of the test suite. No implementation turn ran them. Read their result, record it in Progress, and fix what they find within the plan's scope.",
+  "Full-tick (- [x]) each item the proof covers and move unsupported or regressed ones back to - [~] or - [ ].",
+  "End one of two ways. Done: every item outside Passes is - [x]. When the plan has Passes items, leave it active and report complete with the returned revisions: Vibe64 then runs each pass in its own turn and completes the plan after the last. Without Passes items, complete the plan with the plan helper and report complete with the returned revisions; your final reply is then the plan's one closing message: " + PLAN_CLOSING_MESSAGE + " Needs you: numbered questions, each with a recommended answer, in your final reply and in Progress; report wait. For substantial necessary rework, update the Technical details and Progress and report handoff.",
+  PLAN_STEP_ENDINGS,
+  "This turn reviews the plan only: run no pass. Do not ask for permission merely to verify or complete verified work."
 ].join(" ");
+
+/**
+ * What a plan's pass turn tells its agent, before the pass's request: the
+ * Passes item it runs, what it may fix, how it ends and what it reports.
+ * @param {{ title: string, item: string }} pass
+ * @param {{ last?: boolean, person?: boolean }} [options] last: no other Passes item is left
+ *   unticked; person: the person's message comes before the request
+ */
+function assistantPassInstructions(pass, { last = false, person = false } = {}) {
+  return [
+    `Plan pass: this turn runs ${pass.title}, the plan's Passes item “${pass.item}”, and only that pass; Vibe64 starts each other Passes item in its own turn.`,
+    "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId and workflow.stage, and read every page of BOTH Plan and Progress before working.",
+    "Fix what you find within this pass's scope, each fix proven by a test that failed first: the pass decides what you look for, not what you may fix. A review writes the failing test and then fixes the code; Deslop keeps its cleanups behaviour-neutral but fixes a real defect it finds as a separate fix with its own test.",
+    "Record in Progress, under this pass's title, one line saying what it fixed and proved. In Plan change only this item's tick (vibe64-helper plan write with the paired revisions); the server refuses any other Plan change, and Vibe64 completes the plan after its last pass.",
+    "End one of two ways, reported before your final response through vibe64-helper plan outcome with JSON on stdin: {messageId, turnId, stage, decision, explanation, progress, expectedRevision, expectedProgressRevision}, using the identity and revisions from your latest read. Done: everything within the scope is fixed and proven; full-tick (- [x]) this item, then report complete. Needs you: numbered questions, each with a recommended answer, in your final reply and in Progress; report wait.",
+    PLAN_STEP_ENDINGS,
+    ...(person ? ["The person's message comes before this pass's request below. When it answers this pass's questions, record each answer as a rule in Progress and finish the pass. When it asks for something else, do that as an ordinary request first, then finish the pass or report wait with its questions still open."] : []),
+    last
+      ? `This is the plan's last pass. When it is Done, your final reply is the plan's one closing message: ${PLAN_CLOSING_MESSAGE}`
+      : "Keep your final reply short: what this pass fixed and proved. Progress holds the details."
+  ].join(" ");
+}
 
 /** Senior's verification after a review an explicitly chosen Junior did, with no plan involved. */
 const ASSISTANT_SENIOR_VERIFICATION_MESSAGE = "Senior verification: Check the preceding review's findings and fixes against my request and accepted steering. Inspect the implementation and evidence, fix in-scope issues and run relevant checks. Report findings, fixes, actual checks and anything unverified.";
-
-/**
- * A plan completed during this request starts the after-plan passes: a workflow
- * request the chat runs them for, whose current plan is completed and is not
- * the plan it found already completed when it was admitted.
- * @param {object} request the saved routing request
- * @param {{ status: string, revision: string } | null} plan the current plan
- */
-function planCompletedDuringRequest(request, plan) {
-  const admitted = request?.afterPlan?.planAtAdmission;
-  return Boolean(request?.afterPlan) && plan?.status === "completed" &&
-    !(admitted?.status === "completed" && admitted.revision === plan.revision);
-}
 
 export {
   AFTER_PLAN_DEFAULT_PASSES,
@@ -173,10 +188,10 @@ export {
   ASSISTANT_SENIOR_VERIFICATION_MESSAGE,
   AUTO_SAVE_SETTING,
   afterPlanChoiceProblem,
-  afterPlanPassNotice,
   assistantAutoSaveNotice,
+  assistantPassInstructions,
   assistantPlanCompletionFollows,
   assistantWorkflowEnding,
   inAfterPlanOrder,
-  planCompletedDuringRequest
+  planPassNotice
 };

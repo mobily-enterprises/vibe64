@@ -21,6 +21,16 @@ const request = { messageId: "request-1", message: "Yes, implement it.", submiss
 const EVERY_PASS = { afterPlan: ["review", "security-pass", "data-pass", "quality-pass", "speed-pass", "ux-pass", "identity-pass", "ui-pass", "deslop"], autoSave: true };
 
 const completion = (turnId = "turn-1", state = "completed") => ({ payload: { agentRun: { active: false, state, providerTurnId: turnId } } });
+/**
+ * A lesson's main chat: its plans run no passes, so a pass the person asks for runs as its own turn,
+ * as it does in a temporary chat or Fix it with AI. Main chat's own passes join its plan
+ * (assistantPlanPasses.test.js).
+ */
+async function lessonFixture(t, ...args) {
+  const f = await fixture(t, ...args);
+  f.context.runtime.learningScope = { learnerId: "learner-1", attemptId: "attempt-1", noExercise: false };
+  return f;
+}
 
 test("project message attribution survives routing into native delivery", async t => {
   const f = await fixture(t, { mode: "senior" });
@@ -945,7 +955,7 @@ test("a goal switching tools requires ordinary Send before native goal admission
 for (const [role, refusal] of [["owner", null], ["member", "vibe64_main_chat_approval_required"]]) {
   test(`a migrated unsent ${role} request goes through fresh admission as its original actor`, async (t) => {
     const f = await fixture(t, { mode: "junior" });
-    const original = JSON.stringify({ schemaVersion: 6, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+    const original = JSON.stringify({ schemaVersion: 7, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
       messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
       assignments: { junior: f.assignments.junior }, settingsRevision: 1, submittedBy: { role, username: `original-${role}` } });
     f.metadata.assistant_routing_request = original;
@@ -974,7 +984,7 @@ for (const actorFields of [{}, { submittedBy: null }]) {
         return actor;
       }
     });
-    const original = JSON.stringify({ schemaVersion: 6, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+    const original = JSON.stringify({ schemaVersion: 7, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
       messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
       assignments: { junior: f.assignments.junior }, settingsRevision: 1, ...actorFields });
     f.metadata.assistant_routing_request = original;
@@ -995,7 +1005,7 @@ for (const actorFields of [{}, { submittedBy: null }]) {
 test("standalone admission can retry a migrated request without a signed-in actor", async (t) => {
   const f = await fixture(t, { mode: "junior" });
   f.context.vibe64User = null;
-  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 6, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 7, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
     messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
     assignments: { junior: f.assignments.junior }, settingsRevision: 1, submittedBy: null });
   await f.service.send("session-1", request, f.context);
@@ -1006,7 +1016,7 @@ test("standalone admission can retry a migrated request without a signed-in acto
 
 test("a migrated uncertain request can inspect admission without authorizing fresh inference", async (t) => {
   const f = await fixture(t, { mode: "junior" });
-  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 6, delivery: "uncertain", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 7, delivery: "uncertain", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
     messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
     assignments: { junior: f.assignments.junior }, attemptedMessageId: request.messageId, threadId: "retained-thread", settingsRevision: 1 });
   f.agent.resolveAssistantPurpose = async () => { throw new Error("No inference admission should run for receipt inspection"); };
@@ -1047,8 +1057,8 @@ test("malformed plan status is an actionable error, never inferred completion", 
 });
 
 for (const mode of ["auto", "senior", "junior"]) {
-  test(`explicit Deslop uses the configured Plan model directly from ${mode} without review`, async (t) => {
-    const f = await fixture(t, { mode });
+  test(`outside a chat whose plans run passes, explicit Deslop uses the configured Plan model directly from ${mode} without review`, async (t) => {
+    const f = await lessonFixture(t, { mode });
     const preferences = f.metadata.assistant_routing;
     await f.service.send("session-1", { ...request, message: "  DESLOP! " }, f.context);
     assert.equal(f.helperCalls(), 0);
@@ -1071,7 +1081,7 @@ for (const mode of ["auto", "senior", "junior"]) {
 }
 
 test("the Deslop button uses the configured planner despite a conversation's Junior override", async (t) => {
-  const f = await fixture(t, { mode: "junior" });
+  const f = await lessonFixture(t, { mode: "junior" });
   const saved = await f.configuration.read();
   await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
   f.metadata.assistant_routing = JSON.stringify({ mode: "junior", afterPlan: ["review", "security-pass", "deslop"], override: f.assignments.junior });
@@ -1081,7 +1091,7 @@ test("the Deslop button uses the configured planner despite a conversation's Jun
 });
 
 test("Deslop refuses an unavailable or tool-less Senior model instead of falling back to Junior", async (t) => {
-  const f = await fixture(t, { mode: "junior" });
+  const f = await lessonFixture(t, { mode: "junior" });
   f.connections.set("codex:openai", { available: false, current: null, history: [] });
   await assert.rejects(f.service.send("session-1", { ...request, message: "Deslop" }, f.context), /unavailable/);
   assert.equal(f.sends.length, 0);
@@ -1138,9 +1148,9 @@ for (const [message, scope] of [
   ["UI pass: the whole app", "Run the UI pass on the whole app."]
 ]) {
   for (const mode of ["auto", "senior", "junior"]) {
-    test(`"${message}" from ${mode} runs Genesis's ui-pass task on the configured Senior model with its scope as the request`, async (t) => {
+    test(`outside a chat whose plans run passes, "${message}" from ${mode} runs Genesis's ui-pass task on the configured Senior model with its scope as the request`, async (t) => {
       // Every pass is ticked After a plan: an explicit UI pass still runs alone, with no pass after it.
-      const f = await fixture(t, { mode, ...EVERY_PASS });
+      const f = await lessonFixture(t, { mode, ...EVERY_PASS });
       const preferences = f.metadata.assistant_routing;
       await f.service.send("session-1", { ...request, message }, f.context);
       assert.equal(f.helperCalls(), 0);
@@ -1164,7 +1174,7 @@ for (const [message, scope] of [
 }
 
 test("a UI pass from Custom runs Genesis's ui-pass task on the Custom model", async (t) => {
-  const f = await fixture(t, null);
+  const f = await lessonFixture(t, null);
   const selection = { ...f.assignments.senior, modelId: "gpt-6-sol", variantId: "low" };
   f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: selection, ...EVERY_PASS });
   await f.service.send("session-1", { ...request, message: "UI pass: the bookings pages" }, f.context);
@@ -1180,7 +1190,7 @@ test("a UI pass from Custom runs Genesis's ui-pass task on the Custom model", as
 });
 
 test("a UI pass refuses an unavailable or tool-less Senior model instead of falling back to Junior", async (t) => {
-  const f = await fixture(t, { mode: "junior", ...EVERY_PASS });
+  const f = await lessonFixture(t, { mode: "junior", ...EVERY_PASS });
   f.connections.set("codex:openai", { available: false, current: null, history: [] });
   await assert.rejects(f.service.send("session-1", { ...request, message: "UI pass" }, f.context), /unavailable/);
   assert.equal(f.sends.length, 0);
@@ -1191,7 +1201,7 @@ test("a UI pass refuses an unavailable or tool-less Senior model instead of fall
 });
 
 test("a UI pass with uncertain admission retains its task and checks the receipt without resending", async (t) => {
-  const f = await fixture(t);
+  const f = await lessonFixture(t);
   f.failAdmission();
   const input = { ...request, message: "UI pass: the whole app" };
   await assert.rejects(f.service.send("session-1", input, f.context), /Lost admission/);
@@ -1203,7 +1213,7 @@ test("a UI pass with uncertain admission retains its task and checks the receipt
 });
 
 test("a UI pass sent as genesisTask goes to Genesis verbatim with the configured planner despite a Junior override", async (t) => {
-  const f = await fixture(t, { mode: "junior" });
+  const f = await lessonFixture(t, { mode: "junior" });
   const saved = await f.configuration.read();
   await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
   f.metadata.assistant_routing = JSON.stringify({ mode: "junior", afterPlan: ["review", "security-pass", "deslop"], override: f.assignments.junior });
@@ -1237,9 +1247,9 @@ test("a UI pass is never steered into a running coder or an unfinished goal", as
   assert.equal(f.sends.length, 0);
 });
 
-test("Run in the Passes list sends Genesis's pass in its own Senior turn, as the person's message", async (t) => {
+test("in a lesson, Run in the Passes list sends Genesis's pass in its own Senior turn, as the person's message", async (t) => {
   // Every pass is ticked After a plan: a pass still runs alone, with no pass after it.
-  const f = await fixture(t, { mode: "junior", ...EVERY_PASS });
+  const f = await lessonFixture(t, { mode: "junior", ...EVERY_PASS });
   const message = "Quality pass the whole app.";
   await f.service.send("session-1", { ...request, genesisTask: "quality-pass", message }, f.context);
   assert.equal(f.helperCalls(), 0);
@@ -1257,8 +1267,8 @@ test("Run in the Passes list sends Genesis's pass in its own Senior turn, as the
   assert.equal(f.notices.size, 0, "no pass starts after a pass");
 });
 
-test("Start on the Master pass sends Genesis's request in its own Senior turn, or Genesis's reason when it cannot run", async (t) => {
-  const f = await fixture(t, { mode: "junior", ...EVERY_PASS });
+test("in a lesson, Genesis's Master pass request runs in its own Senior turn, or Genesis's reason when it cannot run", async (t) => {
+  const f = await lessonFixture(t, { mode: "junior", ...EVERY_PASS });
   const reason = "This Genesis source (genesis-compiler 1.10.21) has no Master pass.";
   const master = f.genesis.master;
   f.genesis.master = { ...master, unavailable: reason, passes: [], runs: [] };
@@ -1296,7 +1306,7 @@ test("a pass is refused politely while a turn or goal runs, and a task Genesis d
   assert.equal(f.sends.length, 0);
 });
 
-test("a pass the Genesis serving the project cannot run is refused by name with Genesis's reason; a typed Deslop still runs", async (t) => {
+test("a pass the Genesis serving the project cannot run is refused by name with Genesis's reason; a typed Deslop still runs as its own turn", async (t) => {
   const f = await fixture(t, { mode: "senior" });
   const reason = "This Genesis source (genesis-compiler 1.10.15) cannot run passes.";
   f.genesis.unavailable = reason;
@@ -1321,7 +1331,7 @@ test("a question about the UI pass is ordinary chat, not a UI pass", async (t) =
 });
 
 test("Deslop with uncertain admission retains its task and checks the receipt without resending", async (t) => {
-  const f = await fixture(t);
+  const f = await lessonFixture(t);
   f.failAdmission();
   const input = { ...request, message: "Deslop" };
   await assert.rejects(f.service.send("session-1", input, f.context), /Lost admission/);
@@ -1330,6 +1340,19 @@ test("Deslop with uncertain admission retains its task and checks the receipt wi
   assert.equal(f.sends.length, 1);
   assert.equal(f.state().task, "deslop");
   assert.equal(f.state().status, "working");
+});
+
+test("a plan's pass with uncertain admission keeps its pass and checks the receipt without resending or adding it again", async (t) => {
+  const f = await fixture(t);
+  f.failAdmission();
+  const input = { ...request, message: "Deslop" };
+  await assert.rejects(f.service.send("session-1", input, f.context), /Lost admission/);
+  const plan = (await readWorkPlan(f.context)).text;
+  f.agent.inspectMessageAdmission = async () => ({ admission: "accepted", turnId: "turn-1" });
+  await f.restart().send("session-1", input, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.deepEqual([f.state().stage, f.state().pass.id, f.state().status], ["pass", "deslop", "working"]);
+  assert.equal((await readWorkPlan(f.context)).text, plan, "the retry adds nothing to the plan");
 });
 
 test("a finished turn identifies steering rejected before admission for same-message send recovery", async t => {

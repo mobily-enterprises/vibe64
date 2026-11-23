@@ -1,5 +1,5 @@
-// Where the next after-plan passes start: one commit per session, which the
-// passes' requests name so each judges only the changes since then.
+// Where the next plan's changes start: one commit per session, which a plan's passes over "the
+// plan's changes" name in their requests so each judges only the changes since then.
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runSourceCommand } from "@local/vibe64-runtime/server/sourceCommand";
 
@@ -24,7 +24,7 @@ async function sourceCommit(sourceRoot, args) {
 const sessionHead = (session) => sourceCommit(sessionSourcePath(session), ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]);
 
 /**
- * The commit the session's next after-plan passes start from: the one it recorded, while it is
+ * The commit the session's next plan's changes start from: the one it recorded, while it is
  * still in HEAD's history; otherwise where the session's work leaves the canonical history it last
  * saw (the merge base of HEAD with that commit). A Save that reconciles, or an Update, rebases the
  * session's work, leaving a recorded commit outside that history, where a diff from it would hold
@@ -42,8 +42,8 @@ async function afterPlanBase(session) {
 }
 
 /**
- * Records the session source's HEAD as where the next after-plan passes start: when a chain of
- * them ends, and when a plan becomes current without one recorded (onlyWhenUnset).
+ * Records the session source's HEAD as where the next plan's changes start: when a plan's last
+ * step is done, and when a plan becomes current without one recorded (onlyWhenUnset).
  * @param {{ writeMetadataValue: Function, readMetadataValue: Function }} store
  * @param {{ sessionId: string, metadata?: Record<string, string> }} session
  * @param {{ onlyWhenUnset?: boolean }} [options]

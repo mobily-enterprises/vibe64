@@ -29,48 +29,75 @@ A conversation request only gets an answer: its agent reports no outcome, Vibe64
 records the reply as finished when the turn ends, and no Status message appears.
 
 A request that needs a plan always gets one, and you never have to ask for
-Senior. If Router sends such a request to Junior (or treats it as conversation),
-the agent still writes the plan and sends it to the plan helper; creating a plan,
-changing its scope, reopening or archiving it is Senior's, so the helper hands
-the same request, with that draft, to Senior instead of saving it. A **Senior is
-saving the plan.** notice appears, the chat shows the automatic **Senior saves
-the plan.** message, and as soon as the first turn ends Senior saves or corrects
-the plan in a Planning turn of its own, asking first when a current plan exists
-and you haven't said whether to update it or archive and replace it. Planning
-then waits for your go-ahead as usual. Router's mistake costs one extra turn.
-**Stop** during the first turn hands nothing on. This happens only in Auto: in a
-Junior chat, which you chose, Junior still can't create a plan and tells you to
-switch **Chat mode** to **Senior** or **Auto** and ask again.
+Senior. Router decides from your latest message: an earlier "don't change
+anything yet", or a question answered before, never makes a later "make the
+plan" a conversation, and planning always goes to Senior, whatever role Router
+names. If a plan request still reaches Junior (or a turn that may only answer),
+it writes nothing, not even a draft: it hands the request over and ends its
+turn with one short line. A **Senior is making the plan.** notice appears, the
+chat shows the automatic **Senior makes the plan.** message, and as soon as the
+first turn ends Senior writes the plan from your request and the conversation in
+a Planning turn of its own, asking first when a current plan exists and you
+haven't said whether to update it or archive and replace it. Planning then waits
+for your go-ahead as usual. A plan Junior writes anyway is refused and handed
+over the same way, without its text. **Stop** during the first turn hands
+nothing on. This happens only in Auto: in a Junior chat, which you chose, Junior
+writes nothing and tells you that plans need **Senior** or **Auto**, which you
+choose in **Chat mode**.
 
 At planning, implementation and review, the working agent reports one of four
 outcomes:
 
 - **Continue** keeps its stage and role while authorised work or checks remain.
-- **Handoff** reports finished implementation. When Junior implemented the
-  current plan, Senior then checks the plan in a turn of its own: it reads every
-  page of Plan and Progress, verifies each requirement, fixes in-scope gaps and
-  completes the plan, or leaves it active with the gaps recorded in Progress. If
+- **Handoff** reports finished implementation. Vibe64 refuses Junior's handoff
+  while an item of the plan is still not done (`- [ ]`), naming it: the plan
+  stays in Implementation until every item is built. When Junior implemented the
+  current plan, Senior then reviews the plan in a turn of its own (**Senior
+  reviews the plan.**): it reads every page of Plan and Progress, verifies every
+  item outside the plan's Passes section against the code as it is now, fixes
+  in-scope gaps, each with a test that failed first, and ticks each item the
+  proof covers, or asks you numbered questions and waits. If
   Senior discovers substantial necessary rework, Senior updates the technical
   plan and Progress within the agreed outcome and hands that work back to Junior.
-  Junior finishes it, then Senior checks the plan again. Without a plan, or when
+  Junior finishes it, then Senior reviews the plan again. Without a plan, or when
   Senior implemented it, the work ends with that turn: no review, Deslop or UI
   pass runs, and [Automatically save changes](chat-settings.md) saves it.
 - **Wait** retains the stage for a real blocker, your required decision or an
   explicit pause. A status question or clarification is incorporated into the
   ongoing work; it does not abandon review.
-- **Complete** is available only to Senior. Senior explicitly completes an
-  involved plan after verifying it; once its final explanation is delivered, the
-  passes ticked under **After a plan** in
-  [Passes](passes.md#choose-the-passes-that-run-after-a-plan) run, each in its
-  own turn, then Auto archives the plan and saves the work.
+- **Complete** is available only to Senior. Senior's review is done once every
+  item outside the plan's Passes section is proven: a plan with passes then
+  moves on to them, each in its own Senior turn (see [A plan's
+  passes](passes.md#a-plans-passes)), and after the last one Vibe64 completes
+  and archives the plan and saves the work; Senior completes a plan without
+  passes itself.
 
-After implementation, Auto adds one turn only in one case: Junior implemented
-an involved plan and that plan is still active, so Senior checks and completes
-it. That check is not a pass, has no setting and runs no pass. Work done without
-a plan is no longer reviewed, deslopped or UI-passed automatically: it ends with
-its implementation, saved when Automatically save changes is on. Ask for those checks when you want
-them, from [Passes](passes.md), through the Master pass, or by typing the
-request in chat, such as **Deslop**, **UI pass** or "Review my changes".
+Once you approve a plan, it runs to the end. Junior works its items in the
+plan's order, doing one earlier only when the plan says another depends on it,
+and recording why in Progress. It never starts the plan's final checks (the
+whole-project checks, such as one whole run of the test suite): Senior's review
+runs them once, after every item is built, and reads and records their result.
+When the plan changes during Implementation, because Junior hands an item to
+Senior to correct or you ask for a change while the implementation waits for
+you, the chat says **Senior is changing the plan. Implementation continues once
+the change is saved.** and shows **Senior changes the plan.**; Senior changes
+the plan in a turn of its own, and once the change is saved Vibe64 continues the
+implementation in a new turn without you asking (**Plan changed. Implementation
+continues.**). If your request replaces the plan with a new one instead, the
+new plan waits for your go-ahead. Only a question for you or **Stop** pauses
+the plan; **Continue implementation** resumes it from the plan as it now is,
+including items ticked or changed meanwhile. A turn that builds another item
+starts a fresh allowance of automatic steps. The line above the message box
+says where the plan is; see [The plan's status line](plans.md#the-plans-status-line).
+
+After implementation, Auto adds Senior's review only in one case: Junior
+implemented an involved plan and that plan is still active. That review is not a
+pass and runs none; the plan's own Passes section holds its passes. Work done
+without a plan is not reviewed, deslopped or UI-passed automatically: it ends
+with its implementation, saved when Automatically save changes is on. Ask for
+those checks when you want them, from [Passes](passes.md) or by typing them in
+chat, such as **Deslop**, **UI pass** or **Run the Review pass**: they run in a
+small plan of their own.
 
 A turn that asks you a question (numbered questions or **Possible answers**
 choices, the replies for which the composer shows answer controls) always waits
@@ -78,12 +105,14 @@ for your answer, whatever outcome the agent reported, including when the agent
 adds a short message after the questions, such as "I'll continue once you've
 answered." The composer and this wait read the same questions: the newest among
 the agent's last ten messages since your latest message. Auto never
-moves to Senior's check of the plan, continues or completes past an open question. The notice
+moves to Senior's review of the plan, continues or completes past an open question. The notice
 says **Waiting for your answer. Reply in chat to continue.** and offers no stage
 **Continue** action; reopening the session or recovery after a restart sends
 nothing. Your reply is a new request that Router routes as usual, so answering
-"Yes, fix them" starts implementation, which, for a plan, Senior then checks. At
-Planning with an active saved plan, **Implement plan** remains available.
+"Yes, fix them" starts implementation, which, for a plan, Senior then reviews.
+A reply to a plan's pass that asked you questions goes straight back to that
+pass instead, on Senior, without Router. At Planning with an active saved plan,
+**Implement plan** remains available.
 
 The agent's concrete explanation appears as an ordinary **Status** message in
 chat. It is evidence of the reported work, not independent verification.
@@ -101,8 +130,8 @@ Progress but cannot remove agreed requirements.
 Senior records the deferred requirement and its agreed timing under **Deferred
 work** in Progress before removing it from the current acceptance scope, keeping
 the completed implementation evidence. When every remaining item is checked and
-supported by evidence, Senior completes the revised plan, which starts the
-passes ticked under **After a plan**. Missing resources for the explicitly
+supported by evidence, Senior's review is done and the revised plan moves on to
+its passes. Missing resources for the explicitly
 deferred work do not block that completion. Remaining implementation continues;
 a pause or missing evidence can still stop it. Ordinary draft-plan edits do not
 complete a plan just because all their items are checked.
@@ -139,26 +168,28 @@ explain the retained stage and blocker and offer to stop work or send your reque
 continuation through its existing actions. An explanation or offer alone does not
 authorise another turn. Colleague's watches treat Waiting as needing attention.
 
-In Auto, only Senior completes a plan, even when both roles use the same model.
-When Junior implemented it, Senior checks it in a turn of its own, which runs no
+In Auto, only Senior reviews a plan, even when both roles use the same model.
+When Junior implemented it, Senior reviews it in a turn of its own, which runs no
 pass. Junior's implementation turns before it end by saying what changed and
 what was checked, without asking you to try or publish the work; see [How each
-turn ends](chat-settings.md#how-each-turn-ends). Once the plan is completed, the
-passes ticked under **After a plan** in
-[Passes](passes.md#choose-the-passes-that-run-after-a-plan) run, each in its
-own Senior turn over the plan's changes, with a notice such as **Security pass
-started automatically after the plan (Passes: After a plan)**; then the plan is
-archived and **Automatically save changes** runs **Save**. **Review** and
-**Security pass** always run; **Data pass**, **Quality pass**, [UI
-pass](ui-pass.md) and **Deslop** are ticked for new chats. Work without a plan
+turn ends](chat-settings.md#how-each-turn-ends). Once Senior has reviewed the
+plan, each item in its Passes section runs in its own Senior turn, over the
+plan's changes, with a notice such as **Security pass started: the plan's next
+pass (Security pass: the plan's changes)**; after the last one the plan is
+completed and archived and **Automatically save changes** runs **Save**. A new
+plan's Passes start with the ticks under **After a plan** in
+[Passes](passes.md#choose-the-passes-each-new-plan-starts-with): **Review** and
+**Security pass** always; **Data pass**, **Quality pass**, [UI
+pass](ui-pass.md) and **Deslop** for new chats. **Stop** during a pass pauses
+the plan at that pass; **Continue** in Passes runs it again. Work without a plan
 ends after its implementation, with no Senior turn, and goes straight to
 **Save**. Nothing runs when a turn ends. Senior, Junior and Custom work the
-same way, except that only a Senior chat completes a plan; see [Choose what
-happens once work is finished](chat-settings.md). Colleague can explain
-automatic save and the passes after a plan and, for the owner, change them
-through the chat mode action.
+same way, except that only a Senior chat reviews a plan and runs its passes;
+see [Choose what happens once work is finished](chat-settings.md). Colleague
+can explain automatic save and a plan's passes and, for the owner, change the
+**After a plan** ticks through the chat mode action.
 
-Unfinished checks continue in Senior's check of the plan; substantial necessary
+Unfinished checks continue in Senior's review of the plan; substantial necessary
 rework returns to Junior and comes back to Senior. A changed product requirement
 needs your decision. Planning-only work waits for your request to implement it.
 
@@ -182,7 +213,7 @@ specific alternatives, not a generic “resume” command. **View plan** opens t
 existing Current plan dialog without sending anything. To revise the saved plan,
 send the requested changes through the composer. **Implement plan** sends
 a new human request authorizing implementation within the saved plan's scope;
-it starts Junior implementation, followed by Senior's check of the plan. Your
+it starts Junior implementation, followed by Senior's review of the plan. Your
 composer draft and attachments remain untouched. The button cannot reinterpret
 the original planning request or become another automatic planning continuation.
 
@@ -209,7 +240,7 @@ Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.
 Junior updates Progress and existing checklist marks as work goes: a half tick once an item is built, a full tick once
 the plan's final checks prove it (see [Checklist marks](plans.md#checklist-marks)). Only Senior can manage the plan’s
-lifecycle and explicitly mark it Completed after verifying the evidence, and only once every item is proven.
+lifecycle and explicitly mark a plan without passes Completed after verifying the evidence, and only once every item is proven; Vibe64 completes a plan with passes after its last pass.
 
 If an automatic handoff failed before its message was sent, you can type a new
 request and use the ordinary **Send** button (or speak a new request). Sending

@@ -379,8 +379,8 @@ lease before archival can detach the session tree.
 
 People can create, select, inspect, and archive sessions. A new session receives
 its own Git source and stable identity. Creation starts main chat in Auto with
-automatic save on and the default passes after a plan (`resolveSessionStart`'s default mode and
-`ASSISTANT_FINISHING_DEFAULTS`); a lesson starts in Junior with save off and no pass after a plan.
+automatic save on and the default After a plan ticks for new plans' Passes (`resolveSessionStart`'s default mode and
+`ASSISTANT_FINISHING_DEFAULTS`); a lesson starts in Junior with save off and no plan passes.
 Colleague can also rename, archive and retry preparation through those same
 session actions and their current access checks. Its result projection contains
 bounded session identity, lifecycle and preparation status rather than private

@@ -15,6 +15,7 @@ import {
   passRecommendation,
   readProjectPassRecords
 } from "../../packages/vibe64-terminals/src/server/projectPasses.js";
+import { manageWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 
 const execFileAsync = promisify(execFile);
 const DAY = 24 * 60 * 60 * 1000;
@@ -29,14 +30,17 @@ async function temporaryDirectory(t, prefix) {
 
 // A project whose Genesis list reports lastRuns[id] for each pass and, when its own Genesis runs no
 // pass, unavailable as the reason, and whose session source answers every commit count with
-// commits(since).
-async function project(t, { lastRuns = {}, commits = () => 60, unavailable = null } = {}) {
+// commits(since); Main chat's open plan is plan, and its saved routing request request.
+async function project(t, { lastRuns = {}, commits = () => 60, unavailable = null, plan = "", request = null } = {}) {
   const stateRoot = await temporaryDirectory(t, "v64-passes-");
   const clock = { now: START };
   const counted = [];
   const listed = [];
+  const store = { paths: (sessionId) => ({ sessionRoot: path.join(stateRoot, "sessions", sessionId), conversationsRoot: path.join(stateRoot, "sessions", sessionId, "conversations") }) };
+  if (plan) await manageWorkPlan({ runtime: { store }, session: { sessionId: "session-1" } }, { operation: "new", text: plan }, "senior");
+  const metadata = request ? { assistant_routing_request: JSON.stringify(request) } : {};
   const passes = createProjectPasses({
-    sessionContext: async (sessionId) => ({ runtime: { stateRoot }, session: { sessionId, metadata: {} } }),
+    sessionContext: async (sessionId) => ({ runtime: { stateRoot, store }, session: { sessionId, metadata } }),
     listPasses: async (options) => {
       listed.push(options);
       return {
@@ -74,8 +78,20 @@ test("the Passes list is Genesis's passes, each with its last completed run from
   assert.deepEqual(f.listed, [{ projectRoot: "" }], "Genesis lists the passes for the session's source");
   assert.equal(result.unavailable, null, "the Genesis serving the project runs passes");
   assert.deepEqual(result.byId.deslop.runs, GENESIS_PASSES[0].runs, "each pass carries the runs Genesis offers");
-  assert.deepEqual(result.master, { ...GENESIS_MASTER_PASS, commitsSince: 120 },
-    "the Master pass, never completed, with the whole history's count, which it shares");
+  assert.deepEqual(result.master, { passes: GENESIS_MASTER_PASS.passes }, "Genesis's Master pass gives only the order several passes run in");
+  assert.equal(result.plan, null, "no open plan, no plan's passes");
+});
+
+test("the Passes list shows the open plan's passes, each with its state from the request at that pass", async (t) => {
+  const plan = "# Bookings\n\n- [x] Book a slot\n\n## Passes\n\n- [x] Review: the plan's changes\n- [ ] Deslop: whole app\n";
+  const at = { stage: "pass", status: "waiting", awaitingAnswer: true, pass: { id: "deslop", title: "Deslop", item: "Deslop: whole app", request: "Deslop the whole app." } };
+  const result = await (await project(t, { plan, request: at })).read();
+  assert.deepEqual(result.plan, { title: "Bookings", atPasses: true, passes: [
+    { id: "review", title: "Review", scope: "the plan's changes", item: "Review: the plan's changes", done: true, state: "done" },
+    { id: "deslop", title: "Deslop", scope: "whole app", item: "Deslop: whole app", done: false, state: "needs-you" }
+  ] });
+  assert.equal((await (await project(t, { plan: plan.replace("## Passes\n\n- [x] Review: the plan's changes\n- [ ] Deslop: whole app\n", "") })).read()).plan, null,
+    "a plan without passes shows none");
 });
 
 test("a project whose own Genesis runs no pass lists its passes with Genesis's reason and suggests none", async (t) => {

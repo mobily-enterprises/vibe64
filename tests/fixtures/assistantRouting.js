@@ -16,6 +16,7 @@ import { sessionAgentManagerDefaults } from "./sessionAgentManagerDefaults.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { ASSISTANT_FINISHING_DEFAULTS } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "./genesisPasses.js";
+import { createAgentSessionCommandService } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 
 const { workPlanPath } = __testables;
 const run = promisify(execFile);
@@ -84,7 +85,9 @@ async function fixture(t, preferences = { mode: "auto" }, {
   beforeExclusive,
   readyPlan = true,
   onPlanCompleted,
-  source: withSource = false
+  source: withSource = false,
+  // false: a temporary chat, where Auto and plans are unavailable
+  allowAuto = true
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-lifecycle-"));
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -215,7 +218,7 @@ async function fixture(t, preferences = { mode: "auto" }, {
   const writes = createWritesWhileAssistantWorks();
   // Genesis's pass list for the session's source; a test may change it.
   const genesis = { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
-  const routingOptions = { systemRoot: root, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
+  const routingOptions = { systemRoot: root, allowAuto, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
     writesWhileAssistantWorks: writes,
     listPasses: async () => genesis,
     open: async (_id, options) => ({ ...context, ...options }),
@@ -257,6 +260,33 @@ async function fixture(t, preferences = { mode: "auto" }, {
     failAdmission: (value = true) => { failAdmission = value; }, state: () => JSON.parse(metadata.assistant_routing_request || "null") };
 }
 export { fixture, planDocument, publishPlanFixture };
+
+/** The bound plan command, as the session's agent runs it, inside the request's own native turn. */
+async function planCommands(f) {
+  f.context.runtime.store.readSessionSourceDescriptor = async () => ({ sessionId: "session-1", metadata: f.source?.metadata ||
+    { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: `${f.context.runtime.stateRoot}/sessions/active/session-1/source` } });
+  const handoffs = [];
+  const commands = createAgentSessionCommandService({ logger: silentLogger, publishSessionChanged: async () => {}, project: {
+    readCurrentProject: async () => ({ slug: "fixture", projectRoot: f.context.runtime.stateRoot }),
+    createSessionStore: async () => f.context.runtime.store,
+    runInProjectContext: async (_slug, operation) => operation()
+  }, reportWorkflowOutcome: (id, input) => f.service.recordOutcome(id, input, f.context),
+  handPlanToSenior: (id, input) => { handoffs.push(input); return f.service.handPlanToSenior(id, input, f.context); } });
+  await commands.bindSession("session-1", { wrapperHostDir: f.context.runtime.stateRoot });
+  async function plan(input) {
+    const readNative = f.agent.sessionState;
+    f.agent.sessionState = async () => ({ turn: { active: true, id: f.state().turnId } });
+    try {
+      return await commands.managePlan("session-1", input);
+    } finally { f.agent.sessionState = readNative; }
+  }
+  const revisions = async () => {
+    const current = await readWorkPlan(f.context);
+    return { expectedRevision: current?.revision || "", expectedProgressRevision: current?.progressRevision || "" };
+  };
+  return { plan, handoffs, revisions };
+}
+export { planCommands };
 
 // Report through the production workflow owner as an active native agent would.
 export async function reportOutcome(f, decision, { progress = true, involved = false, explanation = 'Recorded concrete work and checks.', ...extra } = {}) {

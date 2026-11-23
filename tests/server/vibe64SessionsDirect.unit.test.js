@@ -4988,7 +4988,7 @@ test("credit exhaustion permits an authorized assistant change without replaying
         modelId: "opus", variantId: "medium", catalogRevision: `sha256:${"a".repeat(64)}` };
       const next = { ...current, engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra" };
       const delivery = status === "sent" ? "accepted" : status.split("_").at(-1);
-      const original = { schemaVersion: 6, status: "working", delivery, workflow: true,
+      const original = { schemaVersion: 7, status: "working", delivery, workflow: true,
         stage: status.startsWith("review") ? "review" : status.startsWith("planning") ? "planning" : "implementation",
         messageId: "original-request", attemptedMessageId: "original-continuation", threadId: "original-thread",
         deliverySelection: current, review: true, resolvedMode: "junior", error: "Claude has no active turn for this message.",
@@ -5201,7 +5201,7 @@ test("a Custom chat's after-plan choice saves only that choice, after a catalogu
   const custom = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
     modelId: "gpt-6-sol", modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
   // The handoff turn has reported; the turn after it is being prepared.
-  const handoff = { schemaVersion: 6, mode: "custom", status: "working", delivery: "accepted", workflow: true, messageId: "message-1",
+  const handoff = { schemaVersion: 7, mode: "custom", status: "working", delivery: "accepted", workflow: true, messageId: "message-1",
     outcome: { decision: "handoff", turnId: "turn-1" }, turnId: "turn-1" };
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
     assistant_selection: JSON.stringify(custom), assistant_routing_request: JSON.stringify(handoff),
