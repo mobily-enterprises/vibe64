@@ -302,7 +302,10 @@ async function fixture(t, { scopedConversations = false } = {}) {
     accountStatus: async () => behavior.account,
     credentialHome: { home: root }, recordGitActor: async () => ({ ok: true }), connectionStatus: async () => true,
     createProcess: async (options) => {
+      // interrupts: Claude's interrupt controls the process received (a person's Stop ends the turn
+      // with one and keeps the process; stopped says whether the process itself was stopped).
       const native = { options, executionId: `test-${processes.length}`, command: options.command, stopped: false, stopAllowed: true,
+        interrupts: 0,
         initialization: { models: [{ value: "sonnet", supportedEffortLevels: ["low", "high"] }, { value: "haiku", supportedEffortLevels: [] }] },
         async stop() { this.stopped = this.stopAllowed; return { exited: this.stopped, scopeEmpty: this.stopped }; },
         client: { async request(request) {
@@ -310,6 +313,7 @@ async function fixture(t, { scopedConversations = false } = {}) {
           return request.subtype === "get_context_usage"
             ? (behavior.contextUsage || { totalTokens: 1000, maxTokens: 1_000_000, autoCompactThreshold: 967_000, model: "sonnet" }) : {};
         }, interrupt: async () => {
+          native.interrupts++;
           await options.onEvent({ type: "result", subtype: "success", terminal_reason: "aborted_streaming", result: "" });
           return {};
         }, async send(message, input) {
@@ -589,20 +593,29 @@ test("Claude compaction status is scoped to the active conversation and clears a
   await event({ type: "system", subtype: "status", status: "compacting" });
   await f.provider.interruptTurn(f.context);
   assert.equal((await state()).turn.phase, "");
+  // Stop ends the turn as Esc does in Claude Code and keeps the process, which can still report.
+  assert.deepEqual([f.processes[0].interrupts, f.processes[0].stopped], [1, false]);
   await event({ type: "system", subtype: "status", status: "compacting" });
-  assert.equal((await state()).turn.phase, "", "A stopped process cannot restore compaction");
+  assert.equal((await state()).turn.phase, "", "A stopped turn cannot restore compaction");
   await f.provider.sendMessage(f.context, { message: "Continue", messageId: "compact-continue" });
   assert.equal((await state()).turn.phase, "");
-  const nextEvent = f.processes[1].options.onEvent;
+  assert.equal(f.processes.length, 1, "the next message goes to the process the Stop kept");
+  const nextEvent = f.processes[0].options.onEvent;
   await nextEvent({ type: "system", subtype: "status", status: "compacting" });
   await nextEvent({ type: "result", subtype: "error_during_execution", is_error: true, errors: ["Provider unavailable"] });
   await (await f.open()).wait();
   assert.equal((await state()).turn.phase, "");
 });
 
+// A Stop keeps the process when Claude ends the turn on its interrupt. When Claude does not (here it
+// refuses the interrupt), Stop stops the process instead, and that stop needs its exit proof.
 test("Claude stop requires process exit proof and resume keeps the native conversation", async (t) => {
   const f = await fixture(t);
   const initial = await f.provider.sendMessage(f.context, { message: "Go", messageId: "go" });
+  f.processes[0].client.interrupt = async () => {
+    f.processes[0].interrupts++;
+    throw new Error("Claude did not answer the interrupt.");
+  };
   f.processes[0].stopAllowed = false;
   await assert.rejects(f.provider.interruptTurn(f.context), /exit has not been confirmed/u);
   let unconfirmed;
@@ -616,6 +629,8 @@ test("Claude stop requires process exit proof and resume keeps the native conver
   f.processes[0].stopAllowed = true;
   await assert.doesNotReject(() => f.provider.interruptTurn(f.context), "Stop retries native cleanup");
   assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
+  assert.equal(f.processes[0].stopped, true, "the retried Stop proved the process exit");
+  assert.ok(f.processes[0].interrupts >= 1, "Stop asked Claude to end the turn before stopping the process");
   await assert.doesNotReject(() => f.provider.sendMessage(f.context, { message: "Continue", messageId: "continue" }),
     "Confirmed Stop permits a new input");
   assert.equal(f.processes[1].options.sessionId, initial.thread.id);
@@ -1049,7 +1064,8 @@ test("Claude automatic continuation restores Main activity and Stop while loggin
   assert.ok(f.written.some(message => message.text === "private continued answer marker"));
   const interrupted = await f.provider.interruptTurn(f.context);
   assert.equal(interrupted.interrupted, true);
-  assert.equal(f.processes[0].stopped, true);
+  // Stop ends the continued turn with Claude's interrupt, as Esc does, and keeps the process.
+  assert.deepEqual([f.processes[0].interrupts, f.processes[0].stopped], [1, false]);
   assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
   assert.ok(f.diagnostics.some(value => value.stage === "continued"));
   assert.ok(f.diagnostics.some(value => value.stage === "background_tasks" && value.backgroundTasks === 1));
@@ -1080,8 +1096,10 @@ test("Claude conversations work concurrently and stopping one leaves the other a
   const temporaryProcess = f.processes.find(process => process.options.sessionId === temporary.conversationId);
   const mainProcess = f.processes.find(process => process !== temporaryProcess);
   await f.provider.interruptTurn(f.context);
-  assert.equal(mainProcess.stopped, true);
-  assert.notEqual(temporaryProcess.stopped, true);
+  // Stop ends Main's turn with Claude's interrupt and keeps its process; the temporary chat is untouched.
+  assert.deepEqual([mainProcess.interrupts, mainProcess.stopped], [1, false]);
+  assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
+  assert.deepEqual([temporaryProcess.interrupts, temporaryProcess.stopped], [0, false]);
   assert.equal((await f.provider.readConversation(f.context, { conversationId: temporary.conversationId })).status, "inProgress");
   await temporaryProcess.options.onEvent({ type: "result", subtype: "success", result: "Temporary completed" });
   assert.equal((await f.provider.waitForConversationTurn(f.context, { conversationId: temporary.conversationId })).text, "Temporary completed");
@@ -2523,14 +2541,19 @@ test("main Claude Stop remains available while the original goal acknowledgement
   } finally { clearTimeout(stopDeadline); }
   assert.equal(stopped.interrupted, true);
   assert.equal(stopped.thread.id, native.options.sessionId);
-  assert.equal(native.stopped, true, "the original managed stop is confirmed without a goal acknowledgement");
+  // Stop ends the turn as Esc does and keeps the process: it withdraws the goal Claude has not
+  // begun, so Claude never runs it, and interrupts once, without a goal acknowledgement.
+  assert.deepEqual([native.interrupts, native.stopped], [1, false], "the Stop is confirmed without a goal acknowledgement");
+  assert.deepEqual(native.requests.filter(request => request.subtype === "cancel_async_message").map(request => request.message_uuid),
+    [inputs[0].messageId], "Stop withdraws the unacknowledged goal input");
   const result = await goalResult;
   assert.equal(result.value, undefined);
   assert.equal(result.error?.code, "assistant_claude_turn_failed");
-  assert.equal(result.error?.message, "Claude stopped before acknowledging the prompt.");
+  assert.equal(result.error?.message, "Claude's turn was stopped before it acknowledged the prompt.");
   assert.equal(inputs.length, 1, "Stop never resends or replaces the original goal message");
   const metadata = (await f.store.readSession("test")).metadata;
-  assert.equal(JSON.parse(metadata[`claude_conversation_${native.options.sessionId}`]).executionId, "");
+  assert.equal(JSON.parse(metadata[`claude_conversation_${native.options.sessionId}`]).executionId, native.executionId,
+    "the conversation keeps the process the Stop kept");
   assert.equal(metadata.runtime, undefined);
   assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
   assert.deepEqual(await f.store.readConversationLog("test"), []);
@@ -2567,8 +2590,12 @@ test("main Claude canonical goal acknowledgement leaves Stop available and canno
   const result = await pending;
   assert.equal(result.value, undefined);
   assert.equal(result.error?.code, "assistant_claude_turn_failed");
-  assert.equal(result.error?.message, "Claude stopped before acknowledging the prompt.");
-  assert.equal(native.stopped, true);
+  assert.equal(result.error?.message, "Claude's turn was stopped before it acknowledged the prompt.");
+  // The Stop withdrew the goal Claude had not begun and ended the turn with one interrupt; a canonical
+  // conversation's Stop then stops the process too, with its exit proof.
+  assert.deepEqual([native.interrupts, native.stopped], [1, true]);
+  assert.deepEqual(native.requests.filter(request => request.subtype === "cancel_async_message").map(request => request.message_uuid),
+    [inputs[0].messageId]);
   assert.equal(committed, 0, "a rejected command never reaches the original application post-result policy");
   assert.equal(inputs.length, 1);
   assert.deepEqual(await f.store.readConversationLog("test"), []);
@@ -2840,10 +2867,15 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal((await trace()).filter(row => row.args?.includes("--print")).length, 1);
     const stopped = await service.interruptAgentTurn("test", {}, options);
     assert.equal(stopped.interrupted, true);
+    // Stop ends Claude's turn with its interrupt, as Esc does in Claude Code, and keeps the managed
+    // native process, so background agents and commands run on.
     const nativePid = (await trace()).find(row => row.args?.includes("--print")).pid;
-    assert.throws(() => process.kill(nativePid, 0), { code: "ESRCH" }, "Stop returns only after the managed native process has exited");
+    assert.doesNotThrow(() => process.kill(nativePid, 0), "Stop keeps the managed native process");
+    assert.equal((await trace()).filter(row => row.pid === nativePid && row.frame?.request?.subtype === "interrupt").length, 1,
+      "Stop is one interrupt of the running process");
     assert.equal((await service.agentSessionState("test", { ...options, session: await store.readSession("test") })).turn.active, false);
-    assert.equal(JSON.parse((await store.readSession("test")).metadata[`claude_conversation_${state.thread.id}`]).executionId, "");
+    assert.notEqual(JSON.parse((await store.readSession("test")).metadata[`claude_conversation_${state.thread.id}`]).executionId, "",
+      "the conversation keeps the process the Stop kept");
 
     async function startGoal(input, representation) {
       const before = (await trace()).filter(row => row.frame?.type === "user").length;
@@ -2870,8 +2902,13 @@ createInterface({ input: process.stdin }).on('line', async line => {
     const paused = await service.updateAgentGoal("test", { ...options, ...goal, action: "pause" });
     assert.equal(paused.goal.status, "paused");
     assert.equal((await service.readAgentGoal("test", options)).goal.status, "paused");
-    assert.deepEqual((await trace()).filter(row => row.frame?.type === "user").map(row => row.frame.message.content), ["Context: Work", "/goal Tests pass"]);
-    assert.equal((await trace()).filter(row => row.args?.includes("--print")).length, 2);
+    // The Stop kept the process, so the goal ran on it. Pause ends the goal's turn, stands Claude's own
+    // goal checker down on that still-running process, so "Goal cleared" sits beside the Pause, and
+    // then stops the process.
+    assert.deepEqual((await trace()).filter(row => row.frame?.type === "user").map(row => [row.pid, row.frame.message.content]),
+      [[nativePid, "Context: Work"], [nativePid, "/goal Tests pass"], [nativePid, "/goal clear"]]);
+    assert.equal((await trace()).filter(row => row.args?.includes("--print")).length, 1);
+    assert.throws(() => process.kill(nativePid, 0), { code: "ESRCH" }, "Pause returns only after the managed native process has exited");
     rows = await store.readConversationLog("test");
     assert.equal(rows.flatMap(turn => turn.messages).filter(message => message.role === "user").length, 2);
     assert.equal(rows.some(turn => turn.metadata.runtime), false);

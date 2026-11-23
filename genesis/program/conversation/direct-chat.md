@@ -633,7 +633,15 @@ execution identity. Vibe64 records the stop result and publishes run/checkpoint
 state only after native cleanup is confirmed; failed cleanup retains the identity
 for a later Stop attempt.
 The same native turn owner performs control interruption followed by mandatory
-drain even when the control pipe fails. Vibe64 retains the active-turn guard,
+drain even when the control pipe fails. A person's Stop in Main (its native-representation
+conversation's `cancel`) ends Claude's turn as Esc does and keeps the process, so
+background agents and commands run on and report back; the owner withdraws the
+turn's unbegun inputs (`cancel_async_message`) first and stops the process only
+when Claude does not end the turn in time, an input may still run, or for goal
+Pause and Block, a canonical conversation's Stop, close and account changes (JSKIT
+assistant-core 0.2.80). A temporary chat's or an AI task's Stop
+(`interruptDetachedChatTurn`, `stopTemporaryConversation`) stops its process, and
+with it the background work. Vibe64 retains the active-turn guard,
 saved execution cleanup and result publication through its original stop entry.
 JSKIT also owns native model/allowance queries, their account-bound caches,
 shared pending requests and failed-query-process cleanup. Its original native

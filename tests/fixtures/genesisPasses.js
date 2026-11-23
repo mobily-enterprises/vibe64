@@ -66,7 +66,7 @@ const GENESIS_PASSES = Object.freeze([
   {
     id: "review",
     title: "Review",
-    description: "Checks the work against what the app should do: a test that would fail without each behavior, nothing weakened or skipped, and gaps between intent, code and explanation, changing only tests.",
+    description: "Checks the work against what the app should do: a test that would fail without each behavior, nothing weakened or skipped, and gaps between intent, code and explanation, fixing each defect after its failing test.",
     recommend: { when: "after-change", hint: "after each saved change" },
     request: "Review the whole app."
   }

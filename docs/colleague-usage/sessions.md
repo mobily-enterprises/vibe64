@@ -257,11 +257,16 @@ Reduced-motion preferences also disable the animation.
 
 With Claude, **Still working · waiting on 2 background commands…** (Main, with
 the number running) means Claude has posted its answer, but commands it started
-in the background are still running. The answer above is complete and readable,
-and **Stop** still ends the turn. The turn stays active
-until that command finishes or times out, and Claude may then add a short
-follow-up reply after the answer; earlier replies stay visible. Temporary chats
-and an AI task's Chat show the same text without the number. Press **Stop** if you do not need the background command.
+in the background are still running. The answer above is complete and readable.
+The turn stays active until that command finishes or times out, and Claude may
+then add a short follow-up reply after the answer; earlier replies stay visible.
+Temporary chats and an AI task's Chat show the same text without the number.
+In Main, **Stop** ends Claude's turn as Esc does in Claude Code and keeps Claude
+running, so its background commands and agents run on: the chat stops showing
+them as work, and when one reports back Claude answers it in a reply of its own.
+Your next message goes to the same Claude. Pausing a goal or a Vibe64 restart
+ends that background work. In a temporary chat or an AI task's Chat, **Stop**
+also ends the background command, so press it there if you do not need it.
 
 Colleague can explain these states. It should verify current session activity
 through its available read operations before claiming that work has stopped.

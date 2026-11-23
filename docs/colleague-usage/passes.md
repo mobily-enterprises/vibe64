@@ -3,7 +3,8 @@
 A pass is one kind of improvement the AI makes to your app in one go, such
 as **Deslop** (simpler code that does the same thing), the **UI pass**
 (screens in line with the project's UI guidance), **Review** (a test for each
-behavior the app should have) and the other passes Genesis offers: **Visual
+behavior the app should have, and each defect it finds fixed after its failing
+test) and the other passes Genesis offers: **Visual
 identity**, **Quality pass**, **Data pass**, **Security pass**, **User
 experience pass** and **Speed pass**. Genesis writes what each pass does and
 the runs it offers; Vibe64 lists them and suggests one now and then.
