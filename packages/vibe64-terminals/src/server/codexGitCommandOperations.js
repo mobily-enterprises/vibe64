@@ -306,12 +306,9 @@ function gitOperation(args = []) {
   return parseGitInvocation(args).operation;
 }
 
-function commandRequiresGithubToken(command = "", args = []) {
-  if (normalizeText(command) === "gh") {
-    return true;
-  }
-  const operation = gitOperation(args);
-  return !operation || !CODEX_LOCAL_GIT_OPERATIONS.has(operation);
+/** Whether a Git command only works on its repository, as a connected copy allows. */
+function gitCommandIsLocal(args = []) {
+  return CODEX_LOCAL_GIT_OPERATIONS.has(gitOperation(args));
 }
 
 async function readGithubToken({
@@ -497,12 +494,12 @@ export {
   actorCredentialKey,
   CODEX_GIT_COMMAND_TIMEOUT_MS,
   commandOutput,
-  commandRequiresGithubToken,
   commandResultPayload,
   commitAuthorOptions,
   createActorCredentialCache,
   gatewayGitIdentityUserKey,
   githubAuthenticationRejected,
+  gitCommandIsLocal,
   GIT_READ_ONLY_OPERATIONS,
   logGitCommandResult,
   parseGitInvocation,

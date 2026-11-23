@@ -22,7 +22,11 @@ const GITHUB_CREDENTIAL_HELPER_GIT_CONFIG = Object.freeze([
   }
 ]);
 
+// The empty helper first clears every one Git's own config files name (the
+// repository's included), so only this one runs, and none is handed the token
+// to store.
 const GITHUB_TOKEN_CREDENTIAL_HELPER_GIT_CONFIG = Object.freeze([
+  { key: "credential.helper", value: "" },
   {
     key: "credential.https://github.com.helper",
     value: "!f() { case \"$1\" in get) printf '%s\\n' username=x-access-token \"password=${VIBE64_GIT_AUTH_TOKEN}\" ;; esac; }; f"

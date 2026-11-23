@@ -335,11 +335,14 @@ test("Codex recognizes a GitHub session from its source remote URL", async () =>
     });
 
     assert.equal(result.ok, true);
-    assert.equal(gatewayCalls.length, 2);
+    assert.equal(gatewayCalls.length, 3);
     assert.equal(gatewayCalls[0].command, "gh");
-    assert.equal(gatewayCalls[1].command, "git");
-    assert.equal(gatewayCalls[1].gitTransport, "github-token");
-    assert.equal(gatewayCalls[1].gitAuthToken, "secret-github-token");
+    // The repository's own config, read with no token just before the command.
+    assert.deepEqual(gatewayCalls[1].args.slice(0, 2), ["config", "--list"]);
+    assert.equal(gatewayCalls[1].gitAuthToken, undefined);
+    assert.equal(gatewayCalls[2].command, "git");
+    assert.equal(gatewayCalls[2].gitTransport, "github-token");
+    assert.equal(gatewayCalls[2].gitAuthToken, "secret-github-token");
   });
 });
 
@@ -547,7 +550,8 @@ test("GitHub credential lookup shares the budget and timeouts are not reported a
     });
     const input = { command: "gh", args: ["issue", "view", "43"], sessionId: session.sessionId };
     assert.equal((await service.run(input)).ok, true);
-    assert.deepEqual(calls.map(({ timeout }) => timeout), [30_000, 24_000]);
+    // The token, the repository's config, then the command.
+    assert.deepEqual(calls.map(({ timeout }) => timeout), [30_000, 24_000, 24_000]);
 
     calls.length = 0;
     tokenDuration = 30_000;
@@ -611,9 +615,13 @@ test("model-visible Git failures retain their stage, budget, execution reference
         sessionId: session.sessionId,
         stateRoot: root
       });
+      // An agent's shell has no Git or gh variables but Vibe64's own
+      // (commandBaseEnv); a test host may set GIT_CONFIG_GLOBAL, which a
+      // command with the token refuses.
+      const agentShellEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(?:GIT|GH)_/u.test(name)));
       const result = await runProcessWithInput(path.join(prepared.hostWrapperDir, "gh"), ["issue", "comment", "43"], {
         cwd: session.metadata.source_path,
-        env: { ...process.env, ...prepared.env }
+        env: { ...agentShellEnv, ...prepared.env }
       });
       assert.equal(result.exitCode, 1, scenario);
       const diagnostic = JSON.parse(result.stderr.match(/Managed Git diagnostic: (.+)\n/u)[1]);
@@ -975,22 +983,23 @@ test("Codex separates GitHub authorization from the Git filesystem identity", as
 
     const user = currentOsUser();
     assert.equal(result.ok, true);
-    assert.equal(gatewayCalls.length, 2);
+    assert.equal(gatewayCalls.length, 3);
     assert.equal(gatewayCalls[0].actor, "owner-user");
     assert.equal(gatewayCalls[0].command, "gh");
     assert.deepEqual(gatewayCalls[0].args, ["auth", "token"]);
     assert.equal(gatewayCalls[0].cwd, user.home);
     assert.equal(gatewayCalls[0].purpose, "github-api");
     assert.equal(gatewayCalls[0].session.sourcePath, undefined);
-    assert.equal(gatewayCalls[1].actor, "app");
-    assert.equal(gatewayCalls[1].command, "git");
-    assert.equal(gatewayCalls[1].gitTransport, "github-token");
-    assert.equal(gatewayCalls[1].gitAuthToken, "secret-github-token");
-    assert.equal(gatewayCalls[1].input.toString("utf8"), "stdin");
-    assert.equal(gatewayCalls[1].session.sourcePath, session.metadata.source_path);
-    assert.equal(gatewayCalls[1].userKey, user.username);
-    assert.equal(gatewayCalls[1].project.ownerUserKey, user.username);
-    assert.equal(gatewayCalls[1].session.metadata.session_git_command_actor_user_key, user.username);
+    assert.deepEqual(gatewayCalls[1].args.slice(0, 2), ["config", "--list"]);
+    assert.equal(gatewayCalls[2].actor, "app");
+    assert.equal(gatewayCalls[2].command, "git");
+    assert.equal(gatewayCalls[2].gitTransport, "github-token");
+    assert.equal(gatewayCalls[2].gitAuthToken, "secret-github-token");
+    assert.equal(gatewayCalls[2].input.toString("utf8"), "stdin");
+    assert.equal(gatewayCalls[2].session.sourcePath, session.metadata.source_path);
+    assert.equal(gatewayCalls[2].userKey, user.username);
+    assert.equal(gatewayCalls[2].project.ownerUserKey, user.username);
+    assert.equal(gatewayCalls[2].session.metadata.session_git_command_actor_user_key, user.username);
   });
 });
 
@@ -1385,7 +1394,7 @@ function credentialGateway({
   commandResult = { exitCode: 0, ok: true, stdout: "" },
   identityResult = () => ({ exitCode: 0, ok: true, stdout: "user.name Ana Diaz\nuser.email ana@example.test\n" })
 } = {}) {
-  const calls = { command: 0, identity: 0, token: 0 };
+  const calls = { command: 0, identity: 0, repositoryConfig: 0, token: 0 };
   const executions = [];
   return {
     calls,
@@ -1399,6 +1408,11 @@ function credentialGateway({
       if (request.actor === "owner-user" && request.args[0] === "config") {
         calls.identity += 1;
         return identityResult(request);
+      }
+      // An agent's command with the token reads its repository's config first.
+      if (request.args[0] === "config" && request.args.includes("--list")) {
+        calls.repositoryConfig += 1;
+        return { exitCode: 0, ok: true, stdout: "" };
       }
       calls.command += 1;
       return typeof commandResult === "function" ? commandResult(request) : commandResult;
@@ -1417,7 +1431,7 @@ test("session-work checks within the credential TTL reuse the actor's token and 
     const first = await service.sessionWorkSaveContext({ session });
     clock += 60_000;
     const second = await service.sessionWorkSaveContext({ session });
-    assert.deepEqual(gateway.calls, { command: 0, identity: 0, token: 1 });
+    assert.deepEqual(gateway.calls, { command: 0, identity: 0, repositoryConfig: 0, token: 1 });
     // Resources names each credential read and its session, never "This task".
     assert.deepEqual(gateway.executions, [
       { args: ["auth", "token"], execution: { label: "Reading your GitHub sign-in", operationId: "github-token-read" },
@@ -1430,12 +1444,12 @@ test("session-work checks within the credential TTL reuse the actor's token and 
     // An agent's GitHub Git command by the same actor reuses the token too.
     const fetched = await service.run({ args: ["fetch", "origin", "main"], command: "git", sessionId: session.sessionId });
     assert.equal(fetched.ok, true);
-    assert.deepEqual(gateway.calls, { command: 1, identity: 0, token: 1 });
+    assert.deepEqual(gateway.calls, { command: 1, identity: 0, repositoryConfig: 1, token: 1 });
 
     clock += 5 * 60_000;
     const expired = await service.sessionWorkSaveContext({ session });
     assert.equal(expired.commandOptions.gitAuthToken, "token-2");
-    assert.deepEqual(gateway.calls, { command: 1, identity: 0, token: 2 });
+    assert.deepEqual(gateway.calls, { command: 1, identity: 0, repositoryConfig: 1, token: 2 });
   });
 });
 
@@ -1473,7 +1487,7 @@ test("each Save reads the person's current Git identity; \"not set\" is never re
 
     answers.next = "unset"; // the person removed their name
     assert.equal((await save()).commandOptions.personGitIdentity, undefined);
-    assert.deepEqual(gateway.calls, { command: 0, identity: 3, token: 1 });
+    assert.deepEqual(gateway.calls, { command: 0, identity: 3, repositoryConfig: 0, token: 1 });
   });
 });
 

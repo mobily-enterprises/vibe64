@@ -200,7 +200,9 @@ that changes them follows their own rules, as when it runs inside them, and one
 that would change them from the temporary folder (a clone into the source, a
 push to it) is refused. Git on another session's folder, another project or a
 temporary folder all sessions share is refused too, with a message naming this
-session's temporary folder for throwaway repositories.
+session's temporary folder for throwaway repositories. In the source, the Git and
+gh commands that reach GitHub with your sign-in run no program the AI picked
+(see [What the AI's Git does with your GitHub sign-in](github-work.md#what-the-ais-git-does-with-your-github-sign-in)).
 
 ## Chat availability
 

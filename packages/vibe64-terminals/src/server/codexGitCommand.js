@@ -11,9 +11,7 @@ import {
 } from "./sessionGitCommandActor.js";
 import { prepareCodexAttachmentRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
-import {
-  sessionSourcePath
-} from "@local/vibe64-core/server/sessionSourcePath";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { fetchReachesGithubAsGit, listGithubRemoteHeads } from "./githubRemoteHeads.js";
 import { currentProjectSlug } from "./terminalShared.js";
 import { createSessionCommandServers } from "./unixJsonCommand.js";
@@ -30,16 +28,19 @@ import {
   actorCredentialKey,
   CODEX_GIT_COMMAND_TIMEOUT_MS,
   commandResultPayload,
-  commandRequiresGithubToken,
   commitAuthorOptions,
   createActorCredentialCache,
   gatewayGitIdentityUserKey,
   githubAuthenticationRejected,
+  gitCommandIsLocal,
   logGitCommandResult,
   readGithubToken
 } from "./codexGitCommandOperations.js";
 import { commandFailure } from "./commandFailure.js";
 import { createSessionGitPlaces, forwardedGitEnv, placeGitCommand, placeGithubCommand } from "./codexGitCommandPlaces.js";
+import {
+  commandRequiresGithubToken, GITHUB_TOKEN_COMMAND_ENV, githubTokenCommandRefusal, githubTokenConfigRefusal
+} from "./codexGitCommandToken.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -518,7 +519,7 @@ function createCodexGitCommandService({
     const copy = placed.place.kind === "copy" ? placed.place.copy : null;
     // Save publishes a copy and Update brings in its main, so only Git's local
     // commands run in it, with no credential.
-    if (copy && (command !== "git" || commandRequiresGithubToken(command, args))) {
+    if (copy && (command !== "git" || !gitCommandIsLocal(args))) {
       return finish(commandFailure(
         `In connected repository ${copy.name} the AI's Git works on the copy only: Save publishes it and Update brings in its main.`,
         "vibe64_codex_git_command_connected_remote",
@@ -570,6 +571,8 @@ function createCodexGitCommandService({
     }
     if (phaseElapsedMs) phaseElapsedMs.access = Math.round(performance.now() - startedAt);
     const requiresGithubToken = !copy && actor.githubRequired !== false && commandRequiresGithubToken(command, args);
+    const tokenRefusal = requiresGithubToken && githubTokenCommandRefusal({ args, command, env: input.env });
+    if (tokenRefusal) return finish(tokenRefusal, actor);
     stage = "github-account";
     const toolHome = actor.githubRequired === false || !requiresGithubToken
       ? localGitCommandToolHome()
@@ -603,16 +606,22 @@ function createCodexGitCommandService({
     // Resources show the AI's command under the project whose session store
     // was just read, and its session (projectSlug above: reading it lists no projects).
     stage = "command";
+    const readConfig = (configArgs) => runWithinBudget({
+      ...plainGitRequest({ args: configArgs, env: placed.env, readRoots: [commandRoot] }),
+      allowedRoots: commandRoots
+    });
+    const configRefusal = requiresGithubToken && await githubTokenConfigRefusal({ args, command, readConfig });
+    if (configRefusal?.timedOut) return finish(commandResultPayload(configRefusal, { commandSubmitted }), { ...actor, cwd: commandCwd });
+    if (configRefusal) return finish(configRefusal, { ...actor, cwd: commandCwd });
     if (phaseElapsedMs) phaseElapsedMs.commandStarted = Math.round(performance.now() - startedAt);
+    const commandEnv = command === "gh" && githubToken.token ? { GH_TOKEN: githubToken.token } : placed.env;
     const result = await runWithinBudget({
       actor: "app",
       allowedRoots: commandRoots,
       args,
       command,
       cwd: commandCwd,
-      env: command === "gh" && githubToken.token
-        ? { GH_TOKEN: githubToken.token }
-        : placed.env,
+      env: requiresGithubToken ? { ...commandEnv, ...GITHUB_TOKEN_COMMAND_ENV } : commandEnv,
       envPolicy: "auth",
       execution: command === "gh"
         ? { label: "Running GitHub CLI for the AI", operationId: "agent-gh", projectSlug }

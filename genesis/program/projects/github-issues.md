@@ -17,6 +17,7 @@ Dashboard without opening a session.
 - `packages/vibe64-terminals/src/server/codexGitCommand.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandOperations.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandPlaces.js`
+- `packages/vibe64-terminals/src/server/codexGitCommandToken.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandWrappers.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `src/composables/useVibe64Issues.js`
@@ -152,7 +153,11 @@ the existing managed Git commands. The shared Main and temporary conversation
 guidance (AI task conversations included) also directs agents to fetch GitHub-hosted ticket, PR and comment
 attachments through authenticated managed `gh api`, using their original URLs.
 Agents save and inspect the downloaded files; an unauthenticated 404 is not proof
-that a private attachment is missing. They do not extract credentials or retry
+that a private attachment is missing. The managed `gh` carries the session's
+GitHub token, so it runs only the GitHub CLI's own commands and none that shows
+the token, changes gh or runs a program of gh's choosing: `gh auth`, `alias`,
+`config`, `extension`, `codespace`, and any alias or extension name, are refused
+(`vibe64_codex_git_command_token_refused`, `codexGitCommandToken.js`). They do not extract credentials or retry
 with an impersonated browser User-Agent. External links are outside this rule.
 The refresh command uses the managed commands' authenticated Unix
 socket, session generation, stored actor and project access checks. It accepts
