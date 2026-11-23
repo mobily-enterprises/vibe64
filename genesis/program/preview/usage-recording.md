@@ -97,7 +97,13 @@ apply the rule again. The service reads those files incrementally and
 announces changes to the session's viewers. Stop always succeeds and is safe to
 repeat: it tells tracers to stop through `control.json`, waits for the log
 lines queued before it (lines that queue while a write runs are appended
-together, in order, one append per log), then writes an index of the results. Recordings also stop at their time, request and size limits,
+together, in order, one append per log), then writes an index of the results.
+A recording's state changes one at a time, in order, and `recording.json`
+changes before the state anyone reads, so a recording reads as stopped only
+once its files are final (`changeState` in `recordingRecords.js`). No reader
+sees a partial file: JSON files are replaced by rename, a log's unfinished last
+line is skipped or kept for the next read, and the writer's temporary files are
+never read. Recordings also stop at their time, request and size limits,
 when a terminal target exits, when the session closes, and after a read error.
 A recording left running by an earlier server process ends as an error.
 

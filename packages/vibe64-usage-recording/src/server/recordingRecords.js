@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { serializeByKey } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 
 import { recordingRequestRows, writeJsonFile } from "./traceStore.js";
@@ -108,10 +109,10 @@ function createRecordingRecords({
     }
   }
 
-  async function writeRecord(entry) {
+  async function writeRecord(entry, record = entry.record) {
     await writeJsonFile(path.join(entry.directory, "recording.json"), {
       schema: USAGE_RECORDING_SCHEMA,
-      ...publicRecording(entry.record),
+      ...publicRecording(record),
       limits: {
         durationMs: USAGE_RECORDING_LIMITS.durationMs,
         capturedRequests: USAGE_RECORDING_LIMITS.capturedRequests,
@@ -123,9 +124,16 @@ function createRecordingRecords({
     });
   }
 
+  // A recording's state changes one at a time, in the order asked, and its
+  // recording.json changes first: whoever reads the state (readCurrent reads a
+  // live recording's own record) finds the file saying the same, so a
+  // recording reads as stopped only once its files are final.
+  const stateChanges = new Map();
   async function changeState(entry, state, fields = {}) {
-    Object.assign(entry.record, { state, ...fields });
-    await writeRecord(entry);
+    await serializeByKey(stateChanges, entry.directory, async () => {
+      await writeRecord(entry, { ...entry.record, state, ...fields });
+      Object.assign(entry.record, { state, ...fields });
+    });
     await publish(entry);
   }
 
