@@ -842,29 +842,147 @@ test("every request is kept in order with what it asked of what, and a stand-in 
   assert.deepEqual([down.status, down.code, down.retryable], [null, "unreachable", true]);
 });
 
-test("an instance's logs are read by an operation: 202 first, then 200 with its lines once mobilynet moved on, each secret of its service masked, for a live instance or one removed in the last 7 days", async () => {
+// mobilynet's page of an App Service's logs (its openApiServices.js readServiceLogs and machines' serviceLogs.js,
+// mobilynet main 17340a6a): the keys of its answer and of each line.
+const LOGS_KEYS = ["after", "before", "instances", "lines", "more", "operations", "readAt", "units"];
+const LOG_LINE_KEYS = ["at", "error", "instance", "name", "text", "unit"];
+
+test("a service's logs are a page of its instances' lines in time order, read by operations: 202 with them first, then 200 with the page, each secret masked, the instances chosen by only or except", async () => {
   const parts = await runningShop();
   const { standIn, client, serviceId } = parts;
-  const [instance] = standIn.services.instances(serviceId);
-  standIn.services.setLogs(instance.id, "Migrate: Migrate database\nmigrated 3 tables with session-1\nweb: listening on 3000\n");
-  const pending = await client.readServiceLogs(serviceId, { instance: instance.id, lines: 50 });
-  assert.equal(pending.logs, null);
-  assert.equal(pending.instance, instance.id);
-  assert.equal(pending.operation.kind, "app_logs");
-  assert.equal(pending.operation.state, "running");
+  const [one, other] = standIn.services.instances(serviceId);
+  standIn.services.setLogs(one.id, "listening on 3000\nsigned in with session-1\n");
+  standIn.services.setLogs(other.id, "listening on 3000\nError: no database\n");
+
+  const pending = await client.readServiceLogs(serviceId, { only: [one.name], lines: 50 });
+  assert.deepEqual(Object.keys(pending).sort(), LOGS_KEYS);
+  const { operations: running, ...waiting } = pending;
+  assert.deepEqual(waiting, {
+    instances: [{ id: one.id, name: one.name, live: true, removedAt: null, error: null }],
+    units: ["web"], lines: null, before: null, after: null, more: false, readAt: null
+  });
+  assert.deepEqual(running.map((operation) => [operation.kind, operation.state]), [["app_logs", "running"]]);
   standIn.advance();
-  const read = await client.readServiceLogs(serviceId, { instance: instance.id, lines: 50 });
-  assert.equal(read.operation.state, "succeeded");
-  // The service's own secret (sessionKey's value) is masked as mobilynet masks it; the rest is the instance's output.
-  assert.equal(read.logs, "Migrate: Migrate database\nmigrated 3 tables with [secret]\nweb: listening on 3000\n");
-  assert.ok(Number.isFinite(Date.parse(read.readAt)));
-  // Without an instance, or with another service's, mobilynet refuses.
-  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, {}))), { status: 422, code: "validation_failed", fields: ["instance"] });
-  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, { instance: "ins_none" }))), { status: 404, code: "not_found", fields: [] });
+  const page = await client.readServiceLogs(serviceId, { only: [one.name], lines: 50 });
+  assert.deepEqual(Object.keys(page).sort(), LOGS_KEYS);
+  for (const line of page.lines) {
+    assert.deepEqual(Object.keys(line).sort(), LOG_LINE_KEYS);
+    assert.match(line.at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/u, "to the microsecond");
+  }
+  // The service's own secret (sessionKey's value) is masked as mobilynet masks it.
+  assert.deepEqual(page.lines.map((line) => [line.instance, line.name, line.unit, line.text, line.error]), [
+    [one.id, one.name, "web", "listening on 3000", false], [one.id, one.name, "web", "signed in with [secret]", false]
+  ]);
+  assert.deepEqual([page.before, typeof page.after, page.more, page.operations.map((operation) => operation.state)], [null, "string", false, ["succeeded"]]);
+  assert.ok(Number.isFinite(Date.parse(page.readAt)));
+
+  // Every instance's lines merged in time order, a line reading as an error marked; `text` keeps the lines holding it,
+  // `except` leaves an instance out, `lines` keeps the newest; each new ask is read again.
+  const ask = async (asked) => {
+    await client.readServiceLogs(serviceId, asked);
+    standIn.advance();
+    return client.readServiceLogs(serviceId, asked);
+  };
+  const all = await ask({});
+  assert.deepEqual(all.instances.map((instance) => instance.id).sort(), [one.id, other.id].sort());
+  assert.deepEqual(all.lines.map((line) => [line.name, line.text, line.error]).sort(), [
+    [one.name, "listening on 3000", false], [one.name, "signed in with [secret]", false], [other.name, "Error: no database", true], [other.name, "listening on 3000", false]
+  ].sort());
+  assert.ok(all.lines.every((line, index) => index === 0 || all.lines[index - 1].at <= line.at), "in time order");
+  assert.deepEqual((await ask({ text: "DATABASE" })).lines.map((line) => line.text), ["Error: no database"]);
+  assert.deepEqual((await ask({ except: [one.id] })).instances.map((instance) => instance.id), [other.id]);
+  const newest = await ask({ lines: 1 });
+  assert.deepEqual([newest.lines.length, newest.lines[0].at, typeof newest.before], [1, all.lines.at(-1).at, "string"]);
+  // The page before it holds the lines older than it.
+  assert.deepEqual((await ask({ before: newest.before, lines: 1000 })).lines, all.lines.slice(0, -1));
+
+  // An instance it has no logs of, a page size past its limits, a unit the app doesn't declare and two cursors are refused.
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, { only: ["web-none"] }))), { status: 422, code: "validation_failed", fields: ["only"] });
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, { except: ["vps_none"] }))), { status: 422, code: "validation_failed", fields: ["except"] });
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, { lines: 1001 }))), { status: 422, code: "validation_failed", fields: ["lines"] });
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, { unit: "worker" }))), { status: 422, code: "validation_failed", fields: ["unit"] });
+  assert.deepEqual(refusal(await refused(client.readServiceLogs(serviceId, { before: newest.before, after: page.after }))), { status: 422, code: "validation_failed", fields: ["after"] });
   // It needs services:read.
   const blind = standIn.addKey({ projectId: parts.projectId, scopes: ["hosted:read"] });
-  const other = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: blind, fetch: standIn.fetch });
-  assert.equal((await refused(other.readServiceLogs(serviceId, { instance: instance.id }))).code, "scope_missing");
+  const outsider = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: blind, fetch: standIn.fetch });
+  assert.equal((await refused(outsider.readServiceLogs(serviceId))).code, "scope_missing");
+});
+
+test("a release task runs once, after its build passed and before any instance, on an instance of its own that no list shows, whose logs hold its output", async () => {
+  const parts = await runningShop();
+  const { standIn, client, production, serviceId } = parts;
+  // mobilynet takes a task as { command } alone, at most 10, a name as TASK_NAME, a command as start's.
+  const tasked = (tasks) => upload({ ...SHOP, tasks }, JSON.stringify(tasks));
+  for (const [tasks, field] of [
+    [{ migrate: { command: "bin/migrate", user: "shop" } }, "declaration.tasks.migrate"],
+    [{ migrate: { command: "bin/migrate", timeoutSeconds: 900 } }, "declaration.tasks.migrate"],
+    [{ migrate: { command: "bash -c 'npm run migrate'" } }, "declaration.tasks.migrate"],
+    [{ Migrate: { command: "bin/migrate" } }, "declaration.tasks.Migrate"],
+    [Object.fromEntries(Array.from({ length: 11 }, (_, index) => [`task-${index}`, { command: "bin/migrate" }])), "declaration.tasks"]
+  ]) {
+    assert.deepEqual(refusal(await refused(production.createRelease("shop", tasked(tasks)))), { status: 422, code: "validation_failed", fields: [field] }, JSON.stringify(tasks));
+  }
+  // A malformed task's name is refused as it is asked; one the release doesn't declare fails the refresh once it built.
+  const declared = tasked({ migrate: { command: "bin/migrate --all" } });
+  assert.deepEqual(refusal(await refused(client.createServiceRelease(serviceId, declared, { task: "Migrate" }))), { status: 422, code: "validation_failed", fields: ["task"] });
+  const undeclared = await client.createServiceRelease(serviceId, declared, { task: "seed" });
+  assert.equal(undeclared.refresh.task, "seed");
+  settle(standIn);
+  const [notDeclared] = standIn.services.refreshes(serviceId).slice(-1);
+  assert.deepEqual([notDeclared.state, notDeclared.error.code, notDeclared.steps.at(-1).step], ["failed", "release_task_not_declared", "task_failed"]);
+
+  // Asked, it runs before any instance starts, on an instance of its own: task_started names it, task_succeeded follows.
+  const asked = await client.createServiceRelease(serviceId, upload({ ...SHOP, tasks: { migrate: { command: "bin/migrate" } } }, "migrating"), { task: "migrate" });
+  const refreshId = asked.refresh.id;
+  let refresh = await client.readServiceRefresh(serviceId, refreshId);
+  for (let step = 0; step < 4 && !refresh.steps.some((one) => one.step === "task_started"); step += 1) {
+    standIn.advance();
+    refresh = await client.readServiceRefresh(serviceId, refreshId);
+  }
+  assert.deepEqual([refresh.task, refresh.held, refresh.state], ["migrate", false, "building"]);
+  const started = refresh.steps.find((one) => one.step === "task_started");
+  assert.equal(started.detail, "migrate");
+  assert.equal((await client.listServiceInstances(serviceId)).some((one) => one.id === started.instanceId), false, "its instance is no instance of the service");
+  standIn.advance();
+  refresh = await client.readServiceRefresh(serviceId, refreshId);
+  const names = refresh.steps.map((one) => one.step);
+  assert.ok(names.indexOf("task_succeeded") > names.indexOf("task_started") && !names.slice(0, names.indexOf("task_succeeded")).includes("instance_started"),
+    names.join(" "));
+  assert.equal(refresh.steps.find((one) => one.step === "task_succeeded").instanceId, started.instanceId);
+  settle(standIn);
+  assert.equal((await client.readServiceRefresh(serviceId, refreshId)).state, "succeeded");
+  // Deleted once it ran, it is listed with the removed instances, and its output is its logs, as the start's.
+  const removed = await client.listServiceInstances(serviceId, { removed: true });
+  assert.equal(removed.find((one) => one.id === started.instanceId)?.rotation, "gone");
+  const read = async () => {
+    await client.readServiceLogs(serviceId, { only: [started.instanceId] });
+    standIn.advance();
+    return client.readServiceLogs(serviceId, { only: [started.instanceId] });
+  };
+  const logs = await read();
+  assert.deepEqual([logs.instances[0].live, logs.lines.map((line) => line.unit)], [false, ["start"]]);
+
+  // A task that fails fails its refresh with nothing rolled out, naming its outcome and where its output is.
+  const before = (await client.readService(serviceId)).version;
+  standIn.faults.releaseTaskFails = { outcome: "failed", output: ["Running 20261123_add_column", "error: column \"x\" already exists"] };
+  const failing = await client.createServiceRelease(serviceId, upload({ ...SHOP, tasks: { migrate: { command: "bin/migrate" } } }, "failing"), { task: "migrate" });
+  settle(standIn);
+  standIn.faults.releaseTaskFails = false;
+  const failed = await client.readServiceRefresh(serviceId, failing.refresh.id);
+  const instanceId = failed.steps.find((one) => one.step === "task_started").instanceId;
+  assert.deepEqual([failed.state, failed.error], ["failed", {
+    code: "release_task_failed",
+    message: `The release task migrate exited with an error; nothing rolled out. Its output: GET /v1/services/${serviceId}/logs?only=${instanceId}.`,
+    details: { task: "migrate", instanceId, outcome: "failed" }
+  }]);
+  assert.deepEqual([failed.steps.at(-1).step, failed.steps.at(-1).instanceId, failed.steps.some((one) => one.step === "instance_started")], ["task_failed", undefined, false]);
+  assert.equal((await client.readService(serviceId)).version, before, "the version before serves");
+  await client.readServiceLogs(serviceId, { only: [instanceId] });
+  standIn.advance();
+  const output = await client.readServiceLogs(serviceId, { only: [instanceId] });
+  assert.deepEqual(output.lines.map((line) => [line.unit, line.text, line.error]), [
+    ["start", "Running 20261123_add_column", false], ["start", "error: column \"x\" already exists", true]
+  ]);
 });
 
 test("a build's log is read from a byte on, as mobilynet answers it, with vps:read or packages:publish, and names a failed build's reason", async () => {

@@ -20,7 +20,7 @@
 // the workspace's own editor is the only writer).
 import { LABEL } from "../../record.js";
 import { LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE } from "../../steps.js";
-import { MOBILYNET_INTERFACES, RELEASE_TASKS, SERVICE_SETTINGS_FALLBACK, needAs, serviceUpload } from "./declaration.js";
+import { MOBILYNET_INTERFACES, SERVICE_SETTINGS_FALLBACK, needAs, serviceUpload } from "./declaration.js";
 
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
 // mobilynet's names for an App Service and a hosted service: 1 to 64 lowercase letters, digits and hyphens.
@@ -75,15 +75,31 @@ function settingsRefusal(error) {
 }
 
 /**
+ * A refresh's task as its steps and error say (mobilynet's release tasks: the refresh names its task, steps
+ * `task_started` with the task's instance, then `task_succeeded`, or `task_failed` with the refresh failed
+ * `release_task_failed`, whose details name the instance and the outcome: `failed`, `timeout` or `machine_failed`):
+ * `{ name, state, instanceId, outcome }`, `state` `asked` (not started), `running`, `succeeded` or `failed`. A task
+ * mobilynet gives no exit code or output for: its output is its instance's logs.
+ * @param {{ task: string, steps?: Array<{ step: string, instanceId?: string }>, error?: any }} refresh
+ */
+function taskOfRefresh({ task, steps = [], error }) {
+  const started = steps.find((step) => step.step === "task_started");
+  const instanceId = started?.instanceId ?? error?.details?.instanceId ?? null;
+  if (steps.some((step) => step.step === "task_succeeded")) return { name: task, state: "succeeded", instanceId, outcome: null };
+  if (steps.some((step) => step.step === "task_failed")) {
+    return { name: task, state: "failed", instanceId, outcome: error?.details?.outcome ?? error?.code ?? null };
+  }
+  return { name: task, state: started ? "running" : "asked", instanceId, outcome: null };
+}
+
+/**
  * @param {object} options
  * @param {ReturnType<typeof import("./client.js").createMobilynetClient>} options.client
  * @param {string} options.project the mobilynet project's id
  * @param {string} [options.region]
  * @param {boolean} [options.leases] whether mobilynet takes leases (its stand-in does; mobilynet not yet)
- * @param {boolean} [options.releaseTasks] whether mobilynet runs a release's task once per refresh (its stand-in does;
- *   mobilynet not yet: RELEASE_TASKS)
  */
-function createMobilynetAdapter({ client, project, region = "us", leases = false, releaseTasks = RELEASE_TASKS }) {
+function createMobilynetAdapter({ client, project, region = "us", leases = false }) {
   const calls = client.project(project);
 
   /** The adapter's region as mobilynet lists it now, or null when it lists none of that id. */
@@ -293,24 +309,10 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     /** A release of a service's app from its upload: `{ version }`. */
     uploadRelease: async (app, upload) => (await calls.createRelease(app, { archive: upload.bytes, sha256: upload.sha256 })).release,
     /**
-     * Whether a refresh runs a release's task once before any instance starts (a capability the engine reads): mobilynet
-     * has no such task yet (the engine's ask M-C), so the adapter runs none unless made with `releaseTasks: true`, as its
-     * stand-in is; its declarations then carry the task and their serve scripts no Migrate (declaration.js).
+     * The task a service's declaration runs once per refresh asked to, before its instances (mobilynet's release
+     * tasks, declaration.js): `migrate`, or null for an app with no Migrate step.
      */
-    releaseTasks,
-    /**
-     * The task a service's declaration runs once per refresh asked to, before its instances: `migrate`, or null. A
-     * declaration with a migrate task its serve script no longer runs is refused where mobilynet runs no task: its
-     * migrations would never run.
-     */
-    taskOf(declaration) {
-      if (!declaration?.tasks?.migrate) return null;
-      if (!releaseTasks) {
-        throw Object.assign(new Error(`${declaration.name}'s release declares a migrate task, which mobilynet runs no `
-          + "release task for yet; its serve script must migrate (servicePackages with releaseTasks off)."), { code: "production_deploy_release_tasks_unsupported" });
-      }
-      return "migrate";
-    },
+    taskOf: (declaration) => (declaration?.tasks?.migrate ? "migrate" : null),
     /** Hands an App Service a new release, its refresh running `task` first when given: `{ version, refreshId }`. */
     async releaseService(id, upload, { task = null } = {}) {
       const answer = await client.createServiceRelease(id, { archive: upload.bytes, sha256: upload.sha256 }, { task });
@@ -339,10 +341,13 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
       return { id: service.id, refreshId: refresh?.id ?? null };
     },
     /**
-     * How a refresh went, as mobilynet answers it, with its task's (`task: { name, state, exitCode, output }`, its
-     * last lines of output) where it ran one.
+     * How a refresh went, as mobilynet answers it, and where it was asked for a task, how that went as its steps say
+     * (taskOfRefresh): `task: { name, state, instanceId, outcome }`.
      */
-    readRefresh: (id, refreshId) => client.readServiceRefresh(id, refreshId),
+    readRefresh: async (id, refreshId) => {
+      const refresh = await client.readServiceRefresh(id, refreshId);
+      return refresh && refresh.task ? { ...refresh, task: taskOfRefresh(refresh) } : refresh;
+    },
     /** Replaces an App Service's own settings and secrets: its refresh's id, null when mobilynet took them at once. */
     async putSettings(id, { settings, secrets }, { idempotencyKey }) {
       try {

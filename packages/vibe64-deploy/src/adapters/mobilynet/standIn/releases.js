@@ -22,23 +22,38 @@ const FIELDS = Object.freeze([
   "name", "services", "start", "check", "settings", "logins", "rootCommands", "groups", "dataPaths", "ports",
   "machineFeatures", "logs", "requiredPackages", "build", "backup", "layout", "needs", "tasks"
 ]);
-// STAND-IN ONLY: a release's tasks are the shape the engine asks mobilynet for (its design note's M-C), which mobilynet
-// has not built yet: `{ <name>: { command, user?, timeoutSeconds? } }`, each run once by a refresh that asks for it,
-// after its build passed and before any instance starts.
-const TASK_NAME = /^[a-z][a-z0-9-]{0,31}$/u;
-const TASK_MAX_SECONDS = 3600;
+// A release's tasks (mobilynet's release tasks, its apps package's declaration.js tasksOf, main 17340a6a): `{ <name>: {
+// command } }`, at most 10, a name as its TASK_NAME, a command as `start`'s (a path in the app's folder or a program on
+// its PATH, then plain words, no quoting or variables), each run once by a refresh that asks for it, after its build
+// passed and before any instance starts (services.js, serviceEngine.js).
+const TASK_NAME = /^[a-z][a-z0-9-]{0,39}$/u;
+const MAX_TASKS = 10;
+const COMMAND = /^[A-Za-z0-9_+-][A-Za-z0-9._+-]*(?:\/[A-Za-z0-9._+-]+)*(?: [A-Za-z0-9._,:=@+/-]+)*$/u;
+const MAX_COMMAND = 1000;
+
+/** Why a release task is refused, or "", as mobilynet says it. @param {string} name @param {unknown} task */
+function taskProblem(name, task) {
+  if (!TASK_NAME.test(name)) return "A task's name: a lowercase letter, then up to 39 lowercase letters, digits and hyphens.";
+  if (!isRecord(task)) return "A release task: { command }.";
+  const extra = Object.keys(task).find((key) => key !== "command");
+  if (extra !== undefined) return `Unknown field ${JSON.stringify(extra)}: a release task is { command }.`;
+  const { command } = task;
+  if (typeof command !== "string" || command.length > MAX_COMMAND || !COMMAND.test(command)
+    || command.split(" ")[0].split("/").some((part) => part === "." || part === "..")) {
+    return `A path in the app's folder (its build's output) or a program on its PATH, then plain words separated by single spaces (no quotes or variables), up to ${MAX_COMMAND} characters, such as bin/server --port 3000 or node dist/server.js.`;
+  }
+  return "";
+}
 
 /** The field errors of a declaration's `tasks`. @param {unknown} tasks */
 function tasksErrors(tasks) {
   if (tasks === undefined) return {};
-  if (!isRecord(tasks)) return { "declaration.tasks": "An object of task names, each { command, user?, timeoutSeconds? }." };
-  const errors = {};
-  for (const [name, task] of Object.entries(tasks)) {
-    if (!TASK_NAME.test(name)) errors[`declaration.tasks.${name}`] = "A task's name: a lowercase letter, then up to 31 lowercase letters, digits and hyphens.";
-    else if (!isRecord(task) || typeof task.command !== "string" || task.command.length === 0) errors[`declaration.tasks.${name}.command`] = "Required: the command the task runs.";
-    else if (task.timeoutSeconds !== undefined && (!Number.isInteger(task.timeoutSeconds) || task.timeoutSeconds < 1 || task.timeoutSeconds > TASK_MAX_SECONDS)) {
-      errors[`declaration.tasks.${name}.timeoutSeconds`] = `A whole number of seconds from 1 to ${TASK_MAX_SECONDS}.`;
-    }
+  if (!isRecord(tasks)) return { "declaration.tasks": "An object of the app's release tasks by name, each { command }, such as { \"migrate\": { \"command\": \"bin/migrate\" } }." };
+  const names = Object.keys(tasks);
+  const errors = names.length > MAX_TASKS ? { "declaration.tasks": `At most ${MAX_TASKS} release tasks.` } : {};
+  for (const name of names.slice(0, MAX_TASKS)) {
+    const why = taskProblem(name, tasks[name]);
+    if (why) errors[`declaration.tasks.${name}`] = why;
   }
   return errors;
 }
@@ -267,4 +282,4 @@ function createStandInReleases(world) {
   });
 }
 
-export { createStandInReleases };
+export { TASK_NAME, createStandInReleases };

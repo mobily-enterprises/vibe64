@@ -62,7 +62,10 @@ test("each service is its own declaration: its name, its serve script, its packa
       + "--retry-max-time 100 --max-time 10 http://127.0.0.1:3000/api/health",
     logins: [{ name }],
     machineFeatures: ["userns"],
-    needs: [{ interface: "postgresql", as: "V64_DATABASE" }, { interface: "s3", as: "V64_FILES" }]
+    needs: [{ interface: "postgresql", as: "V64_DATABASE" }, { interface: "s3", as: "V64_FILES" }],
+    tasks: { migrate: { command: `systemd-run --pipe --wait --collect --service-type=exec --same-dir --uid=${name} `
+      + `--property=EnvironmentFile=/etc/mobilynet/service.env --property=LoadCredential=settings.json:/run/mobilynet/apps/${name}/settings.json `
+      + `bash vibe64-app/migrate-${name.replace("memobot-", "")}.sh` } }
   });
   assert.deepEqual(declarations.web, {
     ...common("memobot-web"),
@@ -81,7 +84,7 @@ test("each service is its own declaration: its name, its serve script, its packa
   // The shared packages once: jq is the base's and the Stack's.
   assert.equal(declarations.computers.requiredPackages.filter((name) => name === "jq").length, 1);
   assert.equal(declarations.computers.requiredPackages.length, 4 + 2 + shared.length - 1 + MEMOBOT_COMPUTERS_PACKAGES.length);
-  assert.deepEqual(Object.keys(scripts), ["vibe64-app/build.sh", "vibe64-app/serve-web.sh", "vibe64-app/serve-computers.sh"]);
+  assert.deepEqual(Object.keys(scripts), ["vibe64-app/build.sh", "vibe64-app/serve-web.sh", "vibe64-app/migrate-web.sh", "vibe64-app/serve-computers.sh", "vibe64-app/migrate-computers.sh"]);
   assert.match(scripts["vibe64-app/build.sh"], /^npm run deploy:prepare\nprintf '%s\\n' 'Build: Build'\nnpm --prefix \.memobot-server-generated\/app run build$/mu);
   // A long app name is shortened so that each service's name fits mobilynet's 32 characters.
   const long = servicePackages({ app: "a-very-long-project-name-for-it", deployment: DEPLOYMENT, needs: NEEDS, settings });
@@ -211,7 +214,7 @@ test("mobilynet's count is the names a service is sent with its links' fields, e
   assert.throws(() => settingsPerService(NEEDS, [{ key: "PORT", secret: false, valuePresent: false }]), { code: "vibe64_production_env_invalid" });
 });
 
-test("each service's script exports its settings, its resources' names, the instance facts from _mobilynet and its own settings, then migrates and serves", async (t) => {
+test("each service's script exports its settings, its resources' names, the instance facts from _mobilynet and its own settings, then serves; its migrate task's exports them and migrates", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-deploy-serve-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const { scripts } = servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, ENV) });
@@ -252,7 +255,7 @@ test("each service's script exports its settings, its resources' names, the inst
     "V64_PRIVATE_ADDRESS=10.4.0.7",
     "V64_WORK_DIR=/srv/memobot-computers"
   ]);
-  assert.equal(computers.steps, "npm --prefix .memobot-server-generated/app run db:migrate\nnode bin/memobot-server.js serve\n");
+  assert.equal(computers.steps, "node bin/memobot-server.js serve\n", "no service migrates");
   // web, reached at any instance: no address of its own, and Serve's production default for what nothing set.
   const { NODE_ENV: _unset, ...webSettings } = instance("web", "w-9z");
   const web = await serve("web", webSettings);
@@ -265,5 +268,13 @@ test("each service's script exports its settings, its resources' names, the inst
   assert.deepEqual(plain.given, ["DB_HOST=db.internal", "NODE_ENV=production", "V64_DATABASE_HOST=db.internal"]);
   await assert.rejects(serve("computers", elsewhere), (error) => error.code === 1
     && error.stderr.includes("Service computers is reached at each instance, so it needs this instance's own address: its settings have no _mobilynet"));
-  await assert.rejects(readFile(path.join(root, "steps"), "utf8"), { code: "ENOENT" }, "neither Migrate nor Serve ran");
+  await assert.rejects(readFile(path.join(root, "steps"), "utf8"), { code: "ENOENT" }, "Serve didn't run");
+
+  // The migrate task's script takes the same settings from its credentials' folder and migrates; its instance serves
+  // nothing, so one of computers, reached at each instance, needs no address of its own.
+  const credentials = path.join(root, "credentials");
+  await mkdir(credentials);
+  await writeFile(path.join(credentials, "settings.json"), JSON.stringify(elsewhere));
+  await exec("bash", ["vibe64-app/migrate-computers.sh"], { cwd: release, env: { PATH: `${bin}:${process.env.PATH}`, CREDENTIALS_DIRECTORY: credentials } });
+  assert.equal(await readFile(path.join(root, "steps"), "utf8"), "npm --prefix .memobot-server-generated/app run db:migrate\n");
 });

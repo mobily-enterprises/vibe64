@@ -5,24 +5,24 @@
 // by the declaration's `build` block, keeps the folder as the app's read-only output and runs the app as a service, as
 // the app's own login.
 //
-// mobilynet runs `start` and `check` as root, and the build can write any file of the output. So neither runs a file of
-// the app's: start is `install`, which copies the settings mobilynet keeps for root into a file only the app's login
-// reads, and check is `curl` asking the app's health path. Both are programs on the machine's PATH, outside the app's
-// folder. The app's own code runs only in its service, as its login.
+// mobilynet runs `start`, `check` and a release task as root, and the build can write any file of the output. So none
+// runs a file of the app's: start is `install`, which copies the settings mobilynet keeps for root into a file only the
+// app's login reads; check is `curl` asking the app's health path; the migrate task is `systemd-run`, which runs the
+// release's migrate script as the app's login with those settings handed over as a credential (migrateTaskOf). Each is
+// a program on the machine's PATH, outside the app's folder. The app's own code runs only as its login.
+//
+// Migrate is the release's `migrate` task (mobilynet's release tasks, its docs/stages/release-tasks.md, main 17340a6a):
+// a refresh asked for it runs it once, on a temporary instance of the new release with the service's settings and
+// links, after its build passed and before any instance starts, and fails with nothing rolled out when it fails. No
+// serve script migrates, so an instance of any version may start on a database a later release migrated (a production
+// Deploy, 23 Nov: an instance of the version before restarted with new settings, migrated as it started, and knex
+// refused a database holding migrations its code lacked).
 
 import { stackSettingsPerService, withRootFile } from "../../package.js";
 
-// Whether mobilynet runs a release's task once per refresh, after its build passed and before any instance starts (the
-// engine's ask of mobilynet, M-C: a declaration's `tasks`, a refresh asked with `task`). mobilynet has none yet, so a
-// service's serve script still migrates as it starts; with it, Migrate is the release's `migrate` task and every serve
-// script only serves (the adapter's `releaseTasks` capability).
-const RELEASE_TASKS = false;
-// The migrate task's time limit: past it, the task fails and so does its refresh, with nothing rolled out.
-const MIGRATE_TIMEOUT_SECONDS = 900;
-
 /**
- * Where in the release the app's scripts go: `build.sh` (the build VM runs it), `serve-<service>.sh` (a service) and,
- * with release tasks, `migrate-<service>.sh` (that service's migrate task).
+ * Where in the release the app's scripts go: `build.sh` (the build VM runs it), `serve-<service>.sh` (a service) and
+ * `migrate-<service>.sh` (that service's migrate task).
  */
 const APP_SCRIPTS_FOLDER = "vibe64-app";
 const BUILD_SCRIPT = `${APP_SCRIPTS_FOLDER}/build.sh`;
@@ -171,6 +171,26 @@ function migrateScriptOf(service) {
   return `${APP_SCRIPTS_FOLDER}/migrate-${service}.sh`;
 }
 
+// The name the migrate task's settings take in its credentials' folder ($CREDENTIALS_DIRECTORY).
+const MIGRATE_SETTINGS = "settings.json";
+
+/**
+ * The migrate task's command, which mobilynet runs as root in the app's folder in place of the machine's start (so no
+ * start leaves the settings for the login): systemd-run runs the service's migrate script as its login, in that folder,
+ * with the services' environment (mobilynet's service.env: PATH and git's settings) and the settings mobilynet gave root
+ * copied by systemd into the script's own credentials' folder, readable by the login alone. It waits for the script
+ * and exits as it did, its output (and how it ended) the task's instance's logs. One program and plain words, as
+ * mobilynet takes a command; mobilynet stops it at its start step's 280 seconds.
+ * @param {string} name the app's name @param {string} login @param {string} script
+ */
+function migrateTaskOf(name, login, script) {
+  return [
+    "systemd-run --pipe --wait --collect --service-type=exec --same-dir", `--uid=${login}`,
+    "--property=EnvironmentFile=/etc/mobilynet/service.env", `--property=LoadCredential=${MIGRATE_SETTINGS}:/run/mobilynet/apps/${name}/settings.json`,
+    `bash ${script}`
+  ].join(" ");
+}
+
 /**
  * A service's app at mobilynet: the app's name and the service's id, the app's part shortened to fit 32 characters.
  * @param {string} app productionAppName's name @param {string} service
@@ -253,11 +273,11 @@ function stepLines(role, step) {
  */
 function appPackage({
   name, login, port, healthPath, runtimes, settings, workdir = ".", steps, needs = [], bindingLines = [], packages = [], sandboxAllowances = [],
-  service = "web", reached = "any", serviceSettings = {}, releaseTasks = false
+  service = "web", reached = "any", serviceSettings = {}
 }) {
   const serveScript = serveScriptOf(service);
-  // With release tasks, Migrate runs once per Deploy as the release's task, never as an instance starts.
-  const migrateTask = releaseTasks && steps.migrate ? migrateScriptOf(service) : null;
+  // Migrate runs as the release's task, once per Deploy, never as an instance starts.
+  const migrateScript = steps.migrate ? migrateScriptOf(service) : null;
   const machineFeatures = machineFeaturesOf(sandboxAllowances);
   const pythonLibraries = runtimes.includes("python");
   const declaration = {
@@ -278,7 +298,7 @@ function appPackage({
     settings,
     ...(machineFeatures.length > 0 ? { machineFeatures } : {}),
     ...(needs.length > 0 ? { needs } : {}),
-    ...(migrateTask ? { tasks: { migrate: { command: `bash ${migrateTask}`, user: login, timeoutSeconds: MIGRATE_TIMEOUT_SECONDS } } } : {})
+    ...(migrateScript ? { tasks: { migrate: { command: migrateTaskOf(name, login, migrateScript) } } } : {})
   };
   const intoWorkdir = workdir === "." ? [] : [`cd -- ${shellWord(workdir)}`];
   const build = [
@@ -293,18 +313,18 @@ function appPackage({
     ...(pythonLibraries ? PYTHON_LIBRARY_LINES : []),
     ""
   ];
-  // What the serve script and the migrate task both do first: export the settings start left for this login, the
-  // resources' names, the instance's facts and the service's own.
-  const prologue = [
+  // What the serve script and the migrate task both do first: export the settings (those start left for this login, or
+  // the task's credential), the resources' names, the instance's facts and the service's own. The task's instance
+  // serves nothing, so it needs no address of its own.
+  const prologue = (settingsLines, facts) => [
     "set -euo pipefail",
-    `settings=${shellWord(settingsFileForLogin(name))}`,
-    `if [ ! -r "$settings" ]; then echo "No settings at $settings: the app's start step writes them." >&2; exit 1; fi`,
+    ...settingsLines,
     "while IFS= read -r -d '' key && IFS= read -r -d '' value; do export \"$key=$value\"; done < <(",
     "  jq -j 'to_entries[] | select(.key != \"_mobilynet\" and (.key | test(\"^[A-Za-z_][A-Za-z0-9_]*$\"))) | .key, \"\\u0000\", (.value | tostring), \"\\u0000\"' \"$settings\")",
     // The app's folder is read-only, so sign-ins kept in files live where the setting says, in the login's home.
     "if [ -n \"${AUTH_LOCAL_STORE_DIR:-}\" ]; then mkdir -p -- \"$AUTH_LOCAL_STORE_DIR\"; fi",
     ...bindingLines,
-    ...instanceFactLines({ service, login, port, reached }),
+    ...instanceFactLines({ service, login, port, reached: facts }),
     // The service's own facts of the source (its `- Setting` lines), whatever the settings say.
     ...Object.entries(serviceSettings).map(([key, value]) => `export ${key}=${shellWord(value)}`),
     ...Object.entries(steps.serve.defaults ?? {})
@@ -313,23 +333,26 @@ function appPackage({
   ];
   const serve = [
     "#!/usr/bin/env bash",
-    migrateTask
-      ? `# Made by Vibe64: the app's service ${service}. It exports the settings start left for this login and the instance's `
-        + "facts, then serves; the release's migrate task migrates, once per Deploy."
-      : `# Made by Vibe64: the app's service ${service}. It exports the settings start left for this login and the instance's `
-        + "facts, then migrates and serves.",
-    ...prologue,
-    ...(migrateTask ? [] : stepLines("Migrate", steps.migrate)),
+    `# Made by Vibe64: the app's service ${service}. It exports the settings start left for this login and the instance's `
+      + "facts, then serves; the release's migrate task migrates, once per Deploy.",
+    ...prologue([
+      `settings=${shellWord(settingsFileForLogin(name))}`,
+      `if [ ! -r "$settings" ]; then echo "No settings at $settings: the app's start step writes them." >&2; exit 1; fi`
+    ], reached),
     steps.serve.command,
     ""
   ];
   const scripts = { [BUILD_SCRIPT]: build.join("\n"), [serveScript]: serve.join("\n") };
-  if (migrateTask) {
-    scripts[migrateTask] = [
+  if (migrateScript) {
+    scripts[migrateScript] = [
       "#!/usr/bin/env bash",
-      `# Made by Vibe64: the release's migrate task for service ${service}, run once by a Deploy on a temporary machine of `
-        + "the new release, before any of its instances starts. It exports what the service's start does, then migrates.",
-      ...prologue,
+      `# Made by Vibe64: the release's migrate task for service ${service}, run once by a Deploy on a temporary instance of `
+        + "the new release, before any of its instances starts, as the app's login. It exports the settings systemd-run "
+        + "handed it, as the service does, then migrates.",
+      ...prologue([
+        `settings="\${CREDENTIALS_DIRECTORY:-}/${MIGRATE_SETTINGS}"`,
+        `if [ ! -r "$settings" ]; then echo "No settings at $settings: the release task's systemd-run hands them over." >&2; exit 1; fi`
+      ], "any"),
       ...stepLines("Migrate", steps.migrate),
       ""
     ].join("\n");
@@ -530,11 +553,9 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
  *   adapter's serviceSettingsMax), SERVICE_SETTINGS_FALLBACK when not given
  * @param {Record<string, string>} [options.defaults] Serve's own defaults beside the runtime's (the Stack's Environment
  *   defaults), which a setting overrides
- * @param {boolean} [options.releaseTasks] whether Migrate is each release's `migrate` task (the adapter's capability)
- *   rather than a line of every serve script
  * @returns {{ declarations: Record<string, object>, scripts: Record<string, string> }}
  */
-function servicePackages({ app, deployment, needs, settings, settingsMax, defaults = {}, releaseTasks = RELEASE_TASKS }) {
+function servicePackages({ app, deployment, needs, settings, settingsMax, defaults = {} }) {
   const problem = servicePackagesProblem(deployment, settings, { settingsMax });
   if (problem) throw declarationError(problem);
   const runtimes = deployment.runtimeRequirements.map((runtime) => STACK_RUNTIME_PACKS[runtime]);
@@ -571,8 +592,7 @@ function servicePackages({ app, deployment, needs, settings, settingsMax, defaul
       bindingLines: bindingExportLines(needs),
       packages: [...deployment.packages, ...service.packages],
       sandboxAllowances: service.sandboxAllowances,
-      serviceSettings: service.settings,
-      releaseTasks
+      serviceSettings: service.settings
     });
     declarations[service.id] = made.declaration;
     Object.assign(scripts, made.scripts);
@@ -592,7 +612,6 @@ function serviceUpload(archive, declaration) {
 export {
   APP_SCRIPTS_FOLDER,
   MOBILYNET_INTERFACES,
-  RELEASE_TASKS,
   SERVICE_PORT,
   SERVICE_SETTINGS_FALLBACK,
   STACK_RUNTIME_PACKS,

@@ -1,10 +1,11 @@
 import { performance } from "node:perf_hooks";
 
 // The deploy engine's client of mobilynet's API (its OpenAPI document at mobilynet main c6af5ca3: openApiServices.js,
-// openApiHosted.js, openApiSetups.js, openApiNetwork.js, openApiBilling.js): a mobilynet project's App Services and
-// their releases, instances and refreshes, its hosted services and their links, its releases of an app, its domains
-// and routes, the prices and the hosted catalogue. It takes `{ baseUrl, credential }`: mobilynet's address and either
-// an API key of one mobilynet project (`mnk_…`) or a token source that refreshes a grant's access token. Every request
+// openApiHosted.js, openApiSetups.js, openApiNetwork.js, openApiBilling.js; an App Service's release tasks and logs at
+// main 17340a6a): a mobilynet project's App Services and their releases, instances, refreshes and logs, its hosted
+// services and their links, its releases of an app, its domains and routes, the prices and the hosted catalogue. It
+// takes `{ baseUrl, credential }`: mobilynet's address and either an API key of one mobilynet project (`mnk_…`) or a
+// token source that refreshes a grant's access token. Every request
 // is JSON both ways but an upload (a release's tarball, sent as its bytes with its SHA-256), carries the
 // `Idempotency-Key` the caller gives, follows no redirect and is tried once: the engine's next step tries again with the
 // same key. A refusal is a MobilynetError with mobilynet's `{ code, message, details, requestId }`.
@@ -36,6 +37,9 @@ const REFUSALS = new Set([
 const TOKEN_REFUSALS = new Set(["unauthenticated", "key_expired"]);
 // A page of mobilynet's listings, its largest.
 const PAGE_SIZE = 100;
+// What a page of an App Service's logs is asked by (mobilynet's readServiceLogs): `only` and `except` name instances
+// by name or id, comma-separated.
+const LOGS_QUERY = Object.freeze(["only", "except", "unit", "since", "until", "text", "lines", "before", "after"]);
 const REQUEST_TIMEOUT_MS = 20_000;
 // An upload (a release's tarball: at most 1 GiB) has longer.
 const UPLOAD_TIMEOUT_MS = 10 * 60_000;
@@ -278,7 +282,7 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
        * routes and is reached as `<name>.<project label>.internal`; `connections` open a port of another service of
        * the project to its instances. Its instances times its size count against the project's vCPU and memory quotas
        * (`429 quota_exceeded`), and a project at its spending cap makes none (`409 spending_cap_reached`). `task` names a
-       * task of the release's declaration its first refresh runs once before any instance starts (M-C, as a release's).
+       * task of the release's declaration its first refresh runs once before any instance starts, as a release's.
        * @param {{ name: string, region: string, exposure?: "public" | "internal", size: string, instances: number, app: { name?: string, version: string }, settings?: Record<string, unknown>, secrets?: Record<string, string>, routes?: Array<{ host: string, tls?: "edge", take?: boolean }>, connections?: Array<{ to: string, port: number }>, healthCheck?: object, drainSeconds?: number, tags?: Record<string, string>, task?: string }} spec
        * @param {{ idempotencyKey: string }} context
        */
@@ -368,8 +372,12 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
     /**
      * A new release of an App Service's app, uploaded as its tarball (`services:deploy`): `{ release, build, service,
      * refresh }`, a refresh of kind `release` onto it once it built; a refresh that fails leaves the version before
-     * serving. `task` names a task of the release's declaration its refresh runs once, after its build passed and
-     * before any instance starts (`?task=`; the shape the engine asks mobilynet for, its M-C: mobilynet has none yet).
+     * serving. `task` names a task of the release's declaration its refresh runs once (`?task=`, mobilynet's release
+     * tasks): after its build passed and before any instance starts, on a temporary instance of its own, the steps
+     * `task_started` (its instance) then `task_succeeded`, or `task_failed` with the refresh failed `release_task_failed`
+     * (`details: { task, instanceId, outcome }`, the outcome `failed`, `timeout` or `machine_failed`) and nothing rolled
+     * out. A malformed name is `422`; one the release doesn't declare fails the refresh `release_task_not_declared` once it
+     * built. The task's output is its instance's logs (readServiceLogs `only`), kept 2 days.
      * @param {string} serviceId @param {{ archive: Buffer, sha256: string }} upload @param {{ task?: string | null }} [asked]
      */
     createServiceRelease: (serviceId, { archive, sha256 }, { task = null } = {}) => call("POST", `${servicePath(serviceId)}/releases`, {
@@ -383,17 +391,31 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
     rollBackService: (serviceId) => call("POST", `${servicePath(serviceId)}/actions/rollback`, { body: {} }),
     /**
      * An App Service's instances not gone (`services:read`), each its version, rotation and health; with `removed`,
-     * those removed in the last 7 days too.
+     * those removed in the last 2 days too, whose logs are still readable (a release task's instance among them, which
+     * is never one of the live ones).
      * @param {string} serviceId @param {{ removed?: boolean }} [filter]
      */
     listServiceInstances: (serviceId, { removed } = {}) => listAll(`${servicePath(serviceId)}/instances`, { removed: removed ? "true" : undefined }),
     /**
-     * An instance's logs (`services:read`), live or removed in the last 7 days, read from its host by an operation:
-     * `{ instance, logs, readAt, operation }`, `logs` null (`202`) until that operation ends; the same call then answers
-     * the lines (`200`) for a minute. mobilynet masks each of the service's secrets as `[secret]`.
-     * @param {string} serviceId @param {{ instance?: string, unit?: string, since?: string, lines?: number }} which
+     * A page of an App Service's logs (`services:read`): its instances' lines merged in time order, of every instance
+     * live or removed in the last 2 days, `only` those named or all `except` those (by name or id; one it has no logs of
+     * is `422` naming it), the newest `lines` (200 when absent, at most 1000) before `until` or a page's `before`
+     * cursor, or the oldest after an `after` cursor (to follow); `unit` one of the app's services alone, `since` and
+     * `text` narrowing it. Read from the instances' hosts by operations, as mobilynet answers it: `{ instances, units,
+     * lines, before, after, more, readAt, operations }`, `instances` each `{ id, name, live, removedAt, error }` (an
+     * instance whose host couldn't read it has its `error`), `units` the app's services. The first ask answers `202`
+     * with `lines` null and the operations running; once they end the same ask answers `200` with `lines`, each `{ at,
+     * instance, name, unit, text, error }` (`at` to the microsecond, `unit` the app's service or `start` or `check`,
+     * `error` whether it reads as one), a first page for 30 seconds. mobilynet masks each secret's value as `[secret]`.
+     * @param {string} serviceId
+     * @param {{ only?: string | string[], except?: string | string[], unit?: string, since?: string, until?: string, text?: string, lines?: number, before?: string, after?: string }} [asked]
      */
-    readServiceLogs: (serviceId, { instance, unit, since, lines } = {}) => call("GET", `${servicePath(serviceId)}/logs`, { query: { instance, unit, since, lines } }),
+    readServiceLogs: async (serviceId, asked = {}) => {
+      const unknown = Object.keys(asked).find((name) => !LOGS_QUERY.includes(name));
+      if (unknown) throw new TypeError(`readServiceLogs takes no ${unknown}: name instances with only (or except), as mobilynet's logs take them.`);
+      const query = Object.fromEntries(LOGS_QUERY.map((name) => [name, Array.isArray(asked[name]) ? asked[name].join(",") : asked[name]]));
+      return call("GET", `${servicePath(serviceId)}/logs`, { query });
+    },
     /**
      * A build's log from byte `after` (`GET /v1/builds/{id}/log`, `vps:read` or `packages:publish`): `{ text, next,
      * state, done }`, at most 256 KiB, `next` the byte to ask from next; with `wait` (0 to 25 seconds) and nothing new
@@ -403,7 +425,11 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
     readBuildLog: (buildId, { after = 0, wait } = {}) => call("GET", `/v1/builds/${encodeURIComponent(buildId)}/log`, { query: { after, wait } }),
     /** An App Service's refreshes, newest first (`services:read`). @param {string} serviceId */
     listServiceRefreshes: (serviceId) => listAll(`${servicePath(serviceId)}/refreshes`),
-    /** One refresh of an App Service with its steps (`services:read`). @param {string} serviceId @param {string} refreshId */
+    /**
+     * One refresh of an App Service (`services:read`): `{ id, serviceId, kind, state, fromVersion, toVersion, buildId,
+     * held, task, steps, error, createdAt, startedAt, finishedAt }`, `task` the name of the release task it was asked
+     * for, or null. @param {string} serviceId @param {string} refreshId
+     */
     readServiceRefresh: async (serviceId, refreshId) => (await call("GET", `${servicePath(serviceId)}/refreshes/${encodeURIComponent(refreshId)}`)).refresh,
     /** A hosted service (`hosted:read`), or null when mobilynet has none by that id (deleted ones too). @param {string} hostedServiceId */
     readHostedService: async (hostedServiceId) => (await orNull(() => call("GET", hostedPath(hostedServiceId))))?.hostedService ?? null,

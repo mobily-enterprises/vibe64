@@ -35,7 +35,13 @@ const SHOP = Object.freeze({
   }
 });
 
-test("an app's mobilynet.json is built by its build block, and its start and check run no file of the app's", () => {
+// The migrate task's command: systemd-run, a program of the base, which runs the release's migrate script as the
+// service's login in the app's folder, with the services' environment and the settings mobilynet gave root.
+const MIGRATE_TASK = "systemd-run --pipe --wait --collect --service-type=exec --same-dir --uid=shop "
+  + "--property=EnvironmentFile=/etc/mobilynet/service.env --property=LoadCredential=settings.json:/run/mobilynet/apps/shop/settings.json "
+  + "bash vibe64-app/migrate-web.sh";
+
+test("an app's mobilynet.json is built by its build block, and its start, check and migrate task run no file of the app's as root", () => {
   assert.deepEqual(appPackage(SHOP).declaration, {
     name: "shop",
     requiredPackages: ["bash", "coreutils", "curl", "jq", "nodejs_26", "corepack"],
@@ -45,7 +51,8 @@ test("an app's mobilynet.json is built by its build block, and its start and che
     check: "curl --fail --silent --show-error --output /dev/null --retry 30 --retry-delay 3 --retry-all-errors "
       + "--retry-max-time 100 --max-time 10 http://127.0.0.1:3000/api/health",
     logins: [{ name: "shop" }],
-    settings: { PORT: { type: "string", secret: false, required: true } }
+    settings: { PORT: { type: "string", secret: false, required: true } },
+    tasks: { migrate: { command: MIGRATE_TASK } }
   });
   assert.deepEqual(unsupportedRuntimes(["node26", "playwright", "python"]), ["playwright"]);
   assert.equal(healthPathProblem("/api/health"), "");
@@ -77,7 +84,7 @@ test("a Deployment's own packages go on top of the base's and the runtime's, and
   assert.match(packagesProblem(many, ["node26"]), /that is 201 packages, and mobilynet takes at most 200\./u);
 });
 
-test("the build script runs Prepare then Build, and the service exports its settings, then migrates and serves", async (t) => {
+test("the build script runs Prepare then Build, and the service exports its settings, then serves without migrating", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-published-app-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   // Each step writes what it saw; the service's settings file is the test's, where start would leave it.
@@ -104,8 +111,8 @@ test("the build script runs Prepare then Build, and the service exports its sett
   await writeFile(settingsFile, JSON.stringify({ NODE_ENV: "staging", WEIRD: "it's $HOME `x`", AUTH_LOCAL_STORE_DIR: signIns, "bad-name": "x" }));
   await rm(path.join(root, "steps"));
   await run("vibe64-app/serve-web.sh");
-  // A setting wins over Serve's default; quotes and $ stay as they are; Migrate runs before Serve, in the work folder.
-  assert.equal(await readFile(path.join(root, "steps"), "utf8"), "migrate staging it's $HOME `x`\nserve staging it's $HOME `x`\n");
+  // A setting wins over Serve's default; quotes and $ stay as they are; Serve runs in the work folder, and no Migrate.
+  assert.equal(await readFile(path.join(root, "steps"), "utf8"), "serve staging it's $HOME `x`\n");
   assert.ok((await exec("test", ["-d", signIns]).then(() => true)), "the sign-in folder is made");
   assert.match(scripts["vibe64-app/serve-web.sh"], /^if \[ -z "\$\{TRUSTED_PROXIES\+set\}" \]; then export TRUSTED_PROXIES='loopback'; fi$/mu);
 });
@@ -184,7 +191,7 @@ test("a python app's build points the release's native modules at the libraries 
   ].join("\n"));
 });
 
-test("with release tasks, the service only serves and the release's migrate task exports the same settings, then migrates in the work folder", async (t) => {
+test("the release's migrate task runs its script as the service's login with the settings mobilynet gave root, exporting them as the service does, then migrates in the work folder", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-published-app-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const record = (role) => ({ command: `printf '%s %s %s\\n' ${role} "\${NODE_ENV-unset}" "$(basename "$PWD")" >> ${root}/steps` });
@@ -192,29 +199,32 @@ test("with release tasks, the service only serves and the release's migrate task
   const { declaration, scripts } = appPackage({
     ...SHOP,
     workdir: "app",
-    releaseTasks: true,
     steps: { prepare: record("prepare"), build: record("build"), migrate: record("migrate"), serve: { ...record("serve"), defaults: SHOP.steps.serve.defaults } }
   });
-  assert.deepEqual(declaration.tasks, { migrate: { command: "bash vibe64-app/migrate-web.sh", user: "shop", timeoutSeconds: 900 } });
+  // mobilynet takes a release task as { command } alone, which root runs in place of its machine's start.
+  assert.deepEqual(declaration.tasks, { migrate: { command: MIGRATE_TASK } });
   assert.deepEqual(Object.keys(scripts).sort(), ["vibe64-app/build.sh", "vibe64-app/migrate-web.sh", "vibe64-app/serve-web.sh"]);
   await mkdir(path.join(root, "release/app"), { recursive: true });
   for (const [file, text] of Object.entries(scripts)) {
     await mkdir(path.dirname(path.join(root, "release", file)), { recursive: true });
     await writeFile(path.join(root, "release", file), text.replace("/run/app-settings/shop/settings.json", settingsFile));
   }
-  const run = (file) => exec("bash", [file], { cwd: path.join(root, "release"), env: { PATH: process.env.PATH } });
+  // systemd-run gives the migrate script its credentials' folder, which holds the settings as settings.json.
+  const credentials = path.join(root, "credentials");
+  const run = (file, env = {}) => exec("bash", [file], { cwd: path.join(root, "release"), env: { PATH: process.env.PATH, ...env } });
+  await assert.rejects(run("vibe64-app/migrate-web.sh", { CREDENTIALS_DIRECTORY: credentials }),
+    (error) => error.stderr.includes(`No settings at ${credentials}/settings.json`));
+  await mkdir(credentials);
+  await writeFile(path.join(credentials, "settings.json"), JSON.stringify({ NODE_ENV: "staging" }));
   await writeFile(settingsFile, JSON.stringify({ NODE_ENV: "staging" }));
   await run("vibe64-app/serve-web.sh");
   assert.equal(await readFile(path.join(root, "steps"), "utf8"), "serve staging app\n", "the service migrates nothing");
-  await run("vibe64-app/migrate-web.sh");
+  await run("vibe64-app/migrate-web.sh", { CREDENTIALS_DIRECTORY: credentials });
   assert.equal(await readFile(path.join(root, "steps"), "utf8"), "serve staging app\nmigrate staging app\n");
+  assert.doesNotMatch(scripts["vibe64-app/migrate-web.sh"], /app-settings/u, "the task reads no settings file start would write: it runs no start");
 
-  // An app with no Migrate step has no task; without release tasks the service migrates as it starts, as before.
-  assert.equal(appPackage({ ...SHOP, releaseTasks: true, steps: { ...SHOP.steps, migrate: null } }).declaration.tasks, undefined);
-  const plain = appPackage(SHOP);
-  assert.equal(plain.declaration.tasks, undefined);
-  assert.deepEqual(Object.keys(plain.scripts).sort(), ["vibe64-app/build.sh", "vibe64-app/serve-web.sh"]);
-  assert.match(plain.scripts["vibe64-app/serve-web.sh"], /npm run db:migrate/u);
+  // An app with no Migrate step has no task.
+  assert.equal(appPackage({ ...SHOP, steps: { ...SHOP.steps, migrate: null } }).declaration.tasks, undefined);
 });
 
 test("each binding reads the link field it is given, and a URL or a bucket's driver none, so an owner sees which field fills which name", () => {

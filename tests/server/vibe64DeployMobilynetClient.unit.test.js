@@ -144,3 +144,40 @@ test("mobilynet's address is https, or http on this machine only, and a credenti
   assert.throws(() => createMobilynetClient({ baseUrl: BASE, credential: {} }), /an API key, or a token source/u);
   assert.throws(() => createMobilynetClient({ baseUrl: BASE, credential: "mnk_test" }).project(""), /needs the mobilynet project's id/u);
 });
+
+// mobilynet's page of an App Service's logs (its openApiServices.js readServiceLogs, mobilynet main 17340a6a): the
+// keys of its answer, 202 while its reads run and 200 with the page.
+const LOGS_KEYS = ["after", "before", "instances", "lines", "more", "operations", "readAt", "units"];
+const LOG_LINE_KEYS = ["at", "error", "instance", "name", "text", "unit"];
+
+test("a service's logs are asked as mobilynet's logs page takes them, each instance list comma-separated, and answered as mobilynet gives them", async () => {
+  const page = {
+    instances: [{ id: "vps_1", name: "web-k3x9", live: true, removedAt: null, error: null }],
+    units: ["web"],
+    lines: [{ at: "2026-11-23T09:09:58.120351Z", instance: "vps_1", name: "web-k3x9", unit: "web", text: "listening on 3000", error: false }],
+    before: null,
+    after: "eyJzIjoic3ZjXzEifQ",
+    more: false,
+    readAt: "2026-11-23T09:10:00.000Z",
+    operations: [{ id: "op_1", kind: "app_logs", state: "succeeded" }]
+  };
+  const { client, asked } = clientWith([{ status: 200, body: page }, { status: 200, body: page }]);
+  const answer = await client.readServiceLogs("svc_1", {
+    only: ["vps_1", "web-k3x9"], except: "vps_2", unit: "web", since: "2026-11-23T09:00:00Z", until: "2026-11-23T10:00:00Z", text: "error", lines: 50, before: "b"
+  });
+  assert.deepEqual(answer, page, "the page as mobilynet gave it");
+  assert.deepEqual(Object.keys(answer).sort(), LOGS_KEYS);
+  assert.deepEqual(Object.keys(answer.lines[0]).sort(), LOG_LINE_KEYS);
+  const { url } = asked[0];
+  assert.equal(url.pathname, "/v1/services/svc_1/logs");
+  assert.deepEqual([...url.searchParams], [
+    ["only", "vps_1,web-k3x9"], ["except", "vps_2"], ["unit", "web"], ["since", "2026-11-23T09:00:00Z"], ["until", "2026-11-23T10:00:00Z"],
+    ["text", "error"], ["lines", "50"], ["before", "b"]
+  ]);
+  // Asked with nothing, it asks for the newest page of every instance.
+  await client.readServiceLogs("svc_1");
+  assert.equal(asked[1].url.search, "");
+  // An instance asked by the name mobilynet's logs no longer take fails here, naming the one that does.
+  await assert.rejects(client.readServiceLogs("svc_1", { instance: "vps_1" }), /readServiceLogs takes no instance: name instances with only/u);
+  assert.equal(asked.length, 2);
+});
