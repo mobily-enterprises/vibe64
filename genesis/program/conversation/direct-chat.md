@@ -785,6 +785,26 @@ streamed blocks, background-task completion and the interruption barrier for
 steering have one shared implementation. Vibe64 persists admitted user messages
 and projects normalized events into its existing run, transcript and checkpoint
 records. A pipe write alone remains insufficient proof of message delivery.
+
+Claude Code gives the model a message sent during a running turn (a steer)
+inside a system reminder, the channel of its own background-task notices,
+without saying who sent it. Vibe64's Claude message policy
+(`mainConversationMessages.js`) therefore names the sender of every steer in
+Main chat, temporary chats and AI tasks: the person's exact text follows a short
+line saying they sent it while the agent was working, that it is them talking
+and not a tool result or a background notice, and that the agent answers it in
+its next message, in plain words, before carrying on. A note from Vibe64
+(`turnMetadata.vibe64Note`) follows "[A note from Vibe64, not from the
+person.]". Another session's message keeps its own "[Agent message: …]" text,
+a slash command goes unchanged, and Colleague's own chat and bounded helpers,
+which run tool-free, get no line. Only what Claude receives changes: the chat
+keeps showing the exact words sent. Codex needs no line, since `turn/steer`
+delivers a steer as a user message. The settings Vibe64 passes to every Claude
+chat (`claudeFlagSettings`) also deny `ScheduleWakeup`: the tool is meant for
+`/loop`, Monitor and background commands already wake a chat's agent, and a
+wakeup would start work outside routing that nobody asked for. The person's own
+Claude Code terminal keeps it for their `/loop`.
+
 Claude's streamed blocks are temporary. Completed native snapshots retain the
 same identities in live chat and recovered history; block completion removes
 the temporary stream rather than saving it as another reply.

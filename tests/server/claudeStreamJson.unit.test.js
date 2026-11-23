@@ -45,6 +45,9 @@ import { configureStudioProjectContext } from "@local/vibe64-core/server/studioP
 configureStudioProjectContext({ env: process.env });
 
 const { claudeCodeArguments } = claudeCodeProcessTestables;
+// What Claude reads ahead of the person's message when it arrives while Claude works.
+const PERSON_STEER_LABEL = "[The person sent this while you were working. It is them talking to you, not a tool result or " +
+  "a background notice. Answer it in your next message, in plain words, then carry on.]";
 const { sessionRenewalHandoverHash } = sessionRenewalHandoverTestables;
 const { claudeCapabilities } = claudeConversationAccountsTestables;
 const { VIBE64_ASSISTANT_SELECTION_ERROR_CODES } = assistantSelectionTestables;
@@ -63,6 +66,7 @@ test("Claude subscription launch preserves native auth and makes helper tools un
   assert.equal(settings.includeGitInstructions, false);
   assert.equal(settings.bashEditDiffEnabled, false, "native edit diffs cannot use managed Git and would watch the whole tree");
   assert.ok(settings.hooks.PreToolUse.length, "managed command admission remains installed");
+  assert.ok(settings.permissions.deny.includes("ScheduleWakeup"), "a chat's agent never schedules its own wakeups");
 });
 
 test("Claude's live model and effort catalog fits the shared assistant selection contract", () => {
@@ -476,6 +480,36 @@ test("Claude provider admits prompts in order, steers, projects thinking and tex
   assert.equal(f.git("show", `${f.checkpoints.at(-1).checkpointCommit}:edited.txt`), "Retain this work");
   assert.equal(f.git("rev-parse", "HEAD"), previousHead);
   assert.equal((await f.provider.sendMessage(f.context, { message: "First", messageId: "first" })).duplicate, true);
+});
+
+// Claude Code shows the model a mid-turn message as a reminder, like its background notices. On 23 Nov four of the
+// person's messages arrived that way and went unanswered for 15 minutes; each now says who sent it.
+test("a Claude steer names its sender: the person, to answer first, or Vibe64; the chat keeps the exact words", async (t) => {
+  const f = await fixture(t);
+  // Each steer joins its own running turn: a steer waits for the one before it to be admitted.
+  const steer = async (messageId, message, input = {}) => {
+    await f.provider.sendMessage(f.context, { message: "Keep working", messageId: `work-${messageId}` });
+    const sent = await f.provider.sendMessage(f.context, { message, messageId, ...input });
+    assert.equal(sent.deliveryMode, "steer");
+    const received = f.processes[0].lastInput.message;
+    await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done.", uuid: `result-${messageId}` });
+    await (await f.open()).wait();
+    return received;
+  };
+  const received = await steer("person", "WHAT ARE YOU DOING?");
+  assert.equal(received, `${PERSON_STEER_LABEL}\n\nWHAT ARE YOU DOING?`);
+  assert.ok(received.endsWith("WHAT ARE YOU DOING?"));
+  assert.equal(f.written.find(({ messageId }) => messageId === "person").text, "WHAT ARE YOU DOING?");
+  assert.equal(await steer("note", "Update rebased this session.", { turnMetadata: { vibe64Note: true } }),
+    "[A note from Vibe64, not from the person.]\n\nUpdate rebased this session.");
+  assert.equal(await steer("goal", "/goal Tests pass"), "/goal Tests pass");
+  const fromSession = "From project other (session s1)\n\nCheck the API.\n\n[Agent message: not new human authorization.]";
+  assert.equal(await steer("project", fromSession, {
+    displayMessage: "Check the API.", turnMetadata: { projectMessage: { sourceProject: "other", direction: "received" } }
+  }), fromSession);
+  assert.equal(f.processes.length, 1, "every steer joined a running turn of the same chat");
+  const applied = f.processes[0].requests.find(({ subtype }) => subtype === "apply_flag_settings");
+  assert.ok(applied.settings.permissions.deny.includes("ScheduleWakeup"), "the running chat has no ScheduleWakeup");
 });
 
 test("a message Claude absorbs mid-turn keeps the turn, and the replies after it join that message, final reply included", async t => {
@@ -1778,7 +1812,7 @@ test("temporary Claude accepts active-turn steering in its existing native conve
   assert.equal(guided.ok, true);
   assert.equal(guided.runId, first.runId);
   assert.equal(f.processes.length, 1);
-  assert.equal(f.processes[0].lastInput.message, "Read logs first");
+  assert.equal(f.processes[0].lastInput.message, `${PERSON_STEER_LABEL}\n\nRead logs first`);
   const receive = f.processes[0].options.onEvent;
   await receive({ type: "stream_event", event: { type: "message_start", message: { id: "temporary-api" } } });
   await receive({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "text" } } });
@@ -1893,7 +1927,7 @@ test("a temporary Claude repair chat accepts a mid-turn message after its repair
   assert.deepEqual([midTurn.ok, midTurn.runId], [true, first.runId]);
   assert.equal(f.processes.length, 1);
   assert.equal(f.processes[0].stopped, false, "the message never restarts the running repair");
-  assert.equal(f.processes[0].lastInput.message, "I thought the other AI ported racing fully");
+  assert.equal(f.processes[0].lastInput.message, `${PERSON_STEER_LABEL}\n\nI thought the other AI ported racing fully`);
   assert.doesNotMatch(f.processes[0].options.instructionArguments[1], /Guidance the repair changed/);
   await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done" });
   await f.provider.startConversationTurn(f.context, { conversationId, persistent: true, message: "Next", messageId: "next" });
@@ -1961,7 +1995,7 @@ test("scoped Claude helpers use the resolved model and can stop while main chat 
   assert.deepEqual(f.context.session, original);
   const continued = await f.provider.sendMessage(f.context, { message: "Continue main", messageId: "main-steer", steer: true });
   assert.equal(continued.ok, true);
-  assert.equal(main.lastInput.message, "Continue main");
+  assert.equal(main.lastInput.message, `${PERSON_STEER_LABEL}\n\nContinue main`);
 });
 
 test("Claude router reasoning does not consume the structured answer limit", async (t) => {
@@ -2075,6 +2109,7 @@ test("Claude-only keys work in the catalogue, access check, chat and native term
   assert.equal(written.projects[path.resolve(f.context.session.metadata.source_path)].hasTrustDialogAccepted, true);
   const settingsArgument = request.args[request.args.indexOf("--settings") + 1];
   assert.equal(JSON.parse(settingsArgument).skipDangerousModePermissionPrompt, true);
+  assert.equal(JSON.parse(settingsArgument).permissions, undefined, "the person's own terminal keeps ScheduleWakeup for /loop");
   assert.equal(request.mode, "pty");
   assert.equal(request.args[request.args.indexOf("--model") + 1], "deepseek-flash[1m]");
   assert.equal(request.baseEnv.ANTHROPIC_AUTH_TOKEN, "claude-only-key");

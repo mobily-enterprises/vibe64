@@ -150,7 +150,7 @@ them (a turn that is working is told at once, otherwise the note leads your next
 message, and several waiting notes go together); after Save, a working turn is
 told its work was saved as it was when Save started and which files Save
 regenerated. A note sent to a working turn appears in the chat as Vibe64's, not
-as yours. An Update the session's AI ran itself (see below) does not interrupt
+as yours, and Claude is told it is a note from Vibe64, not from you. An Update the session's AI ran itself (see below) does not interrupt
 its turn with that note, because its own command already told it; the note still
 leads your next message. A Save the AI ran itself sends no note at all: its
 command's answer already said what was saved and which files Save regenerated. Colleague can explain these notices; Save and Update

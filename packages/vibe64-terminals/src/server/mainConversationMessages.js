@@ -14,6 +14,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { learningSessionExecutionRoot, readSessionConversationContext } from "./mainConversationContext.js";
 import { normalizeText, toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { MAIN_CHAT_NOTE_TURN_METADATA_KEY } from "./mainChatNote.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -231,6 +232,25 @@ function retainedGoalNotice(goal) {
     "then end your reply briefly: the goal continues once this reply ends. Otherwise leave it as it is.]";
 }
 
+const PERSON_STEER_LABEL = "[The person sent this while you were working. It is them talking to you, not a tool result or " +
+  "a background notice. Answer it in your next message, in plain words, then carry on.]";
+const VIBE64_NOTE_STEER_LABEL = "[A note from Vibe64, not from the person.]";
+
+/**
+ * What Claude reads for a message that arrives while it works. Claude Code hands such a message to the model in a
+ * reminder, the channel of its own background-task notices, without saying who sent it, so the message names its
+ * sender: the person, to be answered next, or Vibe64. Another session's message already says it is an agent's, and a
+ * slash command stays a command.
+ * @param {{ turnMetadata?: Record<string, unknown> }} input
+ * @param {string} message the text as sent
+ * @param {string} prompt what Claude would otherwise read
+ */
+function claudeSteerPrompt(input, message, prompt) {
+  if (message.startsWith("/") || input.turnMetadata?.projectMessage) return prompt;
+  const label = input.turnMetadata?.[MAIN_CHAT_NOTE_TURN_METADATA_KEY] ? VIBE64_NOTE_STEER_LABEL : PERSON_STEER_LABEL;
+  return `${label}\n\n${prompt}`;
+}
+
 function codexContextRefreshPending(session = {}) {
   return normalizeText(session.metadata?.codex_context_refresh_pending) === "yes";
 }
@@ -292,6 +312,9 @@ function createClaudeConversationMessagePolicy({
     const retainedGoal = entry.main && !renewal && !entry.profile && !ctx.assistantScope && !/^\/goal(?:\s|$)/u.test(message)
       ? entry.pausedGoal || entry.blockedGoal : null;
     if (retainedGoal) prompt += retainedGoalNotice(retainedGoal);
+    // Main chat, temporary chats and AI tasks. Colleague's own chat and bounded helpers run tool-free, with no
+    // background notices to mistake a message for.
+    if (steering && !entry.profile && !ctx.assistantScope) prompt = claudeSteerPrompt(input, message, prompt);
     if (!deliveryTiming) {
       onTiming({
         sessionId: ctx.sessionId,

@@ -240,8 +240,11 @@ background task (for example a long test run) still runs: the status reads
 (or chose another Custom model) since that turn started, the message still joins
 the running turn on its original mode and model; your new choice applies from
 the next new request. During a goal, the goal's own mode
-governs its turns (see [Goals and model changes](coding-agent-goals.md)). This
-applies on desktop and mobile.
+governs its turns (see [Goals and model changes](coding-agent-goals.md)). With
+Claude, the assistant is told the message is yours, not a tool result or a
+background notice, and to answer it in its next reply before carrying on. The
+chat shows your message exactly as you typed it. This applies on desktop and
+mobile.
 
 To change the model for an active Update merge repair, open **Chat mode** in
 the **Chat** view of its [AI task window](ai-tasks.md), then **Choose model**. In
