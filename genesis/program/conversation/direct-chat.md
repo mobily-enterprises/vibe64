@@ -2420,7 +2420,10 @@ In plan-running chats (Main chat with a chat mode, not a lesson, Fix it or
 generated work), a pass the person asks for joins the plan: `planPassRequest`
 reads the Passes list's fields (`passAction` continue, again or restart with
 `passId`; `passes` with `passRun`; or a pass's own `genesisTask` and `passRun`)
-or typed words (`passesInMessage`; never a steer's), and `applyPlanPasses`
+or typed words (`passesInMessage`; never a steer's). Genesis's list is read only
+for a message that may ask for passes (`readPassRequest`: those fields, or words
+shaped like a typed request); typed words it can't check against an unreadable
+list go as an ordinary message, while the fields are refused. `applyPlanPasses`
 appends the items to the open plan's Passes, or writes a small plan of its own,
 titled after the request, with the notice **New plan for the passes you asked
 for: <title>.** Once the plan is at its Passes step the message runs its next

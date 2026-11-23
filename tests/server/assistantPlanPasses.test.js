@@ -376,6 +376,26 @@ test("a steer whose words name a pass joins the running turn as written", async 
   assert.equal((await readWorkPlan(f.context)).text, plan);
 });
 
+test("Genesis's pass list is read only for a message that may ask for passes; typed words it can't check are an ordinary message", async (t) => {
+  const plain = await fixture(t, { mode: "senior" }, { readyPlan: false });
+  plain.passReads.failure = new Error("Genesis could not read this project.");
+  await plain.service.send("session-1", { ...request, message: "Build the form." }, plain.context);
+  assert.deepEqual([plain.passReads.count, plain.sends.length, plain.state().stage === "pass"], [0, 1, false]);
+  assert.ok(plain.sends[0].input.message.includes("Build the form."));
+  const typed = await fixture(t, { mode: "senior" }, { readyPlan: false });
+  typed.passReads.failure = new Error("Genesis could not read this project.");
+  await typed.service.send("session-1", { ...request, message: "Run the tests" }, typed.context);
+  assert.deepEqual([typed.passReads.count, typed.sends.length, typed.state().stage === "pass"], [1, 1, false]);
+  assert.ok(typed.sends[0].input.message.includes("Run the tests"));
+  const listed = await fixture(t, { mode: "senior" }, { readyPlan: false });
+  listed.passReads.failure = new Error("Genesis could not read this project.");
+  await assert.rejects(listed.service.send("session-1", { ...request, message: "Security pass the whole app.", genesisTask: "security-pass", passRun: "whole" },
+    listed.context), /Genesis could not read this project/u);
+  await assert.rejects(listed.service.send("session-1", { ...request, messageId: "continue-1", message: "Continue the plan's passes.", passAction: "continue" },
+    listed.context), /Genesis could not read this project/u);
+  assert.equal(listed.sends.length, 0, "the Passes list's own Run and Continue are refused, not sent as words");
+});
+
 test("typed words name passes only as a request to run them", () => {
   const listing = { passes: GENESIS_PASSES, master: { passes: ["review", "security-pass", "data-pass", "quality-pass", "speed-pass", "ux-pass", "identity-pass", "ui-pass", "deslop"] } };
   for (const [message, expected] of [

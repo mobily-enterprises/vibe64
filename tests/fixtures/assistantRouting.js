@@ -216,11 +216,16 @@ async function fixture(t, preferences = { mode: "auto" }, {
   const discards = [];
   let dispatchGate = null;
   const writes = createWritesWhileAssistantWorks();
-  // Genesis's pass list for the session's source; a test may change it.
+  // Genesis's pass list for the session's source; a test may change it, count its reads or make them fail.
   const genesis = { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
+  const passReads = { count: 0, failure: null };
   const routingOptions = { systemRoot: root, allowAuto, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
     writesWhileAssistantWorks: writes,
-    listPasses: async () => genesis,
+    listPasses: async () => {
+      passReads.count += 1;
+      if (passReads.failure) throw passReads.failure;
+      return genesis;
+    },
     open: async (_id, options) => ({ ...context, ...options }),
     interrupt: async () => { interrupts.push(Date.now()); return { ok: true, interrupted: true }; },
     discardPending: async (_id, messageId) => { discards.push(messageId); },
@@ -237,7 +242,7 @@ async function fixture(t, preferences = { mode: "auto" }, {
     } };
   const service = createAssistantRouting(routingOptions);
   return { service, context, metadata, agent, router, sends, events, notices, catalog, catalogs, connections, assignments, configuration,
-    interrupts, discards, receipts, genesis, source: sourceRepository,
+    interrupts, discards, receipts, genesis, passReads, source: sourceRepository,
     // Another operation (such as a sibling chat's slow startup) holds the agent-write lock until released.
     // The next native dispatch waits, inside the write lock, until released.
     holdDispatch() {
