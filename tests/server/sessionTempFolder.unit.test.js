@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { prepareSessionTempFolder, removeSessionTempFolder } from "@local/vibe64-runtime/server/sessionTempFolder";
 import { helperChildEnv, sessionTempDirectory } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
+import { workspaceTempRoot } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/src/server/request.js";
 
@@ -136,5 +137,5 @@ test("the host helper gives a session's temporary folder only to the workspace's
     assert.equal(accepted(refused), "", String(refused));
   }
   // Through the helper's environment: a folder outside the workspace keeps the workspace's TMPDIR.
-  assert.equal(helperChildEnv({ TMPDIR: temp }, daemon, owner).TMPDIR, "/var/lib/vibe64/unitws/tmp");
+  assert.equal(helperChildEnv({ TMPDIR: temp }, daemon, owner).TMPDIR, workspaceTempRoot(owner));
 });
