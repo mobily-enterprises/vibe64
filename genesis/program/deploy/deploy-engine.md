@@ -167,7 +167,7 @@ them.
 
 Each serve script exports the settings mobilynet gave the instance, the
 resources' bound names, the instance facts, the service's own Setting lines,
-then Serve's defaults, migrates and serves. The instance facts come from the
+then Serve's defaults, and serves; no serve script migrates. The instance facts come from the
 `_mobilynet` object mobilynet puts in each instance's settings:
 `V64_INSTANCE_ID` (its hostname), `V64_PRIVATE_ADDRESS`, `V64_WORK_DIR` and,
 for a service reached at each instance, `V64_INSTANCE_URL`. An instance without
@@ -177,16 +177,29 @@ naming why. mobilynet leaves an app's settings to its `start` step, as root, in
 service's login to `/run/app-settings/<app>/settings.json` (mode `0400`), which
 the serve script reads.
 
-Where the adapter runs a release's task (`releaseTasks`, below), Migrate is
-instead each release's `migrate` task: the declaration's `tasks.migrate` runs
-`vibe64-app/migrate-<service>.sh` as the service's login, with a 900-second
-limit, and that script exports the same settings and facts as the serve
-script, then migrates in the work folder; the serve script then only serves.
-An app with no Migrate step has no task. mobilynet runs no such task yet
-(`RELEASE_TASKS` is off), so today every serve script still migrates as its
-instance starts, and an adapter that would run no task refuses a release that
-declares one (`production_deploy_release_tasks_unsupported`) rather than never
-migrating.
+Migrate is each release's `migrate` task, mobilynet's release task (its
+`docs/stages/release-tasks.md`, main `17340a6a`): the declaration's
+`tasks.migrate` is `{ command }` alone, and a refresh asked for it runs it once,
+after its build passed and before any instance starts, on a temporary instance
+of the new release with the service's settings and links, in place of that
+machine's `start`, as root, in the app's folder, stopped at the start step's
+280 seconds. So that no root step runs a file of the app's, the command is
+`systemd-run --pipe --wait --collect --service-type=exec --same-dir
+--uid=<login> --property=EnvironmentFile=/etc/mobilynet/service.env
+--property=LoadCredential=settings.json:/run/mobilynet/apps/<app>/settings.json
+bash vibe64-app/migrate-<service>.sh`: systemd runs the release's migrate
+script as the service's login, with the services' environment and the root-only
+settings copied into the script's own credentials folder
+(`$CREDENTIALS_DIRECTORY/settings.json`), waits for it, and exits as it did,
+its output (and systemd's line saying how it ended) the task's instance's logs.
+The script exports the same settings and facts as the serve script (an instance
+that serves nothing needs no address of its own, so a service reached at each
+instance migrates without one), then migrates in the work folder. An app with
+no Migrate step has no task. Because no serve script migrates, an instance of
+any version can start on a database a later release migrated; on 23 Nov an
+instance of the version before restarted with new settings, migrated as it
+started, and knex refused a database holding migrations its code lacked, which
+failed that service's settings and the Deploy.
 
 `V64_WORK_DIR` is `/srv/<login>`, the work area mobilynet makes for each
 declared login on the machine's data disk (owned by the login, mounted without
@@ -305,17 +318,26 @@ making it twice. In order:
 1. a service whose exposure changed is deleted, to be made again;
 2. each resource's hosted service is made, labelled, or resized, and waited for;
 3. the domain is added to the provider project when none covers it;
-4. each internal service, then the public one. A service that runs a release
-   is first linked to each resource it isn't linked to at the provider, before
-   it is handed its next release, so that release's instances start with them
-   however soon the provider starts them: a provider that reuses a build starts
-   a refresh's instances as the refresh starts (mobilynet's reconcile does
-   both in one transaction; a production Deploy on 18 Nov handed a service a
-   release at 23:42:09, and its first instance started at 23:42:10). A service
-   about to be handed a release is then given its settings, where they differ
-   from those it was given, and that refresh is waited for, so the release's
-   instances start with them; the version it runs restarts with the new values
-   first. Then its release is uploaded and its App Service made (labelled,
+4. each internal service, then the public one, in two passes. First every
+   service that runs a release and is to be handed a new one is readied on the
+   version it runs. It is linked to each resource it isn't linked to at the
+   provider, so that release's instances start with them however soon the
+   provider starts them: a provider that reuses a build starts a refresh's
+   instances as the refresh starts (mobilynet's reconcile does both in one
+   transaction; a production Deploy on 18 Nov handed a service a release at
+   23:42:09, and its first instance started at 23:42:10). It is then given its
+   settings, where they differ from those it was given, and that refresh is
+   waited for, so the release's instances start with them; the version it runs
+   restarts with the new values first. Every service is readied before the
+   Deploy hands any release, so no instance of the version before starts once
+   this Deploy's migrations ran (a production Deploy, 23 Nov: computers' release
+   migrated the database, then web's instances of the version before restarted
+   with web's new settings, migrated as they started, and knex refused a
+   database holding migrations their code lacked, which failed web's settings
+   and needed a second Deploy). A service whose settings name one this Deploy
+   makes (a Reaches of a new service) can't be readied before that one exists,
+   so it is readied just before its own release, once the new service is made.
+   Then, each service in turn: its release is uploaded and its App Service made (labelled,
    internal ones with no routes, the public one routed at the domain with a
    connection to each service it reaches, or made without the domain while
    another App Service the record holds has it: 7) with the count the Plan chose for
@@ -382,8 +404,12 @@ making it twice. In order:
    - The mobilynet adapter answers its refusals of settings ahead with the
      engine's own code, `settings_need_release`, and those settings then follow
      the release. Settings whose refresh fails on the version the service runs
-     (the old code refuses a value the new code takes) follow the release too,
-     and the Deploy goes on. A value no release takes is refused again after
+     (the old code refuses a value the new code takes, or an instance of a
+     release made before 23 Nov, whose serve script migrates, refuses a
+     database an earlier Deploy migrated) follow the release too, and the
+     Deploy goes on: they fail before this Deploy hands any release, so the
+     version before serves as it did, and the release that takes them runs its
+     own code. A value no release takes is refused again after
      the release, where the Deploy fails with the provider's reason. A provider
      that takes settings at once (a service whose first release failed, which
      runs none) starts no refresh, and the release starts with all of them.
@@ -410,7 +436,8 @@ making it twice. In order:
    is handed, even the one it runs; so a Deploy that changes only a size
    replaces no instance for nothing. One whose release failed, or whose
    record was made again from labels, is handed its release again.
-   Where the adapter runs a release's task, the first release this Deploy
+   Where the adapter runs a release's task (mobilynet's does; Google Cloud's
+   and AWS's run none, and their serve scripts migrate), the first release this Deploy
    hands (a new App Service's or a release of one) carries the migrations
    (`task: "migrate"`, `migrations.js`), unless the database already ran this code's: the
    record keeps, once they ran, the fingerprint of the archive they migrated
@@ -421,8 +448,11 @@ making it twice. In order:
    a temporary machine of the new release with its settings and links, after
    its build passed and before any of its instances starts; a later release in
    the same Deploy carries none. Migrations that fail fail that refresh with
-   nothing rolled out and the Deploy with their exit and last line, the version
-   before still serving, and the next Deploy runs them again. A release that
+   nothing rolled out and the Deploy with the provider's reason (mobilynet's
+   names how the task ended, `failed`, `timeout` or `machine_failed`, and where
+   its output is), the version before still serving, and the next Deploy runs
+   them again. The provider gives no exit code or output: their output is the
+   logs of the instance they ran on, which the step reading the refresh names. A release that
    fails after its migrations ran says that the version before serves on the
    migrated database, and the next Deploy doesn't run them again;
 5. a resource the Stack no longer names is unlinked from the services that
@@ -488,7 +518,13 @@ release digest and no upload or release, a new generated secret going ahead of
 the release requiring it, a fixed value going ahead beside a new entry, a
 required setting the Production Env has no value for refused before any change,
 settings that follow the release when the release a service runs fails with
-them, and a Deploy resumed after such settings failed or while they still ran). Two parts rest on mobilynet: a link made ahead of a failed
+them, and a Deploy resumed after such settings failed or while they still ran)
+and to the order of the 23 Nov Deploy: every service's settings go live on the
+version it runs before the first release migrates, and an instance of the
+version before that restarts after an earlier run's migrations serves. A model
+of knex's migration list in the stand-in (an instance whose release migrates as
+it starts refuses a database holding a later release's migrations) is what
+fails the Deploy as it failed on 23 Nov. Two parts rest on mobilynet: a link made ahead of a failed
 refresh ends with it (M14), so the next Deploy makes it again with a new login;
 and the migrations run once only where the provider runs a release's task.
 
@@ -537,9 +573,10 @@ so ("…, which first runs the migrations once"; its `message`: "Its refresh run
 the migrations once, on a temporary machine of the new release, before any
 instance starts."), the first hand-over that needs none says "Migrations
 skipped: the database already ran this code's migrations.", the step reading
-the refresh says how they went ("The migrations ran once (exit 0).") with their
-last 20 lines of output (`output`), and the end says `migrations`: `ran`,
-`failed`, `asked` or `skipped`. A step that starts a refresh,
+the refresh says how they went and where their output is ("The migrations ran
+once. Their output is in the logs of vps_….", or "The migrations failed: they
+exited with an error. Their output is in the logs of vps_…."), and the end says
+`migrations`: `ran`, `failed`, `asked` or `skipped`. A step that starts a refresh,
 or reads how one ended, names it (`refresh: { serviceId, refreshId }`), so the
 caller can follow what the provider does in it. No event carries a setting's
 value, and a report that throws or rejects never stops the run. Every event has
@@ -657,18 +694,29 @@ inventory reads each thing's `tags` as its labels, and a list asks for
 `label=` in a query, `422 validation_failed` under that name, and so does the
 stand-in. mobilynet has no leases yet: an
 adapter made without `leases: true` takes none, which is safe only while one
-editor deploys an environment. Nor does it run a release's task yet: an adapter
-made without `releaseTasks: true` (`RELEASE_TASKS`) runs none, and its
-declarations keep Migrate in each serve script. The task is the engine's ask of
-mobilynet, in the shape its stand-in answers (STAND-IN ONLY, like leases): a
-declaration's `tasks` (`{ <name>: { command, user?, timeoutSeconds? } }`); a
-create's `task` or a release upload's `?task=` naming one, which that refresh
-runs once on a temporary instance of what it moves to (release, settings,
-secrets and links' settings), after `build_passed` and before any instance
-(steps `task_started`, then `task_succeeded` or `task_failed`); a task that
-fails fails the refresh `release_task_failed` with nothing rolled out; and the
-refresh's `task` (`{ name, state, exitCode, output }`). The stand-in's
-`releaseTaskFails` fault fails it.
+editor deploys an environment. mobilynet runs a release's task (main
+`17340a6a`, its `docs/stages/release-tasks.md`), and the stand-in answers it as
+mobilynet does: a declaration's `tasks` is `{ <name>: { command } }`, at most
+10, a name of a lowercase letter then up to 39 lowercase letters, digits and
+hyphens, a command as `start`'s, any other field refused; a create's `task` or
+a release upload's `?task=` names one (a malformed name is `422` under `task`),
+which that refresh runs once, after `build_passed` and before any instance, on
+an instance of its own (rotation `task`: never in rotation, none of the
+service's instances, listed with the removed ones once it ended) of what the
+refresh moves to (release, settings, secrets and links' settings). A name the
+release doesn't declare fails the refresh `release_task_not_declared` once it
+built. The steps are `task_started` (its instance) at one pass, then
+`task_succeeded` (its instance), or `task_failed` with the refresh failed
+`release_task_failed`, `details: { task, instanceId, outcome }` (`failed`,
+`timeout` or `machine_failed`) and a message naming the logs that hold its
+output, nothing rolled out. The refresh's `task` is the name it was asked for,
+or null, beside `held` (false). mobilynet gives no exit code or output: the
+adapter's `readRefresh` reads the task from the steps and error as `task: {
+name, state, instanceId, outcome }` (`asked`, `running`, `succeeded` or
+`failed`), and its output is its instance's logs. Its instance is removed as
+soon as it ends, its logs kept 2 days. The stand-in's `releaseTaskFails` fault
+fails it (`true`, or `{ outcome, output }`, the lines its logs then hold), and
+`services.taskInstances(id)` shows a service's task instances to a test.
 
 The domain is a route's at mobilynet, as its stable domain target change
 (designed 20 Nov, being built; the stand-in answers it already) makes it: a
@@ -694,15 +742,29 @@ changes with the service, so nothing tells an owner that it stays.
 
 Its client also reads what mobilynet did, for a caller that shows it: a
 refresh with its steps (`readServiceRefresh`: build started, passed or failed,
-each instance started, healthy, joined or never healthy) and an instance's logs
-(`readServiceLogs`, `GET /v1/services/{id}/logs`, `services:read`): read by an
-operation, `logs` null with `202` until it ends, then the lines, each of the
-service's secrets masked as `[secret]`; and a build's own log
+the release task started, succeeded or failed, each instance started, healthy,
+joined or never healthy), a page of a service's logs (`readServiceLogs`, `GET
+/v1/services/{id}/logs`, `services:read`, mobilynet main `17340a6a`) and a
+build's own log. A logs page is its instances' lines merged in time order, of
+every instance live or removed in the last 2 days (a release task's among
+them), `only` those named or all `except` those (by name or id,
+comma-separated; one it has no logs of is `422` naming it), the newest `lines`
+(200, at most 1000) before `until` or a `before` cursor, or the oldest after an
+`after` cursor, `unit` one service alone, `since` and `text` narrowing it. It
+answers `{ instances, units, lines, before, after, more, readAt, operations }`
+as mobilynet gives it: `202` with `lines` null while the reads from the
+instances' hosts run, then `200` with each line `{ at, instance, name, unit,
+text, error }` (`unit` the service, or `start` for a release task's, `error`
+whether it reads as one), each secret's value masked as `[secret]`; a first
+page is kept 30 seconds. The client refuses an option mobilynet's logs don't
+take (`instance`, the shape before), naming `only`. And a build's own log
 (`readBuildLog`, `GET /v1/builds/{id}/log`: `{ text, next, state, done }` from
 byte `after`), which needs `vps:read` or `packages:publish`, scopes a key
 holding only the engine's lacks. The stand-in answers each, an instance's
 output as a test sets it (`services.setLogs`), its reads ending at the next
-`advance()` (`standIn/serviceLogs.js`), and a build's own lines; its
+`advance()` (`standIn/serviceLogs.js`: STAND-IN ONLY, a line's time is when it
+was first read or given, and a line is an error by its words alone), and a
+build's own lines; its
 `releaseBuildFails` fault, given `{ code, message }`, fails a build with that
 reason, which the refresh names too, as mobilynet named a build whose output
 passed its limit.

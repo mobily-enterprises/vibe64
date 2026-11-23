@@ -21,8 +21,9 @@ const OTHER_SOFTWARE_LOCATIONS = new Set([
   // The machine the deploy engine deploys an application to at mobilynet, never the person's computer: where mobilynet
   // leaves each app's settings for its start step (root, tmpfs), and the folder that step copies them to for the
   // service's login, as mobilynet's catalogue apps keep a /run folder of their own (packages/vibe64-deploy's
-  // adapters/mobilynet/declaration.js).
-  "/run/mobilynet", "/run/app-settings"
+  // adapters/mobilynet/declaration.js). And that machine's service environment (/etc/mobilynet/service.env: PATH and
+  // git's settings), which the migrate task hands the script it runs as the service's login.
+  "/run/mobilynet", "/run/app-settings", "/etc/mobilynet"
 ]);
 // Known blocker: the privileged helper (every module of its folder), its test
 // files and its release packaging still describe the host they run on.

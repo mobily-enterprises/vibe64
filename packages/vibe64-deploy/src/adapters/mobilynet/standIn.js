@@ -41,16 +41,16 @@ import { createStandInServices } from "./standIn/services.js";
 //                      currentRefresh, advanceBuild, roll), so it is never seen building: a production Deploy handed
 //                      a service a release at 23:42:09 and its refresh's build_started, build_passed and first
 //                      instance_started were all at 23:42:10 (18 Nov)
-//   releaseTaskFails   a release's task a refresh runs (STAND-IN ONLY, the engine's ask M-C) fails, and so does the
-//                      refresh, release_task_failed, before any instance starts: `true`, exit 1; `{ exitCode, output }`
+//   releaseTaskFails   a release task a refresh runs fails, and so does the refresh, release_task_failed, before any
+//                      instance starts: `true`, its command exited with an error; `{ outcome, output }`, the outcome
+//                      (`failed`, `timeout`, `machine_failed`) and the lines its instance's logs then hold
 //   olderHost          a host of each region with hosts runs an agent before 2.9.0, which takes 50 entries for an
 //                      app: an App Service there holds 49 settings and secrets in all, as its region says, not 199
 //
 // Every request is kept in order (`requests()`: its method, path, query, Idempotency-Key, JSON body or upload's
 // SHA-256, and the status and error code it got), so a test can see what was asked and of what.
-// STAND-IN ONLY: leases (`/v1/leases`) and a release's tasks (a declaration's `tasks`, run once by a refresh a create
-// or a release asks to: `task` in a create's body, `?task=` on a release's upload; the refresh's `task` says how it
-// went) answer in the shape the engine asks mobilynet for (client.js), which mobilynet has not built yet; idempotency keys are kept across the organisation, not per key; at a create or
+// STAND-IN ONLY: leases (`/v1/leases`) answer in the shape the engine asks mobilynet for (client.js), which mobilynet
+// has not built yet; idempotency keys are kept across the organisation, not per key; at a create or
 // scale-up the spending cap is asked before the quotas; there are no mobilynet machines, allow rules, webhooks or usage.
 
 /**
@@ -436,9 +436,9 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     /** A mobilynet project's releases of an app, with their builds and declarations. */
     releases: releases.list,
     /**
-     * App Services: `all()`, `service(id)` with their values, `instances(id)` with `_mobilynet`, `refreshes(id)` (a task
-     * a refresh ran with the names of the settings it ran with),
-     * `reaches(from, to, port)`, and `setLogs(instanceId, text)`, what an instance's logs say.
+     * App Services: `all()`, `service(id)` with their values, `instances(id)` with `_mobilynet`, `taskInstances(id)`
+     * (its release tasks' instances), `refreshes(id)`, `reaches(from, to, port)`, and `setLogs(instanceId, text)`, what an
+     * instance's logs say.
      */
     services: services.controls,
     /** Hosted services: `all()`, `service(id)` with their links and secrets, `catalogue()`. */

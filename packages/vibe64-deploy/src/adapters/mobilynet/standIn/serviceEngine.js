@@ -11,7 +11,11 @@ import { EDGE_ADDRESSES, INSTANCE_SIZES, REGIONS, isRecord, randomText } from ".
 const SERVICE_NAME = /^[a-z](?:[a-z0-9-]{0,38}[a-z0-9])?$/u;
 const HOSTNAME = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/u;
 const EXPOSURES = Object.freeze(["public", "internal"]);
-const LIMITS = Object.freeze({ instances: 100, routes: 20, connections: 20, minDrainSeconds: 30, maxDrainSeconds: 600, logsKeptDays: 7 });
+const LIMITS = Object.freeze({ instances: 100, routes: 20, connections: 20, minDrainSeconds: 30, maxDrainSeconds: 600, logsKeptDays: 2 });
+// How long a release task may run: its machine's start step's limit (machines' SERVICE_LIMITS.taskSeconds).
+const TASK_SECONDS = 280;
+// What a release task's failure says it did, by its outcome (machines' serviceTasks.js FAILURES).
+const TASK_FAILURES = Object.freeze({ failed: "exited with an error", timeout: `ran past its ${TASK_SECONDS} seconds`, machine_failed: "couldn't run: its machine failed" });
 const HEALTH_CHECK_DEFAULTS = Object.freeze({ intervalSeconds: 5, timeoutSeconds: 2, healthyAfter: 2, unhealthyAfter: 3 });
 const HEALTH_CHECK_BOUNDS = Object.freeze({ intervalSeconds: [2, 60], timeoutSeconds: [1, 30], healthyAfter: [1, 10], unhealthyAfter: [1, 10] });
 const MAX_SECRET = 4096;
@@ -222,7 +226,7 @@ function specOf(service, refresh = null) {
  * @param {(service: any) => void} parts.syncRoutes makes a service's route rows what it asks for
  */
 function createStandInServiceEngine(world, parts) {
-  const { services, instances, releases, hooks, liveOf, currentRefresh, releaseOf, stepOf, patch, event, syncRoutes } = parts;
+  const { services, instances, releases, logs, hooks, liveOf, currentRefresh, releaseOf, stepOf, patch, event, syncRoutes } = parts;
   const { faults, nextId, at, now } = world;
   let placed = 0;
 
@@ -275,7 +279,7 @@ function createStandInServiceEngine(world, parts) {
     Object.assign(instance, { state: "running", rotation: "in", health: "healthy", healthChangedAt: at(), healthyAt: at() });
   }
 
-  /** An instance removed, its logs kept 7 days. @param {any} instance @param {string} reason */
+  /** An instance removed, its logs kept 2 days. @param {any} instance @param {string} reason */
   function removed(instance, reason) {
     Object.assign(instance, {
       state: "deleted",
@@ -286,10 +290,15 @@ function createStandInServiceEngine(world, parts) {
     });
   }
 
+  /** A refresh's release task's instance, while it lives. @param {any} refresh */
+  const taskInstanceOf = (refresh) => [...instances.values()].find((one) => one.refreshId === refresh.id && one.rotation === "task") ?? null;
+
   /** A refresh's end, failed: the service keeps what it ran (serviceEngine.js endRefresh). */
   function failRefresh(service, refresh, error, step) {
     if (step) refresh.steps.push(stepOf(step, null, error.message));
     Object.assign(refresh, { state: "failed", error, finishedAt: at() });
+    const tasked = taskInstanceOf(refresh);
+    if (tasked) removed(tasked, "task_ended");
     for (const instance of liveOf(service.id).filter((one) => one.refreshId === refresh.id)) removed(instance, "refresh_failed");
     patch(service, { state: service.version ? "running" : "failed", lastError: error });
     event(service, "service.refresh_failed", { refreshId: refresh.id, kind: refresh.kind, version: refresh.toVersion, error: { code: error.code, message: error.message } });
@@ -323,34 +332,43 @@ function createStandInServiceEngine(world, parts) {
   }
 
   /**
-   * A refresh's task, run once on a temporary instance of what the refresh moves to (its release, settings, secrets and
-   * links' settings), never in rotation, before any instance starts (STAND-IN ONLY: the engine's ask of mobilynet, its
-   * M-C). The task keeps the names of the settings it ran with. A failure (`releaseTaskFails`: `true`, exit 1; `{
-   * exitCode, output }`, those) fails the refresh `release_task_failed` with nothing rolled out. Answers whether it passed.
+   * A refresh's release task (machines' serviceTasks.js run), after its build passed and before any instance starts:
+   * one the release doesn't declare fails the refresh `release_task_not_declared`; else, at one pass, an instance of
+   * what the refresh moves to (its release, settings, secrets and links' settings) starts with the task's command as
+   * its start (rotation `task`, none of the service's instances: never in rotation or counted), step `task_started`;
+   * at the next, it passed (`task_succeeded`) or, while `releaseTaskFails` is on (`true`, an exit; `{ outcome, output
+   * }`, `failed`, `timeout` or `machine_failed`, its output the instance's logs), failed the refresh
+   * `release_task_failed` with nothing rolled out. Either way its instance is removed, its logs kept. Answers whether
+   * the refresh rolls now. STAND-IN ONLY: the task's command runs nothing; its instance's logs say it ran unless
+   * `releaseTaskFails` gives them.
    */
   function runTask(service, refresh, release) {
-    const { task } = refresh;
-    const spec = specOf(service, refresh);
-    const machine = nextId("vps");
-    const declared = release.declaration.tasks?.[task.name] ?? {};
-    Object.assign(task, { state: "running", machine, command: declared.command, settings: [...Object.keys(spec.settings), ...Object.keys(spec.secrets)].sort(), startedAt: at() });
-    refresh.steps.push(stepOf("task_started", machine, task.name));
-    const fault = faults.releaseTaskFails;
-    if (fault) {
-      const exitCode = fault === true ? 1 : Number(fault.exitCode ?? 1);
-      const output = fault === true ? ["Migration failed."] : [...(fault.output ?? [])];
-      Object.assign(task, { state: "failed", exitCode, output, finishedAt: at() });
-      refresh.steps.push(stepOf("task_failed", machine, `exit ${exitCode}`));
-      const last = output.at(-1);
-      failRefresh(service, refresh, {
-        code: "release_task_failed",
-        message: `The release's task ${task.name} exited ${exitCode}${last ? `: ${last}` : "."}`,
-        details: { task: task.name, exitCode, output }
-      }, null);
+    const name = refresh.task;
+    if (refresh.steps.some((one) => one.step === "task_succeeded")) return true;
+    if (!Object.hasOwn(release.declaration.tasks ?? {}, name)) {
+      const message = `The release declares no release task ${JSON.stringify(name)}: name it under tasks in its mobilynet.json.`;
+      failRefresh(service, refresh, { code: "release_task_not_declared", message, details: { task: name } }, "task_failed");
       return false;
     }
-    Object.assign(task, { state: "succeeded", exitCode: 0, output: [`${task.name}: done`], finishedAt: at() });
-    refresh.steps.push(stepOf("task_succeeded", machine, task.name));
+    const started = refresh.steps.find((one) => one.step === "task_started");
+    if (!started) {
+      const instance = startInstance(service, specOf(service, refresh), refresh.id);
+      Object.assign(instance, { rotation: "task", task: name });
+      logs.set(instance.id, `${name}: ${release.declaration.tasks[name].command}\n`);
+      refresh.steps.push(stepOf("task_started", instance.id, name));
+      return false;
+    }
+    const instance = instances.get(started.instanceId);
+    const fault = faults.releaseTaskFails;
+    removed(instance, "task_ended");
+    if (fault) {
+      const outcome = fault === true ? "failed" : String(fault.outcome ?? "failed");
+      if (fault !== true && fault.output) logs.set(instance.id, `${fault.output.join("\n")}\n`);
+      const message = `The release task ${name} ${TASK_FAILURES[outcome]}; nothing rolled out. Its output: GET /v1/services/${service.id}/logs?only=${instance.id}.`;
+      failRefresh(service, refresh, { code: "release_task_failed", message, details: { task: name, instanceId: instance.id, outcome } }, "task_failed");
+      return false;
+    }
+    refresh.steps.push(stepOf("task_succeeded", instance.id, name));
     return true;
   }
 
@@ -378,7 +396,7 @@ function createStandInServiceEngine(world, parts) {
       failRefresh(service, refresh, refused, "build_failed");
       return;
     }
-    refresh.steps.push(stepOf("build_passed", null, release.buildId));
+    if (!refresh.steps.some((one) => one.step === "build_passed")) refresh.steps.push(stepOf("build_passed", null, release.buildId));
     if (refresh.task && !runTask(service, refresh, release)) return;
     refresh.state = "rolling";
     const served = servedOf(release.declaration);
@@ -453,6 +471,7 @@ function createStandInServiceEngine(world, parts) {
   /** A deleting service's end: its instances and routes gone, `service.deleted`, its links' consumer gone. */
   function finishDelete(service) {
     for (const instance of liveOf(service.id)) removed(instance, "service_deleted");
+    for (const instance of [...instances.values()].filter((one) => one.serviceId === service.id && one.rotation === "task")) removed(instance, "task_ended");
     patch(service, { state: "deleted", deletedAt: at() });
     syncRoutes(service);
     event(service, "service.deleted", { name: service.name });

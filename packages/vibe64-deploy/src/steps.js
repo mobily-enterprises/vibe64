@@ -6,24 +6,30 @@
 //   1. a service whose exposure changed is deleted first (it holds no data), to be made again;
 //   2. each resource's hosted service is made (labelled) or resized, and waited for;
 //   3. the public service's domain is added to the provider project when none covers it;
-//   4. each internal service, then each public one: a service that runs a release is first linked to each resource
-//      it isn't linked to at the provider, so the instances its next release starts have them however soon the
-//      provider starts them (one that reuses a build starts them as the refresh starts: a production Deploy, 18 Nov);
-//      a service to be handed a release is then given all its settings where they differ from those it was given,
-//      names new to it among them, and that refresh waited for, so the release's instances start with them (the
-//      version it runs restarts with them first). Handed the release first, a release that failed for a setting's value
-//      (an app refusing it as it boots) failed again at each Deploy with the value changed, which never reached the
-//      settings (a production Deploy, 19 Nov). A release declares only what the Stack names (a Production Env entry is
-//      no part of it), so a provider must take a name the release a service runs doesn't declare, as mobilynet does
-//      (decided 19 Nov); a new release requiring one (a new generated secret, a new Reaches) then finds it given. A setting
-//      a service requires that the Production Env has no value for fails the Deploy before any change, naming it. A
-//      provider may still refuse settings the release the service runs doesn't take (one only it requires, a first
-//      release under way): its adapter refuses them SETTINGS_NEED_RELEASE. Those, and settings that didn't go live on
-//      the version it runs, follow the release (6), as a kept release's do;
-//      its release is uploaded, then its service made (internal: no routes; public: routed at the domain, with a
-//      connection to each service it reaches; without it while another service the record holds has it: address.js),
-//      with the count the plan chose for a service it makes, or handed the
-//      release, which rolls to the count the service runs (a provider's refresh rolls to the count the service has as
+//   4. each internal service, then each public one, in two passes. First, every service that runs a release and is to
+//      be handed a new one is readied on the version it runs: linked to each resource it isn't linked to at the
+//      provider, so the instances its next release starts have them however soon the provider starts them (one that
+//      reuses a build starts them as the refresh starts: a production Deploy, 18 Nov), then given all its settings
+//      where they differ from those it was given, names new to it among them, and that refresh waited for, so the
+//      release's instances start with them (the version it runs restarts with them first). Every service is readied
+//      before this Deploy hands any release, so no instance of the version before starts after this Deploy's
+//      migrations ran (a production Deploy, 23 Nov: computers' release migrated, then web's instances of the version
+//      before restarted with web's new settings, migrated as they started, and were refused by knex, which failed
+//      web's settings). A service whose settings name one this Deploy makes (a Reaches of a new service) is given them
+//      once that one is made, just before its own release. Handed the release first, a release that failed for a
+//      setting's value (an app refusing it as it boots) failed again at each Deploy with the value changed, which never
+//      reached the settings (a production Deploy, 19 Nov). A release declares only what the Stack names (a Production
+//      Env entry is no part of it), so a provider must take a name the release a service runs doesn't declare, as
+//      mobilynet does (decided 19 Nov); a new release requiring one (a new generated secret, a new Reaches) then finds
+//      it given. A setting a service requires that the Production Env has no value for fails the Deploy before any
+//      change, naming it. A provider may still refuse settings the release the service runs doesn't take (one only it
+//      requires, a first release under way): its adapter refuses them SETTINGS_NEED_RELEASE. Those, and settings that
+//      didn't go live on the version it runs (the version before refusing them as it starts), follow the release (6),
+//      as a kept release's do: they failed before this Deploy handed any release, so the version before still serves
+//      as it did, and the release that takes them runs its own code.
+//      Then, each service in turn: its release is uploaded, then its service made (internal: no routes; public: routed
+//      at the domain, with a connection to each service it reaches; without it while another service the record holds
+//      has it: address.js), with the count the plan chose for a service it makes, or handed the release, which rolls to the count the service runs (a provider's refresh rolls to the count the service has as
 //      it rolls, as mobilynet's does); then each resource it is still not linked to is linked the moment that refresh
 //      is open, and the refresh waited for.
 //      A service still running the release it was last handed, made from the same upload (the archive and its
@@ -246,34 +252,47 @@ function nextStep({ plan, needs, record, observed, release }) {
   // 3. The domain the public service is routed at.
   if (!run.domain) return { kind: "ensureDomain", domain: release.domain };
 
-  // 4. Each service: its release, its App Service, its refresh, its links.
-  for (const service of servicesInOrder(needs)) {
+  // 4. Each service: readied on the version it runs, every one before any release; then its release, its App
+  // Service, its refresh, its links.
+  const partsOf = (service) => {
     const item = itemOf("service", service.id);
-    const state = run.services[service.id] ?? {};
-    const thing = thingOf(item);
-    if (!thing) {
-      const made = labelledAs(observed, record, "service", service.id);
-      if (made && !item) return { kind: "adopt", item: "service", name: service.id, thing: made };
+    return { item, state: run.services[service.id] ?? {}, thing: thingOf(item) };
+  };
+  // A service that runs a version and is to be handed this Deploy's release, readied on it (the header's 4): its
+  // settings refresh waited for, each resource linked but one taken only with the release (LINK_NEEDS_RELEASE), its
+  // changed settings put. Null once readied, for a service that keeps its release (6 gives it its settings), or where
+  // its settings name a service still to be made (readied once that one is).
+  const readyOf = (service, { item, state, thing }) => {
+    if (state.version || !thing) return null;
+    if (state.refreshId) {
+      if (thing.refresh) return { kind: "wait", words: `Updating the settings of ${service.id} on the version it runs` };
+      return { kind: "checkRefresh", service: service.id, id: thing.id, refreshId: state.refreshId };
     }
+    const first = thing.version ? needs.resources.find((resource) => !linked(resource.id, service.id) && !(state.afterRelease ?? []).includes(resource.id)) : null;
+    if (first) return { kind: "link", resource: first.id, id: itemOf("resource", first.id).id, service: service.id, serviceId: thing.id, beforeRelease: true };
+    if (keeps(service, item, thing)) return null;
+    const values = state.settingsAfterRelease ? null : valuesOf(service, { record, release }, byId);
+    if (values && values.hash !== item.settingsHash) return { kind: "putSettings", service: service.id, id: thing.id, values, beforeRelease: true };
+    return null;
+  };
+  for (const service of servicesInOrder(needs)) {
+    const parts = partsOf(service);
+    if (!parts.thing) {
+      const made = labelledAs(observed, record, "service", service.id);
+      if (made && !parts.item) return { kind: "adopt", item: "service", name: service.id, thing: made };
+    }
+    const ready = readyOf(service, parts);
+    if (ready) return ready;
+  }
+  for (const service of servicesInOrder(needs)) {
+    const parts = partsOf(service);
+    const { item, state, thing } = parts;
     const unlinked = (resource) => !linked(resource.id, service.id);
     if (!state.version) {
-      // The settings given ahead of its release go live on the version it runs before the release is handed.
-      if (state.refreshId && thing) {
-        if (thing.refresh) return { kind: "wait", words: `Updating the settings of ${service.id} on the version it runs` };
-        return { kind: "checkRefresh", service: service.id, id: thing.id, refreshId: state.refreshId };
-      }
-      // Before its release, a service that runs one is linked to each resource it isn't linked to, so its next
-      // instances start with them however soon the provider starts them (a build it reuses starts them at once). A
-      // link the provider takes only with the new release under way (LINK_NEEDS_RELEASE) waits for that release.
-      const first = thing?.version ? needs.resources.find((resource) => unlinked(resource) && !(state.afterRelease ?? []).includes(resource.id)) : null;
-      if (first) return { kind: "link", resource: first.id, id: itemOf("resource", first.id).id, service: service.id, serviceId: thing.id, beforeRelease: true };
+      const ready = readyOf(service, parts);
+      if (ready) return ready;
       if (keeps(service, item, thing)) return { kind: "keepRelease", service: service.id };
       if (!thing) return { kind: "uploadRelease", service: service.id, id: null };
-      // All its settings before its release, where they changed, names new to it among them, so the release's instances
-      // start with them; those the release it runs doesn't take, and those that didn't go live on it, follow the
-      // release (6).
-      const values = state.settingsAfterRelease ? null : valuesOf(service, { record, release }, byId);
-      if (values && values.hash !== item.settingsHash) return { kind: "putSettings", service: service.id, id: thing.id, values, beforeRelease: true };
       return { kind: "releaseService", service: service.id, id: thing.id, ...migrateTask(service.id) };
     }
     if (!thing) {
@@ -357,9 +376,8 @@ function nextStep({ plan, needs, record, observed, release }) {
 async function applyStep(adapter, step, { record: given, needs, plan, release }) {
   const record = structuredClone(given);
   const run = record.run;
-  // What the step's report says beside its words, and a migration's output.
+  // What the step's report says beside its words.
   let message = null;
-  let output = null;
   const serviceOf = (id) => needs.services.find((one) => one.id === id);
   const stateOf = (id) => {
     run.services[id] ??= {};
@@ -458,8 +476,8 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     case "checkRefresh": {
       const refresh = await adapter.readRefresh(step.id, step.refreshId);
       const state = stateOf(step.service);
-      const { task, ...said } = noteTask(record, state, refresh);
-      if (task) ({ message, output } = said);
+      const { task, message: said } = noteTask(record, state, refresh);
+      if (task) message = said;
       if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
         // The links made against it ended with it, and the release it moved to may not run: the next Deploy makes them
         // and hands it that release again.
@@ -470,7 +488,8 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
         const why = refresh.error?.message ?? `its refresh ${refresh.state}`;
         if (state.settingsRefresh && !state.version) {
           // Given ahead of its release, they didn't go live on the version it runs: they follow the release (6), which
-          // may be what takes them.
+          // may be what takes them. No release of this Deploy was handed yet (every service is readied first), so the
+          // version before serves as it did.
           state.settingsAfterRelease = true;
           message = `Its new settings did not go live on the version it runs: ${sentence(why)} ${step.service} gets its new release first, and its settings after it.`;
         } else {
@@ -524,7 +543,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     default:
       throw new TypeError(`No step ${step.kind}.`);
   }
-  return { record, ...(message ? { message } : {}), ...(output ? { output } : {}) };
+  return { record, ...(message ? { message } : {}) };
 }
 
 /**
@@ -562,7 +581,7 @@ async function takeDeployLease(adapter, record, holder) {
  *   change (`{ kind: "wait", words }`), each call tried again (`{ kind: "retry", words, message }`) and the end (`{ kind:
  *   "end", outcome, message?, migrations? }`, `migrations` "ran", "failed", "asked" or "skipped" where the provider runs
  *   them once as a release's task). A step that hands the migrations, or reads how they went, says so in its `message`,
- *   the last lines of their output in `output`.
+ *   which names the instance whose logs hold their output.
  * @param {number} [options.maxSteps]
  * @returns {Promise<{ outcome: "live" | "failed", message?: string, record: any, steps: string[] }>}
  */
@@ -625,7 +644,7 @@ async function deploy({
         try {
           const done = await applyStep(adapter, step, { record, needs, plan, release: full });
           record = await save(done.record);
-          tell({ ...stepEvent(step, words, record), phase: "done", ...(done.message ? { message: done.message } : {}), ...(done.output ? { output: done.output } : {}) });
+          tell({ ...stepEvent(step, words, record), phase: "done", ...(done.message ? { message: done.message } : {}) });
         } catch (error) {
           // A refusal waits for a person: the Deploy fails with it, its record kept as far as it got. Anything the
           // provider may answer later (no answer, its rate limit, a thing busy) is tried again at the next step.
