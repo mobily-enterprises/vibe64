@@ -216,6 +216,28 @@ from what the command says: while a temporary chat or AI task works beside Main
 chat, it refuses because it can't tell which chat ran it, and Main chat's AI
 saves once the other has finished. The same applies on desktop and mobile.
 
+## What the AI's Git does with your GitHub sign-in
+
+In a GitHub project's session, the AI's `git fetch`, `pull`, `push`,
+`ls-remote`, `clone` and `remote`, and its `gh` commands, reach GitHub with the
+session's GitHub sign-in. The token travels with the command, so such a command
+never runs a program the AI picked: it runs none of the repository's hooks,
+reaches GitHub only over HTTPS, uses only Vibe64's own credential, and does not
+enter submodules. It refuses, saying what to do instead, when the command or
+the AI's shell names a program or Git setting it would hand the token to (such
+as `-c credential.helper=...`, `--upload-pack`, `--exec-path`, `--config-env` or
+`GIT_SSH_COMMAND`), when the repository's own Git config sets one (a filter,
+merge or diff program, or a setting that turns off checking GitHub's
+certificate), and for `gh auth`, `gh alias`, `gh extension`, `gh config`,
+`gh codespace` or a gh command that is not one of gh's own. The AI then leaves
+the option out or removes the setting and tries again; you need do nothing.
+
+Every other Git command, such as `commit`, `log`, `merge` or `rebase`, runs
+without your sign-in and keeps the repository's hooks and settings, as does a
+`fetch` or `push` that names a folder on this computer. Your own and the
+computer's Git settings are left alone. Colleague can explain such a refusal;
+the AI itself chooses what to run. The same applies on desktop and mobile.
+
 ## When the repository needs help
 
 A circled **!** on a session's tab reads **Repository needs help**: that

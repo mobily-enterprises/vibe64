@@ -43,7 +43,7 @@ const SUBCOMMAND_VALUE_OPTIONS = Object.freeze({
     "--template", "--server-option", "--filter", "--bundle-uri", "--ref-format", "--revision"]),
   fetch: new Set(FETCH_VALUE_OPTIONS),
   init: new Set(["--template", "--separate-git-dir", "-b", "--initial-branch", "--object-format", "--ref-format"]),
-  "ls-remote": new Set(["--upload-pack", "-o", "--server-option"]),
+  "ls-remote": new Set(["-u", "--upload-pack", "-o", "--server-option"]),
   pull: new Set([...FETCH_VALUE_OPTIONS, "-s", "--strategy", "-X", "--strategy-option"]),
   push: new Set(["-o", "--push-option", "--receive-pack", "--exec", "--repo"])
 });
@@ -421,5 +421,7 @@ export {
   forwardedGitEnv,
   physicalPath,
   placeGitCommand,
-  placeGithubCommand
+  placeGithubCommand,
+  SUBCOMMAND_VALUE_OPTIONS,
+  subcommandArguments
 };

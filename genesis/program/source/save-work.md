@@ -279,6 +279,41 @@ renewal and a failed source's archive remove the temporary folder
 `tests/server/vibe64SessionWorktreeArchive.unit.test.js` and
 `tests/server/agentSessionCommand.unit.test.js`.
 
+In a GitHub session's source the AI's `git clone`, `fetch`, `ls-remote`,
+`pull`, `push` and `remote`, unless the repository they name is a path on this
+computer, and every `gh` command carry the session's GitHub token
+(`commandRequiresGithubToken` in `codexGitCommandToken.js`); every other Git
+command runs without it, as before, so `git credential fill`, a submodule
+`foreach`, an alias or an external `git-*` program no longer get it. The token
+is in the command's environment, where every program it starts can read it,
+so a command that carries it runs no program the AI chose. It refuses, with
+`vibe64_codex_git_command_token_refused` and a message saying what to do
+instead, before reading the token: `-c` config that names a program, weakens
+TLS or undoes what it switches off; `--config-env` and `--exec-path=`;
+`--upload-pack`/`-u`, `--receive-pack`, `--exec`, `clone --template` and
+`clone -c`, signing (`--signed`, `-S`, `--verify-signatures`), merge strategies
+that are not Git's own, and `--recurse-submodules`, Git's abbreviations
+included; the program-naming variables the wrapper reports from the shell
+(`CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES`), which never reach a command; and gh's
+`auth`, `alias`, `config`, `extension` and `codespace` and any name that is
+not one of gh's own commands. Just before the command a plain-Git read of the
+repository's config (`git config --list --includes --show-scope`, with the
+command's own `-C` and `--git-dir`) refuses one whose local or worktree config,
+or a file it includes, sets a filter, merge or diff driver, `diff.external`,
+`core.alternateRefsCommand`, a config-defined hook, a Git LFS program, a
+non-builtin `pull.twohead` or `pull.octopus`, or `http.sslVerify=false`,
+`sslCAInfo`, `sslCAPath` or `curloptResolve`; global and system config belong
+to the person and the host and are not read. The command then runs with
+`GITHUB_TOKEN_COMMAND_ENV`: command-scope `core.hooksPath=/dev/null` (no hook,
+from `.git/hooks` or a configured folder), `core.fsmonitor=false`, an empty
+`core.askPass`, signing and submodule recursion off, `GIT_EDITOR` and
+`GIT_SEQUENCE_EDITOR` `:`, and `GIT_ALLOW_PROTOCOL=https`, which overrides
+every protocol setting, so no ssh, local, `ext::` or remote-helper program
+runs; the token transport's empty `credential.helper` before Vibe64's own
+clears every other helper (`gitConfigEnv.js`, for every `github-token`
+command). Sources: `tests/server/codexGitCommandToken.unit.test.js` and
+`tests/server/codexGitCommand.unit.test.js`.
+
 Native Save confirms a lost push acknowledgement when the remote contains its
 exact proposed commit, then uses the original reconciliation path. An unreadable
 post-push authority records `vibe64_session_save_publication_unknown` on the
