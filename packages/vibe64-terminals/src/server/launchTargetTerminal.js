@@ -218,6 +218,12 @@ function httpReadinessProbeCommand({
   ].join(" ");
 }
 
+// The launch runs in a login shell, which reads ~/.bash_logout when `exit`
+// ends it. Under `set -e` a command failing there (Ubuntu's runs
+// clear_console, which fails without a console) would end the shell with its
+// own status instead, so the wrapper turns errexit off before each exit
+// (vibe64_exit): the launch's status, or the readiness probe's, is the one the
+// launch reports.
 function commandWithHttpReadiness({
   command = "",
   expectedStatus = 200,
@@ -229,6 +235,10 @@ function commandWithHttpReadiness({
   return [
     "{",
     "  set -e",
+    "  vibe64_exit() {",
+    "    set +e",
+    "    exit \"$1\"",
+    "  }",
     `  (${command}) &`,
     "  vibe64_launch_pid=$!",
     "  vibe64_readiness_pid=",
@@ -259,9 +269,9 @@ function commandWithHttpReadiness({
     "    vibe64_readiness_pid=",
     "    if [ \"$vibe64_launch_status\" -eq 0 ]; then",
     "      echo '[studio] Launch target exited before it became ready.' >&2",
-    "      exit 1",
+    "      vibe64_exit 1",
     "    fi",
-    "    exit \"$vibe64_launch_status\"",
+    "    vibe64_exit \"$vibe64_launch_status\"",
     "  fi",
     "  vibe64_readiness_status=",
     "  read -r vibe64_readiness_status <\"$vibe64_readiness_status_file\"",
@@ -270,9 +280,9 @@ function commandWithHttpReadiness({
     "  set -e",
     "  vibe64_readiness_pid=",
     "  if [ \"$vibe64_readiness_status\" -ne 0 ]; then",
-    "    exit \"$vibe64_readiness_status\"",
+    "    vibe64_exit \"$vibe64_readiness_status\"",
     "  fi",
-    "  exit \"$vibe64_launch_status\"",
+    "  vibe64_exit \"$vibe64_launch_status\"",
     "}"
   ].join("\n");
 }

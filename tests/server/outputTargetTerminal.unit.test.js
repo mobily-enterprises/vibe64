@@ -385,7 +385,13 @@ test("HTTP readiness stops probing a launch that exited before the probe started
   });
 });
 
-test("HTTP launch readiness stops immediately when the server exits", async () => {
+test("HTTP launch readiness stops immediately when the server exits, with its status whatever the login shell's logout does", async (t) => {
+  // The launch runs in a login shell, whose `exit` reads ~/.bash_logout.
+  // Ubuntu's runs clear_console in a top-level shell, which fails without a
+  // console; this one fails wherever it runs.
+  const home = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-logout-"));
+  t.after(() => rm(home, { force: true, recursive: true }));
+  await writeFile(path.join(home, ".bash_logout"), "false\n");
   let markLaunchStarted;
   const launchStarted = new Promise((resolve) => {
     markLaunchStarted = resolve;
@@ -399,7 +405,7 @@ test("HTTP launch readiness stops immediately when the server exits", async () =
     timeoutSeconds: 30
   });
   const completion = new Promise((resolve, reject) => {
-    const child = execFile("bash", ["-lc", command], (error, stdout) => {
+    const child = execFile("bash", ["-lc", command], { env: { ...process.env, HOME: home } }, (error, stdout) => {
       if (error) {
         error.stdout = stdout;
         reject(error);
