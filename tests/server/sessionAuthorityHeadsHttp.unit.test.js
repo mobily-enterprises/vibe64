@@ -94,14 +94,20 @@ function githubProject(cloneUrl = "https://github.com/owner/repo.git") {
   return { githubRepository: github, repository: { defaultBranch: "main", github, mode: "github" }, repositoryMode: "github", slug: "alpha" };
 }
 
-// The person's token is read through the gateway as the person; any other
-// gateway request is a Git command the head read was not meant to run.
+// The person's token is read through the gateway as the person, and a Git
+// command with the token first reads its repository's config without it
+// (githubTokenGit.js); any other gateway request is a Git command the head
+// read was not meant to run.
 function gateway() {
-  const state = { commands: [], tokens: 0 };
+  const state = { commands: [], configReads: [], tokens: 0 };
   state.runGatewayCommand = async (request) => {
     if (request.command === "gh" && request.args[0] === "auth") {
       state.tokens += 1;
       return { exitCode: 0, ok: true, stdout: `token-${state.tokens}\n` };
+    }
+    if (request.command === "git" && request.args[0] === "config") {
+      state.configReads.push([request.gitAuthToken, request.gitTransport]);
+      return { exitCode: 0, ok: true, stdout: "" };
     }
     state.commands.push(request);
     return { exitCode: 0, ok: true, stdout: `${H1}\trefs/heads/main\n` };
@@ -235,8 +241,10 @@ test("a managed or non-GitHub authority still lists its heads with git ls-remote
     const elsewhere = await read({ cloneUrl: "https://git.example.test/owner/repo.git" });
     assert.deepEqual(elsewhere.get(session.sessionId), { head: H1 });
     assert.deepEqual(commands.commands.map((request) => request.args.slice(0, 2)), [["ls-remote", "--heads"]]);
+    assert.deepEqual(commands.configReads, [["", "none"]], "the token's ls-remote first reads the config without it");
 
     commands.commands.length = 0;
+    commands.configReads.length = 0;
     const canonical = path.join(root, "canonical", "repository.git");
     const managed = { ...githubSession(root, "managed-1") };
     managed.metadata = { base_commit: H0, repository_mode: "managed_git", source_kind: "session_clone",
@@ -253,6 +261,7 @@ test("a managed or non-GitHub authority still lists its heads with git ls-remote
     });
     assert.deepEqual(heads.get("managed-1"), { head: H1 });
     assert.deepEqual(commands.commands.map((request) => request.args.slice(0, 3)), [["ls-remote", "--heads", canonical]]);
+    assert.deepEqual(commands.configReads, [], "Git without the token reads nothing first");
     assert.equal(github.fetchCalls, 0, "nothing but GitHub is asked over HTTPS");
   });
 });
@@ -278,6 +287,7 @@ test("behind a proxy Node's fetch would not use, the heads are read with git ls-
       assert.equal(github.fetchCalls, inProcess ? 1 : 0, JSON.stringify(proxy));
       assert.deepEqual(commands.commands.map((request) => request.args.slice(0, 2)),
         inProcess ? [] : [["ls-remote", "--heads"]], JSON.stringify(proxy));
+      assert.deepEqual(commands.configReads, inProcess ? [] : [["", "none"]], JSON.stringify(proxy));
     });
   }
 });
