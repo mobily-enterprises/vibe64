@@ -2475,7 +2475,8 @@ test("@preview-lifecycle auto-starts without exposing passive actions", async ({
     {
       automatic: true,
       outputTargetId: "dev",
-      originId: expect.stringMatching(/^tab:/u)
+      originId: expect.stringMatching(/^tab:/u),
+      replacesTerminalSessionId: ""
     }
   ]);
   await expect(page.locator(".vibe64-launch-controls__run-button")).toHaveCount(0);
@@ -2507,7 +2508,8 @@ test("@preview-lifecycle automatically recovers when the first status has no tar
     {
       automatic: true,
       outputTargetId: "dev",
-      originId: expect.stringMatching(/^tab:/u)
+      originId: expect.stringMatching(/^tab:/u),
+      replacesTerminalSessionId: ""
     }
   ]);
   await expect(page.locator(".vibe64-launch-controls__preview-frame")).toBeVisible();
@@ -2542,7 +2544,8 @@ test("@preview-lifecycle refreshes disabled targets after the selected session a
     {
       automatic: true,
       outputTargetId: "dev",
-      originId: expect.stringMatching(/^tab:/u)
+      originId: expect.stringMatching(/^tab:/u),
+      replacesTerminalSessionId: ""
     }
   ]);
 });
@@ -2567,7 +2570,8 @@ test("@preview-lifecycle lets the user recheck a disabled target without a sessi
     {
       automatic: true,
       outputTargetId: "dev",
-      originId: expect.stringMatching(/^tab:/u)
+      originId: expect.stringMatching(/^tab:/u),
+      replacesTerminalSessionId: ""
     }
   ]);
 });
