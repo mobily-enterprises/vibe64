@@ -80,6 +80,7 @@ Git commands.
 - `packages/vibe64-terminals/src/server/sessionWorktreeSwitch.js`
 - `packages/vibe64-terminals/src/server/mainChatNote.js`
 - `packages/vibe64-terminals/src/server/sessionWorkCommands.js`
+- `packages/vibe64-terminals/src/server/githubTokenGit.js`
 - `packages/vibe64-terminals/src/server/sessionWorkAuthority.js`
 - `packages/vibe64-terminals/src/server/githubRemoteHeads.js`
 - `packages/vibe64-terminals/src/server/sessionWorkUpdate.js`
@@ -296,22 +297,38 @@ that are not Git's own, and `--recurse-submodules`, Git's abbreviations
 included; the program-naming variables the wrapper reports from the shell
 (`CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES`), which never reach a command; and gh's
 `auth`, `alias`, `config`, `extension` and `codespace` and any name that is
-not one of gh's own commands. Just before the command a plain-Git read of the
-repository's config (`git config --list --includes --show-scope`, with the
-command's own `-C` and `--git-dir`) refuses one whose local or worktree config,
-or a file it includes, sets a filter, merge or diff driver, `diff.external`,
-`core.alternateRefsCommand`, a config-defined hook, a Git LFS program, a
-non-builtin `pull.twohead` or `pull.octopus`, or `http.sslVerify=false`,
-`sslCAInfo`, `sslCAPath` or `curloptResolve`; global and system config belong
-to the person and the host and are not read. The command then runs with
-`GITHUB_TOKEN_COMMAND_ENV`: command-scope `core.hooksPath=/dev/null` (no hook,
-from `.git/hooks` or a configured folder), `core.fsmonitor=false`, an empty
-`core.askPass`, signing and submodule recursion off, `GIT_EDITOR` and
-`GIT_SEQUENCE_EDITOR` `:`, and `GIT_ALLOW_PROTOCOL=https`, which overrides
-every protocol setting, so no ssh, local, `ext::` or remote-helper program
-runs; the token transport's empty `credential.helper` before Vibe64's own
-clears every other helper (`gitConfigEnv.js`, for every `github-token`
-command). Sources: `tests/server/codexGitCommandToken.unit.test.js` and
+not one of gh's own commands. What it then shares with Save's Git follows.
+
+Every Git that carries a session's GitHub credential, the AI's and Save's,
+Update's and work inspection's (`saveCommand` in `sessionWorkCommands.js`,
+for the `github-token` and `github-https` transports), runs no program the
+repository's own config names (`githubTokenGit.js`). Just before it, a
+plain-Git read with no credential (`git config --list --includes
+--show-scope`, with a Git command's own `-C` and `--git-dir`) refuses one
+whose local or worktree config, or a file it includes, sets
+`core.alternateRefsCommand`, a config-defined hook, or `http.sslVerify=false`,
+`sslCAInfo`, `sslCAPath` or `curloptResolve`, and, unless the command is a
+`fetch`, `push`, `ls-remote` or `remote` that only talks to GitHub, a filter,
+merge or diff driver, `diff.external`, a Git LFS program or a non-builtin
+`pull.twohead` or `pull.octopus`. A `pull`, a gh command and Save's operation,
+which check out, merge and diff, get every refusal. Global and system config
+belong to the person and the host and are not read. The refusal names the
+setting, its file and the `git config --local`, `--worktree` or `--file`
+command that removes it: the AI's command returns
+`vibe64_codex_git_command_token_refused`, Save's and Update's
+`vibe64_session_work_git_config_refused`, before anything runs with the token.
+The command then runs with `GITHUB_TOKEN_COMMAND_ENV`, which every Git it
+starts inherits, Save's operation process included: command-scope
+`core.hooksPath=/dev/null` (no hook, from `.git/hooks` or a configured folder),
+`core.fsmonitor=false`, an empty `core.askPass`, signing (so Save's commits
+are unsigned whatever the person's own config asks) and submodule recursion
+off, `GIT_EDITOR` and `GIT_SEQUENCE_EDITOR` `:`, and `GIT_ALLOW_PROTOCOL=https`,
+which overrides every protocol setting, so no ssh, local, `ext::` or
+remote-helper program runs; the token transport's empty `credential.helper`
+before Vibe64's own clears every other helper (`gitConfigEnv.js`, for every
+`github-token` command). Save's commands without a credential, as in a local
+project, run as before. Sources: `tests/server/codexGitCommandToken.unit.test.js`,
+`tests/server/sessionWorkGitToken.unit.test.js` and
 `tests/server/codexGitCommand.unit.test.js`.
 
 Native Save confirms a lost push acknowledgement when the remote contains its

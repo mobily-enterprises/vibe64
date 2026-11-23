@@ -19,6 +19,7 @@ Dashboard without opening a session.
 - `packages/vibe64-terminals/src/server/codexGitCommandPlaces.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandToken.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandWrappers.js`
+- `packages/vibe64-terminals/src/server/githubTokenGit.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `src/composables/useVibe64Issues.js`
 - `src/composables/useVibe64AppPage.js`

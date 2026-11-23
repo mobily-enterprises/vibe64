@@ -1483,6 +1483,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/codexGitCommandPlaces.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandToken.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandWrappers.js`
+- `packages/vibe64-terminals/src/server/githubTokenGit.js`
 - `packages/vibe64-terminals/src/server/unixJsonCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewWorkerRegistry.js`

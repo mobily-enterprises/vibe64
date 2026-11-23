@@ -6,8 +6,13 @@ import { setTimeout as delay } from "node:timers/promises";
 import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { GITHUB_TOKEN_COMMAND_ENV, githubTokenConfigRefusal } from "./githubTokenGit.js";
 
 const SAVE_TIMEOUT_MS = 120_000;
+// The transports that give a command the person's GitHub credential: the token
+// in its environment, or the person's own helper on a computer signed in to
+// GitHub itself.
+const GITHUB_CREDENTIAL_TRANSPORTS = new Set(["github-https", "github-token"]);
 const SESSION_WORK_COMMAND_SCOPE = Symbol("vibe64-session-work-command-scope");
 
 /**
@@ -98,7 +103,7 @@ async function saveCommand(runCommand, context, command, args, options = {}) {
       return normalized ? [normalized, path.dirname(normalized)] : [];
     })
   ];
-  return runCommand({
+  const request = {
     actor: "daemon",
     allowedRoots,
     args,
@@ -114,7 +119,28 @@ async function saveCommand(runCommand, context, command, args, options = {}) {
     runtimes: commandOptions.gitTransport === "github-https" ? ["git", "gh"] : ["git"],
     timeout: SAVE_TIMEOUT_MS,
     ...commandOptions
+  };
+  if (!GITHUB_CREDENTIAL_TRANSPORTS.has(commandOptions.gitTransport)) return runCommand(request);
+  // Git with the credential, or Save's operation that runs it and passes what
+  // it runs with to every Git it starts, runs no program the repository's own
+  // config names (githubTokenGit.js).
+  const configRefusal = await githubTokenConfigRefusal({
+    args,
+    command,
+    readConfig: (configArgs) => runCommand({
+      ...request,
+      args: configArgs,
+      command: "git",
+      gitAuthToken: "",
+      gitTransport: "none",
+      input: undefined,
+      purpose: "source",
+      runtimes: ["git"]
+    })
   });
+  if (configRefusal?.timedOut) return configRefusal;
+  if (configRefusal) throw saveError(configRefusal.error, "vibe64_session_work_git_config_refused");
+  return runCommand({ ...request, env: { ...env, ...GITHUB_TOKEN_COMMAND_ENV } });
 }
 
 // Git refuses at once while another git command holds the session's index, as the session's AI's own `git status`

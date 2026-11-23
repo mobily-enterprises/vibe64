@@ -3,39 +3,20 @@
 
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { chmod, mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 import { currentOsUser } from "@local/vibe64-core/server/osUserIdentity";
 import { VIBE64_RUNTIME_NAMESPACE_ENV } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "@local/vibe64-core/server/sessionSourcePath";
 import { createCodexGitCommandService, prepareCodexGitCommand } from "@local/vibe64-terminals/server/codexGitCommand";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
-import { endChildInput } from "./childInputTestHelpers.js";
+import { githubTokenTransportFixture, runProcess } from "./githubTokenTransportFixture.js";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 const TOKEN = "secret-github-token";
 const REFUSED = "vibe64_codex_git_command_token_refused";
-
-function runProcess(command, args = [], { cwd = "", env = process.env, input = "" } = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
-    const stdout = [];
-    const stderr = [];
-    child.stdout.on("data", (chunk) => stdout.push(chunk));
-    child.stderr.on("data", (chunk) => stderr.push(chunk));
-    child.once("error", reject);
-    child.once("close", (exitCode) => resolve({
-      exitCode,
-      stderr: Buffer.concat(stderr).toString("utf8"),
-      stdout: Buffer.concat(stdout).toString("utf8")
-    }));
-    endChildInput(child, input);
-  });
-}
 
 function githubSession(root) {
   const sessionId = "token-session";
@@ -227,82 +208,18 @@ test("only Git commands that reach GitHub carry the token; the rest keep their o
   });
 });
 
-// The session's source with a GitHub origin, served by a stand-in for
-// git-remote-https from a repository on this computer: it asks Git for the
-// credential as git-remote-https does and writes what it got to `credential`.
-// Hooks, fsmonitor and the repository's credential helper log their names to
-// `log`, with "token" when the session's token was in their environment.
+// The session's source served by a stand-in GitHub (githubTokenTransportFixture.js), through the AI's managed Git.
 async function tokenTransportFixture(root) {
   const session = githubSession(root);
   const source = session.metadata.source_path;
-  const bare = path.join(root, "github", "repo.git");
-  const upstream = path.join(root, "upstream");
-  const globalConfig = path.join(root, "global.gitconfig");
-  const credential = path.join(root, "credential");
-  const log = path.join(root, "programs.log");
-  await writeFile(globalConfig, "[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n");
-  await writeFile(log, "");
-  const plain = {
-    GIT_CONFIG_GLOBAL: globalConfig,
-    GIT_CONFIG_NOSYSTEM: "1",
-    HOME: root,
-    PATH: process.env.PATH
-  };
-  const git = async (cwd, args) => {
-    const result = await runProcess("git", args, { cwd, env: plain });
-    assert.equal(result.exitCode, 0, `git ${args.join(" ")}: ${result.stderr}`);
-    return result.stdout.trim();
-  };
-  await mkdir(source, { recursive: true });
-  await mkdir(path.dirname(bare), { recursive: true });
-  await git(root, ["init", "--quiet", "--bare", "-b", "main", bare]);
-  await git(source, ["init", "--quiet", "-b", "main"]);
-  await git(source, ["commit", "--quiet", "--allow-empty", "-m", "first"]);
-  await git(source, ["push", "--quiet", bare, "main"]);
-  await git(source, ["remote", "add", "origin", "https://github.com/owner/repo.git"]);
-  await git(root, ["clone", "--quiet", bare, upstream]);
-
-  const execPath = path.join(root, "exec-path");
-  await mkdir(execPath);
-  const gitExecPath = await git(root, ["--exec-path"]);
-  for (const name of await readdir(gitExecPath)) {
-    if (!/^git-remote-(?:https?|ftps?)$/u.test(name)) await symlink(path.join(gitExecPath, name), path.join(execPath, name));
-  }
-  await writeFile(path.join(execPath, "git-remote-https"), [
-    "#!/bin/sh",
-    "while read -r line; do",
-    "  case \"$line\" in",
-    "    capabilities) printf 'connect\\n\\n' ;;",
-    "    connect\\ *)",
-    `      printf 'protocol=https\\nhost=github.com\\n\\n' | git credential fill > '${credential}' 2>/dev/null`,
-    "      printf '\\n'",
-    "      service=${line#connect git-}",
-    "      unset GIT_DIR GIT_WORK_TREE",
-    `      exec git "$service" '${bare}' ;;`,
-    "    *) exit 1 ;;",
-    "  esac",
-    "done",
-    ""
-  ].join("\n"));
-  await chmod(path.join(execPath, "git-remote-https"), 0o755);
-
-  const program = async (file, name) => {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, `#!/bin/sh\necho "${name} \${VIBE64_GIT_AUTH_TOKEN:+token}\${GH_TOKEN:+token}" >> '${log}'\nexit 0\n`);
-    await chmod(file, 0o755);
-    return file;
-  };
+  const fixture = await githubTokenTransportFixture(root, source);
   const calls = [];
   const service = serviceForSession(session, async (request) => {
     calls.push(request);
-    if (isTokenRead(request)) return { exitCode: 0, ok: true, stdout: `${TOKEN}\n` };
-    // This computer's Git, apart from the person's own config, with the
-    // stand-in transport.
-    return runVibe64Command({ ...request, env: { ...request.env, GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: "1", GIT_EXEC_PATH: execPath } });
+    return isTokenRead(request) ? { exitCode: 0, ok: true, stdout: `${TOKEN}\n` } : fixture.runGateway(request);
   });
   const run = (args, { command = "git", env = {} } = {}) => service.run({ args, command, cwd: source, env, sessionId: session.sessionId });
-  const programsRun = async () => (await readFile(log, "utf8")).split("\n").filter(Boolean);
-  return { bare, calls, credential, git, program, programsRun, run, source, upstream };
+  return { ...fixture, calls, run, source };
 }
 
 test("fetch, pull and push with the session's token still work and run none of the repository's hooks, fsmonitor or credential helpers", async () => {
@@ -354,7 +271,7 @@ test("a repository whose own config names a program or weakens TLS refuses a com
     const included = path.join(root, "included.gitconfig");
     await writeFile(included, "[merge \"union-ish\"]\n\tdriver = cat %A\n");
     await eachRow([
-      [["filter.lfs.smudge", "cat"], ["fetch", "origin"], "filter.lfs.smudge", ".git/config"],
+      [["filter.lfs.smudge", "cat"], ["pull", "origin", "main"], "filter.lfs.smudge", ".git/config"],
       [["include.path", included], ["pull", "origin", "main"], "merge.union-ish.driver", included],
       [["http.https://github.com/.sslVerify", "false"], ["push", "origin", "main"], "http.https://github.com/.sslverify", ".git/config"],
       [["http.sslCAInfo", path.join(root, "ca.pem")], ["ls-remote", "origin"], "http.sslcainfo", ".git/config"],
@@ -388,6 +305,16 @@ test("a repository whose own config names a program or weakens TLS refuses a com
     await git(root, ["config", "--global", "filter.lfs.smudge", "git-lfs smudge -- %f"]);
     const fetched = await fixture.run(["fetch", "origin"]);
     assert.equal(fetched.ok, true, fetched.error);
+
+    // A command that only talks to GitHub runs no filter, diff or merge
+    // program, so the repository's own (Bun's lockfile diff, Git LFS) stays.
+    await git(source, ["config", "diff.lockb.textconv", "bun"]);
+    await git(source, ["config", "filter.lfs.smudge", "git-lfs smudge -- %f"]);
+    await eachRow([[["fetch", "origin"]], [["push", "origin", "HEAD:main"]], [["ls-remote", "origin"]]], async (args) => {
+      const result = await fixture.run(args);
+      assert.equal(result.ok, true, `${result.code || ""} ${result.error || ""}`);
+    });
+    assert.equal((await fixture.run(["pull", "origin", "main"])).code, REFUSED, "a pull checks out and diffs");
   });
 });
 
