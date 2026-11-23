@@ -28,8 +28,11 @@ async function settleLastRun(adapter, record, tell) {
     if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
       for (const resource of state.linkedAhead ?? []) delete kept.items[`resource.${resource}`]?.links?.[service];
       delete kept.items[`service.${service}`].release;
-      tell({ kind: "step", phase: "done", step: "settleRefresh", service, words, message: `It ${refresh.state}: `
-        + `${sentence(refresh.error?.message ?? "the provider gave no reason")} This Deploy hands ${service} its ${state.settingsRefresh ? "settings and " : ""}release again.` });
+      // An update aborted with no error was stopped: the Deploy before was stopped by its owner (stop.js).
+      const why = refresh.state === "aborted" && !refresh.error ? "It was stopped with the last Deploy."
+        : `It ${refresh.state}: ${sentence(refresh.error?.message ?? "the provider gave no reason")}`;
+      tell({ kind: "step", phase: "done", step: "settleRefresh", service, words,
+        message: `${why} This Deploy hands ${service} its ${state.settingsRefresh ? "settings and " : ""}release again.` });
     } else tell({ kind: "step", phase: "done", step: "settleRefresh", service, words, message: `It is ${refresh?.state ?? "gone"}.` });
   }
   return kept;

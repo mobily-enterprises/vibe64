@@ -4,6 +4,9 @@
   "description": "The deploy engine: Production's needs from a project's Stack, the package per service, the Plan, the record, the steps and the provider adapters (mobilynet, Google Cloud). Plain Node, with no editor or JSKIT dependency: the editor gives it the credential, the record's place and the prices.",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "undici": "^7.29.1"
+  },
   "exports": {
     ".": "./src/index.js",
     "./needs": "./src/needs.js",

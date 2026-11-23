@@ -17,6 +17,8 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/steps.js`
 - `packages/vibe64-deploy/src/address.js`
 - `packages/vibe64-deploy/src/lastRun.js`
+- `packages/vibe64-deploy/src/stop.js`
+- `packages/vibe64-deploy/src/offline.js`
 - `packages/vibe64-deploy/src/instances.js`
 - `packages/vibe64-deploy/src/domain.js`
 - `packages/vibe64-deploy/src/report.js`
@@ -604,6 +606,43 @@ starts, as mobilynet does with a reused build. Until mobilynet runs M14, mobilyn
 release a service runs, and the first Deploy of an application whose serve
 script needs its database there fails.
 
+## Stopping a Deploy
+
+A host offers the owner a way out of a Deploy that waits, such as one whose
+build is queued at its provider behind another (23 Nov: a release's build sat
+queued 25 minutes behind another build of its project waiting for a build
+server with its base, and nothing could end it). `deploy()` takes
+`stopAsked`, which answers once whether the owner asked to stop since it was
+last called; the Deploy asks it at each step's boundary, and the host wakes
+it from its pause so the boundary comes at once. `deployStopOf(adapter,
+record)` (`stop.js`) decides, from the record as the Deploy kept it last:
+
+- a run not deploying holds nothing open: allowed, with nothing to stop;
+- a service this Deploy handed its release (`handed` on its run state) whose
+  update ended already runs it: refused, as stopping would leave Production
+  partly on the new release;
+- an update past its build (the adapter's `refreshProgress` says `started`:
+  its build passed, its release task, the migrations, or a new instance
+  started, or it rolls) is refused, a settings update's instances restarting
+  likewise;
+- otherwise allowed, naming each update still `queued` or `building` with its
+  build.
+
+Allowed, the Deploy tells `{ kind: "step", step: "stop" }` start and done,
+stops each update at the provider (`stopRefresh`: the update aborted, then its
+build ended, so it no longer holds its project's queue), keeps the record with
+its run `stopped` (each service's update still named), tells `{ kind: "end",
+outcome: "stopped" }` with what it ended, and answers outcome `stopped`; its
+lease is given up as at any end. The services keep the version they ran. The
+next Deploy reads how those updates ended as it reads a Deploy that stopped in
+its wait (`settleLastRun`: an update aborted with no error "was stopped with
+the last Deploy"), drops the links made against them and hands their releases
+again, which the provider builds again. Refused, the Deploy tells the stop
+`refused` with the reason, in words the owner reads ("This Deploy can't be
+stopped now. … It goes on and ends by itself: Live, or Failed with its
+reason."), and goes on. A provider that doesn't answer the stop's reads is
+tried again at the next boundary.
+
 ## The record
 
 The record (`record.js`) keys what was made by (environment, kind, name), each
@@ -768,6 +807,44 @@ build's own lines; its
 `releaseBuildFails` fault, given `{ code, message }`, fails a build with that
 reason, which the refresh names too, as mobilynet named a build whose output
 passed its limit.
+
+A build itself is read with `services:read` for an App Service's (`readBuild`,
+`GET /v1/builds/{id}`, null when mobilynet has none by that id): its state
+(`queued`, `building`, `succeeded`, `failed`), a queued one's `waiting` (`{
+for, words, ahead, latestAt? }`, what it waits for in mobilynet's own words:
+its project's earlier build, a build server holding its base, a free build
+server, a retry, or being sent within seconds) and its `estimate` (`{
+startsBy, endsBy, limitAt, words }`), which a host's Deploy log shows while a
+refresh waits for it. A refresh's `build_started` step is its start, the build
+asked for: the build may then wait before it runs. `endBuild` (`POST
+/v1/builds/{id}/actions/end`, `services:deploy`) ends a queued build at once
+(failed `cancelled`) and a running one when its host stops it; one that ended
+is `409 invalid_state`. `abortServiceRefresh` (`POST
+/v1/services/{id}/refreshes/{rid}/actions/abort`, `services:deploy`) ends a
+queued refresh at once and makes one building or rolling `aborting`, which
+mobilynet's next pass ends `aborted`, its new instances drained and the version
+before kept; one that ended is `409 refresh_not_running`. The adapter's
+`refreshProgress()` and `stopRefresh()` use them to stop a Deploy (Stopping a
+Deploy); a build mobilynet refuses to end leaves the refresh aborted all the
+same, which the stop says. A refresh onto a release whose build failed builds
+it again as it starts, as mobilynet's does (the stand-in, one whose build was
+ended). The
+stand-in answers each, and its `buildsWait` fault keeps a release's new build
+`queued` with `waiting` words (its project's other build first, or the words,
+`latestAt` and `startsBy` given) until it is off.
+
+The client connects through its own dispatcher (undici's `Agent` and `fetch`,
+unless a test gives its stand-in's fetch), whose lookup leaves out each of
+mobilynet's addresses this machine has no route to, found as getaddrinfo finds
+it (a UDP socket connected to the address is refused at once), and keeps them
+all when it reaches none. Node tries a host's addresses in turn, giving up on
+one still connecting after its attempt time (500 ms) and trying the next, so a
+request of an editor too busy to see its connection in time went on to the
+address it can't reach and failed at undici's connect timeout (10 s): on 23
+Nov an editor on a machine with no IPv6 route said "mobilynet did not
+answer: fetch failed" six times in 20 minutes of a Deploy, each read answered
+at once when tried again. A failure names the connection's error ("fetch
+failed (UND_ERR_CONNECT_TIMEOUT)").
 
 For an owner looking at what a Deploy made, the adapter also reads a
 resource's links (`listLinks`, each link's consumer and its connection's
@@ -959,7 +1036,8 @@ request's signature (or the gateway's token), for the engine's tests.
 - `servicePackages()` — one mobilynet declaration per service and the scripts.
 - `imagePackages()`, `imageUpload()` — the image per service, for container providers.
 - `planOf()` — the Plan with verbs, drift, the quote, the quotas and its hash.
-- `deploy()` — a whole Deploy, step by step, under the lease.
+- `deploy()` — a whole Deploy, step by step, under the lease, stopped where `deployStopOf()` allows when asked.
+- `takeOffline()`, `deleteResource()` — Take Production offline and Delete (`offline.js`).
 - `domainStep()`, `addressChange()` — the domain routed to the public service, and its DNS target told once.
 - `setInstances()` — how many instances a running App Service runs, set at its provider at once.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.

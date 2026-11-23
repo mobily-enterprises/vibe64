@@ -508,11 +508,13 @@ function createStandInServices(world, { releases, network }) {
     }
     if (route === "GET /refreshes") return answer(200, pageOf(refreshesOf(service.id).reverse().map(refreshView), params));
     if (route === "GET /logs") return logs.read(service, params);
-    const refreshPath = /^\/refreshes\/([^/]+)$/u.exec(rest);
-    if (refreshPath && method === "GET") {
+    const refreshPath = /^\/refreshes\/([^/]+)(\/actions\/abort)?$/u.exec(rest);
+    if (refreshPath && method === (refreshPath[2] ? "POST" : "GET")) {
       const refresh = refreshes.get(decodeURIComponent(refreshPath[1]));
       if (!refresh || refresh.serviceId !== service.id) return notFound("refresh");
-      return answer(200, { refresh: refreshView(refresh) });
+      if (!refreshPath[2]) return answer(200, { refresh: refreshView(refresh) });
+      if (!engine.abort(service, refresh)) return failure(409, "refresh_not_running", `This refresh is ${refresh.state}: only a refresh building or rolling can be aborted.`, { state: refresh.state });
+      return answer(202, { refresh: refreshView(refresh) });
     }
     return null;
   }

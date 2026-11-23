@@ -1039,3 +1039,54 @@ test("a hosted service's backups are read with hosted:read as mobilynet answers 
   assert.equal((await refused(blind.readHostedBackups(hostedService.id))).code, "scope_missing");
   assert.deepEqual(refusal(await refused(client.readHostedBackups("hsv_none"))), { status: 404, code: "not_found", fields: [] });
 });
+
+test("a build that waits says why in mobilynet's words and ends at once when ended; a refresh aborted keeps the version before, and one asked onto that release again builds it again", async () => {
+  const { standIn, client, release: first, serviceId, projectId } = await runningShop();
+  const words = "No build server it may run on holds its base ubuntu-26.04-20261123.1 yet; a new base reaches them within minutes.";
+  standIn.faults.buildsWait = { for: "base", words, latestAt: "2026-11-20T09:30:00.000Z", startsBy: "2026-11-20T09:10:00.000Z" };
+  const asked = await client.createServiceRelease(serviceId, upload(SHOP, "2"));
+  settle(standIn, 3);
+  // The refresh building, its build still queued behind the wait, said in mobilynet's words with its times.
+  const building = await client.readServiceRefresh(serviceId, asked.refresh.id);
+  assert.deepEqual([building.state, building.steps.map((step) => step.step)], ["building", ["build_started"]]);
+  const queued = await client.readBuild(building.buildId);
+  assert.deepEqual([queued.id, queued.state, queued.waiting, queued.estimate.startsBy, queued.startedAt],
+    [building.buildId, "queued", { for: "base", words, ahead: null, latestAt: "2026-11-20T09:30:00.000Z" }, "2026-11-20T09:10:00.000Z", null]);
+  assert.equal(await client.readBuild("bld_nope"), null);
+  // A build is read with services:read; ending one takes services:deploy.
+  const reader = createMobilynetClient({ baseUrl: standIn.baseUrl, fetch: standIn.fetch, credential: standIn.addKey({ projectId, scopes: ["services:read"] }) });
+  assert.equal((await reader.readBuild(building.buildId)).state, "queued");
+  assert.deepEqual(refusal(await refused(reader.endBuild(building.buildId))), { status: 403, code: "scope_missing", fields: [] });
+  assert.deepEqual(refusal(await refused(reader.abortServiceRefresh(serviceId, asked.refresh.id))), { status: 403, code: "scope_missing", fields: [] });
+
+  // Aborted while it builds: aborting until mobilynet's next step, then aborted, the service on the version it ran.
+  assert.equal((await client.abortServiceRefresh(serviceId, asked.refresh.id)).state, "aborting");
+  assert.deepEqual(refusal(await refused(client.abortServiceRefresh(serviceId, asked.refresh.id))), { status: 409, code: "refresh_not_running", fields: [] });
+  const { build: ended } = await client.endBuild(building.buildId);
+  assert.deepEqual([ended.state, ended.error.code, ended.waiting], ["failed", "cancelled", null]);
+  assert.deepEqual(refusal(await refused(client.endBuild(building.buildId))), { status: 409, code: "invalid_state", fields: [] });
+  standIn.advance();
+  const aborted = await client.readServiceRefresh(serviceId, asked.refresh.id);
+  assert.deepEqual([aborted.state, aborted.error, aborted.steps.at(-1).step], ["aborted", null, "aborted"]);
+  let service = await client.readService(serviceId);
+  assert.deepEqual([service.state, service.version, service.lastError], ["running", first.version, null]);
+  assert.ok(standIn.events().some((event) => event.type === "service.refresh_aborted" && event.details.refreshId === asked.refresh.id));
+
+  // The same release asked for again, nothing holding builds now: a new build, which runs and passes.
+  standIn.faults.buildsWait = false;
+  const again = await client.createServiceRelease(serviceId, upload(SHOP, "2"));
+  assert.equal(again.release.version, asked.release.version);
+  settle(standIn);
+  const moved = await client.readServiceRefresh(serviceId, again.refresh.id);
+  assert.equal(moved.state, "succeeded");
+  assert.notEqual(moved.buildId, building.buildId);
+  assert.equal((await client.readBuild(moved.buildId)).state, "succeeded");
+  service = await client.readService(serviceId);
+  assert.equal(service.version, asked.release.version);
+
+  // A queued refresh aborts at once.
+  standIn.faults.buildsWait = true;
+  const third = await client.createServiceRelease(serviceId, upload(SHOP, "3"));
+  const queuedAbort = await client.abortServiceRefresh(serviceId, third.refresh.id);
+  assert.equal(queuedAbort.state, "aborted");
+});

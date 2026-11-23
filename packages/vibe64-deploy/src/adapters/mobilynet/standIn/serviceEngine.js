@@ -214,7 +214,8 @@ function specOf(service, refresh = null) {
  * @param {object} parts the services stand-in's own
  * @param {Map<string, any>} parts.services each service, by id
  * @param {Map<string, any>} parts.instances each instance, by id, in the order started
- * @param {{ advance: () => void }} parts.releases its projects' releases, each built a step on before the services move
+ * @param {{ advance: () => void, rebuild: (release: any) => void }} parts.releases its projects' releases, each built a
+ *   step on before the services move
  * @param {{ consumerGone: (kind: string, id: string) => void, refreshFailed: (service: any) => void }} parts.hooks what a
  *   deleted service's links do, and a failed refresh's
  * @param {(serviceId: string) => any[]} parts.liveOf a service's instances not gone, oldest first
@@ -313,6 +314,41 @@ function createStandInServiceEngine(world, parts) {
     }
   }
 
+  /**
+   * An aborting refresh's end, at the next step after its abort (serviceEngine.js roll, aborted): its release task's
+   * instance and its new instances go, and the service keeps what it ran, as a failed refresh leaves it but with no
+   * error. Its build goes on: only an End of the build ends it.
+   */
+  function endAborted(service, refresh) {
+    const tasked = taskInstanceOf(refresh);
+    if (tasked) removed(tasked, "task_ended");
+    for (const instance of liveOf(service.id).filter((one) => one.refreshId === refresh.id)) {
+      removed(instance, "refresh_failed");
+      refresh.steps.push(stepOf("instance_draining", instance.id));
+    }
+    refresh.steps.push(stepOf("aborted"));
+    Object.assign(refresh, { state: "aborted", finishedAt: at() });
+    patch(service, { state: service.version ? "running" : "failed", lastError: null });
+    event(service, "service.refresh_aborted", { refreshId: refresh.id, kind: refresh.kind, version: refresh.toVersion });
+    hooks.refreshFailed(service);
+  }
+
+  /**
+   * A refresh aborted (`POST .../refreshes/{rid}/actions/abort`, machines' serviceRefreshCalls.js abortRefresh): a
+   * queued one ends `aborted` at once; one building or rolling is `aborting` until the next step ends it (endAborted).
+   * False for one that ended or is aborting already, which mobilynet refuses `409 refresh_not_running`.
+   */
+  function abort(service, refresh) {
+    if (!["queued", "building", "rolling"].includes(refresh.state)) return false;
+    if (refresh.state !== "queued") refresh.state = "aborting";
+    else {
+      Object.assign(refresh, { state: "aborted", finishedAt: at() });
+      event(service, "service.refresh_aborted", { refreshId: refresh.id, kind: refresh.kind });
+      hooks.refreshFailed(service);
+    }
+    return true;
+  }
+
   /** A refresh's end, succeeded: the service moves onto what it brought. */
   function succeedRefresh(service, refresh) {
     Object.assign(refresh, { state: "succeeded", finishedAt: at() });
@@ -380,12 +416,16 @@ function createStandInServiceEngine(world, parts) {
     if (refresh.state === "queued" && SAME_RELEASE.includes(refresh.kind)) Object.assign(refresh, { fromVersion: service.version, toVersion: service.version });
     const release = releaseOf(service, refresh.toVersion);
     if (refresh.state === "queued") {
+      // A release whose build was ended is built again as its next refresh starts, as mobilynet's serviceEngine.js
+      // currentRefresh builds one whose build failed. STAND-IN ONLY: only an ended build, so that one failing as the
+      // stand-in moves on, before the refresh asked with it starts, fails that refresh as before.
+      if (release?.build === "failed" && release.error?.code === "cancelled") releases.rebuild(release);
       Object.assign(refresh, { state: "building", startedAt: at(), buildId: release?.buildId ?? null });
       refresh.steps.push(stepOf("build_started", null, refresh.buildId));
       // A build done already passes in the same step (`instantBuilds`), as mobilynet's reconcile passes a reused one.
       if (!faults.instantBuilds) return;
     }
-    if (!release || release.build === "building") return;
+    if (!release || release.build === "queued" || release.build === "building") return;
     if (release.build === "failed") {
       const message = release.error?.named ? release.error.message : "The release's build or its check failed.";
       failRefresh(service, refresh, { code: "app_build_failed", message, details: { buildId: release.buildId } }, "build_failed");
@@ -494,10 +534,12 @@ function createStandInServiceEngine(world, parts) {
         // mobilynet's reconcile rolls a refresh in the pass its build passed, starting its first instances then.
         if (faults.instantBuilds && refresh.state === "rolling") roll(service, refresh);
       } else if (refresh.state === "rolling") roll(service, refresh);
+      else if (refresh.state === "aborting") endAborted(service, refresh);
     }
   }
 
   return Object.freeze({
+    abort,
     advance,
     restartFresh,
     startInstance

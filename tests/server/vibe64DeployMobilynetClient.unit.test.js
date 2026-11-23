@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import http from "node:http";
+import net from "node:net";
 import test from "node:test";
 
-import { MobilynetError, createMobilynetClient, tagQuery } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
+import { MobilynetError, createMobilynetClient, routableLookup, tagQuery } from "../../packages/vibe64-deploy/src/adapters/mobilynet/client.js";
 
 // The deploy engine's mobilynet client against a recording fetch: what it sends (the key, Idempotency-Key, JSON or an
 // upload with its SHA-256, tag filters, pages), how it reads mobilynet's refusals, and how a token source refreshes.
@@ -143,6 +146,39 @@ test("mobilynet's address is https, or http on this machine only, and a credenti
   assert.ok(createMobilynetClient({ baseUrl: "http://127.0.0.1:3900", credential: "mnk_test" }));
   assert.throws(() => createMobilynetClient({ baseUrl: BASE, credential: {} }), /an API key, or a token source/u);
   assert.throws(() => createMobilynetClient({ baseUrl: BASE, credential: "mnk_test" }).project(""), /needs the mobilynet project's id/u);
+});
+
+test("a request reaches mobilynet over the address this machine can reach while the editor is too busy to see its connection in time (23 Nov: \"fetch failed\" where Node tried the IPv6 address next)", async (t) => {
+  const server = http.createServer((request, response) => {
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({ build: { id: "bld_1", state: "queued" } }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  // mobilynet's addresses as DNS gives them on a machine with no route to its IPv6 one, which getaddrinfo puts last.
+  // fe80::1, a link-local address naming no interface, is one no machine connects to.
+  const addresses = [{ address: "127.0.0.1", family: 4 }, { address: "fe80::1", family: 6 }];
+  const dns = (hostname, options, callback) => callback(null, addresses);
+  // The editor busy (a release packed, its host at full load) past Node's attempt time as the connection starts.
+  const busy = (lookup) => (hostname, options, callback) => lookup(hostname, options, (...answer) => {
+    callback(...answer);
+    const until = Date.now() + net.getDefaultAutoSelectFamilyAttemptTimeout() + 300;
+    while (Date.now() < until);
+  });
+  const baseUrl = `http://localhost:${server.address().port}`;
+
+  // Given every address DNS gave, Node gives up on the IPv4 one, which had connected, tries the IPv6 one, and the request
+  // fails at undici's connect timeout (10 s): "mobilynet did not answer: fetch failed (UND_ERR_CONNECT_TIMEOUT)".
+  assert.equal((await createMobilynetClient({ baseUrl, credential: "mnk_test", lookup: busy(routableLookup(dns)) }).readBuild("bld_1")).id, "bld_1");
+  // DNS's answer for an address it can't reach at all is kept, for the connection to say why.
+  const only = await new Promise((resolve, reject) => {
+    routableLookup((hostname, options, callback) => callback(null, [addresses[1]]))("mobilynet.test", { all: true }, (error, kept) => (error ? reject(error) : resolve(kept)));
+  });
+  assert.deepEqual(only, [addresses[1]]);
 });
 
 // mobilynet's page of an App Service's logs (its openApiServices.js readServiceLogs, mobilynet main 17340a6a): the

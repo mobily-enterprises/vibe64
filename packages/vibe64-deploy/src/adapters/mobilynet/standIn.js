@@ -36,6 +36,9 @@ import { createStandInServices } from "./standIn/services.js";
 //   neverBoots         new hosted services stay `creating`
 //   releaseBuildFails  a release's build fails, and a refresh onto it fails app_build_failed: `true`, its build
 //                      command exited; `{ code, message }`, that failure, the refresh naming its message too
+//   buildsWait         a release's new build stays `queued` until this is off, its read's `waiting` saying why: `true`,
+//                      its project's other build goes first; `{ for, words, latestAt, startsBy }`, those words (a
+//                      build server that holds its base, say), as mobilynet's buildWaits.js gives them
 //   instantBuilds      a refresh whose release is built already passes its build and starts its first instances in
 //                      the step it starts, as mobilynet's reconcile does with a reused build (one transaction:
 //                      currentRefresh, advanceBuild, roll), so it is never seen building: a production Deploy handed
@@ -67,7 +70,7 @@ const QUOTAS = Object.freeze(Object.keys(DEFAULT_LIMITS));
 // Each quota's unit, as mobilynet's machines.js QUOTAS name them.
 const QUOTA_UNITS = Object.freeze({ machines: "machines", vcpus: "vCPU", memoryGib: "GiB of RAM", diskGib: "GiB of data disk" });
 const FAULTS = Object.freeze([
-  "down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails", "instantBuilds", "releaseTaskFails", "olderHost"
+  "down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails", "buildsWait", "instantBuilds", "releaseTaskFails", "olderHost"
 ]);
 const LEASE_MAX_SECONDS = 3600;
 const LEASE_TEXT = 200;
@@ -88,8 +91,11 @@ const ROUTES = Object.freeze([
   [`^/v1/services/${ID}/settings$`, { PUT: "services:manage" }],
   [`^/v1/services/${ID}/(releases|actions/rollback)$`, { POST: "services:deploy" }],
   [`^/v1/services/${ID}/(instances|refreshes)(/${ID})?$`, { GET: "services:read" }],
+  [`^/v1/services/${ID}/refreshes/${ID}/actions/abort$`, { POST: "services:deploy" }],
   [`^/v1/services/${ID}/logs$`, { GET: "services:read" }],
   [`^/v1/builds/${ID}/log$`, { GET: "vps:read" }],
+  [`^/v1/builds/${ID}$`, { GET: "services:read" }],
+  [`^/v1/builds/${ID}/actions/end$`, { POST: "services:deploy" }],
   [`^/v1/hosted-services/${ID}$`, { GET: "hosted:read", PATCH: "hosted:manage", DELETE: "hosted:manage" }],
   [`^/v1/hosted-services/${ID}/links(/${ID})?$`, { GET: "hosted:read", POST: "hosted:manage", DELETE: "hosted:manage" }],
   [`^/v1/hosted-services/${ID}/backups$`, { GET: "hosted:read" }],
@@ -97,6 +103,7 @@ const ROUTES = Object.freeze([
 ].map(([pattern, methods]) => Object.freeze([new RegExp(pattern, "u"), Object.freeze(methods)])));
 const SERVICE_PATH = new RegExp(`^/v1/services/${ID}$`, "u");
 const BUILD_LOG_PATH = new RegExp(`^/v1/builds/(${ID})/log$`, "u");
+const BUILD_PATH = new RegExp(`^/v1/builds/(${ID})(/actions/end)?$`, "u");
 
 /**
  * The scope a request needs, or null: a service's PATCH `services:manage` for any field but `instances`, which needs
@@ -324,6 +331,14 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     if (buildLog) {
       const part = releases.buildLog((id) => world.reaches(caller, id), decodeURIComponent(buildLog[1]), Number(params.get("after") || 0));
       return part ? answer(200, part) : world.notFound("build");
+    }
+    const buildPath = BUILD_PATH.exec(path);
+    if (buildPath && method === (buildPath[2] ? "POST" : "GET")) {
+      const reaches = (id) => world.reaches(caller, id);
+      const id = decodeURIComponent(buildPath[1]);
+      const answered = buildPath[2] ? releases.endBuild(reaches, id) : releases.readBuild(reaches, id);
+      if (!answered) return world.notFound("build");
+      return "status" in answered ? answered : answer(200, answered);
     }
     const projectPath = /^\/v1\/projects\/([^/]+)\/(events|spending-cap|quotas)$/u.exec(path);
     if (projectPath && method === "GET") {

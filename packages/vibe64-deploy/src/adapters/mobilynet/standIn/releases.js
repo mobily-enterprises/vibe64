@@ -11,7 +11,12 @@ import { MAX_NEEDS, NEED_NAME, interfaceNamed, isRecord, needSettings } from "./
 // the build model took out, a build block saying what it keeps, and its needs (hostedDeclaration.js needsOf: each
 // `{ interface, as }` of an interface mobilynet provides, named once, giving no setting the app declares itself). The
 // same bytes again answer the release they made, its version the day and the first 7 hex digits of its SHA-256. Its
-// build is `building` until the stand-in moves on, then `built`, or `failed` while `releaseBuildFails` is on. An App
+// build is `building` until the stand-in moves on, then `built`, or `failed` while `releaseBuildFails` is on; while
+// `buildsWait` is on it is first `queued`, waiting as that fault says, until the stand-in moves on with it off. A build
+// is read (`GET /v1/builds/{id}`, with its `waiting` and `estimate` while queued) and ended (`POST
+// /v1/builds/{id}/actions/end`: a queued or running one fails `cancelled`), as mobilynet's buildCalls.js answers them,
+// and a refresh onto a release whose build was ended builds it again (machines' serviceEngine.js currentRefresh builds
+// one whose build failed). An App
 // Service refreshes onto one and reads its declaration: its first service with a port, its settings and its needs.
 // STAND-IN ONLY: a release from git (`{ git, deployKey }`) is refused; the stand-in takes uploads only.
 
@@ -168,10 +173,12 @@ function declarationOf(archive, appName) {
 }
 
 /**
- * @param {{ failure: Function, nextId: (prefix: string) => string, at: () => string, now: () => Date, faults: { releaseBuildFails: boolean } }} world
+ * @param {{ failure: Function, nextId: (prefix: string) => string, at: () => string, now: () => Date, faults: { releaseBuildFails: boolean, buildsWait: any } }} world
  */
 function createStandInReleases(world) {
   const { failure, nextId, at, now, faults } = world;
+  // A build's states as mobilynet names them, by the stand-in's.
+  const BUILD_STATES = Object.freeze({ queued: "queued", building: "building", built: "succeeded", failed: "failed" });
   /** @type {Map<string, Map<string, any>>} each mobilynet project's app's releases (`<project> <app>`), by version */
   const releases = new Map();
   const keyOf = (projectId, app) => `${projectId} ${app}`;
@@ -216,14 +223,24 @@ function createStandInReleases(world) {
       source: { upload: { sha256: digest, sizeBytes: archive.length, deletedAt: null } },
       createdAt: at(),
       retiredAt: null,
-      build: "building",
-      buildId: nextId("bld"),
-      error: null,
+      ...newBuild(),
       log: `Building ${app} ${now().toISOString().slice(0, 10).replace(/-/gu, "")}-${digest.slice(0, 7)}: running its build command\n`,
       declaration: read.declaration
     };
     versions.set(release.version, release);
     return { release, started: true };
+  }
+
+  /** A release's new build: queued while `buildsWait` is on, else building at once. */
+  function newBuild() {
+    const queued = Boolean(faults.buildsWait);
+    return { build: queued ? "queued" : "building", buildId: nextId("bld"), error: null, buildCreatedAt: at(), buildStartedAt: queued ? null : at(), buildFinishedAt: null };
+  }
+
+  /** Builds a release whose build failed again, as a refresh onto it does: a new build. @param {any} release */
+  function rebuild(release) {
+    Object.assign(release, newBuild());
+    release.log += "Building it again.\n";
   }
 
   /** A mobilynet project's release of an app by its version, or null. @param {string} projectId @param {string} app @param {string} version */
@@ -238,7 +255,13 @@ function createStandInReleases(world) {
     const fault = faults.releaseBuildFails;
     for (const versions of releases.values()) {
       for (const release of versions.values()) {
+        // A queued build starts once nothing holds it: it builds at the next step.
+        if (release.build === "queued") {
+          if (!faults.buildsWait) Object.assign(release, { build: "building", buildStartedAt: at() });
+          continue;
+        }
         if (release.build !== "building") continue;
+        release.buildFinishedAt = at();
         release.build = fault ? "failed" : "built";
         release.error = !fault ? null
           : fault === true ? { code: "build_failed", message: "The build command exited with status 1." }
@@ -260,8 +283,62 @@ function createStandInReleases(world) {
     if (!release || !reaches(release.projectId)) return null;
     const bytes = Buffer.from(release.log, "utf8");
     const from = Math.min(Math.max(0, after), bytes.length);
-    const state = { building: "building", built: "succeeded", failed: "failed" }[release.build];
-    return { text: bytes.subarray(from).toString("utf8"), next: bytes.length, state, done: release.build !== "building" };
+    const state = BUILD_STATES[release.build];
+    return { text: bytes.subarray(from).toString("utf8"), next: bytes.length, state, done: !["queued", "building"].includes(release.build) };
+  }
+
+  /** The release a build id is of, when the caller's key reaches its project. @param {(projectId: string) => boolean} reaches @param {string} buildId */
+  function releaseOfBuild(reaches, buildId) {
+    const release = [...releases.values()].flatMap((versions) => [...versions.values()]).find((one) => one.buildId === buildId);
+    return release && reaches(release.projectId) ? release : null;
+  }
+
+  /**
+   * A build as mobilynet's buildCalls.js read answers it (`{ build }`): a queued one's `waiting` and `estimate` as the
+   * `buildsWait` fault says (`true`: its project's other build goes first; an object: its `for`, `words`, `latestAt`
+   * and `startsBy`), a running one's `estimate` with its start. STAND-IN ONLY: no log, kind or target in it.
+   * @param {any} release
+   */
+  function buildView(release) {
+    const state = BUILD_STATES[release.build];
+    const wait = faults.buildsWait === true ? { for: "project", words: "Its project builds one at a time: another of its builds goes first." } : faults.buildsWait || {};
+    const queued = state === "queued";
+    return {
+      id: release.buildId,
+      app: release.app,
+      version: release.version,
+      state,
+      waiting: queued ? { for: wait.for ?? "send", words: wait.words ?? "It goes to a build server within 10 seconds.", ahead: null, ...(wait.latestAt ? { latestAt: wait.latestAt } : {}) } : null,
+      estimate: queued || state === "building"
+        ? { startsBy: queued ? wait.startsBy ?? null : release.buildStartedAt, endsBy: null, limitAt: null, words: "" }
+        : null,
+      error: release.build === "failed" ? { code: release.error?.code ?? "build_failed", message: release.error?.message ?? "" } : null,
+      createdAt: release.buildCreatedAt ?? release.createdAt,
+      startedAt: release.buildStartedAt ?? null,
+      finishedAt: release.buildFinishedAt ?? null
+    };
+  }
+
+  /** `GET /v1/builds/{id}`: the build, or null when the caller's key reaches none by that id. */
+  function readBuild(reaches, buildId) {
+    const release = releaseOfBuild(reaches, buildId);
+    return release ? { build: buildView(release) } : null;
+  }
+
+  /**
+   * `POST /v1/builds/{id}/actions/end`: a queued or running build fails `cancelled` (whatever waits on it fails with it
+   * at the next step); one that ended is `409 invalid_state`. Null when the caller's key reaches none by that id.
+   */
+  function endBuild(reaches, buildId) {
+    const release = releaseOfBuild(reaches, buildId);
+    if (!release) return null;
+    if (!["queued", "building"].includes(release.build)) {
+      return failure(409, "invalid_state", "The build has finished and keeps no VM: there is nothing to end.", { state: BUILD_STATES[release.build] });
+    }
+    const message = release.build === "queued" ? "The build was ended before it started." : "The build was ended.";
+    Object.assign(release, { build: "failed", error: { code: "cancelled", message }, buildFinishedAt: at() });
+    release.log += `${message}\n`;
+    return { status: 200, body: { build: buildView(release) } };
   }
 
   /** A project's releases of an app, with their builds and declarations, for tests. @param {string} projectId @param {string} app */
@@ -276,7 +353,10 @@ function createStandInReleases(world) {
     named,
     view,
     advance,
+    rebuild,
     buildLog,
+    readBuild,
+    endBuild,
     list,
     invalid
   });

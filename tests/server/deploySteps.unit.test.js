@@ -17,7 +17,9 @@ import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
 import { settingsPerService, withRootFile } from "../../packages/vibe64-deploy/src/package.js";
 import { planOf } from "../../packages/vibe64-deploy/src/plan.js";
 import { LABEL, createRecordStore, newRecord, rebuildFromLabels } from "../../packages/vibe64-deploy/src/record.js";
-import { applyStep, deleteResource, deploy, nextStep, releaseDigest, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
+import { deleteResource, takeOffline } from "../../packages/vibe64-deploy/src/offline.js";
+import { applyStep, deploy, nextStep, releaseDigest } from "../../packages/vibe64-deploy/src/steps.js";
+import { deployStopOf } from "../../packages/vibe64-deploy/src/stop.js";
 import { MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploymentServices.js";
 import { HOST, runningShop, settle, world } from "./vibe64DeployStandInHelpers.js";
 
@@ -64,11 +66,14 @@ function setup() {
   // Room for two a-8 computers (three when raised by hand), two a-2 webs and their rolling replacements.
   parts.standIn.setQuota(parts.projectId, { vcpus: 96, memoryGib: 192 });
   const adapter = createMobilynetAdapter({ client: parts.client, project: parts.projectId, leases: true });
-  const run = async ({ stack = stackOf(), record, commit, env, records, migratesAsItStarts, choices = {}, decisions = {}, planHash, save, report, pause = () => parts.standIn.advance() }) => {
+  const run = async ({
+    stack = stackOf(), record, commit, env, records, migratesAsItStarts, choices = {}, decisions = {}, planHash, save, report, stopAsked,
+    pause = () => parts.standIn.advance()
+  }) => {
     const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer(), choices, decisions });
     const result = await deploy({
       adapter, needs: stack.needs, record, choices, decisions, planHash: planHash ?? plan.hash, release: releaseOf(commit, stack, { env, records, migratesAsItStarts }), holder: HOLDER,
-      pause, ...(save ? { save } : {}), ...(report ? { report } : {})
+      pause, ...(save ? { save } : {}), ...(report ? { report } : {}), ...(stopAsked ? { stopAsked } : {})
     });
     return { ...result, plan };
   };
@@ -1641,4 +1646,100 @@ test("take offline reports each App Service deleted, the wait while the provider
   assert.ok(said.includes("retry Reading mobilynet again"), said.join(" | "));
   assert.deepEqual(events.at(-1).kind, "end");
   assert.equal(events.at(-1).outcome, "offline");
+});
+
+test("the owner stops a Deploy whose build waits at mobilynet: its update and build end there, the version before keeps serving, and the next Deploy hands the same release again", async () => {
+  const { standIn, client, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  const computersId = first.record.items["service.computers"].id;
+  const webId = first.record.items["service.web"].id;
+  const before = standIn.services.service(computersId).version;
+  // Its project's other build goes first, as mobilynet says: computers' new release waits for its build.
+  standIn.faults.buildsWait = true;
+  let ask = "no";
+  const events = [];
+  const stopped = await run({
+    record: first.record, commit: "c2", report: (event) => events.push(event),
+    pause: () => {
+      standIn.advance();
+      const refresh = standIn.services.refreshes(computersId).at(-1);
+      if (ask === "no" && refresh.kind === "release" && refresh.state === "building") ask = "asked";
+    },
+    stopAsked: () => {
+      if (ask !== "asked") return false;
+      ask = "taken";
+      return true;
+    }
+  });
+  const refresh = standIn.services.refreshes(computersId).at(-1);
+  assert.equal(stopped.outcome, "stopped", stopped.message);
+  assert.equal(stopped.message, `Ended the update of computers, and its build ${refresh.buildId}. Production keeps serving the version it served `
+    + "before this Deploy; deploy again whenever you're ready.");
+  assert.deepEqual([stopped.record.run.state, stopped.record.run.failure, stopped.record.run.services.computers.refreshId], ["stopped", null, refresh.id]);
+  assert.deepEqual(events.filter((event) => event.step === "stop" || event.kind === "end").map((event) => [event.kind, event.phase ?? event.outcome]),
+    [["step", "start"], ["step", "done"], ["end", "stopped"]]);
+  // At mobilynet: the build ended at once, the refresh aborting, then aborted; computers on its version, web untouched.
+  assert.deepEqual([(await client.readBuild(refresh.buildId)).state, (await client.readBuild(refresh.buildId)).error.code], ["failed", "cancelled"]);
+  assert.equal(refresh.state, "aborting");
+  standIn.advance();
+  assert.equal(standIn.services.refreshes(computersId).at(-1).state, "aborted");
+  assert.deepEqual([standIn.services.service(computersId).version, standIn.services.service(computersId).state], [before, "running"]);
+  assert.ok(standIn.services.instances(computersId).filter((one) => !one.removedReason).every((one) => one.version === before));
+  assert.deepEqual(standIn.services.refreshes(webId).map((one) => one.kind), ["create"]);
+  assert.ok(standIn.requests().some((request) => request.method === "DELETE" && request.path.startsWith("/v1/leases/")), "its lease is given up");
+
+  // The next Deploy of the same commit, nothing holding builds now: it reads how the stopped update ended and hands
+  // computers the same release, which mobilynet builds again.
+  standIn.faults.buildsWait = false;
+  const again = [];
+  const resumed = await run({ record: stopped.record, commit: "c2", report: (event) => again.push(event) });
+  assert.equal(resumed.outcome, "live", resumed.message);
+  assert.deepEqual(again.filter((event) => event.step === "settleRefresh" && event.phase === "done").map((event) => event.message),
+    ["It was stopped with the last Deploy. This Deploy hands computers its release again."]);
+  assert.equal(standIn.services.service(computersId).version, stopped.record.run.services.computers.version);
+  assert.notEqual(standIn.services.refreshes(computersId).at(-1).buildId, refresh.buildId);
+});
+
+test("a stop asked once the Deploy is past where it may stop is refused, saying why, and the Deploy goes on to Live; a run that isn't deploying stops with nothing to end", async () => {
+  const { standIn, adapter, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  const computersId = first.record.items["service.computers"].id;
+  let kept = null;
+  let ask = false;
+  const asked = [];
+  const events = [];
+  const second = await run({
+    record: first.record, commit: "c2", report: (event) => events.push(event),
+    save: (one) => {
+      kept = structuredClone(one);
+      return one;
+    },
+    pause: () => {
+      standIn.advance();
+      const computers = kept?.run.services.computers;
+      const refresh = standIn.services.refreshes(computersId).at(-1);
+      // Once computers' new release is past its build; then once computers runs it.
+      if (asked.length === 0 && refresh.kind === "release" && refresh.steps.some((one) => one.step === "build_passed")) asked.push("past its build");
+      else if (asked.length === 1 && computers?.handed && !computers.refreshId) asked.push("runs it");
+      else return;
+      ask = true;
+    },
+    stopAsked: () => {
+      const now = ask;
+      ask = false;
+      return now;
+    }
+  });
+  assert.equal(second.outcome, "live", second.message);
+  assert.deepEqual(asked, ["past its build", "runs it"]);
+  const goesOn = " It goes on and ends by itself: Live, or Failed with its reason.";
+  assert.deepEqual(events.filter((event) => event.step === "stop" && event.phase === "refused").map((event) => event.message), [
+    `This Deploy can't be stopped now. The new release of computers is past its build: its migrations or its new instances have started.${goesOn}`,
+    `This Deploy can't be stopped now. The service computers already runs its new release, and stopping now would leave Production partly on it.${goesOn}`
+  ]);
+  assert.equal(events.filter((event) => event.step === "stop" && event.phase === "start").length, 2);
+  // Nothing was aborted or ended at mobilynet.
+  assert.equal(standIn.requests().filter((request) => /\/actions\/(?:abort|end)$/u.test(request.path)).length, 0);
+  assert.deepEqual(await deployStopOf(adapter, second.record), { allowed: true, refreshes: [] });
 });

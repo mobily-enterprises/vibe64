@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { setInstances } from "../../packages/vibe64-deploy/src/instances.js";
 import { LABEL, labelsFor } from "../../packages/vibe64-deploy/src/record.js";
-import { deleteResource, takeOffline } from "../../packages/vibe64-deploy/src/steps.js";
+import { deleteResource, takeOffline } from "../../packages/vibe64-deploy/src/offline.js";
 import { WORKERS_RESOURCES, workersStack } from "../fixtures/deployWorkersApp.js";
 import { DOMAIN, googleWorld } from "./deployGoogleHelpers.js";
 

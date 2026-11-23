@@ -1,4 +1,8 @@
+import dgram from "node:dgram";
+import dns from "node:dns";
 import { performance } from "node:perf_hooks";
+
+import { Agent, fetch as undiciFetch } from "undici";
 
 // The deploy engine's client of mobilynet's API (its OpenAPI document at mobilynet main c6af5ca3: openApiServices.js,
 // openApiHosted.js, openApiSetups.js, openApiNetwork.js, openApiBilling.js; an App Service's release tasks and logs at
@@ -31,7 +35,7 @@ const REFUSALS = new Set([
   "unauthenticated", "key_expired", "key_revoked", "address_not_allowed", "payment_required", "organisation_suspended",
   "scope_missing", "no_capacity", "quota_exceeded", "name_taken", "size_unknown", "size_not_offered", "validation_failed",
   "invalid_request", "idempotency_key_reused", "settings_missing", "invalid_state", "need_linked", "hosted_service_linked",
-  "no_previous_version", "domain_in_use", "no_backup_store", "lease_held", "spending_cap_reached"
+  "no_previous_version", "domain_in_use", "no_backup_store", "lease_held", "spending_cap_reached", "refresh_not_running"
 ]);
 // The refusals a token source may answer by refreshing its access token, once.
 const TOKEN_REFUSALS = new Set(["unauthenticated", "key_expired"]);
@@ -43,6 +47,63 @@ const LOGS_QUERY = Object.freeze(["only", "except", "unit", "since", "until", "t
 const REQUEST_TIMEOUT_MS = 20_000;
 // An upload (a release's tarball: at most 1 GiB) has longer.
 const UPLOAD_TIMEOUT_MS = 10 * 60_000;
+
+/**
+ * Whether this machine has a route to an address: a UDP socket connected to it, which sends nothing, is refused at once
+ * where the kernel has none (ENETUNREACH), as getaddrinfo's own ordering checks (RFC 6724, rule 1).
+ * @param {string} address @param {number} family
+ * @returns {Promise<boolean>}
+ */
+function routable(address, family) {
+  return new Promise((resolve) => {
+    let socket = null;
+    const done = (reachable) => {
+      try {
+        socket?.close();
+      } catch {
+        // Closed already.
+      }
+      resolve(reachable);
+    };
+    try {
+      socket = dgram.createSocket(family === 6 ? "udp6" : "udp4");
+      socket.once("error", () => done(false));
+      socket.connect(9, address, (error) => done(!error));
+    } catch {
+      done(false);
+    }
+  });
+}
+
+/**
+ * The lookup mobilynet's connections take: DNS's addresses without those this machine has no route to (all of them
+ * when it has a route to none, for the connection to say why). Node tries the addresses of a host in turn, each for at
+ * most its attempt time (500 ms), giving up on one that is slow to connect and trying the next. Where the next is one
+ * it can't reach, the request fails, at undici's connect timeout (10 s), although the first would have answered: on 23
+ * Nov an editor on a machine with no IPv6 route ("mobilynet did not answer: fetch failed" six times in 20 minutes
+ * of a Deploy, each read answered at once when tried again) gave up on mobilynet's IPv4 address while it was too busy
+ * to see its connection in time, and tried its IPv6 one.
+ * @param {typeof dns.lookup} [resolve] DNS's own (a test's)
+ */
+function routableLookup(resolve = dns.lookup) {
+  return (hostname, options, callback) => {
+    resolve(hostname, { ...options, all: true }, async (error, addresses) => {
+      if (error) return callback(error);
+      const reachable = await Promise.all(addresses.map((one) => routable(one.address, one.family)));
+      const kept = addresses.filter((one, index) => reachable[index]);
+      const answer = kept.length > 0 ? kept : addresses;
+      if (options?.all) return callback(null, answer);
+      return callback(null, answer[0].address, answer[0].family);
+    });
+  };
+}
+
+/** The reasons a connection gave under fetch's own "fetch failed": each address's error, where it tried several. */
+function causeOf(error) {
+  const cause = error?.cause;
+  const words = (cause?.errors ?? (cause ? [cause] : [])).map((one) => [one.code, one.address].filter(Boolean).join(" ")).filter(Boolean);
+  return words.length > 0 ? ` (${words.join(", ")})` : "";
+}
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 /** mobilynet's answer when it was not a success, or no answer at all (`status` null, code `unreachable`). */
@@ -101,13 +162,17 @@ async function tokenOf(credential) {
  * @param {string | { token: () => string | Promise<string>, refresh?: () => string | Promise<string> }} options.credential
  *   an API key of one mobilynet project, or a token source: `token()` its access token now, `refresh()` a new one after
  *   mobilynet refused the last (`401 unauthenticated` or `key_expired`), tried once a request
- * @param {typeof fetch} [options.fetch] the stand-in's in tests
+ * @param {typeof fetch} [options.fetch] the stand-in's in tests; without one, the client connects through its own
+ *   dispatcher, whose lookup (`lookup`, routableLookup's by default) leaves out the addresses this machine can't reach
+ * @param {Function} [options.lookup]
  * @param {(entry: { method: string, path: string, idempotencyKey: string | null, status: number | null, errorCode: string | null, requestId: string | null, ms: number }) => void} [options.onRequest]
  *   told of each request, never its body: a body can hold secrets
  * @param {number} [options.timeoutMs]
  */
-function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalThis.fetch, onRequest = () => {}, timeoutMs = REQUEST_TIMEOUT_MS }) {
+function createMobilynetClient({ baseUrl, credential, fetch: given, lookup = routableLookup(), onRequest = () => {}, timeoutMs = REQUEST_TIMEOUT_MS }) {
   const root = apiRoot(baseUrl);
+  const dispatcher = given ? null : new Agent({ connect: { lookup } });
+  const fetchImpl = given ?? undiciFetch;
   if (typeof credential !== "string" && typeof credential?.token !== "function") {
     throw new TypeError("A mobilynet credential is an API key, or a token source with token().");
   }
@@ -130,7 +195,8 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
       headers,
       body: body === undefined ? undefined : upload ? body : JSON.stringify(body),
       redirect: "manual",
-      signal: AbortSignal.timeout(upload ? Math.max(timeoutMs, UPLOAD_TIMEOUT_MS) : timeoutMs)
+      signal: AbortSignal.timeout(upload ? Math.max(timeoutMs, UPLOAD_TIMEOUT_MS) : timeoutMs),
+      ...(dispatcher ? { dispatcher } : {})
     });
     const text = await response.text();
     let parsed = null;
@@ -175,7 +241,7 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
         requestId: answer?.requestId ?? errorBody?.requestId ?? null,
         ms: Math.round(performance.now() - started)
       });
-      if (failure) throw new MobilynetError({ status: null, code: "unreachable", message: `mobilynet did not answer: ${failure.message}` });
+      if (failure) throw new MobilynetError({ status: null, code: "unreachable", message: `mobilynet did not answer: ${failure.message}${causeOf(failure)}` });
       if (ok) return answer.body;
       if (status === 401 && TOKEN_REFUSALS.has(code) && !refreshed && typeof credential.refresh === "function") {
         refreshed = true;
@@ -423,6 +489,23 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
      * @param {string} buildId @param {{ after?: number, wait?: number }} [from]
      */
     readBuildLog: (buildId, { after = 0, wait } = {}) => call("GET", `/v1/builds/${encodeURIComponent(buildId)}/log`, { query: { after, wait } }),
+    /**
+     * A build (`GET /v1/builds/{id}`; an App Service's with `services:read`), or null when mobilynet has none by that id:
+     * `{ id, state, waiting, estimate, error, createdAt, startedAt, finishedAt, … }`, its state `queued`, `building`,
+     * `succeeded` or `failed`. A queued one's `waiting` is what it waits for in mobilynet's own words (`{ for, words,
+     * ahead, latestAt? }`: `for` its project's builds before it, a build server holding its base, a free build server, a
+     * retry, or being sent within seconds), and a queued or running one's `estimate` when it should start and end
+     * (`{ startsBy, endsBy, limitAt, words }`, each time null when mobilynet can't say).
+     * @param {string} buildId
+     */
+    readBuild: async (buildId) => (await orNull(() => call("GET", `/v1/builds/${encodeURIComponent(buildId)}`)))?.build ?? null,
+    /**
+     * Ends a build (`POST /v1/builds/{id}/actions/end`; an App Service's with `services:deploy`): `{ build }`. A queued
+     * one fails `cancelled` at once and a running one when its host has stopped it; whatever waited on it is told. One
+     * that ended already is `409 invalid_state`.
+     * @param {string} buildId
+     */
+    endBuild: (buildId) => call("POST", `/v1/builds/${encodeURIComponent(buildId)}/actions/end`, { body: {} }),
     /** An App Service's refreshes, newest first (`services:read`). @param {string} serviceId */
     listServiceRefreshes: (serviceId) => listAll(`${servicePath(serviceId)}/refreshes`),
     /**
@@ -431,6 +514,14 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
      * for, or null. @param {string} serviceId @param {string} refreshId
      */
     readServiceRefresh: async (serviceId, refreshId) => (await call("GET", `${servicePath(serviceId)}/refreshes/${encodeURIComponent(refreshId)}`)).refresh,
+    /**
+     * Aborts a refresh of an App Service (`services:deploy`): `{ refresh }`. A queued one ends `aborted` at once; one
+     * building or rolling is `aborting` until mobilynet's next pass drains its new instances and ends it `aborted`, the
+     * version before kept. One that ended is `409 refresh_not_running`. Its build goes on: endBuild ends it.
+     * @param {string} serviceId @param {string} refreshId
+     */
+    abortServiceRefresh: async (serviceId, refreshId) => (await call("POST",
+      `${servicePath(serviceId)}/refreshes/${encodeURIComponent(refreshId)}/actions/abort`, { body: {} })).refresh,
     /** A hosted service (`hosted:read`), or null when mobilynet has none by that id (deleted ones too). @param {string} hostedServiceId */
     readHostedService: async (hostedServiceId) => (await orNull(() => call("GET", hostedPath(hostedServiceId))))?.hostedService ?? null,
     /**
@@ -494,4 +585,4 @@ function createMobilynetClient({ baseUrl, credential, fetch: fetchImpl = globalT
   });
 }
 
-export { MobilynetError, createMobilynetClient, tagQuery };
+export { MobilynetError, createMobilynetClient, routableLookup, tagQuery };

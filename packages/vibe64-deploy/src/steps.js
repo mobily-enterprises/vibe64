@@ -73,7 +73,7 @@
 //
 // What the record does not hold is never touched: every call names a thing the engine made and labelled (record.js
 // labelsFor). A Deploy never deletes or makes again a thing that holds data; deleting a disconnected resource is
-// `deleteResource`, and taking the services down `takeOffline`, which returns once they are gone, each its own call. A
+// `deleteResource`, and taking the services down `takeOffline` (both offline.js), which returns once they are gone. A
 // Deploy holds the lease `deploy:<deployment id>` while it runs, renewed at each step, where the adapter takes leases.
 //
 // A Deploy and a Take offline say what they do as they do it, through the caller's `report` (report.js): each step as
@@ -85,6 +85,9 @@
 // live or fails. A Deploy first reads how the refreshes a Deploy before it started and never read ended (that one
 // stopped in its wait), letting go of a failed one's links and release as that Deploy would have, and of settings
 // whose refresh didn't succeed (lastRun.js).
+//
+// A Deploy the owner asks to stop (`stopAsked`) stops at its next step's boundary while nothing it did has reached what
+// Production serves, and otherwise says why not and goes on (stop.js).
 //
 // Each call's idempotency key names this Deploy's run, so a call tried again within it gets the first answer, and a
 // later Deploy asking the same again (a count put back, a service made again after it was taken offline) is not
@@ -99,6 +102,7 @@ import { planOf, stableJson } from "./plan.js";
 import { LABEL, keptChoices, labelsFor } from "./record.js";
 import { reporterOf, sentence, stepEvent, stepWords } from "./report.js";
 import { requiredWithoutValue, settingValues } from "./package.js";
+import { STOP_WORDS, stopAtBoundary } from "./stop.js";
 
 const LEASE_SECONDS = 600;
 // An adapter's refusal of a link its provider takes only with the service's new release under way: the release the
@@ -107,12 +111,6 @@ const LINK_NEEDS_RELEASE = "link_needs_release";
 // An adapter's refusal of settings its provider takes only with the service's new release: the release the service
 // runs doesn't declare one of them (or declares it otherwise), requires one they lack, or is still under way.
 const SETTINGS_NEED_RELEASE = "settings_need_release";
-// How long takeOffline waits between reads of the provider while the services go, and how many reads it makes: an
-// instance leaving drains first (mobilynet's 30 seconds and its stop signal's as long again; AWS's load balancer its
-// 300), so ten minutes in all.
-const OFFLINE_PAUSE_MS = 5_000;
-const OFFLINE_READS = 120;
-
 /** A refusal or failure of a Deploy: `code`, a message a person can act on, and `status` for the caller's answer. */
 function deployError(code, message, status = 409, details = {}) {
   return Object.assign(new Error(message), { code, status, details });
@@ -416,7 +414,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       break;
     case "releaseService": {
       const answer = await adapter.releaseService(step.id, upload(step.service), ...(step.task ? [{ task: step.task }] : []));
-      Object.assign(stateOf(step.service), { version: answer.version, refreshId: answer.refreshId });
+      Object.assign(stateOf(step.service), { version: answer.version, refreshId: answer.refreshId, handed: true });
       record.items[`service.${step.service}`].release = { digest: release.digests[step.service], version: answer.version };
       message = noteHandOver(record, release.migrations, step);
       break;
@@ -437,7 +435,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
         kind: "service", name: service.id, id: made.id, providerName: name, origin: "made", size: choice.size,
         exposure: service.exposure, settingsHash: values.hash, release: { digest: release.digests[service.id], version: state.version }
       };
-      state.refreshId = made.refreshId;
+      Object.assign(state, { refreshId: made.refreshId, handed: true });
       message = noteHandOver(record, release.migrations, step);
       break;
     }
@@ -582,11 +580,16 @@ async function takeDeployLease(adapter, record, holder) {
  *   "end", outcome, message?, migrations? }`, `migrations` "ran", "failed", "asked" or "skipped" where the provider runs
  *   them once as a release's task). A step that hands the migrations, or reads how they went, says so in its `message`,
  *   which names the instance whose logs hold their output.
+ * @param {() => boolean} [options.stopAsked] whether the owner asked to stop this Deploy since it was last called (each
+ *   ask is answered once): at the next step's boundary the Deploy stops where stop.js allows it, its updates under way
+ *   stopped at the provider and its run kept `stopped` (`{ kind: "step", step: "stop", phase: "start" | "done" |
+ *   "refused" }`, then `{ kind: "end", outcome: "stopped" }`), or says why it can't and goes on
  * @param {number} [options.maxSteps]
- * @returns {Promise<{ outcome: "live" | "failed", message?: string, record: any, steps: string[] }>}
+ * @returns {Promise<{ outcome: "live" | "failed" | "stopped", message?: string, record: any, steps: string[] }>}
  */
 async function deploy({
-  adapter, needs, record: start, choices = {}, decisions = {}, planHash, release, holder, save = (kept) => kept, pause = () => {}, report = () => {}, maxSteps = 1000
+  adapter, needs, record: start, choices = {}, decisions = {}, planHash, release, holder, save = (kept) => kept, pause = () => {}, report = () => {},
+  stopAsked = () => false, maxSteps = 1000
 }) {
   const tell = reporterOf(report);
   const [offer, observed] = await Promise.all([adapter.offer(), adapter.inventory()]);
@@ -605,8 +608,25 @@ async function deploy({
   const steps = [];
   let waiting = null;
   let failedReads = 0;
+  let stopping = false;
   try {
     for (let count = 0; count < maxSteps; count += 1) {
+      // A stop asked: tried again at the next boundary while the provider doesn't answer, and the wait said again after a
+      // refusal.
+      if (stopping || stopAsked()) {
+        const first = !stopping;
+        stopping = true;
+        try {
+          const stopped = await stopAtBoundary({ adapter, record, save, tell, first });
+          if (stopped) return { ...stopped, steps };
+          [stopping, waiting] = [false, null];
+        } catch (error) {
+          if (!retryable(error)) throw error;
+          tell({ kind: "retry", words: STOP_WORDS, message: error.message });
+          await pause();
+          continue;
+        }
+      }
       let observed;
       try {
         observed = await adapter.inventory();
@@ -672,79 +692,9 @@ async function deploy({
   }
 }
 
-/**
- * Takes the environment's services down, the public one first: their services go, every resource and its data stay.
- * Once each delete is asked the record without them is kept (`save`); then the provider is read again (`pause` between
- * reads) until it lists none of them, each instance having drained, and the record is answered. A provider still
- * removing some after `maxReads` reads is refused `production_deploy_offline_unfinished`, naming them: the record kept says
- * they are gone, and the provider finishes removing them by itself.
- * @param {any} adapter @param {any} record
- * @param {{ save?: (record: any) => Promise<any> | any, pause?: () => Promise<void> | void, maxReads?: number, report?: (event: any) => unknown }} [options]
- *   `report` told each delete as it starts and ends, the wait, each service gone (`{ kind: "gone", service, words }`),
- *   each read tried again and the end, as a Deploy tells them
- */
-async function takeOffline(adapter, record, {
-  save = (kept) => kept, pause = () => new Promise((resolve) => setTimeout(resolve, OFFLINE_PAUSE_MS)), maxReads = OFFLINE_READS, report = () => {}
-} = {}) {
-  const tell = reporterOf(report);
-  const kept = structuredClone(record);
-  const services = Object.values(kept.items).filter((item) => item.kind === "service")
-    .sort((one, other) => (one.exposure === "public" ? -1 : 0) - (other.exposure === "public" ? -1 : 0));
-  for (const item of services) {
-    const words = `Deleting App Service ${item.name}`;
-    tell({ kind: "step", phase: "start", step: "deleteService", service: item.name, words });
-    await adapter.deleteService(item.id);
-    tell({ kind: "step", phase: "done", step: "deleteService", service: item.name, words });
-    delete kept.items[`service.${item.name}`];
-    for (const resource of Object.values(kept.items)) delete resource.links?.[item.name];
-  }
-  const saved = await save(kept);
-  const going = new Map(services.map((item) => [item.id, item.name]));
-  let left = [...going.values()];
-  let waiting = null;
-  let failedReads = 0;
-  for (let read = 0; read < maxReads; read += 1) {
-    let listed;
-    try {
-      listed = await adapter.inventory();
-      failedReads = 0;
-    } catch (error) {
-      if (!retryable(error)) throw error;
-      failedReads += 1;
-      tell({ kind: "retry", words: `Reading ${adapter.title} again`, attempt: failedReads, message: error.message });
-      for (let one = 0; one < backoffPauses(failedReads); one += 1) await pause();
-      continue;
-    }
-    const now = listed.filter((thing) => going.has(thing.id)).map((thing) => going.get(thing.id));
-    for (const name of left.filter((one) => !now.includes(one))) tell({ kind: "gone", service: name, words: `App Service ${name} is gone` });
-    left = now;
-    if (left.length === 0) {
-      tell({ kind: "end", outcome: "offline" });
-      return saved;
-    }
-    const words = `Waiting for ${adapter.title} to remove ${left.join(" and ")}`;
-    if (words !== waiting) tell({ kind: "wait", words });
-    waiting = words;
-    await pause();
-  }
-  throw deployError("production_deploy_offline_unfinished", `${left.join(" and ")} ${left.length === 1 ? "is" : "are"} still being removed at ${adapter.title}; `
-    + "they take no new requests, and it finishes removing them by itself.", 504, { removing: left });
-}
-
-/**
- * Deletes a disconnected resource and its data, its own action: only one the record holds and the Stack no longer
- * names, and only when the owner typed its name.
- * @param {any} adapter @param {any} record @param {any} needs @param {{ name: string, typed: string }} which
- */
-async function deleteResource(adapter, record, needs, { name, typed }) {
-  const item = record.items[`resource.${name}`];
-  if (!item) throw deployError("production_deploy_item_unknown", `${name} isn't a resource this deployment made.`, 404);
-  if (needs.resources.some((one) => one.id === name)) throw deployError("production_deploy_resource_in_use", `genesis/stack.md still names ${name}: remove it there first.`);
-  if (typed !== name) throw deployError("production_deploy_confirmation_wrong", `Type ${name} to delete it and its data.`, 422);
-  await adapter.deleteResource(item.id);
-  const kept = structuredClone(record);
-  delete kept.items[`resource.${name}`];
-  return kept;
-}
-
-export { LEASE_SECONDS, LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE, applyStep, deleteResource, deploy, deployError, nextStep, releaseDigest, stepWords, takeDeployLease, takeOffline };
+// Take Production offline and Delete are offline.js's, named here too for those who import them from the steps.
+export { deleteResource, takeOffline } from "./offline.js";
+export {
+  LEASE_SECONDS, LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE, applyStep, backoffPauses, deployError, deploy, nextStep, releaseDigest, retryable, stepWords,
+  takeDeployLease
+};

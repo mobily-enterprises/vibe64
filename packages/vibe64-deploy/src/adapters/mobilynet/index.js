@@ -39,6 +39,16 @@ const ROUTE_NAME = /^rte-/u;
 // or ended with a refresh of its consumer that failed or was aborted, which ends every link the release the consumer
 // still runs doesn't name (engine-support M14), whichever Deploy made it.
 const HELD_LINK_STATES = Object.freeze(["issuing", "active", "failed"]);
+// A refresh past its build (refreshProgress): rolling or aborting, or with a step from its build's pass on (its release
+// task's, its new instances').
+const PAST_BUILD_STATES = Object.freeze(["rolling", "aborting", "succeeded"]);
+const PAST_BUILD_STEP = /^(?:build_passed|task_|instance_)/u;
+
+/** A refresh or build that ended already (`409`) or is gone (`404`) needs no stop; anything else is thrown on. */
+function endedAlready(error) {
+  if (error?.status === 409 || error?.status === 404) return null;
+  throw error;
+}
 
 /**
  * A link mobilynet takes only with the service's new release under way, as the engine's own refusal
@@ -347,6 +357,37 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     readRefresh: async (id, refreshId) => {
       const refresh = await client.readServiceRefresh(id, refreshId);
       return refresh && refresh.task ? { ...refresh, task: taskOfRefresh(refresh) } : refresh;
+    },
+    /**
+     * Where a refresh of a service stands, for a Deploy deciding whether it may stop (stop.js): `{ state, started,
+     * buildId }`, `started` once it went past its build (its build passed, its release task or a new instance
+     * started, or it rolls or aborts), `buildId` its build's, null before it has one (queued behind another refresh).
+     * @param {string} id @param {string} refreshId
+     */
+    async refreshProgress(id, refreshId) {
+      const refresh = await client.readServiceRefresh(id, refreshId);
+      const started = PAST_BUILD_STATES.includes(refresh.state) || (refresh.steps ?? []).some((one) => PAST_BUILD_STEP.test(one.step));
+      return { state: refresh.state, started, buildId: refresh.buildId ?? null };
+    },
+    /**
+     * Stops a refresh that has not gone past its build, leaving the service on the version it runs: the refresh
+     * aborted (a queued one at once, a building one at mobilynet's next pass), then its build ended, so the build no
+     * longer holds its project's queue (mobilynet builds a project's builds one at a time). A refresh or a build that
+     * ended already is left as it is. Answers whether its build ended, and why not when mobilynet refused to end it
+     * (the refresh is aborted all the same, and the build ends by itself).
+     * @param {string} id the App Service's id @param {string} refreshId @param {string | null} buildId
+     * @returns {Promise<{ buildEnded: boolean, buildRefusal: string | null }>}
+     */
+    async stopRefresh(id, refreshId, buildId) {
+      await client.abortServiceRefresh(id, refreshId).catch(endedAlready);
+      if (!buildId) return { buildEnded: false, buildRefusal: null };
+      try {
+        await client.endBuild(buildId).catch(endedAlready);
+        return { buildEnded: true, buildRefusal: null };
+      } catch (error) {
+        if (error?.retryable !== false) throw error;
+        return { buildEnded: false, buildRefusal: error.message };
+      }
     },
     /** Replaces an App Service's own settings and secrets: its refresh's id, null when mobilynet took them at once. */
     async putSettings(id, { settings, secrets }, { idempotencyKey }) {
