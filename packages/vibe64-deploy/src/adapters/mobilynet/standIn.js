@@ -102,12 +102,14 @@ const ROUTES = Object.freeze([
   [`^/v1/leases(/${ID})?$`, { POST: "services:deploy", PATCH: "services:deploy", DELETE: "services:deploy" }]
 ].map(([pattern, methods]) => Object.freeze([new RegExp(pattern, "u"), Object.freeze(methods)])));
 const SERVICE_PATH = new RegExp(`^/v1/services/${ID}$`, "u");
+const SERVICE_RELEASE_PATH = new RegExp(`^/v1/services/${ID}/releases$`, "u");
 const BUILD_LOG_PATH = new RegExp(`^/v1/builds/(${ID})/log$`, "u");
 const BUILD_PATH = new RegExp(`^/v1/builds/(${ID})(/actions/end)?$`, "u");
 
 /**
  * The scope a request needs, or null: a service's PATCH `services:manage` for any field but `instances`, which needs
- * `services:deploy` (mobilynet's services.js DEPLOY_FIELDS); the first missing one is named.
+ * `services:deploy` (mobilynet's services.js DEPLOY_FIELDS), and a release that brings settings, secrets or names to
+ * remove `services:manage` as well as `services:deploy` (mobilynet main c3575399); the first missing one is named.
  * @param {string} method @param {string} path @param {any} body @param {Set<string>} held
  */
 function missingScope(method, path, body, held) {
@@ -116,6 +118,8 @@ function missingScope(method, path, body, held) {
     const needed = [...(fields.some((field) => field !== "instances") ? ["services:manage"] : []), ...(fields.includes("instances") || fields.length === 0 ? ["services:deploy"] : [])];
     return needed.find((scope) => !held.has(scope)) ?? null;
   }
+  const bringing = (body && typeof body === "object" && !Buffer.isBuffer(body) ? ["settings", "secrets", "remove"] : []).some((field) => body[field] !== undefined && body[field] !== null);
+  if (method === "POST" && SERVICE_RELEASE_PATH.test(path) && bringing) return ["services:deploy", "services:manage"].find((scope) => !held.has(scope)) ?? null;
   // A build's log takes `packages:publish` in place of `vps:read` (mobilynet's buildModel.js buildReader).
   if (method === "GET" && BUILD_LOG_PATH.test(path) && held.has("packages:publish")) return null;
   const scope = ROUTES.find(([pattern]) => pattern.test(path))?.[1][method];

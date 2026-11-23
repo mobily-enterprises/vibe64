@@ -13,6 +13,13 @@ const MACHINE_SIZES = new Set(MACHINES.map((machine) => machine.name));
 // template, and it is rolling from the start, since Cloud Build built the image before it began. So the engine links a
 // service's resources while the rollout runs (their credentials are in the release's settings already).
 const rolloutOf = (version) => ({ id: `release:${version}`, state: "rolling" });
+/** A group's template labels a service's own settings are kept under: the engine's, without its exposure and version. */
+function ownLabels(labels) {
+  const own = { ...labels };
+  delete own["vibe64-exposure"];
+  delete own["vibe64-version"];
+  return own;
+}
 
 function createGoogleServices(g) {
   const {
@@ -256,8 +263,12 @@ function createGoogleServices(g) {
     return { id: ids.group(name), refreshId: rolloutOf(version).id };
   }
 
-  /** Hands a service a new release: its image once built, the resources its release needs. `{ version, refreshId }`. */
-  async function releaseService(id, upload) {
+  /**
+   * Hands a service a new release: its image once built, the resources its release needs, and `values`, its own
+   * settings and secrets in place of those it has, in the same rollout (without them it keeps its own).
+   * `{ version, refreshId }`.
+   */
+  async function releaseService(id, upload, { values = null } = {}) {
     const app = upload.declaration.name;
     const { version } = await uploadRelease(app, upload);
     const image = await builtImage(app, version);
@@ -266,10 +277,11 @@ function createGoogleServices(g) {
     if (kindOf(id) === "run") {
       const current = await run("GET", id);
       const links = await linksEnv(upload.declaration.needs, engineLabels(current.labels), name, email);
+      const own = values ? await settingsEnv(name, values, current.labels, email) : null;
       await patchRun(id, (body) => {
         const container = body.template.containers[0];
         container.image = image;
-        container.env = [...(container.env ?? []).filter((entry) => !isLink(entry)), ...links];
+        container.env = [...(own ?? (container.env ?? []).filter((entry) => !isLink(entry))), ...links];
         container.startupProbe = { httpGet: { path: upload.declaration.healthPath, port: SERVICE_PORT }, periodSeconds: 10, failureThreshold: 30 };
       });
       return { version, refreshId: rolloutOf(version).id };
@@ -277,7 +289,8 @@ function createGoogleServices(g) {
     const group = await compute("GET", `regions/${region}/instanceGroupManagers/${name}`);
     const { template } = await templateOf(group);
     const links = await linksEnv(upload.declaration.needs, engineLabels(template.properties.labels), name, email);
-    await changeGroup(id, (now) => ({ ...now, image, version, env: [...now.env.filter((entry) => !isLink(entry)), ...links], release: upload.declaration }));
+    const own = values ? await settingsEnv(name, values, ownLabels(template.properties.labels), email) : null;
+    await changeGroup(id, (now) => ({ ...now, image, version, env: [...(own ?? now.env.filter((entry) => !isLink(entry))), ...links], release: upload.declaration }));
     return { version, refreshId: rolloutOf(version).id };
   }
 
@@ -296,10 +309,7 @@ function createGoogleServices(g) {
     }
     const group = await compute("GET", `regions/${region}/instanceGroupManagers/${name}`);
     const { template } = await templateOf(group);
-    const labels = { ...template.properties.labels };
-    delete labels["vibe64-exposure"];
-    delete labels["vibe64-version"];
-    const own = await settingsEnv(name, values, labels, email);
+    const own = await settingsEnv(name, values, ownLabels(template.properties.labels), email);
     await changeGroup(id, (now) => ({ ...now, env: [...own, ...now.env.filter(isLink)] }));
     return "settings";
   }

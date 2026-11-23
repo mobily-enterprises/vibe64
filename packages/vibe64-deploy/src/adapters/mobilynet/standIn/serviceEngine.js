@@ -144,6 +144,35 @@ function valuesOf(invalid, input) {
 }
 
 /**
+ * What a release brings of its service's settings (mobilynet main c3575399, serviceFields.js releaseValuesOf): its
+ * `settings` and `secrets`, checked as a create's, and the names `remove` takes out (up to 200, each up to 64
+ * characters); `brought` null when it brings none. A name both given and removed is refused.
+ * @param {(fieldErrors: Record<string, string>) => any} invalid @param {any} input
+ */
+function broughtOf(invalid, input) {
+  if ([input.settings, input.secrets, input.remove].every((given) => given === undefined || given === null)) return { brought: null };
+  const values = valuesOf(invalid, input);
+  if (values.refusal) return values;
+  const remove = input.remove ?? [];
+  if (!Array.isArray(remove) || remove.length > 200 || remove.some((name) => typeof name !== "string" || name.length === 0 || name.length > 64)) {
+    return { refusal: invalid({ remove: "Up to 200 names of settings or secrets, each up to 64 characters." }) };
+  }
+  const both = remove.filter((name) => Object.hasOwn(values.values.settings, name) || Object.hasOwn(values.values.secrets, name));
+  if (both.length > 0) return { refusal: invalid(Object.fromEntries(both.map((name) => [`remove.${name}`, "Given a value too: set it or remove it."]))) };
+  return { brought: { ...values.values, remove: [...new Set(remove)].sort() } };
+}
+
+/**
+ * A service's settings and secrets with what a release brings (serviceFields.js withReleaseValues): each name it sets
+ * in place of the service's value, plain or secret, and each it removes gone. @param {any} service @param {any} brought
+ */
+function withBrought(service, { settings, secrets, remove }) {
+  const gone = new Set([...remove, ...Object.keys(settings), ...Object.keys(secrets)]);
+  const kept = (values) => Object.fromEntries(Object.entries(values ?? {}).filter(([name]) => !gone.has(name)));
+  return { settings: { ...kept(service.settings), ...settings }, secrets: { ...kept(service.secrets), ...secrets } };
+}
+
+/**
  * The field errors of a replace's names the release a service runs doesn't declare (mobilynet's open settings, 19 Nov,
  * appSettings.js undeclaredProblem): each is taken as a plain setting or a secret, its value text of up to 4096
  * characters, but not a name mobilynet's runtime sets on every instance (the adapter's runtimeSets: PATH, HOME, LANG,
@@ -420,6 +449,10 @@ function createStandInServiceEngine(world, parts) {
       // currentRefresh builds one whose build failed. STAND-IN ONLY: only an ended build, so that one failing as the
       // stand-in moves on, before the refresh asked with it starts, fails that refresh as before.
       if (release?.build === "failed" && release.error?.code === "cancelled") releases.rebuild(release);
+      // A release that brings settings starts from the service's as they are now, with them (mobilynet's
+      // currentRefresh): its instances and task start with them, the version it runs keeps its own, and the service
+      // takes them only once it succeeded.
+      if (refresh.brought) refresh.target = { ...refresh.target, ...withBrought(service, refresh.brought) };
       Object.assign(refresh, { state: "building", startedAt: at(), buildId: release?.buildId ?? null });
       refresh.steps.push(stepOf("build_started", null, refresh.buildId));
       // A build done already passes in the same step (`instantBuilds`), as mobilynet's reconcile passes a reused one.
@@ -546,4 +579,4 @@ function createStandInServiceEngine(world, parts) {
   });
 }
 
-export { INSTANCE_SETTING, createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, tooManySettings, undeclaredErrors, valuesOf };
+export { INSTANCE_SETTING, broughtOf, createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, tooManySettings, undeclaredErrors, valuesOf, withBrought };

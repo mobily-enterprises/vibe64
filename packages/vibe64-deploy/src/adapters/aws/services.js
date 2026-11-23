@@ -521,8 +521,12 @@ async function createService(ctx, { name, exposure, size, instances, app, versio
   return { id: made.AutoScalingGroupARN, refreshId: tagsOf(asList(made.Tags?.member))[REFRESH_TAG] ?? `create:${template.version}` };
 }
 
-/** Hands a service a new release: its image once built, the resources the release needs. `{ version, refreshId }`. */
-async function releaseService(ctx, id, upload) {
+/**
+ * Hands a service a new release: its image once built, the resources the release needs, and `values`, its own settings
+ * and secrets in place of those it has, in the same new revision (without them it keeps its own). `{ version,
+ * refreshId }`.
+ */
+async function releaseService(ctx, id, upload, { values = null } = {}) {
   const current = await readOwnService(ctx, id);
   const base = await ensureBase(ctx);
   const { declaration } = upload;
@@ -536,9 +540,11 @@ async function releaseService(ctx, id, upload) {
     const target = await targetGroupOf(ctx, { item: spec.service, machine: current.machine, healthPath: declaration.healthPath });
     await ctx.client.query("elasticloadbalancing", "ModifyTargetGroup", { TargetGroupArn: target, HealthCheckPath: declaration.healthPath });
   }
+  // Its own settings: those it brings, in place of those it has, or those it has.
+  const own = values ? await ownSettings(ctx, spec.service, labelsOf(current.tags), values) : { env: pick(spec.env, (name) => !isLink(name)), secrets: pick(spec.secrets, (name) => !isLink(name)) };
   const next = {
     ...spec, name: declaration.name, image, version, healthPath: declaration.healthPath, privileged: declaration.machineFeatures.length > 0,
-    env: { ...links.env, ...pick(spec.env, (name) => !isLink(name)) }, secrets: { ...links.secrets, ...pick(spec.secrets, (name) => !isLink(name)) }
+    env: { ...links.env, ...own.env }, secrets: { ...links.secrets, ...own.secrets }
   };
   return { version, refreshId: await roll(ctx, base, current, next, "release") };
 }

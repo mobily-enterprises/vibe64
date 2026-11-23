@@ -19,7 +19,7 @@
 // `leases: true` takes none, which is safe only while one editor deploys a project's environment (Managed today:
 // the workspace's own editor is the only writer).
 import { LABEL } from "../../record.js";
-import { LINK_NEEDS_RELEASE, SETTINGS_NEED_RELEASE } from "../../steps.js";
+import { LINK_NEEDS_RELEASE } from "../../steps.js";
 import { MOBILYNET_INTERFACES, SERVICE_SETTINGS_FALLBACK, needAs, serviceUpload } from "./declaration.js";
 
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
@@ -64,24 +64,6 @@ function linkRefusal(error) {
   const waits = /declares no need/u.test(fields.need ?? "") || /release/u.test(fields.consumer ?? "");
   if (!waits) return error;
   return Object.assign(new Error(error.message), { code: LINK_NEEDS_RELEASE, retryable: error.retryable, details: error.details, cause: error });
-}
-
-/**
- * A replace of a service's settings mobilynet takes only with its new release, as the engine's own refusal
- * (SETTINGS_NEED_RELEASE): mobilynet checks a replace against the release the service runs (serviceFields.js
- * checkSettings). It takes a name that release doesn't declare as a plain setting or a secret (decided 19 Nov), so a
- * Production Env entry, which no release declares, goes in a replace whatever the release; it refuses `422
- * validation_failed` one giving a setting the release declares otherwise (a secret as a plain setting), `422
- * settings_missing` one lacking a setting only the release it runs requires, and `409 invalid_state` one asked while the
- * service's first release is still under way. The engine then gives them after the release, which is also where a
- * value that fits no release is refused again, as mobilynet refused it. One tried again later (a service busy) is
- * mobilynet's, as it gave it.
- * @param {any} error
- */
-function settingsRefusal(error) {
-  const waits = !error?.retryable && ["validation_failed", "settings_missing", "invalid_state"].includes(error?.code);
-  if (!waits) return error;
-  return Object.assign(new Error(error.message), { code: SETTINGS_NEED_RELEASE, retryable: false, status: error.status, details: error.details, cause: error });
 }
 
 /**
@@ -323,9 +305,18 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
      * tasks, declaration.js): `migrate`, or null for an app with no Migrate step.
      */
     taskOf: (declaration) => (declaration?.tasks?.migrate ? "migrate" : null),
-    /** Hands an App Service a new release, its refresh running `task` first when given: `{ version, refreshId }`. */
-    async releaseService(id, upload, { task = null } = {}) {
-      const answer = await client.createServiceRelease(id, { archive: upload.bytes, sha256: upload.sha256 }, { task });
+    /**
+     * Hands an App Service a new release with the settings it brings, its refresh running `task` first when given:
+     * uploaded to the project as a release of its app (the same bytes answer the release they made), then handed by
+     * that version with `values`, its own settings and secrets in place of those it holds, and `remove`, the names
+     * given before and no longer (a need's are its links'). Its new instances and release task start with them while
+     * the version it runs keeps serving with its own, and the service takes them only once that refresh succeeded
+     * (mobilynet main c3575399); without `values` it keeps its settings. `{ version, refreshId }`.
+     */
+    async releaseService(id, upload, { app, task = null, values = null, remove = [], idempotencyKey }) {
+      const { version } = (await calls.createRelease(app, { archive: upload.bytes, sha256: upload.sha256 })).release;
+      const brought = values ? { settings: values.settings, secrets: values.secrets, remove } : {};
+      const answer = await client.releaseServiceVersion(id, { version, ...brought, task }, { idempotencyKey });
       return { version: answer.release.version, refreshId: answer.refresh?.id ?? null };
     },
     /**
@@ -389,14 +380,11 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         return { buildEnded: false, buildRefusal: error.message };
       }
     },
-    /** Replaces an App Service's own settings and secrets: its refresh's id, null when mobilynet took them at once. */
-    async putSettings(id, { settings, secrets }, { idempotencyKey }) {
-      try {
-        return (await client.putServiceSettings(id, { settings, secrets }, { idempotencyKey })).refresh?.id ?? null;
-      } catch (error) {
-        throw settingsRefusal(error);
-      }
-    },
+    /**
+     * Replaces an App Service's own settings and secrets, on the release it runs (one keeping its release; one handed a
+     * release brings them with it): its refresh's id, null when mobilynet took them at once.
+     */
+    putSettings: async (id, { settings, secrets }, { idempotencyKey }) => (await client.putServiceSettings(id, { settings, secrets }, { idempotencyKey })).refresh?.id ?? null,
     changeService: async (id, change, { idempotencyKey }) => (await client.changeService(id, change, { idempotencyKey })).refresh?.id ?? null,
     /**
      * Routes the domain to a public App Service: its route made or taken, and with `take` moved from the service that

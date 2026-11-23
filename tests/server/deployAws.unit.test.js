@@ -164,10 +164,11 @@ test("a second deploy rolls web onto a new revision and workers onto new machine
   const second = await run({ record: first.record, commit: "c2", env: { SESSION_SECRET: "session-1", SETUP_CODE: "setup-1", MAIL_PASSWORD: "mail-2", MAX_JOBS: "8" } });
   assert.equal(second.outcome, "live", second.message);
   assert.deepEqual(second.plan.items.map((item) => item.verb), ["kept", "kept", "kept", "kept"]);
-  // web's new mail password goes first, on the version it runs, once, then its release (a step tried again is listed again).
+  // web's new mail password goes with its release, never ahead of it on the version it runs (a step tried again is
+  // listed again).
   const webSteps = second.steps.filter((step) => /^(putSettings|releaseService) web$/u.test(step));
-  assert.deepEqual([webSteps[0], webSteps.at(-1), webSteps.filter((step) => step === "putSettings web").length], ["putSettings web", "releaseService web", 1]);
-  // web: one deployment, of a newer revision (its new settings, then the release, each a revision ECS rolled out).
+  assert.ok(webSteps.length > 0 && webSteps.every((step) => step === "releaseService web"), webSteps.join(", "));
+  // web: one deployment, of a newer revision (the release with its new settings, a revision ECS rolled out).
   const web = standIn.view().services.find((one) => one.name === "shop-web");
   assert.deepEqual([web.deployments.length, web.deployments[0].rolloutState], [1, "COMPLETED"]);
   assert.notEqual(web.deployments[0].taskDefinition, web.taskDefinition.replace(/:\d+$/u, ":1"));

@@ -9,8 +9,8 @@ import { sentence } from "./report.js";
  * go, its links made ahead dropped (they ended with it) and its service handed its release again, so the next Deploy
  * makes them again and nothing it holds is stale. A refresh still open is waited for by the next Deploy as it reads
  * the service; should it then fail, the links it ends are made again as the provider no longer holds them (nextStep).
- * A settings refresh that didn't succeed, open or ended, gives its settings again. Answers the record with the reason
- * of each that failed.
+ * The settings a refresh brought (a release's, or a settings refresh's) count as given once it succeeded; one that
+ * didn't, open or ended, leaves them to be given again. Answers the record with the reason of each that failed.
  * @param {any} adapter @param {any} record @param {(event: any) => void} tell
  */
 async function settleLastRun(adapter, record, tell) {
@@ -22,9 +22,7 @@ async function settleLastRun(adapter, record, tell) {
     tell({ kind: "step", phase: "start", step: "settleRefresh", service, words, refresh: { serviceId: id, refreshId: state.refreshId } });
     const refresh = await adapter.readRefresh(id, state.refreshId);
     noteTask(kept, state, refresh);
-    // A settings refresh not known to have succeeded (failed, or still open and may yet fail): the provider may keep the
-    // settings the service had, so this Deploy gives them again.
-    if (state.settingsRefresh && refresh?.state !== "succeeded") delete kept.items[`service.${service}`].settingsHash;
+    if (refresh?.state === "succeeded" && state.bringing) Object.assign(kept.items[`service.${service}`], state.bringing);
     if (refresh && (refresh.state === "failed" || refresh.state === "aborted")) {
       for (const resource of state.linkedAhead ?? []) delete kept.items[`resource.${resource}`]?.links?.[service];
       delete kept.items[`service.${service}`].release;
@@ -32,7 +30,7 @@ async function settleLastRun(adapter, record, tell) {
       const why = refresh.state === "aborted" && !refresh.error ? "It was stopped with the last Deploy."
         : `It ${refresh.state}: ${sentence(refresh.error?.message ?? "the provider gave no reason")}`;
       tell({ kind: "step", phase: "done", step: "settleRefresh", service, words,
-        message: `${why} This Deploy hands ${service} its ${state.settingsRefresh ? "settings and " : ""}release again.` });
+        message: `${why} This Deploy hands ${service} its release${state.bringing ? " and its settings" : ""} again.` });
     } else tell({ kind: "step", phase: "done", step: "settleRefresh", service, words, message: `It is ${refresh?.state ?? "gone"}.` });
   }
   return kept;

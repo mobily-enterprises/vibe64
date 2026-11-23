@@ -450,6 +450,25 @@ function createMobilynetClient({ baseUrl, credential, fetch: given, lookup = rou
       body: archive, contentSha256: sha256, ...(task ? { query: { task } } : {})
     }),
     /**
+     * Hands an App Service a release of its app the project has, by its `version` (createRelease uploads it), with the
+     * settings it brings (`services:deploy`, and `services:manage` for the settings; mobilynet main c3575399): `{
+     * release, build, service, refresh }` as createServiceRelease's. `settings` and `secrets` set those names and
+     * `remove` takes names out, over the service's settings and secrets as they are when its refresh starts; every
+     * other name is kept, a need's setting refused `422` as its link's alone. Its refresh's new instances and release
+     * task start with them while the version before keeps serving with its own, and the service takes them only once
+     * the refresh succeeded: one that fails or is aborted leaves them as they were. Checked as a replace is, against
+     * the release it moves to: at the call (`422 validation_failed` or `settings_missing`, nothing queued) once its
+     * declaration is read and no other refresh is open, else as its build passed (the refresh failed with that code).
+     * The same Idempotency-Key and body answer the first answer again.
+     * @param {string} serviceId
+     * @param {{ version: string, settings?: Record<string, unknown>, secrets?: Record<string, string>, remove?: string[], task?: string | null }} asked
+     * @param {{ idempotencyKey?: string }} [context]
+     */
+    releaseServiceVersion: (serviceId, { version, settings, secrets, remove, task = null }, { idempotencyKey } = {}) => call("POST", `${servicePath(serviceId)}/releases`, {
+      body: { version, ...(settings ? { settings } : {}), ...(secrets ? { secrets } : {}), ...(remove?.length ? { remove } : {}), ...(task ? { task } : {}) },
+      idempotencyKey
+    }),
+    /**
      * Rolls an App Service back to the version it ran before (`services:deploy`): `{ service, refresh }`, kind
      * `rollback`; `409 no_previous_version` when it has none.
      * @param {string} serviceId

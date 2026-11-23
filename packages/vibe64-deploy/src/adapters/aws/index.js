@@ -82,7 +82,7 @@ function createAwsAdapter({ client, deployment = null, nixpkgs, now = () => Date
     domainRecords: (domain) => domainRecords(ctx, domain),
     /** Keeps a release and starts its image's build: `{ version }`, the image's tag. */
     uploadRelease: (app, upload) => uploadRelease(ctx, app, upload),
-    releaseService: (id, upload) => releaseService(ctx, id, upload),
+    releaseService: (id, upload, asked) => releaseService(ctx, id, upload, asked),
     createService: (spec, options) => createService(ctx, spec, options),
     readRefresh: (id, refreshId) => readRefresh(ctx, id, refreshId),
     putSettings: (id, values) => putSettings(ctx, id, values),

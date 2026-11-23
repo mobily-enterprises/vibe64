@@ -527,6 +527,14 @@ test("moveDomain routes the running public App Service to another domain at once
 /** Each write sent to the provider after `count` requests, but the Deploy's lease: `[method, path]`. */
 const writesAfter = (standIn, count) => requestsAfter(standIn, count).filter((request) => isWrite(request) && !request.path.startsWith("/v1/leases"))
   .map((request) => [request.method, request.path]);
+/**
+ * The writes that hand a service its release: its upload to the project, then the release by its version, which brings
+ * its settings where they changed. @param {string} projectId @param {any} kept a record @param {string} service
+ */
+const handed = (projectId, kept, service) => [
+  ["POST", `/v1/projects/${projectId}/apps/${kept.items[`service.${service}`].providerName}/releases`],
+  ["POST", `/v1/services/${kept.items[`service.${service}`].id}/releases`]
+];
 /** Each resource's links as mobilynet holds them now: `{ item: [[link id, consumer, state]] }`, ids naming the credentials. */
 const linksHeld = (standIn, kept) => Object.fromEntries(["resource.database", "resource.files"].map((item) => [item,
   standIn.hosted.service(kept.items[item].id).links.map((link) => [link.id, link.consumer.id, link.state]).sort()]));
@@ -550,7 +558,7 @@ test("a redeploy of unchanged code and Stack sends the provider nothing but its 
 });
 
 test("a redeploy where one of two services changed hands that one alone its release: no hosted service, link or other service is touched", async () => {
-  const { standIn, run, record } = setup();
+  const { standIn, projectId, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
@@ -563,7 +571,8 @@ test("a redeploy where one of two services changed hands that one alone its rele
   const at = standIn.requests().length;
   const second = await run({ stack: changed, record: first.record, commit: "c1" });
   assert.equal(second.outcome, "live", second.message);
-  assert.deepEqual(writesAfter(standIn, at), [["POST", `/v1/services/${computers}/releases`]], "computers' release, and nothing else");
+  assert.deepEqual(writesAfter(standIn, at), handed(projectId, first.record, "computers"), "computers' release, and nothing else");
+  assert.equal(computers, second.record.items["service.computers"].id);
   assert.deepEqual(second.steps.filter((step) => !step.startsWith("wait")), ["ensureDomain", "releaseService computers", "checkRefresh computers", "keepRelease web"]);
   assert.deepEqual(standIn.services.refreshes(web).map((one) => one.kind), ["create"], "no refresh of web");
   assert.deepEqual(standIn.services.instances(web).map((one) => one.id), webInstances, "web's machines run on");
@@ -615,7 +624,7 @@ test("a Production Env entry added, changed or removed, on the same code and Sta
 });
 
 test("a service whose release failed is handed it again on the next Deploy, while every hosted service and link stays as it was", async () => {
-  const { standIn, run, record } = setup();
+  const { standIn, projectId, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
@@ -631,8 +640,9 @@ test("a service whose release failed is handed it again on the next Deploy, whil
   const at = standIn.requests().length;
   const again = await run({ record: failed.record, commit: "c2" });
   assert.equal(again.outcome, "live", again.message);
-  assert.deepEqual(writesAfter(standIn, at), [["POST", `/v1/services/${computers}/releases`], ["POST", `/v1/services/${web}/releases`]],
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, again.record, "computers"), ...handed(projectId, again.record, "web")],
     "computers handed c2 again and web its first c2: no hosted-service write, no link");
+  assert.deepEqual([computers, web], [again.record.items["service.computers"].id, again.record.items["service.web"].id]);
   assert.deepEqual(linksHeld(standIn, again.record), links, "the same links (the same logins) through the failure and the Deploy after it");
 });
 
@@ -642,8 +652,8 @@ const writesTo = (standIn, count, serviceId) => requestsAfter(standIn, count).fi
 /** A setup code as the newer framework takes one: at least 20 letters and digits. @param {string} [code] */
 const longCode = (code) => /^[A-Za-z0-9]{20,}$/u.test(code ?? "");
 
-test("a release that fails for a secret's value is put right by a Deploy with the value changed: web is given its settings, then the release, whose instances start with them", async () => {
-  const { standIn, run, record } = setup();
+test("a release that fails for a secret's value is put right by a Deploy with the value changed: its release brings the value, its instances start with it, and no instance of the version before ever does", async () => {
+  const { standIn, projectId, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
@@ -657,24 +667,23 @@ test("a release that fails for a secret's value is put right by a Deploy with th
   assert.match(failed.message, /^web: the release did not go live: A new instance never became healthy/u);
   settle(standIn);
 
-  // The owner saves a long code in the Production Env and deploys the same commit: web is given it on c1, which takes
-  // it, then handed c2, whose instances start with it. Nothing follows the release, and computers runs c2 already.
+  // The owner saves a long code in the Production Env and deploys the same commit: web is handed c2 again, its release
+  // bringing the code; computers runs c2 already. Nothing goes to web ahead of its release or after it.
   const env = { ...ENV, AUTH_LOCAL_SETUP_CODE: "SetupCodeOfTwentyFour024" };
   const events = reports();
   const at = standIn.requests().length;
   const fixed = await run({ record: failed.record, commit: "c2", env, report: events.report });
   assert.equal(fixed.outcome, "live", fixed.message);
-  assert.deepEqual(writesAfter(standIn, at), [["PUT", `/v1/services/${web}/settings`], ["POST", `/v1/services/${web}/releases`]]);
-  assert.deepEqual(fixed.steps.filter((step) => !step.startsWith("wait")),
-    ["ensureDomain", "putSettings web", "checkRefresh web", "keepRelease computers", "releaseService web", "checkRefresh web"]);
+  assert.deepEqual(writesAfter(standIn, at), handed(projectId, fixed.record, "web"));
+  assert.deepEqual(fixed.steps.filter((step) => !step.startsWith("wait")), ["ensureDomain", "keepRelease computers", "releaseService web", "checkRefresh web"]);
   const words = events.events.filter((event) => event.kind === "step" && event.phase === "start" && event.service === "web").map((event) => event.words);
-  assert.deepEqual(words, ["Updating the settings of web", "Reading how the update of web ended", "Handing App Service web the new release", "Reading how the update of web ended"]);
-  assert.ok(events.events.some((event) => event.kind === "wait" && event.words === "Updating the settings of web on the version it runs"));
-  const [settings, release] = standIn.services.refreshes(web).slice(-2);
-  assert.deepEqual([settings.kind, settings.toVersion, settings.state, release.kind, release.state], ["settings", c1, "succeeded", "release", "succeeded"]);
-  const serving = standIn.services.instances(web).filter((one) => !one.removedReason);
-  assert.ok(serving.length === 2 && serving.every((one) => one.version === fixed.record.run.services.web.version && one.secrets.AUTH_LOCAL_SETUP_CODE === env.AUTH_LOCAL_SETUP_CODE),
-    "web serves c2 with the long code");
+  assert.deepEqual(words, ["Handing App Service web the new release", "Reading how the update of web ended"]);
+  const [release] = standIn.services.refreshes(web).slice(-1);
+  assert.deepEqual([release.kind, release.state, release.target.secrets.AUTH_LOCAL_SETUP_CODE], ["release", "succeeded", env.AUTH_LOCAL_SETUP_CODE]);
+  const instances = standIn.services.instances(web);
+  assert.ok(instances.filter((one) => !one.removedReason).length === 2 && instances.filter((one) => !one.removedReason)
+    .every((one) => one.version === fixed.record.run.services.web.version && one.secrets.AUTH_LOCAL_SETUP_CODE === env.AUTH_LOCAL_SETUP_CODE), "web serves c2 with the long code");
+  assert.equal(instances.some((one) => one.version === c1 && one.secrets.AUTH_LOCAL_SETUP_CODE === env.AUTH_LOCAL_SETUP_CODE), false, "no instance of c1 ever ran with it");
   assert.notEqual(fixed.record.items["service.web"].settingsHash, failed.record.items["service.web"].settingsHash);
 
   // Nothing changed: no settings and no release, nothing but the lease.
@@ -683,30 +692,33 @@ test("a release that fails for a secret's value is put right by a Deploy with th
   const again = await run({ record: fixed.record, commit: "c2", env });
   assert.equal(again.outcome, "live", again.message);
   assert.deepEqual(writesAfter(standIn, unchanged), []);
-  // A new commit with the same settings: each service its release, and no settings.
+  // A new commit with the same settings: each service its release, bringing none.
   settle(standIn);
   const moved = standIn.requests().length;
   const third = await run({ record: again.record, commit: "c3", env });
   assert.equal(third.outcome, "live", third.message);
-  assert.deepEqual(writesAfter(standIn, moved), [["POST", `/v1/services/${computers}/releases`], ["POST", `/v1/services/${web}/releases`]]);
+  assert.deepEqual(writesAfter(standIn, moved), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web")]);
+  assert.equal(computers, third.record.items["service.computers"].id);
+  const broughtBy = (id) => requestsAfter(standIn, moved).filter((request) => request.path === `/v1/services/${id}/releases`)
+    .flatMap((request) => Object.keys(request.body).filter((key) => ["settings", "secrets", "remove"].includes(key)));
+  assert.deepEqual([broughtBy(computers), broughtBy(web)], [[], []], "a release that brings no settings sends none");
 });
 
-test("a new generated secret, which a new release requires and no release declared before, goes to each service ahead of that release, which starts with it", async () => {
+test("a new generated secret, which a new release requires and no release declared before, goes to each service with that release, which starts with it", async () => {
   const { standIn, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
   const { items } = first.record;
   const [web, computers] = [items["service.web"].id, items["service.computers"].id];
-  // Every service's c2 requires MEMOBOT_SIGNING_KEY, which c1 doesn't declare: c1 takes it in a settings replace as a
-  // secret it doesn't declare, so c2's refresh finds it given.
+  // Every service's c2 requires MEMOBOT_SIGNING_KEY, which c1 doesn't declare: c2's release brings it.
   const stack = stackOf((lines) => lines.map((line) => (line.startsWith("- Generated secrets:") ? `${line} \`MEMOBOT_SIGNING_KEY\`` : line)));
   const env = { ...ENV, MEMOBOT_SIGNING_KEY: "signing-1" };
   const at = standIn.requests().length;
   const second = await run({ stack, record: first.record, commit: "c2", env });
   assert.equal(second.outcome, "live", second.message);
   for (const [service, id] of [["computers", computers], ["web", web]]) {
-    assert.deepEqual(writesTo(standIn, at, id), [["PUT", `/v1/services/${id}/settings`, 202], ["POST", `/v1/services/${id}/releases`, 202]], service);
+    assert.deepEqual(writesTo(standIn, at, id), [["POST", `/v1/services/${id}/releases`, 202]], service);
     const serving = standIn.services.instances(id).filter((one) => !one.removedReason);
     assert.ok(serving.length === 2 && serving.every((one) => one.version === second.record.run.services[service].version
       && one.secrets.MEMOBOT_SIGNING_KEY === "signing-1"), `${service} serves c2 with the new secret`);
@@ -733,7 +745,7 @@ test("a setting a service requires that the Production Env has no value for fail
   assert.deepEqual(writesAfter(fresh.standIn, before), [], "nothing made");
 });
 
-test("a fixed value and a name new to its service go ahead together of the release that needs the value", async () => {
+test("a fixed value and a name new to its service go together with the release that needs the value", async () => {
   const { standIn, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
@@ -745,20 +757,30 @@ test("a fixed value and a name new to its service go ahead together of the relea
   const failed = await run({ record: first.record, commit: "c2" });
   assert.equal(failed.outcome, "failed", failed.message);
   settle(standIn);
-  // The owner saves a long code and, in the same Deploy, a new Production Env entry, which no release declares: both go
-  // ahead on c1, then c2 starts with them, and nothing follows the release.
+  // The owner saves a long code and, in the same Deploy, a new Production Env entry, which no release declares: c2's
+  // release brings both, and nothing follows it.
   const records = [...ENV_RECORDS, { key: "MEMOBOT_GREETING", secret: false }];
   const env = { ...ENV, AUTH_LOCAL_SETUP_CODE: "SetupCodeOfTwentyFour024", MEMOBOT_GREETING: "Hello" };
   const at = standIn.requests().length;
   const fixed = await run({ record: failed.record, commit: "c2", env, records });
   assert.equal(fixed.outcome, "live", fixed.message);
-  assert.deepEqual(writesTo(standIn, at, web), [["PUT", `/v1/services/${web}/settings`, 202], ["POST", `/v1/services/${web}/releases`, 202]]);
+  assert.deepEqual(writesTo(standIn, at, web), [["POST", `/v1/services/${web}/releases`, 202]]);
   const serving = standIn.services.instances(web).filter((one) => !one.removedReason);
   assert.ok(serving.length === 2 && serving.every((one) => one.version === fixed.record.run.services.web.version
     && one.secrets.AUTH_LOCAL_SETUP_CODE === "SetupCodeOfTwentyFour024" && one.settings.MEMOBOT_GREETING === "Hello"), "web serves c2 with both");
+
+  // The entry removed with the next commit: c3's release takes it out, and web serves without it.
+  settle(standIn);
+  const later = standIn.requests().length;
+  const third = await run({ record: fixed.record, commit: "c3", env: { ...ENV, AUTH_LOCAL_SETUP_CODE: "SetupCodeOfTwentyFour024" } });
+  assert.equal(third.outcome, "live", third.message);
+  const [asked] = requestsAfter(standIn, later).filter((request) => request.path === `/v1/services/${web}/releases`);
+  assert.deepEqual(asked.body.remove, ["MEMOBOT_GREETING"]);
+  assert.ok(standIn.services.instances(web).filter((one) => !one.removedReason).every((one) => !Object.hasOwn(one.settings, "MEMOBOT_GREETING")), "web serves c3 without it");
+  assert.equal(Object.hasOwn(standIn.services.service(web).settings, "MEMOBOT_GREETING"), false);
 });
 
-test("settings that don't go live on the version a service runs follow its release, which takes them", async () => {
+test("settings the version a service runs would refuse go live with its next release alone: no instance of that version ever starts with them", async () => {
   const { standIn, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
@@ -768,29 +790,61 @@ test("settings that don't go live on the version a service runs follow its relea
   // c1's web refuses the new Stripe key as it boots; c2's takes it.
   standIn.faults.instancesUnhealthy = (instance) => instance.serviceId === web && instance.version === c1 && instance.secrets.STRIPE_SECRET_KEY === "sk_live_2";
   const env = { ...ENV, STRIPE_SECRET_KEY: "sk_live_2" };
-  const events = reports();
+  const refreshesBefore = standIn.services.refreshes(web).length;
   const at = standIn.requests().length;
-  const second = await run({ record: first.record, commit: "c2", env, report: events.report });
+  const second = await run({ record: first.record, commit: "c2", env });
   assert.equal(second.outcome, "live", second.message);
-  assert.deepEqual(writesTo(standIn, at, web), [["PUT", `/v1/services/${web}/settings`, 202], ["POST", `/v1/services/${web}/releases`, 202], ["PUT", `/v1/services/${web}/settings`, 202]]);
-  assert.ok(events.said().includes("Its new settings did not go live on the version it runs: A new instance never became healthy; the previous version kept serving. "
-    + "web gets its new release first, and its settings after it."));
-  assert.deepEqual(standIn.services.refreshes(web).slice(-3).map((one) => [one.kind, one.state]), [["settings", "failed"], ["release", "succeeded"], ["settings", "succeeded"]]);
-  const serving = standIn.services.instances(web).filter((one) => !one.removedReason);
-  assert.ok(serving.length === 2 && serving.every((one) => one.version === second.record.run.services.web.version && one.secrets.STRIPE_SECRET_KEY === "sk_live_2"),
+  assert.deepEqual(writesTo(standIn, at, web), [["POST", `/v1/services/${web}/releases`, 202]]);
+  assert.deepEqual(standIn.services.refreshes(web).slice(refreshesBefore).map((one) => [one.kind, one.state]), [["release", "succeeded"]]);
+  const instances = standIn.services.instances(web);
+  assert.equal(instances.some((one) => one.version === c1 && one.secrets.STRIPE_SECRET_KEY === "sk_live_2"), false, "no instance of c1 ran with the new key");
+  assert.ok(instances.filter((one) => !one.removedReason).every((one) => one.version === second.record.run.services.web.version && one.secrets.STRIPE_SECRET_KEY === "sk_live_2"),
     "web serves c2 with the new key");
 });
 
-test("a Deploy that stopped while a service's settings went ahead of its release, those settings then failing, is resumed by the next, which gives them again", async () => {
+test("a release that fails leaves its service's settings as they were: the version before serves with them, the record still names them, and the next Deploy brings the new ones again", async () => {
   const { standIn, run, record } = setup();
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
   const web = first.record.items["service.web"].id;
   const c1 = first.record.run.services.web.version;
-  standIn.faults.instancesUnhealthy = (instance) => instance.serviceId === web && instance.version === c1 && instance.secrets.STRIPE_SECRET_KEY === "sk_live_2";
-  const env = { ...ENV, STRIPE_SECRET_KEY: "sk_live_2" };
-  // The editor stops at the first pause once web's settings went ahead of its release.
+  // c2's web never gets healthy, whatever its settings.
+  standIn.faults.instancesUnhealthy = (instance) => instance.serviceId === web && instance.version !== c1;
+  const env = { ...ENV, STRIPE_SECRET_KEY: "sk_live_2", MEMOBOT_OWNERS: "owner@example.com,second@example.com" };
+  const failed = await run({ record: first.record, commit: "c2", env });
+  assert.equal(failed.outcome, "failed");
+  assert.match(failed.message, /^web: the release did not go live: A new instance never became healthy.* The version before \(\S+\) still serves, with its settings as they were\./u);
+  settle(standIn);
+  // The release's refresh brought them; failed, they never became web's.
+  const [release] = standIn.services.refreshes(web).slice(-1);
+  assert.deepEqual([release.kind, release.state, release.target.secrets.STRIPE_SECRET_KEY], ["release", "failed", "sk_live_2"]);
+  const held = standIn.services.service(web);
+  assert.deepEqual([held.version, held.secrets.STRIPE_SECRET_KEY, held.settings.MEMOBOT_OWNERS], [c1, "sk_test_1", "owner@example.com"], "web keeps the values it had");
+  const instances = standIn.services.instances(web);
+  assert.ok(instances.filter((one) => !one.removedReason).every((one) => one.version === c1 && one.secrets.STRIPE_SECRET_KEY === "sk_test_1"), "c1 serves with them");
+  assert.equal(instances.some((one) => one.version === c1 && one.secrets.STRIPE_SECRET_KEY === "sk_live_2"), false, "no instance of c1 ever ran with the new key");
+  assert.deepEqual(
+    [failed.record.items["service.web"].settingsHash, failed.record.items["service.web"].settingNames],
+    [first.record.items["service.web"].settingsHash, first.record.items["service.web"].settingNames],
+    "the record still names the settings web holds"
+  );
+
+  // Put right, the next Deploy brings them again with the release.
+  standIn.faults.instancesUnhealthy = false;
+  const at = standIn.requests().length;
+  const again = await run({ record: failed.record, commit: "c2", env });
+  assert.equal(again.outcome, "live", again.message);
+  assert.deepEqual(writesTo(standIn, at, web), [["POST", `/v1/services/${web}/releases`, 202]]);
+  assert.deepEqual([standIn.services.service(web).secrets.STRIPE_SECRET_KEY, standIn.services.service(web).settings.MEMOBOT_OWNERS], ["sk_live_2", env.MEMOBOT_OWNERS]);
+  assert.notEqual(again.record.items["service.web"].settingsHash, first.record.items["service.web"].settingsHash);
+});
+
+/**
+ * A Deploy of c2 with a new Stripe key that the editor stops at its first pause once web's release, bringing the key,
+ * was handed: `{ kept }`, the record as it last kept it.
+ */
+async function stoppedWhileBringing({ run, standIn }, first, env) {
   let kept = null;
   const stopped = await run({
     record: first.record, commit: "c2", env,
@@ -799,58 +853,92 @@ test("a Deploy that stopped while a service's settings went ahead of its release
       return one;
     },
     pause: () => {
-      if (kept?.run.services.web?.settingsRefresh) throw new Error("the editor stopped");
+      if (kept?.run.services.web?.bringing) throw new Error("the editor stopped");
       standIn.advance();
     }
   }).catch((error) => error);
   assert.equal(stopped.message, "the editor stopped");
-  assert.equal(kept.items["service.web"].settingsHash === first.record.items["service.web"].settingsHash, false, "the record says web was given them");
+  assert.equal(kept.items["service.web"].settingsHash, first.record.items["service.web"].settingsHash, "the record names the settings web holds until its release succeeds");
+  return { kept };
+}
+
+test("a Deploy that stopped while a release that brought settings ran, that release then succeeding, is resumed by the next, which counts them as given: nothing goes to web again", async () => {
+  const parts = setup();
+  const { standIn, run, record } = parts;
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
   settle(standIn);
-  assert.equal(standIn.services.refreshes(web).at(-1).state, "failed");
+  const web = first.record.items["service.web"].id;
+  const env = { ...ENV, STRIPE_SECRET_KEY: "sk_live_2" };
+  const { kept } = await stoppedWhileBringing(parts, first, env);
+  settle(standIn);
+  assert.equal(standIn.services.refreshes(web).at(-1).state, "succeeded");
 
   const events = reports();
   const at = standIn.requests().length;
   const resumed = await run({ record: kept, commit: "c2", env, report: events.report });
   assert.equal(resumed.outcome, "live", resumed.message);
-  const settled = events.events.filter((event) => event.step === "settleRefresh" && event.phase === "done");
-  assert.deepEqual(settled.map((event) => event.message),
-    ["It failed: A new instance never became healthy; the previous version kept serving. This Deploy hands web its settings and release again."]);
-  assert.deepEqual(writesTo(standIn, at, web), [["PUT", `/v1/services/${web}/settings`, 202], ["POST", `/v1/services/${web}/releases`, 202], ["PUT", `/v1/services/${web}/settings`, 202]]);
-  const serving = standIn.services.instances(web).filter((one) => !one.removedReason);
-  assert.ok(serving.length === 2 && serving.every((one) => one.secrets.STRIPE_SECRET_KEY === "sk_live_2"), "web serves with the new key");
+  const settled = events.events.filter((event) => event.step === "settleRefresh" && event.phase === "done" && event.service === "web");
+  assert.deepEqual(settled.map((event) => event.message), ["It is succeeded."]);
+  assert.deepEqual(writesTo(standIn, at, web), [], "web's release and its settings stand");
+  assert.notEqual(resumed.record.items["service.web"].settingsHash, first.record.items["service.web"].settingsHash);
+  assert.equal(standIn.services.service(web).secrets.STRIPE_SECRET_KEY, "sk_live_2");
 });
 
-test("a Deploy resumed while the settings a stopped one gave ahead of a release still run gives them again, so a failure of theirs leaves none behind", async () => {
-  const { standIn, run, record } = setup();
+test("a Deploy that stopped while a release that brought settings ran, that release then failing, is resumed by the next, which brings them again with the release", async () => {
+  const parts = setup();
+  const { standIn, run, record } = parts;
   const first = await run({ record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
   const web = first.record.items["service.web"].id;
   const c1 = first.record.run.services.web.version;
-  standIn.faults.instancesUnhealthy = (instance) => instance.serviceId === web && instance.version === c1 && instance.secrets.STRIPE_SECRET_KEY === "sk_live_2";
+  standIn.faults.instancesUnhealthy = (instance) => instance.serviceId === web && instance.version !== c1;
   const env = { ...ENV, STRIPE_SECRET_KEY: "sk_live_2" };
-  let kept = null;
-  const stopped = await run({
-    record: first.record, commit: "c2", env,
-    save: (one) => {
-      kept = structuredClone(one);
-      return one;
-    },
-    pause: () => {
-      if (kept?.run.services.web?.settingsRefresh) throw new Error("the editor stopped");
-      standIn.advance();
-    }
-  }).catch((error) => error);
-  assert.equal(stopped.message, "the editor stopped");
-  // The next Deploy starts at once, while those settings still run; they fail on c1 later.
+  const { kept } = await stoppedWhileBringing(parts, first, env);
+  settle(standIn);
+  assert.equal(standIn.services.refreshes(web).at(-1).state, "failed");
+  assert.equal(standIn.services.service(web).secrets.STRIPE_SECRET_KEY, "sk_test_1", "web keeps the key it had");
+
+  standIn.faults.instancesUnhealthy = false;
+  const events = reports();
+  const at = standIn.requests().length;
+  const resumed = await run({ record: kept, commit: "c2", env, report: events.report });
+  assert.equal(resumed.outcome, "live", resumed.message);
+  const settled = events.events.filter((event) => event.step === "settleRefresh" && event.phase === "done" && event.service === "web");
+  assert.deepEqual(settled.map((event) => event.message),
+    ["It failed: A new instance never became healthy; the previous version kept serving. This Deploy hands web its release and its settings again."]);
+  assert.deepEqual(writesTo(standIn, at, web), [["POST", `/v1/services/${web}/releases`, 202]]);
+  const serving = standIn.services.instances(web).filter((one) => !one.removedReason);
+  assert.ok(serving.length === 2 && serving.every((one) => one.version === resumed.record.run.services.web.version && one.secrets.STRIPE_SECRET_KEY === "sk_live_2"),
+    "web serves c2 with the new key");
+});
+
+test("a Deploy resumed while a release that brought settings still runs hands it again with them, so a failure of the first leaves none of them behind and no instance of the version before starts with them", async () => {
+  const parts = setup();
+  const { standIn, run, record } = parts;
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  const web = first.record.items["service.web"].id;
+  const c1 = first.record.run.services.web.version;
+  const env = { ...ENV, STRIPE_SECRET_KEY: "sk_live_2" };
+  const { kept } = await stoppedWhileBringing(parts, first, env);
+  // The next Deploy starts at once, while that release still runs; its instances then never get healthy.
+  const stoppedRefresh = kept.run.services.web.refreshId;
   assert.ok(["queued", "building", "rolling"].includes(standIn.services.refreshes(web).at(-1).state));
+  standIn.faults.instancesUnhealthy = (instance) => instance.refreshId === stoppedRefresh;
   const at = standIn.requests().length;
   const resumed = await run({ record: kept, commit: "c2", env });
   assert.equal(resumed.outcome, "live", resumed.message);
-  assert.deepEqual(writesTo(standIn, at, web), [["PUT", `/v1/services/${web}/settings`, 202], ["POST", `/v1/services/${web}/releases`, 202], ["PUT", `/v1/services/${web}/settings`, 202]]);
-  const serving = standIn.services.instances(web).filter((one) => !one.removedReason);
+  assert.deepEqual(writesTo(standIn, at, web), [["POST", `/v1/services/${web}/releases`, 202]]);
+  assert.deepEqual(standIn.services.refreshes(web).slice(-2).map((one) => [one.kind, one.state]), [["release", "failed"], ["release", "succeeded"]]);
+  const instances = standIn.services.instances(web);
+  assert.equal(instances.some((one) => one.version === c1 && one.secrets.STRIPE_SECRET_KEY === "sk_live_2"), false, "no instance of c1 ran with the new key");
+  const serving = instances.filter((one) => !one.removedReason);
   assert.ok(serving.length === 2 && serving.every((one) => one.version === resumed.record.run.services.web.version && one.secrets.STRIPE_SECRET_KEY === "sk_live_2"),
-    "web serves c2 with the new key, not the one the failed settings left");
+    "web serves c2 with the new key");
+  assert.notEqual(resumed.record.items["service.web"].settingsHash, first.record.items["service.web"].settingsHash);
 });
 
 /** What a Deploy's reports said: its steps' messages, and the end's migrations. */
@@ -898,10 +986,7 @@ function knexDatabase({ standIn, projectId }) {
   };
   return { refused, migrated: () => Math.max(migrated, ...tasksMigrated()) };
 }
-/** Whether a step's message says settings ahead of a release did not go live on the version a service runs. */
-const fellBack = (said) => said.some((message) => /did not go live on the version it runs/u.test(message));
-
-test("every service's settings go live on the version it runs before this Deploy's first release, so no instance of the version before starts once its migrations ran (a production Deploy, 23 Nov)", async () => {
+test("a two-service Deploy hands each service its release with its new settings, so no instance of the version before ever starts, before or after the migrations ran (production Deploys, 23 Nov)", async () => {
   const { standIn, projectId, run, record } = setup();
   const database = knexDatabase({ standIn, projectId });
   const first = await run({ record, commit: "c1", migratesAsItStarts: true });
@@ -909,37 +994,36 @@ test("every service's settings go live on the version it runs before this Deploy
   settle(standIn);
   const { items } = first.record;
   const [web, computers] = [items["service.web"].id, items["service.computers"].id];
+  const startedBefore = new Set([web, computers].flatMap((id) => standIn.services.instances(id).map((one) => one.id)));
   // c2 brings migrations c1 lacks, and the generated session secret, which both services take, a new value. On 23 Nov
-  // computers' release migrated the database, then web's instances of the version before restarted with their new
-  // settings, migrated as they started, and knex refused them: web's settings refresh failed.
+  // that value went to each service ahead of its release: web's instances of the version before restarted with it
+  // once computers' release had migrated the database, migrated as they started, and knex refused them.
   const env = { ...ENV, AUTH_LOCAL_SESSION_SECRET: "session-2" };
-  const told = reports();
   const at = standIn.requests().length;
-  const second = await run({ record: first.record, commit: "c2", env, report: told.report });
+  const second = await run({ record: first.record, commit: "c2", env });
   assert.equal(second.outcome, "live", second.message);
-  assert.deepEqual(writesAfter(standIn, at), [
-    ["PUT", `/v1/services/${computers}/settings`], ["PUT", `/v1/services/${web}/settings`],
-    ["POST", `/v1/services/${computers}/releases`], ["POST", `/v1/services/${web}/releases`]
-  ]);
-  assert.deepEqual(database.refused, [], "no instance of c1 started once c2's migrations ran");
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web")]);
+  assert.deepEqual(database.refused, [], "no instance refused the migrated database");
   assert.equal(database.migrated(), 2);
-  assert.equal(fellBack(told.said()), false, told.said().join(" | "));
-  for (const id of [computers, web]) {
-    const [settings, release] = standIn.services.refreshes(id).slice(-2);
-    assert.deepEqual([settings.kind, settings.state, release.kind, release.state], ["settings", "succeeded", "release", "succeeded"]);
+  for (const [service, id] of [["computers", computers], ["web", web]]) {
+    const started = standIn.services.instances(id).filter((one) => !startedBefore.has(one.id));
+    assert.ok(started.length === 2 && started.every((one) => one.version === second.record.run.services[service].version && one.secrets.AUTH_LOCAL_SESSION_SECRET === "session-2"),
+      `${service}: every instance this Deploy started runs c2, with the new secret`);
+    assert.deepEqual(standIn.services.refreshes(id).slice(-1).map((one) => [one.kind, one.state]), [["release", "succeeded"]]);
+    assert.equal(standIn.services.refreshes(id).some((one) => one.kind === "settings"), false, `${service}: no settings refresh`);
   }
-  // The migrations ran once, as the first release's task (computers'), before any instance of c2 started.
+  // The migrations ran once, as the first release's task (computers'), with the new settings, before any instance of c2.
   assert.deepEqual(tasksRan(standIn, second.record), [["computers", "release", "migrate", "succeeded"]]);
+  assert.equal(standIn.services.taskInstances(computers).at(-1).secrets.AUTH_LOCAL_SESSION_SECRET, "session-2");
 });
 
-test("an instance of the version before that starts once an earlier run's migrations ran serves, since no serve script migrates: a Deploy resumed with new settings gives them on the version web runs", async () => {
+test("a Deploy stopped once its migrations ran is resumed with new settings: web's release brings them, and no instance of the version before starts on the migrated database", async () => {
   const { standIn, projectId, run, record } = setup();
   const database = knexDatabase({ standIn, projectId });
-  const first = await run({ record, commit: "c1" });
+  const first = await run({ record, commit: "c1", migratesAsItStarts: true });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
   const web = first.record.items["service.web"].id;
-  const c1 = first.record.run.services.web.version;
   // The Deploy of c2 stops in its wait once computers' release, and its migrations, ran.
   let kept = null;
   const stopped = await run({
@@ -956,15 +1040,17 @@ test("an instance of the version before that starts once an earlier run's migrat
   assert.equal(stopped.message, "the editor stopped");
   assert.equal(database.migrated(), 2, "c2's migrations ran");
   settle(standIn);
-  // The owner changes a value web takes and deploys again: web's instances of c1 restart with it on c2's database.
+  const startedBefore = new Set(standIn.services.instances(web).map((one) => one.id));
+  // The owner changes a value web takes and deploys again: web's c2 release brings it.
   const env = { ...ENV, MEMOBOT_OWNERS: "owner@example.com,second@example.com" };
   const told = reports();
   const resumed = await run({ record: kept, commit: "c2", env, report: told.report });
   assert.equal(resumed.outcome, "live", resumed.message);
-  assert.deepEqual(database.refused, [], "web's instances of c1 started on c2's database");
-  const settings = standIn.services.refreshes(web).find((one) => one.kind === "settings");
-  assert.deepEqual([settings.toVersion, settings.state], [c1, "succeeded"]);
-  assert.equal(fellBack(told.said()), false, told.said().join(" | "));
+  assert.deepEqual(database.refused, [], "no instance of c1 started on c2's database");
+  assert.equal(standIn.services.refreshes(web).some((one) => one.kind === "settings"), false, "no settings refresh of c1");
+  const started = standIn.services.instances(web).filter((one) => !startedBefore.has(one.id));
+  assert.ok(started.length === 2 && started.every((one) => one.version === resumed.record.run.services.web.version && one.settings.MEMOBOT_OWNERS === env.MEMOBOT_OWNERS),
+    "every instance of web started runs c2, with the new value");
   assert.equal(told.migrations(), "skipped", "the migrations the stopped run ran are not run again");
 });
 

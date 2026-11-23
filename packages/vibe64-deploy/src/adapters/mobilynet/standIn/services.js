@@ -1,5 +1,7 @@
 import { INSTANCE_SIZES, isRecord, needSettings, pageOf, projectLabel, tagsMatch, tagsOf, thingName } from "./catalogue.js";
-import { createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, tooManySettings, undeclaredErrors, valuesOf } from "./serviceEngine.js";
+import {
+  broughtOf, createStandInServiceEngine, fieldsOf, settingsMissing, settingsMissingWords, specOf, tooManySettings, undeclaredErrors, valuesOf, withBrought
+} from "./serviceEngine.js";
 import { createStandInServiceLogs } from "./serviceLogs.js";
 import { TASK_NAME } from "./releases.js";
 
@@ -50,6 +52,59 @@ function taskOf(invalid, name) {
     return { refusal: invalid({ task: "A release task's name as its release declares it: a lowercase letter, then up to 39 lowercase letters, digits and hyphens." }) };
   }
   return { task: name };
+}
+
+/**
+ * A release of a service's app the project has, by its version: `404` for none, `409 invalid_state` for a retired one.
+ * @param {{ releases: any, notFound: (what: string) => any, invalidState: (state: string) => any }} parts @param {any} service @param {unknown} version
+ */
+function releaseByVersion({ releases, notFound, invalidState }, service, version) {
+  const found = typeof version === "string" ? releases.named(service.projectId, service.app, version) : null;
+  if (!found) return { refusal: notFound("release") };
+  return found.state === "retired" ? { refusal: invalidState("retired") } : { release: found, started: false };
+}
+
+/**
+ * What a test reads of the stand-in's App Services (`controls`): each service and instance with the values it holds or
+ * started with, its refreshes with their targets, and whether one service reaches another.
+ * @param {object} parts the services stand-in's own
+ */
+function standInControls({ services, instances, refreshesOf, logs, view, instanceView, refreshView }) {
+  /** An instance with what it started with, for tests. @param {string} id its service's @param {any} instance */
+  const heldInstance = (id, instance) => ({
+    ...instanceView(services.get(id), instance), settings: { ...instance.settings }, secrets: { ...instance.secrets }, mobilynet: structuredClone(instance.mobilynet), refreshId: instance.refreshId
+  });
+
+  /** A service with its settings' and secrets' values, as its instances read them, for tests. @param {any} service */
+  const heldView = (service) => ({ ...view(service), settings: { ...service.settings }, secrets: { ...service.secrets }, deletedAt: service.deletedAt });
+
+  return Object.freeze({
+    /** Every service, deleted ones too, with its settings' and secrets' values. */
+    all: () => [...services.values()].map(heldView),
+    /** One service with its values, or null. @param {string} id */
+    service: (id) => (services.has(id) ? heldView(services.get(id)) : null),
+    /**
+     * A service's instances, gone ones too, each with the settings and secrets it started with and its own
+     * `_mobilynet` (`mobilynet`), as its app reads them; `taskInstances(id)`, its release tasks' instances alike, each
+     * with its task. @param {string} id
+     */
+    instances: (id) => [...instances.values()].filter((one) => one.serviceId === id && !one.task).map((one) => heldInstance(id, one)),
+    taskInstances: (id) => [...instances.values()].filter((one) => one.serviceId === id && one.task).map((one) => ({ ...heldInstance(id, one), task: one.task })),
+    /**
+     * Sets what an instance's logs say (`GET /v1/services/{id}/logs`), its service's secrets then masked as mobilynet
+     * masks them. @param {string} instanceId @param {string} text
+     */
+    setLogs: (instanceId, text) => logs.set(instanceId, text),
+    /** A service's refreshes, oldest first, each with its target. @param {string} id */
+    refreshes: (id) => refreshesOf(id).map((one) => ({ ...refreshView(one), target: structuredClone(one.target) })),
+    /** Whether one service's instances reach another's on a port: a connection of the first to the second. */
+    reaches: (fromId, toId, port) => {
+      const from = services.get(fromId);
+      const to = services.get(toId);
+      return Boolean(from && to && ![from.state, to.state].some((state) => ["deleting", "deleted"].includes(state))
+        && from.connections.some((connection) => connection.to === toId && connection.port === port));
+    }
+  });
 }
 
 /**
@@ -253,12 +308,13 @@ function createStandInServices(world, { releases, network }) {
   }
 
   /** Queues a refresh of a service (design 9.4); it runs once those before it ended. */
-  function queueRefresh(service, { kind, toVersion, target = {}, task = null }) {
+  function queueRefresh(service, { kind, toVersion, target = {}, task = null, brought = null }) {
     const refresh = {
       id: nextId("rfr"),
       serviceId: service.id,
       kind,
       task,
+      brought,
       state: "queued",
       fromVersion: service.version,
       toVersion,
@@ -423,21 +479,53 @@ function createStandInServices(world, { releases, network }) {
     return answer(changed.refresh ? 202 : 200, { service: view(service), refresh: refreshView(changed.refresh) });
   }
 
-  /** `POST /v1/services/{id}/releases` (createServiceRelease): an upload, built, then a refresh onto it. */
+  /**
+   * `POST /v1/services/{id}/releases` (createServiceRelease): an upload, built, then a refresh onto it; or, with a JSON
+   * body, the release of its app the project has by `version`, with the settings it brings (broughtOf; mobilynet main
+   * c3575399), which its refresh starts from the service's with and the service takes only once it succeeded.
+   */
   function release(service, body, contentSha256, taskName) {
     const refused = unchangeable(service);
     if (refused) return refused;
-    const task = taskOf(invalid, taskName);
+    const asked = Buffer.isBuffer(body) ? { task: taskName } : (isRecord(body) ? body : {});
+    const task = taskOf(invalid, asked.task);
     if (task.refusal) return task.refusal;
-    const made = releases.upload(service.projectId, service.app, body, contentSha256);
+    const made = Buffer.isBuffer(body) ? releases.upload(service.projectId, service.app, body, contentSha256)
+      : releaseByVersion({ releases, notFound, invalidState }, service, asked.version);
     if (made.refusal) return made.refusal;
-    const refresh = queueRefresh(service, { kind: "release", toVersion: made.release.version, task: task.task });
+    const brought = Buffer.isBuffer(body) ? { brought: null } : checkBrought(service, made.release, broughtOf(invalid, asked));
+    if (brought.refusal) return brought.refusal;
+    const refresh = queueRefresh(service, { kind: "release", toVersion: made.release.version, task: task.task, brought: brought.brought });
     return answer(202, {
       release: releases.view(made.release),
       build: made.started ? { id: made.release.buildId, state: "queued" } : null,
       service: view(service),
       refresh: refreshView(refresh)
     });
+  }
+
+  /**
+   * What a release brings, checked (serviceLinks.js checkReleaseValues): a name only a link sets is refused, given or
+   * removed; and while no other refresh of the service is open, the service's settings with these must fit the release
+   * it moves to (`422 validation_failed` for a name it doesn't declare that isn't text or is MobilyNet's own,
+   * `settings_missing`, or past the region's limit). Behind an open one it is checked as its build passed, as every
+   * refresh is (releaseRefusal).
+   */
+  function checkBrought(service, release, read) {
+    if (read.refusal || !read.brought) return read;
+    const linked = [declarationOf(service), refreshAhead(service)?.declaration, release.declaration].flatMap((one) => linkedNames(one));
+    const { settings, secrets, remove } = read.brought;
+    const named = [...Object.keys(settings), ...Object.keys(secrets), ...remove].filter((name) => linked.includes(name));
+    if (named.length > 0) return { refusal: invalid(Object.fromEntries(named.map((name) => [name, "Set by the link of its need to a hosted service alone: link or unlink it instead."]))) };
+    if (refreshesOf(service.id).some((one) => OPEN_REFRESH.includes(one.state))) return read;
+    const declared = [...Object.keys(isRecord(release.declaration.settings) ? release.declaration.settings : {}), ...linkedNames(release.declaration)];
+    const otherwise = undeclaredErrors(declared, linked, { settings, secrets });
+    if (otherwise) return { refusal: invalid(otherwise) };
+    const values = withBrought(service, read.brought);
+    const missing = settingsMissing(release.declaration, values);
+    if (missing.length > 0) return { refusal: failure(422, "settings_missing", settingsMissingWords(missing), { settings: missing }) };
+    const crowded = tooManySettings(values, world.settingsMax(service.region));
+    return crowded ? { refusal: invalid(crowded) } : read;
   }
 
   /** `POST /v1/services/{id}/actions/rollback` (rollBackService). */
@@ -498,7 +586,8 @@ function createStandInServices(world, { releases, network }) {
     if (route === "PATCH ") return idempotent(idempotencyKey, `${service.id} change ${JSON.stringify(body)}`, () => change(service, body));
     if (route === "DELETE ") return remove(service);
     if (route === "PUT /settings") return idempotent(idempotencyKey, `${service.id} settings ${JSON.stringify(body)}`, () => putSettings(service, body));
-    if (route === "POST /releases") return release(service, body, contentSha256, params.get("task"));
+    if (route === "POST /releases" && Buffer.isBuffer(body)) return release(service, body, contentSha256, params.get("task"));
+    if (route === "POST /releases") return idempotent(idempotencyKey, `${service.id} release ${JSON.stringify(body)}`, () => release(service, body));
     if (route === "POST /actions/rollback") return idempotent(idempotencyKey, `${service.id} rollback`, () => rollBack(service));
     if (route === "GET /instances") {
       const withRemoved = params.get("removed") === "true";
@@ -604,42 +693,6 @@ function createStandInServices(world, { releases, network }) {
     return service?.projectId === projectId && service.exposure === "public" && !["deleting", "deleted"].includes(service.state) ? service : null;
   }
 
-  /** An instance with what it started with, for tests. @param {string} id its service's @param {any} instance */
-  const heldInstance = (id, instance) => ({
-    ...instanceView(services.get(id), instance), settings: { ...instance.settings }, secrets: { ...instance.secrets }, mobilynet: structuredClone(instance.mobilynet), refreshId: instance.refreshId
-  });
-
-  /** A service with its settings' and secrets' values, as its instances read them, for tests. @param {any} service */
-  const heldView = (service) => ({ ...view(service), settings: { ...service.settings }, secrets: { ...service.secrets }, deletedAt: service.deletedAt });
-
-  const controls = Object.freeze({
-    /** Every service, deleted ones too, with its settings' and secrets' values. */
-    all: () => [...services.values()].map(heldView),
-    /** One service with its values, or null. @param {string} id */
-    service: (id) => (services.has(id) ? heldView(services.get(id)) : null),
-    /**
-     * A service's instances, gone ones too, each with the settings and secrets it started with and its own
-     * `_mobilynet` (`mobilynet`), as its app reads them; `taskInstances(id)`, its release tasks' instances alike, each
-     * with its task. @param {string} id
-     */
-    instances: (id) => [...instances.values()].filter((one) => one.serviceId === id && !one.task).map((one) => heldInstance(id, one)),
-    taskInstances: (id) => [...instances.values()].filter((one) => one.serviceId === id && one.task).map((one) => ({ ...heldInstance(id, one), task: one.task })),
-    /**
-     * Sets what an instance's logs say (`GET /v1/services/{id}/logs`), its service's secrets then masked as mobilynet
-     * masks them. @param {string} instanceId @param {string} text
-     */
-    setLogs: (instanceId, text) => logs.set(instanceId, text),
-    /** A service's refreshes, oldest first, each with its target. @param {string} id */
-    refreshes: (id) => refreshesOf(id).map((one) => ({ ...refreshView(one), target: structuredClone(one.target) })),
-    /** Whether one service's instances reach another's on a port: a connection of the first to the second. */
-    reaches: (fromId, toId, port) => {
-      const from = services.get(fromId);
-      const to = services.get(toId);
-      return Boolean(from && to && ![from.state, to.state].some((state) => ["deleting", "deleted"].includes(state))
-        && from.connections.some((connection) => connection.to === toId && connection.port === port));
-    }
-  });
-
   return Object.freeze({
     request,
     advance: () => {
@@ -655,7 +708,7 @@ function createStandInServices(world, { releases, network }) {
     serving,
     routable,
     useHooks: (given) => Object.assign(hooks, given),
-    controls
+    controls: standInControls({ services, instances, refreshesOf, logs, view, instanceView, refreshView })
   });
 }
 

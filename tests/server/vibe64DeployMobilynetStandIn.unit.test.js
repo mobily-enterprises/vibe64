@@ -436,6 +436,60 @@ test("a release whose build fails, or whose new instances never get healthy, lea
   assert.deepEqual([none.status, none.code], [409, "no_previous_version"]);
 });
 
+test("a release by version brings settings, secrets and names to remove: its instances start with them, the service takes them once it succeeded, and one that fails keeps the service's as they were", async () => {
+  const { standIn, client, production, projectId, serviceId } = await runningShop();
+  // Version 2 requires `region`, which the service lacks.
+  const declaration = { ...SHOP, settings: { ...SHOP.settings, region: { type: "string", required: true } } };
+  const { release: second } = await production.createRelease("shop", upload(declaration, "2"));
+  const missing = await refused(client.releaseServiceVersion(serviceId, { version: second.version, settings: { greeting: "Hello" } }));
+  assert.deepEqual([missing.status, missing.code, missing.details.settings], [422, "settings_missing", ["region"]]);
+  // A name only a link sets, given or removed; a name both given and removed; a version the project lacks.
+  assert.deepEqual(refusal(await refused(client.releaseServiceVersion(serviceId, { version: second.version, remove: ["DB_HOST"] }))),
+    { status: 422, code: "validation_failed", fields: ["DB_HOST"] });
+  assert.deepEqual(refusal(await refused(client.releaseServiceVersion(serviceId, { version: second.version, settings: { region: "eu", greeting: "Hi" }, remove: ["greeting"] }))),
+    { status: 422, code: "validation_failed", fields: ["remove.greeting"] });
+  assert.equal((await refused(client.releaseServiceVersion(serviceId, { version: "999" }))).status, 404);
+  // Settings are services:manage's: a key that deploys alone hands a release, but not one that brings settings.
+  const deployOnly = createMobilynetClient({ baseUrl: standIn.baseUrl, credential: standIn.addKey({ projectId, scopes: ["services:read", "services:deploy"] }), fetch: standIn.fetch });
+  const scoped = await refused(deployOnly.releaseServiceVersion(serviceId, { version: second.version, secrets: { sessionKey: "session-2" } }));
+  assert.deepEqual([scoped.status, scoped.code, scoped.details], [403, "scope_missing", { scope: "services:manage" }]);
+  assert.equal(standIn.services.refreshes(serviceId).length, 1, "nothing refused was queued");
+
+  const asked = { version: second.version, settings: { region: "eu", greeting: "Hello" }, secrets: { sessionKey: "session-2" } };
+  const handed = await client.releaseServiceVersion(serviceId, asked, { idempotencyKey: "release-2" });
+  assert.deepEqual([handed.release.version, handed.refresh.kind, handed.refresh.toVersion], [second.version, "release", second.version]);
+  assert.equal(JSON.stringify(handed).includes("session-2"), false, "no secret in the answer");
+  assert.equal((await client.releaseServiceVersion(serviceId, asked, { idempotencyKey: "release-2" })).refresh.id, handed.refresh.id, "the same key answers again");
+  const reused = await refused(client.releaseServiceVersion(serviceId, { ...asked, secrets: { sessionKey: "session-9" } }, { idempotencyKey: "release-2" }));
+  assert.deepEqual([reused.status, reused.code], [409, "idempotency_key_reused"]);
+  assert.equal(standIn.services.service(serviceId).secrets.sessionKey, "session-1", "the service keeps its own while the refresh runs");
+  settle(standIn);
+  const held = standIn.services.service(serviceId);
+  assert.deepEqual([held.version, held.settings.mode, held.settings.region, held.settings.greeting, held.secrets.sessionKey], [second.version, "web", "eu", "Hello", "session-2"]);
+  const serving = standIn.services.instances(serviceId).filter((one) => !one.removedReason);
+  assert.ok(serving.length === 2 && serving.every((one) => one.version === second.version && one.settings.greeting === "Hello" && one.secrets.sessionKey === "session-2"));
+
+  // A release that fails, removing `greeting` and bringing a new key: its instances started without and with them, and
+  // the service keeps both as they were.
+  const { release: third } = await production.createRelease("shop", upload(declaration, "3"));
+  standIn.faults.instancesUnhealthy = true;
+  const failing = await client.releaseServiceVersion(serviceId, { version: third.version, secrets: { sessionKey: "session-3" }, remove: ["greeting"] });
+  settle(standIn);
+  standIn.faults.instancesUnhealthy = false;
+  assert.equal((await client.readServiceRefresh(serviceId, failing.refresh.id)).state, "failed");
+  const tried = standIn.services.instances(serviceId).filter((one) => one.version === third.version);
+  assert.ok(tried.length > 0 && tried.every((one) => one.secrets.sessionKey === "session-3" && !Object.hasOwn(one.settings, "greeting")), "its instances started with them");
+  const kept = standIn.services.service(serviceId);
+  assert.deepEqual([kept.version, kept.settings.greeting, kept.secrets.sessionKey], [second.version, "Hello", "session-2"], "the service's settings as they were");
+  assert.ok(standIn.services.instances(serviceId).filter((one) => !one.removedReason).every((one) => one.version === second.version && one.secrets.sessionKey === "session-2"));
+
+  // Handed again, it succeeds: `greeting` gone, the new key taken.
+  await client.releaseServiceVersion(serviceId, { version: third.version, secrets: { sessionKey: "session-3" }, remove: ["greeting"] });
+  settle(standIn);
+  const now = standIn.services.service(serviceId);
+  assert.deepEqual([now.version, Object.hasOwn(now.settings, "greeting"), now.settings.region, now.secrets.sessionKey], [third.version, false, "eu", "session-3"]);
+});
+
 test("deletes: a linked hosted service stays until its links go with it, and a deleted service's instances go while its route is kept", async () => {
   const { standIn, client, production, serviceId } = await runningShop();
   const { hostedService: db, links: [dbLink] } = await production.createHostedService({ app: "postgresql-18", links: [{ consumer: { service: serviceId } }] }, { idempotencyKey: "hosted-db" });
