@@ -95,6 +95,7 @@ function useVibe64OutputControls({
   return {
     activeOutputTarget: outputTerminal.activeOutputTarget,
     previewTestNotice: preview.previewTestNotice,
+    previewIdentityNotice: preview.previewIdentityNotice,
     activeOutputTargetId: outputTerminal.activeOutputTargetId,
     activeTerminal: outputTerminal.activeTerminal,
     closeTerminal: launch.closeTerminal,

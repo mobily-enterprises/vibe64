@@ -55,7 +55,8 @@ function createOutputTargetLaunchStatus({
       outputRuns,
       outputTargets,
       previewStatus,
-      previewApplicationIdentities: context.previewApplicationIdentities
+      previewApplicationIdentities: context.previewApplicationIdentities,
+      previewApplicationIdentityProblems: context.previewApplicationIdentityProblems
     });
     const stopState = previewStopState(context.session.metadata);
     if (stopState.stopped) response.preview.stoppedIntent = true;
@@ -114,7 +115,8 @@ function createOutputTargetLaunchStatus({
         );
       }
       const identity = previewIdentitySelection(input, {
-        identities: status.previewIdentity?.identities || []
+        identities: status.previewIdentity?.identities || [],
+        skippedIdentities: status.previewIdentity?.skippedIdentities || []
       });
       return {
         grant: createPreviewIdentityGrant(previewAuth, identity.selection),
@@ -155,7 +157,8 @@ function createOutputTargetLaunchStatus({
         );
       }
       const identity = previewIdentitySelection({ identityName, mode: "identity" }, {
-        identities: status.previewIdentity?.identities || []
+        identities: status.previewIdentity?.identities || [],
+        skippedIdentities: status.previewIdentity?.skippedIdentities || []
       });
       const result = await runner(identity.selection);
       if (result?.ok !== true) {

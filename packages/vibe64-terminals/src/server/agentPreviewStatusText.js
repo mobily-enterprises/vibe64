@@ -6,6 +6,7 @@ import { WEB_LAUNCH_READINESS_TIMEOUT_SECONDS } from "./launchTargetTerminal.js"
 import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol.js";
 import { previewLastPath, previewLogPath } from "./previewDiagnosticFiles.js";
 import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { previewApplicationIdentityLabel } from "@local/vibe64-core/shared/previewIdentity";
 
 const DEFAULT_PREVIEW_LOG_LINES = 200;
 // Let the launch probe finish and publish its result before the command times out.
@@ -203,6 +204,15 @@ function previewStatusSummary(status = {}, options = {}) {
       type: normalizeText(identity?.type)
     }))
     .filter((identity) => identity.name && identity.type);
+  const skippedIdentities = (Array.isArray(status.previewIdentity?.skippedIdentities)
+    ? status.previewIdentity.skippedIdentities
+    : [])
+    .map((identity) => ({
+      name: normalizeText(identity?.name),
+      position: Number(identity?.position) || 0,
+      reason: normalizeText(identity?.reason)
+    }));
+  const identityFileProblem = normalizeText(status.previewIdentity?.fileProblem);
   return {
     currentPage: previewCurrentPage(previewState, {
       browserUrl
@@ -217,6 +227,9 @@ function previewStatusSummary(status = {}, options = {}) {
     defaultIdentity: normalizeText(status.previewIdentity?.defaultIdentityName),
     identities,
     identityTypes,
+    // Only when the project's identity file has invalid entries or is not an identity list.
+    ...(skippedIdentities.length > 0 ? { skippedIdentities } : {}),
+    ...(identityFileProblem ? { identityFileProblem } : {}),
     outputTargetId: outputTargetIdFromStatus(status),
     stoppedIntent: status.preview?.stoppedIntent === true,
     ready: previewReady(status),
@@ -237,7 +250,17 @@ function previewSummaryLines(summary = {}) {
     summary.terminal?.id ? `Terminal: ${summary.terminal.id} (${summary.terminal.status || "unknown"})` : "",
     summary.identities?.length
       ? `Managed app identities: ${summary.identities.map((identity) => identity.name).join(", ")}`
-      : "Managed app identities: none configured - save the accounts the person names or confirms with vibe64-helper preview identities save; see vibe64-helper spec preview-identities",
+      : summary.skippedIdentities?.length || summary.identityFileProblem
+        ? "Managed app identities: none usable"
+        : "Managed app identities: none configured - save the accounts the person names or confirms with vibe64-helper preview identities save; see vibe64-helper spec preview-identities",
+    ...(summary.skippedIdentities || []).map((identity) => (
+      `Skipped managed app ${previewApplicationIdentityLabel(identity)}: ${identity.reason}`
+    )),
+    summary.identityFileProblem ? `Managed app identities file: ${summary.identityFileProblem}` : "",
+    summary.skippedIdentities?.length || summary.identityFileProblem
+      ? "Preview cannot sign in as a skipped identity. Rename or remove skipped identities only as the person asks: " +
+        "in Dashboard > App access, or by saving the complete list with vibe64-helper preview identities save (vibe64-helper spec preview-identities)."
+      : "",
     `Stale: ${summary.stale ? "yes" : "no"}`
   ].filter(Boolean);
 }

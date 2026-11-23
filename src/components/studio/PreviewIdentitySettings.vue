@@ -20,8 +20,9 @@
         </v-btn>
         <v-btn
           color="primary"
-          :disabled="!changed || stale || loading || saving"
+          :disabled="!canSave"
           size="small"
+          :title="saveBlockedReason || undefined"
           type="button"
           variant="flat"
           @click="save"
@@ -53,6 +54,9 @@
         </div>
 
         <div class="preview-identity-settings__list">
+          <v-alert v-if="savedListNotice" type="warning" variant="tonal">
+            {{ savedListNotice }}
+          </v-alert>
           <v-alert v-if="stale" type="warning" variant="tonal">
             The saved identities changed while you were editing. Reload the saved identities
             and review your changes before saving.
@@ -62,6 +66,7 @@
             v-for="(identity, index) in identities"
             :key="index"
             class="preview-identity-settings__identity"
+            :class="{ 'preview-identity-settings__identity--invalid': identityProblems[index] }"
           >
             <div class="preview-identity-settings__fields">
               <v-text-field
@@ -91,6 +96,13 @@
                 variant="outlined"
               />
             </div>
+            <p
+              v-if="identityProblems[index]"
+              class="preview-identity-settings__problem"
+              role="alert"
+            >
+              {{ identityProblems[index] }}
+            </p>
             <div class="preview-identity-settings__identity-actions">
               <v-chip
                 v-if="index === 0"
@@ -135,6 +147,9 @@
           >
             Add identity
           </v-btn>
+          <p v-if="saveBlockedReason" class="preview-identity-settings__blocked">
+            {{ saveBlockedReason }}
+          </p>
         </div>
       </section>
     </template>
@@ -147,9 +162,12 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import {
+  IDENTITY_FIELDS_UNSUPPORTED,
   PREVIEW_IDENTITY_SELECTOR_EMAIL,
   PREVIEW_IDENTITY_SELECTOR_LOGIN,
-  PREVIEW_IDENTITY_SELECTOR_USER_ID
+  PREVIEW_IDENTITY_SELECTOR_USER_ID,
+  inspectPreviewApplicationIdentities,
+  previewApplicationIdentityLabel
 } from "@local/vibe64-core/shared/previewIdentity";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import {
@@ -234,15 +252,59 @@ const changed = computed(() => (
   JSON.stringify(identities.value) !== JSON.stringify(savedIdentities.value)
 ));
 
+// What the saved file holds beyond its valid identities: the entries Preview
+// skips, each with its reason, and a file that is not an identity list.
+const savedFileProblem = computed(() => String(resource.data.value?.fileProblem || "").trim());
+const savedInvalidIdentities = computed(() => (
+  Array.isArray(resource.data.value?.invalidIdentities) ? resource.data.value.invalidIdentities : []
+));
+const savedListNotice = computed(() => {
+  if (savedFileProblem.value) {
+    return `${savedFileProblem.value} Preview runs without managed app identities until it is replaced: ` +
+      "add the identities you need and choose Save.";
+  }
+  // An entry whose only problem is fields Vibe64 does not use looks right here, and saving drops them.
+  const toEdit = savedInvalidIdentities.value.filter((entry) => entry?.code !== IDENTITY_FIELDS_UNSUPPORTED);
+  const toRewrite = savedInvalidIdentities.value.filter((entry) => entry?.code === IDENTITY_FIELDS_UNSUPPORTED);
+  return [
+    toEdit.length > 0
+      ? `Preview skips ${identityLabels(toEdit)} until ${toEdit.length > 1 ? "they are" : "it is"} fixed. ` +
+        `Rename or remove ${toEdit.length > 1 ? "each one" : "it"}, then choose Save.`
+      : "",
+    ...toRewrite.map((entry) => (
+      `Preview skips ${previewApplicationIdentityLabel(entry)} until it is fixed: ${entry.reason} ` +
+      "Choose Save to store it without them."
+    ))
+  ].filter(Boolean).join(" ");
+});
+
+// What is wrong with each entry of the draft, by the rules a save enforces; "" for a valid one.
+const draftRows = computed(() => inspectPreviewApplicationIdentities(identities.value));
+const identityProblems = computed(() => draftRows.value.map((row) => row.problem?.reason || ""));
+const saveBlockedReason = computed(() => {
+  const invalid = draftRows.value.filter((row) => row.problem);
+  return invalid.length > 0 ? `Fix or remove ${identityLabels(invalid)} to save.` : "";
+});
+// An unchanged list is saved again to replace a file that is not an identity list or holds invalid entries.
+const canSave = computed(() => Boolean(
+  (changed.value || savedFileProblem.value || savedInvalidIdentities.value.length > 0) &&
+  !saveBlockedReason.value && !stale.value && !loading.value && !saving.value
+));
+
 // The draft belongs to one project source. A newer saved list replaces it
 // only while it has no unsaved edits; otherwise the person chooses to reload.
 const stale = ref(false);
 let draftSource = "";
-watch(() => [resource.data.value?.identities, projectSlug.value, selectedSessionId.value || ""], ([value, slug, sessionId]) => {
+watch(() => [
+  resource.data.value?.identities,
+  resource.data.value?.invalidIdentities,
+  projectSlug.value,
+  selectedSessionId.value || ""
+], ([value, invalid, slug, sessionId]) => {
   const source = JSON.stringify([slug, sessionId]);
   const dirty = changed.value;
   const previous = JSON.stringify(savedIdentities.value);
-  savedIdentities.value = cloneIdentities(value);
+  savedIdentities.value = cloneIdentities(savedEntries(value, invalid));
   const saved = JSON.stringify(savedIdentities.value);
   if (source !== draftSource || !dirty) {
     resetDraft();
@@ -253,6 +315,29 @@ watch(() => [resource.data.value?.identities, projectSlug.value, selectedSession
 }, {
   immediate: true
 });
+
+/**
+ * The saved list as the file holds it, so the person sees and fixes every entry
+ * in its place: the valid identities, with each invalid entry back at its
+ * position (counted from 1).
+ */
+function savedEntries(valid = [], invalid = []) {
+  const pending = Array.isArray(valid) ? [...valid] : [];
+  const byPosition = new Map((Array.isArray(invalid) ? invalid : []).map((entry) => [Number(entry?.position), entry]));
+  const entries = [];
+  const total = pending.length + byPosition.size;
+  for (let position = 1; position <= total; position += 1) {
+    const entry = byPosition.get(position) || pending.shift();
+    if (entry) entries.push(entry);
+    byPosition.delete(position);
+  }
+  return [...entries, ...pending, ...byPosition.values()];
+}
+
+function identityLabels(entries = []) {
+  const labels = entries.map((entry) => previewApplicationIdentityLabel(entry));
+  return labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}` : labels[0] || "";
+}
 
 function resetDraft() {
   identities.value = cloneIdentities(savedIdentities.value);
@@ -377,6 +462,19 @@ async function save() {
   display: grid;
   gap: 0.5rem;
   grid-template-columns: minmax(0, 0.65fr) minmax(0, 0.8fr) minmax(0, 1.25fr);
+}
+
+.preview-identity-settings__identity--invalid {
+  border-bottom-color: rgb(var(--v-theme-error));
+}
+
+.preview-identity-settings__problem,
+.preview-identity-settings__blocked {
+  color: rgb(var(--v-theme-error));
+  font-size: 0.86rem;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .preview-identity-settings__identity-actions {

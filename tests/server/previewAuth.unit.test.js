@@ -161,9 +161,25 @@ test("managed app identities normalize named app-owned selectors without a Vibe6
     }
   ]), {
     code: "vibe64_invalid_application_identities_config",
-    message: /invalid name/u,
+    message: "Managed app identity 1 (\"you\") is not valid. The name \"you\" is reserved by Vibe64 (default, guest and you are). Choose another, such as admin or user.",
+    messageCode: "vibe64_application_identity_name_reserved",
+    messageParams: { name: "you", position: 1 }
+  });
+  assert.throws(() => normalizePreviewApplicationIdentities([
+    {
+      name: "admin",
+      type: PREVIEW_IDENTITY_SELECTOR_EMAIL,
+      value: "ada@example.com"
+    },
+    {
+      name: "Ada Admin",
+      type: PREVIEW_IDENTITY_SELECTOR_LOGIN,
+      value: "ada"
+    }
+  ]), {
+    message: /^Managed app identity 2 \("Ada Admin"\) is not valid\. The name "Ada Admin" can't be used/u,
     messageCode: "vibe64_application_identity_name_invalid",
-    messageParams: { position: 1 }
+    messageParams: { name: "Ada Admin", position: 2 }
   });
   assert.throws(() => normalizePreviewApplicationIdentities([
     {
@@ -172,7 +188,7 @@ test("managed app identities normalize named app-owned selectors without a Vibe6
       value: "ada@example.com",
       vibe64User: "merc"
     }
-  ]), /contain only name, type, and value/u);
+  ]), { message: /^Managed app identity 1 \("admin"\) is not valid\. It has fields Vibe64 does not use \(vibe64User\)/u });
   assert.throws(() => normalizePreviewApplicationIdentities([
     {
       name: "admin",
@@ -184,7 +200,7 @@ test("managed app identities normalize named app-owned selectors without a Vibe6
       type: PREVIEW_IDENTITY_SELECTOR_USER_ID,
       value: "42"
     }
-  ]), /duplicated/u);
+  ]), { message: /^Managed app identity 1 \("admin"\) is not valid\. The name "admin" is also used by identity 2\./u });
 });
 
 test("preview identity grants verify once scoped data remains unchanged", () => {

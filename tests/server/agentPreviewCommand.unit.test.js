@@ -538,6 +538,14 @@ test("agent preview help works without the control socket and documents every br
 
 test("agent preview identities read and save only the session's bound project through its save path", async () => {
   const calls = [];
+  const skipped = {
+    code: "vibe64_application_identity_name_reserved",
+    name: "you",
+    position: 2,
+    reason: "The name \"you\" is reserved by Vibe64 (default, guest and you are). Choose another, such as admin or user.",
+    type: "login",
+    value: "merc"
+  };
   let context = "";
   let identityTypes = ["email"];
   const command = createAgentPreviewCommandService({ logger: silentLogger, publishSessionChanged: async () => null,
@@ -552,7 +560,7 @@ test("agent preview identities read and save only the session's bound project th
       },
       async readPreviewApplicationIdentities(input) {
         calls.push(["read", context, input]);
-        return { ok: true, identities: [{ name: "admin", type: "email", value: "admin@example.com" }] };
+        return { ok: true, identities: [{ name: "admin", type: "email", value: "admin@example.com" }], invalidIdentities: [skipped] };
       },
       async savePreviewApplicationIdentities(input) {
         calls.push(["save", context, input]);
@@ -572,8 +580,9 @@ test("agent preview identities read and save only the session's bound project th
   assert.equal(listed.ok, true);
   assert.deepEqual(JSON.parse(listed.stdout), {
     identities: [{ name: "admin", type: "email", value: "admin@example.com" }],
-    identityTypes: ["email"]
-  });
+    identityTypes: ["email"],
+    invalidIdentities: [skipped]
+  }, "the agent sees each entry Preview skips, so a complete replacement can rename or remove it");
 
   const requested = [
     { name: "admin", type: "email", value: "admin@nf-dam.local" },
@@ -600,6 +609,7 @@ test("agent preview identities read and save only the session's bound project th
     stdin: JSON.stringify([{ name: "admin", type: "login", value: "admin" }])
   });
   assert.equal(undeclared.code, "vibe64_agent_preview_identities_type_undeclared");
+  assert.match(undeclared.stderr, /^Identity 1 \("admin"\) uses the app identifier "login", which this project's Stack does not declare\. /u);
   assert.match(undeclared.stderr, /declares in #### Preview identity: email/u);
   identityTypes = [];
   const unsupported = await command.run({ args: ["identities", "save"], sessionId: "session-a", stdin: JSON.stringify(requested) });

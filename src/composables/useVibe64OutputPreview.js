@@ -19,9 +19,11 @@ import {
 import { browserCanOpenTarget } from "@/lib/vibe64LaunchPreviewDestination.js";
 import { createLaunchBrowserOpener } from "@/lib/vibe64LaunchBrowserWindow.js";
 import {
+  launchPreviewIdentityNotice,
   launchPreviewRequiresProxy,
   launchPreviewTestNotice
 } from "@/lib/vibe64LaunchPreview.js";
+import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 
 /**
  * The running output's Preview: the addresses it can be opened at, whether
@@ -89,6 +91,11 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
         };
   });
   const previewTestNotice = computed(() => launchPreviewTestNotice(status.value, activeOutputTarget.value));
+  // The project's managed app identities Preview skips, with where they are fixed.
+  const previewIdentityNotice = computed(() => {
+    const notice = launchPreviewIdentityNotice(status.value);
+    return notice ? { ...notice, appAccessPath: projectAppPath(projectSlug.value, "/dashboard/access") } : null;
+  });
   // The ready Preview's own action: the app's address and the proxied one.
   const readyPreviewAction = computed(() => {
     const targetHref = previewTargetHref.value || String(previewTarget.value?.targetHref || "").trim();
@@ -225,6 +232,7 @@ function useVibe64OutputPreview({ outputs, outputTerminal, projectSlug }) {
     launchActions,
     openAction,
     previewIdentity,
+    previewIdentityNotice,
     previewTargetDisabledReason,
     previewTargetRecovery,
     previewTestNotice,

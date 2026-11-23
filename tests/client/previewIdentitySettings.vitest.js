@@ -160,3 +160,100 @@ describe("an unsaved managed app identity draft", () => {
     expect(state.stale).toBe(false);
   });
 });
+
+describe("a saved identity list with invalid entries", () => {
+  let app;
+  afterEach(() => {
+    app?.unmount();
+    mocks.reload = null;
+    mocks.run = null;
+  });
+  const admin = { name: "admin", type: "email", value: "admin@example.test" };
+  const you = { name: "you", type: "login", value: "merc" };
+  const reason = "The name \"you\" is reserved by Vibe64 (default, guest and you are). Choose another, such as admin or user.";
+
+  function mount(data) {
+    mocks.data = Vue.ref(data);
+    mocks.sessionId = Vue.ref("s1");
+    mocks.slug = Vue.ref("books");
+    const renderer = Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+    app = renderer.createApp({ ...PreviewIdentitySettings, render: () => null });
+    app.provide(Vue.ssrContextKey, { modules: new Set() });
+    app.mount({});
+    return app._instance.setupState;
+  }
+
+  it("shows every entry in its place, marks the invalid one with its reason, and saves once it is renamed", async () => {
+    const state = mount({
+      identities: [admin],
+      invalidIdentities: [{ ...you, code: "vibe64_application_identity_name_reserved", position: 1, reason }]
+    });
+    expect(state.identities).toEqual([you, admin]);
+    expect(state.identityProblems).toEqual([reason, ""]);
+    expect(state.savedListNotice).toBe(
+      "Preview skips identity 1 (\"you\") until it is fixed. Rename or remove it, then choose Save."
+    );
+    expect(state.canSave).toBe(false);
+    expect(state.saveBlockedReason).toBe("Fix or remove identity 1 (\"you\") to save.");
+
+    state.identities[0].name = "owner";
+    await Vue.nextTick();
+    expect(state.identityProblems).toEqual(["", ""]);
+    expect(state.canSave).toBe(true);
+    let saved = null;
+    mocks.run = async (context) => {
+      saved = context;
+      return { ok: true };
+    };
+    await state.save();
+    expect(saved.identities).toEqual([{ ...you, name: "owner" }, admin]);
+  });
+
+  it("lets the person remove the invalid entry and keep the valid ones", async () => {
+    const state = mount({
+      identities: [admin],
+      invalidIdentities: [{ ...you, code: "vibe64_application_identity_name_reserved", position: 2, reason }]
+    });
+    expect(state.identities).toEqual([admin, you]);
+    state.removeIdentity(1);
+    await Vue.nextTick();
+    expect(state.identities).toEqual([admin]);
+    expect(state.canSave).toBe(true);
+  });
+
+  it("marks an entry the person adds while it is invalid, and refuses to save it", async () => {
+    const state = mount({ identities: [admin] });
+    state.addIdentity();
+    Object.assign(state.identities[1], { name: "guest", type: "email", value: "guest@example.test" });
+    await Vue.nextTick();
+    expect(state.identityProblems[1]).toMatch(/^The name "guest" is reserved by Vibe64/u);
+    expect(state.canSave).toBe(false);
+  });
+
+  it("offers Save for an entry whose only problem saving fixes", async () => {
+    const viewer = { name: "viewer", type: "email", value: "viewer@example.test" };
+    const state = mount({
+      identities: [admin],
+      invalidIdentities: [{
+        ...viewer,
+        code: "vibe64_application_identity_fields_unsupported",
+        position: 2,
+        reason: "It has fields Vibe64 does not use (vibe64User): an identity has only a name, an app identifier and an application value."
+      }]
+    });
+    expect(state.identities).toEqual([admin, viewer]);
+    expect(state.identityProblems).toEqual(["", ""]);
+    expect(state.savedListNotice).toBe("Preview skips identity 2 (\"viewer\") until it is fixed: It has fields Vibe64 does not use " +
+      "(vibe64User): an identity has only a name, an app identifier and an application value. Choose Save to store it without them.");
+    expect(state.canSave).toBe(true);
+  });
+
+  it("loads a file that is not an identity list, says why, and can replace it", async () => {
+    const fileProblem = ".vibe64/preview-identities.json is not valid JSON (Unexpected end of JSON input).";
+    const state = mount({ fileProblem, identities: [] });
+    expect(state.identities).toEqual([]);
+    expect(state.savedListNotice).toBe(`${fileProblem} Preview runs without managed app identities until it is replaced: ` +
+      "add the identities you need and choose Save.");
+    expect(state.canSave).toBe(true);
+  });
+});

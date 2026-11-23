@@ -20,6 +20,7 @@ import {
 } from "../../src/lib/vibe64LaunchBrowserWindow.js";
 import {
   launchPreviewFromStatus,
+  launchPreviewIdentityNotice,
   launchPreviewRequiresProxy,
   launchPreviewTestNotice,
   normalizeLaunchPreview
@@ -54,6 +55,27 @@ import {
 } from "@local/studio-terminal-core/shared";
 
 describe("Vibe64 launch controls", () => {
+  it("names each app identity Preview skips, with its reason, and a file it can't read", () => {
+    const reason = "The name \"you\" is reserved by Vibe64 (default, guest and you are). Choose another, such as admin or user.";
+    expect(launchPreviewIdentityNotice({})).toBeNull();
+    expect(launchPreviewIdentityNotice({ previewIdentity: { fileProblem: "", skippedIdentities: [] } })).toBeNull();
+    expect(launchPreviewIdentityNotice({ previewIdentity: { skippedIdentities: [{ name: "you", position: 1, reason }] } })).toEqual({
+      message: `Identity 1 ("you"): ${reason} Preview can't sign in as it until it is renamed or removed in App access.`,
+      title: "Preview skips an app identity"
+    });
+    const many = launchPreviewIdentityNotice({ previewIdentity: { skippedIdentities: [1, 2, 3, 4, 5].map((position) => ({
+      name: `name-${position}`, position, reason: "It has no application value."
+    })) } });
+    expect(many.title).toBe("Preview skips 5 app identities");
+    expect(many.message).toBe("Identity 1 (\"name-1\"): It has no application value. Identity 2 (\"name-2\"): It has no application value. " +
+      "Identity 3 (\"name-3\"): It has no application value. And 2 more. " +
+      "Preview can't sign in as them until they are renamed or removed in App access.");
+    expect(launchPreviewIdentityNotice({ previewIdentity: { fileProblem: ".vibe64/preview-identities.json is not valid JSON (Unexpected end)." } })).toEqual({
+      message: ".vibe64/preview-identities.json is not valid JSON (Unexpected end). " +
+        "Preview runs without managed app identities until the file is fixed in App access.",
+      title: "Preview can't read its app identities"
+    });
+  });
   it("shows declared test data and retains restoration failures without guessing target names", () => {
     expect(launchPreviewTestNotice({}, { id: "test-database" })).toBeNull();
     expect(launchPreviewTestNotice({}, { id: "app", dataMode: "test" }).title).toBe("Test Preview");

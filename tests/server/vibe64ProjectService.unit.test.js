@@ -2576,9 +2576,93 @@ test("managed app identity validation rejects ambiguous names", async () => {
 
     assert.equal(response.ok, false);
     assert.equal(response.errors[0].code, "vibe64_invalid_application_identities_config");
-    assert.match(response.errors[0].message, /duplicated/u);
+    assert.equal(response.errors[0].message,
+      "Managed app identity 1 (\"admin\") is not valid. The name \"admin\" is also used by identity 2. Each name must be unique.");
     assert.equal(response.messageCode, "vibe64_application_identity_name_duplicated");
-    assert.deepEqual(response.messageParams, { name: "admin" });
+    assert.deepEqual(response.messageParams, { name: "admin", position: 1 });
+  });
+});
+
+async function writeStoredPreviewIdentities(sourceRoot, content) {
+  const storedPath = path.join(sourceRoot, ".vibe64", "preview-identities.json");
+  await mkdir(path.dirname(storedPath), { recursive: true });
+  await writeFile(storedPath, typeof content === "string" ? content : `${JSON.stringify(content)}\n`, "utf8");
+  return storedPath;
+}
+
+test("an invalid managed app identity still reads: the valid ones, and each invalid one in place with its reason", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = project(targetRoot);
+    await writeStoredPreviewIdentities(targetRoot, {
+      identities: [
+        { name: "you", type: "login", value: "merc" },
+        { name: "admin", type: "email", value: "admin@example.test" },
+        { name: "member", type: "login", value: "member" }
+      ],
+      version: 1
+    });
+
+    const read = await service.readPreviewApplicationIdentities();
+
+    assert.equal(read.ok, true, JSON.stringify(read));
+    assert.deepEqual(read.identities, [
+      { name: "admin", type: "email", value: "admin@example.test" },
+      { name: "member", type: "login", value: "member" }
+    ]);
+    assert.deepEqual(read.invalidIdentities, [{
+      code: "vibe64_application_identity_name_reserved",
+      name: "you",
+      position: 1,
+      reason: "The name \"you\" is reserved by Vibe64 (default, guest and you are). Choose another, such as admin or user.",
+      type: "login",
+      value: "merc"
+    }]);
+    assert.equal(read.fileProblem, undefined);
+  });
+});
+
+test("a managed app identity file that is not an identity list reads as none, saying what is wrong with it", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = project(targetRoot);
+    for (const [content, problem] of [
+      ["{\"identities\": [", /^\.vibe64\/preview-identities\.json is not valid JSON \(/u],
+      [{ identities: [], version: 2 }, /^\.vibe64\/preview-identities\.json has version 2; this Vibe64 reads version 1\.$/u],
+      [{ version: 1 }, /^\.vibe64\/preview-identities\.json has no "identities" list\.$/u],
+      [["admin"], /^\.vibe64\/preview-identities\.json is not an identity list\.$/u]
+    ]) {
+      await writeStoredPreviewIdentities(targetRoot, content);
+      const read = await service.readPreviewApplicationIdentities();
+      assert.equal(read.ok, true, JSON.stringify(read));
+      assert.deepEqual(read.identities, []);
+      assert.match(read.fileProblem, problem);
+    }
+
+    const saved = await service.savePreviewApplicationIdentities({
+      identities: [{ name: "admin", type: "email", value: "admin@example.test" }]
+    });
+    assert.equal(saved.ok, true, "saving replaces a file that could not be read");
+    assert.deepEqual(await service.readPreviewApplicationIdentities(), saved);
+  });
+});
+
+test("a save refuses an invalid managed app identity, naming it and the reason, and leaves the file as it was", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = project(targetRoot);
+    const stored = { identities: [{ name: "admin", type: "email", value: "admin@example.test" }], version: 1 };
+    const storedPath = await writeStoredPreviewIdentities(targetRoot, stored);
+
+    const response = await service.savePreviewApplicationIdentities({
+      identities: [
+        { name: "admin", type: "email", value: "admin@example.test" },
+        { name: "you", type: "login", value: "merc" }
+      ]
+    });
+
+    assert.equal(response.ok, false);
+    assert.equal(response.errors[0].code, "vibe64_invalid_application_identities_config");
+    assert.equal(response.errors[0].message,
+      "Managed app identity 2 (\"you\") is not valid. The name \"you\" is reserved by Vibe64 (default, guest and you are). Choose another, such as admin or user.");
+    assert.deepEqual(JSON.parse(await readFile(storedPath, "utf8")), stored);
   });
 });
 

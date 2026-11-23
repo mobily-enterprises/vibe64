@@ -31,8 +31,8 @@ const descriptions = {
   "prompt-hints.save": "Enable or disable optional next-message suggestions for this project, only as requested by the user. Read settings first. This uses the same owner-only control as Project settings and changes Vibe64's runtime setting, not agent instructions or project source. The result reports the saved enabled state; reread settings after an uncertain result.",
   "repository.workflow.save": "Change whether this GitHub project requires pull requests, only at the user's request. Read settings first and check repositoryWorkflow.available and canEdit. This uses the existing owner-only setting; it neither creates nor merges a pull request and does not change existing session source. The result reports the saved requirement. Reread settings after an uncertain result.",
   "development-database.scope.save": "Change the managed development database policy to project (one shared database) or session (separate session databases), only at the user's request. Read settings first and check developmentDatabase.managed, canChange and disabledReason. Every session must be closed before changing scope. With project scope unchanged, allowSharedDatabaseSessions can be enabled or disabled while sessions are open. Enabling allows the normal session limit and all sessions share the same database; disabling preserves existing sessions but blocks further creation when one or more are open. Do not archive sessions or discard unsaved work merely to enable this setting. This changes the policy through Project settings; it does not migrate application data or run database commands. Reread settings after an uncertain result.",
-  "preview-identities.read": "Read the complete ordered list of named existing application accounts from Managed app access for the exact project and selected source session. Pass that sessionId; omit it only to read standalone project source. The first identity is the default; an empty list means none is configured. These are selectors (email, login or user-id), never passwords. This read does not verify that an account exists, that the app supports identity exchange, or that Preview is signed in.",
-  "preview-identities.save": "Save the user's requested Managed app access identity list in the exact project/session source. First read preview-identities for that same target and preserve every unrequested entry. This replaces the complete ordered list (at most 32); move an entry first to make it the default, or remove entries only when requested. Names must be unique, start with a letter and use at most 64 lowercase letters, digits, underscores or hyphens; default, guest and you are reserved. Use the user's actual existing app identifiers; never invent accounts or accept passwords. Writes retain ordinary source-work and project locks and follow normal session Save. Success configures selectors only: it does not create an app user, change roles, sign in Preview, or push source. After an uncertain write reread before retrying."
+  "preview-identities.read": "Read the complete ordered list of named existing application accounts from Managed app access for the exact project and selected source session. Pass that sessionId; omit it only to read standalone project source. The first identity is the default; an empty list means none is configured. These are selectors (email, login or user-id), never passwords. invalidIdentities lists each stored entry Preview skips, with its 1-based position in the stored list and the reason; fileProblem means the stored file is not an identity list, so none are used. This read does not verify that an account exists, that the app supports identity exchange, or that Preview is signed in.",
+  "preview-identities.save": "Save the user's requested Managed app access identity list in the exact project/session source. First read preview-identities for that same target and preserve every unrequested entry. This replaces the complete ordered list (at most 32); move an entry first to make it the default, or remove entries only when requested. Names must be unique, start with a letter and use at most 64 lowercase letters, digits, underscores or hyphens; default, guest and you are reserved. Every entry is checked and an invalid one is refused, naming it and the reason, so while the read has invalidIdentities the replacement must rename or remove each one, only as the user asks. Use the user's actual existing app identifiers; never invent accounts or accept passwords. Writes retain ordinary source-work and project locks and follow normal session Save. Success configures selectors only: it does not create an app user, change roles, sign in Preview, or push source. After an uncertain write reread before retrying."
 };
 
 function sourceSummary(value) {
@@ -107,6 +107,18 @@ export function settingsTool(operation) {
           })
         },
         identities: { type: "array", items: previewApplicationIdentitySchema, required: false },
+        invalidIdentities: {
+          type: "array",
+          required: false,
+          items: createSchema({
+            name: text,
+            position: { type: "integer", required: true },
+            reason: { ...text, maxLength: 1024 },
+            type: text,
+            value: text
+          })
+        },
+        fileProblem: { ...text, maxLength: 1024 },
         collaboration: {
           type: "object",
           required: false,
@@ -217,6 +229,16 @@ export function settingsTool(operation) {
         };
       }
       if (Array.isArray(result.identities)) output.identities = result.identities.map(({ name, type, value }) => ({ name, type, value }));
+      if (Array.isArray(result.invalidIdentities)) {
+        output.invalidIdentities = result.invalidIdentities.map(({ name, position, reason, type, value }) => ({
+          name: String(name || "").slice(0, 512),
+          position,
+          reason: String(reason || "").slice(0, 1024),
+          type: String(type || "").slice(0, 512),
+          value: String(value || "").slice(0, 512)
+        }));
+      }
+      if (result.fileProblem) output.fileProblem = String(result.fileProblem).slice(0, 1024);
       if (result.collaboration) {
         const value = result.collaboration;
         const requirements = String(value.requirements || "");
