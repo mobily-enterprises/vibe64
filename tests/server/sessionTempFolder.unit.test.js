@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { prepareSessionTempFolder, removeSessionTempFolder } from "@local/vibe64-runtime/server/sessionTempFolder";
 import { helperChildEnv, sessionTempDirectory } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
-import { workspaceTempRoot } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
+import { DAEMON_USERNAME_PREFIX, workspaceTempRoot } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/src/server/request.js";
 
@@ -107,7 +107,8 @@ test("plain local Git keeps its own identity and reaches remotes with no credent
 test("the host helper gives a session's temporary folder only to the workspace's own commands, as a real folder of an active session", async (t) => {
   const root = await withRoot(t);
   const managedRoot = path.join(root, "managed");
-  const owner = "v64d_unitws";
+  // The workspace's own account: the helper finds its workspace folder (unitws) by the daemon prefix.
+  const owner = `${DAEMON_USERNAME_PREFIX}unitws`;
   const projects = path.join(managedRoot, "unitws", "projects");
   const temp = path.join(projects, "demo", "sessions", "active", "session-1", "tmp");
   const elsewhere = path.join(root, "elsewhere");
