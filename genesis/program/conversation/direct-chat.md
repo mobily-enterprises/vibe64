@@ -78,7 +78,14 @@ again before it renders and follows it through that check, so a message the
 server still holds never shows as unconfirmed: it ends accepted, not sent with
 the refusal, removed when cancelled, or unconfirmed in words when the server
 knows nothing of it. Shutdown ends a held wait for preparation (the delivery is
-refused unsent, `vibe64_agent_message_server_restarting`). Each send logs
+refused unsent, `vibe64_agent_message_server_restarting`). A message held past
+its answer is also in session metadata `held_agent_messages`
+(`heldMessageRecords.js`, `schemaVersion` 1, at most 50 entries for a day),
+written before the held answer goes out: marked waiting, dropped when its
+delivery ends, and kept with its refusal when it ended unsent. A restarted
+editor's delivery check, finding neither the held delivery nor routing's own
+record of it, answers from that record: not sent, with its refusal or, for one
+still marked waiting (a crash), the restart's, so Retry sends it. Each send logs
 `vibe64.agent_message.send_timing` from its arrival with its stage times, at
 warn when held or slower than a second, and `vibe64.agent_message.held` when it
 answers held. On 24 Nov 2026 a send waited inside its request for a
@@ -1406,6 +1413,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 
 - `packages/vibe64-sessions/src/server/mainChatApprovals.js`
 - `packages/vibe64-sessions/src/server/heldMessages.js`
+- `packages/vibe64-sessions/src/server/heldMessageRecords.js`
 - `src/lib/vibe64HeldMessage.js`
 - `src/composables/useVibe64MainChatApprovals.js`
 - `src/components/studio/vibe64-session/Vibe64MainChatApprovals.vue`

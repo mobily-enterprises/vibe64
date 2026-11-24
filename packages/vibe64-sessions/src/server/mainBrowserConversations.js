@@ -67,8 +67,9 @@ function operationResult(result) {
 /**
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
- * @param {(sessionId: string, messageId: string) => object | null} dependencies.inspectHeldMessage a held Main
- *   chat message's delivery check (null when no send of it is held), which never opens the native conversation
+ * @param {(sessionId: string, messageId: string) => object | null | Promise<object | null>} dependencies.inspectHeldMessage
+ *   a held Main chat message's delivery check (null when no send of it is held or recorded), which never opens the
+ *   native conversation; one only the session's records know is marked `recorded`
  * @param {TerminalsService} dependencies.terminals
  */
 function createMainBrowserConversations({ actions, inspectHeldMessage, terminals }) {
@@ -142,14 +143,17 @@ function createMainBrowserConversations({ actions, inspectHeldMessage, terminals
 
     /**
      * A held message answers from its delivery, which may still wait for the workspace preparation, without opening
-     * the native conversation. One whose delivery ended without saying whether it reached the assistant is the
-     * conversation's to answer, which keeps the held refusal's words when it knows no more.
+     * the native conversation. One whose delivery ended without saying whether it reached the assistant, and one
+     * only the session's records know (the editor restarted since), are the conversation's to answer first: its
+     * answer stands unless it knows nothing of the message.
      */
     async function inspectDelivery(input) {
       const held = temporary ? null : await withTerminals(() => inspectHeldMessage(target.sessionId, input.messageId));
-      if (held && held.status !== "unknown") return held;
+      if (held && !held.recorded && held.status !== "unknown") return held;
       const inspected = await withConversation(conversation => conversation.inspectDelivery(input));
-      return held && inspected?.status === "unknown" ? held : inspected;
+      if (!held || inspected?.status !== "unknown") return inspected;
+      const { recorded: _recorded, ...receipt } = held;
+      return receipt;
     }
 
     /**
