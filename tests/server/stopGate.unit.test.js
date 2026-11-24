@@ -17,9 +17,10 @@ import { registerStopGate, STOPPING_HEADER, stopAcceptingConnections } from "../
 // x-vibe64-stopping, which tells the page it may send it again to the next server; an answer in flight finishes and
 // closes its connection; the listener takes no new connection; and the command gateway starts nothing.
 
-function get(port, path) {
+/** A GET on `agent`: a kept-alive connection, as a browser's, or with `false` a connection of its own that closes. */
+function get(port, path, agent = false) {
   return new Promise((resolve, reject) => {
-    const outgoing = http.get({ agent: false, host: "127.0.0.1", port, path }, (response) => {
+    const outgoing = http.get({ agent, host: "127.0.0.1", port, path }, (response) => {
       let body = "";
       response.setEncoding("utf8");
       response.on("data", (chunk) => { body += chunk; });
@@ -49,13 +50,19 @@ test("once the stop begins, a request runs nothing and says it may be sent again
     return { ok: true };
   });
   await app.listen({ host: "127.0.0.1", port: 0 });
-  t.after(() => app.close());
+  const keptAlive = new http.Agent({ keepAlive: true });
+  // The held request is released however the test ends, so a failure before its release fails, not hangs.
+  t.after(async () => {
+    releaseSlow();
+    await app.close();
+    keptAlive.destroy();
+  });
   const { port } = app.server.address();
 
   const before = await app.inject({ method: "POST", url: "/write", payload: {} });
   assert.equal(before.statusCode, 200);
   assert.equal(before.headers[STOPPING_HEADER], undefined);
-  const slow = get(port, "/slow");
+  const slow = get(port, "/slow", keptAlive);
   while (!handled.includes("slow")) await new Promise((resolve) => setTimeout(resolve, 5));
 
   assert.equal(beginServerStop("SIGTERM"), true);
@@ -63,7 +70,7 @@ test("once the stop begins, a request runs nothing and says it may be sent again
   stopAcceptingConnections(app.server);
 
   const refused = await app.inject({ method: "POST", url: "/write", payload: {} });
-  assert.equal(refused.statusCode, 503);
+  assert.equal(refused.statusCode, 503, "a request that arrives while the server stops is refused");
   assert.equal(refused.headers[STOPPING_HEADER], "1", "the page may send it again");
   assert.equal(refused.headers.connection, "close");
   assert.equal(refused.headers["retry-after"], "1");
