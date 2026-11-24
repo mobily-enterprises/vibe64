@@ -450,6 +450,15 @@ function createProjectEnvironment({
     return (await resolvedProjectEnvironment({}, await userEnvRecords())).effectiveEnvironment;
   }
 
+  /**
+   * The Env a session's commands receive, its managed resources included: the values the project gives the
+   * session's processes (as `vibe64-helper env status` counts them), never the editor's own process environment.
+   * @param {{ session?: object, sessionId: string }} input
+   */
+  async function sessionCommandEnvironment(input) {
+    return (await resolvedProjectEnvironment(input, await userEnvRecords())).projectEnvironment;
+  }
+
   return Object.freeze({
     userEnvRecords,
     resolvedProjectEnvironment,
@@ -457,7 +466,8 @@ function createProjectEnvironment({
     revealEnvSecretState,
     downloadEnvState,
     saveEnvState,
-    promptEnvironment
+    promptEnvironment,
+    sessionCommandEnvironment
   });
 }
 

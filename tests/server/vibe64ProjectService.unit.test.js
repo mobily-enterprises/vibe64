@@ -144,6 +144,41 @@ test("prepared execution reuses confirmed resources without source admission and
   });
 });
 
+test("a session's prompts are checked against the Env its commands receive, the session's managed database included", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "prompt-environment";
+    await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
+    const database = { component: "jskit-mysql", resource: { id: "database", kind: "mysql", environmentAlternatives: [{
+      preferred: true, bindings: { database: "DB_NAME", host: "DB_HOST", password: "DB_PASSWORD", port: "DB_PORT", username: "DB_USER" }
+    }] } };
+    const values = { database: "session_db", host: "127.0.0.1", password: "pw-session", port: "3306", username: "session" };
+    const reader = { ...values, password: "pw-reader", port: 3306, username: "reader" };
+    const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
+      databaseToolEnvironment: { contract: "vibe64.database-tool-environment.v1", kind: "mysql", read: reader,
+        write: { ...values, port: 3306 } },
+      resourceValues: [{ declaration: { component: "jskit-mysql", id: "database", kind: "mysql" }, values }] });
+    const service = project(targetRoot, {
+      env: { EDITOR_ONLY: "editor" },
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [{ name: "DB_CLIENT", value: "mysql2" }],
+        files: [], resources: [database], status: "ready" }),
+      resourceEnvironmentProvider: { managedDevelopmentDatabase: true,
+        environmentForProvisionedResources: provided, environmentForResources: provided }
+    });
+    const runtime = await service.createRuntimeWithoutSource();
+    await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
+    const session = await runtime.store.readSession(sessionId);
+    // The project-level Env, resolved without a session, has no session database: a prompt checked against it
+    // called DB_NAME, DB_HOST, DB_PASSWORD, DB_PORT and DB_USER missing.
+    assert.equal((await runtime.resolvePromptEnvironment()).DB_HOST, undefined);
+    // The session's prompts get what its commands get: its managed database, the Stack's defaults, and nothing of the
+    // editor's own environment.
+    const expected = { DB_CLIENT: "mysql2", DB_HOST: "127.0.0.1", DB_NAME: "session_db", DB_PASSWORD: "pw-session",
+      DB_PORT: "3306", DB_USER: "session" };
+    assert.deepEqual(await runtime.resolveSessionEnvironment(session), expected);
+    assert.deepEqual(await service.projectExecutionEnvironment({ sessionId }), expected);
+  });
+});
+
 test("execution preparation rechecks current declarations after acquiring source admission", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "environment-recheck";
