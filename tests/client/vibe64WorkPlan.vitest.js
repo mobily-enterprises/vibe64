@@ -382,3 +382,16 @@ it("renders each checklist mark as its own state: a built item is an indetermina
   expect(marks[2]).not.toContain('indeterminate="true"');
   expect(html).toContain("Export the report");
 });
+
+it("names the plan files Vibe64 cannot use above History, which still lists every other archived plan", () => {
+  const warning = "Vibe64 skipped a plan file it cannot use: /state/plans/archive/" + "c".repeat(64) +
+    ".json (Vibe64 is not allowed to read it: it belongs to another account or its permissions changed).";
+  const f = mount({ available: false, current: null, history: [{ id: "a".repeat(64), title: "Archived", status: "active", archivedAt: "2026-09-29T00:00:00Z" }],
+    planFileProblems: [{ path: "/state/plans/archive/" + "c".repeat(64) + ".json", problem: "Vibe64 is not allowed to read it" }], warning });
+  f.state().showPlan("history");
+  expect(f.state().showHistory).toBe(true);
+  expect(f.state().planFileWarning).toBe(warning);
+  expect(f.state().history.map(item => item.title)).toEqual(["Archived"]);
+  mocks.resource.data.value = { available: false, current: null, history: [] };
+  expect(f.state().planFileWarning).toBe("");
+});
