@@ -67,6 +67,11 @@ function createEditorReconnect() {
     return new Promise((resolve) => answerWaiters.add(resolve));
   }
 
+  /** Whether requests find the editor unreachable now. */
+  function unreachable() {
+    return failingSince !== 0;
+  }
+
   /**
    * @param {(event: EditorReconnectEvent) => void} listener
    * @returns {() => void} the unsubscribe
@@ -79,9 +84,8 @@ function createEditorReconnect() {
   return Object.freeze({
     answered,
     failed,
-    isUpdating: () => updating,
     subscribe,
-    unreachable: () => failingSince !== 0,
+    unreachable,
     whenAnswered
   });
 }
