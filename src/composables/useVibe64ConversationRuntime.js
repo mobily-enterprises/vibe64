@@ -16,7 +16,7 @@ import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { isArchivedVibe64Session } from "@/lib/vibe64SessionViewModel.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
-import { followHeldMessage, messageAnswerHeld, messageAnswerLost } from "@/lib/vibe64HeldMessage.js";
+import { followHeldMessage, messageAnswerHeld, messageAnswerLost, recoverRestoredMessages } from "@/lib/vibe64HeldMessage.js";
 
 function browserDraftStorage(identity) {
   try {
@@ -193,7 +193,15 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
       return messageAnswerHeld(answer) ? follow({ messageId: input.messageId, waitingFor: answer.waitingFor }) : answer;
     } },
     application(conversation) {
-      deliveries.set(conversation.identity.conversationId, conversation.delivery);
+      const conversationId = conversation.identity.conversationId;
+      deliveries.set(conversationId, conversation.delivery);
+      // A reload restored any message still on its way as unconfirmed; the server may still hold it.
+      const recovery = new AbortController();
+      onScopeDispose(() => recovery.abort());
+      void recoverRestoredMessages(conversation.delivery, {
+        inspect: (messageId, signal) => api.inspectConversationDelivery(conversationId, messageId, { signal }),
+        signal: recovery.signal
+      });
       const target = mainConversationTarget(conversation.identity.conversationId);
       return createConversationApplication(conversation, { viewer, summarySession,
         identity: Object.freeze({ ...identity.value, ...target, actorKey: conversation.identity.actorKey }) });

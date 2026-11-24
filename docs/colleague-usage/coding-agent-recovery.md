@@ -20,7 +20,9 @@ or the hosted editor's front end giving up after a minute) stays pending with
 **Checking whether the editor received this message** while Vibe64 checks its
 delivery by itself. It becomes sent once it is confirmed; if Vibe64 cannot
 confirm it, the message says so in words and **Retry** checks its receipt
-before sending it again.
+before sending it again. Reloading the page while a message is on its way does
+the same: the message stays pending, shows what it waits for, and is never
+sent twice.
 
 ## When a turn is interrupted
 
