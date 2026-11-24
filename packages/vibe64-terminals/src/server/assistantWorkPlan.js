@@ -5,7 +5,7 @@ import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 import { PLAN_LEFTOVERS_RULE } from "@local/vibe64-runtime/shared/assistantFinishing";
-import { fixableLeftoversRefusal } from "./planLeftovers.js";
+import { readThroughOf, refuseUnprovenAgentWrite } from "./assistantWorkPlanAgentWrites.js";
 import { PLAN_LIMIT, planError, planFileError, planFileProblem, readPlanFile, withPlanFileProblems } from "./assistantWorkPlanFiles.js";
 
 // Process-wide: whole pair reads and publication/cleanup of a plan file run
@@ -339,9 +339,6 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   }, problems);
 }
 
-// What only a read's last page, or a write's answer, gives: proof that Plan and Progress were read through to the end.
-const readThroughOf = (plan) => sha256Hex("vibe64-plan-read-through-v1\0" + plan.artifactRevision);
-
 async function writePlan(file, text) {
   const directory = path.dirname(file);
   await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -494,8 +491,7 @@ function refuseUnreadInput(input) {
  * change the ticks outside Passes. Any role that may tick may record that it checked the plan and
  * found nothing to change (checked). With `sourceState`, the AI's change records the session's
  * source as it is now as the plan's mark (MARKING_OPERATIONS); a plan replaced or archived drops it.
- * With `agent` (the agent's plan command), write and progress-write need the readThrough a read's last page or the
- * last write returned, and Progress's Leftovers may hold no failing or flaky test, written or at completion.
+ * With `agent` (the agent's plan command), a change must prove what refuseUnprovenAgentWrite checks.
  * @param {object} context
  * @param {object} input
  * @param {string} role senior, review, junior, pass or user
@@ -543,15 +539,7 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
     if (current && expectedProgressRevision !== (current.progressRevision || "")) {
       throw planError("Progress changed. Read both documents before editing them.", "vibe64_work_plan_progress_changed");
     }
-    if (agent && current && ["write", "progress-write"].includes(operation) && input.readThrough !== readThroughOf(current)) {
-      const fix = "read every page of Plan and Progress (follow nextOffset while hasMore), then write from all of them. Nothing changed.";
-      throw planError(
-        `plan ${operation} replaces the whole ${TEXT_OPERATIONS[operation]}, so it needs readThrough from the read's last page or your last write's answer: ${fix}`,
-        "vibe64_work_plan_read_through_required"
-      );
-    }
-    const leftovers = agent && ["progress-write", "complete"].includes(operation) && fixableLeftoversRefusal(operation === "complete" ? current?.progressText : input.text);
-    if (leftovers) throw planError(leftovers, "vibe64_work_plan_leftover_fixable");
+    if (agent) refuseUnprovenAgentWrite(operation, input, current);
     if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_revision_missing");
     if (["write", "progress-write", "checked", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.", "vibe64_work_plan_missing");
     if (["write", "progress-write", "checked"].includes(operation) && current.status !== "active") {
@@ -638,7 +626,6 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
     const page = await readWorkPlanPageUnlocked(context);
     const known = new Set((page.planFileProblems || []).map(problem => problem.path));
     const result = withPlanFileProblems(page, [...(page.planFileProblems || []), ...skipped.filter(problem => !known.has(problem.path))]);
-    // The writer read both documents through and wrote one of them whole: its next write needs no new read.
     if (["write", "progress-write"].includes(operation)) result.readThrough = readThroughOf(result);
     if (current && (replacing || operation === "archive")) {
       result.notice = "Archived “" + current.title + "”. It remains available in Plan history.";

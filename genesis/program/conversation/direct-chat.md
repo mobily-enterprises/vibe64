@@ -1475,6 +1475,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantRoutingGoals.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlanFiles.js`
+- `packages/vibe64-terminals/src/server/assistantWorkPlanAgentWrites.js`
+- `packages/vibe64-terminals/src/server/planLeftovers.js`
 - `packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261008-plan-progress.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261010-assistant-workflow.js`
@@ -2185,7 +2187,7 @@ names a stray or unreadable file among the documents instead of failing.
 A read pages Plan then Progress as one character stream; only the page that ends
 it (hasMore false) carries readThrough, a digest of the pair's identity, and so
 does each write's answer. The agent's plan command passes `agent: true`,
-so its write and progress-write, which replace a whole document, are refused
+so (`assistantWorkPlanAgentWrites.js`) its write and progress-write, which replace a whole document, are refused
 (vibe64_work_plan_read_through_required) without the current pair's readThrough:
 a Progress rebuilt from the first page alone cannot cut the tail it never read.
 Vibe64's own writes build from the whole pair and need none. The same option
