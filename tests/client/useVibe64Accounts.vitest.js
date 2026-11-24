@@ -5,6 +5,7 @@ import {
 } from "@local/vibe64-core/shared";
 
 import {
+  authSessionReadAnswer,
   statusWithAccount,
   statusWithCodexReconnectRequired
 } from "../../packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js";
@@ -64,5 +65,16 @@ describe("useVibe64Accounts account status cache", () => {
     expect(statusWithAccount(status, codexOut)).toMatchObject({ ready: false, blockedReason: "Sign in to Codex." });
     expect(statusWithAccount(status, { id: "github" })).toBe(status, "a row the status does not list waits for the reload");
     expect(statusWithAccount(undefined, signedOut)).toBe(undefined);
+  });
+});
+
+describe("useVibe64Accounts sign-in progress reads", () => {
+  it("fails a sign-in progress read that failed, rather than answering with the status before it", () => {
+    const before = { id: "auth-1", status: "authenticating" };
+    expect(authSessionReadAnswer({ data: { id: "auth-1", status: "connected" } }, before, "")).toEqual({ id: "auth-1", status: "connected" });
+    // A failed refetch keeps the data it had: answering with it would show the sign-in waiting for ever.
+    expect(() => authSessionReadAnswer({ data: before, isError: true }, before,
+      "Vibe64 could not check this sign-in's progress just now. It checks again shortly."))
+      .toThrow("Vibe64 could not check this sign-in's progress just now. It checks again shortly.");
   });
 });
