@@ -119,6 +119,11 @@ again. The module loads only into recorded processes, through
 `PHP_INI_SCAN_DIR`. Your own PHP settings and extensions keep loading as
 before.
 
+Where a host supplies PHP without its development files, the dialog says
+**PHP usage recording isn't available on this workspace yet** instead, and
+names no command: nothing can build the module there until the host adds
+them.
+
 **What is separated per request.**
 - `php artisan serve` and `php -S`, with or without a router script, record
   each request on its own, including several workers answering at once
