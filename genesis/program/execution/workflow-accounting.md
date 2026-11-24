@@ -397,7 +397,13 @@ a login the workspace's member list names: an existing account is registered as
 without a password (`createPerson` in `hostAccounts.js`): in the host's account
 database, numbered in its people's band, in a group of its own, with the host's
 person shell and an empty home of its own, `/home/<login>` at 0750, whatever the
-umask (a home already there is kept as it is). Either way the person joins the
+umask. That home is always one it makes: when anything is already at
+`/home/<login>` (a folder an account removed outside Vibe64 left, whatever uid
+owns it, a link or a file), no account is made and the step fails (exit 2) with
+one line naming it, its kind and uid, and how an administrator moves it away;
+the folder stays exactly as it is, since whose files they are is not Vibe64's to
+judge, and the next member list makes the person once it is gone. One that
+appears while the account is made takes the new account away again. Either way the person joins the
 shared group and `nix-users`, the group the units of a person's commands name,
 and running it again changes nothing. A name Vibe64 keeps for its own accounts
 (a workspace daemon's or a staging account's, `root`, or not a managed

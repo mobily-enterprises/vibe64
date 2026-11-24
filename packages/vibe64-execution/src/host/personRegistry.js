@@ -354,7 +354,10 @@ function registerPerson(workspace = "", username = "", {
 // the owner is. A name Vibe64 keeps for its own accounts, and an existing
 // account that is not a person's login (a system or administrator account), are
 // refused (exit 3) before anything changes, so a list never makes one a person.
-// Running it again changes nothing.
+// A login without an account whose home is already there (a folder, a link or a
+// file another account left) fails before anything changes (exit 2, so the list
+// is sent again once an administrator has moved it away): a new person never
+// gets a folder that is not theirs. Running it again changes nothing.
 function addPerson(workspace = "", username = "", {
   addToGroup = (name, group) => addUserToGroup(name, group, helperAccountDatabase()),
   create = (name) => createPerson(name, {
