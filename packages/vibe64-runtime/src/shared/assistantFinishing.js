@@ -149,6 +149,7 @@ const ASSISTANT_PLAN_COMPLETION_MESSAGE = [
   "Full-tick (- [x]) each item the proof covers and move unsupported or regressed ones back to - [~] or - [ ].",
   "End one of two ways. Done: every item outside Passes is - [x]. When the plan has Passes items, leave it active and report complete with the returned revisions: Vibe64 then runs each pass in its own turn and completes the plan after the last. Without Passes items, complete the plan with the plan helper and report complete with the returned revisions; your final reply is then the plan's one closing message: " + PLAN_CLOSING_MESSAGE + " Needs you: numbered questions, each with a recommended answer, in your final reply and in Progress; report wait. For substantial necessary rework, update the Technical details and Progress and report handoff.",
   PLAN_STEP_ENDINGS,
+  "Each item whose proof can't run in this session (a real phone, a suite only CI runs) ends as Needs you: a numbered question with a recommended answer, in your final reply and in Progress. A question Junior's last reply asked the person is yours now: settle it from Plan and Progress, or ask it as a Needs you question. Whether to run the passes or save is never one: Vibe64 runs the passes and saves.",
   "This turn reviews the plan only: run no pass. Do not ask for permission merely to verify or complete verified work."
 ].join(" ");
 

@@ -2536,20 +2536,38 @@ tick an active plan (Senior's, Junior's or Senior's review, from
 reads the plan's revisions, its record and the source state while the turn's
 selection is prepared, and keeps them in memory by request key and message
 (`planCheckTurns`). When that turn completes, unless the person stopped it, a
-goal is active, it ends asking the person, or a restart or disconnected
-schedule lost the start, routing compares: the same active plan, Progress and
+goal is active, or a restart or disconnected schedule lost the start, routing
+compares (a turn that ended asking the person is compared too): the same active plan, Progress and
 record, and changed files, send one follow-up (`preparePlanCheck`) to the same
 AI in the same stage before anything else follows. It is Vibe64's note
 (`vibe64Note`, shown as Vibe64's system row) whose display gives the file count
 and whose message names up to five files and asks the AI to walk the checklist
 item by item, not only the item it was on, half-tick what is built, record
-Progress or run `plan checked`, then stop; it renders planning's instructions
+Progress or run `plan checked`, says that Senior's review, the plan's passes and
+Save are Vibe64's next steps and never a question for the person, asks it to
+ask any other question again, then stop; it renders planning's instructions
 (manage the plan, change no application files), no Genesis task and no workflow
 outcome instructions. Its own turn gets no check. When it ends, an outcome the turn before it reported stands for it
 (rebound to its turn, with the plan's revisions as the check left them when the
 plan's scope is unchanged), and the request settles as it would have. A check
 that never left settles the request at once; one that may have reached the AI
 waits as an uncertain delivery.
+
+A turn that gets no check (the check's own included) may then hand Auto's plan
+to Senior's review (`reviewBuiltPlan`): Junior's completed, unstopped turn
+implementing the active plan (`assistantPlanCompletionFollows`; the request
+implements it, or the turn changed the plan's revision) that would stop the
+plan, because it reported wait, reported nothing or asked the person, goes on
+as Junior's handoff would, with Vibe64's own `handoff` outcome (`vibe64: true`),
+when every item outside Passes is built or the check's turn left the plan,
+Progress and record exactly as the check found them (`state.planCheck` keeps
+them). A reported continue, handoff or Done stands, an active goal keeps its own
+flow, and an item still open with a question waits for the person as before.
+Routing skips the wait for the person's answer for Vibe64's own handoff: Senior's
+review (`ASSISTANT_PLAN_COMPLETION_MESSAGE`) verifies and ticks every item,
+takes Junior's question as its own, and asks what can't be proven in the session
+as numbered Needs you questions with a recommended answer, in its reply and in
+Progress; whether to run the passes or save is never one.
 
 Every workflow turn's instructions (`assistantWorkflowInstructions`, composed
 by routing delivery for Auto and direct chats alike) end with how the turn ends
