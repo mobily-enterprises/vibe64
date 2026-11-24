@@ -36,11 +36,13 @@ beforeEach(async () => {
   viewer = ref({ actorKey: "owner" });
   open = ref(true);
   read = vi.fn(async path => path.endsWith("/learning") ? progress(`learner-${viewer.value.actorKey}`) : { ok: true, courses: [] });
-  configureHttpWebClient({ request: read });
+  // Starts and resumes are posted through the HTTP client, answered here by the command harness.
+  configureHttpWebClient({ request: (path, options = {}) => options.method === "POST"
+    ? harness.command(path, options.body) : read(path, options) });
   mount();
   await flush();
 });
-afterEach(() => { app.unmount(); queryClient.clear(); configureHttpWebClient(originalClient); });
+afterEach(() => { vi.useRealTimers(); app.unmount(); queryClient.clear(); configureHttpWebClient(originalClient); });
 
 it("reads actor-scoped resources while Learning is open, without requiring a project", async () => {
   expect(courses.active.value).toBe(true);
@@ -114,6 +116,34 @@ it("retains exact start identity and inputs across an uncertain result without a
   await courses.startLesson(courses.startRetry.value);
   expect(harness.command.mock.calls[1][1]).toEqual(first);
   expect(courses.startRetry.value).toBeNull();
+});
+
+// A start or resume prepares the practice project, which can outlast the hosted edge's minute.
+it("repeats a held start and a held resume with the same request until the saved attempt is confirmed", async () => {
+  harness.command.mockResolvedValueOnce({ ok: true, preparing: true, requestId: "held", waitingFor: "preparing" });
+  await expect(courses.startLesson(selection)).resolves.toMatchObject({ attemptId: A, current: true });
+  expect(harness.command).toHaveBeenCalledTimes(2);
+  expect(harness.command.mock.calls[1], "the repeat names the same start").toEqual(harness.command.mock.calls[0]);
+  harness.command.mockClear();
+  harness.command.mockResolvedValueOnce({ ok: true, preparing: true, attemptId: A, waitingFor: "preparing" });
+  await expect(courses.resumeLesson(A)).resolves.toMatchObject({ attemptId: A, current: true });
+  expect(harness.command.mock.calls).toEqual([[`/api/vibe64/training/attempts/${A}/resume`, {}], [`/api/vibe64/training/attempts/${A}/resume`, {}]]);
+});
+
+it.each([0, 502, 504])("repeats a start whose answer was lost with status %s, and never shows that failure", async (status) => {
+  harness.command.mockRejectedValueOnce(Object.assign(new Error(`Request failed with status ${status}.`), { status }));
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  const starting = courses.startLesson(selection);
+  await vi.advanceTimersByTimeAsync(5_000);
+  await expect(starting).resolves.toMatchObject({ attemptId: A });
+  expect(harness.command).toHaveBeenCalledTimes(2);
+  expect(harness.command.mock.calls[1]).toEqual(harness.command.mock.calls[0]);
+});
+
+it("words a start refusal the server did not word, never showing its status", async () => {
+  harness.command.mockRejectedValueOnce(Object.assign(new Error("Request failed with status 404."), { status: 404 }));
+  await expect(courses.startLesson(selection)).rejects.toThrow("The lesson request was not confirmed. Retry the same request");
+  expect(courses.startRetry.value, "the same start can be retried").toMatchObject(selection);
 });
 
 it("retains exact retry when the start response is not a confirmed saved attempt", async () => {

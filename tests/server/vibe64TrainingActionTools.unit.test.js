@@ -266,6 +266,33 @@ test("known preparation contention retains the same attempt and gives a safe spe
   });
 });
 
+// A start prepares the practice project and a finish archives it, which can outlast the hosted edge's minute.
+test("the learner's own lesson start and finish answer within two seconds while they go on, and a repeat joins them", async t => {
+  const f = await fixture(t);
+  const preparation = Promise.withResolvers();
+  const archive = Promise.withResolvers();
+  const c = f.register({ ...f.exercises,
+    async startLesson(value) { await preparation.promise; return f.exercises.startLesson(value); },
+    async finishLesson(value) { await archive.promise; return f.exercises.finishLesson(value); } });
+  let began = Date.now();
+  const held = await c.execute("lesson.start", f.input);
+  assert.ok(Date.now() - began < 2_900, "The start waited for its preparation");
+  assert.deepEqual(held, { ok: true, preparing: true, requestId: "start-one", waitingFor: "preparing" });
+  const repeat = c.execute("lesson.start", f.input);
+  preparation.resolve();
+  const started = await repeat;
+  assert.equal(started.ok, true, JSON.stringify(started));
+  assert.equal(f.calls.filter(call => call.operation === "start").length, 1, "The repeat joined the running start");
+  const input = { attemptId: started.active.attemptId, expectedRevision: started.revision };
+  began = Date.now();
+  assert.deepEqual(await c.execute("lesson.finish", input), { ok: true, finishing: true, attemptId: input.attemptId, waitingFor: "finishing" });
+  assert.ok(Date.now() - began < 2_900, "The finish waited for its archive");
+  const finishing = c.execute("lesson.finish", input);
+  archive.resolve();
+  assert.deepEqual(await finishing, { ok: true, available: true, changed: true });
+  assert.equal(f.calls.filter(call => call.operation === "finish").length, 1, "The repeat joined the running finish");
+});
+
 test("finish and ended-start replay expose the original target and actual active state without project effects", async t => {
   const f = await fixture(t);
   const c = f.register(f.exercises);

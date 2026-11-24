@@ -686,6 +686,63 @@ describe("useVibe64Learning controller", () => {
     expect(learning.state.lessonError).toBe("");
   });
 
+  // A restart prepares a fresh practice project and a finish archives one, which can outlast the hosted edge's minute.
+  it("repeats a held restart and a held finish with the same request until their outcome", async () => {
+    const NEXT = "33333333-3333-4333-8333-333333333333";
+    let current = ATTEMPT;
+    const answers = { restart: 0, finish: 0 };
+    const { learning, calls } = controller({ mode: () => ({ ...LEARN, currentAttemptId: current }),
+      posts: url => {
+        if (url === VIBE64_LEARNING_ROUTES.lessonRestart(ATTEMPT)) {
+          answers.restart += 1;
+          if (answers.restart === 1) return { ok: true, preparing: true, attemptId: ATTEMPT, waitingFor: "preparing" };
+          current = NEXT;
+          return { ok: true, available: true, active: { attemptId: NEXT } };
+        }
+        if (url === VIBE64_LEARNING_ROUTES.lessonFinish(NEXT)) {
+          answers.finish += 1;
+          if (answers.finish === 1) return { ok: true, finishing: true, attemptId: NEXT, waitingFor: "finishing" };
+          current = "";
+          return { ok: true, available: true, changed: true };
+        }
+        return { ok: true };
+      } });
+    learning.setViewer("member");
+    await flush();
+    await expect(learning.restart()).resolves.toMatchObject({ ok: true, active: { attemptId: NEXT } });
+    const restarts = calls.filter(call => call.url === VIBE64_LEARNING_ROUTES.lessonRestart(ATTEMPT));
+    expect(restarts).toHaveLength(2);
+    expect(restarts[1].body, "the repeat names the same restart and revision").toEqual(restarts[0].body);
+    expect(learning.attemptId).toBe(NEXT);
+    await expect(learning.finish()).resolves.toMatchObject({ ok: true, changed: true });
+    const finishes = calls.filter(call => call.url === VIBE64_LEARNING_ROUTES.lessonFinish(NEXT));
+    expect(finishes).toHaveLength(2);
+    expect(finishes[1].body).toEqual(finishes[0].body);
+    expect(learning.state.attemptsError).toBe("");
+  });
+
+  it.each([0, 502, 504])("repeats a restart whose answer was lost with status %s, and never shows that failure", async (status) => {
+    let restarts = 0;
+    const { learning, calls } = controller({
+      posts: (url) => {
+        if (url !== VIBE64_LEARNING_ROUTES.lessonRestart(ATTEMPT)) return { ok: true };
+        restarts += 1;
+        if (restarts === 1) throw Object.assign(new Error(`Request failed with status ${status}.`), { status });
+        return { ok: true, available: true, active: { attemptId: ATTEMPT } };
+      }
+    });
+    learning.setViewer("member");
+    await flush();
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const restarting = learning.restart();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(restarting).resolves.toMatchObject({ ok: true });
+    const sent = calls.filter(call => call.url === VIBE64_LEARNING_ROUTES.lessonRestart(ATTEMPT));
+    expect(sent).toHaveLength(2);
+    expect(sent[1].body).toEqual(sent[0].body);
+    expect(learning.state.attemptsError).toBe("");
+  });
+
   it.each([0, 502, 504])("repeats a Check my work whose answer was lost with status %s, and never shows that failure", async (status) => {
     let reviews = 0;
     const { learning, calls } = controller({
