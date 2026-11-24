@@ -46,6 +46,7 @@ import {
   createBrowserLifecycleMonitor,
   registerBrowserLifecycleWebSocketRoute
 } from "./server/lib/browserLifecycle.js";
+import { handleUpgradeSocketErrors } from "./server/lib/upgradeSocketErrors.js";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
@@ -350,6 +351,9 @@ async function createServer(options = {}) {
       }
     }
   });
+  // Before any upgrade handler (WebSocket routes, realtime, a host's own), so no upgrade's connection is ever left
+  // without an error listener.
+  handleUpgradeSocketErrors(app.server, { logger: app.log });
   // Before any plugin or route, so every answer, the release bundle's included, refuses other sites' frames.
   registerEditorFraming(app, { env: runtimeEnv });
   for (const warning of loggerOptions.warnings) {

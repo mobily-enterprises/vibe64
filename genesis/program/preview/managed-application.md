@@ -693,7 +693,12 @@ and another session's proxy has its own token. Ending the session's terminals
 (archive, renewal or project close) retires the token, and the registry keeps
 tokens only in memory, so a server restart issues new ones; an older tab then
 gets the 403 `Launch preview token is missing or invalid.` until Preview is
-opened again from the editor. Tokens are never logged.
+opened again from the editor. Tokens are never logged. A request or WebSocket
+upgrade whose target is no address (such as `//`) is answered 400 `This address
+is not one the Preview can serve.` before its token is read, so no request a
+peer sends can end the editor that serves the Preview; a browser's or app's
+reset of a proxied WebSocket closes its other side
+(`tests/server/editorPeerResets.integration.test.js`).
 The open-in-new-tab button uses the project's one named tab. An editor that is
 not on loopback never opens the app's server-only loopback address: when the
 action it opens has no proxied address yet, the tab shows **Starting app…** and

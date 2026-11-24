@@ -159,6 +159,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `config/server.js`
 - `tests/server/editorSecurityHeaders.unit.test.js`
 - `server/lib/browserLifecycle.js`
+- `server/lib/upgradeSocketErrors.js`
+- `tests/server/editorPeerResets.integration.test.js`
 - `packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js`
 - `packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js`
 - `packages/vibe64-accounts/src/shared/authOutput.js`
@@ -199,7 +201,15 @@ matches the request host, port and HTTP(S) scheme, including the host's forwarde
 protocol. Authenticated cookie sockets cannot omit Origin; local command-line
 clients retain the loopback-only exception. Authentication does not bypass this
 check. Native incoming WebSocket messages are limited to 1 MiB; file attachments
-use their separate upload API. The server (`server.js`) believes forwarded
+use their separate upload API. A peer that resets a connection never ends the
+editor: Node takes its own error listener off a WebSocket upgrade's connection
+before it hands it over, and a route's handler adds one only at its handshake,
+after every Fastify hook (a host's sign-in check among them), so `server.js`
+gives every upgrade's connection a listener before any handler sees it
+(`server/lib/upgradeSocketErrors.js`). A reset before a handler has taken the
+connection is logged at warn (`vibe64.server.upgrade_socket_error`, with the
+address's path, never its query) and the connection is destroyed; a taken one is
+its handler's to close. The server (`server.js`) believes forwarded
 headers (X-Forwarded-For, -Proto, -Host) only from the proxies JSKIT's
 `TRUSTED_PROXIES` names, loopback when unset, so a visitor's own header never
 makes a request look local or HTTPS; a host whose edge ends TLS names that
