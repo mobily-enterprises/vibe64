@@ -16,6 +16,7 @@ import {
   ACTION_CREATE_PULL_REQUEST,
   ACTION_START_SESSION_PULL_REQUEST,
   ACTION_CREATE_SESSION,
+  ACTION_START_SESSION_CREATION,
   ACTION_INSPECT_ASSISTANT_ACCESS,
   ACTION_INSPECT_SESSION,
   ACTION_INSPECT_SESSION_RENEWAL,
@@ -266,6 +267,7 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_LIST_ASSISTANT_CAPABILITIES,
     ACTION_UPDATE_ASSISTANT_MODEL_ACCESS,
     ACTION_CREATE_SESSION,
+    ACTION_START_SESSION_CREATION,
     ACTION_UPDATE_CURRENT_SESSION,
     ACTION_INSPECT_SESSION,
     ACTION_UPDATE_ASSISTANT_SELECTION,
@@ -3616,6 +3618,59 @@ test("archiving a source-creation failure does not release resources that were n
   const result = await service.archiveSession("failed-source", {});
   assert.equal(result.ok, true);
   assert.deepEqual(calls, ["closing", "terminals", "archive"]);
+});
+
+async function answeredWithin(promise, ms, message) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// The held answer comes after two seconds; a request still waiting a second after that waited for the creation.
+const CREATION_ANSWER_MS = 3_000;
+
+test("a session the page creates answers within two seconds while its source is made, and its repeat joins it, then reads the session",
+  async () => {
+    await withTemporaryRoot(async (root) => {
+      const made = Promise.withResolvers();
+      const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(root), beforeCreate: () => made.promise });
+      const input = { requestId: "44444444-4444-4444-8444-444444444444", vibe64User: { username: "owner", role: "owner" } };
+      const first = await answeredWithin(harness.service.startSessionCreation(input), CREATION_ANSWER_MS,
+        "Creating a session waited for its source");
+      assert.equal(first.ok, true, JSON.stringify(first));
+      assert.equal(first.creating, true, JSON.stringify(first));
+      assert.equal(first.requestId, input.requestId);
+      assert.equal(first.waitingFor, "source");
+      const repeated = await answeredWithin(harness.service.startSessionCreation({ ...input, repeat: true }), CREATION_ANSWER_MS,
+        "The repeat waited for the creation");
+      assert.equal(repeated.creating, true, JSON.stringify(repeated));
+      assert.equal(harness.creationInputs.length, 1, "a repeat never creates a second session");
+      made.resolve();
+      const created = await answeredWithin(harness.service.startSessionCreation({ ...input, repeat: true }), CREATION_ANSWER_MS,
+        "The repeat after the creation ended waited");
+      assert.equal(created.ok, true, JSON.stringify(created));
+      assert.equal(created.sessionId, "session-1");
+      assert.equal(harness.creationInputs.length, 1);
+    });
+  });
+
+test("a repeated session creation this editor does not hold creates nothing and says to check the session list", async () => {
+  const harness = sessionCreationPolicyHarness();
+  const repeated = await harness.service.startSessionCreation({
+    repeat: true,
+    requestId: "55555555-5555-4555-8555-555555555555",
+    vibe64User: { username: "owner", role: "owner" }
+  });
+  assert.equal(repeated.ok, false, JSON.stringify(repeated));
+  assert.equal(repeated.code, "vibe64_session_creation_not_followed");
+  assert.match(repeated.error, /session list/u);
+  assert.equal(harness.runtimeCreations, 0);
+  assert.equal(harness.creationInputs.length, 0);
 });
 
 test("session creation resolves a partial selection before checking access", async () => {

@@ -247,7 +247,7 @@ POST /api/app/:slug/vibe64/pull-requests/:number/merge public app - vibe64.proje
 POST /api/app/:slug/vibe64/pull-requests/:number/ready public app - vibe64.project.pull-requests.ready
 POST /api/app/:slug/vibe64/pull-requests/:number/update-branch public app - vibe64.project.pull-requests.update-branch
 POST /api/app/:slug/vibe64/repository/remote public app - vibe64.project.repository.remote
-POST /api/app/:slug/vibe64/sessions public app - vibe64.sessions.create
+POST /api/app/:slug/vibe64/sessions public app - vibe64.sessions.create.start
 POST /api/app/:slug/vibe64/sessions/:sessionId/agent-attachments public app 525336576 -
 POST /api/app/:slug/vibe64/sessions/:sessionId/agent-goal public app - vibe64.terminals.agent-goal.update
 POST /api/app/:slug/vibe64/sessions/:sessionId/agent-message public app - vibe64.sessions.agent-message.send
