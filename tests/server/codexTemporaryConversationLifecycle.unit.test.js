@@ -8445,6 +8445,9 @@ test("same raw session delivery admission remains independent across project req
         messageId: "same-message"
       })
     ));
+    // The test closes its own two projects' sessions; the fixture's own close of session-1 has no project
+    // here, so it is skipped from now on, and a check that fails ends in its own words.
+    simulateControllerCrash();
     try {
       await withoutWaitingFor("alpha's held message delivery", () => betaMessageHold.entered);
     } finally {
@@ -8517,7 +8520,6 @@ test("same raw session delivery admission remains independent across project req
         });
       })
     ]);
-    simulateControllerCrash();
   });
 });
 
@@ -8718,6 +8720,9 @@ test("renewal cleanup cannot drain another project's notification queue", {
     });
     await notificationHold.entered;
 
+    // The test closes its own two projects' sessions; the fixture's own close of session-1 has no project
+    // here, so it is skipped from now on, and a check that fails ends in its own words.
+    simulateControllerCrash();
     try {
       await withoutWaitingFor("beta's held notification", async () => {
         await runWithProjectRequestContext(
@@ -8748,7 +8753,6 @@ test("renewal cleanup cannot drain another project's notification queue", {
       beta.context,
       () => controller.closeAllForSession(sessionId)
     );
-    simulateControllerCrash();
   });
 });
 
@@ -8844,6 +8848,9 @@ test("renewal cleanup cannot cancel another project's finalizing recovery timer"
       });
       await notificationHold.entered;
 
+      // The test closes its own two projects' sessions; the fixture's own close of session-1 has no project
+      // here, so it is skipped from now on, and a check that fails ends in its own words.
+      simulateControllerCrash();
       try {
         await withoutWaitingFor("beta's held notification", async () => {
           await runWithProjectRequestContext(
@@ -8885,7 +8892,6 @@ test("renewal cleanup cannot cancel another project's finalizing recovery timer"
         beta.context,
         () => controller.closeAllForSession(sessionId)
       );
-      simulateControllerCrash();
     });
   } finally {
     t.mock.timers.reset();
