@@ -1,9 +1,9 @@
 // A real Vibe64 server for serverStopBudget.integration.test.js, busy the way a workspace's editor is when a release
-// stops it: a request still waiting on a long command it started, a long command a background job started, and a
-// poller that starts a short command every 50 ms, as the page's and the editor's own work did on mercmobily's
+// stops it: a request still waiting on a long command it started, a long command a background job started, and a poller
+// that starts a short command every 50 ms, as the page's and the editor's own work did on a hosted workspace's
 // release-10 stop (24 Nov 2026), when the editor started twelve helper calls after SIGTERM and took 3.33 s to stop.
-// Every command goes through the editor's one command gateway. What happens is appended to events.log in the folder
-// the test gives (VIBE64_STOP_TEST_ROOT): "<epoch ms> <event> [<detail>]".
+// Every command goes through the editor's one command gateway. What happens is appended to events.log in the folder the
+// test gives (VIBE64_STOP_TEST_ROOT): "<epoch ms> <event> [<detail>]".
 import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";

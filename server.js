@@ -98,11 +98,11 @@ import {
 /** @typedef {ReturnType<typeof import("@jskit-ai/kernel/shared/capabilities").createCapabilityRuntime>} CapabilityRuntime */
 
 const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
-// A stop's budget. On release 10's move of mercmobily (24 Nov 2026) the old editor took 3.33 s to stop, starting helper
-// calls after SIGTERM, while the edge in front of it answered 502 and 503; the page now rides out the restart, and the
-// editor is gone in under a second. Requests in flight, and the commands that were running when the stop began, get
-// STOP_DRAIN_MS; then those connections close and those commands end. The stop's own work (each provider's shutdown)
-// has until DEFAULT_SHUTDOWN_TIMEOUT_MS, when whatever still runs is ended and the process exits.
+// A stop's budget. On release 10's move of a hosted workspace (24 Nov 2026) the old editor took 3.33 s to stop,
+// starting helper calls after SIGTERM, while the edge in front of it answered 502 and 503; the page now rides out the
+// restart, and the editor is gone in under a second. Requests in flight, and the commands that were running when the
+// stop began, get STOP_DRAIN_MS; then those connections close and those commands end. The stop's own work (each
+// provider's shutdown) has until DEFAULT_SHUTDOWN_TIMEOUT_MS, when whatever still runs is ended and the process exits.
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 850;
 
 function resolveShutdownTimeoutMs(value = DEFAULT_SHUTDOWN_TIMEOUT_MS) {

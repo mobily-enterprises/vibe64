@@ -1,8 +1,8 @@
 // The editor server's stop, as everything in its process sees it: one moment, when server.js's stop signal handler
 // begins, after which nothing starts new work. The command gateway refuses every command from then on, and work that
 // runs on its own schedule (a host's resource controller, the AI engines' closing fences, the planned-stop record)
-// begins its own stop at that moment instead of when the capability runtime's reverse order reaches its provider.
-// On release 10's move of mercmobily (24 Nov 2026) the old editor went on starting helper calls for 1.1 s after
+// begins its own stop at that moment instead of when the capability runtime's reverse order reaches its provider. On
+// release 10's move of a hosted workspace (24 Nov 2026) the old editor went on starting helper calls for 1.1 s after
 // SIGTERM and took 3.33 s to stop.
 //
 // One process runs one editor server at a time; each server's start resets the stop (resetServerStop), so a process
