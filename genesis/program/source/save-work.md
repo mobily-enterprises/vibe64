@@ -29,7 +29,12 @@ failure the notice mirrored leaves it once the record is no longer failed. The
 same reading feeds the session assistant's `vibe64-helper session status`
 (`repository`) and Colleague's work tool (`repositoryProblem`), so neither has
 to guess. The failure does not disable Save: Save stays unavailable only when
-there is nothing to save.
+there is nothing to save. A Save that starts and then finds nothing to save is
+not a failure: it records a ready `save-no-changes` note (code
+`vibe64_session_save_no_changes`, no `error`), so no tab flags it, and the view
+shows the server's words as a note, as it does for the same refusal before Save
+starts; callers such as automatic save and `vibe64-helper session save` still
+receive the refusal.
 
 For Genesis projects with declared generated artifacts, Save and Update
 regenerate them on the proposed tree (`regenerateDerivedArtifactTree`). Genesis
