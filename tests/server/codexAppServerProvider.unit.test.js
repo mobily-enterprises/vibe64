@@ -78,6 +78,34 @@ async function withTemporaryDirectory(callback) {
   }
 }
 
+// A Helper start exports its model catalogue before it launches anything: the host's Codex launcher runs `debug models
+// --bundled` in the Helper's own home and environment. This file's host has runtime packs with an empty root, so a test
+// that starts a Helper installs a stand-in launcher that answers only that export with a one-model catalogue, as the
+// Colleague's controlled Codex does, and records each call; it is removed when the test ends.
+async function withManagedCodexCatalogueExport(callback) {
+  const managedBin = path.dirname(MANAGED_CODEX_COMMAND);
+  const callsPath = path.join(managedBin, "catalogue-exports.jsonl");
+  await mkdir(managedBin, { recursive: true });
+  await writeFile(MANAGED_CODEX_COMMAND, [
+    `#!${process.execPath}`,
+    "const args = process.argv.slice(2);",
+    `process.getBuiltinModule("node:fs").appendFileSync(${JSON.stringify(callsPath)}, JSON.stringify({ args, env: process.env }) + "\\n");`,
+    "if (args[0] !== \"debug\" || args[1] !== \"models\" || !args.includes(\"--bundled\")) process.exit(2);",
+    "process.stdout.write(JSON.stringify({ models: [{ slug: \"test-model\", priority: 0 }] }));",
+    ""
+  ].join("\n"), { mode: 0o755 });
+  try {
+    return await callback({
+      async exports() {
+        const lines = (await readFile(callsPath, "utf8").catch(() => "")).split("\n").filter(Boolean);
+        return lines.map((line) => JSON.parse(line));
+      }
+    });
+  } finally {
+    await rm(managedBin, { force: true, recursive: true });
+  }
+}
+
 async function withRuntimeNamespace(namespace, callback) {
   const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
   if (namespace) {
@@ -2567,7 +2595,7 @@ test("codex provider starts a host-native app-server", async () => {
 });
 
 test("codex helper provider starts from a private empty home and strips project execution inputs", async () => {
-  await withTemporaryDirectory(async (runtimeDir) => {
+  await withManagedCodexCatalogueExport((managedCodex) => withTemporaryDirectory(async (runtimeDir) => {
     const toolHomeSource = path.join(runtimeDir, "canonical-account-home");
     const projectWorkdir = path.join(runtimeDir, "project", "source");
     await Promise.all([
@@ -2691,13 +2719,31 @@ test("codex helper provider starts from a private empty home and strips project 
       "VIBE64_CODEX_APP_SERVER_RUNTIME_TOKEN"
     ]);
 
+    // The catalogue export ran before the launch, in the same private home and stripped environment.
+    const catalogueExports = await managedCodex.exports();
+    assert.notEqual(catalogueExports.length, 0);
+    for (const { env } of catalogueExports) {
+      assert.equal(env.HOME, helperHome);
+      assert.equal(env.CODEX_HOME, helperHome);
+      for (const secretName of [
+        "DB_PASSWORD",
+        "OPENAI_API_KEY",
+        "PROJECT_CONFIG_SECRET",
+        "PROJECT_HOST_SECRET",
+        "SESSION_DB_SECRET",
+        "VIBE64_PROJECT_SECRET"
+      ]) {
+        assert.equal(Object.hasOwn(env, secretName), false, secretName);
+      }
+    }
+
     const stored = await readFile(path.join(runtimeDir, "runtime.json"), "utf8");
     assert.doesNotMatch(stored, /canonical-account-home|access-token|refresh-token|api-key/u);
-  });
+  }));
 });
 
 test("codex helper provider retires a detached child when startup never becomes ready", async () => {
-  await withTemporaryDirectory(async (root) => {
+  await withManagedCodexCatalogueExport(() => withTemporaryDirectory(async (root) => {
     const runtimeDir = path.join(root, "codex-app-server-helper-unready");
     let child = null;
     try {
@@ -2754,11 +2800,11 @@ test("codex helper provider retires a detached child when startup never becomes 
         }
       }
     }
-  });
+  }));
 });
 
 test("codex helper provider retires a started child when metadata persistence fails", async () => {
-  await withTemporaryDirectory(async (root) => {
+  await withManagedCodexCatalogueExport(() => withTemporaryDirectory(async (root) => {
     const runtimeDir = path.join(root, "codex-app-server-helper-metadata");
     let child = null;
     try {
@@ -2835,7 +2881,7 @@ test("codex helper provider retires a started child when metadata persistence fa
         }
       }
     }
-  });
+  }));
 });
 
 test("shared Codex login identity accepts missing account metadata and survives refresh and restart", async () => {
