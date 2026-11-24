@@ -246,12 +246,16 @@ login environment cannot name `HOME`, `LOGNAME`, `PATH`, `TMPDIR`, `USER` or
 `XDG_RUNTIME_DIR`, which the resolver and the helper already own, and a host
 profile that does is refused.
 The exec helper gives every command but a staging account's the workspace's
-temporary folder as `TMPDIR` (`packages/vibe64-execution/src/host/commandEnvironment.js`),
-and, because a JVM ignores `TMPDIR`, `JAVA_TOOL_OPTIONS` starting with
-`-Djava.io.tmpdir` and `-Djna.tmpdir` set to it: the native libraries SQLite's JDBC
-driver, Netty, Jansi and JNA unpack would otherwise go to `/tmp` and `~/.cache`,
-which cannot start programs on a host whose `/tmp` and homes are `noexec`. The
-caller's own `JAVA_TOOL_OPTIONS` follow, so a `-D` it names wins.
+temporary folder as `TMPDIR`, and a staging account's its own temporary
+folder, `app/tmp` in its area beside its home
+(`packages/vibe64-execution/src/host/commandEnvironment.js`), and, because a
+JVM ignores `TMPDIR`, every command `JAVA_TOOL_OPTIONS` starting with
+`-Djava.io.tmpdir` and `-Djna.tmpdir` set to it (`javaTemporaryOptions`): the
+native libraries SQLite's JDBC driver, Netty, Jansi and JNA unpack would
+otherwise go to `/tmp` and `~/.cache`, which cannot start programs on a host
+whose `/tmp` and homes are `noexec`. The caller's own `JAVA_TOOL_OPTIONS`
+follow, so a `-D` it names wins; for a staging account's command run with its
+release's Env file, the Env file's own follow, once.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
 account home. Relative directories are rejected before starting a process.
@@ -498,9 +502,11 @@ lasts and the host's system uid range is small. Through
 directories it opened itself, never following a link, it makes the area: root's
 directories down to the project's (`0711`), the daemon's `handover/` the
 application's group may read (`2750`), and the application's own `app/` with
-its `home/` and `database/` (`0700`), which the daemon may search for a database
-by name but never list. An existing directory must still have the owner it was
-given; nothing is repaired. `retire` refuses while a staging unit of the
+its `home/`, its temporary folder `tmp/`, and `database/` (`0700`), which the
+daemon may search for a database by name but never list. An existing directory
+must still have the owner it was given, except `home/` and `tmp/`, which the
+application may make whatever it likes and root never opens again; nothing is
+repaired. `retire` refuses while a staging unit of the
 account is still installed (it could start it again), while its `database/`
 still holds anything (root never removes a database), or while anything runs
 as it.
@@ -543,7 +549,8 @@ command. That command runs as the account, finds the staging unit root
 installed for it (the running one), and starts the client's command, bash
 (`--noprofile --norc`, and no `BASH_ENV` or `ENV` from the login's
 environment) or an SFTP server in that release's folder with its Env file, the
-unit's PATH and runtime pack folder and, for a release whose start script runs the command it is
+unit's PATH, runtime pack folder and temporary folder (with a JVM's options naming it, the Env file's own
+after them) and, for a release whose start script runs the command it is
 given, that script's runtimes and Serve defaults; it adds `staging-logs`,
 `staging-status`, `staging-restart` and `staging-enter`. `activity`
 reads two records for the account, each its newest 500 entries, and says when
@@ -585,8 +592,9 @@ Any command may run there, from the application's own area (`app/` or
 check. The editor cannot enter that area, so it checks such a directory against
 the request's allowed roots without resolving links, and the helper resolves it
 as root. It runs as the account and its own group alone, with umask `0077`, the
-runner under `setpriv --no-new-privs`, and a sandbox: no new privileges, a
-private `/tmp` as its `TMPDIR`, the whole file system read-only except its area
+runner under `setpriv --no-new-privs`, and a sandbox: no new privileges, its
+own `app/tmp` as its `TMPDIR` (with a private `/tmp` beside it, which may be
+`noexec`), the whole file system read-only except its area
 and its receipt, no access to homes or to the host's settings folder (with
 its people and applications), no other users' processes, no devices beyond
 the standard ones, no System V IPC or `/dev/shm` shared with others, no kernel settings,
@@ -672,7 +680,8 @@ its environment file and start script the daemon's own
 group may read (and run) but not change. The unit runs as the account and its
 own group with umask `0077`, the helper under `setpriv --no-new-privs`, in the
 same sandbox as the application's executions with its area as the only
-writable place, a private `/tmp`, and one listening port: `SocketBindAllow=`
+writable place, its `app/tmp` there as its `TMPDIR` (`Environment=TMPDIR=`,
+with a private `/tmp` beside it), and one listening port: `SocketBindAllow=`
 names its loopback port (1024–65535) and `SocketBindDeny=any` refuses every
 other TCP port, port 0 included, so it can never take over another service's
 port while that service is down. UDP binds stay allowed: a UDP client (Node's
@@ -680,6 +689,20 @@ port while that service is down. UDP binds stay allowed: a UDP client (Node's
 no port rule can name, and no host service listens on an unprivileged UDP
 port. The staging service still starts at boot and requires its managed
 databases.
+
+`/tmp`, a private one included, may be `noexec` (mobilynet mounts it so), so a
+tool that unpacks a program into `TMPDIR` and runs it would fail there; the
+staging area lets programs start, and is the application's own, so its
+temporary folder there opens nothing to anyone else. At every start the
+helper's `run-staging-unit`, as the account, makes that folder afresh, as a
+private `/tmp` is: it removes `app/tmp` (a link the application planted there
+removed, never followed), makes it again (`0700`), and gives a JVM options
+naming it before the Env file's own. It does so only where the unit's `TMPDIR`
+is exactly `tmp` beside the account's home in its `app/` folder, never a folder
+an Env file names. What it cannot remove (a folder the application made
+read-only) stays, said in the service's log, and the start goes on. A unit
+written before keeps `TMPDIR=/tmp` and starts as it did until the helper
+writes it again (its next publish).
 
 Known, accepted limit: a finite execution as an application (Prepare, Build,
 Migrate, release file work) has no bind limits, so it may listen on any TCP

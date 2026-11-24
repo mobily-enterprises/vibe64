@@ -287,7 +287,9 @@ function stagingUnitFile({
     "SocketBindDeny=any",
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
     ...serviceEnvironmentLines({ runtimePackRoot, servicePath }),
-    "Environment=TMPDIR=/tmp",
+    // Its own temporary folder in its area, beside its home: /tmp, its private one included, may be noexec, so tools
+    // that start programs they unpack there would fail. runStagingUnit makes it afresh at every start.
+    `Environment=TMPDIR=${systemdUnitSafeValue(path.join(user.stagingAccount.appRoot, "tmp"))}`,
     // The service's own user loads its environment at every start; see
     // runStagingUnit. setpriv holds even where a drop-in switches the
     // unit's NoNewPrivileges= off.

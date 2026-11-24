@@ -444,21 +444,25 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   }
   env.LOGNAME = targetUser.username;
   env.USER = targetUser.username;
-  // An application has its own private temporary directory, and no access to
-  // the workspace's. A session's AI commands have the session's own.
+  // An application has its own temporary folder in its area, beside its home (its unit's TMPDIR too), and no
+  // access to the workspace's. A session's AI commands have the session's own.
   env.TMPDIR = targetUser.stagingAccount
-    ? "/tmp"
+    ? path.join(path.dirname(targetUser.home), "tmp")
     : sessionTempDirectory(input.TMPDIR, targetUser, ownerUsername) || workspaceTempRoot(ownerUsername);
-  // A JVM ignores TMPDIR: its temporary files, among them the native libraries a Java library unpacks to load
-  // (SQLite's JDBC driver, Netty, Jansi), go to java.io.tmpdir, /tmp, and JNA's to ~/.cache. Where /tmp and the homes
-  // are noexec (mobilynet) each load fails with "failed to map segment from shared object". Every JVM a command
-  // starts, Maven's and Gradle's forked ones too, reads JAVA_TOOL_OPTIONS; the caller's options come after these,
-  // so a -D they name wins.
-  if (!targetUser.stagingAccount) {
-    env.JAVA_TOOL_OPTIONS = [`-Djava.io.tmpdir=${env.TMPDIR}`, `-Djna.tmpdir=${env.TMPDIR}`, env.JAVA_TOOL_OPTIONS]
-      .filter(Boolean).join(" ");
-  }
+  env.JAVA_TOOL_OPTIONS = javaTemporaryOptions(env);
   return env;
+}
+
+/**
+ * A JVM ignores TMPDIR: its temporary files, among them the native libraries a Java library unpacks to load
+ * (SQLite's JDBC driver, Netty, Jansi), go to java.io.tmpdir, /tmp, and JNA's to ~/.cache. Where /tmp and the homes
+ * are noexec (mobilynet) each load fails with "failed to map segment from shared object". Every JVM a command
+ * starts, Maven's and Gradle's forked ones too, reads JAVA_TOOL_OPTIONS: these name the environment's TMPDIR, and its
+ * own JAVA_TOOL_OPTIONS come after them, so a -D they name wins.
+ * @param {{ JAVA_TOOL_OPTIONS?: string, TMPDIR: string }} env
+ */
+function javaTemporaryOptions(env = {}) {
+  return [`-Djava.io.tmpdir=${env.TMPDIR}`, `-Djna.tmpdir=${env.TMPDIR}`, env.JAVA_TOOL_OPTIONS].filter(Boolean).join(" ");
 }
 
 export {
@@ -467,6 +471,7 @@ export {
   helperChildEnv,
   helperCommandPath,
   helperSettings,
+  javaTemporaryOptions,
   managedExecutionRuntimeBase,
   parseEnvironmentFile,
   readEnvironmentFile,

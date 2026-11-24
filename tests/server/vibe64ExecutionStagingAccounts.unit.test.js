@@ -127,7 +127,8 @@ test("each project of a workspace gets its own registered account and area", asy
     assert.deepEqual(await directory(level), { directory: true, gid: GID, mode: 0o711, uid: UID }, level);
   }
   assert.deepEqual(await directory(account.handoverRoot), { directory: true, gid: GID, mode: 0o2750, uid: UID });
-  for (const own of [account.appRoot, account.home, account.databaseRoot]) {
+  // Its temporary folder, its TMPDIR, is its own too, beside its home in its area, where programs may start.
+  for (const own of [account.appRoot, account.home, path.join(account.appRoot, "tmp"), account.databaseRoot]) {
     assert.deepEqual(await directory(own), { directory: true, gid: GID, mode: 0o700, uid: UID }, own);
   }
   assert.equal(host.grants.length, 1, "the daemon may search the database directory");
@@ -313,11 +314,13 @@ test("an area entry the helper did not make is refused, never followed or repair
     await rename(`${entry}.moved`, entry);
   }
   assert.deepEqual(await readdir(elsewhere), []);
-  // The application may make its own home whatever it likes.
-  await rm(account.home, { recursive: true });
-  await symlink(elsewhere, account.home);
-  assert.doesNotThrow(() => host.ensure("shop"));
-  assert.deepEqual(await readdir(elsewhere), []);
+  // The application may make its own home and temporary folder whatever it likes.
+  for (const own of [account.home, path.join(account.appRoot, "tmp")]) {
+    await rm(own, { recursive: true });
+    await symlink(elsewhere, own);
+    assert.doesNotThrow(() => host.ensure("shop"), own);
+    assert.deepEqual(await readdir(elsewhere), [], own);
+  }
 });
 
 test("retiring a project removes its application, its registration and its whole area", async (t) => {
@@ -520,24 +523,30 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   assert.deepEqual(accountUnitLines({ username: "alice" }),
     ["User=alice", "Group=vibe64", "SupplementaryGroups=nix-users", "UMask=0007"]);
 
-  const env = helperChildEnv({ HOME: "/elsewhere", TMPDIR: "/elsewhere" }, user, daemonUser("test"), "vibe64-command");
+  // Its temporary folder is its own, in its area beside its home, where programs may start: /tmp, its private one
+  // included, may be noexec (mobilynet's is), and so may the folder a JVM unpacks native libraries to by default.
+  const temporaryFolder = path.join(account.appRoot, "tmp");
+  const env = helperChildEnv({ HOME: "/elsewhere", TMPDIR: "/elsewhere", JAVA_TOOL_OPTIONS: "-Xmx256m" }, user,
+    daemonUser("test"), "vibe64-command");
   assert.equal(env.HOME, account.home);
-  assert.equal(env.TMPDIR, "/tmp");
-  assert.equal(env.JAVA_TOOL_OPTIONS, undefined, "an application's JVM keeps its own private /tmp");
+  assert.equal(env.TMPDIR, temporaryFolder);
+  assert.equal(env.JAVA_TOOL_OPTIONS, `-Djava.io.tmpdir=${temporaryFolder} -Djna.tmpdir=${temporaryFolder} -Xmx256m`);
 
   // The runner loads the staging environment as the application, keeping its
-  // private temporary directory.
+  // own temporary folder over one its Env file names, and the Env file's own JVM options after the folder's, once.
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-application-runner-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const environmentFile = path.join(root, "environment");
-  await writeFile(environmentFile, "RELEASE_KEY=from-file\nTMPDIR=/from-file\n", { mode: 0o640 });
+  await writeFile(environmentFile, "RELEASE_KEY=from-file\nTMPDIR=/from-file\nJAVA_TOOL_OPTIONS=-Xmx64m\n", { mode: 0o640 });
   const payloadPath = path.join(root, "command.json");
   await writeFile(payloadPath, JSON.stringify({
     stagingAccount: true,
-    args: ["-e", "process.stdout.write(JSON.stringify({key:process.env.RELEASE_KEY,tmp:process.env.TMPDIR,umask:process.umask()}))"],
+    args: ["-e", "process.stdout.write(JSON.stringify({java:process.env.JAVA_TOOL_OPTIONS,key:process.env.RELEASE_KEY," +
+      "tmp:process.env.TMPDIR,umask:process.umask()}))"],
     command: process.execPath,
     cwd: root,
-    env: { HOME: account.home, PATH: "/usr/bin:/bin", USER: account.username },
+    // As root hands it over.
+    env: helperChildEnv({ PATH: "/usr/bin:/bin" }, user, daemonUser("test"), "vibe64-command"),
     executionId: randomUUID(),
     stagingEnvironmentFile: environmentFile,
     schema: "vibe64.managed-execution.command",
@@ -547,7 +556,8 @@ test("an application's execution runs as itself in its sandbox, with its own tem
     cwd: root, env: {}, timeout: 5000
   });
   // Its files are its own alone, as its unit's UMask= says.
-  assert.deepEqual(JSON.parse(stdout), { key: "from-file", tmp: "/tmp", umask: 0o077 });
+  assert.deepEqual(JSON.parse(stdout), { java: `-Djava.io.tmpdir=${temporaryFolder} -Djna.tmpdir=${temporaryFolder} -Xmx64m`,
+    key: "from-file", tmp: temporaryFolder, umask: 0o077 });
 });
 
 test("a staging account's execution is finite, and its receipt sits where only root adds receipts", async (t) => {
@@ -654,7 +664,7 @@ test("a staging service unit runs as its application in its sandbox, listening o
     "NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ReadWritePaths=/area/app /area/database",
     "ProtectHome=yes", "ProtectProc=invisible", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
     `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "SocketBindAllow=tcp:4100", "SocketBindAllow=udp", "SocketBindDeny=any",
-    "Environment=PATH=/packs/bin:/usr/bin", "Environment=TMPDIR=/tmp", "PrivateDevices=yes", "PrivateIPC=yes", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
+    "Environment=PATH=/packs/bin:/usr/bin", "Environment=TMPDIR=/area/app/tmp", "PrivateDevices=yes", "PrivateIPC=yes", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
     "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK", "SystemCallArchitectures=native",
     "SystemCallFilter=@system-service", "SystemCallErrorNumber=EPERM",
     "WorkingDirectory=/area/app/releases/r1/workspace", "Requires=vibe64-managed-test-mariadb.service",

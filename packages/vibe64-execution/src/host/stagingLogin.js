@@ -21,7 +21,7 @@ import {
   installedStagingUnits,
   registeredStagingAccount
 } from "./stagingAccounts.js";
-import { readEnvironmentFile } from "./commandEnvironment.js";
+import { javaTemporaryOptions, readEnvironmentFile } from "./commandEnvironment.js";
 import {
   resolveOsUser,
   resolveOwnerUser,
@@ -150,8 +150,8 @@ function unitValue(lines = [], prefix = "") {
 
 /**
  * The staging unit root installed for the account: the running one, or the last of its own when none runs. It
- * names the release's folder, its Env file and start script, and the PATH and runtime pack folder its service starts
- * with.
+ * names the release's folder, its Env file and start script, and the PATH, runtime pack folder and temporary folder
+ * its service starts with.
  * @param {string} username
  */
 function runningStagingUnit(username, {
@@ -171,14 +171,24 @@ function runningStagingUnit(username, {
     path: unitValue(unit.lines, "Environment=PATH="),
     runtimePackRoot: unitValue(unit.lines, RUNTIME_PACK_ROOT_UNIT_LINE),
     startScript: unitText(started[2]),
+    tmpdir: unitValue(unit.lines, "Environment=TMPDIR="),
     workingDirectory: unitValue(unit.lines, "WorkingDirectory=")
   };
 }
 
 // The runtime pack folder the unit names beside its PATH, by which that PATH's tool wrappers find their packs, so a login
-// and staging-enter run npm and the rest as the service does; none when the unit names none.
-function unitRuntimePackEnvironment(unit = {}) {
-  return unit.runtimePackRoot ? { [RUNTIME_PACK_ROOT_ENV]: unit.runtimePackRoot } : {};
+// and staging-enter run npm and the rest as the service does, and its temporary folder, where programs may start
+// (/tmp may not let them); none of either when the unit names none.
+function unitServiceEnvironment(unit = {}) {
+  return {
+    ...(unit.runtimePackRoot ? { [RUNTIME_PACK_ROOT_ENV]: unit.runtimePackRoot } : {}),
+    ...(unit.tmpdir ? { TMPDIR: unit.tmpdir } : {})
+  };
+}
+
+// A JVM ignores TMPDIR, so where the unit names one its options name the folder, the release's own after them.
+function withJavaTemporaryOptions(env = {}, unitTmpdir = "") {
+  return unitTmpdir ? { ...env, JAVA_TOOL_OPTIONS: javaTemporaryOptions(env) } : env;
 }
 
 // staging-enter, staging-logs, staging-restart and staging-status, as functions bash imports.
@@ -222,9 +232,9 @@ function recordStagingLogin(event = {}) {
 
 /**
  * What a staging login's command runs with: the login's own environment, without a file a shell would read before the
- * command (which only that environment could name), then the PATH and runtime pack folder the service starts with, as
- * its unit names them, the release's Env file, the staging-* functions and the unit's name.
- * @param {{ environmentFile: string, name: string, path: string, runtimePackRoot?: string }} unit
+ * command (which only that environment could name), then the PATH, runtime pack folder and temporary folder the service
+ * starts with, as its unit names them, the release's Env file, the staging-* functions and the unit's name.
+ * @param {{ environmentFile: string, name: string, path: string, runtimePackRoot?: string, tmpdir?: string }} unit
  * @param {{ env?: Record<string, string>, helperPath?: string, readEnvironment?: (file: string) => Record<string, string> }} options
  */
 function stagingLoginEnvironment(unit, { env = process.env, helperPath = "", readEnvironment = readEnvironmentFile } = {}) {
@@ -232,10 +242,12 @@ function stagingLoginEnvironment(unit, { env = process.env, helperPath = "", rea
   delete inherited.BASH_ENV;
   delete inherited.ENV;
   return {
-    ...inherited,
-    PATH: unit.path || env.PATH || "",
-    ...unitRuntimePackEnvironment(unit),
-    ...readEnvironment(unit.environmentFile),
+    ...withJavaTemporaryOptions({
+      ...inherited,
+      PATH: unit.path || env.PATH || "",
+      ...unitServiceEnvironment(unit),
+      ...readEnvironment(unit.environmentFile)
+    }, unit.tmpdir),
     ...stagingShellFunctions(helperPath),
     VIBE64_STAGING_UNIT: unit.name
   };
@@ -369,7 +381,7 @@ function stagingEnterCommand({
       LANG: env.LANG || "C.UTF-8",
       LOGNAME: user.username,
       PATH: unit.path || env.PATH || "",
-      ...unitRuntimePackEnvironment(unit),
+      ...unitServiceEnvironment(unit),
       SHELL: STAGING_SHELL[0],
       TERM: env.TERM || "dumb",
       USER: user.username,
@@ -471,6 +483,7 @@ function stagingEnterArgv(command = [], startScript = "") {
  */
 function runStagingEnter([mountNamespace = "", environmentFile = "", startScript = "", workingDirectory = "", ...command] = [], {
   env = process.env,
+  execve = (file, args, environment) => process.execve(file, args, environment),
   link = (file) => readlinkSync(file)
 } = {}) {
   // Root starts it already as the account; inside the application's own user namespace that may be uid 0 there.
@@ -483,7 +496,8 @@ function runStagingEnter([mountNamespace = "", environmentFile = "", startScript
   }
   process.chdir(workingDirectory);
   const [file, ...args] = stagingEnterArgv(command, startScriptRunsArguments(startScript) ? startScript : "");
-  process.execve(file, [file, ...args], { ...env, ...readEnvironmentFile(environmentFile) });
+  // Root passed TMPDIR only from the unit (stagingEnterCommand).
+  execve(file, [file, ...args], withJavaTemporaryOptions({ ...env, ...readEnvironmentFile(environmentFile) }, env.TMPDIR));
 }
 
 export {
