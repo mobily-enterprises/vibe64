@@ -4,7 +4,7 @@ import getPort from "get-port";
 import {
   resolveRuntimeEnv
 } from "./server/lib/runtimeEnv.js";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -55,6 +55,8 @@ import {
   configureCodexAttachmentHostRoot
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { configureVibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
+import { readVibe64WorkingTurns } from "@local/vibe64-runtime/server/workingTurns";
+import { recordUntracedStops, startCrashWatch } from "@local/vibe64-core/server/crashWatch";
 import {
   BASELINE_LEDGER_EXISTS,
   BASELINE_STATE_WITHOUT_LEDGER,
@@ -128,6 +130,7 @@ function forceCloseServerConnections(server) {
  * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
  * @param {() => unknown} [dependencies.closeRuntimeTerminals]
  * @param {(code: number) => void} [dependencies.exitProcess]
+ * @param {(error: Error) => unknown} [dependencies.onStopFailed] Records a stop that failed or overran, before the exit.
  * @param {typeof setTimeout} [dependencies.setTimeoutFn]
  * @param {number} [dependencies.shutdownTimeoutMs]
  */
@@ -138,6 +141,7 @@ function createSignalShutdownHandler({
   clearTimeoutFn = clearTimeout,
   closeRuntimeTerminals = () => closeTerminalSessionsForNamespacePrefix(""),
   exitProcess = process.exit.bind(process),
+  onStopFailed = () => {},
   setTimeoutFn = setTimeout,
   shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS
 }) {
@@ -188,6 +192,10 @@ function createSignalShutdownHandler({
         pendingOperations: [...pendingOperations],
         ...progressFields()
       }, "Vibe64 server shutdown timed out; forcing process exit.");
+      onStopFailed(Object.assign(
+        new Error(`Vibe64 did not stop within ${timeoutMs} ms; still running: ${[...pendingOperations].join(", ") || "nothing named"}.`),
+        { code: "vibe64_shutdown_timeout" }
+      ));
       forceCloseServerConnections(app.server);
       exitOnce(1);
     }, timeoutMs);
@@ -246,6 +254,7 @@ function createSignalShutdownHandler({
         failedOperations: (error?.errors || []).map(({ operation }) => operation).filter(Boolean),
         ...progressFields()
       }, "Failed to stop vibe64 server cleanly.");
+      onStopFailed(error);
       exitOnce(1);
     }
   };
@@ -271,6 +280,16 @@ async function withProcessEnv(values, fn) {
     return await fn();
   } finally {
     assign(previous);
+  }
+}
+
+/** What a crash record names as running: the app's package name and version, such as vibe64@0.1.81. */
+function serverVersion(appRoot) {
+  try {
+    const { name, version } = JSON.parse(readFileSync(path.join(appRoot, "package.json"), "utf8"));
+    return `${name || "vibe64"}@${version || "unknown"}`;
+  } catch {
+    return "vibe64@unknown";
   }
 }
 
@@ -371,6 +390,18 @@ async function createServer(options = {}) {
   }).catch(error => {
     if (error.code !== BASELINE_LEDGER_EXISTS && error.code !== BASELINE_STATE_WITHOUT_LEDGER) throw error;
   });
+  // The previous server's end, before anything starts that resumes its work: a crash it could not record (SIGKILL,
+  // an out-of-memory kill, power loss) is recorded now, and the turns it left working are counted.
+  await recordUntracedStops({
+    systemRoot,
+    countActiveTurns: async () => (await readVibe64WorkingTurns({ systemRoot })).length,
+    logger: app.log
+  }).catch((error) => logOperationalEvent(app.log, "error", {
+    component: "server-lifecycle",
+    error,
+    event: "vibe64.server.crash_records_unreadable"
+  }, "Could not check how the previous Vibe64 server ended."));
+  app.vibe64SystemRoot = systemRoot;
   // Live session state (agent command helpers, pending uploads) lives below the
   // system root for the life of the process, so every caller resolves it alike.
   const attachmentsRoot = configureCodexAttachmentHostRoot(systemRoot, process.env);
@@ -405,6 +436,7 @@ async function createServer(options = {}) {
     explicitRoot: options.appRoot,
     fallbackRoot: MODULE_APP_ROOT
   });
+  app.vibe64AppRoot = appRoot;
   const projectContext = configureStudioProjectContext({
     cwd: process.cwd(),
     env: runtimeEnv,
@@ -555,12 +587,19 @@ async function startServer(options = {}) {
     startupSlug: options.startupSlug,
     targetRoot: requestedTargetRoot
   });
+  // Started below once the server listens: from then on, its process records its own abnormal end.
+  /** @type {ReturnType<typeof startCrashWatch> | null} */
+  let crashWatch = null;
+  let stoppingOnSignal = false;
   const closeAndExit = createSignalShutdownHandler({
     app,
     capabilityRuntime: app.vibe64CapabilityRuntime,
     beforeClose() {
+      stoppingOnSignal = true;
       app.browserLifecycleMonitor.stop();
     },
+    // The exit ends the watch: cleanly on code 0, and a failed stop has its record by then.
+    onStopFailed: (error) => crashWatch?.recordStopFailure(error),
     shutdownTimeoutMs: options.shutdownTimeoutMs
   });
   process.once("SIGINT", closeAndExit);
@@ -568,6 +607,8 @@ async function startServer(options = {}) {
   app.addHook("onClose", async () => {
     process.off("SIGINT", closeAndExit);
     process.off("SIGTERM", closeAndExit);
+    // A server closed without a stop signal (a caller's app.close()) ends cleanly here.
+    if (!stoppingOnSignal) crashWatch?.stop();
   });
   if (options.browserLifecycleShutdown === true) {
     app.browserLifecycleMonitor.enableShutdown(closeAndExit);
@@ -607,6 +648,11 @@ async function startServer(options = {}) {
       transport: "tcp"
     };
   }
+  crashWatch = startCrashWatch({
+    systemRoot: app.vibe64SystemRoot,
+    version: serverVersion(app.vibe64AppRoot),
+    logger: app.log
+  });
   const publicOrigin = String(options.publicOrigin || "").trim();
   const browserUrl = publicOrigin
     ? browserUrlForPublicOrigin(publicOrigin, {
