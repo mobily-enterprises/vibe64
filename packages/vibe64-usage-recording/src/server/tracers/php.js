@@ -1,7 +1,25 @@
 import { statSync } from "node:fs";
 import path from "node:path";
 
+import { runtimePackBinPaths } from "@local/vibe64-execution/server";
 import { PHP_USAGE_INI_NAME, phpUsageBuildCommand, phpUsageScanDirectory } from "../../../runtime/php/module.js";
+
+function isFile(file) {
+  try {
+    return statSync(file).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * On a host that supplies the runtimes (its runtime packs) a person cannot install PHP's development package, so the
+ * module can be built only where the host's PHP pack has php-config.
+ */
+function hostPhpWithoutDevelopmentFiles() {
+  const folders = runtimePackBinPaths("php");
+  return folders.length > 0 && !folders.some((folder) => isFile(path.join(folder, "php-config")));
+}
 
 /**
  * PHP records through a small extension (runtime/php/ext) built once per PHP
@@ -16,14 +34,17 @@ function prepare() {
       reason: `PHP recording cannot use a module folder whose path contains "${path.delimiter}": ${scanDirectory}`
     };
   }
-  try {
-    if (statSync(path.join(scanDirectory, PHP_USAGE_INI_NAME)).isFile()) {
-      // The trailing separator keeps PHP's own scan directory, and with it the
-      // extensions PHP is installed with, when nothing else is set.
-      return { available: true, environment: {}, prependEnvironment: { PHP_INI_SCAN_DIR: `${scanDirectory}${path.delimiter}` } };
-    }
-  } catch {
-    // Not built yet.
+  if (isFile(path.join(scanDirectory, PHP_USAGE_INI_NAME))) {
+    // The trailing separator keeps PHP's own scan directory, and with it the
+    // extensions PHP is installed with, when nothing else is set.
+    return { available: true, environment: {}, prependEnvironment: { PHP_INI_SCAN_DIR: `${scanDirectory}${path.delimiter}` } };
+  }
+  if (hostPhpWithoutDevelopmentFiles()) {
+    return {
+      available: false,
+      reason: "PHP usage recording isn't available on this workspace yet: its PHP comes without the development files " +
+        "(phpize and php-config) the recording module is built with."
+    };
   }
   return {
     available: false,

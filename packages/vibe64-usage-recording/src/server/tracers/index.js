@@ -7,7 +7,7 @@ import python from "./python.js";
 
 // Each runtime tracer module default-exports:
 //   { runtime, label, prepare({ recordingDirectory, sourceRoot, recordingId, targetKind }) }
-// prepare is pure (no I/O beyond stat of its own runtime files) and returns
+// prepare is pure (no I/O beyond stats of its own runtime files and the host's runtime packs) and returns
 //   { available: true, environment, prependEnvironment, nodePreload? }
 // or { available: false, reason }.
 // - environment values are set as given;
