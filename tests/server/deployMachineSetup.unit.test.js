@@ -58,7 +58,8 @@ async function repository(root, files) {
   await git(["init", "-q", "-b", "main"]);
   for (const [file, content] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(root, file)), { recursive: true });
-    if (content?.link) await symlink(content.link, path.join(root, file));
+    // A string has a .link of its own (String.prototype.link), so only a plain object names a link.
+    if (typeof content === "object" && !Buffer.isBuffer(content)) await symlink(content.link, path.join(root, file));
     else await writeFile(path.join(root, file), content);
   }
   await git(["add", "-A"]);
