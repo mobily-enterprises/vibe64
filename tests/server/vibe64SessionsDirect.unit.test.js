@@ -4858,6 +4858,34 @@ test("integration continuation action forwards only request identity and authent
   assert.deepEqual(events, [["session-1", { reason: "integration-setup-completed", session: null }]]);
 }));
 
+// Continue in chat after an integration setup waits for the session's workspace setup before it sends the
+// continuation, which can outlast the hosted edge's minute.
+test("an integration continuation answers within two seconds while the workspace setup runs, and its repeat joins it",
+  async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
+    const runtime = {};
+    const calls = [];
+    const setup = Promise.withResolvers();
+    const sessions = createService({
+      project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
+      setupRunner: { isRunning: () => true, wait: () => setup.promise },
+      terminals: { async resumeIntegrationContinuation(...args) {
+        calls.push(args.slice(0, 2));
+        return { ok: true, integrationSetup: { outcome: "completed", continuation: { status: "accepted" } } };
+      } },
+      publishSessionChanged: async () => {}
+    });
+    const input = { turnId: "000001", requestId: "c".repeat(64) };
+    const first = await answeredWithin(sessions.resumeIntegrationContinuation("session-1", input), CREATION_ANSWER_MS,
+      "The continuation waited for the workspace setup");
+    assert.deepEqual(first, { ok: true, resuming: true, sessionId: "session-1", turnId: "000001", waitingFor: "workspace-setup" });
+    const repeated = sessions.resumeIntegrationContinuation("session-1", input);
+    setup.resolve();
+    const resumed = await answeredWithin(repeated, CREATION_ANSWER_MS, "The repeat waited past the continuation");
+    assert.equal(resumed.ok, true, JSON.stringify(resumed));
+    assert.equal(resumed.integrationSetup.continuation.status, "accepted");
+    assert.deepEqual(calls, [["session-1", input]], "the repeat joined the running continuation");
+  }));
+
 test("integration setup skip needs no AI access and still validates the saved request", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: projectRuntimeRoot(targetRoot) });

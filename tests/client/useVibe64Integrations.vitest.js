@@ -2,7 +2,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import { effectScope, nextTick, reactive, ref } from "vue";
 import { useVibe64Integrations } from "@/composables/useVibe64Integrations.js";
 
-const mocks = vi.hoisted(() => ({ resource: null, save: null, saveOptions: null, registrationOptions: null, setup: null }));
+const mocks = vi.hoisted(() => ({ resource: null, save: null, saveOptions: null, registrationOptions: null, setup: null,
+  continuation: null }));
+// Continue in chat after a verified setup: its requests, outside the setup command, which would announce a lost answer.
+vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
+  getHttpWebClient: () => ({ request: (...args) => mocks.continuation(...args) })
+}));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: () => mocks.resource
 }));
@@ -30,6 +35,7 @@ function payload(name) {
 function fixture() {
   mocks.resource = { data: ref(payload("first")), reload: vi.fn() };
   mocks.setup = vi.fn(async () => ({ status: "disconnected" }));
+  mocks.continuation = vi.fn(async () => ({ ok: true }));
   const context = ref({ sessionId: "one", sessionsApiPath: `/projects/${++sequence}/sessions` });
   const scope = effectScope();
   scopes.push(scope);
@@ -499,23 +505,66 @@ it.each([false, true])("resumes verified setup and preserves the connection when
   await nextTick();
   mocks.setup.mockClear();
   const decision = { outcome: "completed", requestId: "b".repeat(64), continuation: { status: "pending" } };
-  mocks.setup.mockImplementation(async ({ path }) => {
-    if (path.endsWith("/integration-setup/resume")) {
-      if (uncertain) throw new Error("Delivery unconfirmed. Check again.");
-      return { integrationSetup: { ...decision, continuation: { status: "accepted" } } };
-    }
-    return { status: "connected", integrationSetup: decision };
+  mocks.setup.mockImplementation(async () => ({ status: "connected", integrationSetup: decision }));
+  mocks.continuation.mockImplementation(async () => {
+    if (uncertain) throw new Error("Delivery unconfirmed. Check again.");
+    return { ok: true, integrationSetup: { ...decision, continuation: { status: "accepted" } } };
   });
   await model.runSetup("connect");
-  expect(mocks.setup).toHaveBeenCalledTimes(2);
-  expect(mocks.setup).toHaveBeenLastCalledWith({
-    path: `${context.value.sessionsApiPath}/one/integration-setup/resume`,
-    body: { turnId: "000001", requestId: "b".repeat(64) }
+  expect(mocks.setup).toHaveBeenCalledTimes(1);
+  expect(mocks.continuation).toHaveBeenCalledExactlyOnceWith(`${context.value.sessionsApiPath}/one/integration-setup/resume`, {
+    method: "POST", body: { turnId: "000001", requestId: "b".repeat(64) }
   });
   expect(model.connection.value.status).toBe("connected");
   expect(model.connectionError.value).toBe(uncertain ? "Delivery unconfirmed. Check again." : "");
   expect(model.connection.value.integrationSetup.continuation.status).toBe(uncertain ? "pending" : "accepted");
   expect(context.value.refreshConversation).toHaveBeenCalledTimes(1);
+});
+
+/** A verified setup whose continuation in chat has not been accepted yet. */
+async function verifiedSetupAwaitingContinuation() {
+  const fixtureModel = fixture();
+  fixtureModel.context.value.refreshConversation = vi.fn(async () => {});
+  fixtureModel.context.value.integrationSetupRequest = {
+    sessionId: "one", integrationId: "calendar", turnId: "000001", requestId: "b".repeat(64)
+  };
+  fixtureModel.selected.value = "calendar";
+  await nextTick();
+  const decision = { outcome: "completed", requestId: "b".repeat(64), continuation: { status: "pending" } };
+  mocks.setup.mockImplementation(async () => ({ status: "connected", integrationSetup: decision }));
+  return { ...fixtureModel, accepted: { ...decision, continuation: { status: "accepted" } } };
+}
+
+// The continuation waits for the session's workspace setup, so the server answers within two seconds that it is
+// resuming while it goes on.
+it("follows a held continuation with the same request until its outcome", async () => {
+  const { context, model, accepted } = await verifiedSetupAwaitingContinuation();
+  mocks.continuation.mockResolvedValueOnce({ ok: true, resuming: true, sessionId: "one", turnId: "000001", waitingFor: "workspace-setup" })
+    .mockResolvedValueOnce({ ok: true, integrationSetup: accepted });
+  await model.runSetup("connect");
+  expect(mocks.continuation).toHaveBeenCalledTimes(2);
+  expect(mocks.continuation.mock.calls[1]).toEqual([`${context.value.sessionsApiPath}/one/integration-setup/resume`, {
+    method: "POST", body: { turnId: "000001", requestId: "b".repeat(64) }
+  }]);
+  expect(model.connection.value.integrationSetup.continuation.status).toBe("accepted");
+  expect(model.connectionError.value).toBe("");
+});
+
+it.each([0, 502, 504])("repeats a continuation whose answer was lost with status %s, and never shows that failure", async (status) => {
+  const { model, accepted } = await verifiedSetupAwaitingContinuation();
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  try {
+    mocks.continuation.mockRejectedValueOnce(Object.assign(new Error(`Request failed with status ${status}.`), { status }))
+      .mockResolvedValueOnce({ ok: true, integrationSetup: accepted });
+    const running = model.runSetup("connect");
+    await vi.advanceTimersByTimeAsync(5_000);
+    await running;
+    expect(mocks.continuation).toHaveBeenCalledTimes(2);
+    expect(model.connection.value.integrationSetup.continuation.status).toBe("accepted");
+    expect(model.connectionError.value).toBe("");
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it("does not attach another session's, slot's or staging request to application commands", async () => {

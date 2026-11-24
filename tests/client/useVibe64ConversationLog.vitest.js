@@ -226,6 +226,48 @@ describe("useVibe64ConversationLog", () => {
     scope.stop();
   });
 
+  // The continuation waits for the session's workspace setup, so the server answers within two seconds that it is
+  // resuming while it goes on.
+  it("follows a held continuation with the same request until its outcome", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "completed", continuation: { status: "pending" } } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
+    httpRequest.mockResolvedValueOnce({ ok: true, resuming: true, sessionId: "session-1", turnId: "000001", waitingFor: "workspace-setup" })
+      .mockResolvedValueOnce({ ok: true });
+    expect(await model.resumeIntegrationRequest({ sessionId: "session-1", turnId: "000001", requestId })).toBe(true);
+    expect(httpRequest).toHaveBeenCalledTimes(2);
+    expect(httpRequest.mock.calls[1]).toEqual(["/api/vibe64/sessions/session-1/integration-setup/resume", {
+      method: "POST", body: { turnId: "000001", requestId }
+    }]);
+    expect(model.integrationActionError.value).toBeNull();
+    scope.stop();
+  });
+
+  it.each([0, 502, 504])("repeats a continuation whose answer was lost with status %s, and never shows that failure", async (status) => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "completed", continuation: { status: "pending" } } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      httpRequest.mockRejectedValueOnce(Object.assign(new Error(`Request failed with status ${status}.`), { status }))
+        .mockResolvedValueOnce({ ok: true });
+      const resuming = model.resumeIntegrationRequest({ sessionId: "session-1", turnId: "000001", requestId });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await resuming).toBe(true);
+      expect(httpRequest).toHaveBeenCalledTimes(2);
+      expect(model.integrationActionError.value).toBeNull();
+    } finally {
+      vi.useRealTimers();
+      scope.stop();
+    }
+  });
+
   it("checks continuation directly from saved chat without requiring integration configuration", async () => {
     const scope = effectScope();
     const session = ref({ sessionId: "session-1" });
