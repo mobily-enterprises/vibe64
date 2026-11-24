@@ -23,6 +23,9 @@ const VIBE64_PROJECT_CHANGED_EVENT = "vibe64.project.changed";
 const TARGET_PROJECT_ENDPOINT = studioApiPath("studio/current-app");
 const STUDIO_HEALTH_ENDPOINT = studioApiPath("studio/health");
 const STUDIO_TOOLS_ENDPOINT = studioApiPath("studio/health/tools");
+const STUDIO_CRASHES_ENDPOINT = studioApiPath("studio/health/crashes");
+const STUDIO_CRASH_SUMMARY_ENDPOINT = studioApiPath("studio/health/crashes/summary");
+const STUDIO_CRASHES_ACKNOWLEDGE_ENDPOINT = studioApiPath("studio/health/crashes/acknowledge");
 const VIBE64_ENDPOINT = studioApiPath("vibe64");
 const PROJECT_SELECTION_ENDPOINT = `${VIBE64_ENDPOINT}/projects`;
 const ENV_ENDPOINT = `${VIBE64_ENDPOINT}/env`;
@@ -78,6 +81,11 @@ function studioHealthQueryKey(surfaceId, ownershipFilter) {
   return ["vibe64", surfaceId, ownershipFilter, "studio-health"];
 }
 
+/** The crash records' reads: "summary" (the banner's) and "list" (the Crashes page's) share the prefix. */
+function studioCrashesQueryKey(surfaceId, ownershipFilter, part = "") {
+  return ["vibe64", surfaceId, ownershipFilter, "studio-crashes", ...(part ? [part] : [])];
+}
+
 export {
   VIBE64_COLLABORATION_API_SUFFIX,
   VIBE64_DEVELOPMENT_DATABASE_API_SUFFIX,
@@ -105,6 +113,9 @@ export {
   PREVIEW_IDENTITIES_ENDPOINT,
   TARGET_PROJECT_API_SUFFIX,
   TARGET_PROJECT_ENDPOINT,
+  STUDIO_CRASHES_ACKNOWLEDGE_ENDPOINT,
+  STUDIO_CRASHES_ENDPOINT,
+  STUDIO_CRASH_SUMMARY_ENDPOINT,
   STUDIO_HEALTH_ENDPOINT,
   STUDIO_TOOLS_ENDPOINT,
   projectSelectionQueryKey,
@@ -113,5 +124,6 @@ export {
   projectSettingsQueryKey,
   previewIdentitiesQueryKey,
   targetProjectQueryKey,
+  studioCrashesQueryKey,
   studioHealthQueryKey
 };

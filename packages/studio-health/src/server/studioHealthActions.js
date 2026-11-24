@@ -1,13 +1,21 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
-import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
+import { NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
-import { studioHealthQueryInputValidator, studioToolsQueryInputValidator } from "./inputSchemas.js";
+import {
+  crashesAcknowledgeInputValidator,
+  studioHealthQueryInputValidator,
+  studioToolsQueryInputValidator
+} from "./inputSchemas.js";
 
 /** @typedef {import("./types.js").StudioHealthService} StudioHealthService */
+/** @typedef {ReturnType<typeof import("./crashes.js").createCrashService>} CrashService */
 
 const ACTION_READ_STUDIO_HEALTH = "vibe64.studio-health.read";
 const ACTION_CHECK_STUDIO_TOOLS = "vibe64.studio-health.tools";
+const ACTION_READ_CRASH_SUMMARY = "vibe64.studio-health.crashes.summary";
+const ACTION_LIST_CRASHES = "vibe64.studio-health.crashes.list";
+const ACTION_ACKNOWLEDGE_CRASHES = "vibe64.studio-health.crashes.acknowledge";
 
 // The bounded Health summary the assistant receives.
 const HEALTH_SUMMARY_OUTPUT = {
@@ -61,8 +69,9 @@ function healthSummaryForAssistant(result) {
 /**
  * @param {object} dependencies
  * @param {StudioHealthService} dependencies.studioHealth
+ * @param {CrashService} dependencies.crashes
  */
-function createStudioHealthActions({ studioHealth }) {
+function createStudioHealthActions({ studioHealth, crashes }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
@@ -89,12 +98,37 @@ function createStudioHealthActions({ studioHealth }) {
         vibe64: WORKSPACE_OPERATION
       },
       execute: (input) => studioHealth.checkTools(input)
+    }),
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: ACTION_READ_CRASH_SUMMARY,
+      input: studioHealthQueryInputValidator,
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      execute: (input) => crashes.summary(input)
+    }),
+    // Crash records stay off the assistant's tools: an error's message and stack may hold what no AI should read.
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: ACTION_LIST_CRASHES,
+      input: studioHealthQueryInputValidator,
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      execute: (input) => crashes.list(input)
+    }),
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_ACKNOWLEDGE_CRASHES,
+      input: crashesAcknowledgeInputValidator,
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      execute: (input) => crashes.acknowledge(input)
     })
   ]);
 }
 
 export {
+  ACTION_ACKNOWLEDGE_CRASHES,
   ACTION_CHECK_STUDIO_TOOLS,
+  ACTION_LIST_CRASHES,
+  ACTION_READ_CRASH_SUMMARY,
   ACTION_READ_STUDIO_HEALTH,
   createStudioHealthActions
 };

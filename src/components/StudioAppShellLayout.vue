@@ -1,4 +1,5 @@
 <template>
+  <Vibe64CrashBanner />
   <v-app-bar
     border
     class="shell-layout__app-bar bg-surface"
@@ -47,6 +48,7 @@ import ShellPageActionsTarget from "@jskit-ai/shell-web/client/components/ShellP
 import { useShellAppBar } from "@jskit-ai/shell-web/client/composables/useShellAppBar";
 import Vibe64AiTaskTrayTarget from "./Vibe64AiTaskTrayTarget.vue";
 import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
+import Vibe64CrashBanner from "./studio/Vibe64CrashBanner.vue";
 import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
 
 const SWIPE_MIN_DISTANCE_PX = 64;

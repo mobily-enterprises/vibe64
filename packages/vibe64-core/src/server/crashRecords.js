@@ -68,8 +68,9 @@ function isMissing(error) {
   return error?.code === "ENOENT";
 }
 
-/** The file's text written whole, synced, before this returns; what the dying process uses. */
-function writeFileAtomicSync(filePath, text) {
+/** The value written whole as JSON, synced, before this returns; what the dying process uses. */
+function writeJsonFileAtomicSync(filePath, value) {
+  const text = `${JSON.stringify(value, null, 2)}\n`;
   const directory = path.dirname(filePath);
   mkdirSync(directory, { recursive: true, mode: DIRECTORY_MODE });
   const temporary = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
@@ -92,8 +93,6 @@ function writeFileAtomicSync(filePath, text) {
     closeSync(folder);
   }
 }
-
-const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
 function readRemovedSync(systemRoot) {
   try {
@@ -132,11 +131,11 @@ function capRecordsSync(systemRoot, { now }) {
   if (excess.length === 0) return 0;
   const removed = readRemovedSync(systemRoot);
   const unacknowledged = excess.filter((id) => !parseRecordText(id, readRecordTextSync(systemRoot, id))?.acknowledged).length;
-  writeFileAtomicSync(path.join(crashesRoot(systemRoot), REMOVED_FILE), json({
+  writeJsonFileAtomicSync(path.join(crashesRoot(systemRoot), REMOVED_FILE), {
     count: removed.count + excess.length,
     unacknowledged: removed.unacknowledged + unacknowledged,
     lastRemovedAt: now
-  }));
+  });
   for (const id of excess) rmSync(recordPath(systemRoot, id), { force: true });
   return excess.length;
 }
@@ -159,7 +158,7 @@ function writeCrashRecordSync({ systemRoot, record }) {
   if (!RECORD_ID_PATTERN.test(String(record?.id || "")) || !KINDS.has(record.kind)) {
     throw new TypeError("A crash record needs its id and kind.");
   }
-  writeFileAtomicSync(recordPath(systemRoot, record.id), json(record));
+  writeJsonFileAtomicSync(recordPath(systemRoot, record.id), record);
   return { removed: capRecordsSync(systemRoot, { now: new Date().toISOString() }) };
 }
 
@@ -217,7 +216,8 @@ async function readVibe64CrashRecords({ systemRoot }) {
   const removed = readRemovedSync(systemRoot);
   return {
     records,
-    unacknowledged: records.filter((record) => !record.acknowledged).length + removed.unacknowledged,
+    // An unreadable record can't be acknowledged, so it is shown, not counted.
+    unacknowledged: records.filter((record) => record.kind !== "unreadable" && !record.acknowledged).length + removed.unacknowledged,
     removed
   };
 }
@@ -309,7 +309,7 @@ async function crashForInterruptedTurn({ systemRoot, startedAt }) {
 
 /** Writes a running server's marker (its heartbeat rewrites it). */
 function writeRunningMarkerSync({ systemRoot, marker }) {
-  writeFileAtomicSync(path.join(runningFolder(systemRoot), `${marker.pid}-${marker.instance}.json`), json(marker));
+  writeJsonFileAtomicSync(path.join(runningFolder(systemRoot), `${marker.pid}-${marker.instance}.json`), marker);
 }
 
 /**
@@ -320,7 +320,7 @@ async function rewriteRunningMarker({ systemRoot, marker }) {
   const file = path.join(runningFolder(systemRoot), `${marker.pid}-${marker.instance}.json`);
   const temporary = `${path.join(path.dirname(file), `.${path.basename(file)}`)}.${randomBytes(4).toString("hex")}.tmp`;
   try {
-    await writeFile(temporary, json(marker), { flag: "wx", mode: FILE_MODE });
+    await writeFile(temporary, JSON.stringify(marker), { flag: "wx", mode: FILE_MODE });
     await rename(temporary, file);
     return true;
   } catch (error) {
@@ -381,6 +381,7 @@ async function takeLastExit({ systemRoot }) {
 export {
   CRASH_KIND,
   CRASH_RECORDS_LIMIT,
+  MARKER_NAME_PATTERN,
   acknowledgeVibe64Crashes,
   crashForInterruptedTurn,
   crashRecordId,

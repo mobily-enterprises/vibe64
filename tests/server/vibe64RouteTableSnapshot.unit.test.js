@@ -143,6 +143,8 @@ GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/requ
 GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/current public app - vibe64.usage-recording.current.read
 GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/targets public app - vibe64.usage-recording.targets.read
 GET /api/studio/health public app - vibe64.studio-health.read
+GET /api/studio/health/crashes public app - vibe64.studio-health.crashes.list
+GET /api/studio/health/crashes/summary public app - vibe64.studio-health.crashes.summary
 GET /api/studio/health/tools public app - vibe64.studio-health.tools
 GET /api/vibe64/accounts public app - vibe64.accounts.read
 GET /api/vibe64/accounts/auth/:sessionId public app - vibe64.accounts.auth-session.read
@@ -316,6 +318,7 @@ POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId public app 16384
 POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/dismiss public app 16384 vibe64.usage-recording.dismiss
 POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/interactions public app 16384 vibe64.usage-recording.interaction.record
 POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/stop public app 16384 vibe64.usage-recording.stop
+POST /api/studio/health/crashes/acknowledge public app 1024 vibe64.studio-health.crashes.acknowledge
 POST /api/vibe64/accounts/auth public app - vibe64.accounts.auth.start
 POST /api/vibe64/accounts/codex-providers/remove public app - vibe64.accounts.codex-providers.remove
 POST /api/vibe64/accounts/git-identity public app - vibe64.accounts.git-identity.save

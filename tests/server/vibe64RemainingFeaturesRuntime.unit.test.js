@@ -105,6 +105,9 @@ test("remaining Vibe64 features use named capabilities and register direct route
 
   assert.deepEqual(actions.listDefinitions().map((action) => action.id).sort(), [
     "vibe64.current-app.read",
+    "vibe64.studio-health.crashes.acknowledge",
+    "vibe64.studio-health.crashes.list",
+    "vibe64.studio-health.crashes.summary",
     "vibe64.studio-health.read",
     "vibe64.studio-health.tools",
     ...[

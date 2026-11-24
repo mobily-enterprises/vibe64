@@ -1,8 +1,9 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
 import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
-import { resolveStudioAppRoot } from "@local/vibe64-core/server/studioRoots";
+import { VIBE64_SYSTEM_ROOT_ENV, resolveStudioAppRoot } from "@local/vibe64-core/server/studioRoots";
 
+import { createCrashService } from "./crashes.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
 import { createStudioHealthActions } from "./studioHealthActions.js";
@@ -49,10 +50,13 @@ const StudioHealthFeature = defineFeature({
   },
   /**
    * @param {object} capabilities
+   * @param {RuntimeEnv} capabilities.env
    * @param {StudioHealthService} capabilities.studioHealth
    */
-  actions({ studioHealth }) {
-    return createStudioHealthActions({ studioHealth });
+  actions({ env, studioHealth }) {
+    // The server records its crashes in the system root it settled on (server.js), which every feature's env names.
+    const crashes = createCrashService({ systemRoot: env[VIBE64_SYSTEM_ROOT_ENV] });
+    return createStudioHealthActions({ studioHealth, crashes });
   }
 });
 

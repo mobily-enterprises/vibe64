@@ -84,7 +84,11 @@ function currentBootId() {
  * Whether the process a marker names is still that server: the same boot, a process with that pid this account can
  * signal, started when the marker says (where the system tells; otherwise any live process of ours with that pid).
  */
-function markerProcessAlive({ pid, marker }, { bootId = currentBootId(), startTicks = processStartTicks, signal = process.kill.bind(process) } = {}) {
+function markerProcessAlive({ pid, marker }, {
+  bootId = currentBootId(),
+  startTicks = processStartTicks,
+  signal = process.kill.bind(process)
+} = {}) {
   if (!marker) return false;
   if (marker.bootId && bootId && marker.bootId !== bootId) return false;
   try {
@@ -197,7 +201,7 @@ function startCrashWatch({ systemRoot, version, logger, processRef = process, he
       error
     }, "Could not write the server's running marker."));
   }, heartbeatMs);
-  heartbeat.unref?.();
+  heartbeat.unref();
 
   /** Writes the record of this process's end, once; a marker stays when it cannot, so the next start records it. */
   function record(error, origin) {

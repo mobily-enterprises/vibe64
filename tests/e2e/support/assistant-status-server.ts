@@ -532,6 +532,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === "/vibe64/training/courses") result = { ok: true, courses: [] };
       else if (route === "/vibe64/training/learning") result = { ok: true, available: false };
       else if (route === "/vibe64/colleague") result = { ok: false, error: "Colleague is not part of this scenario." };
+      else if (route === "/studio/health/crashes/summary") result = { ok: true, canAcknowledge: true, unacknowledged: 0, latest: null };
       if (request.method !== "GET" || result === undefined) {
         state.unexpectedRequests.push(requestKey);
         json(response, { ok: false, error: `Unexpected status fixture request: ${requestKey}` }, 404);

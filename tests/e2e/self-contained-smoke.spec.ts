@@ -144,6 +144,7 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
     ["/api/vibe64/training/courses", { ok: true, courses: [] }],
     ["/api/vibe64/training/learning", { ok: true, available: false }],
     ["/api/vibe64/colleague", { ok: false, error: "Colleague is not part of this smoke." }],
+    ["/api/studio/health/crashes/summary", { ok: true, canAcknowledge: true, unacknowledged: 0, latest: null }],
     [
       "/api/vibe64/assistants/capabilities",
       {

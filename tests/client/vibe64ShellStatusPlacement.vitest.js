@@ -74,6 +74,12 @@ vi.mock("@jskit-ai/shell-web/client/components/ShellPageActionsTarget", async ()
 
 vi.mock("@jskit-ai/shell-web/client/composables/useShellAppBar", () => ({ useShellAppBar() {} }));
 
+// The crash banner, as a marker: it reads the server's crashes, which tests/e2e/crash-banner.spec.ts covers.
+vi.mock("../../src/components/studio/Vibe64CrashBanner.vue", async () => {
+  const { defineComponent: defineVueComponent, h: createElement } = await import("vue");
+  return { default: defineVueComponent({ name: "Vibe64CrashBannerTestDouble", setup: () => () => createElement("span", { "data-test": "crash-banner" }) }) };
+});
+
 import ShellLayout from "../../src/components/ShellLayout.vue";
 import StudioAppShellLayout from "../../src/components/StudioAppShellLayout.vue";
 
@@ -172,6 +178,13 @@ describe("Vibe64 custom shell status placement", () => {
   it("keeps one status outlet when an account page has no app-bar actions", async () => {
     const html = await renderManagementShell();
     expect(html.match(/data-shell-outlet="shell-layout:top-right"/gu)).toHaveLength(1);
+  });
+
+  it("holds the crash banner once, before the app bar, in the Studio shell and every management page", async () => {
+    for (const html of [await renderCustomShell("workspace-actions"), await renderManagementShell("account-menu")]) {
+      expect(html.match(/data-test="crash-banner"/gu)).toHaveLength(1);
+      expect(html.indexOf('data-test="crash-banner"')).toBeLessThan(html.indexOf('data-test="shell-identity"'));
+    }
   });
 });
 

@@ -832,11 +832,13 @@ Reports read-only platform health using the current account and workspace servic
 
 Reading health does not create an account, repair a project, launch a native conversation or run application setup. Connection and execution owners retain those effects and their recovery controls.
 
+Serves the editor server's crash records (Core's `crashRecords.js`): the banner's summary for every person, the whole records and their acknowledgement for the workspace owner or the person at their own computer, none of them an assistant tool.
+
 ### Source
 - Directory `packages/studio-health`
 
 ### Program
-- Nothing.
+- `genesis/program/operations/crash-records.md`
 
 ### Data owned
 - Nothing.
@@ -1029,6 +1031,8 @@ The shared upload byte policy keeps Files, chat HTTP admission and browser valid
 Persisted-state upgrades use the existing numbered registry, preflight, backups and retry rules. Product services supply the data and admission boundary; normal reads do not silently repair historical state.
 
 Owns the learning space (`learningSpace.js` with the Project context): practice projects live only in their learner's namespace `<root>/<learnerKey>/<practiceId>/<slug>`, apart from the catalogue, on both hosts, with their runtime roots in the shared `<systemRoot>/projects` inventory. It owns the practice slug and ID, the immutable schema-2 training marker, the one practice scope, the learning-space listing and the one admission rule: a person opens only their own practice project, and work without a person is admitted as the marker's learner. A catalogue entry with a retired training marker is skipped with a one-time warning and never fails the normal projects' listing. The host supplies only the space root; Training owns lessons, attempts and the Practice list.
+
+Owns the editor server's crash records (`crashRecords.js`, Node only, read by hosts' own reports too) and the crash watch that writes them (`crashWatch.js`): one private JSON file per abnormal end under `<systemRoot>/crashes/records/`, the newest 100 kept and the removed ones counted, running markers whose process died without a trace recorded at the next start, and who acknowledged each and when.
 
 Owns the session timeline (`sessionTimeline.js`) and its reader, `vibe64 timeline` (`sessionTimelineCli.js`): one bounded, private JSON-lines file per session under `<projectRuntimeRoot>/timeline/`, holding event metadata only. Each package records its own events through it (Sessions the browser connections, Terminals the turns, conversations, engine processes and server stop, AI tasks their windows, and the route wrapper here the failed session requests); none reads it back.
 

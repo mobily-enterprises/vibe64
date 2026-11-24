@@ -68,6 +68,9 @@ beside the sessions' helpers (in `codex-git-command/health-check/`) and starts i
 never installs software, signs in or repairs anything, and a pass is not proof that
 a particular project builds.
 
+A crash of Vibe64 itself is not a Health check: it shows as a red banner on every
+page until the workspace owner acknowledges it. See [crashes](crashes.md).
+
 ## Ask Colleague
 
 Ask Colleague "check my setup" (or similar). Colleague runs the same Health checks
