@@ -135,6 +135,21 @@ restrictions remain GitHub's responsibility.
 GitHub mutations are never automatically retried. Saving to a PR branch does
 not merge it or advance the PR base branch.
 
+The form's request (`POST .../sessions/:sessionId/pull-request`) runs
+`vibe64.sessions.pull-request.start`, which the assistant's tools do not offer,
+with a `requestId` the form makes for each Create (`startSessionPullRequest` in
+`sessionWork.js`, held work from `@local/vibe64-core/server/heldWork`). It
+answers with the creation's outcome when that comes within two seconds, and
+otherwise `{ ok: true, creating: true, requestId, waitingFor }` while it goes
+on (`session-write`, then `creating`): a hosted workspace's edge ends a request
+after about a minute, while saving and pushing a large change and asking
+GitHub can take minutes. The form says it is creating and sends the same
+request again (`createPullRequestFollowed` in `vibe64PullRequestCreate.js`),
+which joins that creation or reads its outcome for fifteen minutes after it
+ended, and does so after an answer that never came back (status 0, or a 5xx
+without the server's code); it never shows a status code. The assistant's tool
+runs `vibe64.sessions.pull-request.create` and waits for the outcome.
+
 After creation, the session's PR action becomes View pull request and opens the
 existing Dashboard detail. That detail offers Ready for review for drafts,
 Update branch from the PR base when GitHub permits, and Merge into the base.

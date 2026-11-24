@@ -351,6 +351,9 @@ Creating a pull request saves the session's connected copies first, straight to
 their mains, exactly as Save does, then pushes this session's work to the pull
 request branch; see [Work in connected repositories](connected-repositories.md).
 A copy behind its main stops it with the same **Update first** refusal.
+The dialog says it is creating while Vibe64 saves the work and asks GitHub, which
+can take minutes for a large change, and follows it to the end; a dropped
+connection meanwhile never creates a second pull request.
 
 Colleague can explain these workflows, open their views, inspect bounded saved-work
 status, request native Save/Update, and use supported issue/PR actions when asked.

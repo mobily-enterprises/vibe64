@@ -89,6 +89,7 @@ function createService({
     publishSessionChanged
   });
   const work = createSessionWork({
+    logger,
     project,
     publishSessionChanged,
     recovery,
@@ -208,6 +209,7 @@ function createService({
     inspectSessionWork: work.inspectSessionWork,
     saveSessionWork: work.saveSessionWork,
     settleStartedWork: work.settleStartedWork,
+    startSessionPullRequest: work.startSessionPullRequest,
     startSessionSave: work.startSessionSave,
     startSessionUpdate: work.startSessionUpdate,
     updateSessionWork: work.updateSessionWork,

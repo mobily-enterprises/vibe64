@@ -21,7 +21,7 @@ import {
   ACTION_CANCEL_SESSION_RENEWAL,
   ACTION_CHECK_SESSION_UPDATES,
   ACTION_CONFIRM_SESSION_RENEWAL,
-  ACTION_CREATE_PULL_REQUEST,
+  ACTION_START_SESSION_PULL_REQUEST,
   ACTION_CREATE_SESSION,
   ACTION_DECLINE_MAIN_CHAT_APPROVAL,
   ACTION_EDIT_MAIN_CHAT_APPROVAL,
@@ -138,8 +138,10 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     summary: "Change the owner-controlled model access for an assistant provider."
   });
 
+  // The pull request dialog's create answers within two seconds, as creating while it goes on: the hosted edge ends
+  // a request after about a minute. The dialog repeats it with the same requestId until its outcome.
   routes.actionRoute("POST", "/sessions/:sessionId/pull-request", {
-    actionId: ACTION_CREATE_PULL_REQUEST,
+    actionId: ACTION_START_SESSION_PULL_REQUEST,
     bodyLimit: 300_000,
     buildInput: sessionBodyWithoutUserInput,
     summary: "Push session work to a new branch and create a GitHub pull request."

@@ -6,6 +6,7 @@ import { vibe64SessionDisplayTitle, vibe64SessionPullRequest } from "@/lib/vibe6
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { GITHUB_BODY_MAX_LENGTH, githubProjectRepositoryName } from "@/lib/vibe64GithubProject.js";
+import { createPullRequestFollowed } from "@/lib/vibe64PullRequestCreate.js";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -52,7 +53,11 @@ async function submit() {
   if (pending.value || !title.value.trim()) return;
   pending.value = true;
   try {
-    const result = await resource.save({ title: title.value.trim(), body: body.value, draft: draft.value, destinationReview: destinationReview.value }, { method: "POST" });
+    // One request id per Create: its repeats, while the server answers that it is creating or after a lost answer,
+    // join that creation and never start a second.
+    const request = { title: title.value.trim(), body: body.value, draft: draft.value, destinationReview: destinationReview.value,
+      requestId: globalThis.crypto.randomUUID() };
+    const result = await createPullRequestFollowed(() => resource.save(request, { method: "POST" }));
     feedback.success("Pull request created. Future commits update its source branch.");
     emit("created", result.pullRequest);
     emit("update:modelValue", false);
@@ -89,6 +94,9 @@ async function submit() {
           <summary class="py-3">What gets pushed</summary>
           <p>All saved file changes are committed and pushed to the PR branch. Database data and chat history are separate. GitHub automation may run; this does not publish to staging or deploy to production.</p>
         </details>
+        <p v-if="pending" role="status" class="text-body-small ma-0">
+          Saving this session's work and creating the pull request on GitHub. A large change can take a few minutes.
+        </p>
       </v-card-text>
       <v-card-actions class="pa-5 pt-2">
         <v-spacer />
