@@ -10,6 +10,7 @@ import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useVibe64ProjectSlug } from "/src/composables/useVibe64ProjectScope.js";
+import { workAnswerLost } from "/src/lib/vibe64SessionWorkOutcome.js";
 
 const SYSTEM_GRAPH_API_SUFFIX = "/vibe64/system-graph";
 const SYSTEM_GRAPH_SURFACE = "app";
@@ -28,12 +29,6 @@ function systemQueryKey(projectSlug, sessionId = "", resource = "") {
 
 function cityAvailable(status = {}, kind = "") {
   return status.cities?.[kind]?.available === true;
-}
-
-/** A request whose answer never came back: no status, or a proxy's 5xx without the server's own code. */
-function answerLost(error) {
-  const status = Number(error?.status);
-  return !error?.code && (status === 0 || status >= 500);
 }
 
 /**
@@ -169,7 +164,7 @@ function useVibe64SystemGraph({
       await refreshStatusResource.reload();
       // An answer lost on the way (a dropped connection, or the hosted edge's 502 or 504) says nothing about the scan:
       // when the status shows the one this request started, the status tells its outcome.
-      if (answerLost(error) && scan.value?.id && scan.value.id !== scanBefore) {
+      if (workAnswerLost(error) && scan.value?.id && scan.value.id !== scanBefore) {
         refreshResource.mutation.reset();
         return null;
       }
