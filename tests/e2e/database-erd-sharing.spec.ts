@@ -951,6 +951,11 @@ for (const width of [390, 960, 1600]) {
 for (const saved of [false, true]) for (const next of ["All columns and Keys only", "Reset positions and a return from Data"]) {
   test(`@erd-dense 130 tables and 479 links remain usable with ${saved ? "saved" : "new"} positions, then ${next}`, async ({ browser, baseURL }) => {
     const schema = denseErdSchema();
+    // A small diagram of the same kind, its first ten tables and the links among them, is drawn first on the same page.
+    const smallTables = new Set(schema.tables.slice(0, 10).map(table => table.qualifiedName));
+    const smallSchema = { ...schema, tables: schema.tables.slice(0, 10),
+      relationships: schema.relationships.filter(link => smallTables.has(link.sourceTable) && smallTables.has(link.referencedTable)) };
+    const small = await sharedDiagramServer(baseURL!, { schemaOverride: smallSchema });
     const savedNodes = saved ? schema.tables.slice(0, 126).map((table, index) => ({
       table: table.qualifiedName, x: index % 10 * 420, y: Math.floor(index / 10) * 360
     })) : [];
@@ -976,6 +981,12 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       // Chrome's trace records every task the page's main thread runs with the CPU time it took.
       await browser.startTracing(page, { categories: ["-*", "toplevel", "blink.user_timing"] });
       tracing = true;
+      const reset = page.getByRole("button", { name: "Fit", exact: true });
+      await openDiagram(page, small.url, { waitForReady: false });
+      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__node")).toHaveCount(10, { timeout: 15_000 });
+      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(smallSchema.relationships.length, { timeout: 15_000 });
+      await expect(reset).toBeEnabled({ timeout: 15_000 });
+      await page.evaluate(() => performance.mark("erd-drawn"));
       await openDiagram(page, server.url, { waitForReady: false });
       await expect.poll(() => page.evaluate(() => (window as any).erdRoutingRequests)).toBeGreaterThan(0);
       // Typing lands while the routed connections are drawn.
@@ -984,20 +995,18 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       await search.press("Escape");
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__node")).toHaveCount(130, { timeout: 15_000 });
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479, { timeout: 15_000 });
-      const reset = page.getByRole("button", { name: "Fit", exact: true });
       await expect(reset).toBeEnabled({ timeout: 15_000 });
       await page.evaluate(() => performance.mark("erd-drawn"));
       const trace = JSON.parse(String(await browser.stopTracing()));
       tracing = false;
-      // A freeze is read in CPU time, not by the clock: from the routes request until they are drawn, no task may
-      // hold the main thread, and the typing above, for 0.725 s of CPU. A task's CPU time stays close to what its work
-      // costs however many processes share the host, while its wall time grows with them; a loaded host still slows
-      // it, through the cores and caches it shares. On the desktop, at loads of 3 to 13, alone or sharing 2 CPUs with
-      // four busy loops, the longest task (applying the routes) took 0.23-0.6 s and computing the routes on the main
-      // thread again 0.89-1.8 s: the bound sits 1.2 times from both. Applying them as before fbfa93c66 (0.71-1.06 s)
-      // also fails the DOM ceiling below.
-      const [longestTask] = longestMainThreadTasks(trace.traceEvents, "erd-routes-requested", "erd-drawn");
-      expect(longestTask).toBeLessThan(725);
+      // A freeze is read in CPU time, not by the clock, and against the small diagram's: from each diagram's routes
+      // request until they are drawn, the longest task on the main thread, in both the one applying the worker's
+      // routes. A loaded host slows both alike, so their ratio is the cost of the dense diagram's own work. On usone,
+      // at loads of 8 to 11, alone or sharing 2 CPUs with four busy loops, the small diagram's took 24-35 ms and the
+      // dense one's 261-299 ms, 8.7-11.5 times as long; computing the routes on the main thread again, which holds the
+      // typing above, took the dense one's to 979-1,640 ms, 29-56 times. The bound sits 1.6 times from both.
+      const [smallTask, longestTask] = longestMainThreadTasks(trace.traceEvents, "erd-routes-requested", "erd-drawn");
+      expect(longestTask / smallTask, `the dense diagram's longest task, ${longestTask} ms, over the small one's, ${smallTask} ms`).toBeLessThan(18);
       // The cost itself, independent of load: every DOM node drawing the cards and connections. Ports
       // are plain elements and connections draw their own paths; a component per port or per
       // connection adds about 1,900 or 1,400 nodes here and fails this ceiling.
@@ -1036,28 +1045,33 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       if (tracing) await browser.stopTracing();
       await context.close();
       await server.close();
+      await small.close();
     }
   });
 }
 
 // The CPU time, in ms, of the longest task the page's main thread ran in each window from a `from` performance mark to
-// the next `to` mark, from a Chrome trace: the marks name that thread, and the "toplevel" category records each task
-// it runs as a ThreadControllerImpl::RunTask event whose tdur is the thread time it took; a task Chrome records without
-// it counts its wall time, which is never less. Every window holds at least the task that set its first mark, so a
-// window without tasks means the trace no longer records them, and fails rather than measuring nothing.
+// the next `to` mark, from a Chrome trace: each window's first mark names its thread, which a navigation may change,
+// and the "toplevel" category records each task it runs as a ThreadControllerImpl::RunTask event whose tdur is the
+// thread time it took. A task Chrome records without it, its tracing's own WillClearIncrementalState of a few
+// microseconds, counts its wall time, which is never less, and is noted on the test. Every window holds at least the
+// task that set its first mark, so a window without tasks means the trace no longer records them, and fails rather
+// than measuring nothing.
 function longestMainThreadTasks(events: any[], from: string, to: string) {
   const marks = events.filter(event => event.name === from || event.name === to).sort((a, b) => a.ts - b.ts);
   expect(marks.length, `"${from}" and "${to}" marks in the trace`).toBeGreaterThan(0);
-  const tasks = events.filter(event => event.pid === marks[0].pid && event.tid === marks[0].tid && event.ph === "X"
-    && event.name === "ThreadControllerImpl::RunTask");
-  return marks.flatMap((start, index) => {
+  const tasks = events.filter(event => event.ph === "X" && event.name === "ThreadControllerImpl::RunTask");
+  const windows = marks.flatMap((start, index) => {
     if (start.name !== from) return [];
     const end = marks[index + 1];
     expect(end?.name, `a "${to}" mark after each "${from}" mark`).toBe(to);
-    const window = tasks.filter(task => task.ts + task.dur >= start.ts && task.ts < end.ts);
-    expect(window.length, "main-thread tasks traced in the window").toBeGreaterThan(0);
-    return [Math.max(...window.map(task => (task.tdur ?? task.dur) / 1000))];
+    return [tasks.filter(task => task.pid === start.pid && task.tid === start.tid && task.ts + task.dur >= start.ts && task.ts < end.ts)];
   });
+  expect(windows.map(window => window.length), "main-thread tasks traced in each window").not.toContain(0);
+  for (const task of windows.flat()) if (task.tdur === undefined) test.info().annotations.push({
+    type: "main-thread task without thread time", description: `${task.dur / 1000} ms of wall time counted instead`
+  });
+  return windows.map(window => Math.max(...window.map(task => (task.tdur ?? task.dur) / 1000)));
 }
 
 test("@erd-dense routing worker errors leave an actionable retry and recover", async ({ browser, baseURL }) => {
