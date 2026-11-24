@@ -1474,6 +1474,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-core/src/server/stateUpgrades/20261114-after-plan-passes.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingGoals.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
+- `packages/vibe64-terminals/src/server/assistantWorkPlanFiles.js`
 - `packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261008-plan-progress.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261010-assistant-workflow.js`
@@ -2172,7 +2173,8 @@ progress journal. All public current/page/history reads and mutations share the 
 per-path queue for the entire pair read or publication/cleanup; internal owner
 reads remain unlocked to avoid recursive queue waits. Reads reject missing,
 linked, conflicting or changed documents.
-A plan file the owner cannot use never stops the plan: an unreadable current
+A plan file the owner cannot use never stops the plan (assistantWorkPlanFiles.js
+reads each file and names the ones it cannot use): an unreadable current
 record or document refuses with vibe64_work_plan_file_unreadable naming the file
 and its fix. An unreadable or changed archive is left out of History and named in
 the read's planFileProblems and warning, which the History view shows, while
