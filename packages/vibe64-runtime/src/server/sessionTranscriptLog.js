@@ -29,8 +29,8 @@ import { CONVERSATION_MESSAGE_ROLES, CONVERSATION_TURN_ID_PATTERN } from "./sess
  * and the chat is refused rather than read without it.
  *
  * A change no line can say (a turn removed or moved, rewind markers changed),
- * and the change that takes the lines after the snapshot past a thirty-second
- * of it (or past 64 KiB, for a small chat), is saved as the chat whole instead:
+ * and the change that takes the lines after the snapshot past 1/64 of it (or
+ * past 64 KiB, for a small chat), is saved as the chat whole instead:
  * one snapshot line, published in one step over the file. Loading a chat then
  * parses its own record and at most that much more, and over many messages a
  * message still writes a bounded multiple of its own line, at 50 turns as at
@@ -45,7 +45,7 @@ const NEWLINE = 0x0a;
 const SNAPSHOT_FIELDS = new Set(["version", "metadata", "rewound", "turns", "summary"]);
 const CHANGE_FIELDS = new Set(["turns", "metadata", "summary"]);
 // The lines a chat keeps after its snapshot before it is saved whole again: the larger of these.
-const CHECKPOINT_SHARE = 32;
+const CHECKPOINT_SHARE = 64;
 const CHECKPOINT_FLOOR_BYTES = 64 * 1024;
 const TURN_CHANGE_FIELDS = new Set(["keep", "messages", "metadata"]);
 const TURN_FIELDS = new Set(["messages", "metadata"]);

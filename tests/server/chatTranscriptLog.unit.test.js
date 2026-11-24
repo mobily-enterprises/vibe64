@@ -166,15 +166,15 @@ test("a damaged line before the last is never skipped: the chat is refused and l
   assert.equal(await readFile(file, "utf8"), damaged);
 });
 
-test("a chat whose changes outgrow a thirty-second of its snapshot (64 KiB at least) is saved whole again: a load parses little more than its record, and a message writes the same bounded share at any size", async t => {
+test("a chat whose changes outgrow 1/64 of its snapshot (64 KiB at least) is saved whole again: a load parses little more than its record, and a message writes the same bounded share at any size", async t => {
   const { parseLegacyTranscript, parseTranscriptLog, writeTranscriptLog } = await import("@local/vibe64-runtime/server/sessionTranscriptLog");
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-chat-checkpoint-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const lineCount = async file => (await readFile(file, "utf8")).split("\n").length - 1;
   const sizes = [];
-  // 3 KB messages: two whole saves at 50 turns (each past 64 KiB of lines), one at 1,500 (past a 32nd of 2.9 MB).
+  // 3 KB messages: two whole saves at 50 turns (each past 64 KiB of lines), one at 2,500 (past 1/64 of 4.6 MB).
   const messages = 45;
-  for (const turns of [50, 1500]) {
+  for (const turns of [50, 2500]) {
     const file = path.join(root, `${turns}.jsonl`);
     let saved = await writeTranscriptLog(file, null, parseLegacyTranscript(JSON.stringify(legacyDocument(turns))));
     let written = 0;
@@ -195,7 +195,7 @@ test("a chat whose changes outgrow a thirty-second of its snapshot (64 KiB at le
         written += Number(after.size);
         assert.equal(await lineCount(file), 1, "A chat saved whole is one snapshot line.");
       }
-      assert.ok(saved.changeBytes <= Math.max(64 * 1024, saved.snapshotBytes / 32),
+      assert.ok(saved.changeBytes <= Math.max(64 * 1024, saved.snapshotBytes / 64),
         `What follows the snapshot stays within its share (${saved.changeBytes} after ${saved.snapshotBytes} at ${turns} turns).`);
     }
     const reread = parseTranscriptLog(await readFile(file));
@@ -207,7 +207,7 @@ test("a chat whose changes outgrow a thirty-second of its snapshot (64 KiB at le
   const [small, large] = sizes;
   assert.ok(Math.abs(small.line - large.line) <= 16, `An appended message writes the same at both sizes: ${JSON.stringify(sizes)}.`);
   for (const { turns, line, perMessage } of sizes) {
-    assert.ok(perMessage <= 34 * line, `Over many messages, one writes at most 34 of its lines at ${turns} turns: ${JSON.stringify(sizes)}.`);
+    assert.ok(perMessage <= 66 * line, `Over many messages, one writes at most 66 of its lines at ${turns} turns: ${JSON.stringify(sizes)}.`);
   }
   // A change no line can say (a turn removed) is the chat whole too, never a second record after the first.
   const file = path.join(root, "removed.jsonl");
