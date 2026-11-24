@@ -81,6 +81,22 @@ function rejectPreviewRequest(response) {
   response.end("Launch preview token is missing or invalid.");
 }
 
+const PREVIEW_BAD_ADDRESS_MESSAGE = "This address is not one the Preview can serve.";
+
+/**
+ * The request's address on the Preview, or null when it is none: a request target such as `//` names a host but no
+ * address, and parsing it throws, which would end the editor serving the Preview.
+ * @param {import("node:http").IncomingMessage} request
+ * @param {string} base
+ */
+function previewRequestUrl(request, base) {
+  try {
+    return new URL(String(request.url || "/"), base);
+  } catch {
+    return null;
+  }
+}
+
 function rejectPreviewUpgrade(socket, options = {}) {
   const {
     message = "Launch preview token is missing or invalid.",
@@ -269,7 +285,16 @@ async function proxyPreviewRequest(request, response, {
   targetOrigin = ""
 }) {
   const startedAtMs = Date.now();
-  const requestUrl = new URL(String(request.url || "/"), proxyOrigin || targetOrigin);
+  const requestUrl = previewRequestUrl(request, proxyOrigin || targetOrigin);
+  if (!requestUrl) {
+    response.writeHead(400, {
+      "Cache-Control": "no-store",
+      "Connection": "close",
+      "Content-Type": "text/plain; charset=utf-8"
+    });
+    response.end(PREVIEW_BAD_ADDRESS_MESSAGE);
+    return;
+  }
   const tokenDiagnostics = previewRequestTokenDiagnostics(request, requestUrl, {
     proxyOrigin
   });
@@ -589,7 +614,15 @@ function proxyPreviewUpgrade(request, socket, head, {
   targetHost = "",
   targetOrigin = ""
 }) {
-  const requestUrl = new URL(String(request.url || "/"), proxyOrigin || targetOrigin);
+  const requestUrl = previewRequestUrl(request, proxyOrigin || targetOrigin);
+  if (!requestUrl) {
+    rejectPreviewUpgrade(socket, {
+      message: PREVIEW_BAD_ADDRESS_MESSAGE,
+      statusCode: 400,
+      statusMessage: "Bad Request"
+    });
+    return;
+  }
   if (!access.admits(previewRequestToken(request, requestUrl, { proxyOrigin }))) {
     rejectPreviewUpgrade(socket);
     return;
