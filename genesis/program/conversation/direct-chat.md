@@ -72,7 +72,12 @@ page (`useVibe64ConversationRuntime`, `src/lib/vibe64HeldMessage.js`) keeps the
 message pending with the stage in words and follows it through that check until
 it settles; a send whose answer was lost (a dropped connection or an edge's
 5xx) is followed the same way, so an edge's status code never shows as the
-message's error. Shutdown ends a held wait for preparation (the delivery is
+message's error. A reload restores every message still on its way as
+unconfirmed (JSKIT's restore); `recoverRestoredMessages` makes each pending
+again before it renders and follows it through that check, so a message the
+server still holds never shows as unconfirmed: it ends accepted, not sent with
+the refusal, removed when cancelled, or unconfirmed in words when the server
+knows nothing of it. Shutdown ends a held wait for preparation (the delivery is
 refused unsent, `vibe64_agent_message_server_restarting`). Each send logs
 `vibe64.agent_message.send_timing` from its arrival with its stage times, at
 warn when held or slower than a second, and `vibe64.agent_message.held` when it

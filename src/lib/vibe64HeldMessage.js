@@ -105,6 +105,7 @@ async function followHeldMessage(held, { inspect, wait, pending, signal, lost = 
     if (status === "accepted") return { ok: true, messageId };
     if (status === "not-sent" || status === "cancelled") {
       return { ok: false, messageId, error: normalizeText(receipt.error) || "The message was not sent.",
+        ...(status === "cancelled" ? { cancelled: true } : {}),
         ...(code ? { code } : status === "cancelled" ? { code: "vibe64_assistant_routing_cancelled" } : {}) };
     }
     // Neither held nor received: the editor restarted, or the lost answer never reached it.
@@ -114,4 +115,63 @@ async function followHeldMessage(held, { inspect, wait, pending, signal, lost = 
   }
 }
 
-export { followHeldMessage, heldMessageWaitingLabel, messageAnswerHeld, workAnswerLost as messageAnswerLost };
+/**
+ * Messages a reload restored unsent are checked before they show as unconfirmed. JSKIT restores every message that
+ * was still on its way when the page closed as unconfirmed ("Message delivery is not confirmed."), but the server
+ * may still hold it, waiting for the workspace preparation: each one is pending again at once, saying Vibe64 checks
+ * it, and is followed through its delivery check like an answer lost on the way. It ends accepted, not sent with the
+ * server's refusal, removed when the server cancelled it, or unconfirmed in plain words when the server knows
+ * nothing of it. Called as the conversation's runtime is made, right after JSKIT restored them and before anything
+ * shows them.
+ * @param {{
+ *   find: (messageId: string) => any,
+ *   accept: (messageId: string) => void,
+ *   remove: (messageId: string) => void,
+ *   restoreUncertain: (request: { messageId: string, error?: string }) => boolean,
+ *   rejectUnsent: (messageId: string, error: string) => boolean,
+ *   wait: (messageId: string, reason?: string) => void,
+ *   state: { messages: any[] }
+ * }} delivery the conversation's delivery
+ * @param {{ inspect: (messageId: string, signal?: AbortSignal) => Promise<unknown>, signal?: AbortSignal,
+ *   delays?: readonly number[] }} options
+ */
+function recoverRestoredMessages(delivery, { inspect, signal, delays = CHECK_DELAYS_MS }) {
+  const restored = delivery.state.messages.filter(message => message.status === "uncertain" && !message.cancelling);
+  return Promise.all(restored.map(async (message) => {
+    const messageId = message.id;
+    const restoredError = message.error;
+    // Pending again before anything renders it: its delivery check decides what it is.
+    message.status = "pending";
+    message.error = "";
+    const pending = () => delivery.find(messageId)?.status === "pending";
+    let outcome;
+    try {
+      outcome = await followHeldMessage({ messageId }, {
+        inspect: checkSignal => inspect(messageId, checkSignal),
+        wait: label => delivery.wait(messageId, label),
+        pending,
+        signal,
+        lost: true,
+        delays
+      });
+    } catch {
+      // The page left this conversation: it keeps the message as JSKIT restored it.
+      outcome = { ok: false, status: "uncertain", error: restoredError };
+    }
+    if (!pending()) return;
+    if (outcome.ok) delivery.accept(messageId);
+    else if (outcome.cancelled) delivery.remove(messageId);
+    else {
+      delivery.restoreUncertain({ messageId, error: outcome.error || restoredError });
+      if (outcome.status !== "uncertain") delivery.rejectUnsent(messageId, outcome.error);
+    }
+  }));
+}
+
+export {
+  followHeldMessage,
+  heldMessageWaitingLabel,
+  messageAnswerHeld,
+  recoverRestoredMessages,
+  workAnswerLost as messageAnswerLost
+};
