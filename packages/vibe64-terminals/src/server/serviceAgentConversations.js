@@ -2,6 +2,7 @@ import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
+import { planChangesSinceMark } from "./planSourceChanges.js";
 import {
   assistantRoutingGoalFromMetadata,
   assistantRoutingRequestFromMetadata,
@@ -329,12 +330,19 @@ function createServiceAgentConversations({
     return sessionAgent.interruptDetachedChatTurn(sessionId, input, options);
   }
 
+  /**
+   * A page of the session's plan. Its summary of an active current plan says how many of the session's files
+   * changed since the AI last brought the plan up to date (changedSince), so a plan behind its work never looks current.
+   */
   function readSessionWorkPlan(sessionId, input) {
-    return vibe64Result(async () => ({
-      ok: true,
-      sessionId,
-      ...await readWorkPlanPage(await assistantContext.assistantSessionOptions(sessionId), input)
-    }));
+    return vibe64Result(async () => {
+      const context = await assistantContext.assistantSessionOptions(sessionId);
+      const page = await readWorkPlanPage(context, input);
+      if (page.current?.status === "active" && !(Number(input?.offset) > 0)) {
+        page.current.changedSince = await planChangesSinceMark(context).catch(() => null);
+      }
+      return { ok: true, sessionId, ...page };
+    });
   }
 
   function archiveSessionWorkPlan(sessionId, input) {

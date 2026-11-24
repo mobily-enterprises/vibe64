@@ -1,7 +1,8 @@
 /**
  * One routing's shared state: its settings, the requests it is preparing, their send timings,
- * the follow-ups it schedules live, the cancelled messages whose cleanup has not settled, and the interrupted
- * turns it resumes after a wait.
+ * the follow-ups it schedules live, the cancelled messages whose cleanup has not settled, the interrupted
+ * turns it resumes after a wait, and the plan and source each running turn started from (for the plan check when it
+ * ends).
  * @param {object} settings
  * @param {string} settings.systemRoot
  * @param {boolean} settings.allowAuto
@@ -25,6 +26,8 @@ function createAssistantRoutingState({ systemRoot, allowAuto }) {
   // Interrupted turns this process resumes after a short wait (a lost connection, an overloaded AI service), by
   // request key; close clears them, and the next server's reconcile schedules any left.
   const resumeTimers = new Map();
+  // By request key: the plan and source a turn that may tick the plan started from, kept in this process only.
+  const planCheckTurns = new Map();
 
   return Object.freeze({
     systemRoot,
@@ -35,7 +38,8 @@ function createAssistantRoutingState({ systemRoot, allowAuto }) {
     cancelling,
     stopping,
     settling,
-    resumeTimers
+    resumeTimers,
+    planCheckTurns
   });
 }
 

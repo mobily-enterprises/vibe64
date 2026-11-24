@@ -68,15 +68,15 @@ function workPlanPath(context) {
 }
 
 async function readPlanFile(file, options = {}) {
-  const { plainText = false } = options;
+  const { plainText = false, limit = PLAN_LIMIT } = options;
   let handle;
   try {
     if (!(await lstat(path.dirname(file))).isDirectory()) throw planError("The plan directory must not be a link.", "vibe64_work_plan_directory_link");
     handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const info = await handle.stat();
-    if (!info.isFile() || info.size > PLAN_LIMIT) throw planError("The plan must be a regular Markdown file smaller than 256 KiB.", "vibe64_work_plan_file_invalid");
+    if (!info.isFile() || info.size > limit) throw planError("The plan must be a regular Markdown file smaller than 256 KiB.", "vibe64_work_plan_file_invalid");
     const text = await handle.readFile("utf8");
-    if (Buffer.byteLength(text) > PLAN_LIMIT) throw planError("The plan is too large.", "vibe64_work_plan_too_large");
+    if (Buffer.byteLength(text) > limit) throw planError("The plan is too large.", "vibe64_work_plan_too_large");
     if (plainText) return text;
     const status = /^Status: (active|completed)\r?$/mu.exec(text)?.[1];
     if (!status) throw planError("This plan needs the stopped-service state upgrade before it can be used.", "vibe64_work_plan_upgrade_required");
@@ -105,6 +105,14 @@ function planDirectory(context) {
 function pairPath(context, id = "") {
   if (id && !/^[a-f0-9]{64}$/u.test(id)) throw planError("Invalid archived plan identity.", "vibe64_work_plan_archive_id_invalid");
   return id ? path.join(planDirectory(context), "archive", id + ".json") : path.join(planDirectory(context), "current.json");
+}
+// When the AI last brought the current plan up to date: it wrote the ticks or Progress (or the plan), or checked
+// the plan and found nothing to change. It keeps the session's source as it was then, so the plan view can say how
+// many files changed since. A plan replaced or archived drops it.
+const MARK_LIMIT = 1024 * 1024;
+const MARK_HOWS = Object.freeze(["updated", "checked"]);
+function markPath(context) {
+  return path.join(planDirectory(context), "updated.json");
 }
 function pairIdentity(record) {
   return sha256Hex("vibe64-plan-progress-v1\0" + JSON.stringify([record.planRevision, record.progressRevision]));
@@ -135,6 +143,36 @@ function parsePairRecord(source, id = "") {
   }
   return record;
 }
+/**
+ * The current plan's mark, or null when none is kept (a plan the AI has not updated or checked since it became current).
+ * @returns {Promise<{ at: string, how: "updated" | "checked", source: object | null } | null>}
+ */
+async function readMark(context) {
+  const invalid = () => planError("The plan's update record is invalid. Inspect it before continuing.", "vibe64_work_plan_mark_invalid");
+  const source = await readPlanFile(markPath(context), { plainText: true, limit: MARK_LIMIT }).catch((error) => {
+    // A link, a folder or an oversized file in its place is an invalid record, as unreadable JSON is.
+    throw ["vibe64_work_plan_file_invalid", "vibe64_work_plan_too_large", "ELOOP"].includes(error?.code) ? invalid() : error;
+  });
+  if (source === null) return null;
+  let mark;
+  try {
+    mark = JSON.parse(source);
+  } catch {
+    mark = null;
+  }
+  if (!mark || mark.schemaVersion !== 1 || !Number.isFinite(Date.parse(mark.at)) || !MARK_HOWS.includes(mark.how) ||
+      (mark.source !== null && (typeof mark.source !== "object" || !Array.isArray(mark.source.repositories)))) {
+    throw invalid();
+  }
+  return { at: mark.at, how: mark.how, source: mark.source };
+}
+async function writeMark(context, how, source) {
+  const mark = { schemaVersion: 1, at: source?.at || new Date().toISOString(), how, source: source || null };
+  let text = JSON.stringify(mark) + "\n";
+  // A source too large to record keeps only when: the plan view then counts no files since.
+  if (Buffer.byteLength(text) > MARK_LIMIT) text = JSON.stringify({ ...mark, source: null }) + "\n";
+  await writePlan(markPath(context), text);
+}
 async function readPair(context, id = "") {
   const source = await readPlanFile(pairPath(context, id), { plainText: true });
   if (source === null) return null;
@@ -154,6 +192,11 @@ async function readPair(context, id = "") {
     artifactRevision: pairIdentity(record),
     ...(record.archivedAt ? { archivedAt: record.archivedAt } : {})
   };
+}
+/** When a current plan file was last written, or "" when it is gone. */
+async function savedAt(file) {
+  const info = await lstat(file).catch((error) => error?.code === "ENOENT" ? null : Promise.reject(error));
+  return info ? info.mtime.toISOString() : "";
 }
 async function readWorkPlanUnlocked(context) {
   const pair = await readPair(context);
@@ -237,15 +280,26 @@ async function readWorkPlanHistoryUnlocked(context) {
   const history = await Promise.all([...ids].map(id => readArchivedSummary(context, id)));
   return history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
 }
-// The current plan's summary carries its step, read from the plan each time, for the chat's status line.
-function currentPlanSummary(current) {
-  return current ? {
+/**
+ * The current plan's summary carries its step, read from the plan each time, for the chat's status line, and when it
+ * was last brought up to date: when the AI last updated its ticks or Progress, or checked it (updatedHow "updated" or
+ * "checked"), otherwise when the plan was last saved ("saved").
+ */
+async function currentPlanSummary(context, current) {
+  if (!current) return null;
+  // An unreadable record leaves when unknown, never the plan unreadable: the AI's next change writes a new one.
+  const mark = await readMark(context)
+    .catch((error) => error?.code === "vibe64_work_plan_mark_invalid" ? false : Promise.reject(error));
+  const saved = mark === null ? await savedAt(current.legacy ? workPlanPath(context) : pairPath(context)) : "";
+  return {
     title: current.title,
     status: current.status,
     revision: current.revision,
     progressRevision: current.progressRevision || "",
-    step: workPlanStep(current)
-  } : null;
+    step: workPlanStep(current),
+    updatedAt: mark ? mark.at : saved,
+    updatedHow: mark ? mark.how : mark === null ? "saved" : ""
+  };
 }
 async function readWorkPlanPageUnlocked(context, options = {}) {
   const {
@@ -258,7 +312,8 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   } = options;
   if (summaryOnly) {
     const current = await readWorkPlanUnlocked(context);
-    return { available: Boolean(current), current: currentPlanSummary(current), history: await readWorkPlanHistoryUnlocked(context) };
+    const history = await readWorkPlanHistoryUnlocked(context);
+    return { available: Boolean(current), current: await currentPlanSummary(context, current), history };
   }
   if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16000) {
     throw planError("Invalid plan page bounds.", "vibe64_work_plan_page_bounds_invalid");
@@ -269,7 +324,7 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   const current = await readWorkPlanUnlocked(context);
   const plan = archiveId ? await readArchived(context, archiveId) : current;
   const history = offset === 0 ? await readWorkPlanHistoryUnlocked(context) : undefined;
-  const summary = currentPlanSummary(current);
+  const summary = await currentPlanSummary(context, current);
   if (!plan) return { available: false, current: summary, ...(history ? { history } : {}) };
   if (expectedRevision && expectedRevision !== plan.revision || (offset > 0 || expectedProgressRevision) &&
       expectedProgressRevision !== (plan.progressRevision || "")) {
@@ -373,16 +428,24 @@ function readWorkPlanPage(context, options) {
   return withWorkPlan(context, () => readWorkPlanPageUnlocked(context, options));
 }
 
+// The AI's changes that bring the plan up to date, which record the source as it is then (the plan's mark).
+const MARKING_OPERATIONS = Object.freeze(["new", "write", "progress-write", "reopen", "checked"]);
+
 /**
  * The helper derives role from the admitted turn, never from command payloads. A plan's pass turn
  * ("pass") may write Progress and change only its own Passes item's tick (passItem); Junior may
- * change the ticks outside Passes.
+ * change the ticks outside Passes. Any role that may tick may record that it checked the plan and
+ * found nothing to change (checked). With `sourceState`, the AI's change records the session's
+ * source as it is now as the plan's mark (MARKING_OPERATIONS); a plan replaced or archived drops it.
  * @param {object} context
  * @param {object} input
  * @param {string} role senior, review, junior, pass or user
- * @param {{ passItem?: string }} [options]
+ * @param {{ passItem?: string, sourceState?: () => Promise<object | null> }} [options]
  */
-async function manageWorkPlan(context, input, role, { passItem = "" } = {}) {
+async function manageWorkPlan(context, input, role, { passItem = "", sourceState } = {}) {
+  // Read before the plan's queue: Git's status of the source takes longer than the plan's own reads.
+  const marking = Boolean(sourceState) && MARKING_OPERATIONS.includes(input.operation);
+  const source = marking ? await sourceState().catch(() => null) : null;
   return withWorkPlan(context, async () => {
     const {
       operation,
@@ -393,10 +456,11 @@ async function manageWorkPlan(context, input, role, { passItem = "" } = {}) {
     } = input;
     if (operation === "read") return readWorkPlanPageUnlocked(context, input);
     if (operation === "history") return { history: await readWorkPlanHistoryUnlocked(context) };
-    if (!["new", "write", "progress-write", "complete", "archive", "reopen"].includes(operation)) {
+    if (!["new", "write", "progress-write", "checked", "complete", "archive", "reopen"].includes(operation)) {
       throw planError("Unknown plan operation.", "vibe64_work_plan_operation_unknown");
     }
-    const canEdit = ["senior", "review"].includes(role) || (["junior", "pass"].includes(role) && ["write", "progress-write"].includes(operation)) ||
+    const canEdit = ["senior", "review"].includes(role) ||
+      (["junior", "pass"].includes(role) && ["write", "progress-write", "checked"].includes(operation)) ||
       (role === "user" && (operation === "archive" || (operation === "reopen" && Boolean(archiveId))));
     if (!canEdit) {
       throw planError(
@@ -416,8 +480,8 @@ async function manageWorkPlan(context, input, role, { passItem = "" } = {}) {
       throw planError("Progress changed. Read both documents before editing them.", "vibe64_work_plan_progress_changed");
     }
     if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_revision_missing");
-    if (["write", "progress-write", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.", "vibe64_work_plan_missing");
-    if (["write", "progress-write"].includes(operation) && current.status !== "active") {
+    if (["write", "progress-write", "checked", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.", "vibe64_work_plan_missing");
+    if (["write", "progress-write", "checked"].includes(operation) && current.status !== "active") {
       throw planError("The plan is completed. Senior must explicitly reopen it before changes.", "vibe64_work_plan_completed");
     }
     let next;
@@ -455,6 +519,10 @@ async function manageWorkPlan(context, input, role, { passItem = "" } = {}) {
         }
         break;
       }
+      case "checked":
+        // The plan stays exactly as it is: only its mark records that it was checked.
+        await writeMark(context, "checked", source);
+        return { ...await readWorkPlanPageUnlocked(context), notice: "Recorded that the plan was checked: its marks and Progress stay as they are." };
       case "progress-write":
         next = current.text;
         progressText = String(input.text ?? "");
@@ -486,8 +554,11 @@ async function manageWorkPlan(context, input, role, { passItem = "" } = {}) {
     }
     // Save the exact record before replacement. Content identity makes retry safe.
     if (current && (replacing || operation === "archive")) await archiveCurrent(context, current);
+    // The mark belongs to the plan it was made for.
+    if (replacing || operation === "archive") await rm(markPath(context), { force: true });
     if (operation === "archive") await rm(pairPath(context));
     else await publishPair(context, next, progressText);
+    if (marking) await writeMark(context, "updated", source);
     // Keep the original safe until the reopened current document is written.
     if (operation === "reopen" && archiveId) await rm(pairPath(context, archiveId));
     await retireUnreferencedDocuments(context);
@@ -514,7 +585,7 @@ function workPlanInstructions(role, { autoOutcome = false, auto = false } = {}) 
     "The conversation has one current plan, active or completed, and preserved archived snapshots outside the project repository.",
     "Use vibe64-helper plan --help, then vibe64-helper plan read or history to inspect it. Use the plan helper for ALL edits and lifecycle operations; never edit its storage files directly or copy them into the repository.",
     "Plan commands take a JSON object on stdin. Writes require expectedRevision and expectedProgressRevision from the latest paired read. Read every page of BOTH text and progressText before working; a link is not a read. New/write take text containing a Markdown title and checklists (- [ ] / - [~] / - [x]); other headings and structure are your choice.",
-    "Keep the agreed Plan scope stable: start with a short summary of the proposed changes written for a nontechnical user, followed by a checklist of agreed deliverables and acceptance requirements. Then include a ## Technical details section containing a VERY detailed technical implementation plan that Junior can follow carefully: actual owners/files, ordered steps, constraints, edge cases and verification. The viewer collapses Technical details for the person, who can expand them; this is presentation only. Junior and review MUST read and follow the complete technical section, not just the summary/checklist. Each checklist item carries one of three marks: - [ ] not done yet, - [~] built (implemented, and its own focused checks pass) and - [x] proven by the plan's final checks. Update checklist ticks with write as you go; do not wait until the whole plan or turn is finished. Half-tick each item (- [~]) as soon as it is implemented and its own focused checks pass, and full-tick it (- [x]) when the plan's final proof covers it: the whole run, the review or the proof the plan states. Never leave a built item empty. A partial item stays - [ ]; an item whose evidence is missing or that regressed moves back to - [~] or - [ ], including when review finds it. Keep checklist wording and technical scope unchanged when updating ticks. Record supporting evidence and blockers in the paired Progress document with progress-write, then use its returned paired revisions for the checklist write. Do not append progress logs or evidence to Plan. The optional link in Plan is only a convenience; Plan and Progress are one artifact.",
+    "Keep the agreed Plan scope stable: start with a short summary of the proposed changes written for a nontechnical user, followed by a checklist of agreed deliverables and acceptance requirements; when one item is a foundation that others build on, split it or say so in the item, so the marks can move as the work goes. Then include a ## Technical details section containing a VERY detailed technical implementation plan that Junior can follow carefully: actual owners/files, ordered steps, constraints, edge cases and verification. The viewer collapses Technical details for the person, who can expand them; this is presentation only. Junior and review MUST read and follow the complete technical section, not just the summary/checklist. Each checklist item carries one of three marks: - [ ] not done yet, - [~] built (implemented, and its own focused checks pass) and - [x] proven by the plan's final checks. Update checklist ticks with write as you go; do not wait until the whole plan or turn is finished. Half-tick each item (- [~]) as soon as it is implemented and its own focused checks pass, and full-tick it (- [x]) when the plan's final proof covers it: the whole run, the review or the proof the plan states. Never leave a built item empty: tick each item the moment it is built and its own checks pass, not at the end of the turn. When work on one item also builds others, walk the whole checklist: half-tick each item that is built and checked, note in Progress what is partly built, and never hold every tick until the first item is finished. When a turn changed files but not the marks or Progress, Vibe64's plan check asks you once to walk the checklist and update them, or to run plan checked (paired revisions, nothing changes) when nothing needs a new mark. A partial item stays - [ ]; an item whose evidence is missing or that regressed moves back to - [~] or - [ ], including when review finds it. Keep checklist wording and technical scope unchanged when updating ticks. Record supporting evidence and blockers in the paired Progress document with progress-write, then use its returned paired revisions for the checklist write. Do not append progress logs or evidence to Plan. The optional link in Plan is only a convenience; Plan and Progress are one artifact.",
     "Human instructions take precedence. Keep agreed scope and completed evidence; do not invent additional requirements. Discussion alone never changes plan status.",
     "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan.",
     "A plan's steps are Implementation, Senior review, Passes and Completed. Its last section, ## Passes, lists the passes it runs after Senior's review, one checklist item each (- [ ] <pass title>: <scope>, such as - [ ] Security pass: the plan's changes). Vibe64 writes it from the chat's After a plan ticks when the plan is created and adds the passes the person starts; keep it last, and change it only when the person asks to change this plan's passes. Once every item outside Passes is - [x], Vibe64 runs each unticked Passes item in its own Senior turn, then completes and archives the exact Plan and Progress; do not archive it yourself.",
@@ -599,8 +670,14 @@ function planProgressUpgradeChanges(files) {
 
 const __testables = Object.freeze({ workPlanPath });
 
+/** The current plan's mark (see readMark), read in the plan's queue. */
+function readWorkPlanMark(context) {
+  return withWorkPlan(context, () => readMark(context));
+}
+
 export {
   readWorkPlan,
+  readWorkPlanMark,
   readWorkPlanPage,
   manageWorkPlan,
   workPlanInstructions,

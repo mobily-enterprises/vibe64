@@ -47,7 +47,8 @@ function conversationTurnPresentation(turn) {
       system: { ...(turn.system || turn.user), role: "system", projectMessage: turn.metadata.projectMessage }
     } : {}),
     ...turnInterruptionPresentation(turn),
-    // A note Vibe64 steered into a working turn, after Save or Update changed the session, is Vibe64's own.
+    // A note Vibe64 steered into a working turn, after Save or Update changed the session, and the plan check it sends
+    // after a turn that changed the source but not the plan, are Vibe64's own.
     ...(turn.metadata?.vibe64Note === true && turn.user ? { user: null, system: { ...turn.user, role: "system" } } : {}),
     // A Learning watch wake is application-origin: show its short status, not the teacher prompt.
     ...(learningGuidancePresentation(turn.user) ? {

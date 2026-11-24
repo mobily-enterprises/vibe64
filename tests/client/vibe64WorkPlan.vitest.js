@@ -69,6 +69,35 @@ it("exposes the current plan's step from its summary read, for the chat's status
   expect(workPlanStatusLine(f.exposed().step)).toBe("");
 });
 
+it("exposes how current the plan is from its summary's facts, for the dialog and the status line, as the clock and the plan move", async () => {
+  vi.useFakeTimers({ now: Date.parse("2026-11-24T12:00:00Z") });
+  try {
+    const step = { step: "implementation", item: 1, items: 1, title: "Prove privacy" };
+    const behind = { status: "active", step, updatedAt: "2026-11-24T11:13:00Z", updatedHow: "updated", changedSince: { files: 12, more: false } };
+    const f = mount({ ...active, current: behind });
+    expect(f.exposed().freshness).toEqual({ text: "Updated 47 min ago · 12 files changed since", updated: "Updated 47 min ago",
+      changed: "12 files changed since", behind: true });
+    expect(workPlanStatusLine(f.exposed().step, { freshness: f.exposed().freshness }))
+      .toBe("Plan: implementing item 1 of 1, Prove privacy · 12 files changed since the plan's last update");
+    vi.advanceTimersByTime(60_000);
+    await nextTick();
+    expect(f.exposed().freshness.updated).toBe("Updated 48 min ago");
+    // The AI checked the plan: current, and the status line says only where the plan is.
+    mocks.resource.data.value = { ...active, current: { ...behind, updatedAt: "2026-11-24T12:01:00Z", updatedHow: "checked",
+      changedSince: { files: 0, more: false } } };
+    await nextTick();
+    expect(f.exposed().freshness).toEqual({ text: "Checked just now · no files changed since", updated: "Checked just now",
+      changed: "no files changed since", behind: false });
+    expect(workPlanStatusLine(f.exposed().step, { freshness: f.exposed().freshness })).toBe("Plan: implementing item 1 of 1, Prove privacy");
+    // A plan read without the facts (an older server) or not active shows none.
+    mocks.resource.data.value = { ...active, current: { status: "active", step } };
+    await nextTick();
+    expect(f.exposed().freshness).toBe(null);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("shows history with no current plan and keeps code examples separate from checklist claims", async () => {
   const f = mount({ available: false, current: null, history: [{ id: "a".repeat(64), title: "Archived", status: "active", archivedAt: "2026-09-29T00:00:00Z" }] });
   expect(f.state().visible).toBe(true);

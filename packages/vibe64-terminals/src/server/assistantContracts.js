@@ -101,8 +101,25 @@ function temporaryConversationTool(description) {
   };
 }
 
+// What Colleague reads of the current plan's summary: how current the plan is, as facts.
+const CURRENT_PLAN_FIELDS = {
+  title: shortText,
+  status: shortText,
+  revision: { type: "string", maxLength: 64, required: false },
+  progressRevision: shortText,
+  updatedAt: shortText,
+  updatedHow: shortText,
+  changedSince: {
+    type: "object",
+    required: false,
+    nullable: true,
+    schema: createSchema({ files: { type: "integer", min: 0, required: true }, more: { type: "boolean", required: false } })
+  }
+};
+
 function workPlanTool() {
   const fields = {
+    current: { type: "object", required: false, nullable: true, schema: createSchema(CURRENT_PLAN_FIELDS) },
     ok: { type: "boolean", required: true },
     available: { type: "boolean", required: false },
     sessionId: shortText,
@@ -143,10 +160,14 @@ function workPlanTool() {
     hasMore: { type: "boolean", required: false }
   };
   return {
-    description: "Read Main chat's paired Plan and Progress without starting AI. Always finish BOTH text and progressText across every page before implementing, reviewing or claiming a complete read. Offset/limit count Unicode characters; pages contain at most 16000. Follow nextOffset while hasMore, passing the first page's revision and progressRevision as expectedRevision and expectedProgressRevision on every later page. If changed, restart the read. Never call a partial page the complete plan. Current and archived plans remain readable after completion. Use archiveId from history to read an archived snapshot. Checklist items are - [ ] not done yet, - [~] built or - [x] proven: total counts every item, built counts built and proven ones, checked counts proven ones. Archive the current plan with work-plan.archive and make an archive current with work-plan.restore; execute, change or reopen it over a current plan through an explicit chat request; Auto routes by intent. Temporary chats do not support Auto plans.",
+    description: "Read Main chat's paired Plan and Progress without starting AI. Always finish BOTH text and progressText across every page before implementing, reviewing or claiming a complete read. Offset/limit count Unicode characters; pages contain at most 16000. Follow nextOffset while hasMore, passing the first page's revision and progressRevision as expectedRevision and expectedProgressRevision on every later page. If changed, restart the read. Never call a partial page the complete plan. Current and archived plans remain readable after completion. Use archiveId from history to read an archived snapshot. Checklist items are - [ ] not done yet, - [~] built or - [x] proven: total counts every item, built counts built and proven ones, checked counts proven ones. current.updatedAt says when the AI last updated the plan's marks or Progress (updatedHow updated) or checked it and found nothing to change (checked), or else when the plan was last saved (saved); an active plan's current.changedSince counts the session's files changed since then (more: there may be more), a fact to report as such, never a guess at what is done. Archive the current plan with work-plan.archive and make an archive current with work-plan.restore; execute, change or reopen it over a current plan through an explicit chat request; Auto routes by intent. Temporary chats do not support Auto plans.",
     output: { mode: "replace", schema: createSchema(fields) },
     transformResult(result = {}) {
-      return Object.fromEntries(Object.entries(result).filter(([key]) => Object.hasOwn(fields, key)));
+      const picked = Object.fromEntries(Object.entries(result).filter(([key]) => Object.hasOwn(fields, key)));
+      if (picked.current) {
+        picked.current = Object.fromEntries(Object.entries(picked.current).filter(([key]) => Object.hasOwn(CURRENT_PLAN_FIELDS, key)));
+      }
+      return picked;
     }
   };
 }
