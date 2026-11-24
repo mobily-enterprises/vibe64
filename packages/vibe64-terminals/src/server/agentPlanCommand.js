@@ -18,8 +18,9 @@ if (!operation || ["--help", "-h"].includes(operation)) {
     + 'If a current plan exists, ask whether to update it or archive and replace it unless the user already chose. Explain that the archive remains accessible; pass archiveCurrent:true only after replacement is authorized.\\n'
     + 'Auto read also returns workflow identity. outcome takes {messageId,turnId,stage,decision,explanation,progress} and paired revisions when this plan is involved. Decisions: continue, handoff, wait, complete. Only Senior review can report complete.\\n'
     + 'Only Senior can create, complete, reopen or archive; complete needs every checklist item - [x]. Junior can update Progress with progress-write and existing checklist ticks with write; all other Plan content stays unchanged.\\n'
+    + 'Each turn acts as its role (in Auto, the one Router gave it), also a turn that only answers a question, so Senior\\'s and Junior\\'s ticks and Progress go through. A pass the person started on its own outside the plan, a Custom chat and a turn with no running request can only read and history: the refusal says which turn it is and how the person gets the change; do not retry it.\\n'
     + 'checked takes the paired revisions and changes nothing: it records that you walked the checklist and nothing needs a new mark or Progress, which counts as the plan being up to date.\\n'
-    + 'In Auto, a turn that may not make the plan change asked for (Junior making, changing, reopening or archiving a plan, or an answer-only turn) writes nothing and runs handoff (no input): Senior makes the plan from the request and the conversation in its own turn right after yours. A plan change refused to such a turn is handed over the same way, without its text.');
+    + 'In Auto, a turn asked to make, change, reopen or archive a plan that its role may not (Junior), or that Router took for conversation, writes nothing and runs handoff (no input): Senior makes the plan from the request and the conversation in its own turn right after yours. A plan change refused to such a turn is handed over the same way, without its text.');
   process.exit(0);
 }
 try {

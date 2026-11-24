@@ -728,12 +728,15 @@ and review; Junior implements unless the person explicitly chooses Senior. Any
 request to make, save or extend a plan is planning, decided from the latest
 message, and planning is always Senior's, whatever role Router names. A request
 that needs a plan always gets one without the person asking for Senior: when it
-still reaches Junior, or a turn that may only answer, that turn writes nothing,
+still reaches Junior, or a turn Router took for conversation, that turn writes nothing,
 hands the request over (or has a plan it writes anyway refused and handed over
 the same way, without its text) and ends; Senior's planning turn then writes the
 plan from the request and the conversation, announced as "Senior is making the
 plan.". A Junior chat, which the person chose, writes nothing and says plans
-need Senior or Auto.
+need Senior or Auto. Every turn works on the plan with its role, also one that
+only answers a question: Senior's and Junior's ticks and Progress go through. A
+turn that may only read the plan (a pass started outside the plan, a Custom
+chat) says so when it tries a change, and how the person gets it.
 Routing progress appears with the message, without a duplicate banner above the
 composer.
 A plan's steps are Implementation, Senior review, Passes and Completed, and once

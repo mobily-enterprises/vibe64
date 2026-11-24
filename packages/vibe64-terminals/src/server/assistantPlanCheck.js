@@ -21,12 +21,13 @@ const NAMED_FILES = 5;
 const PLAN_CHECK_LABEL = "Plan check";
 
 /**
- * Whether the request's turn may change the plan's marks: Senior's, Junior's or a review's own turn, never a pass's
- * (its own Passes item only), a task's, an answer's or a Custom chat's.
+ * Whether the request's turn gets the plan check: Senior's, Junior's or a review's own turn, never a pass's (its own
+ * Passes item only), a task's, a Custom chat's or a turn that only answers, which may tick the plan but is not asked to.
  * @param {object} request the saved routing request
  */
 function assistantPlanChecks(request) {
-  return ["senior", "junior", "review"].includes(assistantPlanRole({ ...request, status: "working", delivery: "accepted" }));
+  return request?.reason !== "conversation" &&
+    ["senior", "junior", "review"].includes(assistantPlanRole({ ...request, status: "working", delivery: "accepted" }));
 }
 
 const markIdentity = (mark) => (mark ? `${mark.how}:${mark.at}` : "");

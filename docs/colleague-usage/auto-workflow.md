@@ -27,13 +27,15 @@ Router chooses a role and one of conversation, planning, implementation or revie
 only for a new Auto request. It does not decide what happens after each turn.
 A conversation request only gets an answer: its agent reports no outcome, Vibe64
 records the reply as finished when the turn ends, and no Status message appears.
+Its turn still works on the plan with the role Router gave it: Senior's or
+Junior's ticks and Progress are saved.
 
 A request that needs a plan always gets one, and you never have to ask for
 Senior. Router decides from your latest message: an earlier "don't change
 anything yet", or a question answered before, never makes a later "make the
 plan" a conversation, and planning always goes to Senior, whatever role Router
-names. If a plan request still reaches Junior (or a turn that may only answer),
-it writes nothing, not even a draft: it hands the request over and ends its
+names. If a plan request still reaches Junior (or a turn Router took for a
+conversation), it writes nothing, not even a draft: it hands the request over and ends its
 turn with one short line. A **Senior is making the plan.** notice appears, the
 chat shows the automatic **Senior makes the plan.** message, and as soon as the
 first turn ends Senior writes the plan from your request and the conversation in
