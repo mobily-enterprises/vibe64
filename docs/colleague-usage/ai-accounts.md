@@ -144,6 +144,8 @@ validation; subscription login can require an external browser, one-time code or
 authorization code. You perform provider consent and secret entry. Wait for the
 saved connected state, and use **Refresh** or **Check saved key** when offered.
 Do not reconnect or resend a key solely because a status request was interrupted.
+A sign-in whose progress cannot be read says so and keeps checking; **Start
+again** starts a new one even after Vibe64 restarted during the old one.
 If one account's status cannot be read, only that account shows the reason as
 not connected (a Codex account change that is still finishing stays
 **Reconnecting**); the other accounts show their usual status. Use **Refresh**
