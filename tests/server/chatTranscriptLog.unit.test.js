@@ -172,7 +172,7 @@ const asSaved = record => JSON.parse(JSON.stringify({ metadata: record.metadata,
 
 test("every saved change replays to exactly the record its transaction committed", async () => {
   const { parseTranscriptLog, transcriptChangeLine, transcriptLogContents } = await import("@local/vibe64-runtime/server/sessionTranscriptLog");
-  let seed = 20261124;
+  let seed = 0;
   const random = limit => (seed = (seed * 1103515245 + 12345) % 2147483648) % limit;
   const pick = values => values[random(values.length)];
   let serial = 0;
@@ -196,58 +196,64 @@ test("every saved change replays to exactly the record its transaction committed
     return next;
   }
   const isObject = candidate => candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
-  let saved = { metadata: { runtime: { version: 3 } }, rewound: [], turns: new Map([["000001", { messages: [message()] }]]) };
-  let file = transcriptLogContents(saved);
-  let snapshots = 1;
-  for (let step = 0; step < 1500; step += 1) {
-    // A transaction shares every turn and message it does not change, as JSKIT's does.
-    const next = { ...saved, turns: new Map(saved.turns) };
-    for (let edit = random(3) + 1; edit > 0; edit -= 1) {
-      const ids = [...next.turns.keys()];
-      const id = pick(ids);
-      const turn = next.turns.get(id);
-      switch (random(12)) {
-        case 0: case 1: next.turns.set(String(Math.max(...ids.map(Number)) + 1).padStart(6, "0"), { messages: [message()],
-          ...(random(2) ? { metadata: { actorId: "ada", runtime: { status: "running" } } } : {}) }); break;
-        case 2: case 3: next.turns.set(id, { ...turn, messages: [...turn.messages, message()] }); break;
-        case 4: if (turn.messages.length) {
-          const messages = [...turn.messages];
-          messages[random(messages.length)] = { ...messages[random(messages.length)], text: `Edited ${++serial}` };
-          next.turns.set(id, { ...turn, messages });
-        } break;
-        case 5: next.turns.set(id, { ...turn, messages: turn.messages.slice(0, random(turn.messages.length + 1)) }); break;
-        case 6: case 7: next.turns.set(id, { ...turn, metadata: changed(turn.metadata) }); break;
-        case 8: { const { metadata: _removed, ...bare } = turn; next.turns.set(id, bare); } break;
-        case 9: next.metadata = changed(next.metadata); break;
-        case 10: next.summary = pick([undefined, { text: `Summary ${++serial}`, throughTurnId: id }]); break;
-        default: switch (random(4)) {
-          case 0: next.rewound = random(2) ? [...new Set([...next.rewound, id])] : []; break;
-          case 1: if (ids.length > 1) next.turns.delete(id); next.rewound = next.rewound.filter(turnId => next.turns.has(turnId)); break;
-          case 2: next.turns = new Map([...next.turns].reverse()); break;
-          default: next.metadata = JSON.parse('{"__proto__":{"polluted":true},"runtime":{"version":4}}');
+  // Each step checks the whole record, so its cost follows the record's size: three chats of 500 steps each cover
+  // 1,500 transactions at a third of the size one 1,500-step chat grows to.
+  const steps = 500;
+  for (const start of [20261124, 7, 424242]) {
+    seed = start;
+    let saved = { metadata: { runtime: { version: 3 } }, rewound: [], turns: new Map([["000001", { messages: [message()] }]]) };
+    let file = transcriptLogContents(saved);
+    let snapshots = 1;
+    for (let step = 0; step < steps; step += 1) {
+      // A transaction shares every turn and message it does not change, as JSKIT's does.
+      const next = { ...saved, turns: new Map(saved.turns) };
+      for (let edit = random(3) + 1; edit > 0; edit -= 1) {
+        const ids = [...next.turns.keys()];
+        const id = pick(ids);
+        const turn = next.turns.get(id);
+        switch (random(12)) {
+          case 0: case 1: next.turns.set(String(Math.max(...ids.map(Number)) + 1).padStart(6, "0"), { messages: [message()],
+            ...(random(2) ? { metadata: { actorId: "ada", runtime: { status: "running" } } } : {}) }); break;
+          case 2: case 3: next.turns.set(id, { ...turn, messages: [...turn.messages, message()] }); break;
+          case 4: if (turn.messages.length) {
+            const messages = [...turn.messages];
+            messages[random(messages.length)] = { ...messages[random(messages.length)], text: `Edited ${++serial}` };
+            next.turns.set(id, { ...turn, messages });
+          } break;
+          case 5: next.turns.set(id, { ...turn, messages: turn.messages.slice(0, random(turn.messages.length + 1)) }); break;
+          case 6: case 7: next.turns.set(id, { ...turn, metadata: changed(turn.metadata) }); break;
+          case 8: { const { metadata: _removed, ...bare } = turn; next.turns.set(id, bare); } break;
+          case 9: next.metadata = changed(next.metadata); break;
+          case 10: next.summary = pick([undefined, { text: `Summary ${++serial}`, throughTurnId: id }]); break;
+          default: switch (random(4)) {
+            case 0: next.rewound = random(2) ? [...new Set([...next.rewound, id])] : []; break;
+            case 1: if (ids.length > 1) next.turns.delete(id); next.rewound = next.rewound.filter(turnId => next.turns.has(turnId)); break;
+            case 2: next.turns = new Map([...next.turns].reverse()); break;
+            default: next.metadata = JSON.parse('{"__proto__":{"polluted":true},"runtime":{"version":4}}');
+          }
         }
       }
+      const line = transcriptChangeLine(saved, next);
+      let snapshot = false;
+      if (line !== null) {
+        assert.equal(line.indexOf("\n"), line.length - 1, "One change is one line.");
+        snapshot = JSON.parse(line).version === 2;
+        file += line;
+      } else assert.deepEqual(asSaved(next), asSaved(saved), "Only an unchanged record writes nothing.");
+      const { record, validBytes } = parseTranscriptLog(Buffer.from(file));
+      assert.equal(validBytes, Buffer.byteLength(file));
+      assert.equal(JSON.stringify(asSaved(record)), JSON.stringify(asSaved(next)), `Step ${step} replays exactly, key order included.`);
+      // A later snapshot replaces everything before it (just checked), so the file goes on from it alone: each step
+      // parses a short file instead of the whole history of whole records.
+      if (snapshot) {
+        snapshots += 1;
+        file = line;
+      }
+      saved = next;
     }
-    const line = transcriptChangeLine(saved, next);
-    let snapshot = false;
-    if (line !== null) {
-      assert.equal(line.indexOf("\n"), line.length - 1, "One change is one line.");
-      snapshot = JSON.parse(line).version === 2;
-      file += line;
-    } else assert.deepEqual(asSaved(next), asSaved(saved), "Only an unchanged record writes nothing.");
-    const { record, validBytes } = parseTranscriptLog(Buffer.from(file));
-    assert.equal(validBytes, Buffer.byteLength(file));
-    assert.equal(JSON.stringify(asSaved(record)), JSON.stringify(asSaved(next)), `Step ${step} replays exactly, key order included.`);
-    // A later snapshot replaces everything before it (just checked), so the file goes on from it alone: each step
-    // parses a short file instead of the whole history of whole records.
-    if (snapshot) {
-      snapshots += 1;
-      file = line;
-    }
-    saved = next;
+    assert.ok(snapshots < steps / 4, `Only changes a line cannot say are new snapshots (${snapshots} of ${steps}, seed ${start}).`);
   }
   assert.equal({}.polluted, undefined, "A saved __proto__ key stays a key.");
-  assert.ok(snapshots < 400, `Only changes a line cannot say are new snapshots (${snapshots} of 1500).`);
 });
 
 // The saved shape the previous release wrote: one compact transcript.json record per chat.

@@ -14,7 +14,7 @@ import {
 } from "./sessionTranscriptLog.js";
 
 /** @typedef {import("./types.js").SessionRecordFiles} SessionRecordFiles */
-/** @typedef {ReturnType<typeof import("./sessionStateUpgrades.js").createSessionStateUpgrades>["prepareSessionStateUpgrade"]} PrepareSessionStateUpgrade */
+/** @typedef {import("./sessionTemporaryConversationRemoval.js").PrepareSessionStateUpgrade} PrepareSessionStateUpgrade */
 
 /**
  * @param {{ recordFiles: SessionRecordFiles, prepareSessionStateUpgrade: PrepareSessionStateUpgrade }} dependencies
