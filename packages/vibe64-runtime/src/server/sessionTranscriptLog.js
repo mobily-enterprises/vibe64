@@ -270,7 +270,9 @@ function parseTranscriptLog(buffer) {
     if (isPlainObject(lines[index]) && Object.hasOwn(lines[index], "version")) {
       record = recordFromSnapshot(lines[index]);
       snapshot = index;
-    } else applyChange(record, lines[index]);
+    } else {
+      applyChange(record, lines[index]);
+    }
   }
   const validBytes = ends.at(-1);
   const snapshotEnd = ends[snapshot];
@@ -421,8 +423,13 @@ async function writeTranscriptLog(filePath, saved, next) {
       throw error;
     }
     const stats = await handle.stat({ bigint: true });
-    return remember(filePath, { identity: fileIdentity(stats), record: next, validBytes: saved.validBytes + bytes.length,
-      snapshotBytes: saved.snapshotBytes, changeBytes: saved.changeBytes + bytes.length });
+    return remember(filePath, {
+      identity: fileIdentity(stats),
+      record: next,
+      validBytes: saved.validBytes + bytes.length,
+      snapshotBytes: saved.snapshotBytes,
+      changeBytes: saved.changeBytes + bytes.length
+    });
   } finally {
     await handle.close();
   }
