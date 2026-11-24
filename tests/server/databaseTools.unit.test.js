@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, mkdir, readFile, writeFile, rm, access, readdir } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import os from "node:os";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
@@ -1947,6 +1948,55 @@ test("database copilot keeps a failed question's own error when its helper clean
   assert.match(blocked.error, /Native cleanup unavailable/u);
   assert.equal(starts, 1);
   assert.equal(deletes, 2);
+});
+
+// A question runs an AI turn and its queries, which can outlast the hosted edge's minute.
+test("a database question the page names answers within two seconds while its AI turn runs, and its repeat joins it", async (t) => {
+  const runtime = await databaseHelperRuntime(t);
+  const store = {
+    readSession: async (sessionId) => ({ sessionId, metadata: {} }),
+    readArtifact: async () => JSON.stringify(testSchema())
+  };
+  const endpoint = { database: "catalogue", host: "127.0.0.1", username: "reader", password: "private-password", port: 5432 };
+  const project = { createSessionStore: async () => store, createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+    localDatabaseServers: async () => ({ managed: true, databases: [] }),
+    sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
+      contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: endpoint, write: endpoint
+    } }) };
+  const turn = Promise.withResolvers();
+  let starts = 0;
+  const terminals = {
+    resolveAssistantPurpose: async () => ({ available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-connection" }),
+    resolveEphemeralAgentExecutionProfile: async () => databaseExecutionProfile(),
+    async runEphemeralAgentChatTurn(_scope, _input, options) {
+      starts += 1;
+      await options.onEvent({ type: "thread", threadId: "held-question-thread" });
+      await turn.promise;
+      return { ok: true, threadId: "held-question-thread", text: databaseFinalResponse({ answer: "Held answer", intent: "explain", sql: "" }) };
+    },
+    deleteEphemeralAgentConversation: async () => ({ ok: true })
+  };
+  const service = createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, project, terminals });
+  const request = { sessionId: "held-session", vibe64User: { username: "member", role: "member" },
+    requestId: "88888888-8888-4888-8888-888888888888", messages: [{ role: "user", content: "What is stored here?" }] };
+  try {
+    const first = await Promise.race([service.startAssistantQuestion(request), delay(3_000, "still waiting", { ref: false })]);
+    assert.notEqual(first, "still waiting", "The question waited for its AI turn");
+    assert.deepEqual(first, { ok: true, answering: true, requestId: request.requestId, waitingFor: "answering" });
+    const repeated = service.startAssistantQuestion({ ...request, repeat: true });
+    turn.resolve();
+    const answer = await repeated;
+    assert.equal(answer.ok, true, JSON.stringify(answer));
+    assert.equal(answer.answer, "Held answer");
+    assert.equal(starts, 1, "the repeat joined the question");
+    const lost = await service.startAssistantQuestion({ ...request, repeat: true, requestId: "99999999-9999-4999-8999-999999999999" });
+    assert.equal(lost.ok, false);
+    assert.equal(lost.code, "vibe64_database_assistant_not_followed");
+    assert.equal(starts, 1, "a repeat this editor does not hold asks nothing");
+  } finally {
+    turn.resolve();
+    await service.close();
+  }
 });
 
 test("session close tries every database copilot receipt and names each one that cannot close", async (t) => {
