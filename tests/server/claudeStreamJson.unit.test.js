@@ -1174,6 +1174,8 @@ test("Claude shutdown retains its resolved selection after main chat moves to Co
   const context = { ...f.context, assistantSelection: undefined };
   await f.provider.sendMessage(context, { message: "First", messageId: "before-changeover" });
   await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done", uuid: "done" });
+  // Claude's turn ends (its checkpoint, then its completed record) before the person moves Main to Codex.
+  await (await f.open()).wait();
   const claudeId = f.context.session.metadata.claude_conversation_id;
   const selection = JSON.stringify({ ...f.context.assistantSelection, engineId: "codex", agentId: "codex",
     modelProviderId: "deepseek", modelId: "deepseek-flash" });
@@ -1186,10 +1188,10 @@ test("Claude shutdown retains its resolved selection after main chat moves to Co
 
   assert.equal((await f.provider.invalidateRuntimes({}, { reason: "server-shutdown" })).ok, true);
   assert.equal(f.processes[0].stopped, true);
-  // Shutdown leaves the running turn's end, and its checkpoint, to the next
-  // server's recovery: the saved record keeps its execution, as after a crash.
+  // The ended turn stays completed and its stopped process is forgotten. (A turn that ends once the shutdown has
+  // begun keeps its execution and active state for the next server: the next test.)
   const { executionId, state } = JSON.parse(f.context.session.metadata[`claude_conversation_${claudeId}`]);
-  assert.deepEqual({ executionId, state }, { executionId: "test-0", state: "active" });
+  assert.deepEqual({ executionId, state }, { executionId: "", state: "completed" });
   assert.equal(f.context.session.metadata.assistant_selection, selection);
   assert.equal(f.context.session.metadata.agent_identity_provider, "codex");
   assert.equal(f.context.session.metadata.agent_identity_conversation_id, "retained-codex-thread");
