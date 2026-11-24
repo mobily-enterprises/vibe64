@@ -1753,25 +1753,48 @@ test("@overview-transition details fade in at their final positions while the ov
     expect(await overview.boundingBox()).toEqual(before);
     await expect(overview.locator(".vue-flow__transformationpane")).toHaveAttribute("style", backgroundCamera!);
     await page.screenshot({ path: info.outputPath("preparing.png") });
-    const transition = diagram.evaluate(element => new Promise<string[]>(resolve => {
-      const frames: string[] = [];
+    // The fade is read from the transition itself, not counted in the frames this host draws: a starved renderer can
+    // draw the whole 160 ms in one frame. The watch is in place before the routes are released and sees, in the same
+    // task, the diagram made visible: that starts an opacity transition from 0 to 1, and what the diagram shows then,
+    // in every frame until it is opaque and once arranging has ended (Fit is enabled again) is the same camera and
+    // table positions.
+    const transition = await diagram.evaluateHandle(element => ({ read: new Promise<{ fade: Record<string, number> | null, shown: string[] }>(resolve => {
+      const view = () => JSON.stringify({
+        camera: element.querySelector(".vue-flow__transformationpane")?.getAttribute("style"),
+        nodes: Array.from(element.querySelectorAll<HTMLElement>(".vue-flow__node"), node => node.style.transform)
+      });
+      const shown: string[] = [];
+      let fade: Record<string, number> | null = null;
       const sample = () => {
-        const opacity = Number(getComputedStyle(element).opacity);
-        if (opacity > 0) frames.push(JSON.stringify({
-          camera: element.querySelector(".vue-flow__transformationpane")?.getAttribute("style"),
-          nodes: Array.from(element.querySelectorAll<HTMLElement>(".vue-flow__node"), node => node.style.transform)
-        }));
-        if (opacity === 1) resolve(frames);
+        shown.push(view());
+        if (Number(getComputedStyle(element).opacity) === 1) resolve({ fade, shown });
         else requestAnimationFrame(sample);
       };
-      requestAnimationFrame(sample);
-    }));
+      const observer = new MutationObserver(() => {
+        if (!element.classList.contains("database-erd__flow--ready")) return;
+        observer.disconnect();
+        // getAnimations() applies the class first, so it lists the transition the class starts.
+        const opacity = element.getAnimations().find(animation => (animation as CSSTransition).transitionProperty === "opacity");
+        if (opacity) {
+          const [from, to] = opacity.effect!.getKeyframes().map(keyframe => Number(keyframe.opacity));
+          fade = { duration: Number(opacity.effect!.getComputedTiming().duration), from, to };
+        }
+        sample();
+      });
+      observer.observe(element, { attributes: true, attributeFilter: ["class"] });
+    }) }));
     await worker.release();
     await expect(diagram).toHaveCSS("opacity", "1");
     await expect(page.getByText("Preparing diagram…", { exact: true })).toHaveCount(0);
-    const frames = await transition;
-    expect(frames.length).toBeGreaterThan(1);
-    expect(new Set(frames).size).toBe(1);
+    const { fade, shown } = await transition.evaluate(({ read }) => read);
+    await expect(page.getByTitle("Fit diagram")).toBeEnabled();
+    shown.push(await diagram.evaluate(element => JSON.stringify({
+      camera: element.querySelector(".vue-flow__transformationpane")?.getAttribute("style"),
+      nodes: Array.from(element.querySelectorAll<HTMLElement>(".vue-flow__node"), node => node.style.transform)
+    })));
+    expect(fade).toMatchObject({ from: 0, to: 1 });
+    expect(fade!.duration).toBeGreaterThan(0);
+    expect(new Set(shown).size).toBe(1);
     expect(await overview.boundingBox()).toEqual(before);
     await expect(overview.locator(".vue-flow__transformationpane")).toHaveAttribute("style", backgroundCamera!);
     await page.screenshot({ path: info.outputPath("ready.png") });
