@@ -318,7 +318,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     refreshRepositoryState: props.refreshRepositoryState,
     canCreateSession: props.sessionData.canCreateSession,
     createSession: props.sessionData.createSession,
-    createSessionCommand: props.sessionData.createSessionCommand,
     createSessionRunning: props.sessionData.createSessionRunning,
     createSessionVisible: props.sessionData.createSessionVisible,
     createSessionTitle: props.sessionData.createSessionTitle,

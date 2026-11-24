@@ -33,6 +33,7 @@ import {
   sessionChangeDiffInputValidator,
   sessionChangesInputValidator,
   sessionCreateInputValidator,
+  sessionCreateStartInputValidator,
   sessionPullRequestInputValidator,
   sessionPullRequestStartInputValidator,
   sessionIdInputValidator,
@@ -64,6 +65,7 @@ const ACTION_UPDATE_ASSISTANT_MODEL_ACCESS = "vibe64.assistants.model-access.upd
 const ACTION_CREATE_PULL_REQUEST = "vibe64.sessions.pull-request.create";
 const ACTION_START_SESSION_PULL_REQUEST = "vibe64.sessions.pull-request.start";
 const ACTION_CREATE_SESSION = "vibe64.sessions.create";
+const ACTION_START_SESSION_CREATION = "vibe64.sessions.create.start";
 const ACTION_PIN_SESSION = "vibe64.sessions.pin";
 const ACTION_RENAME_SESSION = "vibe64.sessions.rename";
 const ACTION_UPDATE_ASSISTANT_SELECTION = "vibe64.sessions.assistant-selection.update";
@@ -221,6 +223,14 @@ function createSessionActions({ sessions }) {
         vibe64: PROJECT_OPERATION
       },
       execute: (input) => sessions.createSession(input)
+    }),
+    // The page's new session: the same creation, answered as creating while it goes on; the page repeats it.
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_START_SESSION_CREATION,
+      input: { ...sessionCreateStartInputValidator, mode: "create" },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => sessions.startSessionCreation(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -548,6 +558,7 @@ export {
   ACTION_ARCHIVE_SESSION,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CREATE_SESSION,
+  ACTION_START_SESSION_CREATION,
   ACTION_CREATE_PULL_REQUEST,
   ACTION_START_SESSION_PULL_REQUEST,
   ACTION_CONFIRM_SESSION_RENEWAL,

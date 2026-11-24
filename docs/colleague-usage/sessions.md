@@ -26,8 +26,9 @@ then select **Create session** (or
 **Create branch & session**). While **Creating session…** is shown, the dialog
 shows a progress bar and explains that it is copying the project source. It stays open: clicking outside,
 pressing Escape, Close and Cancel cannot dismiss it. On success it closes and
-opens the new session. If creation fails, review the error and retry or dismiss
-the dialog. This works the same way on desktop and mobile.
+opens the new session; a large project can take minutes, and a dropped
+connection never creates a second session. If creation fails, review the error
+and retry or dismiss the dialog. This works the same way on desktop and mobile.
 
 On a phone the session's header controls (**New session** (+), a local
 project's Git branch button and the session's GitHub account) sit beside the

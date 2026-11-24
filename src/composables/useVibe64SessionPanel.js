@@ -151,7 +151,6 @@ function useVibe64SessionPanel(props, emit) {
     refreshRepositoryState: repositoryStatusRegistry.refresh,
     canCreateSession: sessionData.canCreateSession,
     createSession: sessionData.createSession,
-    createSessionCommand: sessionData.createSessionCommand,
     createSessionRunning: sessionData.createSessionRunning,
     createSessionVisible: sessionData.createSessionVisible,
     createSessionTitle: sessionData.createSessionTitle,

@@ -22,7 +22,7 @@ import {
   ACTION_CHECK_SESSION_UPDATES,
   ACTION_CONFIRM_SESSION_RENEWAL,
   ACTION_START_SESSION_PULL_REQUEST,
-  ACTION_CREATE_SESSION,
+  ACTION_START_SESSION_CREATION,
   ACTION_DECLINE_MAIN_CHAT_APPROVAL,
   ACTION_EDIT_MAIN_CHAT_APPROVAL,
   ACTION_INSPECT_ASSISTANT_ACCESS,
@@ -147,8 +147,10 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     summary: "Push session work to a new branch and create a GitHub pull request."
   });
 
+  // A new session answers within two seconds, as creating while its source is made: the hosted edge ends a request
+  // after about a minute. The page repeats it with the same requestId until its outcome.
   routes.actionRoute("POST", "/sessions", {
-    actionId: ACTION_CREATE_SESSION,
+    actionId: ACTION_START_SESSION_CREATION,
     buildInput: bodyWithoutUserInput,
     summary: "Create a Vibe64 chat session."
   });
