@@ -274,9 +274,17 @@ test("the learner's own lesson start and finish answer within two seconds while 
   const c = f.register({ ...f.exercises,
     async startLesson(value) { await preparation.promise; return f.exercises.startLesson(value); },
     async finishLesson(value) { await archive.promise; return f.exercises.finishLesson(value); } });
-  let began = Date.now();
-  const held = await c.execute("lesson.start", f.input);
-  assert.ok(Date.now() - began < 2_900, "The start waited for its preparation");
+  // A request that waits for its work fails here instead of hanging the file.
+  const answered = async (request, waitedFor) => {
+    const timer = Promise.withResolvers();
+    const timeout = setTimeout(() => timer.resolve(waitedFor), 2_900);
+    const answer = await Promise.race([request, timer.promise]).finally(() => clearTimeout(timeout));
+    if (answer !== waitedFor) return answer;
+    preparation.resolve();
+    archive.resolve();
+    return assert.fail(waitedFor);
+  };
+  const held = await answered(c.execute("lesson.start", f.input), "The start waited for its preparation");
   assert.deepEqual(held, { ok: true, preparing: true, requestId: "start-one", waitingFor: "preparing" });
   const repeat = c.execute("lesson.start", f.input);
   preparation.resolve();
@@ -284,9 +292,8 @@ test("the learner's own lesson start and finish answer within two seconds while 
   assert.equal(started.ok, true, JSON.stringify(started));
   assert.equal(f.calls.filter(call => call.operation === "start").length, 1, "The repeat joined the running start");
   const input = { attemptId: started.active.attemptId, expectedRevision: started.revision };
-  began = Date.now();
-  assert.deepEqual(await c.execute("lesson.finish", input), { ok: true, finishing: true, attemptId: input.attemptId, waitingFor: "finishing" });
-  assert.ok(Date.now() - began < 2_900, "The finish waited for its archive");
+  assert.deepEqual(await answered(c.execute("lesson.finish", input), "The finish waited for its archive"),
+    { ok: true, finishing: true, attemptId: input.attemptId, waitingFor: "finishing" });
   const finishing = c.execute("lesson.finish", input);
   archive.resolve();
   assert.deepEqual(await finishing, { ok: true, available: true, changed: true });
