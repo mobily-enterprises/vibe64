@@ -16,10 +16,9 @@ import {
   vibe64AssistantSelectionFromMetadata
 } from "../shared/assistantSelection.js";
 import { normalizeVibe64ConversationAttachments } from "../shared/conversationAttachments.js";
-import { writeJsonFile, writeTextFile } from "./sessionFiles.js";
+import { writeJsonFile } from "./sessionFiles.js";
 import {
   CONVERSATION_MESSAGE_FILE_PATTERN,
-  CONVERSATION_MESSAGE_ROLES,
   CONVERSATION_TURN_ATTACHMENTS_FILE,
   CONVERSATION_TURN_ID_PATTERN,
   CONVERSATION_TURN_METADATA_FILE,
@@ -27,12 +26,18 @@ import {
 } from "./sessionRecordRules.js";
 import {
   conversationTurnRoot,
-  createParsedFileCache,
   isoFromConversationTimestamp,
   readDirectoryEntries,
   readTextIfExists,
   sortedFileNames
 } from "./sessionStoreLayout.js";
+import {
+  LEGACY_TRANSCRIPT_FILE,
+  TRANSCRIPT_LOG_FILE,
+  emptyTranscriptRecord,
+  readTranscriptLog,
+  writeTranscriptLog
+} from "./sessionTranscriptLog.js";
 import { enqueueSessionMutation } from "./sessionStoreLocks.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -43,7 +48,6 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").SessionRecords} SessionRecords */
 
 const conversationStreams = createConversationStreams();
-const conversationRecordCache = createParsedFileCache(8);
 const conversationMessageIds = new WeakMap();
 
 function conversationRecordHasMessage(record, messageId) {
@@ -337,100 +341,50 @@ function createSessionConversationStore({
     }
   }
 
-  // A record keeps the compaction summary its conversation runtime writes, when it has one.
-  function conversationRecordJson(record) {
-    return {
-      version: 1,
-      metadata: record.metadata,
-      rewound: record.rewound,
-      turns: [...record.turns],
-      ...(record.summary ? { summary: record.summary } : {})
-    };
-  }
-
-  function parseConversationRecord(source) {
-    let value;
-    try {
-      value = JSON.parse(source);
-    } catch {
-      throw vibe64Error("Conversation storage is not valid JSON. Restore it before continuing.", "vibe64_invalid_conversation_storage");
-    }
-    return validateConversationDocument(value);
-  }
-
-  function validateConversationDocument(value) {
-    const turnIds = Array.isArray(value?.turns) ? new Set(value.turns.map((entry) => entry?.[0])) : new Set();
-    if (value?.version !== 1 || !isPlainObject(value.metadata) || !Array.isArray(value.rewound) || !Array.isArray(value.turns) ||
-        value.turns.some((entry) => !Array.isArray(entry) ||
-          entry.length !== 2 ||
-          typeof entry[0] !== "string" ||
-          !CONVERSATION_TURN_ID_PATTERN.test(entry[0]) ||
-          !isPlainObject(entry[1]) || !Array.isArray(entry[1].messages) ||
-          (entry[1].metadata !== undefined && !isPlainObject(entry[1].metadata)) ||
-          entry[1].messages.some((message) => !isPlainObject(message) || !CONVERSATION_MESSAGE_ROLES.includes(message.role) ||
-            typeof message.text !== "string" || typeof message.at !== "string" || !Number.isFinite(Date.parse(message.at)) ||
-            (message.messageId !== undefined && typeof message.messageId !== "string"))) ||
-        turnIds.size !== value.turns.length ||
-        value.rewound.some((id) => !turnIds.has(id)) ||
-        (value.summary !== undefined && (!isPlainObject(value.summary) || typeof value.summary.text !== "string" ||
-          typeof value.summary.throughTurnId !== "string"))) {
-      throw vibe64Error(
-        "Conversation storage has an unsupported or damaged format. Restore it before continuing.",
-        "vibe64_invalid_conversation_storage_format"
-      );
-    }
-    return {
-      metadata: value.metadata,
-      rewound: value.rewound,
-      turns: new Map(value.turns),
-      ...(value.summary ? { summary: value.summary } : {})
-    };
-  }
-
+  /**
+   * The chat's saved transcript (`conversation-log/transcript.jsonl`, see
+   * sessionTranscriptLog.js) as `{ saved, record }`: saved is what the next
+   * append starts from, null while the chat has no transcript yet. A chat still
+   * in the previous release's shape is refused until the offline upgrade has
+   * converted it; reading never converts it.
+   */
   async function readConversationRecord(sessionPaths) {
     try {
-      return await conversationRecordCache.read(path.join(sessionPaths.conversationLogRoot, "transcript.json"), parseConversationRecord);
+      const saved = await readTranscriptLog(path.join(sessionPaths.conversationLogRoot, TRANSCRIPT_LOG_FILE));
+      return { saved, record: saved.record };
     } catch (error) {
       if (!isMissingPathError(error)) throw error;
     }
     const entries = await readDirectoryEntries(sessionPaths.conversationLogRoot);
-    if (entries.some((entry) =>
-      CONVERSATION_TURN_ID_PATTERN.test(entry.name) || ["rewound.json", "message-ids.json"].includes(entry.name))) {
+    if (entries.some((entry) => CONVERSATION_TURN_ID_PATTERN.test(entry.name) ||
+      [LEGACY_TRANSCRIPT_FILE, "rewound.json", "message-ids.json"].includes(entry.name))) {
       throw vibe64Error(
         "This conversation needs the offline state upgrade. Stop services and run the candidate upgrade-state command before opening it.",
         "vibe64_conversation_upgrade_required"
       );
     }
-    return { turns: new Map(), metadata: {}, rewound: [] };
+    return { saved: null, record: emptyTranscriptRecord() };
   }
 
   /**
    * The session lease owns cross-process exclusion; JSKIT owns the transaction.
-   * One rename publishes messages, native receipts and runtime metadata together.
+   * One appended line commits messages, native receipts and runtime metadata
+   * together.
    */
   function conversationRecordTransaction(sessionPaths, callback, write = false, newTurnMetadata = null) {
-    let record;
+    let loaded;
     const storage = createConversationStorage({
       async readRecord() {
-        record = await readConversationRecord(sessionPaths);
-        return record;
+        loaded = await readConversationRecord(sessionPaths);
+        return loaded.record;
       },
       async writeRecord(_scope, next) {
-        // Transactions cannot change rewind markers; keep the saved ones.
-        next = {
-          metadata: next.metadata,
-          turns: next.turns,
-          rewound: next.rewound ?? record.rewound,
-          summary: next.summary
-        };
-        const document = conversationRecordJson(next);
-        validateConversationDocument(document);
-        // Compact JSON: every reader parses it, and pretty printing a long
-        // transcript on each update costs more than the rest of the write.
-        const filePath = path.join(sessionPaths.conversationLogRoot, "transcript.json");
-        const identity = await writeTextFile(filePath, `${JSON.stringify(document)}\n`);
-        // The written document is final: JSKIT's write does not change it again.
-        conversationRecordCache.remember(filePath, identity, next);
+        // Transactions cannot change rewind markers; keep the saved ones. The
+        // message index JSKIT keeps on the record stays with it for the next one.
+        await writeTranscriptLog(path.join(sessionPaths.conversationLogRoot, TRANSCRIPT_LOG_FILE), loaded.saved, {
+          ...next,
+          rewound: next.rewound ?? loaded.record.rewound
+        });
       }
     });
     return storage[write ? "write" : "read"](sessionPaths.conversationLogRoot, (transaction) => callback({
@@ -440,11 +394,11 @@ function createSessionConversationStore({
        */
       ...(write ? {} : {
         async hasMessage(id) {
-          return conversationRecordHasMessage(record, id);
+          return conversationRecordHasMessage(loaded.record, id);
         }
       }),
       async listTurnIds() {
-        return (await transaction.listTurnIds()).filter((id) => !record.rewound.includes(id));
+        return (await transaction.listTurnIds()).filter((id) => !loaded.record.rewound.includes(id));
       },
       /**
        * Identity lookups see the same turns as listTurnIds.
@@ -453,12 +407,12 @@ function createSessionConversationStore({
       ...(typeof transaction.findMessageTurnId === "function" ? {
         async findMessageTurnId(id) {
           const turnId = await transaction.findMessageTurnId(id);
-          return turnId && !record.rewound.includes(turnId) ? turnId : "";
+          return turnId && !loaded.record.rewound.includes(turnId) ? turnId : "";
         }
       } : {}),
       async readTurn(id) {
         const turn = await transaction.readTurn(id);
-        if (!turn || record.rewound.includes(id)) return turn;
+        if (!turn || loaded.record.rewound.includes(id)) return turn;
         const integrationSetup = await readIntegrationSetupDecision(sessionPaths, id, turn.assistant);
         return integrationSetup ? { ...turn, integrationSetup } : turn;
       },
@@ -540,7 +494,7 @@ function createSessionConversationStore({
 
   async function readFirstUserMessage(sessionId) {
     return archiveAccess.withReadableSessionPaths(sessionId, async (paths) => {
-      const record = await readConversationRecord(paths);
+      const { record } = await readConversationRecord(paths);
       for (const turn of record.turns.values()) {
         const user = turn.messages.find((message) => message.role === "user");
         if (user) return user;
@@ -680,12 +634,10 @@ function createSessionConversationStore({
     completeIntegrationSetupRequest,
     conversationMessageIdExists,
     conversationMessageIdExistsForRenewal,
-    conversationRecordJson,
     conversationStorage,
     deleteSessionConversation,
     findSubmittedConversationTurn,
     listSessionConversations,
-    parseConversationRecord,
     readConversationLog,
     readConversationLogPage,
     readConversationLogTurn,
