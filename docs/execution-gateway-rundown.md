@@ -393,6 +393,27 @@ Claude Code conversation does, hands its project's Env as the project's
 (`project.runtimeConfigEnv`, or `projectEnv` for the conversation execution),
 not inside `baseEnv`.
 
+Nor does a command take the editor's own address, `HOST` and `PORT`, or its
+`TRUSTED_PROXIES`, `SERVER_SURFACE` and `JSKIT_SERVER_SURFACE`: a project's
+server reads the same names, and its dev server would try the editor's own port.
+A Preview gives the application its own address.
+
+On a managed host (`execHelperPath` configured) the editor is the host's service,
+and its environment is the service's: the host's variables for the app, the
+editor's settings and public addresses, its database and keys. There
+`resolveCommandEnv` first drops every `baseEnv` entry the editor's own
+`process.env` has with the same value (`withoutManagedEditorEnv`), whichever
+caller handed it on: the gateway's own inheritance, a caller that spread the
+editor's env (the Codex runtime context), or an agent's command, whose base env
+is the agent's own. It keeps only `MANAGED_EDITOR_ENV_KEPT` (language, time and
+terminal, proxies and certificates, `TMPDIR`, `GENESIS_PARSER_*`,
+`PHP_INI_SCAN_DIR`, `VIBE64_WORKSPACE`) and every `LC_*`, and, for a Preview
+(`purpose: "preview"`), `MANAGED_EDITOR_PREVIEW_ENV_KEPT`, the addresses and
+speech service an editor running as that Preview serves itself by. A value a
+caller set itself and the command's own `env` stay, and the database names are
+filtered the same way before `databaseEnv` reads the base env. A standalone
+editor's environment is its person's shell and stays as it was.
+
 Gateway-owned process identity env looks like:
 
 ```js
