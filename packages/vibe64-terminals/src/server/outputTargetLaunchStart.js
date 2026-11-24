@@ -64,6 +64,7 @@ import {
   reusableLaunchTerminal
 } from "./outputTargetLaunchTerminals.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("./types.js").OutputTargetTerminalState} OutputTargetTerminalState */
 /** @typedef {import("./types.js").OutputTargetLaunchCoordination} OutputTargetLaunchCoordination */
@@ -72,6 +73,9 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").ProjectServicesEnsure} ProjectServicesEnsure */
+
+// A start's answer, inside the launch lock, that the workspace preparation runs: the start waits for it outside.
+const PREPARING = Symbol("preparing");
 
 function previewStoppedRefusal() {
   return { ok: false, code: "vibe64_preview_stopped", error: "Preview was stopped explicitly. Use Start preview to run it again." };
@@ -162,7 +166,33 @@ function createOutputTargetLaunchStart({
     });
   }
 
-  async function startTerminal(sessionId, input = {}) {
+  /**
+   * Starts an output target once the session's workspace is prepared. A start never holds the session's launch
+   * lock while a preparation runs, so the outputs read, Open, the identity switch, Stop, the session's close and
+   * other starts answer meanwhile: it waits for the preparation outside the lock, then starts again from its checks
+   * without asking for another. A Stop or a close while it waited ends it unstarted. `stage` names what it waits on:
+   * `launch-queue` (the lock), `workspace-preparation`, then `starting`.
+   * @param {string} sessionId
+   * @param {object} [input]
+   * @param {{ stage?: (name: string) => void }} [controls]
+   */
+  async function startTerminal(sessionId, input = {}, { stage = doNothing } = {}) {
+    const interruptions = launchCoordination.launchInterruptions(sessionId);
+    let prepared = false;
+    for (;;) {
+      stage("launch-queue");
+      const attempt = await startOnce(sessionId, input, { prepared, stage });
+      if (!attempt?.[PREPARING]) return attempt;
+      stage("workspace-preparation");
+      const failure = await attempt[PREPARING].then(() => null, error => error);
+      if (failure) return vibe64Result(async () => { throw failure; });
+      const interrupted = launchCoordination.launchInterruptedSince(sessionId, interruptions);
+      if (interrupted) return interrupted;
+      prepared = true;
+    }
+  }
+
+  function startOnce(sessionId, input, { prepared, stage }) {
     return vibe64Result(async () => launchCoordination.withLaunchStartLock(sessionId, async () => {
       if (input.restartIfStartedBefore !== undefined && !previewStartedBefore(sessionId, input.restartIfStartedBefore)) {
         return { ok: true, restarted: false };
@@ -186,12 +216,16 @@ function createOutputTargetLaunchStart({
             return previewStoppedRefusal();
           }
         }
-        const context = await readPreparedLaunchContext(project, sessionId, {
+        const read = await readPreparedLaunchContext(project, sessionId, {
           ensureWorkspacePrepared,
+          prepared,
           // An explicit start runs a failed setup again; an automatic one
           // reports the stored failure instead of rerunning it unasked.
           rerunFailedSetup: input.automatic !== true
         });
+        if (read.preparing) return { [PREPARING]: read.preparing };
+        stage("starting");
+        const { context } = read;
         const unavailable = launchCoordination.launchAdmissionFailure(sessionId, context.session);
         if (unavailable) {
           return unavailable;

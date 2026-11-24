@@ -652,17 +652,11 @@ test("launch start awaits preparation, publishes proxied ingress, and cannot ret
       outputTargetId: "app"
     }));
     await preparationStartedPromise;
-    let closeFinished = false;
-    const closing = controller.closeAllForSession(sessionId).then((result) => {
-      closeFinished = true;
-      return result;
-    });
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(closeFinished, false);
+    // The session's close no longer waits for the preparation: previewStartLaunchQueue.unit.test.js proves it
+    // answers at once and ends the waiting start unstarted.
     finishPreparation();
 
     const terminal = await starting;
-    await closing;
 
     assert.equal(terminal.ok, true, JSON.stringify(terminal));
     assert.equal(capturedLaunchProject.slug, "launch-project");

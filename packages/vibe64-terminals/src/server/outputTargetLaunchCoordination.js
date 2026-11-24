@@ -37,6 +37,9 @@ function createOutputTargetLaunchCoordination({
   sessionAdmissionFailure
 }) {
   const launchStarts = createKeyedQueue();
+  // Each session's Stops and closes, counted, so a start that waited for the workspace preparation outside the
+  // launch lock knows whether one came meanwhile.
+  const interruptions = new Map();
 
   /**
    * The environment, project and command runner a Preview status read or
@@ -187,6 +190,42 @@ function createOutputTargetLaunchCoordination({
     return launchStarts.run(String(sessionId || "global"), operation);
   }
 
+  /**
+   * A Stop (`stopped`) or the session's close (`closed`) ends the starts waiting for its workspace preparation.
+   * @param {string} sessionId
+   * @param {"stopped" | "closed"} reason
+   */
+  function interruptLaunches(sessionId, reason) {
+    const key = String(sessionId || "global");
+    interruptions.set(key, { count: (interruptions.get(key)?.count || 0) + 1, reason });
+  }
+
+  /** How many Stops and closes the session has had, for `launchInterruptedSince`. */
+  function launchInterruptions(sessionId) {
+    return interruptions.get(String(sessionId || "global"))?.count || 0;
+  }
+
+  /**
+   * The refusal of a start that waited while the session's Preview was stopped or the session closed, or null.
+   * @param {string} sessionId
+   * @param {number} count `launchInterruptions` when the start began
+   */
+  function launchInterruptedSince(sessionId, count) {
+    const latest = interruptions.get(String(sessionId || "global"));
+    if (!latest || latest.count === count) return null;
+    return latest.reason === "closed"
+      ? {
+        ok: false,
+        code: "vibe64_session_closing",
+        error: "The session closed while its workspace was being prepared, so Preview did not start."
+      }
+      : {
+        ok: false,
+        code: "vibe64_preview_stopped",
+        error: "Preview was stopped while the workspace was being prepared. Use Start preview to run it again."
+      };
+  }
+
   function launchAdmissionFailure(sessionId = "", session = null) {
     const frozen = sessionAdmissionFailure(sessionId);
     if (frozen?.ok === false) {
@@ -244,6 +283,9 @@ function createOutputTargetLaunchCoordination({
     captureOutputResults,
     markLaunchReady,
     withLaunchStartLock,
+    interruptLaunches,
+    launchInterruptions,
+    launchInterruptedSince,
     launchAdmissionFailure,
     withLaunchAdmission,
     resolvePreviewStatus

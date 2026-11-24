@@ -48,6 +48,8 @@ function createOutputTargetTerminalSessions({
   async function closeAllForSession(sessionId) {
     const testRun = state.previewTestRuns.get(sessionId);
     if (testRun) testRun.closing = true;
+    // A start waiting for the workspace preparation, outside the lock, starts nothing once the session closes.
+    launchCoordination.interruptLaunches(sessionId, "closed");
     await stopActiveUsageRecording(currentProjectScopeKey(), sessionId, "session-ended");
     return launchCoordination.withLaunchStartLock(sessionId, async () => {
       // The session ends, so its Preview access token ends with it. A restart,
@@ -99,6 +101,8 @@ function createOutputTargetTerminalSessions({
   }
 
   async function stopTerminal(sessionId, terminalSessionId) {
+    // A start waiting for the workspace preparation, outside the lock, starts nothing once Preview is stopped.
+    if (!state.previewTestRuns.has(sessionId)) launchCoordination.interruptLaunches(sessionId, "stopped");
     return vibe64Result(async () => launchCoordination.withLaunchStartLock(sessionId, async () => {
       if (state.previewTestRuns.has(sessionId)) {
         return {

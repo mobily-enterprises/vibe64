@@ -523,6 +523,14 @@ and local Git excludes. A changed setup runs under assistant-write admission
 until its command completes. Environment preparation and Git alternates repair
 also recheck under that lock before writing. A rejected preparation stops launch.
 Namespace admission prevents renewal from freezing a launch midway through it.
+A start never holds the launch queue or namespace admission while a workspace
+preparation runs (`readPreparedLaunchContext` answers `{ preparing }`): it waits
+for that preparation outside them, so the outputs read, Open, the identity
+switch, Stop, the session's close and renewal's freeze answer meanwhile, then
+takes the queue again and reruns its checks without asking for another
+preparation. A Stop or the session's close while it waited
+(`interruptLaunches`) ends it unstarted (`vibe64_preview_stopped`,
+`vibe64_session_closing`).
 
 Status inspection resolves the environment without provisioning resources or
 writing project environment files. Confirmed preview readiness supersedes a
