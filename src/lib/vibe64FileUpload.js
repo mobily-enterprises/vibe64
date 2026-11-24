@@ -127,16 +127,15 @@ function uploadFileRequest({
           settle(reject, new Error(invalid));
           return;
         }
-        const error = vibe64ApiError(
-          payload || {},
-          `${failure} (HTTP ${request.status || "unknown"})`
-        );
+        // A failure the server did not word (an edge's page) is said without its status: a person never sees one.
+        const error = vibe64ApiError(payload || {}, failure);
         error.status = Number(request.status || 0);
         error.statusCode = error.status;
         settle(reject, error);
       };
       request.onerror = () => {
-        settle(reject, new Error(`${failure} Check your connection and try again.`));
+        // Status 0: the answer never came back, as a caller that repeats a lost answer reads it.
+        settle(reject, Object.assign(new Error(`${failure} Check your connection and try again.`), { status: 0, statusCode: 0 }));
       };
       request.onabort = () => {
         settle(reject, abortError());

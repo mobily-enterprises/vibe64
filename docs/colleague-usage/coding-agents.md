@@ -215,6 +215,11 @@ deciding what to send next. This also applies to steering instructions.
 For provider startup, interruption and delivery recovery, read
 [Coding-agent recovery](coding-agent-recovery.md).
 
+While setup, **Save** or **Update** holds the session, or the connection drops,
+an attachment stays queued and keeps uploading on its own for a few minutes; if
+it still cannot, the composer says why (for example, that the session is being
+saved), and you can add the file again once that finishes.
+
 An attachment upload refused because its session is closing identifies whether
 the session is being archived or deleted when that reason is known. No file is
 added. Use an open session before uploading again. Colleague can explain the
