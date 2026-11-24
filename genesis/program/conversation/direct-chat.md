@@ -3465,9 +3465,17 @@ enclosing session-close lifetime.
 The session-agent manager shares overlapping checks after authorizing each
 caller. A missing, unloaded, or disconnected provider session goes through its
 common runtime's native readiness operation, retaining the application's wait
-of up to ten seconds for the agent-write lock. Attachment uploads wait up to sixty
-seconds for that lock and retain it so renewal cannot freeze and clean up a session
-while an upload is writing. Admission rechecks the session after waiting, so renewal or archive
+of up to ten seconds for the agent-write lock. Attachment uploads wait up to thirty
+seconds for that lock (`ATTACHMENT_UPLOAD_LOCK_WAIT_MS`), well inside the hosted
+edge's minute, and retain it so renewal cannot freeze and clean up a session
+while an upload is writing. A holder that keeps it longer (setup preparing the
+workspace, Save, Update) refuses in its own words, retryably;
+`useVibe64AttachmentCommands` sends the file again after that refusal, after the
+storage lock's `vibe64_agent_attachment_busy`, and after an answer that never
+came back (status 0, or a 5xx without a code), waiting 1, 2, 3 and then 5
+seconds for up to twelve attempts, then says the holder's words or that Vibe64
+could not be reached. An upload stored but never answered leaves an unsent file
+that expires. `uploadFileRequest` never words a failure with its HTTP status. Admission rechecks the session after waiting, so renewal or archive
 cannot be bypassed by a queued upload. Vibe64 configures JSKIT's shared attachment
 queue for one upload at a time, matching this storage boundary; selected files
 appear immediately as queued and proceed automatically. Concurrent requests from

@@ -15,9 +15,14 @@ import { assertProjectEffectAdmission } from "@local/vibe64-core/server/projectR
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { defineSessionRenewalHandoverText, sessionRenewalManualHandoverTemplate } from "./sessionRenewalHandover.js";
-import { AGENT_WRITE_WAIT_MS, runSessionRenewalOperation } from "./serviceSessionAccess.js";
+import { runSessionRenewalOperation } from "./serviceSessionAccess.js";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
+
+// An upload holds its request while it waits for the session's write lock, which setup preparing the workspace, Save
+// or Update hold for minutes; the hosted edge ends a request after about a minute. Thirty seconds leaves the upload
+// time to store its file and answer with the holder's worded, retryable refusal, which the composer sends again.
+const ATTACHMENT_UPLOAD_LOCK_WAIT_MS = 30_000;
 
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
@@ -409,7 +414,7 @@ function createServiceAgentConversations({
   function uploadAgentAttachment(sessionId, input = {}, options = {}) {
     return sessionAccess.runMainAgentWrite(sessionId, options, (context) => (
       sessionAgent.uploadAttachment(sessionId, input, context)
-    ), { operation: "upload-agent-attachment", waitMs: AGENT_WRITE_WAIT_MS });
+    ), { operation: "upload-agent-attachment", waitMs: ATTACHMENT_UPLOAD_LOCK_WAIT_MS });
   }
 
   function readAgentAttachment(sessionId, attachmentId) {

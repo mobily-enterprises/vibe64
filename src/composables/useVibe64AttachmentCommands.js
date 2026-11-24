@@ -10,6 +10,7 @@ import {
   vibe64AgentAttachmentPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { uploadFileRequest } from "@/lib/vibe64FileUpload.js";
+import { workAnswerLost } from "@/lib/vibe64SessionWorkOutcome.js";
 
 function missingSessionResponse() {
   return {
@@ -35,6 +36,24 @@ const ATTACHMENT_UPLOAD_MESSAGES = Object.freeze({
   failure: "Assistant attachment could not be uploaded.",
   invalid: "Assistant attachment upload returned an invalid response."
 });
+
+// Contention a later attempt gets past: the session's write lock, which setup preparing the workspace, Save or Update
+// hold for minutes (the server waits thirty seconds for it, then refuses in the holder's words), and the attachment
+// storage lock. An upload refused for either, or whose answer never came back (the hosted edge cut it, or the
+// connection dropped), is sent again after these waits, the last repeating; an upload stored but never answered
+// leaves an unsent file that expires.
+const RETRYABLE_UPLOAD_REFUSALS = new Set(["vibe64_agent_write_mode_busy", "vibe64_agent_attachment_busy"]);
+const UPLOAD_RETRY_DELAYS_MS = Object.freeze([1_000, 2_000, 3_000, 5_000]);
+const MAX_UPLOAD_ATTEMPTS = 12;
+const UPLOAD_LOST_CONTACT = "Vibe64 could not be reached to upload this attachment. Check your connection and try again.";
+
+function retryableUploadRefusal(value) {
+  return RETRYABLE_UPLOAD_REFUSALS.has(String(value?.code || ""));
+}
+
+function uploadRetryDelay(attempt) {
+  return new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_DELAYS_MS[Math.min(attempt, UPLOAD_RETRY_DELAYS_MS.length - 1)]));
+}
 
 function useVibe64AttachmentCommands() {
   const paths = usePaths();
@@ -92,13 +111,21 @@ function useVibe64AttachmentCommands() {
         ok: false
       };
     }
-    return await uploadFileRequest({
-      file,
-      messages: ATTACHMENT_UPLOAD_MESSAGES,
-      onProgress,
-      path: vibe64AgentAttachmentPath(sessionsApiPath.value, normalizedSessionId),
-      signal
-    });
+    const path = vibe64AgentAttachmentPath(sessionsApiPath.value, normalizedSessionId);
+    for (let attempt = 0; ; attempt += 1) {
+      const last = attempt + 1 >= MAX_UPLOAD_ATTEMPTS;
+      let result;
+      try {
+        result = await uploadFileRequest({ file, messages: ATTACHMENT_UPLOAD_MESSAGES, onProgress, path, signal });
+      } catch (error) {
+        if (signal?.aborted || (!retryableUploadRefusal(error) && !workAnswerLost(error))) throw error;
+        if (last) throw retryableUploadRefusal(error) ? error : new Error(UPLOAD_LOST_CONTACT);
+        await uploadRetryDelay(attempt);
+        continue;
+      }
+      if (result?.ok !== false || !retryableUploadRefusal(result) || last) return result;
+      await uploadRetryDelay(attempt);
+    }
   }
 
   return { deleteAttachment, uploadAttachment };
