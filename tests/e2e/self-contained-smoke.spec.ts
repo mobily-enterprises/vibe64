@@ -53,36 +53,47 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(accountMenuButton).toBeFocused();
 });
 
-test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
-  let projectSelectionRecovered = false;
+test("an editor that does not answer shows Updating…, and after about a minute JSKIT's shell recovery with Retry", async ({ page }) => {
+  // The editor is away and stays away: neither the project read nor the page's health check gets an answer.
+  let editorAway = true;
   await mockReadyStudioShell(page, {
     failGet(apiPathname) {
-      return apiPathname === "/api/vibe64/projects" && !projectSelectionRecovered;
+      return editorAway && (apiPathname === "/api/vibe64/projects" || apiPathname === "/api/health");
     }
   });
 
   await page.clock.install();
   await page.goto(DEVELOPMENT_PATH);
+  const awaySince = await page.evaluate(() => Date.now());
 
+  const banners = page.locator(".shell-error-host__banner");
+  const updating = banners.filter({ hasText: "Updating…" });
   const recoveryMessage = "Projects could not reach the server or network. Check the connection and try again.";
-  const recoveryBanner = page.locator(".shell-error-host__banner").filter({
-    hasText: recoveryMessage
-  });
-  // JSKIT retries the failed read on the client's own timers, in its HTTP client
-  // and again in the query, before it offers recovery. Each wait follows a failed
-  // request, so the test moves the page clock through one wait (at most 3 s) at a time.
+  const recoveryBanner = banners.filter({ hasText: recoveryMessage });
+  // The page's client waits for the editor on the page's own timers, asking again after each wait (at most 3 s), so
+  // the test moves the page clock through one wait at a time.
+  await expect(async () => {
+    await page.clock.runFor(1_000);
+    await expect(updating).toBeVisible({ timeout: 250 });
+  }).toPass({ intervals: [100], timeout: 15_000 });
+  await expect(recoveryBanner).toHaveCount(0);
+
+  // After about a minute the client stops waiting, and JSKIT's shell offers recovery while Updating… stays.
   await expect(async () => {
     await page.clock.runFor(3_000);
     await expect(recoveryBanner).toBeVisible({ timeout: 250 });
-  }).toPass({ intervals: [100], timeout: 15_000 });
+  }).toPass({ intervals: [100], timeout: 40_000 });
+  expect(await page.evaluate(() => Date.now()) - awaySince).toBeGreaterThanOrEqual(55_000);
+  await expect(updating).toBeVisible();
 
-  projectSelectionRecovered = true;
+  editorAway = false;
   await recoveryBanner.getByRole("button", { name: "Retry" }).click();
 
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible({
     timeout: 15_000
   });
   await expect(recoveryBanner).toHaveCount(0);
+  await expect(updating).toHaveCount(0);
 });
 
 test("a tab still running the build before an update offers Reload when it opens a page the update removed", async ({ page }) => {
@@ -138,6 +149,8 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
   await suppressAiOnboarding(page);
   const failInitialGetCounts = new Map(Object.entries(options.failInitialGetCounts || {}));
   const apiPayloads = new Map<string, unknown>([
+    // The editor is up, as its server answers: the page's client asks while it waits for an editor that did not answer.
+    ["/api/health", { ok: true, app: "vibe64" }],
     ["/api/vibe64/accounts/codex-providers", { ok: true, providers: [] }],
     ["/api/vibe64/accounts/ai-connections", { ok: true, connections: [] }],
     ["/api/vibe64/training/learning-mode", { ok: true, available: true, learningMode: null }],

@@ -60,13 +60,20 @@ open tab carries on by itself, and you don't need to do anything:
   and is done once Vibe64 is back, exactly once.
 - If Vibe64 stays unreachable for about a minute, the page says so in words:
   **Vibe64 can't reach the editor. It may be updating; try again in a
-  moment.** Something you did then says **Vibe64 couldn't reach the editor, so
-  this wasn't done. Try again in a moment.**
+  moment.** A part of the page that could not load offers **Retry** (for
+  example **Projects could not reach the server or network**), and
+  **Updating…** stays until Vibe64 answers. Something you did then says
+  **Vibe64 couldn't reach the editor, so this wasn't done. Try again in a
+  moment.**
 - If the restart cut off something already under way, Vibe64 may not know
   whether it finished. It never repeats it on its own, and says **Vibe64 lost
   contact with the editor while doing this, so it can't tell whether it was
   done. Check, then try again if it wasn't.** Look at the result first, for
   example the file, the list or the chat, before you try again.
+- When Vibe64 itself answers that something can't be done right now (a
+  service it uses is down, for example), that is not a restart: its own
+  message shows at once, usually with **Retry**, and no **Updating…** banner
+  appears.
 - The banner and messages are the same on desktop and phone.
 
 Colleague can explain the banner and these messages. It cannot see whether a
