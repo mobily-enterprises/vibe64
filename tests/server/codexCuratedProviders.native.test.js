@@ -222,6 +222,20 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
       helper.close();
     }
   }
+  // A helper on the owner's OpenAI provider has no provider home to bring model rows, so only the catalogue its start
+  // exports keeps Codex from fetching the model list (chatgpt.com) before it answers: the harness fails this at once.
+  const openaiHelper = createCodexAppServerAgentProvider({
+    ...providers.find((candidate) => (candidate.options.modelProviderId || "openai") === "openai").options,
+    executionMode: "helper", runtimeDir: path.join(root, "codex-app-server-helper-openai"), runtimeInstanceId: "codex-app-server-helper-openai"
+  });
+  try {
+    await openaiHelper.connect();
+    const catalog = await openaiHelper.listModels({ includeHidden: false, limit: 100 });
+    assert.ok(catalog.data.some((model) => model.model === "gpt-5.6-luna"), JSON.stringify(catalog.data.map((model) => model.model)));
+  } finally {
+    if (openaiHelper.runtime) await openaiHelper.stopRuntime();
+    openaiHelper.close();
+  }
   const gpt = runtimes.get("openai");
   const selected = runtimes.get("deepseek");
   await assert.rejects(connections.change("deepseek", { remove: true }), /Another subscriber retained the selected thread/,
