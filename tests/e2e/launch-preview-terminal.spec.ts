@@ -36,6 +36,8 @@ const SESSION_ID = "session-renderer";
 const TARGET_APP_URL = "http://127.0.0.1:4103/home";
 const PROXY_APP_URL = "http://127.0.0.1:49000/home";
 const TEST_ASSISTANT_CATALOG_REVISION = `sha256:${"a".repeat(64)}`;
+// A Preview start names itself (`newLaunchStartId`), so its held or lost answer is followed to that start.
+const LAUNCH_START_ID = /^start_[a-f0-9]{32}$/u;
 
 for (const width of [390, 768, 1280]) {
   for (const kind of ["web", "terminal", "finite", "none"]) {
@@ -2518,9 +2520,12 @@ for (const stopped of [false, true]) {
     await page.locator(".vibe64-launch-controls__terminal--embedded")
       .getByRole("button", { name: "Restart preview", exact: true }).click();
     await expect.poll(() => launchSession.getLaunchStartPayloads()).toHaveLength(startsBeforeToolbar + 2);
-    for (const payload of launchSession.getLaunchStartPayloads()) {
-      expect(payload).toMatchObject({ forceRestart: true, outputTargetId: "dev" });
+    const restarts = launchSession.getLaunchStartPayloads();
+    for (const payload of restarts) {
+      expect(payload).toMatchObject({ forceRestart: true, outputTargetId: "dev", startId: expect.stringMatching(LAUNCH_START_ID) });
     }
+    expect(new Set(restarts.map((payload) => (payload as { startId?: string }).startId)).size, "each press is its own start")
+      .toBe(restarts.length);
 
     await page.locator(".vibe64-launch-controls__terminal--embedded")
       .getByRole("button", { name: "Close", exact: true }).click();
@@ -2577,7 +2582,9 @@ test("@preview-lifecycle auto-starts without exposing passive actions", async ({
       automatic: true,
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u),
-      replacesTerminalSessionId: ""
+      replacesTerminalSessionId: "",
+      // The start names itself, so a held or lost answer is followed to this start.
+      startId: expect.stringMatching(LAUNCH_START_ID)
     }
   ]);
   await expect(page.locator(".vibe64-launch-controls__run-button")).toHaveCount(0);
@@ -2610,7 +2617,9 @@ test("@preview-lifecycle automatically recovers when the first status has no tar
       automatic: true,
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u),
-      replacesTerminalSessionId: ""
+      replacesTerminalSessionId: "",
+      // The start names itself, so a held or lost answer is followed to this start.
+      startId: expect.stringMatching(LAUNCH_START_ID)
     }
   ]);
   await expect(page.locator(".vibe64-launch-controls__preview-frame")).toBeVisible();
@@ -2646,7 +2655,9 @@ test("@preview-lifecycle refreshes disabled targets after the selected session a
       automatic: true,
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u),
-      replacesTerminalSessionId: ""
+      replacesTerminalSessionId: "",
+      // The start names itself, so a held or lost answer is followed to this start.
+      startId: expect.stringMatching(LAUNCH_START_ID)
     }
   ]);
 });
@@ -2672,7 +2683,9 @@ test("@preview-lifecycle lets the user recheck a disabled target without a sessi
       automatic: true,
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u),
-      replacesTerminalSessionId: ""
+      replacesTerminalSessionId: "",
+      // The start names itself, so a held or lost answer is followed to this start.
+      startId: expect.stringMatching(LAUNCH_START_ID)
     }
   ]);
 });
