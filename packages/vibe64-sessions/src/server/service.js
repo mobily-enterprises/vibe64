@@ -21,7 +21,8 @@ const LISTED_CONFLICTS = 5;
 /**
  * Why automatic save stopped at the Update it ran first, in words, with the one button that leads on: the Update
  * notice's Fix it with AI, which repairs a conflict, or any other Update problem, and then runs Update itself.
- * @param {{ error?: string, details?: { conflictPaths?: string[], conflictRecovery?: object | null, connectedRepository?: string } }} update
+ * @param {{ error?: string, details?: object }} update the Update's refusal: its message, and a conflict's
+ *   `conflictRecovery`, `conflictPaths` and `connectedRepository`
  */
 function automaticUpdateStopped(update) {
   const details = update.details || {};

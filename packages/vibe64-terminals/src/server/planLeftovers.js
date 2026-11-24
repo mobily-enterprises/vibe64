@@ -53,7 +53,9 @@ function failingTestLeftovers(progressText) {
       flush();
       if (section === LABEL_SECTION) section = 0;
       else item = line;
-    } else flush();
+    } else {
+      flush();
+    }
   }
   flush();
   return found;
