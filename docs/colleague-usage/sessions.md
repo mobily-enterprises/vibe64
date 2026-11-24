@@ -344,8 +344,8 @@ or be closed by idle cleanup. Closing your browser does not remove the pin.
 Idle cleanup otherwise closes an open project, with its Preview, terminals and
 assistant processes, 30 to 35 minutes after its last recorded activity (opening
 it, typing in one of its chats, session changes and assistant work). Opening the
-project while idle cleanup is closing it waits for that Close, then opens the
-project again. A chat message sent then, or after the Close, also reopens the
+project while idle cleanup is closing it waits for that Close, however long it
+takes, then opens the project again. A chat message sent then, or after the Close, also reopens the
 project and then reaches the assistant; if the project cannot open, the message
 stays marked as not sent, with the reason. If idle cleanup closes the project
 while a chat holds a draft or an undelivered message, the page stays, showing
