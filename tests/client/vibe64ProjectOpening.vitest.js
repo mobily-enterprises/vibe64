@@ -5,8 +5,9 @@ import * as Vue from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { configureHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 
-const mocks = vi.hoisted(() => ({ command: null, requests: [], realtime: [], selectionReload: vi.fn(), listPath: "" }));
+const mocks = vi.hoisted(() => ({ command: null, requests: [], realtime: [], selectionReload: vi.fn(), listPath: "", send: null }));
 vi.mock("@/lib/vibe64ProjectScope.js", async (importOriginal) => ({
   ...await importOriginal(), projectListPath: () => mocks.listPath
 }));
@@ -26,10 +27,17 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
       async run(context) {
         if (!this.canRun || this.isRunning) return null;
         this.isRunning = true;
-        const request = Promise.withResolvers();
-        mocks.requests.push({ context, options: options.buildCommandOptions(null, { context }), ...request });
-        try { return await request.promise; }
-        finally { this.isRunning = false; }
+        const commandOptions = options.buildCommandOptions(null, { context });
+        // Each request the open sends, through the command's own client when it has one, waits for the test's answer.
+        mocks.send = () => {
+          const request = Promise.withResolvers();
+          mocks.requests.push({ context, options: commandOptions, ...request });
+          return request.promise;
+        };
+        try {
+          return await (options.client || { request: mocks.send }).request(commandOptions.path,
+            { method: commandOptions.method, body: options.buildRawPayload(null, { context }) });
+        } finally { this.isRunning = false; }
       }
     });
     return mocks.command;
@@ -72,7 +80,9 @@ function passthrough(tag) {
 }
 
 const dispose = [];
-afterEach(() => { while (dispose.length) dispose.pop()(); mocks.listPath = ""; vi.unstubAllGlobals(); });
+// The open's own client sends through this one.
+configureHttpWebClient({ request: () => mocks.send() });
+afterEach(() => { while (dispose.length) dispose.pop()(); mocks.listPath = ""; vi.unstubAllGlobals(); vi.useRealTimers(); });
 const success = { ok: true, runtime: { open: true } };
 async function flush() { for (let i = 0; i < 8; i += 1) await Vue.nextTick(); }
 
@@ -309,6 +319,45 @@ describe("opening a routed project", () => {
     await flush();
     expect(view.page.projectRuntimeError.value).toBe("");
     expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  });
+
+  // An open that arrives while idle cleanup closes the project waits for that Close, which can outlast the hosted
+  // edge's minute.
+  it("repeats an open held behind idle cleanup's Close until the project opens", async () => {
+    const view = await mountPage();
+    mocks.requests[0].resolve({ ok: true, opening: true, waitingFor: "project-close" });
+    await flush();
+    expect(mocks.requests).toHaveLength(2);
+    expect(mocks.requests[1].options).toEqual(mocks.requests[0].options);
+    expect(view.page.projectRuntimeReady.value).toBe(false);
+    expect(view.sessionMounted).not.toHaveBeenCalled();
+    mocks.requests[1].resolve(success);
+    await flush();
+    expect(view.page.projectRuntimeReady.value).toBe(true);
+    expect(view.page.projectRuntimeError.value).toBe("");
+    expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([0, 502, 504])("repeats an open whose answer was lost with status %s, and never shows that failure", async (status) => {
+    const view = await mountPage();
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    mocks.requests[0].reject(Object.assign(new Error(`Request failed with status ${status}.`), { status }));
+    await vi.advanceTimersByTimeAsync(1_000);
+    await flush();
+    expect(mocks.requests).toHaveLength(2);
+    expect(view.page.projectRuntimeError.value).toBe("");
+    mocks.requests[1].resolve(success);
+    await flush();
+    expect(view.page.projectRuntimeReady.value).toBe(true);
+    expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  });
+
+  it("words an open failure the server did not word, never showing its status", async () => {
+    const view = await mountPage();
+    mocks.requests[0].reject(Object.assign(new Error("Request failed with status 404."), { status: 404 }));
+    await flush();
+    expect(view.page.projectRuntimeError.value).toBe("The project could not be opened. Try again.");
+    expect(view.sessionMounted).not.toHaveBeenCalled();
   });
 
   it("opens the latest project after an earlier navigation's request finishes", async () => {
