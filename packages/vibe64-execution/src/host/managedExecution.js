@@ -307,14 +307,16 @@ async function runManagedExecutionPayload(payloadPath = "") {
   controllerLease?.once("close", stopForControllerLoss);
   const startedAt = new Date().toISOString();
   let childSignal = "";
+  // Root's JVM options name only the temporary folder; the staging environment's own follow them once.
+  const { JAVA_TOOL_OPTIONS: _temporaryFolderOptions, ...requested } = payload.stagingEnvironmentFile ? payload.env : {};
   try {
     child = spawn(command, Array.isArray(payload.args) ? payload.args.map(String) : [], {
       cwd: String(payload.cwd || "/"),
       detached: Boolean(controllerLease),
       // The runner, as the execution's own user, loads the staging environment.
       env: payload.stagingEnvironmentFile
-        ? helperChildEnv({ ...process.env, ...readEnvironmentFile(payload.stagingEnvironmentFile), ...payload.env },
-          { stagingAccount: payload.stagingAccount === true, home: payload.env.HOME, username: payload.env.USER }, payload.env.USER)
+        ? helperChildEnv({ ...process.env, ...readEnvironmentFile(payload.stagingEnvironmentFile), ...requested },
+          { stagingAccount: payload.stagingAccount === true, home: requested.HOME, username: requested.USER }, requested.USER)
         : payload.env && typeof payload.env === "object" && !Array.isArray(payload.env) ? payload.env : {},
       stdio: payload.inputPresent === true
         ? ["pipe", "inherit", "inherit"]

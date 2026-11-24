@@ -9,6 +9,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  rmSync,
   unlinkSync,
   writeFileSync
 } from "node:fs";
@@ -22,7 +23,7 @@ import {
   assertStagingUnitClaim,
   registeredStagingAccount
 } from "./stagingAccounts.js";
-import { helperCommandPath, readEnvironmentFile } from "./commandEnvironment.js";
+import { helperCommandPath, javaTemporaryOptions, readEnvironmentFile } from "./commandEnvironment.js";
 import {
   ensureGroup,
   MANAGED_ROOT,
@@ -36,6 +37,7 @@ import {
 import {
   canonicalPath,
   fsyncDirectory,
+  makeDirectory,
   openDirectoryBelow,
   openedPath,
   openRootOwnedDirectory,
@@ -585,7 +587,25 @@ function runStagingUnit(environmentFile = "", startScript = "") {
     throw new Error("Usage: vibe64-exec-helper run-staging-unit <environment-file> <start-script>");
   }
   assertStagingAreaNosuid(process.cwd());
-  process.execve(startScript, [startScript], { ...process.env, ...readEnvironmentFile(environmentFile) });
+  const env = { ...process.env, ...readEnvironmentFile(environmentFile) };
+  // The unit's own temporary folder, beside the account's home in its area, made afresh as a private /tmp is at
+  // each start: whatever the application left there goes, a link it planted removed, never followed. A unit that
+  // names another TMPDIR (one installed before, with TMPDIR=/tmp) starts as it did.
+  const home = process.env.HOME || "";
+  const app = path.dirname(home);
+  const temporaryFolder = path.join(app, "tmp");
+  if (path.isAbsolute(home) && path.normalize(home) === home && path.basename(home) === "home" &&
+    path.basename(app) === "app" && process.env.TMPDIR === temporaryFolder) {
+    try {
+      rmSync(temporaryFolder, { force: true, recursive: true });
+    } catch (error) {
+      // A file it cannot remove (in a folder it made read-only, as Go's module downloads are) never stops the start.
+      process.stderr.write(`Vibe64 left what remains in the staging service's temporary folder ${temporaryFolder}: ${error.message}\n`);
+    }
+    makeDirectory(temporaryFolder, 0o700);
+    env.JAVA_TOOL_OPTIONS = javaTemporaryOptions(env);
+  }
+  process.execve(startScript, [startScript], env);
 }
 
 export {

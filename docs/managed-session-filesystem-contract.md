@@ -86,7 +86,11 @@ databases run as its own staging account, in an area of its own in root's
 system folder for staging apps, outside every managed project/session source
 namespace. The daemon hands it a staging release's source and Staging Env
 through that area's handover directory, which only the staging account's group
-may read.
+may read. Its temporary folder, the `TMPDIR` of its commands, staging service
+and staging logins, is `app/tmp` in that area beside its home: the staging
+account's own (`0700`), in a place where programs may start even where `/tmp`
+is `noexec`, and out of every other account's reach. Its staging service makes
+it afresh at each start.
 
 A session's temporary folder is the `TMPDIR` of the session's AI commands:
 `v64s-` and 12 hex digits of its session folder's path, directly in the
