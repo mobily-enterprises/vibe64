@@ -640,9 +640,11 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
 
 // The page's HTTP stays mocked; its chat uses this server's real conversation
 // owner and Socket.IO transport, and so do its temporary conversations when the
-// server serves Temporary AI. Studio sockets must come from the server's own
-// origin, so they are relayed from Node.
-export async function relayConversation(page: Page, server: { url: string; temporary?: unknown }) {
+// server serves Temporary AI, and Colleague's own reads when it serves Colleague:
+// Colleague names its conversation there, which the page then reads and
+// subscribes to here. Studio sockets must come from the server's own origin, so
+// they are relayed from Node.
+export async function relayConversation(page: Page, server: { url: string; temporary?: unknown; colleague?: unknown }) {
   const relay = (url: string | RegExp) => page.route(url, async (route) => {
     const { pathname, search } = new URL(route.request().url());
     const response = await route.fetch({ url: `${server.url}${pathname}${search}`,
@@ -652,6 +654,7 @@ export async function relayConversation(page: Page, server: { url: string; tempo
   });
   await relay("**/api/assistant/**");
   if (server.temporary) await relay(/\/(?:temporary-conversations|ai-tasks)(?:[/?]|$)/u);
+  if (server.colleague) await relay(/\/api\/vibe64\/colleague(?:[/?]|$)/u);
   await page.routeWebSocket(/\/socket\.io\//u, (route) => {
     const url = new URL(route.url());
     const upstream = new WebSocket(`${server.url.replace("http", "ws")}${url.pathname}${url.search}`, { origin: server.url });

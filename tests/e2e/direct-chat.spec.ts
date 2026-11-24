@@ -43,23 +43,96 @@ const SCROLL_TEST_COPY = "A deliberately detailed update keeps the conversation 
 
 // The page's HTTP stays mocked; its chat uses the real conversation owner for
 // the page's session. With a temporary engine, that owner also serves Temporary
-// AI: the page reaches its temporary conversations through the same relay.
+// AI: the page reaches its temporary conversations through the same relay. On a
+// Colleague host, that server also serves its real Colleague: the page reads
+// Colleague's conversation through the relay and subscribes to it over the
+// shared realtime socket, as a composed host serves it. Its model is a fixed
+// reply in this process.
 const hintTest = test.extend<{
   temporaryEngineId: "codex" | null;
+  colleagueHost: boolean;
   hintRealtime: Awaited<ReturnType<typeof assistantStatusServer>>;
 }>({
   temporaryEngineId: [null, { option: true }],
-  hintRealtime: [async ({ page, temporaryEngineId }, use) => {
-    const realtime = await assistantStatusServer({ session: directSession(), temporaryEngineId });
+  colleagueHost: [false, { option: true }],
+  hintRealtime: [async ({ page, temporaryEngineId, colleagueHost }, use) => {
+    const realtime = await assistantStatusServer({ session: directSession(), temporaryEngineId, colleague: colleagueHost });
+    const restoreModel = colleagueHost ? answerColleagueModel() : () => {};
     try {
       await relayConversation(page, realtime);
       await use(realtime);
     } finally {
+      restoreModel();
       await realtime.close();
     }
   }, { auto: true }]
 });
 const temporaryTest = hintTest.extend({ temporaryEngineId: "codex" });
+const colleagueHostTest = hintTest.extend({ colleagueHost: true });
+
+// The status server's Colleague streams from a model at colleague.invalid. Its
+// requests are answered here, in this process, with one short reply, so none
+// leaves it; every other request is the original fetch's.
+function answerColleagueModel(reply = "Looking now.") {
+  const original = globalThis.fetch;
+  const frame = (delta: Record<string, unknown>, finishReason: string | null = null) =>
+    `data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: finishReason }] })}\n\n`;
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (new URL(input instanceof Request ? input.url : String(input)).origin !== "http://colleague.invalid") return original(input, init);
+    return new Response(frame({ role: "assistant", content: reply }) + frame({}, "stop"), { headers: { "content-type": "text/event-stream" } });
+  };
+  return () => { globalThis.fetch = original; };
+}
+
+// A composed host's assistant settings: the workspace's shared Colleague name,
+// and each person's Colleague and coding voice preferences, which its Colleague
+// loads before it opens voice.
+async function mockColleagueHostSettings(page: Page) {
+  const preferences: Record<string, Record<string, unknown>> = {
+    colleague: { avatar: "merc", readAloud: false, avatarVisible: true },
+    coding: { avatar: "yu", readAloud: true, avatarVisible: true }
+  };
+  await page.route("**/api/auth/assistant-settings", route => fulfillJson(route, { ok: true, canEdit: true, settings: { colleagueName: "Colleague" } }));
+  await page.route("**/api/auth/assistant-settings/personal/*", route => fulfillJson(route, { ok: true, canEdit: true,
+    settings: preferences[new URL(route.request().url()).pathname.split("/").at(-1) || ""] }));
+}
+
+// Colleague's open surface: below 600px a full-screen dialog, from 600px a
+// 380px drawer at the right edge, beside the page.
+function colleaguePanel(page: Page, width: number) {
+  return width < 600
+    ? page.getByRole("dialog", { name: "Colleague conversation", exact: true })
+    : page.locator(".v-navigation-drawer--active").filter({ has: page.locator(".vibe64-colleague") });
+}
+
+// A microphone that records silence, so a recording opens without a device.
+async function fakeMicrophone(page: Page) {
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = async () => {
+      const audio = new AudioContext({ sampleRate: 16000 });
+      const output = audio.createMediaStreamDestination();
+      const track = output.stream.getAudioTracks()[0];
+      const stop = track.stop.bind(track);
+      track.stop = () => { stop(); void audio.close(); };
+      return output.stream;
+    };
+  });
+}
+
+// Colleague's voice socket, as the host's speech service speaks it: ready, each
+// heartbeat answered, and fixed words for each recording.
+async function routeColleagueVoice(page: Page) {
+  await page.routeWebSocket("**/api/vibe64/colleague/voice/ws", socket => {
+    socket.send(JSON.stringify({ type: "voice.ready" }));
+    socket.onMessage(message => {
+      if (typeof message !== "string") return;
+      const control = JSON.parse(message);
+      if (control.type === "ping") socket.send(JSON.stringify({ type: "pong", turnId: control.turnId }));
+      if (control.type === "listen.start") socket.send(JSON.stringify({ type: "transcript.partial", turnId: control.turnId, text: "Please inspect" }));
+      if (control.type === "listen.stop") socket.send(JSON.stringify({ type: "transcript.final", turnId: control.turnId, text: "Please inspect this project." }));
+    });
+  });
+}
 
 const sessionChat = (page: Page) => page.getByRole("region", { name: "Session chat" });
 
@@ -2149,18 +2222,13 @@ async function openAiAccounts(page: Page) {
 }
 
 for (const width of [320, 390, 820, 1280, 2048]) {
-  hintTest(`@colleague-mobile session Send remains usable beside Colleague at ${width}px`, async ({ page, hintRealtime }, info) => {
+  colleagueHostTest(`@colleague-mobile session Send remains usable beside Colleague at ${width}px`, async ({ page, hintRealtime }, info) => {
     test.skip(process.env.VIBE64_E2E_COLLEAGUE_HOST !== "1", "Requires a composed host with Colleague mounted.");
     await page.setViewportSize({ width, height: 844 });
     const sent = hintRealtime.state.messages;
     await mockDirectChat(page);
-    await page.route("**/api/vibe64/colleague**", route => fulfillJson(route,
-      new URL(route.request().url()).pathname.endsWith("/models") ? ASSISTANT_CATALOG : {
-        ok: true, conversationId: "colleague-mobile", status: "ready", messages: [], watches: [], assignments: [],
-        assistantSelection: { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex" }
-      }));
-    await page.route("**/api/auth/assistant-settings", route => fulfillJson(route, { ok: true, canEdit: true,
-      settings: { voiceEnabled: true, autoSend: false, readAloud: false, avatar: "merc" } }));
+    await mockColleagueHostSettings(page);
+    await routeColleagueVoice(page);
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
@@ -2173,32 +2241,44 @@ for (const width of [320, 390, 820, 1280, 2048]) {
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0].message).toBe("A session message with Colleague minimized");
     await expect(page.getByTestId("jskit-shell-app-bar").getByRole("button", { name: "Open Colleague" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Talk to Colleague", exact: true })).not.toBeVisible();
+    // Colleague's voice controls stay with its conversation while it is minimized.
+    const colleague = page.getByRole("complementary", { name: "Colleague", exact: true });
+    const talk = colleague.getByRole("button", { name: "Talk", exact: true });
+    await expect(talk).not.toBeVisible();
     await composer.fill("Keep the session draft");
     await launcher.focus();
     await page.keyboard.press("Enter");
     const colleagueDraft = page.getByLabel("Message Colleague", { exact: true });
     await expect(colleagueDraft).toBeVisible();
     await colleagueDraft.fill("Keep the Colleague draft");
-    await expect(page.getByRole("button", { name: "Talk to Colleague", exact: true })).toBeVisible();
-    const dialog = page.getByRole("dialog", { name: "Colleague conversation", exact: true });
-    await expect(dialog).toBeVisible();
+    await expect(talk).toBeVisible();
+    const panel = colleaguePanel(page, width);
+    await expect(panel).toBeVisible();
     await page.screenshot({ path: info.outputPath(`colleague-${width}.png`), animations: "disabled" });
-    const box = await dialog.locator(".vibe64-colleague").boundingBox();
-    expect(box!.x).toBe(width - Math.min(width, 460));
-    expect(box!.width).toBe(Math.min(width, 460));
-    expect(box!.y).toBe(0);
-    expect(box!.height).toBe(844);
+    if (width < 600) {
+      expect(await panel.locator(".conversation-dialog__surface").boundingBox()).toEqual({ x: 0, y: 0, width, height: 844 });
+    } else {
+      // The drawer sits beside the session, whose Send stays usable to its left.
+      const box = await panel.boundingBox();
+      expect(Math.round(box!.width)).toBe(380);
+      expect(Math.round(box!.x + box!.width)).toBe(width);
+      expect(Math.round(box!.y + box!.height)).toBe(844);
+      const send = page.getByRole("button", { name: "Send message", exact: true });
+      await expect(send).toBeEnabled();
+      const sendBox = await send.boundingBox();
+      expect(sendBox!.x + sendBox!.width).toBeLessThanOrEqual(box!.x);
+    }
     await page.setViewportSize({ width, height: 500 });
     await expect(page.getByRole("button", { name: "Send to Colleague", exact: true })).toBeInViewport();
-    await expect(page.getByRole("button", { name: "Close Colleague", exact: true })).toBeInViewport();
+    await expect(panel.getByRole("button", { name: "Close Colleague", exact: true })).toBeInViewport();
     await page.keyboard.press("Escape");
-    await expect(dialog).not.toBeVisible();
+    await expect(panel).not.toBeVisible();
     await expect(launcher).toBeFocused();
     await expect(composer).toHaveValue("Keep the session draft");
     await launcher.click();
     await expect(colleagueDraft).toHaveValue("Keep the Colleague draft");
-    await page.getByRole("button", { name: "Close Colleague", exact: true }).click();
+    await panel.getByRole("button", { name: "Close Colleague", exact: true }).click();
+    await expect(panel).not.toBeVisible();
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect.poll(() => sent.length).toBe(2);
     expect(errors).toEqual([]);
@@ -2229,74 +2309,61 @@ hintTest("@mobile-preview-resources hides meters only in mobile Preview", async 
 });
 
 for (const width of [320, 390, 820]) {
-  hintTest(`@colleague-hold touch recording previews text before Send or Discard at ${width}px`, async ({ page }, info) => {
+  colleagueHostTest(`@colleague-hold touch recording previews text before Send or Discard at ${width}px`, async ({ page, hintRealtime }, info) => {
     test.skip(process.env.VIBE64_E2E_COLLEAGUE_HOST !== "1", "Requires a composed Colleague host.");
     await page.setViewportSize({ width, height: 720 });
     await mockDirectChat(page);
-    const sent: Record<string, unknown>[] = [];
-    await page.route("**/api/vibe64/colleague**", async route => {
-      if (route.request().method() === "POST" && new URL(route.request().url()).pathname.endsWith("/messages")) sent.push(route.request().postDataJSON());
-      await fulfillJson(route, { ok: true, conversationId: "held-voice", status: "ready", messages: [], watches: [], assignments: [] });
-    });
-    await page.route("**/api/auth/assistant-settings", route => fulfillJson(route, { ok: true, canEdit: true,
-      settings: { colleagueName: "Colleague", avatar: "merc", sendMode: "immediately" } }));
-    await page.addInitScript(() => {
-      navigator.mediaDevices.getUserMedia = async () => {
-        const audio = new AudioContext({ sampleRate: 16000 });
-        const output = audio.createMediaStreamDestination();
-        const track = output.stream.getAudioTracks()[0];
-        const stop = track.stop.bind(track);
-        track.stop = () => { stop(); void audio.close(); };
-        return output.stream;
-      };
-    });
-    await page.routeWebSocket("**/api/vibe64/colleague/voice/ws", socket => {
-      socket.send(JSON.stringify({ type: "voice.ready" }));
-      socket.onMessage(message => {
-        if (typeof message !== "string") return;
-        const control = JSON.parse(message);
-        if (control.type === "listen.start") socket.send(JSON.stringify({ type: "transcript.partial", turnId: control.turnId, text: "Please inspect" }));
-        if (control.type === "listen.stop") socket.send(JSON.stringify({ type: "transcript.final", turnId: control.turnId, text: "Please inspect this project." }));
-      });
-    });
+    // What Colleague accepted, as its owner received it.
+    const sent = hintRealtime.colleague!.sent;
+    await mockColleagueHostSettings(page);
+    await fakeMicrophone(page);
+    await routeColleagueVoice(page);
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     const launcher = page.getByRole("button", { name: "Open Colleague", exact: true });
     await expect(launcher).toBeVisible();
     const touch = await page.context().newCDPSession(page);
-    const bubble = page.getByRole("dialog", { name: "Review voice message", exact: true });
-    for (const action of ["Discard", "Send"]) {
+    const panel = colleaguePanel(page, width);
+    const colleague = page.getByRole("complementary", { name: "Colleague", exact: true });
+    // The held words are an unsent message in Colleague's own conversation.
+    const review = colleague.locator(".assistant-transcript__message--pending");
+    const buttons = { Discard: review.getByRole("button", { name: "Discard unsent message", exact: true }),
+      Send: review.getByRole("button", { name: "Send", exact: true }) };
+    for (const action of ["Discard", "Send"] as const) {
       const box = await launcher.boundingBox();
       await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 }] });
-      await expect(bubble.getByText("Please inspect", { exact: true })).toBeVisible();
-      await expect(bubble.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
-      const heldBox = await bubble.boundingBox();
-      expect(heldBox!.x).toBeLessThanOrEqual(16);
-      expect(heldBox!.x + heldBox!.width).toBeLessThanOrEqual(width * 2 / 3 + 4);
+      // Holding opens Colleague on the words heard so far, which cannot be sent yet.
+      await expect(panel).toBeVisible();
+      await expect(review.getByText("Please inspect", { exact: true })).toBeVisible();
+      await expect(buttons.Send).toHaveCount(0);
       if (action === "Send") await page.screenshot({ path: info.outputPath(`voice-holding-${width}.png`), animations: "disabled" });
       await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-      await expect(bubble.getByText("Please inspect this project.", { exact: true })).toBeVisible();
-      await expect(page.getByRole("dialog", { name: "Colleague conversation", exact: true })).not.toBeVisible();
+      // Releasing finishes the words for review; nothing is sent before Send.
+      await expect(review.getByText("Please inspect this project.", { exact: true })).toBeVisible();
       expect(sent).toHaveLength(0);
-      await expect(bubble.getByRole("button", { name: action, exact: true })).toBeInViewport();
-      const reviewBox = await bubble.boundingBox();
-      expect(reviewBox!.x).toBeLessThanOrEqual(16);
-      expect(reviewBox!.x + reviewBox!.width).toBeLessThanOrEqual(width * 2 / 3 + 4);
-      for (const button of await bubble.getByRole("button").all()) {
+      await expect(buttons[action]).toBeInViewport();
+      const reviewBox = await review.boundingBox();
+      for (const button of await review.getByRole("button").all()) {
         expect((await touchTarget(button)).height).toBeGreaterThanOrEqual(48);
         const target = await button.boundingBox();
         expect(target!.x + target!.width).toBeLessThanOrEqual(reviewBox!.x + reviewBox!.width);
       }
       if (action === "Send") await page.screenshot({ path: info.outputPath(`voice-review-${width}.png`), animations: "disabled" });
-      await bubble.getByRole("button", { name: action, exact: true }).click();
-      await expect(bubble).not.toBeVisible();
+      await buttons[action].click();
+      await expect(review).toHaveCount(0);
+      if (action === "Discard") {
+        expect(sent).toHaveLength(0);
+        // The launcher records again once Colleague is closed.
+        await panel.getByRole("button", { name: "Close Colleague", exact: true }).click();
+        await expect(panel).not.toBeVisible();
+      }
     }
-    expect(sent).toHaveLength(1);
+    await expect.poll(() => sent.length).toBe(1);
     expect(sent[0].message).toBe("Please inspect this project.");
+    // Colleague answers in its conversation, from the fixed local reply.
+    await expect(colleague.getByRole("region", { name: "Conversation history", exact: true }).getByText("Looking now.", { exact: true })).toBeVisible();
     expect(errors).toEqual([]);
-    await launcher.click();
-    await expect(page.getByRole("dialog", { name: "Colleague conversation", exact: true })).toBeVisible();
   });
 }
 
