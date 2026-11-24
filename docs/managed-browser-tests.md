@@ -102,6 +102,30 @@ the operation. A generic timeout without resource evidence remains undiagnosed.
 
 ## Application setup
 
+A JSKIT project has its test target from its first commit. Genesis's `jskit`
+Stack piece, which `stack add` writes into a new project's `genesis/stack.md`,
+declares `test-app` beside the normal `app` target:
+
+```md
+### Target `test-app`: Test Preview
+
+- Mode: `interactive`
+- Data: `test`
+- Runtimes: `nodejs`
+- Run `Serve on the test database`: `node_modules/.bin/jskit` `browser-test-server` `{host}` `{port}`
+```
+
+`jskit browser-test-server` serves one worker's server of the app's own
+`browserTestConfig()`: the production build, the database its `prepare` module
+gives that worker (`BROWSER_TEST_DB_NAME` itself in JSKIT's database patterns),
+its test-only `env` and `APP_ENV=test`. Both JSKIT database pieces bind
+`BROWSER_TEST_DB_NAME` and `TEST_DB_NAME` as optional database names, so a host
+that provisions a project's database gives the browser suite and the Node
+database tests one each. `vibe64-helper playwright --target test-app npm-run
+test:e2e` then runs the project's own suite on that database. A project whose
+own `## Outputs` predates the target adds the block above; any other project
+adds a target of its own as below.
+
 Keep the normal target as the default. Add another web target with
 ``- Data: `test` `` to the existing `## Outputs` section in `genesis/stack.md`,
 using scripts that actually exist. `vibe64-helper spec outputs` (`npx vibe64 spec
@@ -175,6 +199,25 @@ lint rule reports such configurations before a run.
 When test resources, an isolated identity flow, or external-effect controls are
 missing, report the specific missing prerequisite. Vibe64 manages the declared
 processes; it cannot invent a safe testing contract for an arbitrary application.
+
+## What a session's browser run covers
+
+A session runs its own source's browser suite against a declared Data `test`
+target, as above. It does not run, and is not meant to run:
+
+- a suite in a connected copy, which is the connected project's to run in its
+  own session; and
+- a suite in its self-starting mode, whose own harness builds the app and
+  starts its servers and databases (a Playwright `globalSetup` or `webServer`).
+  Under `vibe64-helper playwright` the suite gets `PLAYWRIGHT_BASE_URL`, so a
+  configuration that follows `browserTestConfig()` runs managed against the
+  target instead; a harness that ignores it is not supported in a session,
+  since its own servers are not the host's to admit, isolate or restore.
+
+New projects follow JSKIT's managed-runner guidance (`browserTestConfig()`,
+with its managed target), so neither case arises for them. Only a few existing
+repositories use self-starting harnesses, public Mercbot's among them; their own
+CI and test machines run those suites.
 
 The shared assistant session instructions include this workflow. New or refreshed
 provider contexts receive updated instructions through their normal lifecycle;
