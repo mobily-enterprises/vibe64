@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -29,9 +29,12 @@ test("agent shell commands run as session-owned managed executions and drain on 
     });
   }
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-session-command-"));
-  // The editor's TMPDIR, which holds the session's own temporary folder.
-  const editorTemp = path.join(temporaryRoot, "tmp");
-  await mkdir(editorTemp);
+  // The editor's TMPDIR, which holds the session's own temporary folder: a short folder of its own under /tmp, as
+  // every test holding a socket keeps it, whatever TMPDIR the tests run with. A folder below theirs would leave the
+  // session's sockets no room, so the AI would be refused (vibe64_session_temp_folder_too_long): already under a
+  // runner's /var/tmp/v64-tmp, past the 54 bytes such a TMPDIR may have, and under a Vibe64 session's own TMPDIR.
+  const editorTemp = await realpath(await mkdtemp("/tmp/v64-asc-"));
+  t.after(() => rm(editorTemp, { force: true, recursive: true }));
   const previousTmpdir = process.env.TMPDIR;
   process.env.TMPDIR = editorTemp;
   t.after(() => {
