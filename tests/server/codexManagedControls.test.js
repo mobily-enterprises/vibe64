@@ -284,7 +284,8 @@ test("native Codex paginated reload applies changed controls and preserves histo
     'wire_api = "responses"', 'requires_openai_auth = false', 'supports_websockets = false', ''
   ].join("\n"));
   const socketPath = path.join(root, "app-server.sock");
-  const child = spawn("codex", ["app-server", "--listen", `unix://${socketPath}`, "-c", "features.remote_control=false"], {
+  const child = spawn("codex", ["app-server", "--listen", `unix://${socketPath}`, "-c", "features.remote_control=false",
+    "-c", "features.plugins=false", "-c", "features.remote_plugin=false"], {
     env: { PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: root, LANG: "C.UTF-8" },
     detached: true, stdio: ["ignore", "ignore", "pipe"]
   });
