@@ -144,10 +144,14 @@ otherwise `{ ok: true, creating: true, requestId, waitingFor }` while it goes
 on (`session-write`, then `creating`): a hosted workspace's edge ends a request
 after about a minute, while saving and pushing a large change and asking
 GitHub can take minutes. The form says it is creating and sends the same
-request again (`createPullRequestFollowed` in `vibe64PullRequestCreate.js`),
-which joins that creation or reads its outcome for fifteen minutes after it
-ended, and does so after an answer that never came back (status 0, or a 5xx
-without the server's code); it never shows a status code. The assistant's tool
+request again as a repeat (`repeat: true`, `createPullRequestFollowed` in
+`vibe64PullRequestCreate.js`), which joins that creation or reads its outcome
+for fifteen minutes after it ended, and does so after an answer that never
+came back (status 0, or a 5xx without the server's code); it never shows a
+status code. A repeat never starts a creation, as GitHub mutations are never
+retried automatically: one this editor does not hold (it restarted, or the
+first request never arrived) answers `vibe64_session_pull_request_not_followed`,
+saying to check the session's pull request before creating it again. The assistant's tool
 runs `vibe64.sessions.pull-request.create` and waits for the outcome.
 
 After creation, the session's PR action becomes View pull request and opens the
