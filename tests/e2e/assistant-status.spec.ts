@@ -333,8 +333,12 @@ for (const failure of ["http-503", "connection-reset", "invalid-json"]) {
   test(`recovers from ${failure} without reloading`, async ({ page }) => {
     const recovery = Promise.withResolvers<void>();
     server.state.checks.push(async (response) => {
-      if (failure === "http-503") json(response, { ok: false, error: "Temporarily unavailable" }, 503);
-      else if (failure === "invalid-json") {
+      // The editor's own 503 for this check, as JSKIT's error handler answers it (OpenCode's bridge closing as the
+      // server stops, openCodeHostPreparation.js): every failure the editor answers carries a code, so the page says so
+      // at once and retries. An uncoded 5xx is followed instead (the next test).
+      if (failure === "http-503") {
+        json(response, { error: "The OpenCode bridge is shutting down.", code: "vibe64_opencode_closed", params: {}, details: {} }, 503);
+      } else if (failure === "invalid-json") {
         response.writeHead(200, { "content-type": "application/json" });
         response.end('{"ok":');
       }
@@ -364,6 +368,50 @@ for (const failure of ["http-503", "connection-reset", "invalid-json"]) {
     expect(server.state.messages).toHaveLength(0);
   });
 }
+
+// A 5xx without a code is not the editor's (a proxy's, or the hosted edge's 502 or 504), so the check may never have
+// reached it: the page sends the check again a second later and says nothing meanwhile (vibe64HeldRequest.js).
+test("an uncoded 503 during the check repeats it a second later and never says the status is unverified", async ({ page }) => {
+  // Each time the warning's text enters the page, from its first load on: one look for its absence could fall between
+  // its coming and its going.
+  await page.addInitScript((text) => {
+    const shown: string[] = [];
+    Object.assign(window, { assistantWarningShown: shown });
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.type === "characterData" ? [record.target] : [...record.addedNodes]) {
+          if (!["SCRIPT", "STYLE"].includes(node.nodeName) && node.textContent?.includes(text)) shown.push(node.textContent);
+        }
+      }
+    }).observe(document, { childList: true, characterData: true, subtree: true });
+  }, "Assistant status could not be verified.");
+  const warningsShown = () => page.evaluate(() => (window as unknown as { assistantWarningShown: string[] }).assistantWarningShown.length);
+  server.state.checks.push((response) => json(response, { ok: false, error: "Temporarily unavailable" }, 503));
+  // Each check's time on the page clock, which moves only when the test moves it.
+  const checkTimes: number[] = [];
+  await page.route("**/agent-session", async (route) => {
+    if (route.request().method() === "POST") checkTimes.push(await page.evaluate(() => Date.now()));
+    await route.fallback();
+  });
+  await openChatOnPageClock(page, { paused: true });
+  await composer(page).fill("Keep my draft.");
+  await expect.poll(() => checkTimes.length).toBe(1);
+  // The paused page clock holds the repeat: nothing is sent again, and the assistant is still loading.
+  const loading = page.getByText("Loading assistant…", { exact: true }).first();
+  await expect(loading).toBeVisible();
+  await expect(page.getByRole("button", { name: "Waiting for the assistant to load" })).toBeDisabled();
+  await expectSteady(async () => ({ checks: checkTimes.length, loading: await loading.isVisible(), warnings: await warningsShown() }),
+    { checks: 1, loading: true, warnings: 0 }, 1_000);
+  await page.clock.runFor(900);
+  await expectSteady(() => checkTimes.length, 1, 500);
+  await page.clock.resume();
+  await expect(steer(page)).toBeEnabled();
+  await expect(composer(page)).toHaveValue("Keep my draft.");
+  expect(server.state.checkCount).toBe(2);
+  expect(checkTimes[1] - checkTimes[0]).toBeGreaterThanOrEqual(1_000);
+  expect(server.state.messages).toHaveLength(0);
+  expect(await page.evaluate(() => (window as unknown as { assistantWarningShown: string[] }).assistantWarningShown)).toEqual([]);
+});
 
 test("repeated failures back off instead of flooding the server", async ({ page }) => {
   server.state.checks.push(busy, busy, busy, busy);
