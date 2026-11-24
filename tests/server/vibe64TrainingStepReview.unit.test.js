@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { setTimeout as delay } from "node:timers/promises";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -85,6 +86,7 @@ async function fixture(t) {
       codexAppServerHelperTurnSettings({ cwd: scope.workdir, executionProfile: input.executionProfile, outputSchema: input.outputSchema });
       await options.onEvent({ type: "thread", threadId: "review-thread" });
       await options.onEvent({ type: "helper-execution", executionId: "review-execution" });
+      if (state.turnWait) await state.turnWait;
       if (state.providerError) return { ok: false, error: state.providerError };
       return { ok: true, status: "completed", text: state.answer };
     },
@@ -192,6 +194,26 @@ test("Check my work passes on the learner's own Helper with the fixed framing, a
   assert.deepEqual(await f.press("r2"), { ok: true, stepId: "green-heading", outcome: "passed", recorded: false, replayed: false, alreadyPassed: true });
   assert.equal(aiRuns(f), 1, "a passed step never asks again");
   assert.deepEqual(await f.press("r1"), { ...result, replayed: true }, "a request ID replays its saved review");
+});
+
+// The review is an AI turn on the learner's own Helper, which can outlast the hosted edge's minute.
+test("Check my work answers within two seconds while its review runs, and its repeat joins it", async t => {
+  const f = await fixture(t);
+  const review = Promise.withResolvers();
+  f.state.turnWait = review.promise;
+  try {
+    const first = await Promise.race([f.press("held-review"), delay(3_000, "still waiting", { ref: false })]);
+    assert.notEqual(first, "still waiting", "Check my work waited for its review");
+    assert.deepEqual(first, { ok: true, reviewing: true, stepId: "green-heading", requestId: "held-review", waitingFor: "reviewing" });
+    const repeated = f.press("held-review");
+    review.resolve();
+    const result = await repeated;
+    assert.equal(result.outcome, "passed", JSON.stringify(result));
+    assert.equal(result.recorded, true);
+    assert.equal(aiRuns(f), 1, "the repeat joined the running review");
+  } finally {
+    review.resolve();
+  }
 });
 
 test("Not yet keeps its hint; unchanged evidence reuses the saved review and new work asks again", async t => {

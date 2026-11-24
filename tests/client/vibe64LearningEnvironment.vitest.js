@@ -665,6 +665,49 @@ describe("useVibe64Learning controller", () => {
     expect(learning.stepStatus("read")).toBe("not-started");
   });
 
+  // A check or an AI review can outlast the hosted edge's minute: the server answers within two seconds that it is
+  // checking, and the page repeats the same request until the result.
+  it("repeats a held Check with the same request until its result, and shows no failure", async () => {
+    let checks = 0;
+    const { learning, calls } = controller({
+      posts: (url, body) => {
+        if (url !== VIBE64_LEARNING_ROUTES.stepCheck(ATTEMPT)) return { ok: true };
+        checks += 1;
+        return checks === 1 ? { ok: true, checking: true, stepId: "preview", requestId: body.requestId, waitingFor: "checking" }
+          : { ok: true, stepId: "preview", outcome: "passed", recorded: true };
+      }
+    });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT });
+    await expect(learning.runCheck("preview")).resolves.toMatchObject({ outcome: "passed", recorded: true });
+    const sent = calls.filter(call => call.url === VIBE64_LEARNING_ROUTES.stepCheck(ATTEMPT));
+    expect(sent).toHaveLength(2);
+    expect(sent[1].body.requestId).toBe(sent[0].body.requestId);
+    expect(learning.state.lessonError).toBe("");
+  });
+
+  it.each([0, 502, 504])("repeats a Check my work whose answer was lost with status %s, and never shows that failure", async (status) => {
+    let reviews = 0;
+    const { learning, calls } = controller({
+      posts: (url) => {
+        if (url !== VIBE64_LEARNING_ROUTES.stepReview(ATTEMPT)) return { ok: true };
+        reviews += 1;
+        if (reviews === 1) throw Object.assign(new Error(`Request failed with status ${status}.`), { status });
+        return { ok: true, stepId: "tick", outcome: "not-yet-passed", recorded: true, review: { comment: "Not yet." } };
+      }
+    });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT });
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const reviewing = learning.review("tick");
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(reviewing).resolves.toMatchObject({ outcome: "not-yet-passed" });
+    const sent = calls.filter(call => call.url === VIBE64_LEARNING_ROUTES.stepReview(ATTEMPT));
+    expect(sent).toHaveLength(2);
+    expect(sent[1].body.requestId).toBe(sent[0].body.requestId);
+    expect(learning.state.lessonError).toBe("");
+  });
+
   it("Show me closes Courses, then guides with the practice project's view; Teach me asks Colleague", async () => {
     const navigateBrowser = vi.fn();
     const view = { projectSlug: "practice-one", openFile: vi.fn() };

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { setTimeout as delay } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -65,9 +66,12 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
   }
   const checkCalls = [], innerCalls = [], published = [], removed = [];
   let outcome = "passed";
+  // A check that runs until the test lets it finish.
+  let checkWait = null;
   const checks = {
     async runOrientationCheck(input) {
       checkCalls.push(input);
+      if (checkWait) await checkWait;
       return { checkResult: { check: "app-response", observationId: input.observationId, outcome } };
     },
     async runCodeCheck() { throw new Error("no code check in these tests"); }
@@ -106,7 +110,7 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
     return tools.executeToolCall({ toolName: definition.name, toolSet, context: toolContext, argumentsText: JSON.stringify(input) });
   };
   return { root, pin, auth, learners, content, definitions, toolSet, execute, tool, start, checkCalls, innerCalls, published, removed, practiceCalls,
-    set outcome(value) { outcome = value; } };
+    set outcome(value) { outcome = value; }, set checkWait(value) { checkWait = value; } };
 }
 
 const observation = (attempt) => ({ control: "exercise-response",
@@ -255,6 +259,32 @@ test("Colleague's step check is a diagnostic only; the learner's App press and o
   const read = await f.execute("lesson.read", { attemptId: attempt.attemptId });
   assert.deepEqual(read.passedStepIds, ["open-preview"]);
   assert.ok(read.results.every(value => value.origin === "check"));
+});
+
+// A declared check can run for longer than the hosted edge lets a request wait (about a minute).
+test("the learner's own Check answers within two seconds while its check runs, and its repeat joins it", async t => {
+  const f = await fixture(t);
+  const attempt = await f.start();
+  const base = { attemptId: attempt.attemptId, stepId: "open-preview" };
+  f.outcome = "not-yet-passed";
+  await f.execute("step.observe", { ...base, observation: observation(attempt) });
+  f.outcome = "passed";
+  const running = Promise.withResolvers();
+  f.checkWait = running.promise;
+  try {
+    const first = await Promise.race([f.execute("step.check.run", { ...base, requestId: "held-check" }),
+      delay(3_000, "still waiting", { ref: false })]);
+    assert.notEqual(first, "still waiting", "Check waited for its check");
+    assert.deepEqual(first, { ok: true, checking: true, stepId: "open-preview", requestId: "held-check", waitingFor: "checking" });
+    const calls = f.checkCalls.length;
+    const repeated = f.execute("step.check.run", { ...base, requestId: "held-check" });
+    running.resolve();
+    const result = await repeated;
+    assert.deepEqual({ outcome: result.outcome, recorded: result.recorded }, { outcome: "passed", recorded: true });
+    assert.equal(f.checkCalls.length, calls, "the repeat joined the running check");
+  } finally {
+    running.resolve();
+  }
 });
 
 test("deletions are the learner's one click and need the person's confirmation from Colleague; each notifies the learner", async t => {
