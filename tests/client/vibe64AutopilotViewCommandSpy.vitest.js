@@ -1042,7 +1042,10 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain(':sending="composerSending"');
     expect(component).toContain('@submit="sendComposerMessage"');
     expect(component).toContain('@stop="requestAgentInterrupt"');
-    expect(component).toContain(':described-by="composerSupportStatusVisible ? thinkingStatusId : \'\'"');
+    // The message box is described by the working status and, when Send holds the draft, why.
+    expect(component).toContain(':described-by="composerDescribedBy"');
+    expect(component).toContain('[composerSupportStatusVisible.value ? thinkingStatusId : "",\n  composerHeldReason.value ? composerHeldReasonId : ""]');
+    expect(component).toContain(':id="composerHeldReasonId"');
     expect(component).toContain("<AssistantComposerSupport");
     expect(composable).toContain('waiting: "Waiting for the assistant to accept guidance"');
     expect(composable).toContain('steering: "Sending guidance to assistant"');

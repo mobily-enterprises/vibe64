@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assistantRoutingNotice } from "../../packages/vibe64-runtime/src/shared/assistantRouting.js";
+import { assistantRoutingNotice } from "../../packages/vibe64-runtime/src/shared/assistantRoutingNotice.js";
 import { workPlanStatusLine } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 
 const request = (stage, delivery, fields = {}) => ({ messageId: "workflow", status: "waiting", stage, workflow: true, delivery,

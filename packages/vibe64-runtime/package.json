@@ -12,6 +12,7 @@
     "./shared/assistantFinishing": "./src/shared/assistantFinishing.js",
     "./shared/assistantRouting": "./src/shared/assistantRouting.js",
     "./shared/assistantRoutingAssignments": "./src/shared/assistantRoutingAssignments.js",
+    "./shared/assistantRoutingNotice": "./src/shared/assistantRoutingNotice.js",
     "./shared/conversationQuestions": "./src/shared/conversationQuestions.js",
     "./shared/sessionDebugLog": "./src/shared/sessionDebugLog.js"
   },
