@@ -48,15 +48,42 @@ function heldReceipt(messageId, entry) {
  * whose delivery settles within `answerMs` answers with its result, as before; a later one answers that the message
  * is held, with what it waits for, and its delivery check reports the outcome once it ends. Each send's timing, from
  * its arrival, is logged once it ends.
+ * A message held past its answer is also in the session's records (`records`, heldMessageRecords.js) until its
+ * delivery ends, and stays there when it ended unsent, so a restarted editor still answers its delivery check.
  * @param {object} dependencies
+ * @param {ReturnType<typeof import("./heldMessageRecords.js").createHeldMessageRecords>} dependencies.records
  * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} [dependencies.logger]
  * @param {number} [dependencies.answerMs]
  * @param {number} [dependencies.outcomeMs]
  */
-function createHeldMessages({ logger = silentLogger, answerMs = SEND_ANSWER_MS, outcomeMs = HELD_OUTCOME_MS } = {}) {
+function createHeldMessages({ records, logger = silentLogger, answerMs = SEND_ANSWER_MS, outcomeMs = HELD_OUTCOME_MS }) {
   const entries = new Map();
   const closing = new AbortController();
   const key = (sessionId, messageId) => `${sessionId}\0${messageId}`;
+
+  /** One entry's record writes, in order; a failed write is logged, never the send's failure. */
+  function record(entry, sessionId, messageId, write) {
+    entry.recording = entry.recording.then(write).catch((error) => {
+      try {
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64.agent_message",
+          event: "vibe64.agent_message.held_record_failed",
+          sessionId,
+          messageId,
+          error
+        }, "A held message's record could not be written.");
+      } catch {
+        // Diagnostic only.
+      }
+    });
+    return entry.recording;
+  }
+
+  function recordSettled(entry, sessionId, messageId) {
+    if (entry.settleRecorded) return entry.recording;
+    entry.settleRecorded = true;
+    return record(entry, sessionId, messageId, () => records.settle(sessionId, messageId, heldReceipt(messageId, entry)));
+  }
 
   function logTiming(sessionId, messageId, entry) {
     const elapsedMs = Date.now() - entry.receivedAt;
@@ -76,7 +103,16 @@ function createHeldMessages({ logger = silentLogger, answerMs = SEND_ANSWER_MS, 
 
   function start(sessionId, messageId, deliver) {
     const id = key(sessionId, messageId);
-    const entry = { receivedAt: Date.now(), stage: "received", stages: { received: 0 }, settled: false, outcome: null, heldAnswer: false };
+    const entry = {
+      receivedAt: Date.now(),
+      stage: "received",
+      stages: { received: 0 },
+      settled: false,
+      outcome: null,
+      heldAnswer: false,
+      recording: Promise.resolve(),
+      settleRecorded: false
+    };
     const stage = (name) => {
       entry.stage = name;
       entry.stages[name] = Date.now() - entry.receivedAt;
@@ -84,10 +120,11 @@ function createHeldMessages({ logger = silentLogger, answerMs = SEND_ANSWER_MS, 
     entry.done = Promise.resolve()
       .then(() => deliver({ stage, signal: closing.signal }))
       .then(result => ({ result }), error => ({ error }))
-      .then((outcome) => {
+      .then(async (outcome) => {
         entry.settled = true;
         entry.outcome = outcome;
         entry.stages.finished = Date.now() - entry.receivedAt;
+        if (entry.heldAnswer) await recordSettled(entry, sessionId, messageId);
         try {
           logTiming(sessionId, messageId, entry);
         } catch {
@@ -124,6 +161,9 @@ function createHeldMessages({ logger = silentLogger, answerMs = SEND_ANSWER_MS, 
     }
     if (!entry.heldAnswer) {
       entry.heldAnswer = true;
+      // Recorded before the answer goes out, so a restart after it still knows the message waited.
+      await record(entry, sessionId, messageId, () => records.hold(sessionId, messageId));
+      if (entry.settled) await recordSettled(entry, sessionId, messageId);
       entry.stages.answered = Date.now() - entry.receivedAt;
       try {
         logOperationalEvent(logger, "warn", {
@@ -152,6 +192,22 @@ function createHeldMessages({ logger = silentLogger, answerMs = SEND_ANSWER_MS, 
   }
 
   /**
+   * The held message's delivery check here, or, once this editor no longer holds it (a restart), what the session's
+   * records say of it, marked `recorded`: null when neither knows it.
+   * @param {string} sessionId
+   * @param {string} messageId
+   */
+  async function inspectRecorded(sessionId, messageId) {
+    const held = inspect(sessionId, messageId);
+    if (held) return held;
+    try {
+      return await records.read(sessionId, messageId);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * At shutdown: a held message that has not reached its assistant stops waiting (its delivery refuses it, unsent),
    * and this resolves once every held delivery has ended.
    */
@@ -163,6 +219,7 @@ function createHeldMessages({ logger = silentLogger, answerMs = SEND_ANSWER_MS, 
   return Object.freeze({
     close,
     inspect,
+    inspectRecorded,
     send
   });
 }

@@ -3,6 +3,7 @@ import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/proje
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
+import { createHeldMessageRecords, HELD_MESSAGE_RESTARTED } from "./heldMessageRecords.js";
 import { createHeldMessages } from "./heldMessages.js";
 import { createMainChatApprovals } from "./mainChatApprovals.js";
 import { sessionResult } from "./sessionResults.js";
@@ -23,10 +24,7 @@ function messageText(input) {
 
 /** The refusal of a held message that the server's shutdown stopped before it reached its assistant. */
 function shutdownRefusal() {
-  return Object.assign(new Error("Vibe64 restarted before this message reached the assistant. Send it again."), {
-    code: "vibe64_agent_message_server_restarting",
-    delivery: "not-sent"
-  });
+  return Object.assign(new Error(HELD_MESSAGE_RESTARTED.error), { code: HELD_MESSAGE_RESTARTED.code, delivery: "not-sent" });
 }
 
 /**
@@ -79,7 +77,7 @@ function createSessionMessages({
     publishProjectChanged,
     deliver: sendAgentMessage
   });
-  const heldMessages = createHeldMessages({ logger });
+  const heldMessages = createHeldMessages({ logger, records: createHeldMessageRecords(project) });
 
   /**
    * Delivers a message to the session's assistant once the project is open and its workspace prepared.
@@ -274,7 +272,7 @@ function createSessionMessages({
    * @param {string} messageId
    */
   function inspectHeldMessage(sessionId, messageId) {
-    return heldMessages.inspect(normalizeText(sessionId), normalizeText(messageId));
+    return heldMessages.inspectRecorded(normalizeText(sessionId), normalizeText(messageId));
   }
 
   /** At shutdown: held messages still waiting are refused, unsent, and this resolves once every one has ended. */

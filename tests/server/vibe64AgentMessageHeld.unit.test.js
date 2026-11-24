@@ -324,7 +324,13 @@ test("held messages deliver each message once, answer a quick delivery with its 
   const logged = [];
   const logger = { debug() {}, error() {}, info: (fields) => logged.push(fields), warn: (fields) => logged.push(fields),
     child() { return logger; } };
-  const held = createHeldMessages({ logger, answerMs: 20, outcomeMs: 60 });
+  const written = [];
+  const records = {
+    async hold(sessionId, messageId) { written.push(["hold", sessionId, messageId]); },
+    async settle(sessionId, messageId, receipt) { written.push(["settle", sessionId, messageId, receipt.status]); },
+    async read() { return null; }
+  };
+  const held = createHeldMessages({ logger, records, answerMs: 20, outcomeMs: 60 });
   const release = Promise.withResolvers();
   let starts = 0;
   const slow = async ({ stage }) => { starts += 1; stage("workspace-preparation"); await release.promise; return { ok: true, delivered: true }; };
@@ -351,6 +357,10 @@ test("held messages deliver each message once, answer a quick delivery with its 
     assert.deepEqual(await held.send("s1", "refused", async () => ({ ok: true, delivered: true })), { ok: true, delivered: true });
 
     await eventually(() => held.inspect("s1", "m1") === null, "an old outcome was kept");
+    // Only a message held past its answer is recorded, once, and its record settles when its delivery ends.
+    assert.deepEqual(written.filter(([, sessionId, messageId]) => sessionId === "s1" && messageId === "m1"),
+      [["hold", "s1", "m1"], ["settle", "s1", "m1", "accepted"]]);
+    assert.equal(written.some(([, , messageId]) => messageId === "quick" || messageId === "refused"), false);
   } finally {
     release.resolve();
     await held.close();
