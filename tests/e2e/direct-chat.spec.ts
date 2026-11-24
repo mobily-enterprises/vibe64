@@ -3354,3 +3354,37 @@ for (const width of [390, 1280]) {
     }
   });
 }
+
+test("@plan-freshness a question while the plan's last item is still open shows the plan as needing the person, never as implementing", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const server = await assistantStatusServer();
+  try {
+    const session = server.state.session;
+    session.agentSession.turn.active = false;
+    // The turn ended asking the person, the last item not built yet: a real question, which waits for its answer.
+    server.state.conversationLog = [
+      { turnId: "000001", user: { role: "user", messageId: "request-1", text: "Implement the plan." },
+        assistant: { role: "assistant", text: "Old messages need a contact id.\n\n[1] Which contact id should old messages use?\n" +
+          "Possible answers:\n- The email address (recommended)\n- The phone number" } }
+    ];
+    const text = "Status: active\n# Contact threads\n\n- [~] Store contact threads\n- [~] List a contact's threads\n" +
+      "- [~] Reply in a thread\n- [ ] Move old messages into threads\n";
+    const progressText = "# Progress\n\nThe migration waits for the contact id.\n";
+    const current = { title: "Contact threads", status: "active", revision: "c".repeat(64), progressRevision: "d".repeat(64),
+      step: { step: "implementation", item: 4, items: 4, title: "Move old messages into threads" },
+      updatedAt: new Date().toISOString(), updatedHow: "updated", changedSince: { files: 0, more: false } };
+    const total = Array.from(text).length + Array.from(progressText).length;
+    await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/work-plan`, route => fulfillJson(route, {
+      ok: true, sessionId: session.sessionId, available: true, status: "active", title: current.title, revision: current.revision,
+      built: 3, checked: 0, total: 4, archiveId: "", current, history: [], text, progressRevision: current.progressRevision,
+      progressAvailable: true, progressText, offset: 0, nextOffset: total, totalCharacters: total, hasMore: false
+    }));
+    await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+    await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+    await expect(page.getByTestId("vibe64-plan-status")).toHaveText("Plan: needs you (1 question)");
+    expect(server.state.messages).toEqual([]);
+  } finally {
+    await page.close();
+    await server.close();
+  }
+});

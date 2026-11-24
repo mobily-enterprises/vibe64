@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fixture, planCommands, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
 import { readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { workPlanStatusLine, workPlanStep } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 
 // A live session's cases, in Auto through the real routing service: Junior's turn on the plan's last item ended
 // asking whether to run the passes or save, once with that item unticked and once with every item half-ticked
@@ -92,4 +93,10 @@ test("a question while an item is still open waits for the person's answer, as b
   await plan({ operation: "progress-write", text: "# Progress\n\nThe migration waits for the contact id.\n", ...await revisions() });
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status, f.state().awaitingAnswer], [1, "waiting", true]);
+  // The plan's status line shows it waiting for the person, never as implementing: from the request, and from the
+  // chat's open question (the browser suite checks the chat's own line).
+  const step = workPlanStep(await readWorkPlan(f.context));
+  assert.deepEqual([step.step, step.item], ["implementation", 4]);
+  assert.equal(workPlanStatusLine(step, { request: f.state() }), "Plan: needs you");
+  assert.equal(workPlanStatusLine(step, { questions: 1, request: f.state() }), "Plan: needs you (1 question)");
 });
