@@ -97,7 +97,7 @@ async function fixture(t) {
   return { page, privateRequests: () => privateRequests, title: resource.visual.title };
 }
 
-test("native isolated SVG player preserves authored transitions, receipts, semantic restoration and recovery", { skip: !enabled, timeout: 120000 }, async t => {
+test("native isolated SVG player preserves authored transitions, receipts, semantic restoration and recovery", { skip: enabled ? false : "set VIBE64_TRAINING_VISUAL_BROWSER_INTEGRATION=1 to run the player in a real browser", timeout: 120000 }, async t => {
   const { page, privateRequests, title } = await fixture(t);
   const frame = () => page.frames().find(value => value !== page.mainFrame());
   const command = input => page.evaluate(value => window.visualFixture.command(value), input);
