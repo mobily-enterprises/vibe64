@@ -262,7 +262,7 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/cancel public ap
 POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/check public app - vibe64.ai-tasks.check
 POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/continue public app - vibe64.ai-tasks.continue
 POST /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId/finish public app - vibe64.ai-tasks.finish
-POST /api/app/:slug/vibe64/sessions/:sessionId/archive public app - vibe64.sessions.archive
+POST /api/app/:slug/vibe64/sessions/:sessionId/archive public app - vibe64.sessions.archive.start
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/conflicts public app 2097152 vibe64.source-editor.file-area.conflicts
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/directory public app 2097152 vibe64.source-editor.file-area.mkdir
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/file public app 2097152 vibe64.source-editor.file-area.create

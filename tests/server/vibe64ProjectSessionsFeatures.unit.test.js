@@ -284,6 +284,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.agent-message.send",
     "vibe64.sessions.agent-turn.interrupt",
     "vibe64.sessions.archive",
+    "vibe64.sessions.archive.start",
     "vibe64.sessions.archived.list",
     "vibe64.sessions.assistant-access.inspect",
     "vibe64.sessions.assistant-selection.update",
@@ -326,10 +327,10 @@ test("project and sessions register routes and captured actions during setup", a
   assert.deepEqual(internalActionIds, [
     "vibe64.sessions.conversation.context.read"
   ]);
-  // The new session, Save, Update and Create pull request buttons' routes run the actions that answer once the work
-  // starts, or while it goes on; the actions that wait for its outcome are the assistant's tools.
-  const routedByStartActions = ["vibe64.sessions.create", "vibe64.sessions.pull-request.create", "vibe64.sessions.updates.apply",
-    "vibe64.sessions.work.save"];
+  // The new session, Archive, Save, Update and Create pull request buttons' routes run the actions that answer once
+  // the work starts, or while it goes on; the actions that wait for its outcome are the assistant's tools.
+  const routedByStartActions = ["vibe64.sessions.archive", "vibe64.sessions.create", "vibe64.sessions.pull-request.create",
+    "vibe64.sessions.updates.apply", "vibe64.sessions.work.save"];
   assert.equal(sessionRoutes.length, sessionActions[0].actions.length - internalActionIds.length - routedByStartActions.length,
     "internal actions, including the conversation access query, have no HTTP route");
   assert.equal(sessionActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);

@@ -13,6 +13,7 @@ import {
   ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF,
   ACTION_INSPECT_REPOSITORY_VERSION_FILES,
   ACTION_ARCHIVE_SESSION,
+  ACTION_START_SESSION_ARCHIVE,
   ACTION_CREATE_PULL_REQUEST,
   ACTION_START_SESSION_PULL_REQUEST,
   ACTION_CREATE_SESSION,
@@ -290,6 +291,7 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_READ_SESSION_CONVERSATION_LOG,
     ACTION_RETRY_WORKSPACE_SETUP,
     ACTION_ARCHIVE_SESSION,
+    ACTION_START_SESSION_ARCHIVE,
     ACTION_SEND_AGENT_MESSAGE,
     "vibe64.sessions.main-chat-approvals.read",
     "vibe64.sessions.main-chat-approvals.edit",
@@ -3565,6 +3567,71 @@ test("archiving a session releases its managed resources after terminals stop", 
   const result = await service.archiveSession("session-1", {});
   assert.equal(result.ok, true);
   assert.deepEqual(calls, ["closing", "terminals", "resources:session-1", "archive"]);
+});
+
+/** The sessions service over one session whose archive stops its terminals once the test lets it. */
+function archivingWorld() {
+  const calls = [];
+  const stopped = Promise.withResolvers();
+  const session = { sessionId: "session-1", sourcePath: "/srv/session-1/source", status: "active" };
+  const runtime = {
+    store: { async assertSessionNotPinned() {}, async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; },
+      async runSessionExclusive(_sessionId, _operationName, operation) { return { acquired: true, value: await operation() }; } },
+    async archiveSession() {
+      calls.push("archive");
+      return { ...session, status: "archived" };
+    },
+    async clearSessionClosing() {},
+    async getSession() { return session; },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    async markSessionClosing() { calls.push("closing"); }
+  };
+  const service = createService({
+    project: {
+      async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+      async releaseSessionResources() { return { ok: true }; }
+    },
+    terminals: {
+      async closeSessionTerminals() {
+        calls.push("terminals");
+        await stopped.promise;
+      }
+    },
+    setupRunner: { isRunning: () => false, wait: () => null }
+  });
+  return { calls, service, stopTerminals: () => stopped.resolve() };
+}
+
+test("an archive the page names answers within two seconds while the session's work stops, and its repeat joins it, then reads its outcome",
+  async () => {
+    const world = archivingWorld();
+    const input = { requestId: "66666666-6666-4666-8666-666666666666" };
+    const first = await answeredWithin(world.service.startSessionArchive("session-1", input), CREATION_ANSWER_MS,
+      "Archiving waited for the session's work to stop");
+    assert.deepEqual(first, { ok: true, archiving: true, requestId: input.requestId, waitingFor: "stopping" });
+    const repeated = await answeredWithin(world.service.startSessionArchive("session-1", { ...input, repeat: true }),
+      CREATION_ANSWER_MS, "The repeat waited for the archive");
+    assert.equal(repeated.archiving, true, JSON.stringify(repeated));
+    assert.deepEqual(world.calls, ["closing", "terminals"], "a repeat never archives a second time");
+    world.stopTerminals();
+    const archived = await answeredWithin(world.service.startSessionArchive("session-1", { ...input, repeat: true }),
+      CREATION_ANSWER_MS, "The repeat after the archive ended waited");
+    assert.equal(archived.ok, true, JSON.stringify(archived));
+    assert.equal(archived.status, "archived");
+    assert.deepEqual(world.calls, ["closing", "terminals", "archive"]);
+  });
+
+test("a repeated archive this editor does not hold archives nothing and says to check the session list", async () => {
+  const world = archivingWorld();
+  const repeated = await world.service.startSessionArchive("session-1", {
+    repeat: true,
+    requestId: "77777777-7777-4777-8777-777777777777"
+  });
+  assert.equal(repeated.ok, false, JSON.stringify(repeated));
+  assert.equal(repeated.code, "vibe64_session_archive_not_followed");
+  assert.match(repeated.error, /session list/u);
+  assert.deepEqual(world.calls, []);
 });
 
 test("archiving a source-creation failure does not release resources that were never provisioned", async () => {
