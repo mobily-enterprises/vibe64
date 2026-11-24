@@ -156,7 +156,7 @@ back what the project's last build of that app left in those folders before the
 build command and keeps them again after it, at most 4 GiB in all (its
 `mobilynet-build-run` cache-restore and cache-save). So a Prepare that installs
 each pinned tool into a store in the home and links it into the release
-downloads nothing on the next build with the same pins: Mercbot Online's
+downloads nothing on the next build with the same pins: Mercbot's
 822 MiB tools store (`~/.cache/mercbot-tools`) was downloaded again by every
 build, 81 s of its 101 s command on 24 Nov 2026, because only `~/.npm` was
 kept. What a step reuses there is the step's to check by the version or hash it

@@ -20,7 +20,7 @@ import { settingsPerService } from "../../packages/vibe64-deploy/src/package.js"
 // A Deployment's `- Kept between builds:` names folders of the build's home that a host building the app afresh each
 // time keeps for its next build. On mobilynet they are the declaration's build cache, beside the runtime's: its build
 // VM starts with an empty home, so a Prepare that installs each pinned version of a tool once into a store in the home
-// (as Mercbot's tools store does, 822 MiB and 81 s of each of Mercbot Online's builds on 24 Nov) downloaded everything
+// (as Mercbot's tools store does, 822 MiB and 81 s of each of its builds on 24 Nov) downloaded everything
 // again every build. Here the builds run as mobilynet's build VM runs them, and a local server counts the downloads.
 const exec = promisify(execFile);
 
@@ -156,7 +156,7 @@ test("a build keeps the Deployment's Kept between builds, so a second Prepare wi
   assert.deepEqual(declarations.web.build.cache, ["~/.npm", "~/.cache/shop-tools"]);
 
   // Without the line a build keeps only the runtime's folder, so every build downloads the tool again, as each of
-  // Mercbot Online's Deploys did.
+  // Mercbot's Deploys did.
   const plain = packageOf(shopLines({ kept: false }));
   assert.deepEqual(plain.declarations.web.build.cache, ["~/.npm"]);
   for (let round = 0; round < 2; round += 1) {

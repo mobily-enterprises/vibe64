@@ -1,6 +1,6 @@
 // The crash records of one Vibe64 installation: every abnormal end of its editor server, kept in its system root for
 // the people who can fix what caused it (the editor's red banner and Crashes page) and for a host's own reports
-// (Vibe64 Online's VPS report reads them with readVibe64CrashRecords, as it reads working turns).
+// (a host's report on the machine it runs reads them with readVibe64CrashRecords, as it reads working turns).
 //
 //   <systemRoot>/crashes/records/<id>.json   one record per abnormal end; ids sort by the time they were recorded
 //   <systemRoot>/crashes/running/<pid>-<instance>.json

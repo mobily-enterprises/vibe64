@@ -322,7 +322,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     sendAsPerson: input => actions.execute({ actionId: ACTION_SEND_AGENT_MESSAGE,
       input: { projectSlug: PROJECT_SLUG, sessionId: "test", ...input },
       context: { channel: "internal", surface: "app", requestMeta: { request: { headers: {} } } } }),
-    /** The assistant host no longer resolves the person (their account was disabled), as Online refuses then. */
+    /** The assistant host no longer resolves the person, as once their account has been disabled. */
     revokeAccess() { accessRevoked = true; },
     options, store, warnings, actor, goalCommands, intent, turnActive, waitFor, trace,
     failNextStart: () => writeFile(failStartPath, ""),

@@ -64,7 +64,7 @@ many: **Only the latest 100 crashes are kept: 3 older ones were removed.**
 
 Each crash is a small JSON file in Vibe64's system folder, in
 `crashes/records/`, readable only by the account that runs Vibe64. A host's own
-reports read them there too (Vibe64 Online's server report does).
+reports read them there too, as a host reports its own server.
 
 ## Ask Colleague
 

@@ -29,7 +29,7 @@ can fix its cause has seen it, because a crash is a defect in Vibe64 itself.
 
 ## Public contract
 
-`startServer` (`server.js`, used by public's `bin/server.js` and Vibe64 Online's
+`startServer` (`server.js`, used by public's `bin/server.js` and a host's own
 launcher alike) starts a crash watch once the server listens. The watch holds a
 running marker, its heartbeat rewritten every 30 s, in
 `<systemRoot>/crashes/running/`. An uncaught error or unhandled rejection is
