@@ -568,13 +568,21 @@ refresh ends with it (M14), so the next Deploy makes it again with a new login;
 and the migrations run once only where the provider runs a release's task.
 
 A refusal from the provider (a quota, the spending cap) fails the Deploy with
-its reason, the record kept as far as it got; an answer the provider may give
-later is tried again. That holds for the provider read at the top of each step
+its reason after the step's own words, as its log named it (`stepWords`:
+"Making the hosted service for database: …", never the step's kind), the
+record kept as far as it got; an answer the provider may give later is tried
+again. That holds for the provider read at the top of each step
 too: a read that got no answer, a 5xx or the provider's rate limit (as a Deploy
 waiting minutes for a build may meet) is tried again, one pause later, then two,
 four and at most six (30 seconds at a caller's 5), for as long as the Deploy
 waits, so the run lives until it is live or failed; before, one such read ended
-the run with its record still deploying. A Deploy first reads how each refresh
+the run with its record still deploying. The reads a Deploy makes before it
+changes anything (the offer, the inventory, the edge's addresses: `firstRead`)
+are tried again with the same pauses, at most five times, after which it stops
+`production_deploy_unanswered` ("mobilynet didn't answer, so the Deploy
+stopped before changing anything. Deploy again."), having kept no record and
+asked the provider nothing else; before, the first such read that got no
+answer ended the Deploy with the transport's own error. A Deploy first reads how each refresh
 the Deploy before it started, and never read, ended (`settleLastRun`: that one
 stopped in its wait): one that failed or was aborted is let go as that Deploy
 would have let it go, its links made ahead dropped, since they ended with it,
@@ -682,7 +690,10 @@ The record (`record.js`) keys what was made by (environment, kind, name), each
 with the provider's id and name; everything the engine makes carries the labels
 `vibe64-deployment`, `vibe64-app`, `vibe64-environment` and `vibe64-item`, so
 `rebuildFromLabels()` makes the record again from the provider. Its file, in
-the editor's private state, is written only over the revision its writer read.
+the editor's private state, is written only over the revision its writer read:
+another writer's change refuses it `production_deploy_record_stale`, in the
+owner's words ("Production's record changed while this ran, so it stopped
+before writing over that change: try again."), the revisions in its `details`.
 The links it names are believed only while the provider holds them, where the
 adapter lists them (The steps, 4). It keeps each service's size and no count:
 the provider holds the count (An App Service's count). A record written before
