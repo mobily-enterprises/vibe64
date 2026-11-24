@@ -173,7 +173,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       calls.push({ method, args, projectSlug: context.slug, actor: context.vibe64User });
       return { ok: true, method };
     };
-    const sessions = Object.fromEntries(["listSessions", "renameSession", "archiveSession", "retryWorkspaceSetup", "broadcastSessionPreviewState", "sendAgentMessage", "interruptAgentTurn", "readSessionConversationLog"].map((name) => [name, record(name)]));
+    const sessions = Object.fromEntries(["listSessions", "renameSession", "startSessionArchive", "retryWorkspaceSetup", "broadcastSessionPreviewState", "sendAgentMessage", "interruptAgentTurn", "readSessionConversationLog"].map((name) => [name, record(name)]));
     const terminals = Object.fromEntries(["readSessionWorkPlan", "listTemporaryConversations", "createTemporaryConversation", "readTemporaryConversation", "startTemporaryConversationTurn", "stopTemporaryConversation", "deleteTemporaryConversation"].map((name) => [name, record(name)]));
     actions.register({ contributorId: "sessions", domain: "sessions", actions: createSessionActions({ sessions: withMainChatOperations(sessions) }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
     actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions({ terminals }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
@@ -194,7 +194,8 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       ["POST", "/sessions/:sessionId/agent-message", "vibe64.sessions.agent-message.send", { message: "Consider this correction.", messageId: "main-steer", submissionKind: "steer" }, "sendAgentMessage"],
       ["POST", "/sessions/:sessionId/agent-turn/interrupt", "vibe64.sessions.agent-turn.interrupt", { reason: "Requested by user" }, "interruptAgentTurn"],
       ["PATCH", "/sessions/:sessionId/name", "vibe64.sessions.rename", { name: "A name" }, "renameSession"],
-      ["POST", "/sessions/:sessionId/archive", "vibe64.sessions.archive", {}, "archiveSession"],
+      ["POST", "/sessions/:sessionId/archive", "vibe64.sessions.archive.start", { requestId: "66666666-6666-4666-8666-666666666666" },
+        "startSessionArchive"],
       ["POST", "/sessions/:sessionId/workspace-setup/retry", "vibe64.sessions.workspace-setup.retry", {}, "retryWorkspaceSetup"],
       ["POST", "/sessions/:sessionId/preview-state", "vibe64.sessions.preview-state.broadcast", { projectSlug: slug, route: "/preview", originId: "browser" }, "broadcastSessionPreviewState"],
       ["GET", "/sessions/:sessionId/temporary-conversations", "vibe64.terminals.temporary-conversation.list", {}, "listTemporaryConversations"],
