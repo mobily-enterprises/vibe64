@@ -41,6 +41,20 @@ const server = net.createServer({ allowHalfOpen: true }, (socket) => {
     if (signal) process.kill(process.pid, signal);
     else process.exitCode = code ?? 1;
   });
+  // A stop signals this bridge's whole process group. The bridge ends after its child, which it reaps, and then as
+  // the signal asked: an orphan would wait for init to reap it, and the stop reads the group as running until then.
+  // The child's input ends here as it did when the bridge died at once, so a child that no signal reached, the
+  // bridge's alone, still ends; one that outlasts the stop's grace ends with the bridge at its SIGKILL.
+  process.on("SIGTERM", () => {
+    const end = () => {
+      process.removeAllListeners("SIGTERM");
+      process.kill(process.pid, "SIGTERM");
+    };
+    if (child.exitCode !== null || child.signalCode !== null) return end();
+    socket.unpipe(child.stdin);
+    child.stdin.end();
+    child.once("exit", end);
+  });
 });
 server.on("error", (error) => {
   throw error;

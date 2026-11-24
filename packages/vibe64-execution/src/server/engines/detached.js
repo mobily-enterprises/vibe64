@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
 import { mkdir, open, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +8,7 @@ import {
   commandErrorResult,
   commandResult
 } from "../result.js";
+import { processGroupHasLiveMember, readProcessStart } from "../runtime/processStart.js";
 
 const detachedExecutions = new Map();
 const DEFAULT_STOP_TERM_MS = 3000;
@@ -191,12 +193,47 @@ async function processGroupMembers(processGroupId = null, limit = 10) {
   return members;
 }
 
+/**
+ * Waits until no member of the group runs. A member that has exited holds nothing, though the kernel keeps it in the
+ * group until its parent reaps it, and an orphan waits for init, which a busy host can take seconds to get to. So a
+ * group still there 100 ms on is read, then 200, 400, 800 ms after each read and at the deadline, and only members
+ * that have not exited count. Windows has no process table to read; its members all count.
+ */
 async function waitForProcessGroupEmpty(processGroupId = null, timeoutMs = 0) {
-  const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-  while (processGroupExists(processGroupId) && Date.now() < deadline) {
+  const started = Date.now();
+  const deadline = started + Math.max(0, Number(timeoutMs) || 0);
+  let readAt = started + 100;
+  let readEvery = 200;
+  while (processGroupExists(processGroupId)) {
+    const due = Date.now() >= deadline;
+    if (due || Date.now() >= readAt) {
+      if (await onlyExitedMembers(processGroupId)) return true;
+      if (due) return false;
+      readAt = Date.now() + readEvery;
+      readEvery *= 2;
+    }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  return !processGroupExists(processGroupId);
+  return true;
+}
+
+// Read without the thread pool: /proc is in memory, and a pooled read of each process's file waits for the pool and
+// then the event loop several times over, which on a loaded host made one read of the table take up to 1.45 s.
+const PROCESS_TABLE = {
+  readdirFn: async (folder) => readdirSync(folder),
+  readFileFn: async (file, encoding) => readFileSync(file, encoding)
+};
+
+/**
+ * The leader's own file answers while it runs. Only once it has exited is the whole table read, twice: a member that
+ * forks and exits while the first read runs leaves a child only the second read lists.
+ */
+async function onlyExitedMembers(processGroupId) {
+  if (process.platform === "win32") return false;
+  const leader = await readProcessStart(processGroupId, PROCESS_TABLE);
+  if (leader.status === "exact" && leader.groupId === Number(processGroupId) && leader.state !== "Z") return false;
+  return !await processGroupHasLiveMember(processGroupId, PROCESS_TABLE) &&
+    !await processGroupHasLiveMember(processGroupId, PROCESS_TABLE);
 }
 
 async function drainProcessGroup(processGroupId = null, options = {}) {

@@ -93,11 +93,28 @@ test("conversation execution preserves output and exit status after input EOF", 
 // failed and ended the bridge mid-stream, so Claude startup on a loaded machine
 // read ECONNRESET. One thread pool thread, busy while the client connects, gives
 // that order every time.
+const bridgePath = fileURLToPath(new URL("../../packages/vibe64-execution/src/server/engines/stdioBridge.js", import.meta.url));
+
+/** A connection to a stream bridge's socket, made as the product makes it: as soon as the socket exists. */
+async function connectToBridge(socketPath) {
+  for (;;) {
+    const socket = await new Promise((resolve, reject) => {
+      const connection = net.createConnection({ path: socketPath, allowHalfOpen: true });
+      connection.once("connect", () => resolve(connection));
+      connection.once("error", reject);
+    }).catch(async error => {
+      if (!["ENOENT", "ECONNREFUSED"].includes(error.code)) throw error;
+      await new Promise(resolve => setTimeout(resolve, 25));
+      return null;
+    });
+    if (socket) return socket;
+  }
+}
+
 test("the stream bridge keeps its client while its thread pool is busy", { timeout: 15_000 }, async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-stdio-bridge-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const socketPath = path.join(root, "stream.sock");
-  const bridgePath = fileURLToPath(new URL("../../packages/vibe64-execution/src/server/engines/stdioBridge.js", import.meta.url));
   const busyThreadPool = "data:text/javascript,import { pbkdf2 } from 'node:crypto'; pbkdf2('a', 'b', 1e6, 64, 'sha512', () => {});";
   const bridge = spawn(process.execPath, ["--import", busyThreadPool, bridgePath, socketPath, "",
     process.execPath, "-e", "process.stdin.pipe(process.stdout)"], {
@@ -107,24 +124,62 @@ test("the stream bridge keeps its client while its thread pool is busy", { timeo
   let stderr = "";
   bridge.stderr.on("data", chunk => { stderr += chunk; });
   const exited = new Promise(resolve => bridge.once("exit", (code, signal) => resolve({ code, signal })));
-  // Connect as the product does: as soon as the socket exists.
-  let socket = null;
-  while (!socket) {
-    socket = await new Promise((resolve, reject) => {
-      const connection = net.createConnection({ path: socketPath, allowHalfOpen: true });
-      connection.once("connect", () => resolve(connection));
-      connection.once("error", reject);
-    }).catch(async error => {
-      if (!["ENOENT", "ECONNREFUSED"].includes(error.code)) throw error;
-      await new Promise(resolve => setTimeout(resolve, 25));
-      return null;
-    });
-  }
+  const socket = await connectToBridge(socketPath);
   socket.end("ping\n");
   const chunks = [];
   for await (const chunk of socket) chunks.push(chunk);
   assert.equal(Buffer.concat(chunks).toString(), "ping\n", stderr);
   assert.deepEqual(await exited, { code: 0, signal: null }, stderr);
+});
+
+// A stop signals the bridge's whole process group, and the native process can take a moment to end, as Claude Code
+// does. The bridge ends only after its child, which it reaps: an orphan would wait for init to reap it, and a stop
+// reads the group as running until every member is reaped.
+test("a stopped stream bridge ends after its child, leaving nothing of its group", { timeout: 15_000 }, async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-stdio-bridge-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const socketPath = path.join(root, "stream.sock");
+  const native = "process.on('SIGTERM', () => setTimeout(() => process.exit(0), 300)); process.stdin.resume(); process.stdout.write('ready\\n');";
+  const bridge = spawn(process.execPath, [bridgePath, socketPath, "", process.execPath, "-e", native], {
+    detached: true, stdio: ["ignore", "ignore", "pipe"]
+  });
+  t.after(() => { try { process.kill(-bridge.pid, "SIGKILL"); } catch { /* The bridge's group has ended. */ } });
+  let stderr = "";
+  bridge.stderr.on("data", chunk => { stderr += chunk; });
+  const exited = new Promise(resolve => bridge.once("exit", (code, signal) => resolve({ code, signal })));
+  const socket = await connectToBridge(socketPath);
+  socket.on("error", () => {});
+  socket.resume();
+  // The native process is running, with its own SIGTERM handling, once it writes.
+  await new Promise(resolve => socket.once("data", resolve));
+  process.kill(-bridge.pid, "SIGTERM");
+  assert.deepEqual(await exited, { code: null, signal: "SIGTERM" }, stderr);
+  assert.throws(() => process.kill(-bridge.pid, 0), { code: "ESRCH" }, "nothing of the bridge's group outlives it");
+  socket.destroy();
+});
+
+test("a stream bridge signalled alone ends its child's input, so the child it outlived no longer waits on it", {
+  timeout: 15_000
+}, async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-stdio-bridge-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const socketPath = path.join(root, "stream.sock");
+  // As Claude's stream does, the native process reads its input until it ends; no signal reaches it.
+  const native = "process.stdin.on('end', () => process.exit(0)); process.stdin.resume(); process.stdout.write('ready\\n');";
+  const bridge = spawn(process.execPath, [bridgePath, socketPath, "", process.execPath, "-e", native], {
+    detached: true, stdio: ["ignore", "ignore", "pipe"]
+  });
+  t.after(() => { try { process.kill(-bridge.pid, "SIGKILL"); } catch { /* The bridge's group has ended. */ } });
+  const exited = new Promise(resolve => bridge.once("exit", (code, signal) => resolve({ code, signal })));
+  const socket = await connectToBridge(socketPath);
+  socket.on("error", () => {});
+  socket.resume();
+  await new Promise(resolve => socket.once("data", resolve));
+  process.kill(bridge.pid, "SIGTERM");
+  const late = new Promise(resolve => setTimeout(() => resolve("still running after 5 s"), 5_000).unref());
+  assert.deepEqual(await Promise.race([exited, late]), { code: null, signal: "SIGTERM" });
+  assert.throws(() => process.kill(-bridge.pid, 0), { code: "ESRCH" }, "nothing of the bridge's group outlives it");
+  socket.destroy();
 });
 
 test("conversation execution observes a server failure without calling it a successful start receipt", { timeout: 10_000 }, async t => {
