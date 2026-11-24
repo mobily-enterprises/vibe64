@@ -129,6 +129,12 @@ with its Serve command and Ready check taken from the app's own code. On the
 service that reaches it, it adds a `- Reaches:` line. Vibe64's check reads the
 Deployment back: it must parse and declare the new service.
 
+A Deploy to production makes each service after the services it reaches. Two
+services that reach each other can't both start on their first Deploy, since
+each needs the other's address: the Deploy fails before making either, naming
+both. Take one of their `- Reaches:` lines out of `genesis/stack.md`, deploy,
+then put it back once both run.
+
 ## Remove a service
 
 There is no **Remove** button. Ask the AI in the session to remove the
