@@ -61,6 +61,7 @@ function launchPreviewInFlightText({
   activeOutputTarget = null,
   embeddedStartTarget = null,
   launchStarting = false,
+  launchStartWaiting = "",
   launchWaiting = false,
   launchStatusText = "",
   loading = false,
@@ -83,7 +84,8 @@ function launchPreviewInFlightText({
   const target = activeOutputTarget || embeddedStartTarget;
   const launchStatus = String(launchStatusText || "").trim();
   if (launchStarting) {
-    return `Starting preview: ${outputTargetLabel(embeddedStartTarget || activeOutputTarget)}.`;
+    const waiting = String(launchStartWaiting || "").trim();
+    return `Starting preview: ${outputTargetLabel(embeddedStartTarget || activeOutputTarget)}.${waiting ? ` ${waiting}.` : ""}`;
   }
   if (launchWaiting) {
     return "Waiting for the current workspace operation to finish. Preview will retry automatically.";

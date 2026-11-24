@@ -16,6 +16,8 @@ import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64ProjectScopedStorageKey } from "@/lib/vibe64ProjectScope.js";
 import { launchStatusAgentWriteBusy } from "@/lib/vibe64LaunchStatus.js";
 import { writeLaunchAutoStartAttempt } from "@/lib/vibe64LaunchAutoStart.js";
+import { followLaunchStart, launchStartAnswerHeld, newLaunchStartId } from "@/lib/vibe64LaunchStart.js";
+import { workAnswerLost } from "@/lib/vibe64SessionWorkOutcome.js";
 
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
@@ -69,6 +71,8 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
   const refusedAdmissionId = ref("");
   const launchStarting = ref(false);
   const launchWaiting = ref(false);
+  // What a start the server holds waits for, in words, while the page follows it.
+  const launchStartWaiting = ref("");
   const autoStartKey = ref("");
   let disposed = false;
 
@@ -85,7 +89,8 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
       ...(context.forceRestart === true ? { forceRestart: true } : {}),
       ...(context.outputParameters === undefined ? {} : { outputParameters: context.outputParameters }),
       outputTargetId: String(context.outputTargetId || ""),
-      replacesTerminalSessionId: String(context.replacesTerminalSessionId || "")
+      replacesTerminalSessionId: String(context.replacesTerminalSessionId || ""),
+      startId: String(context.startId || "")
     }),
     fallbackRunError: "Output target could not be started.",
     messages: {
@@ -94,7 +99,8 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
     onRunError(error) {
       // Startup failures belong to the preview, including automatic attempts.
       // Rethrow before useCommand also presents them as action-feedback toasts.
-      if (readRefOrGetterValue(embeddedPreview)) {
+      // A lost answer is never presented: the page follows the start instead.
+      if (readRefOrGetterValue(embeddedPreview) || workAnswerLost(error)) {
         throw error;
       }
     },
@@ -185,8 +191,46 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
   }
 
   /**
+   * Follows a start the server holds, or one whose answer was lost, through the outputs read until it ends, saying
+   * what it waits for (`launchStartWaiting`), and returns its run, or null once the page moved on. A start that did
+   * not run throws its refusal in words, with the admission it was refused by.
+   */
+  async function followHeldStart(held, scopeKey) {
+    const following = new AbortController();
+    const stopWhenMoved = watch(launchScopeKey, (key) => {
+      if (key !== scopeKey) following.abort();
+    });
+    try {
+      const outcome = await followLaunchStart(held, {
+        async read() {
+          await refresh({ scopeKey });
+          return status.value.launchStarts;
+        },
+        signal: following.signal,
+        waiting(label) {
+          launchStartWaiting.value = label;
+        }
+      });
+      if (!outcome || disposed) return null;
+      if (!outcome.ok) {
+        throw Object.assign(new Error(outcome.error), {
+          code: outcome.code || "",
+          details: outcome.admissionId ? { admission: { id: outcome.admissionId } } : {}
+        });
+      }
+      const running = status.value.activeTerminal;
+      return running?.id === outcome.terminalSessionId ? running : { ok: true, id: outcome.terminalSessionId };
+    } finally {
+      stopWhenMoved();
+      launchStartWaiting.value = "";
+    }
+  }
+
+  /**
    * Starts a target. The start names the run this tab shows, or none, so the server returns a run another
-   * start began meanwhile instead of replacing it; `automatic` marks a start the person did not ask for.
+   * start began meanwhile instead of replacing it; `automatic` marks a start the person did not ask for. It names
+   * itself (`startId`): one that waits answers as starting and the page follows it, and so does one whose answer
+   * was lost on the way.
    */
   async function run(outputTarget = {}, {
     applyDefaultDisplay = true,
@@ -228,14 +272,26 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
         : undefined;
       const missing = outputTarget.parameters?.find((parameter) => parameter.required && !parameters[parameter.id]?.trim());
       if (missing) throw new Error(`${missing.label} is required. Open Preview options to set it.`);
-      const terminalSession = await startTerminalCommand.run({
-        automatic: automatic === true || Boolean(normalizedAutoStartAttemptKey),
-        forceRestart,
-        ...(parameters ? { outputParameters: parameters } : {}),
-        outputTargetId: outputTarget.id,
-        replacesTerminalSessionId: terminalSessionId.value || "",
-        sessionId: currentSessionId
-      });
+      const startId = newLaunchStartId();
+      let terminalSession;
+      try {
+        terminalSession = await startTerminalCommand.run({
+          automatic: automatic === true || Boolean(normalizedAutoStartAttemptKey),
+          forceRestart,
+          ...(parameters ? { outputParameters: parameters } : {}),
+          outputTargetId: outputTarget.id,
+          replacesTerminalSessionId: terminalSessionId.value || "",
+          sessionId: currentSessionId,
+          startId
+        });
+      } catch (error) {
+        if (!workAnswerLost(error)) throw error;
+        terminalSession = { ok: true, starting: true, startId, waitingFor: "unconfirmed" };
+      }
+      if (launchStartAnswerHeld(terminalSession)) {
+        terminalSession = await followHeldStart(terminalSession, startedScopeKey);
+        if (!terminalSession) return false;
+      }
       if (
         disposed ||
         startedScopeKey !== launchScopeKey.value ||
@@ -386,6 +442,7 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
     closeTerminal,
     launchButtonsDisabled,
     launchError,
+    launchStartWaiting,
     launchStarting,
     launchWaiting,
     operationBusy,

@@ -110,6 +110,7 @@ function useVibe64OutputControls({
     launchStatusAttempt: outputs.launchStatusAttempt,
     launchStatusIdleRecoveryExhausted: autoStart.launchStatusIdleRecoveryExhausted,
     launchStarting: launch.launchStarting,
+    launchStartWaiting: launch.launchStartWaiting,
     launchWaiting: computed(() => outputs.workspacePreparing.value || launch.launchWaiting.value),
     workspacePreparing: outputs.workspacePreparing,
     outputTargets: outputs.outputTargets,

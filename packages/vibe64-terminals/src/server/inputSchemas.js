@@ -52,6 +52,8 @@ const outputTargetFields = {
   originId: optionalText,
   // The run the start's view showed ("" for none): another one running is returned, not replaced.
   replacesTerminalSessionId: { ...optionalText, maxLength: 200 },
+  // The page's name for this start: it answers within two seconds and the outputs read reports it (launchStarts).
+  startId: { type: "string", maxLength: 100, pattern: /^[A-Za-z0-9_-]{8,100}$/u, required: false },
   vibe64User: {
     type: "object",
     additionalProperties: true,

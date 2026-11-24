@@ -1133,6 +1133,8 @@ it.each([
   const running = { id: "run-9", status: "running", metadata: { outputTargetId: "app", launchReady: true } };
   let shown = { ok: true, outputTargets: [target], activeTerminal: null, preview: { state: "stopped", stoppedIntent: true } };
   const posts = [];
+  // The page reads the outputs at its own pace, 250 ms first and up to 3 s apart: these timers move it on.
+  vi.useFakeTimers();
   vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/held-run"),
     localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
   vi.stubGlobal("WebSocket", class { static OPEN = 1; readyState = 3; addEventListener() {} send() {} close() {} });
@@ -1166,17 +1168,20 @@ it.each([
     const startId = posts[0].startId;
     expect(startId).toMatch(/^start_/u);
     shown = { ...shown, launchStarts: [{ startId, status: "starting", waitingFor: "workspace-preparation" }] };
-    await vi.waitFor(() => expect(controls.launchStartWaiting.value).toBe("Waiting for the workspace preparation to finish"),
-      { timeout: 3_000 });
+    await vi.advanceTimersByTimeAsync(800);
+    expect(controls.launchStartWaiting.value).toBe("Waiting for the workspace preparation to finish");
     expect(controls.launchError.value).toBe("");
     shown = { ...shown, activeTerminal: running, preview: { state: "ready", href: "http://127.0.0.1:3000/" },
       launchStarts: [{ startId, status: "started", terminalSessionId: "run-9" }] };
+    await vi.advanceTimersByTimeAsync(3_500);
     await expect(started).resolves.toBe(true);
     expect(controls.terminalSessionId.value).toBe("run-9");
     expect(controls.launchError.value).toBe("");
     expect(controls.launchStartWaiting.value).toBe("");
     expect(posts).toHaveLength(1);
-  } finally { app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
+  } finally {
+    app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); vi.useRealTimers();
+  }
 });
 
 it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup and exposes the %s outcome", async outcome => {

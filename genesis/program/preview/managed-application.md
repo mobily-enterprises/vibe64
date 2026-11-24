@@ -537,6 +537,22 @@ takes the queue again and reruns its checks without asking for another
 preparation. A Stop or the session's close while it waited
 (`interruptLaunches`) ends it unstarted (`vibe64_preview_stopped`,
 `vibe64_session_closing`).
+A start the page names (`startId`, `src/lib/vibe64LaunchStart.js`) runs as
+held work (`@local/vibe64-core/server/heldWork`, in `outputTargetTerminal.js`):
+it answers with its run when that comes within two seconds, and otherwise
+`{ ok: true, starting: true, startId, waitingFor }` (`launch-queue`,
+`workspace-preparation` or `starting`). A repeat of it joins it, or reads its
+outcome once it ended, and never starts it again. The outputs read reports the
+session's latest five such starts as `launchStarts` (`starting` with
+`waitingFor`, `started` with `terminalSessionId`, or `failed` with the refusal's
+words, code and admission), each for 15 minutes after it ends, and its end
+publishes `output-target-start-settled`. The page follows its start through
+those reads, as it does a start whose answer was lost (status 0, or a 5xx
+without a code): **Starting preview: <target>.** with what it waits for in
+words, then its run or its refusal; a start the editor no longer knows reads
+"Vibe64 restarted while Preview was starting. Start it again." A start without
+a `startId` (the assistant's tool, the editor's own) waits for its run as
+before.
 
 Status inspection resolves the environment without provisioning resources or
 writing project environment files. Confirmed preview readiness supersedes a
