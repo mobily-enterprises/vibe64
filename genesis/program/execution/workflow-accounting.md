@@ -164,7 +164,17 @@ reaper process holding their process groups over a pipe from the server. When
 the server ends in any way, including a crash or a closed terminal, the pipe
 closes and the reaper stops those groups (SIGTERM, then SIGKILL after three
 seconds); it also exits once the last detached command ends. Commands remain
-their own process-group leaders. Terminal commands, including Preview launches,
+their own process-group leaders. A stop drains a command's group the same way
+and counts a member that has exited as ended, though its parent, or init for an
+orphan, has yet to reap it (`waitForProcessGroupEmpty` in `engines/detached.js`
+reads a group still there 100 ms on, then 200, 400, 800 ms after each read: its
+leader's /proc entry while the leader runs, and once it has exited every
+member's with `processGroupHasLiveMember`, without the thread pool, whose
+per-file round trips a loaded host stretched to 1.45 s for one read). A streamed
+command's stdio bridge, its group's leader, ends its child's input at SIGTERM
+and ends only after reaping that child, so the child is never left for init to
+reap, and a SIGTERM that reached the bridge alone still ends a child that reads
+its input to the end. Terminal commands, including Preview launches,
 end with the kernel's hangup of their terminal instead; a program that ignores
 SIGHUP outlives the server. Captured commands are not held. A saved service
 execution ID this server does not hold therefore belongs to an earlier server

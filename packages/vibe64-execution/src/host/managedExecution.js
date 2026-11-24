@@ -2,7 +2,7 @@
 // that unit.
 
 import { spawn, spawnSync } from "node:child_process";
-import { readFileSync, unlinkSync } from "node:fs";
+import { readdirSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { createConnection } from "node:net";
 import { constants as osConstants } from "node:os";
@@ -434,15 +434,26 @@ function terminateManagedExecutionChild(child = null) {
 }
 
 /**
- * Waits until the stopped child's process group is gone, its exited members reaped too, so the
- * runner's own exit means the tree has stopped: the rest of SIGTERM's grace, then SIGKILL. A tree
- * still there after SIGKILL's wait is left to the unit's own stop, which ends what is left.
- * @param {import("node:child_process").ChildProcess} child
+ * Waits until no member of the stopped child's process group runs, so the runner's own exit means
+ * the tree has stopped: the rest of SIGTERM's grace, then SIGKILL. A member that has exited holds
+ * nothing, though the kernel keeps it in the group until its parent reaps it, and an orphan waits
+ * for init, which a busy host can take seconds to get to: a group still there 100 ms after SIGTERM
+ * is read, then 200, 400, 800 ms after each read, and only members that have not exited count. A
+ * tree still there after SIGKILL's wait is left to the unit's own stop, which ends what is left.
+ * @param {{ pid?: number }} child
  * @param {number} terminatedAt when SIGTERM was sent, in epoch milliseconds
  */
 async function awaitManagedExecutionGroupExit(child, terminatedAt) {
   let killed = false;
+  let readAt = terminatedAt + 100;
+  let readEvery = 200;
   while (managedExecutionGroupExists(child)) {
+    if (Date.now() >= readAt) {
+      // Read twice: a member that forks and exits while the first read runs leaves a child only the second read lists.
+      if (!managedExecutionGroupHasLiveMember(child) && !managedExecutionGroupHasLiveMember(child)) return;
+      readAt = Date.now() + readEvery;
+      readEvery *= 2;
+    }
     const elapsed = Date.now() - terminatedAt;
     if (elapsed >= MANAGED_EXECUTION_STOP_GRACE_MS + MANAGED_EXECUTION_KILL_WAIT_MS) {
       process.stderr.write("Vibe64 managed service process tree did not stop after SIGKILL.\n");
@@ -453,6 +464,45 @@ async function awaitManagedExecutionGroupExit(child, terminatedAt) {
       killed = true;
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+/**
+ * Whether a member of the child's process group has not exited, from Linux's process table. The helper keeps no
+ * import outside this folder, so this is its own reading of the table that the server's processGroupHasLiveMember
+ * (server/runtime/processStart.js) reads, with the same rules: a process that has gone, or that hidepid hides, is
+ * left out, and a table that cannot be read proves nothing, so the kernel's answer, which counts exited members,
+ * decides. Elsewhere that answer always decides. The leader's own file answers while it runs; only
+ * once it has exited is the whole table read.
+ * @param {{ pid?: number }} child
+ */
+function managedExecutionGroupHasLiveMember(child) {
+  const groupId = Number(child?.pid);
+  if (process.platform !== "linux") return managedExecutionGroupExists(child);
+  try {
+    if (runsInGroup(String(groupId), groupId)) return true;
+    for (const name of readdirSync("/proc")) {
+      if (/^\d+$/u.test(name) && runsInGroup(name, groupId)) return true;
+    }
+    return false;
+  } catch {
+    return managedExecutionGroupExists(child);
+  }
+}
+
+function runsInGroup(name, groupId) {
+  const stat = readProcessStat(name);
+  const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+  return Boolean(stat) && Number(fields[2]) === groupId && fields[0] !== "Z";
+}
+
+// Read without the thread pool, as the server's stop reads the table: see waitForProcessGroupEmpty (engines/detached.js).
+function readProcessStat(name) {
+  try {
+    return readFileSync(`/proc/${name}/stat`, "utf8");
+  } catch (error) {
+    if (["EACCES", "ENOENT", "EPERM", "ESRCH"].includes(error?.code)) return "";
+    throw error;
   }
 }
 
@@ -492,6 +542,7 @@ function signalManagedExecutionChild(child = null, signal = "SIGTERM") {
 }
 
 export {
+  awaitManagedExecutionGroupExit,
   handleManagedExecutionOperation,
   managedExecutionControllerLeaseName,
   runManagedExecutionPayload

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { closeSync, openSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { createServer } from "node:net";
 import path from "node:path";
@@ -23,7 +24,11 @@ import {
 } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 import { managedExecutionRuntimeBase } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
 import { DAEMON_USERNAME_PREFIX } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
-import { managedExecutionControllerLeaseName } from "../../packages/vibe64-execution/src/host/managedExecution.js";
+import {
+  awaitManagedExecutionGroupExit,
+  managedExecutionControllerLeaseName
+} from "../../packages/vibe64-execution/src/host/managedExecution.js";
+import { drainProcessGroup } from "../../packages/vibe64-execution/src/server/engines/detached.js";
 
 const { normalizeExecutionDescriptor } = requestTestables;
 
@@ -553,6 +558,105 @@ test("standalone detached execution stops and drains its exact process group", a
     () => process.kill(result.pid, 0),
     (error) => error?.code === "ESRCH"
   );
+});
+
+// A member that has exited stays in its process group until its parent reaps it, and an orphan's parent is init,
+// which a busy host can take seconds to get to. Here the parent lives on and never reaps, so the group keeps its
+// members, both exited once the stop signals them, for as long as the test needs: a stop must count them as ended.
+// It reads them with the thread pool held, which a pooled read of every process's file waits for.
+const UNREAPED_GROUP = `
+import os, sys, time
+leader = os.fork()
+if leader == 0:
+    os.setpgid(0, 0)
+    time.sleep(60)
+    os._exit(0)
+try:
+    os.setpgid(leader, leader)
+except OSError:
+    pass
+member = os.fork()
+if member == 0:
+    os.setpgid(0, leader)
+    time.sleep(60)
+    os._exit(0)
+sys.stdout.write(f"{leader}\\n")
+sys.stdout.flush()
+time.sleep(60)
+`;
+
+/** A process group of two running members whose parent, outside the group, never reaps them. */
+async function unreapedGroup(t) {
+  const parent = spawn("python3", ["-c", UNREAPED_GROUP], { detached: true, stdio: ["ignore", "pipe", "inherit"] });
+  let groupId = 0;
+  t.after(() => {
+    for (const id of [groupId, parent.pid]) {
+      try { process.kill(-id, "SIGKILL"); } catch { /* That group has ended. */ }
+    }
+  });
+  let output = "";
+  for await (const chunk of parent.stdout) {
+    output += chunk;
+    if (output.includes("\n")) break;
+  }
+  groupId = Number(output.trim());
+  assert.ok(Number.isSafeInteger(groupId) && groupId > 1, output);
+  return groupId;
+}
+
+/**
+ * Holds every thread of this process's pool, as other work holds a busy host's, in the open of a FIFO that has no
+ * writer, which costs no CPU. The function it returns opens the writing end, which lets them all go.
+ */
+async function holdThreadPool(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-held-pool-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const fifo = path.join(root, "held");
+  await promisify(execFile)("mkfifo", [fifo]);
+  const readers = Array.from({ length: Number(process.env.UV_THREADPOOL_SIZE) || 4 }, () => open(fifo, "r"));
+  return async () => {
+    const writer = openSync(fifo, "w");
+    for (const reader of await Promise.all(readers)) await reader.close();
+    closeSync(writer);
+  };
+}
+
+/** A stop's wait run while the thread pool is held: its result, or that it was still waiting after two seconds. */
+async function waitWithPoolHeld(t, wait) {
+  const release = await holdThreadPool(t);
+  const started = Date.now();
+  let timer;
+  try {
+    return await Promise.race([
+      wait().then((value) => ({ value, ms: Date.now() - started })),
+      new Promise((resolve) => { timer = setTimeout(() => resolve({ late: true, ms: Date.now() - started }), 2_000); })
+    ]);
+  } finally {
+    clearTimeout(timer);
+    await release();
+  }
+}
+
+test("a detached stop counts its group's exited members as ended, though their parent has yet to reap them", {
+  skip: process.platform !== "linux", timeout: 20_000
+}, async (t) => {
+  const groupId = await unreapedGroup(t);
+  const stop = await waitWithPoolHeld(t, () => drainProcessGroup(groupId));
+  assert.equal(stop.late, undefined, `the stop was still waiting after ${stop.ms} ms`);
+  assert.equal(stop.value, true, "the group's members have all exited");
+  assert.ok(stop.ms < 1_000, `the stop waited ${stop.ms} ms for members that had exited`);
+  assert.doesNotThrow(() => process.kill(-groupId, 0), "the exited members are still unreaped");
+});
+
+test("a managed runner's stop counts its group's exited members as ended too", {
+  skip: process.platform !== "linux", timeout: 20_000
+}, async (t) => {
+  const groupId = await unreapedGroup(t);
+  process.kill(-groupId, "SIGTERM");
+  const stop = await waitWithPoolHeld(t, () => awaitManagedExecutionGroupExit({ pid: groupId }, Date.now()));
+  assert.equal(stop.late, undefined, `the runner was still waiting after ${stop.ms} ms`);
+  assert.ok(stop.ms < 1_000, `the runner waited ${stop.ms} ms for members that had exited`);
+  assert.doesNotThrow(() => process.kill(-groupId, 0), "the exited members are still unreaped");
 });
 
 test("standalone finite execution drains descendants before reporting completion", async (t) => {
