@@ -45,12 +45,48 @@ not another permission request. Do not bypass the execution boundary or describe
 its refusal as missing human consent. These relevant checks do not need another
 human approval.
 
-Use supported development source composition (connected repositories) without
-changing release versions just to consume source edits. Report missing
-source-composition support as an implementation gap. This permission alone does
+Consume JSKIT source edits through connected repositories (below), and report
+missing support for that as an implementation gap. This permission alone does
 not authorize npm publication, deployment, destructive Git operations or
 unrelated framework work. Existing architectural boundaries and test-scope
 requirements still apply.
+
+### Who moves JSKIT pins
+
+A project's JSKIT pins are the `@jskit-ai/*` versions in its `package.json`
+and `package-lock.json`.
+
+- This repository, and a platform built on it, takes its JSKIT and Genesis
+  pins only from its release workflow (`jskit-release pin`). Never move them
+  in development, connected copy or not.
+- A user project moves its own JSKIT pins, and only with JSKIT's update
+  command, `npm run jskit:update`, which moves every `@jskit-ai` pin to one
+  published catalog and installs it. Never move a JSKIT package with
+  `npm install`, `npm update` or `npm audit fix`. Never run
+  `npm install --no-save` in a tree where Vibe64 put a connected copy: it puts
+  the published package back, so the checks then pass for code the session
+  does not run.
+
+With a JSKIT copy connected to a user project:
+
+- **The copy carries a newer published version than the pins.** `jskit check`
+  runs from the copy, with its catalog, so `npm run verify` refuses with
+  `JSKIT project graph is inconsistent` until the pins move. Run
+  `npm run jskit:update`, then start Preview
+  (`vibe64-helper preview ensure --wait`): its preparation puts the connected
+  copy back in place of the published one the update installed, and
+  `vibe64-helper session status --json` shows the copy `inEffect` again. Then
+  verify. **Save** would also move the pins, but only when it runs.
+- **The copy holds unpublished edits.** It keeps the version of its last
+  release, so with the pins at that version verification accepts the copy as
+  it is, and the pins stay. The edits reach Staging and Production once JSKIT
+  publishes them and the pins move to that release. Never change a version in
+  the copy by hand: JSKIT's release does that.
+- **An unrelated dependency update, such as an audit fix.** It leaves every
+  `@jskit-ai` entry as it was; if `git diff package.json package-lock.json`
+  shows one moved, restore both files and update only the packages the fix
+  names. Install the new lockfile with `npm ci`, then start Preview so
+  preparation puts the connected copy back before you verify.
 
 ## Connected repositories
 
