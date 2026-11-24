@@ -23,7 +23,8 @@ test("all ordinary database HTTP operations execute their authorized action and 
       ["PUT", "/overview", "overview.save", "saveOverview", { definition: { actors: [] } }],
       ["PUT", "/snippets", "snippet.save", "saveSnippet", { snippet: { sql: "select 1" } }],
       ["DELETE", "/snippets/:snippetId", "snippet.delete", "deleteSnippet", { snippetId: "snippet-1" }],
-      ["POST", "/assistant", "assistant.ask", "askAssistant", { messages: [{ role: "user", text: "Explain the schema" }] }]
+      // The page names its question (requestId) so a repeat joins it; one without a name asks once, as before.
+      ["POST", "/assistant", "assistant.ask", "startAssistantQuestion", { messages: [{ role: "user", text: "Explain the schema" }] }]
     ];
     const calls = [];
     let allowed = true;

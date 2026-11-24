@@ -38,6 +38,7 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
       create: { ok: true, saveCommit: "c".repeat(40), pullRequest: { ...pr, ...review, headCommit: "old-source-identity",
         baseRepository: review.repository }, worktreePath: "/private/worktree" }
     };
+    const startedAs = [];
     const record = (input) => calls.push({ input, actor: currentProjectRequestContext().vibe64User, project: currentProjectRequestContext().slug });
     const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
     actions.register({ contributorId: "pull-requests", domain: "project", actions: [
@@ -49,9 +50,10 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
       }) }),
       ...createSessionActions({ sessions: {
         async createSessionPullRequest(sessionId, input) { record({ sessionId, ...input }); return results.create; },
-        // The dialog's create names its request, so a repeat joins it; the tool waits for the creation.
+        // The dialog's create names its request, so a repeat joins it; the tool waits for the creation. Another
+        // caller's create names none and creates once, as before.
         async startSessionPullRequest(sessionId, { requestId, ...input }) {
-          assert.equal(requestId, CREATE_REQUEST_ID);
+          startedAs.push(requestId);
           record({ sessionId, ...input });
           return results.create;
         },
@@ -149,12 +151,18 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
       if (isCreate) {
         for (const patch of [{ title: "" }, { sessionId: "" }, { destinationReview: {} }]) assert.equal((await execute(patch)).ok, false);
         assert.equal(Object.hasOwn(parameters.properties, "requestId"), false, "the tool waits for its creation");
-        for (const body of [input, { ...input, requestId: "not-a-request-id" }]) {
-          await assert.rejects(route.handler({ ...request, input: { body } }, testReply()),
-            error => error.statusCode >= 400 && error.statusCode < 500, JSON.stringify(body.requestId));
-        }
+        await assert.rejects(route.handler({ ...request, input: { body: { ...input, requestId: "not-a-request-id" } } }, testReply()),
+          error => error.statusCode >= 400 && error.statusCode < 500, "a malformed request id is refused");
       }
       assert.equal(calls.length, count, "invalid and revoked calls cannot reach the service");
+      if (isCreate) {
+        assert.deepEqual(startedAs, [CREATE_REQUEST_ID], "the dialog's create names its request");
+        const unnamed = testReply();
+        await route.handler({ ...request, input: { body: input } }, unnamed);
+        assert.equal(unnamed.payload, results.create, "a create without a request id creates, as before");
+        assert.deepEqual(calls.at(-1), httpCall);
+        assert.deepEqual(startedAs, [CREATE_REQUEST_ID, undefined]);
+      }
     }
     const createSession = toolSet.tools.find(tool => tool.actionId === "vibe64.sessions.create");
     const opened = await catalog.executeToolCall({ toolName: createSession.name, toolSet, context,
