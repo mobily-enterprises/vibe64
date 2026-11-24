@@ -1025,6 +1025,99 @@ test("a two-service Deploy hands each service its release with its new settings,
   assert.equal(standIn.services.taskInstances(computers).at(-1).secrets.AUTH_LOCAL_SESSION_SECRET, "session-2");
 });
 
+/** The two-service Stack with computers reaching web too, so each reaches the other. */
+const eachReachesTheOther = () => stackOf((lines) => lines.flatMap((line) => (line === "- Reached: `each instance`"
+  ? [line, "- Reaches: `web` as `MEMOBOT_WEB_URL`"] : [line])));
+/** The two-service Stack with computers, the internal service, reaching web, the public one, and web reaching nothing. */
+const internalReachesPublic = () => stackOf((lines) => lines.filter((line) => !line.startsWith("- Reaches: `computers`"))
+  .flatMap((line) => (line === "- Reached: `each instance`" ? [line, "- Reaches: `web` as `MEMOBOT_WEB_URL`"] : [line])));
+const WEB_ADDRESS = /^http:\/\/\S+:\d+$/u;
+
+test("each service of a Deploy that hands both a release, each reaching the other, replaces its machines once: its release brings its settings, and none follow in a settings refresh", async () => {
+  const { standIn, projectId, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  const { items } = first.record;
+  const ids = { computers: items["service.computers"].id, web: items["service.web"].id };
+  const kindsAfter = (counts) => Object.fromEntries(Object.entries(ids).map(([service, id]) => [service,
+    standIn.services.refreshes(id).slice(counts[service]).map((one) => [one.kind, one.state])]));
+  const countsNow = () => Object.fromEntries(Object.entries(ids).map(([service, id]) => [service, standIn.services.refreshes(id).length]));
+  // computers now reaches web too, a setting new to it, and the code is new: each is handed its release once, computers'
+  // with web's address, which web's own release doesn't move.
+  let [at, counts] = [standIn.requests().length, countsNow()];
+  const second = await run({ stack: eachReachesTheOther(), record: first.record, commit: "c2" });
+  assert.equal(second.outcome, "live", second.message);
+  // computers' connection to web is opened after the move: a change that starts no refresh.
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web"),
+    ["PATCH", `/v1/services/${ids.computers}`]]);
+  assert.deepEqual(kindsAfter(counts), { computers: [["release", "succeeded"]], web: [["release", "succeeded"]] });
+  settle(standIn);
+  const serving = (id) => standIn.services.instances(id).filter((one) => !one.removedReason);
+  assert.ok(serving(ids.computers).every((one) => WEB_ADDRESS.test(one.settings.MEMOBOT_WEB_URL ?? "")), "computers' instances have web's address");
+  // A new commit alone: each is handed its release, nothing else.
+  [at, counts] = [standIn.requests().length, countsNow()];
+  const third = await run({ stack: eachReachesTheOther(), record: second.record, commit: "c3" });
+  assert.equal(third.outcome, "live", third.message);
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web")]);
+  assert.deepEqual(kindsAfter(counts), { computers: [["release", "succeeded"]], web: [["release", "succeeded"]] });
+});
+
+test("a first Deploy whose internal service reaches the public one makes the public one first, then the internal one with its address: one refresh each", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ stack: internalReachesPublic(), record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  assert.deepEqual(first.steps.filter((step) => step.startsWith("createService")), ["createService web", "createService computers"]);
+  const { items } = first.record;
+  const [web, computers] = [items["service.web"].id, items["service.computers"].id];
+  assert.deepEqual([web, computers].map((id) => standIn.services.refreshes(id).map((one) => [one.kind, one.state])),
+    [[["create", "succeeded"]], [["create", "succeeded"]]]);
+  settle(standIn);
+  assert.ok(standIn.services.instances(computers).filter((one) => !one.removedReason).every((one) => WEB_ADDRESS.test(one.settings.MEMOBOT_WEB_URL ?? "")));
+});
+
+test("a first Deploy of two services that reach each other makes the first without the other's address, then the other with its, then gives the first the address it lacked", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ stack: eachReachesTheOther(), record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  assert.deepEqual(first.steps.filter((step) => /^(createService|putSettings)/u.test(step)),
+    ["createService computers", "createService web", "putSettings computers"]);
+  const { items } = first.record;
+  const [web, computers] = [items["service.web"].id, items["service.computers"].id];
+  assert.deepEqual([computers, web].map((id) => standIn.services.refreshes(id).map((one) => one.kind)), [["create", "settings"], ["create"]]);
+  settle(standIn);
+  const serving = (id) => standIn.services.instances(id).filter((one) => !one.removedReason);
+  assert.ok(serving(computers).every((one) => WEB_ADDRESS.test(one.settings.MEMOBOT_WEB_URL ?? "")), "computers has web's address");
+  assert.ok(serving(web).every((one) => typeof one.settings.MEMOBOT_COMPUTERS_URL === "string"), "web has computers' address");
+});
+
+test("a record an editor before setting names kept (no names; a hash a failed settings refresh dropped) gets each service's settings with its release, then once more in a settings refresh, which a Deploy after it never repeats", async () => {
+  const { standIn, projectId, run, record } = setup();
+  const first = await run({ record, commit: "c1" });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  // As the editor before 7f3529167 kept it: a settings hash without the names, dropped where a settings refresh failed
+  // (production Deploys of 23 Nov).
+  const old = structuredClone(first.record);
+  for (const service of ["computers", "web"]) {
+    delete old.items[`service.${service}`].settingNames;
+    delete old.items[`service.${service}`].settingsHash;
+  }
+  const { items } = first.record;
+  const put = (service) => ["PUT", `/v1/services/${items[`service.${service}`].id}/settings`];
+  let at = standIn.requests().length;
+  const second = await run({ record: old, commit: "c2" });
+  assert.equal(second.outcome, "live", second.message);
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web"),
+    put("computers"), put("web")], "computers' release, web's, then computers' settings and web's: the names no longer given go");
+  settle(standIn);
+  at = standIn.requests().length;
+  const third = await run({ record: second.record, commit: "c3" });
+  assert.equal(third.outcome, "live", third.message);
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web")],
+    "each service's release alone");
+});
+
 test("a Deploy stopped once its migrations ran is resumed with new settings: web's release brings them, and no instance of the version before starts on the migrated database", async () => {
   const { standIn, projectId, run, record } = setup();
   const database = knexDatabase({ standIn, projectId });
