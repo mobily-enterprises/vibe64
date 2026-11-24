@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createMainConversationAuthority } from "../../packages/vibe64-sessions/src/server/mainConversationAuthority.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
@@ -77,4 +78,26 @@ function withMainChatOperations(sessions) {
   };
 }
 
-export { createSessionsService, withMainChatOperations };
+/**
+ * A Main chat send through a browser conversation, followed to its delivery as the page follows it: a send whose
+ * delivery outlasts the editor's two-second answer (a loaded machine, a slow project open after a restart) answers as
+ * held (`status: "queued"`), and its delivery check then reports `accepted`, `not-sent` or `unknown`. The receipt is
+ * the send's own when it was not held, and otherwise the held answer with `delivered` from the check, and the check
+ * as `delivery`.
+ * @param {{ send: (input: object) => Promise<object>, inspectDelivery: (input: object) => Promise<object> }} conversation
+ * @param {{ messageId: string }} input
+ * @param {{ timeoutMs?: number }} [options]
+ */
+async function sendFollowed(conversation, input, { timeoutMs = 30_000 } = {}) {
+  const receipt = await conversation.send(input);
+  if (receipt?.delivered !== false || receipt.status !== "queued") return receipt;
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const delivery = await conversation.inspectDelivery({ messageId: input.messageId });
+    if (delivery?.status !== "pending") return { ...receipt, delivered: delivery?.status === "accepted", delivery };
+    assert.ok(Date.now() < deadline, `${input.messageId} was still held after ${timeoutMs} ms: ${JSON.stringify(delivery)}`);
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+}
+
+export { createSessionsService, sendFollowed, withMainChatOperations };

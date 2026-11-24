@@ -33,7 +33,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
-import { createSessionsService as createSessionService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
+import { createSessionsService as createSessionService, sendFollowed, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/server/sessionRealtimeEvents.js";
@@ -2813,6 +2813,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
   actions.register({ contributorId: "test.claude-main-goals", domain: "vibe64",
     actions: [...createSessionActions({ sessions: withMainChatOperations(sessions) }), ...createTerminalActions({ terminals })]
       .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
+  // Its sends are followed to their delivery, as the page follows them: on a loaded machine a send can outlast the
+  // editor's two-second answer and answer as held.
   const goalFacade = await sessions.browserConversations.open({
     id: mainConversationId({ projectSlug: "claude-main-fixture", sessionId: "test" }), context: { channel: "internal", surface: "app", requestMeta: { request: originalGoalRequest } }
   });
@@ -3375,12 +3377,12 @@ createInterface({ input: process.stdin }).on('line', async line => {
       });
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
         "Knowing the action ID is not authority to pause a Main goal");
-      const prose = await goalFacade.send({ messageId: "service-pause-prose", text: "I am paused.", steer: true });
+      const prose = await sendFollowed(goalFacade, { messageId: "service-pause-prose", text: "I am paused.", steer: true });
       assert.equal(prose.delivered, true);
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "active");
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
         "Ordinary prose never substitutes for the structured Pause operation");
-      const pauseReceipt = await goalFacade.send({ messageId: "service-self-pause", text: "Pause through the admitted application tool.", steer: true });
+      const pauseReceipt = await sendFollowed(goalFacade, { messageId: "service-self-pause", text: "Pause through the admitted application tool.", steer: true });
       assert.equal(pauseReceipt.delivered, true);
       const pauseDeadline = Date.now() + 5000;
       let pauseCall;
@@ -3419,7 +3421,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       service = createService();
       assert.equal((await service.recoverActiveGoals()).results[0].skipped, true);
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, framesBeforeRestart);
-      const ordinary = await goalFacade.send({ messageId: "service-after-paused-restart", text: "An ordinary message while the goal stays paused." });
+      const ordinary = await sendFollowed(goalFacade, { messageId: "service-after-paused-restart", text: "An ordinary message while the goal stays paused." });
       assert.equal(ordinary.delivered, true);
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "paused");
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false);
@@ -3442,7 +3444,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
         }
       };
       const commandsBeforeChatResume = await resumedGoalCommands();
-      const resumeReceipt = await goalFacade.send({ messageId: "service-self-resume", text: "Resume through the admitted application tool.", steer: true });
+      const resumeReceipt = await sendFollowed(goalFacade, { messageId: "service-self-resume", text: "Resume through the admitted application tool.", steer: true });
       assert.equal(resumeReceipt.delivered, true);
       const resumeCall = await finishedToolCall("self-resume-execute");
       assert.equal(resumeCall.result.ok, true, JSON.stringify(resumeCall.result));
@@ -3465,7 +3467,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
         "Claude, whose own goal checker was cleared, was told the goal is paused and how to resume it");
       // With nothing to resume, Claude's Resume is refused and sends nothing.
       // The turn that asked for the Resume has ended, so these are new messages.
-      const againReceipt = await goalFacade.send({ messageId: "service-self-resume-again", text: "Resume again through the admitted application tool." });
+      const againReceipt = await sendFollowed(goalFacade, { messageId: "service-self-resume-again", text: "Resume again through the admitted application tool." });
       assert.equal(againReceipt.delivered, true);
       const againCall = await finishedToolCall("self-resume-again-execute");
       assert.notEqual(againCall.result.ok, true, JSON.stringify(againCall.result));
@@ -3477,7 +3479,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       await assert.rejects(actions.execute({ actionId: "vibe64.terminals.main-goal.block",
         input: { projectSlug: "claude-main-fixture", reason: "Missing approval code" },
         context: { channel: "automation", surface: "app" } }), { code: "vibe64_main_goal_control_required" });
-      const blockReceipt = await goalFacade.send({ messageId: "service-self-block", text: "Block through the admitted application tool." });
+      const blockReceipt = await sendFollowed(goalFacade, { messageId: "service-self-block", text: "Block through the admitted application tool." });
       assert.equal(blockReceipt.delivered, true);
       const blockDeadline = Date.now() + 5000;
       let blockCall;
@@ -3504,7 +3506,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
         "Restart retains the blocker without invoking Claude again");
       // On 24 Nov 2026 this send outlasted the editor's two-second answer on a loaded test host and answered as held.
       slowProjectOpenMs = 2_500;
-      const blockedOrdinary = await goalFacade.send({ messageId: "service-blocked-ordinary", text: "Explain the blocker without resuming." });
+      const blockedOrdinary = await sendFollowed(goalFacade, { messageId: "service-blocked-ordinary", text: "Explain the blocker without resuming." });
       assert.equal(blockedOrdinary.delivered, true);
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked");
       const blockedInputs = (await trace()).filter(row => row.frame?.type === "user").slice(blockedFrames);
