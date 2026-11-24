@@ -119,10 +119,13 @@ While the editor restarts, the page carries on. Its one HTTP client
 finds no editor (no answer, or a 502, 503 or 504 from the edge) again with
 backoff for up to a minute. It sends a write again only when the editor cannot
 have done it. A write made while the page already knows the editor is
-unreachable waits unsent until the editor answers. A write the stopping server
-refused before any handler ran (503 with `x-vibe64-stopping: 1`) is sent again.
-Any other failed write may come after the editor did the work, so it is never
-sent again: its error keeps the transport's status and code for the callers
+unreachable waits unsent until the editor answers. A write that got a 503 no
+handler ran for is sent again: the stopping server's refusal before any handler
+ran (`x-vibe64-stopping: 1`), or mobilynet's edge answering itself while no
+editor runs (`x-mobilynet-no-backend: 1`, which the edge strips from every
+backend response). Any other failed write (no answer, a 502 or 504, or an
+unmarked 503) may come after the editor did the work, so it is never sent
+again: its error keeps the transport's status and code for the callers
 that follow their own lost answers (`vibe64HeldMessage.js`, the Preview start,
 Create pull request), and its words say Vibe64 cannot tell whether it was done.
 `src/lib/vibe64EditorReconnect.js` holds whether the editor answers. After

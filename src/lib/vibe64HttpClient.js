@@ -14,12 +14,14 @@ import { resolveStudioRequestUrl } from "./studioUrls.js";
 //   - while the page already knows the editor is unreachable, a write waits and is not sent. It goes out once the
 //     editor answers (a GET of HEALTH_PATH watches for that), or fails after RECONNECT_WINDOW_MS saying it was not
 //     done;
-//   - a write the stopping editor refused before any handler ran (503 with STOPPING_HEADER, which the server sends
-//     to a request that arrives while it stops) is sent again in the same way.
-//   Any other failure of a write (no answer, or the edge's 502, 503 or 504) may come after the editor did it: it is
-//   never sent again. Its error keeps the transport's status and code, so a caller that follows its own lost
-//   answers (a Main chat send, a Preview start, Create pull request) still does, and it says in words that Vibe64
-//   cannot tell whether it was done.
+//   - a write that got a 503 nothing ran for is sent again in the same way: the stopping editor's refusal before any
+//     handler ran (STOPPING_HEADER, which the server sends to a request that arrives while it stops), or the hosted
+//     edge's own answer while no editor runs (NO_BACKEND_HEADER, which mobilynet's edge adds to every 503 it answers
+//     itself and strips from every backend response, so no app can send it). A 502 or 504 never proves that.
+//   Any other failure of a write (no answer, a 502 or 504, or a 503 without either mark) may come after the editor
+//   did it: it is never sent again. Its error keeps the transport's status and code, so a caller that follows its
+//   own lost answers (a Main chat send, a Preview start, Create pull request) still does, and it says in words that
+//   Vibe64 cannot tell whether it was done.
 // A failure the page reports in the end says so in words, never as a status code, and is marked as retried, so a
 // query does not repeat the whole wait.
 
@@ -33,6 +35,8 @@ const HEALTH_PATH = "/api/health";
 const LONG_OUTAGE_PROBE_MS = 10_000;
 // The stopping editor's answer to a request it did not start (server.js's stop).
 const STOPPING_HEADER = "x-vibe64-stopping";
+// mobilynet's edge's own 503, which no editor answered.
+const NO_BACKEND_HEADER = "x-mobilynet-no-backend";
 // Each attempt's record of what came back, which the client's fetch fills in: a symbol in the request's options,
 // which JSKIT's client passes on to fetch with the rest of them and fetch itself ignores.
 const ATTEMPT = Symbol("vibe64.httpAttempt");
@@ -73,10 +77,10 @@ function stoppedByCaller(error, signal) {
 /**
  * The failure the page reports, in words: the transport's own text (a status-only message or a network failure)
  * becomes `message`, and its status and code stay. A failure the editor explained itself keeps its words, unless
- * the stopping editor gave it.
+ * the answer was a 503 nothing ran for.
  */
-function reportedFailure(error, message, { stopping = false } = {}) {
-  if (stopping || isGenericHttpErrorMessage(error)) {
+function reportedFailure(error, message, { notRun = false } = {}) {
+  if (notRun || isGenericHttpErrorMessage(error)) {
     error.message = message;
     delete error.messageCode;
     delete error.messageParams;
@@ -100,7 +104,8 @@ function createVibe64HttpClient({
     const response = await fetchImpl(url, config);
     if (attempt) {
       attempt.answered = true;
-      attempt.stopping = Number(response.status) === 503 && response.headers.get(STOPPING_HEADER) === "1";
+      attempt.notRun = Number(response.status) === 503 &&
+        (response.headers.get(STOPPING_HEADER) === "1" || response.headers.get(NO_BACKEND_HEADER) === "1");
     }
     return response;
   }
@@ -188,7 +193,7 @@ function createVibe64HttpClient({
       if (write && reconnect.unreachable() && !await editorAnswersBy(deadline, signal)) {
         throw markTransientRetriesSpent(Object.assign(new Error(WRITE_NOT_DONE), { status: 0, code: null }));
       }
-      const attempt = { answered: false, stopping: false };
+      const attempt = { answered: false, notRun: false };
       try {
         const value = await send({ ...requestOptions, [ATTEMPT]: attempt });
         reconnect.answered();
@@ -203,12 +208,12 @@ function createVibe64HttpClient({
         }
         reconnect.failed();
         watchEditor();
-        if (write && !attempt.stopping) {
+        if (write && !attempt.notRun) {
           throw reportedFailure(error, WRITE_OUTCOME_UNKNOWN);
         }
         const wait = retryDelay(retry);
         if (Date.now() + wait > deadline) {
-          throw reportedFailure(error, write ? WRITE_NOT_DONE : READ_UNREACHABLE, { stopping: attempt.stopping });
+          throw reportedFailure(error, write ? WRITE_NOT_DONE : READ_UNREACHABLE, { notRun: attempt.notRun });
         }
         await pause(wait, signal);
       }
@@ -233,6 +238,7 @@ function createVibe64HttpClient({
 
 export {
   createVibe64HttpClient,
+  NO_BACKEND_HEADER,
   RECONNECT_WINDOW_MS,
   STOPPING_HEADER
 };
