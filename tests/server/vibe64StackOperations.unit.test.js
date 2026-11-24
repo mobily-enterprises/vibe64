@@ -303,6 +303,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
       { label: "Migrate", argv: ["npm", "run", "db:prepare"], role: "migrate" },
       { label: "Start", argv: ["npm", "start"], role: "serve" }
     ],
+    buildCache: [],
     // Without `### Service` headings, the Deployment is one public service.
     services: [{
       id: "web",
@@ -332,6 +333,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
     instances: { max: 1 },
     readiness: null,
     steps: [],
+    buildCache: [],
     services: [],
     deploymentResources: {}
   });

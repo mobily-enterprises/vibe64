@@ -10,6 +10,7 @@ import {
   unknownEntryMessage
 } from "./stackOperation.js";
 import {
+  BUILD_CACHE_PREFIX,
   DEPLOYMENT_ENTRY_FORMS,
   DEPLOYMENT_STEP_ROLES,
   ERROR_CODE,
@@ -23,6 +24,7 @@ import {
   STEP_LINE,
   STEP_ROLE_ORDER,
   VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES,
+  buildCache,
   deploymentStep,
   disposablePaths,
   generatedSecrets,
@@ -68,6 +70,7 @@ function emptyDeployment() {
     instances: { max: 1 },
     readiness: null,
     steps: [],
+    buildCache: [],
     services: [],
     deploymentResources: {}
   };
@@ -187,6 +190,12 @@ function parseDeployment(lines, deploymentPath) {
       if (seen.has("packages")) invalid(deploymentPath, "Duplicate Deployment Packages.", line);
       seen.add("packages");
       result.packages = packages(source, deploymentPath, line);
+      continue;
+    }
+    if (source.startsWith(BUILD_CACHE_PREFIX)) {
+      if (seen.has("build-cache")) invalid(deploymentPath, "Duplicate Deployment Kept between builds.", line);
+      seen.add("build-cache");
+      result.buildCache = buildCache(source, deploymentPath, line);
       continue;
     }
     if (source.startsWith(INSTANCES_PREFIX)) {
@@ -319,12 +328,15 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
     packages: parsed.packages,
     instances: parsed.instances,
     readiness: parsed.readiness,
-    steps: parsed.steps
+    steps: parsed.steps,
+    buildCache: parsed.buildCache
   };
-  // A Deployment without services or resource lines hashes as v1 did, so its recipe keeps its identity; services and
-  // resource lines join the hash when the Stack says them.
+  // A Deployment without services, resource lines or Kept between builds hashes as v1 did, so its recipe keeps its
+  // identity; each joins the hash when the Stack says it.
+  const { buildCache: kept, ...v1Recipe } = recipe;
   const hashed = {
-    ...recipe,
+    ...v1Recipe,
+    ...(kept.length > 0 ? { buildCache: kept } : {}),
     ...(withServices ? { services: parsed.services } : {}),
     ...(Object.keys(parsed.deploymentResources).length > 0 ? { deploymentResources: parsed.deploymentResources } : {})
   };

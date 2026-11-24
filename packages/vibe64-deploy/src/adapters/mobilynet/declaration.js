@@ -90,8 +90,12 @@ const MAX_PACKAGES = 200;
 // The machine's kernel features (mobilynet's machineFeatures) each of a Deployment's `- Sandbox allows:` needs:
 // gVisor's rootless runsc makes its own user namespace, and a FUSE mount needs /dev/fuse.
 const SANDBOX_MACHINE_FEATURES = Object.freeze({ fuse: Object.freeze(["fuse"]), gvisor: Object.freeze(["userns"]) });
-// The folders a runtime's builds keep for the next build of the same app.
+// The folders a runtime's builds keep for the next build of the same app, beside the Deployment's own (its `- Kept
+// between builds:`), as the declaration's build cache: mobilynet's build VM starts with an empty home, puts back what
+// the project's last build of the app left in those folders before the command, and keeps them again after it
+// (mobilynet's metal/hostd/build-vm/mobilynet-build-run, cache-restore and cache-save), at most MAX_BUILD_CACHE.
 const RUNTIME_CACHES = Object.freeze({ node26: Object.freeze(["~/.npm"]) });
+const MAX_BUILD_CACHE = 10;
 // The characters mobilynet takes in a command's words; the health path is one of check's.
 const COMMAND_WORD = /^[A-Za-z0-9._,:=@+/-]+$/u;
 
@@ -121,6 +125,14 @@ function packagesProblem(packages, runtimes) {
   return count > MAX_PACKAGES
     ? `With those every app and its runtimes need, that is ${count} packages, and mobilynet takes at most ${MAX_PACKAGES}.`
     : "";
+}
+
+/**
+ * The folders a build keeps for the next build of the same app: the runtimes', then the Deployment's own, each once.
+ * @param {ReadonlyArray<string>} runtimes @param {ReadonlyArray<string>} [kept] the Deployment's `- Kept between builds:`
+ */
+function buildCacheOf(runtimes, kept = []) {
+  return [...new Set([...runtimes.flatMap((runtime) => RUNTIME_CACHES[runtime] ?? []), ...kept])];
 }
 
 /** The kernel features a Deployment's sandbox allowances need, sorted. @param {ReadonlyArray<string>} allowances */
@@ -269,11 +281,13 @@ function stepLines(role, step) {
  *   the runtimes', each a name packagesProblem takes
  * @param {ReadonlyArray<string>} [app.sandboxAllowances] the Deployment's `- Sandbox allows:`, declared as the machine
  *   features they need (machineFeatures), each one SANDBOX_MACHINE_FEATURES has
+ * @param {ReadonlyArray<string>} [app.buildCache] the Deployment's `- Kept between builds:`, folders of the build's home
+ *   kept with the runtimes' for the next build (buildCacheOf)
  * @typedef {{ command: string, label?: string }} Step
  */
 function appPackage({
   name, login, port, healthPath, runtimes, settings, workdir = ".", steps, needs = [], bindingLines = [], packages = [], sandboxAllowances = [],
-  service = "web", reached = "any", serviceSettings = {}
+  buildCache = [], service = "web", reached = "any", serviceSettings = {}
 }) {
   const serveScript = serveScriptOf(service);
   // Migrate runs as the release's task, once per Deploy, never as an instance starts.
@@ -286,7 +300,7 @@ function appPackage({
     build: {
       ...(pythonLibraries ? { packages: ["patchelf"] } : {}),
       command: `bash ${BUILD_SCRIPT}`,
-      cache: [...new Set(runtimes.flatMap((runtime) => RUNTIME_CACHES[runtime] ?? []))],
+      cache: buildCacheOf(runtimes, buildCache),
       output: ["."]
     },
     start: `install -D --owner=${login} --mode=0400 /run/mobilynet/apps/${name}/settings.json ${settingsFileForLogin(name)}`,
@@ -486,6 +500,15 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
         + "Remove it from the Stack's - Runtimes: line, Save, then try again."
     };
   }
+  const cache = buildCacheOf(runtimes, deployment.buildCache ?? []);
+  if (cache.length > MAX_BUILD_CACHE) {
+    return {
+      code: "vibe64_app_package_build_cache_invalid",
+      message: `A mobilynet build keeps at most ${MAX_BUILD_CACHE} folders between builds, its runtimes' among them `
+        + `(${buildCacheOf(runtimes).join(", ")}), and the Deployment would keep ${cache.length}. Name fewer in genesis/stack.md's `
+        + "- Kept between builds: (the coding agent can do this), Save, then deploy to production."
+    };
+  }
   // Every service is linked to each resource Production makes, whose link's fields mobilynet writes into its settings
   // and secrets. A service's names are each counted once (settingsPerService's keys: a generated secret or the setup
   // code the Env holds too is one); the setup code is counted even once the first account removed it from the Env, as
@@ -592,6 +615,7 @@ function servicePackages({ app, deployment, needs, settings, settingsMax, defaul
       bindingLines: bindingExportLines(needs),
       packages: [...deployment.packages, ...service.packages],
       sandboxAllowances: service.sandboxAllowances,
+      buildCache: deployment.buildCache ?? [],
       serviceSettings: service.settings
     });
     declarations[service.id] = made.declaration;

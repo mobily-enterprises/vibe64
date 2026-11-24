@@ -19,8 +19,8 @@ named `Deployment`, validates it under the Vibe64-owned
 declared resources. The source is strict Markdown; its normalized result
 contains exact argument arrays, working directory, runtime requirements,
 release-recreation paths, generated secret names, the setup code name, sandbox
-allowances, system packages, how many instances a host may run, and success
-condition.
+allowances, system packages, the folders kept between builds, how many
+instances a host may run, and success condition.
 Invalid, absent, and competing
 declarations remain explicit states.
 
@@ -62,6 +62,20 @@ beside its runtimes and refuses a name it doesn't have; a host that runs the
 app on a machine it does not build, such as a workspace's own staging service,
 ignores the line.
 
+`- Kept between builds:` names, in backticks, folders of the build's home:
+`~/` then 1 to 16 plain names (letters, digits and `. _ @ + -`, never `.` or
+`..`), at most 1024 characters, at most 10 folders, each once. A host that
+builds the application afresh each time keeps them for its next build of the
+same project, such as a download cache or a store into which Prepare installs
+each pinned version of a tool once; the result is `buildCache`, `[]` without
+the entry, and it joins the recipe's hash only when the Stack says it, so a
+Deployment without it keeps its recipe's identity. A host whose home outlives
+builds, such as a workspace's own staging service, ignores it; on mobilynet the
+deploy engine declares it as the build's cache
+([deploy engine](../deploy/deploy-engine.md), The package). The entry is the
+whole Deployment's, as the build is: under a `### Service` heading it is
+refused with the fix.
+
 `- Instances: up to` names, in backticks, how many identical copies of the
 application a host may run at once behind one address, from 1 to 100; the
 result is `instances: { max }`, 1 without the entry. An application declares
@@ -77,9 +91,9 @@ runs, as identical instances from the one build, under a heading
 `### Service \`id\`: summary` (1 to 8; an id is a lowercase letter then up to
 15 lowercase letters, digits and hyphens). The entries above the first heading
 are shared by every service: Workdir, Runtimes, Recreate on restore, Generated
-secrets, Setup code, Packages and the Prepare, Build and Migrate steps (one
-build serves them all). Under its heading each service says its Exposure
-(`public` or `internal`, exactly one public), its Serve step, Ready when and
+secrets, Setup code, Packages, Kept between builds and the Prepare, Build and
+Migrate steps (one build serves them all). Under its heading each service says
+its Exposure (`public` or `internal`, exactly one public), its Serve step, Ready when and
 Instances (`min` to `max`), and may say Needs at least (the smallest machine in
 whole vCPUs and GiB), Production (the count Production starts with), Reached
 (`each instance` for an internal service whose instances are reached one by

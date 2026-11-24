@@ -20,6 +20,16 @@ const SANDBOX_ALLOWS_PREFIX = "- Sandbox allows: ";
 const PACKAGES_PREFIX = "- Packages: ";
 const PACKAGES_MAX = 200;
 const PACKAGE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.+-]{0,127}(?:\^[A-Za-z_][A-Za-z0-9_-]{0,31})?$/u;
+// The folders of the build's home a host that builds the application afresh each time keeps from one build to the
+// next, such as a package manager's download cache or a store that installs each pinned version of a tool once: `~/`
+// then 1 to 16 plain segments, at most 1024 characters, as a mobilynet build's cache takes them. A host whose home
+// outlives builds keeps them anyway; one whose builds start empty and keep nothing ignores the line. What a step finds
+// there is the step's to check by the version or hash it pins: a host only puts back what the same project's last
+// build of the app left.
+const BUILD_CACHE_PREFIX = "- Kept between builds: ";
+const BUILD_CACHE_MAX = 10;
+const BUILD_CACHE_SEGMENT = /^[A-Za-z0-9._@+-]{1,255}$/u;
+const BUILD_CACHE_PATH_MAX = 1024;
 // How many identical copies of the application a host may run at once behind
 // one address: one unless the application says it shares nothing between
 // requests that lives in one copy (files it writes, sign-ins kept in memory).
@@ -54,6 +64,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   `${SETUP_CODE_PREFIX}\`NAME\``,
   `${SANDBOX_ALLOWS_PREFIX}${VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES.map((name) => `\`${name}\``).join(" ")}`,
   `${PACKAGES_PREFIX}\`package\`...`,
+  `${BUILD_CACHE_PREFIX}\`~/folder\`...`,
   `${INSTANCES_PREFIX}\`count\``,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
@@ -150,6 +161,35 @@ function packages(source, deploymentPath, line) {
   return values;
 }
 
+function buildCache(source, deploymentPath, line) {
+  const values = backtickedArguments(
+    source.slice(BUILD_CACHE_PREFIX.length),
+    ERROR_CODE,
+    deploymentPath,
+    "Deployment Kept between builds",
+    line,
+    { maximum: Infinity }
+  );
+  if (values.length > BUILD_CACHE_MAX) {
+    invalid(deploymentPath, `Deployment Kept between builds names at most ${BUILD_CACHE_MAX} folders.`, line);
+  }
+  const wrong = values.find((value) => {
+    const segments = value.startsWith("~/") ? value.slice(2).split("/") : [];
+    return value.length > BUILD_CACHE_PATH_MAX || segments.length === 0 || segments.length > 16
+      || segments.some((segment) => !BUILD_CACHE_SEGMENT.test(segment) || segment === "." || segment === "..");
+  });
+  if (wrong !== undefined) {
+    invalid(
+      deploymentPath,
+      "Deployment Kept between builds names folders of the build's home as `~/` then plain names, such as "
+        + `\`~/.cache/pip\`, never . or ..; ${JSON.stringify(wrong)} isn't one.`,
+      line
+    );
+  }
+  if (new Set(values).size !== values.length) invalid(deploymentPath, "Deployment Kept between builds names a folder twice.", line);
+  return values;
+}
+
 function instancesMax(source, deploymentPath, line) {
   const [count] = backtickedArguments(
     source.slice(INSTANCES_PREFIX.length),
@@ -184,6 +224,7 @@ function deploymentStep(match, deploymentPath, line) {
 }
 
 export {
+  BUILD_CACHE_PREFIX,
   DEPLOYMENT_ENTRY_FORMS,
   DEPLOYMENT_STEP_ROLES,
   ENVIRONMENT_NAME,
@@ -199,6 +240,7 @@ export {
   STEP_LINE,
   STEP_ROLE_ORDER,
   VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES,
+  buildCache,
   deploymentStep,
   disposablePaths,
   generatedSecrets,

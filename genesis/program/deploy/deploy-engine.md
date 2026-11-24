@@ -147,6 +147,25 @@ runs, never a new release or build: until 19 Nov every entry was declared, and
 adding one made mobilynet build the same code again (about four minutes for a
 production web service, for one name).
 
+Each declaration's build cache (`build.cache`) is its runtime's folder (Node's
+`~/.npm`) and the Deployment's `- Kept between builds:`, each once
+(`buildCacheOf`), at most the 10 mobilynet keeps: more is refused before
+anything is made (`vibe64_app_package_build_cache_invalid`, naming the
+runtime's and the fix). mobilynet's build VM starts with an empty home, puts
+back what the project's last build of that app left in those folders before the
+build command and keeps them again after it, at most 4 GiB in all (its
+`mobilynet-build-run` cache-restore and cache-save). So a Prepare that installs
+each pinned tool into a store in the home and links it into the release
+downloads nothing on the next build with the same pins: Mercbot Online's
+822 MiB tools store (`~/.cache/mercbot-tools`) was downloaded again by every
+build, 81 s of its 101 s command on 24 Nov 2026, because only `~/.npm` was
+kept. What a step reuses there is the step's to check by the version or hash it
+pins; mobilynet puts back only that project's app's own last cache.
+`deployBuildCache.unit.test.js` runs an app's builds as mobilynet's build VM
+does, its cache restored and saved by the runner's tar commands, and counts a
+local server's downloads: the same pins download nothing the second time, a
+changed pin once, and without the line every build downloads.
+
 The build script runs Prepare then Build. For the python runtime each
 declaration also requires `gcc-unwrapped^lib` and `zlib`, its build block takes
 `patchelf`, and the build's last step (`PYTHON_LIBRARY_LINES`) adds those
@@ -228,6 +247,8 @@ declares), port, health path, machine features, the resources it needs and its
 settings. `imageUpload()` adds `vibe64-app/Containerfile` to the archive: Nix's
 image, the packages from one nixpkgs commit the editor names (never a branch),
 the release, the shared build, then the serve script as a user of its own.
+Each image build starts empty, so the Deployment's `- Kept between builds:`
+keeps nothing there.
 
 ## The Plan
 
