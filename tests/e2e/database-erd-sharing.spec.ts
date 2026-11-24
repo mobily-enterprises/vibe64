@@ -944,8 +944,10 @@ for (const width of [390, 960, 1600]) {
 }
 
 
-for (const saved of [false, true]) {
-  test(`@erd-dense 130 tables and 479 links remain usable with ${saved ? "saved" : "new"} positions`, async ({ browser, baseURL }) => {
+// Each test draws the diagram three times: the first draw, then the column changes or Reset and the return from Data.
+// All five draws in one test took 43-48 s on 2 CPUs shared with four busy loops, and more than its 60 s at load 13.
+for (const saved of [false, true]) for (const next of ["All columns and Keys only", "Reset positions and a return from Data"]) {
+  test(`@erd-dense 130 tables and 479 links remain usable with ${saved ? "saved" : "new"} positions, then ${next}`, async ({ browser, baseURL }) => {
     const schema = denseErdSchema();
     const savedNodes = saved ? schema.tables.slice(0, 126).map((table, index) => ({
       table: table.qualifiedName, x: index % 10 * 420, y: Math.floor(index / 10) * 360
@@ -1004,24 +1006,28 @@ for (const saved of [false, true]) {
       });
       expect(diagramNodes).toBeLessThan(19_000);
       await expect.poll(() => server.saves.length).toBe(1);
-      const positions = () => page.locator(".database-workspace__main > .database-erd .vue-flow__node").evaluateAll((nodes: HTMLElement[]) => nodes.map(node => ({ id: node.dataset.id, position: node.style.transform })));
-      const initial = await positions();
       if (saved) {
         const persisted = new Map((server.saves[0].layout as any).nodes.map(node => [node.table, node]));
         for (const node of savedNodes) expect(persisted.get(node.table)).toMatchObject({ x: node.x, y: node.y });
       }
-      await diagramAction(page, "All columns");
-      await expect.poll(() => server.saves.length).toBe(2);
-      expect(await positions()).toEqual(initial);
-      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479);
-      await diagramAction(page, "Keys only");
-      await expect.poll(() => server.saves.length).toBe(3);
-      await diagramAction(page, "Reset positions");
-      // Leave while the worker is active, then return using the warm workspace.
-      await page.getByRole("button", { name: "Data", exact: true }).click();
-      await page.getByRole("button", { name: "ERD", exact: true }).click();
-      await expect(reset).toBeEnabled({ timeout: 15_000 });
-      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479);
+      if (next === "All columns and Keys only") {
+        const positions = () => page.locator(".database-workspace__main > .database-erd .vue-flow__node").evaluateAll((nodes: HTMLElement[]) => nodes.map(node => ({ id: node.dataset.id, position: node.style.transform })));
+        const initial = await positions();
+        await diagramAction(page, "All columns");
+        await expect.poll(() => server.saves.length).toBe(2);
+        expect(await positions()).toEqual(initial);
+        await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479);
+        await diagramAction(page, "Keys only");
+        await expect.poll(() => server.saves.length).toBe(3);
+      } else {
+        // Reset starts in Keys only, the column mode the first draw opens in and the column changes end in.
+        await diagramAction(page, "Reset positions");
+        // Leave while the worker is active, then return using the warm workspace.
+        await page.getByRole("button", { name: "Data", exact: true }).click();
+        await page.getByRole("button", { name: "ERD", exact: true }).click();
+        await expect(reset).toBeEnabled({ timeout: 15_000 });
+        await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479);
+      }
       expect(errors).toEqual([]);
     } finally {
       if (tracing) await browser.stopTracing();
