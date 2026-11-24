@@ -326,6 +326,36 @@ describe("useVibe64CodexCommands attachment uploads", () => {
       await expectNoFurtherAttempt(4);
     });
 
+    it("says Vibe64 could not be reached after twelve 5xx answers the server did not word", async () => {
+      const commands = useVibe64CodexCommands();
+      const upload = commands.uploadAttachment("session-1", attachmentFile());
+      const failure = upload.catch(error => error);
+
+      await answerAttempts(everyAttempt((request) => request.respondText(502, "")));
+
+      const error = await failure;
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe(UPLOAD_LOST_CONTACT);
+      await expectNoFurtherAttempt(UPLOAD_ATTEMPTS);
+    });
+
+    it("says a refusal the server did not word without its HTTP status, and does not send it again", async () => {
+      const commands = useVibe64CodexCommands();
+      const upload = commands.uploadAttachment("session-1", attachmentFile());
+      const failure = upload.catch(error => error);
+
+      FakeXmlHttpRequest.instances[0].respondText(
+        413,
+        "<html><head><title>413 Request Entity Too Large</title></head><body>413 Request Entity Too Large</body></html>"
+      );
+
+      const error = await failure;
+      expect(error.message).toBe("Assistant attachment could not be uploaded.");
+      expect(error.message).not.toMatch(/HTTP \d{3}/);
+      expect(error).toMatchObject({ code: "", status: 413 });
+      await expectNoFurtherAttempt(1);
+    });
+
     it.each([
       ["vibe64_agent_write_mode_busy", "The workspace is being prepared. Try again when it is ready."],
       ["vibe64_agent_attachment_busy", "Attachment storage is busy. Try uploading the file again."]
