@@ -353,9 +353,11 @@ async function readWorkPlanHistoryUnlocked(context) {
  */
 async function currentPlanSummary(context, current) {
   if (!current) return null;
-  // An unreadable record leaves when unknown, never the plan unreadable: the AI's next change writes a new one.
-  const mark = await readMark(context)
-    .catch((error) => error?.code === "vibe64_work_plan_mark_invalid" ? false : Promise.reject(error));
+  // An unreadable record, an invalid one or one Vibe64 is not allowed to read, leaves when unknown, never the plan
+  // unreadable: the AI's next change writes a new one.
+  const mark = await readMark(context).catch((error) => (
+    ["vibe64_work_plan_mark_invalid", "vibe64_work_plan_file_unreadable"].includes(error?.code) ? false : Promise.reject(error)
+  ));
   const saved = mark === null ? await savedAt(current.legacy ? workPlanPath(context) : pairPath(context)) : "";
   return {
     title: current.title,
