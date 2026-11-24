@@ -60,9 +60,10 @@ for (const signal of STOP_SIGNALS) process.on(signal, () => {});
 
 // The background job's long command.
 void longCommand("background").then((result) => mark("background-ended", result.code || (result.ok ? "ok" : "failed")));
-// The poller: each start that reached a process says so itself ("poll-ran"); one the gateway refused is "poll-refused".
+// The poller: each start that reached a process says so itself ("poll-ran", at the time its process began); one the
+// gateway refused is "poll-refused".
 setInterval(() => {
-  void command(["-e", "require('node:fs').appendFileSync(process.argv[1], `${Date.now()} poll-ran\\n`)", events], 10_000)
+  void command(["-e", "require('node:fs').appendFileSync(process.argv[1], `${Math.round(performance.timeOrigin)} poll-ran\\n`)", events], 10_000)
     .then((result) => {
       if (result.ok !== true) mark("poll-refused", result.code || "failed");
     });

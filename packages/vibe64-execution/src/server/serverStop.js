@@ -21,10 +21,10 @@ function stoppingError(reason) {
  * Begins the server's stop: the signal aborts and every listener runs, synchronously, once. Only server.js's stop
  * signal handler calls it. A listener's failure is logged, never thrown.
  * @param {string} [reason] the stop signal, such as SIGTERM
- * @param {{ logger?: { error?: Function } | null }} [options]
+ * @param {{ logger?: { error: (fields: object, message: string) => unknown } }} [options] the server's logger
  * @returns {boolean} whether this call began it
  */
-function beginServerStop(reason = "server-shutdown", { logger = null } = {}) {
+function beginServerStop(reason = "server-shutdown", { logger = console } = {}) {
   if (begun) return false;
   begun = true;
   controller.abort(stoppingError(String(reason || "server-shutdown")));
@@ -33,7 +33,7 @@ function beginServerStop(reason = "server-shutdown", { logger = null } = {}) {
       listener(reason);
     } catch (error) {
       try {
-        logger?.error?.({
+        logger.error({
           component: "server-lifecycle",
           event: "vibe64.server.stop_listener_failed",
           error

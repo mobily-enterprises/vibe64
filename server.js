@@ -29,7 +29,6 @@ import {
   closeTerminalSessionsForNamespacePrefix
 } from "@local/vibe64-execution/server/terminalSessions";
 import { beginServerStop, resetServerStop } from "@local/vibe64-execution/server/serverStop";
-import { endCaptures } from "@local/vibe64-execution/server";
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
@@ -50,7 +49,7 @@ import {
   registerBrowserLifecycleWebSocketRoute
 } from "./server/lib/browserLifecycle.js";
 import { handleUpgradeSocketErrors } from "./server/lib/upgradeSocketErrors.js";
-import { registerStopGate, stopAcceptingConnections } from "./server/lib/stopGate.js";
+import { STOP_DRAIN_MS, endRunningCommands, registerStopGate, stopAcceptingConnections } from "./server/lib/stopGate.js";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
@@ -105,10 +104,7 @@ const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
 // editor is gone in under a second. Requests in flight, and the commands that were running when the stop began, get
 // STOP_DRAIN_MS; then those connections close and those commands end. The stop's own work (each provider's shutdown)
 // has until DEFAULT_SHUTDOWN_TIMEOUT_MS, when whatever still runs is ended and the process exits.
-const STOP_DRAIN_MS = 600;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 850;
-// How long an ended command's process group has after SIGTERM before SIGKILL, and after SIGKILL.
-const STOP_COMMAND_GRACE_MS = 75;
 
 function resolveShutdownTimeoutMs(value = DEFAULT_SHUTDOWN_TIMEOUT_MS) {
   const timeoutMs = Math.floor(Number(value));
@@ -116,15 +112,6 @@ function resolveShutdownTimeoutMs(value = DEFAULT_SHUTDOWN_TIMEOUT_MS) {
     return DEFAULT_SHUTDOWN_TIMEOUT_MS;
   }
   return timeoutMs;
-}
-
-/** Ends the commands this process started that are still running (those started before `startedBefore`). */
-function endRunningCommands(startedBefore = Infinity) {
-  return endCaptures({
-    startedBefore,
-    termTimeoutMs: STOP_COMMAND_GRACE_MS,
-    killTimeoutMs: STOP_COMMAND_GRACE_MS
-  });
 }
 
 /** @param {import("node:http").Server} server */

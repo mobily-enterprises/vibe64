@@ -1,4 +1,5 @@
 import { serverStopBegun, VIBE64_SERVER_STOPPING_CODE } from "@local/vibe64-execution/server/serverStop";
+import { endCaptures } from "@local/vibe64-execution/server";
 
 // The editor's answers while its stop runs. The listener closes as the stop begins (stopAcceptingConnections), but a
 // browser's kept-alive connection can still carry a request: it is answered at once, before any other hook, route or
@@ -7,6 +8,10 @@ import { serverStopBegun, VIBE64_SERVER_STOPPING_CODE } from "@local/vibe64-exec
 // connection too, so the page's next request reaches the next server.
 
 const STOPPING_HEADER = "x-vibe64-stopping";
+// How long requests in flight, and the commands running as the stop began, have before they are ended.
+const STOP_DRAIN_MS = 600;
+// How long an ended command's process group has after SIGTERM before SIGKILL, and after SIGKILL.
+const STOP_COMMAND_GRACE_MS = 75;
 
 /**
  * Registers the gate. Called first on the server's root Fastify instance, so it covers every route.
@@ -42,8 +47,19 @@ function stopAcceptingConnections(server) {
   }
 }
 
+/** Ends the commands this process started that are still running (those started before `startedBefore`). */
+function endRunningCommands(startedBefore = Infinity) {
+  return endCaptures({
+    startedBefore,
+    termTimeoutMs: STOP_COMMAND_GRACE_MS,
+    killTimeoutMs: STOP_COMMAND_GRACE_MS
+  });
+}
+
 export {
   STOPPING_HEADER,
+  STOP_DRAIN_MS,
+  endRunningCommands,
   registerStopGate,
   stopAcceptingConnections
 };
