@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { renameSync } from "node:fs";
+import { mkdirSync, renameSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -251,8 +251,11 @@ test("people and memberships go to the account database the host names, people w
     process.umask(previousUmask);
   });
   const username = "v64hostsettingsprobe";
-  const person = { gid: process.getgid(), home: path.join(homes, username), uid: UID, username };
-  const resolveUser = (name) => (name === username ? person : assert.fail(`resolved ${name}`));
+  const other = "v64hostsettingsprobe2";
+  const people = Object.fromEntries([username, other].map((name) =>
+    [name, { gid: process.getgid(), home: path.join(homes, name), uid: UID, username: name }]));
+  const person = people[username];
+  const resolveUser = (name) => people[name] ?? assert.fail(`resolved ${name}`);
 
   assert.equal(createPerson(username, { homeRoot: homes, numberOptions: ["-K", "UID_MIN=20000"], resolveUser }), person);
   addUserToGroup(username, "vibe64", "files");
@@ -261,22 +264,67 @@ test("people and memberships go to the account database the host names, people w
   assert.equal(home.mode & 0o7777, 0o750, "an empty home of the person's own, 0750");
   assert.equal(home.uid, UID);
   assert.deepEqual(await readdir(person.home), []);
-  // A home already there is the person's data and stays as it is.
-  await chmod(person.home, 0o700);
-  await writeFile(path.join(person.home, "notes.txt"), "mine");
-  createPerson(username, { database: "extrausers", homeRoot: homes, shell: "/usr/lib/host/shell", resolveUser });
-  addUserToGroup(username, "vibe64", "extrausers");
-  assert.equal((await stat(person.home)).mode & 0o7777, 0o700);
-  assert.deepEqual(await readdir(person.home), ["notes.txt"]);
+  // The extra users database and the host's own person shell.
+  assert.equal(createPerson(other, { database: "extrausers", homeRoot: homes, shell: "/usr/lib/host/shell", resolveUser }),
+    people[other]);
+  addUserToGroup(other, "vibe64", "extrausers");
+  assert.equal((await stat(people[other].home)).mode & 0o7777, 0o750);
 
   assert.deepEqual((await readFile(log, "utf8")).trim().split("\n"), [
     `useradd -K UID_MIN=20000 --user-group --no-create-home --home-dir ${person.home} --shell /bin/bash ${username}`,
     `usermod -a -G vibe64 ${username}`,
     // No password is set: no chpasswd or passwd ran.
-    `useradd --extrausers --user-group --no-create-home --home-dir ${person.home} --shell /usr/lib/host/shell ${username}`,
+    `useradd --extrausers --user-group --no-create-home --home-dir ${people[other].home} --shell /usr/lib/host/shell ${other}`,
     // usermod has no --extrausers and its -a -G leaves such a group unchanged.
-    `gpasswd --extrausers -a ${username} vibe64`
+    `gpasswd --extrausers -a ${other} vibe64`
   ]);
+});
+
+// A login with no account whose /home/<login> is already there: a folder an account removed outside Vibe64 left
+// (its uid may even be the one the new account would get), one a machine kept when it dropped the account at boot, or
+// a link or file in its place. Whose files they are is not Vibe64's to judge, so a new person never gets them: add-person
+// makes no account at all, and says what an administrator does.
+test("a new person never gets a home that is already there: no account is made, and the refusal names it", async (t) => {
+  const homes = await temporaryFolder(t, "v64-person-homes-");
+  const elsewhere = await temporaryFolder(t, "v64-person-elsewhere-");
+  const ran = [];
+  const run = (command, args) => {
+    ran.push([command, ...args].join(" "));
+    return "";
+  };
+  const resolveUser = (name) => ({ gid: process.getgid(), home: path.join(homes, name), uid: UID, username: name });
+  // Another account's folder, with its files; a link to a folder elsewhere; a file.
+  await mkdir(path.join(homes, "geoff"), { mode: 0o700 });
+  await writeFile(path.join(homes, "geoff", "notes.txt"), "someone else's");
+  await writeFile(path.join(elsewhere, "secret.txt"), "not geoff's");
+  await symlink(elsewhere, path.join(homes, "dora"));
+  await writeFile(path.join(homes, "sam"), "a file");
+  for (const [name, kind] of [["geoff", "a folder"], ["dora", "a link"], ["sam", "a file"]]) {
+    const home = path.join(homes, name);
+    assert.throws(() => createPerson(name, { database: "extrausers", homeRoot: homes, resolveUser, run }), (error) =>
+      error.exitCode !== 3 && error.message === `${name} gets no account: ${home} is already there (${kind} of uid ` +
+        `${UID}), which a new person must never get. An administrator moves it away (sudo mv ${home} /root/${name}-old) ` +
+        `and the next member list makes ${name}.`,
+    name);
+  }
+  assert.deepEqual(ran, [], "no account was made");
+  assert.deepEqual(await readdir(path.join(homes, "geoff")), ["notes.txt"], "the folder stays exactly as it was");
+  assert.equal((await stat(path.join(homes, "geoff"))).mode & 0o7777, 0o700);
+  assert.deepEqual(await readdir(elsewhere), ["secret.txt"], "a link is never followed");
+  assert.equal(await readFile(path.join(homes, "sam"), "utf8"), "a file");
+
+  // One that appears while the account is made (root's /home leaves only another root process to do it): the account
+  // just made goes again, so a later list never finds an account whose home is not its own.
+  const raced = (command, args) => {
+    run(command, args);
+    if (command === "useradd") mkdirSync(path.join(homes, "lee"), { mode: 0o700 });
+    return "";
+  };
+  ran.length = 0;
+  assert.throws(() => createPerson("lee", { database: "extrausers", homeRoot: homes, resolveUser, run: raced }),
+    { message: /^lee gets no account: .+lee is already there \(a folder of uid \d+\)/u });
+  assert.deepEqual(ran, [`useradd --extrausers --user-group --no-create-home --home-dir ${path.join(homes, "lee")} ` +
+    "--shell /bin/bash lee", "userdel --extrausers lee"]);
 });
 
 test("the host's helper settings may name a person's login shell; without it /bin/bash", () => {
