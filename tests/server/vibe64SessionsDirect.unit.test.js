@@ -85,6 +85,8 @@ import {
 } from "./vibe64TestHelpers.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+// No Main chat send is held by these conversations' sessions.
+const noHeldMessage = () => null;
 
 function agentWriteLockHarness() {
   const active = new Set();
@@ -844,6 +846,7 @@ test("Main browser delivery preserves original owner-conflict recovery scalars w
   const expected = { ok: false, delivered: false, code: result.code, error: result.error,
     operationOutcome: result.operationOutcome, retryable: true, refreshRecommended: true };
   const conversations = createMainBrowserConversations({
+    inspectHeldMessage: noHeldMessage,
     actions: { async execute(request) {
       calls.push(request);
       if (request.actionId === ACTION_READ_CONVERSATION_CONTEXT) return { actor: { id: "owner" } };
@@ -869,6 +872,7 @@ test("Main browser plain messages leave the turn expectation to Routing; explici
   const target = { projectSlug: "test-project", sessionId: "session-1" };
   const sent = [];
   const conversations = createMainBrowserConversations({
+    inspectHeldMessage: noHeldMessage,
     actions: { async execute(request) {
       if (request.actionId === ACTION_READ_CONVERSATION_CONTEXT) return { actor: { id: "owner" } };
       sent.push(request.input);
@@ -887,6 +891,7 @@ test("Main and temporary browser Cancel reach their chat's cancel without openin
   const target = { projectSlug: "test-project", sessionId: "session-1" };
   const calls = [];
   const conversations = createMainBrowserConversations({
+    inspectHeldMessage: noHeldMessage,
     actions: { async execute(request) {
       assert.equal(request.actionId, ACTION_READ_CONVERSATION_CONTEXT);
       return { actor: { id: "owner" }, user: { id: "owner" }, project: { projectSlug: target.projectSlug } };

@@ -67,11 +67,11 @@ function operationResult(result) {
 /**
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
- * @param {(sessionId: string, messageId: string) => object | null} [dependencies.inspectHeldMessage] a held Main
- *   chat message's delivery check, which never opens the native conversation
+ * @param {(sessionId: string, messageId: string) => object | null} dependencies.inspectHeldMessage a held Main
+ *   chat message's delivery check (null when no send of it is held), which never opens the native conversation
  * @param {TerminalsService} dependencies.terminals
  */
-function createMainBrowserConversations({ actions, inspectHeldMessage = () => null, terminals }) {
+function createMainBrowserConversations({ actions, inspectHeldMessage, terminals }) {
   async function open({ id, context }) {
     const temporary = temporaryConversationTarget(id);
     const target = temporary || mainConversationTarget(id);

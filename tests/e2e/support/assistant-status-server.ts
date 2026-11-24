@@ -50,6 +50,8 @@ import {
   bootstrapPayload, currentAppPayload, directChatSessionPayload,
   readyProjectSelectionPayload, WORKSPACE_SLUG
 } from "./base-shell-data.ts";
+// No Main chat send is held by these conversations' sessions.
+const noHeldMessage = () => null;
 
 // The real server configures the Studio project context at startup; this
 // fixture's conversation actions read it the same way.
@@ -274,7 +276,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       return { ok: true, interrupted: true };
     },
     async updateAssistantSelection() { throw new Error("This scenario has not supplied a selection response."); },
-    browserConversations: createMainBrowserConversations({ actions, terminals })
+    browserConversations: createMainBrowserConversations({ actions, inspectHeldMessage: noHeldMessage, terminals })
   };
   const projectContext = { currentPracticeProjectScope: () => null, projectsRoot: "/workspace", async readWorkspaceProject() { return { project: { projectRoot: session.targetRoot } }; } };
   registerVibe64ActionContext(actions, {

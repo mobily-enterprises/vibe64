@@ -17,6 +17,8 @@ import { requestMainGoalControl } from "../../packages/vibe64-terminals/src/serv
 import { registerRoutes as registerSessions } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { registerRoutes as registerTerminals } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
+// No Main chat send is held by these conversations' sessions.
+const noHeldMessage = () => null;
 
 test("standalone Main and temporary conversations use the selected local project without signed-in authority", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
@@ -55,7 +57,7 @@ test("standalone Main and temporary conversations use the selected local project
       },
       subscribe() { subscriptions += 1; return () => {}; }
     });
-    const conversations = createMainBrowserConversations({ actions, terminals: {
+    const conversations = createMainBrowserConversations({ actions, inspectHeldMessage: noHeldMessage, terminals: {
       openBrowserConversation: open, openTemporaryBrowserConversation: open
     } });
     const retained = [];
@@ -143,7 +145,7 @@ test("a Main conversation message that names another person still runs as the si
         }
       }) }).filter(({ id }) => [ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE].includes(id))
         .map(definition => ({ channels: ["internal"], surfaces: ["app"], ...definition })) });
-    const conversations = createMainBrowserConversations({ actions, terminals: {} });
+    const conversations = createMainBrowserConversations({ actions, inspectHeldMessage: noHeldMessage, terminals: {} });
     const conversation = await conversations.open({ id: mainConversationId({ projectSlug: slug, sessionId: "session-1" }),
       context: { surface: "app", channel: "internal" } });
     await conversation.send({ text: "Hello", messageId: "forged-1", vibe64User: forged,
@@ -293,7 +295,7 @@ test("conversation facades and subscription checks preserve real Fastify request
       ["cookie-sessions", createSessionActions({ sessions: withMainChatOperations({}) }).filter(({ id }) => id === ACTION_READ_CONVERSATION_CONTEXT)],
       ["cookie-terminals", createTerminalActions({ terminals }).filter(({ id }) => id === ACTION_READ_CANONICAL_AGENT_GOAL)]
     ]) actions.register({ contributorId, domain: "test", actions: definitions.map(definition => ({ surfaces: ["app"], ...definition })) });
-    const conversations = createMainBrowserConversations({ actions, terminals });
+    const conversations = createMainBrowserConversations({ actions, inspectHeldMessage: noHeldMessage, terminals });
     const { access } = await Vibe64ConversationsFeature.setup({
       actionCatalogue: actions, env: {}, sessions: { browserConversations: conversations }, http: testRouteApp().http
     }, {});
@@ -382,7 +384,7 @@ test("browser conversation methods retain fresh project context through delayed 
       }
       return handle;
     }
-    const facade = createMainBrowserConversations({ actions, terminals: {
+    const facade = createMainBrowserConversations({ actions, inspectHeldMessage: noHeldMessage, terminals: {
       openBrowserConversation: () => openHandle("main"),
       openTemporaryBrowserConversation: () => openHandle("temporary")
     } });
