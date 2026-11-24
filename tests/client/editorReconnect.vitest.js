@@ -39,10 +39,11 @@ function fakeEditor() {
       });
     }
     handled.push(`${method} ${pathname}`);
-    if (mode === "busy") {
-      // The editor itself answers that it can't do this right now, in its own JSON and words.
+    if (mode.startsWith("busy")) {
+      // The editor itself answers that it can't do this right now, in its own JSON and words: a service it relies on
+      // is away (503), or answered it badly (502) or too late (504).
       return new Response(JSON.stringify({ message: "Suggestions unavailable" }), {
-        status: 503,
+        status: Number(mode.slice("busy-".length)) || 503,
         headers: { "content-type": "application/json; charset=utf-8" }
       });
     }
@@ -129,6 +130,37 @@ async function openPage() {
   // Mid-session: the page has already read from the editor.
   await expect(client.request("/api/sessions/status")).resolves.toMatchObject({ ok: true });
   return { client, editor, runtime };
+}
+
+/** A read and a write the editor itself answers `status` in its own JSON: what the page makes of them. */
+async function editorAnswered(status) {
+  const label = `the editor's own ${status}`;
+  const { client, editor, runtime } = await openPage();
+
+  editor.set(`busy-${status}`);
+  let settled = 0;
+  const read = pageAction(runtime, () => client.request("/api/suggestions")).finally(() => {
+    settled += 1;
+  });
+  const write = pageAction(runtime, () => client.request("/api/notes", { method: "POST", body: { text: "keep" } }))
+    .finally(() => {
+      settled += 1;
+    });
+  await vi.advanceTimersByTimeAsync(50);
+  expect(settled, label).toBe(2);
+  await vi.advanceTimersByTimeAsync(5_000);
+
+  const [readOutcome, writeOutcome] = [await read, await write];
+  for (const outcome of [readOutcome, writeOutcome]) {
+    expect(outcome.ok, label).toBe(false);
+    expect(outcome.error.status, label).toBe(status);
+    expect(outcome.error.message, label).toBe("Suggestions unavailable");
+  }
+  // Its query offers Retry at once rather than asking again.
+  expect(shouldRetryTransientQueryFailure(0, readOutcome.error), label).toBe(false);
+  expect(editor.handled, label).toEqual(["GET /api/sessions/status", "GET /api/suggestions", "POST /api/notes"]);
+  expect(shownMessages(runtime), label).not.toContain(UPDATING);
+  expect(runtime.reports.filter((entry) => entry.message === UPDATING), label).toEqual([]);
 }
 
 beforeEach(() => {
@@ -300,31 +332,10 @@ describe("the page through an editor restart", () => {
     expect(shouldRetryTransientQueryFailure(0, outcome.error)).toBe(false);
   });
 
-  it("fails at once, in the route's words, a read or write the editor itself answered 503, and starts no health watch", async () => {
-    const { client, editor, runtime } = await openPage();
-
-    editor.set("busy");
-    let settled = 0;
-    const read = pageAction(runtime, () => client.request("/api/suggestions")).finally(() => {
-      settled += 1;
-    });
-    const write = pageAction(runtime, () => client.request("/api/notes", { method: "POST", body: { text: "keep" } }))
-      .finally(() => {
-        settled += 1;
-      });
-    await vi.advanceTimersByTimeAsync(50);
-    expect(settled).toBe(2);
-    await vi.advanceTimersByTimeAsync(5_000);
-
-    const [readOutcome, writeOutcome] = [await read, await write];
-    for (const outcome of [readOutcome, writeOutcome]) {
-      expect(outcome.ok).toBe(false);
-      expect(outcome.error.status).toBe(503);
-      expect(outcome.error.message).toBe("Suggestions unavailable");
+  it("fails at once, in the route's words, a read or write the editor itself answered 502, 503 or 504, and starts no health watch", async () => {
+    for (const status of [503, 502, 504]) {
+      await editorAnswered(status);
     }
-    expect(editor.handled).toEqual(["GET /api/sessions/status", "GET /api/suggestions", "POST /api/notes"]);
-    expect(shownMessages(runtime)).not.toContain(UPDATING);
-    expect(runtime.reports.filter((entry) => entry.message === UPDATING)).toEqual([]);
   });
 
   it("reconnects a realtime socket that lost the editor as soon as the editor answers again, and refetches", async () => {
