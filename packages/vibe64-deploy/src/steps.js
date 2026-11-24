@@ -191,6 +191,31 @@ const retryable = (error) => error?.retryable === true;
 const BACKOFF_PAUSES_MAX = 6;
 /** The pauses before the provider is read again after this many failed reads in a row. @param {number} failures */
 const backoffPauses = (failures) => Math.min(2 ** (failures - 1), BACKOFF_PAUSES_MAX);
+// How many times a Deploy makes each read it makes before it changes anything: then it stops, nothing changed.
+const FIRST_READS = 5;
+
+/**
+ * A read a Deploy makes before it changes anything (the offer, the inventory, the edge's addresses), tried again as
+ * the loop's reads are while the provider may answer later; after FIRST_READS it stops with
+ * `production_deploy_unanswered`, saying in words that nothing changed (the provider's own words are in each retry).
+ * @template T @param {any} adapter @param {() => Promise<T>} read
+ * @param {{ tell: (event: any) => void, pause: () => Promise<void> | void }} context @returns {Promise<T>}
+ */
+async function firstRead(adapter, read, { tell, pause }) {
+  for (let failures = 1; ; failures += 1) {
+    try {
+      return await read();
+    } catch (error) {
+      if (!retryable(error)) throw error;
+      if (failures >= FIRST_READS) {
+        throw deployError("production_deploy_unanswered",
+          `${adapter.title} didn't answer, so the Deploy stopped before changing anything. Deploy again.`, 503);
+      }
+      tell({ kind: "retry", words: `Reading ${adapter.title} again`, attempt: failures, message: error.message });
+      for (let one = 0; one < backoffPauses(failures); one += 1) await pause();
+    }
+  }
+}
 
 /**
  * The next step of a Deploy, or `{ kind: "live" }`, or `{ kind: "failed", message }`, or `{ kind: "wait", words }`
@@ -612,7 +637,8 @@ async function deploy({
     throw deployError("production_deploy_aliases_unsupported",
       `${adapter.title} can't answer at other names than the domain (${aliases.join(", ")}): remove them, then deploy to production.`, 409);
   }
-  const [offer, observed] = await Promise.all([adapter.offer(), adapter.inventory()]);
+  const reading = { tell, pause };
+  const [offer, observed] = await firstRead(adapter, () => Promise.all([adapter.offer(), adapter.inventory()]), reading);
   const plan = planOf({ needs, record: start, observed, offer, choices, decisions });
   if (plan.hash !== planHash) throw deployError("production_deploy_plan_stale", "What this Deploy would do changed since the plan was read: read the plan again, then deploy to production.");
   if (plan.problems.length > 0) throw deployError("production_deploy_plan_refused", plan.problems[0].message, 422, { problems: plan.problems });
@@ -620,7 +646,8 @@ async function deploy({
     const declaration = release.declarations[service.id];
     return [service.id, releaseDigest(adapter.serviceUpload(release.archive, declaration), declaration)];
   }));
-  const full = { ...release, digests, port: adapter.servicePort, trustedProxies: await adapter.trustedProxies(), migrations: migrationsOf(adapter, needs, release) };
+  const trustedProxies = await firstRead(adapter, () => adapter.trustedProxies(), reading);
+  const full = { ...release, digests, port: adapter.servicePort, trustedProxies, migrations: migrationsOf(adapter, needs, release) };
   // Taken once the release is read, so a release refused gives up no lease it holds.
   const lease = await takeDeployLease(adapter, start, holder);
   const run = { id: `run_${randomBytes(6).toString("hex")}`, release: release.id, planHash, state: "deploying", domain: null, services: {}, failure: null };
@@ -691,7 +718,8 @@ async function deploy({
           if (typeof error?.retryable !== "boolean") throw error;
           if (error.retryable) tell({ ...stepEvent(step, words), kind: "retry", message: error.message });
           else {
-            record = await save({ ...structuredClone(record), run: { ...record.run, failure: `${steps.at(-1)}: ${error.message}` } });
+            // In the step's own words, as the log said it, never its kind ("createResource database").
+            record = await save({ ...structuredClone(record), run: { ...record.run, failure: `${words}: ${error.message}` } });
             tell({ ...stepEvent(step, words), phase: "refused", message: error.message });
           }
         }

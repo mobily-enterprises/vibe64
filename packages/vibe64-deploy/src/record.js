@@ -165,7 +165,9 @@ function createRecordStore({ root, now = () => new Date() }) {
     if (current !== expectedRevision) {
       throw new RecordError(
         "production_deploy_record_stale",
-        `The ${environment} record changed since it was read (revision ${current}, not ${expectedRevision}): read it again, then decide again.`,
+        // In the owner's words: something else (another Deploy, a Take offline, a Delete) wrote it first.
+        `${environment.charAt(0).toUpperCase()}${environment.slice(1)}'s record changed while this ran, so it stopped before writing over `
+          + "that change: try again.",
         { expected: expectedRevision, current }
       );
     }
