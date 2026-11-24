@@ -28,6 +28,7 @@ import {
   runCommand,
   sortedDirectoryNames
 } from "./sessionStoreLayout.js";
+import { LEGACY_TRANSCRIPT_FILE, legacyTranscriptJson, parseLegacyTranscript } from "./sessionTranscriptLog.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
@@ -609,10 +610,10 @@ function createSessionStateUpgrades({
         const changes = [];
         for (const scope of scopes) {
           await inventory(scope.paths.conversationLogRoot);
-          const filePath = path.join(scope.paths.conversationLogRoot, "transcript.json");
+          const filePath = path.join(scope.paths.conversationLogRoot, LEGACY_TRANSCRIPT_FILE);
           if (!await checkedPath(filePath)) continue;
           const original = await readRegularText(filePath);
-          conversationStore.parseConversationRecord(original);
+          parseLegacyTranscript(original);
           const document = JSON.parse(original);
           const messages = document.turns.flatMap(([, turn]) => turn.messages);
           const patches = await transform({
@@ -623,7 +624,7 @@ function createSessionStateUpgrades({
           });
           if (applyMessageDataPatches(messages, patches)) {
             const contents = `${JSON.stringify(document, null, 2)}\n`;
-            conversationStore.parseConversationRecord(contents);
+            parseLegacyTranscript(contents);
             changes.push({ filePath, original, contents });
           }
         }
@@ -647,7 +648,7 @@ function createSessionStateUpgrades({
         }
         for (const scope of scopes) {
           const entries = await inventory(scope.conversationLogRoot);
-          const filePath = path.join(scope.conversationLogRoot, "transcript.json");
+          const filePath = path.join(scope.conversationLogRoot, LEGACY_TRANSCRIPT_FILE);
           const original = await checkedPath(filePath) ? await readRegularText(filePath) : null;
           const legacy = [];
           const turns = new Map();
@@ -672,13 +673,13 @@ function createSessionStateUpgrades({
             legacy.push({ filePath: sourcePath, original: contents, contents: null });
           }
           if (original !== null) {
-            conversationStore.parseConversationRecord(original);
+            parseLegacyTranscript(original);
             if (legacy.length) {
               throw new Error(`Conversation has both current and legacy records: ${filePath}. Inspect the upgrade backup before retrying.`);
             }
           } else if (legacy.length || turns.size) {
-            const contents = `${JSON.stringify(conversationStore.conversationRecordJson({ turns, metadata: {}, rewound }), null, 2)}\n`;
-            conversationStore.parseConversationRecord(contents);
+            const contents = `${JSON.stringify(legacyTranscriptJson({ turns, metadata: {}, rewound }), null, 2)}\n`;
+            parseLegacyTranscript(contents);
             // Publish the complete record first. Retry follows the prepared manifest
             // and retires old files only after all original bytes are backed up.
             changes.push({ filePath, original: null, contents }, ...legacy);

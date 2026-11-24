@@ -9,6 +9,7 @@ import { __testables, upgradeAssistantRoles } from "../../packages/vibe64-accoun
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
+import { upgradeChatTranscripts } from "./vibe64TestHelpers.js";
 
 const { upgradeAssistantRoleSession, upgradeAssistantRoleTurn } = __testables;
 
@@ -144,6 +145,7 @@ test("preflight creates no state and changes no bytes; publication preserves rou
   assert.deepEqual(await snapshot(f.systemRoot), published, "retry reuses exact published copies");
   await upgradeSessionConversations({ systemRoot: f.systemRoot, apply: true,
     backupRoot: path.join(f.systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
+  await upgradeChatTranscripts(f.systemRoot);
   assert.equal((await f.store.readConversationTail("active"))[0].metadata.assistantRouting.resolvedMode, "junior");
   assert.equal((await f.store.readConversationLogPage({ sessionId: "active", conversationId: "temporary" })).conversationLog[0].metadata.assistantRouting.resolvedMode, "junior");
 });
@@ -173,6 +175,7 @@ test("closing, archived and prepared renewal histories are renamed, including ar
   }
   await upgradeSessionConversations({ systemRoot: f.systemRoot, apply: true,
     backupRoot: path.join(f.systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
+  await upgradeChatTranscripts(f.systemRoot);
   assert.equal((await f.store.readConversationTail("archived"))[0].metadata.assistantRouting.resolvedMode, "junior");
 });
 

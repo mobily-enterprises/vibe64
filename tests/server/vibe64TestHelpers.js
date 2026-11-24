@@ -14,6 +14,8 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { LOCAL_PROJECT_RESOURCES } from "@local/vibe64-project/server/resourceEnvironment";
 import { NO_SAVED_ENV_VALUES } from "@local/vibe64-project/server/savedEnvValues";
+import { upgradeChatTranscriptLogs } from "@local/vibe64-runtime/server/chatTranscriptLogUpgrade";
+import { parseTranscriptLog, transcriptLogContents } from "@local/vibe64-runtime/server/sessionTranscriptLog";
 
 async function withTemporaryRoot(callback) {
   const previousRuntimeNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
@@ -76,10 +78,20 @@ function projectRuntimeRoot(targetRoot) {
 
 // Seed completed historical state without retaining an application Undo API.
 async function markHistoricalConversationRewound(store, sessionId, turnIds) {
-  const file = path.join(store.paths(sessionId).conversationLogRoot, "transcript.json");
-  const record = JSON.parse(await readFile(file, "utf8"));
+  const file = path.join(store.paths(sessionId).conversationLogRoot, "transcript.jsonl");
+  const { record } = parseTranscriptLog(await readFile(file));
   record.rewound = [...new Set([...record.rewound, ...turnIds])];
-  await writeFile(file, `${JSON.stringify(record)}\n`);
+  await writeFile(file, transcriptLogContents(record));
+}
+
+/**
+ * Converts the previous release's transcript.json chats as deployment's ordered
+ * upgrades do after 20261002-session-conversations: 20261124-chat-transcript-log.
+ * @param {string} systemRoot
+ */
+async function upgradeChatTranscripts(systemRoot) {
+  await upgradeChatTranscriptLogs({ systemRoot, apply: true, report: () => {},
+    backupRoot: path.join(systemRoot, "upgrades/backups/20261124-chat-transcript-log") });
 }
 
 /**
@@ -127,6 +139,7 @@ function projectServiceCollaborators() {
 
 export {
   markHistoricalConversationRewound,
+  upgradeChatTranscripts,
   managedSessionSourceRoot,
   projectRuntimeRoot,
   projectServiceCollaborators,

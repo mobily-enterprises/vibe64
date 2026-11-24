@@ -601,7 +601,9 @@ history files are never changed by this upgrade.
 ## Main and temporary conversation records
 
 `20261002-session-conversations` converts each main and temporary chat to one
-`conversation-log/transcript.json` record. It preserves messages, timestamps,
+`conversation-log/transcript.json` record (which
+`20261124-chat-transcript-log` later turns into the appended
+`transcript.jsonl`). It preserves messages, timestamps,
 message IDs, attachments, attribution, answering-model metadata and hidden rewind
 turns. Native histories and application admission records are unchanged. Existing
 integration setup decisions stay in their application-owned files.
@@ -2105,6 +2107,66 @@ rerun finds nothing left to remove. Run it as the OS user that owns the session
 state and checkouts, with Vibe64 and every session process stopped. Focused
 evidence: `sessionTempFolderUpgrade.unit.test.js` and
 `stateUpgrades.unit.test.js`.
+
+## Appended chat transcripts (`20261124-chat-transcript-log`)
+
+A chat's transcript was one record, `conversation-log/transcript.json`, which
+every message replaced whole: 4 ms and 131 KB written at 50 turns, 49-85 ms
+and the whole 11.8 MB file written again at 5,000 turns, and a crash during
+that write was a crash during the chat's only copy. It is now
+`conversation-log/transcript.jsonl`, which each saved change appends to as one
+line, so a message writes the same 1.6 KB at 5,000 turns as at 50. Runtime's `sessionTranscriptLog.js` owns the format:
+
+- The first line is the chat whole, a snapshot:
+  `{"version":2,"metadata":{...},"rewound":[...],"turns":[[turnId,{messages,metadata}],...],"summary":{...}}`,
+  the same fields the old record held.
+- Each later line is one committed transaction's change and nothing else:
+  `{"turns":[[turnId,{"keep":n,"messages":[...],"metadata":PATCH}]],"metadata":PATCH,"summary":{...}|null}`.
+  A turn the chat lacks is added after the others; a turn it has keeps its
+  first `keep` messages (all of them when `keep` is absent) and then gains
+  `messages`, so a held message, an approval or an edited reply rewrites that
+  turn's changed messages only. A PATCH is a list of edits to an object, each
+  `[path, value]` (set) or `[path]` (remove), the empty path being the whole
+  object, so a status change, a red interruption entry, a native receipt or
+  the runtime's `seen` map costs its own bytes.
+- A change no line can say (a turn removed or moved, rewind markers changed),
+  and the change that would take the lines after the snapshot past 1/64 of
+  it (64 KiB at least), saves the chat whole instead: one
+  snapshot line, published in one atomic step. A load parses the record and at
+  most that share more, and over many messages each one writes a bounded
+  multiple of its own line, at 5,000 turns as at 50.
+
+A crash can leave only the line being appended unfinished. Reading ignores the
+bytes after the last newline, and a last line that is not JSON (blocks that
+never reached the disk), and the next save cuts them off before it appends. A
+line before the last that is not JSON, or a record that does not replay, is
+damage: the chat is refused with `vibe64_invalid_conversation_storage` and
+left as it is, never read without it. Each append is synced before the save
+returns; a failed append is cut off again, so the file keeps whole records only.
+
+This upgrade follows `20261124-session-temp-folders`. The owner is Runtime's
+`chatTranscriptLogUpgrade.js`, supplied by the candidate CLI; the script refuses
+to run without it. Through the stopped session store and Core's verified backup
+publisher, it converts each main and temporary chat of every project's active
+and closing sessions, archives and prepared renewal archives: the old record
+becomes the new file's one snapshot line, unchanged. Before anything is staged
+each conversion is read back through the new reader and compared with the old
+record; an unreadable record, a record with fields this upgrade does not know,
+or a chat holding both files stops it before anything changes. The new file is
+published before the old one is removed, and both are kept under
+`upgrades/backups/20261124-chat-transcript-log/` (`before/` holds the old
+record, `after/` the new file). A chat still in the per-turn layout is
+`20261002-session-conversations`'s, which runs first.
+
+Check is read-only and reports, per project, how many chats it would convert.
+An interrupted apply resumes the same prepared files; a rerun after it finished
+changes nothing. Nothing reads or converts an old record at run time: opening
+or writing an unconverted chat refuses with
+`vibe64_conversation_upgrade_required`. Run it as the OS user that owns the
+session state, with Vibe64 and every session process stopped. Converting a
+5,040-turn (10 MB) chat took about 2 s to apply and under 1 s to check on a
+busy test host. Focused evidence:
+`chatTranscriptLog.unit.test.js` and `stateUpgrades.unit.test.js`.
 
 ## Auto plan handoff (no upgrade)
 

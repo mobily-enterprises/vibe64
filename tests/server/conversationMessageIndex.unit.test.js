@@ -6,6 +6,8 @@ import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
+import { parseTranscriptLog } from "@local/vibe64-runtime/server/sessionTranscriptLog";
+import { upgradeChatTranscripts } from "./vibe64TestHelpers.js";
 
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "v64-message-index-"));
@@ -16,8 +18,12 @@ async function fixture(t) {
   await store.createSession({ sessionId: "test", runtimeKind: "genesis" });
   const log = store.paths("test").conversationLogRoot;
   return { store, create, log, index: path.join(log, "message-ids.json"),
-    upgrade: () => upgradeSessionConversations({ systemRoot, apply: true,
-      backupRoot: path.join(systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} }) };
+    // 20261002-session-conversations, then 20261124-chat-transcript-log, as deployment's ordered upgrades run them.
+    upgrade: async () => {
+      await upgradeSessionConversations({ systemRoot, apply: true,
+        backupRoot: path.join(systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
+      await upgradeChatTranscripts(systemRoot);
+    } };
 }
 
 test("message receipts survive restarts without scanning historical turn directories", async (t) => {
@@ -65,8 +71,8 @@ test("offline conversion recovers missing or damaged legacy indexes from durable
     assert.equal(await f.store.conversationMessageIdExists("test", "first"), true);
     assert.equal(await f.create().conversationMessageIdExists("test", "accepted-before-crash"), true);
     await f.store.writeConversationUserMessage("test", { messageId: "next", text: "Next" });
-    const record = JSON.parse(await fs.readFile(path.join(f.log, "transcript.json"), "utf8"));
-    assert.deepEqual(new Set(record.turns.flatMap(([, turn]) => turn.messages.map(message => message.messageId))),
+    const { record } = parseTranscriptLog(await fs.readFile(path.join(f.log, "transcript.jsonl")));
+    assert.deepEqual(new Set([...record.turns.values()].flatMap(turn => turn.messages.map(message => message.messageId))),
       new Set(["first", "accepted-before-crash", "next"]));
     assert.equal(await f.store.writeConversationUserMessage("test", { messageId: "first", text: "Retry hidden message" }), null);
   });

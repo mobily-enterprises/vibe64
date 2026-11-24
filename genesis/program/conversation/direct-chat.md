@@ -1061,17 +1061,32 @@ in their original positions. It keeps valid calls and native history unchanged,
 rejects ambiguous identity or unsupported content, and adds no tool execution or
 model retry. Native compaction and fallback still belong to Codex.
 
-The application transcript is one `conversation-log/transcript.json` record per
-main or temporary conversation. JSKIT owns its nine-method transaction behavior;
-Vibe64 holds the existing session mutation lease and publishes the record by one
-atomic replacement. Messages, runtime metadata, tool receipts and per-turn
-attribution commit together, or a failed transaction leaves the previous record.
-The application retains attachment references, native message versions and
+The application transcript is one `conversation-log/transcript.jsonl` file per
+main or temporary conversation (`sessionTranscriptLog.js`). JSKIT owns its
+nine-method transaction behavior; Vibe64 holds the existing session mutation
+lease and appends what each committed transaction changed as one synced line, so
+a message costs the same however long the chat is. The first line is the whole
+record (a snapshot); each later line names the turns that changed, the messages
+each keeps and gains, and patches to turn and chat metadata and the summary. A
+change no line can say (a turn removed or moved, rewind markers changed), and
+the change that would take the lines after the snapshot past 1/64 of it (64
+KiB at least), saves the chat whole instead: one snapshot line published
+in one atomic step. A load therefore parses the record and at most that share
+more, and over many messages each one writes a bounded multiple of its own line
+at any chat length. Messages, runtime metadata, tool receipts and per-turn
+attribution commit together in one save, or a failed transaction leaves the
+previous record: a
+failed append is cut off, and an append a crash left unfinished (bytes after
+the last newline, or a last line that is not JSON) is ignored by reads and cut
+off by the next save. Any earlier unreadable line refuses the chat. The
+application retains attachment references, native message versions and
 integration setup decisions; decisions remain separate application records.
-The record is compact JSON validated as an object before publication. Its parsed
-form is reused while the file's device, inode, size and modification time are
-unchanged; Vibe64's own publication primes that cache and any other writer
-invalidates it. Read transactions answer message-ID existence from an index of
+Every changed turn is validated before it is written, and the replayed record
+as a whole when it is read. Its parsed form is reused while the file's device,
+inode, size and modification time are unchanged; Vibe64's own appends prime that
+cache and any other writer invalidates it, and an append refuses
+(`vibe64_conversation_storage_changed`) when the file changed after its
+transaction read it. Read transactions answer message-ID existence from an index of
 that parsed record. The bound main transcript also supplies `findSubmittedTurn`
 and `readTurn`, so admission locates one conversation-log entry without reading
 the whole log; rewound turns stay hidden from both. Session reads reuse
@@ -1085,8 +1100,12 @@ history. Those operations must finish on the previous release before activation.
 The numbered offline `20261002-session-conversations` upgrade converts old message
 files, attachment/turn metadata and rewind lists, including temporary, closing,
 archived and prepared renewal histories. It backs up all original bytes before
-publication and retries the prepared replacements. Ordinary conversation reads
-require the upgrade instead of converting old state. Nested transcript writes
+publication and retries the prepared replacements. The numbered
+`20261124-chat-transcript-log` upgrade then turns each resulting
+`transcript.json` into a `transcript.jsonl` whose one snapshot line is the same
+record, verified by reading it back, and removes the old file only after the new
+one is published. Ordinary conversation reads require the upgrades instead of
+converting old state. Nested transcript writes
 share the mutation queue; AI changeover still compares content to preserve
 corrections and missed history.
 

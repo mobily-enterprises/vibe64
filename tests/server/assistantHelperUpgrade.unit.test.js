@@ -6,6 +6,7 @@ import test from "node:test";
 import { __testables as assistantHelperUpgradeTestables, upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
+import { upgradeChatTranscripts } from "./vibe64TestHelpers.js";
 
 import { __testables as codexHelperThreadLedgerTestables, createCodexHelperThreadLedger }
   from "../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js";
@@ -86,6 +87,7 @@ test("Helper upgrade preserves user choices and authored content while removing 
   assert.equal(await readFile(f.file, "utf8"), published);
   await upgradeSessionConversations({ systemRoot: f.systemRoot, apply: true,
     backupRoot: path.join(f.systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
+  await upgradeChatTranscripts(f.systemRoot);
   const history = await f.store.readConversationTail("active");
   assert.equal(history[0].user.text, "intern and economy are my words");
   assert.equal(history[0].metadata.assistantRouting.resolvedMode, "helper");
@@ -104,6 +106,7 @@ test("Helper upgrade includes closing and archived histories", async t => {
   assert.equal(JSON.parse(await readFile(path.join(closingRoot, "metadata/assistant_routing"), "utf8")).mode, "junior");
   await upgradeSessionConversations({ systemRoot: f.systemRoot, apply: true,
     backupRoot: path.join(f.systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
+  await upgradeChatTranscripts(f.systemRoot);
   assert.equal((await f.store.readConversationTail("archived"))[0].metadata.assistantRouting.resolvedMode, "helper");
 });
 
