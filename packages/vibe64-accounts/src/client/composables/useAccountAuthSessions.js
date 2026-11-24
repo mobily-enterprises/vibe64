@@ -175,7 +175,7 @@ function useAccountAuthSessions(
       const session = await accounts.startAuth(...startArgs);
       authDebug("client.auth.start.response", authSessionDebugFields(session));
       if (!session?.id) {
-        throw new Error("Login did not return an auth session.");
+        throw new Error("The sign-in could not start: Vibe64 did not answer with it. Try again.");
       }
       rememberAuthSession(session);
       await handleAuthSessionUpdate(session);
@@ -213,7 +213,10 @@ function useAccountAuthSessions(
       return;
     }
     try {
-      await accounts.cancelAuthSession(session.id);
+      await accounts.cancelAuthSession(session.id).catch((error) => {
+        // The editor no longer knows this sign-in (it restarted meanwhile): it is over already, as a cancel makes it.
+        if (error?.code !== "unknown_auth_session") throw error;
+      });
       forgetSession(session);
       await refreshStatus();
       stopPollingIfIdle();
@@ -283,7 +286,7 @@ function useAccountAuthSessions(
         const nextSession = await accounts.readAuthSession(session.id);
         authDebug("client.auth.poll.response", authSessionDebugFields(nextSession));
         if (!isRecord(nextSession) || !nextSession.id) {
-          throw new Error("Account login session did not return status.");
+          throw new Error("Vibe64 did not say how this sign-in is going. It checks again shortly.");
         }
         await handleAuthSessionUpdate(nextSession, {
           event: "client.auth.session.poll",

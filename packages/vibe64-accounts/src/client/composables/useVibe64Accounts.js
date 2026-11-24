@@ -65,6 +65,18 @@ function statusWithCodexReconnectRequired(status = {}) {
   };
 }
 
+/**
+ * A sign-in progress read's answer: the session it read, or an error when the read failed. A failed refetch keeps the
+ * data it had, so answering with it would show the sign-in waiting for ever instead of saying the read failed.
+ * @param {{ data?: unknown, isError?: boolean } | undefined} result the refetch's result
+ * @param {unknown} current the data the resource holds
+ * @param {string} loadError the failed read's words
+ */
+function authSessionReadAnswer(result, current, loadError) {
+  if (result?.isError) throw new Error(loadError);
+  return result?.data || current || null;
+}
+
 // An account action answers with that account's new row. Showing it at once
 // keeps the readiness rule the server applies: every required account connected.
 function statusWithAccount(status, account) {
@@ -99,7 +111,7 @@ function useVibe64Accounts({
   const authSessionResource = useEndpointResource({
     client,
     enabled: false,
-    fallbackLoadError: "Account login session could not load.",
+    fallbackLoadError: "Vibe64 could not check this sign-in's progress just now. It checks again shortly.",
     path: computed(() => authSessionReadId.value
       ? `${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(authSessionReadId.value)}`
       : ""),
@@ -232,7 +244,7 @@ function useVibe64Accounts({
       return null;
     }
     const result = await authSessionResource.reload();
-    return result?.data || authSessionResource.data.value || null;
+    return authSessionReadAnswer(result, authSessionResource.data.value, authSessionResource.loadError.value);
   }
 
   async function cancelAuthSession(sessionId) {
@@ -311,6 +323,7 @@ function useVibe64Accounts({
 /** @typedef {ReturnType<typeof useVibe64Accounts>} Vibe64Accounts */
 
 export {
+  authSessionReadAnswer,
   statusWithAccount,
   statusWithCodexReconnectRequired,
   useVibe64Accounts
