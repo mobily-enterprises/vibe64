@@ -25,5 +25,9 @@ export default Object.freeze({
       return { available: false, reason: "This Vibe64 installation is missing its Python recorder files." };
     }
     return { available: true, environment: {}, prependEnvironment: { PYTHONPATH: PYTHON_RUNTIME_DIRECTORY } };
+  },
+  // An unset PYTHONPATH stands for nothing: Python's own paths stay.
+  unsetEnvironment() {
+    return {};
   }
 });

@@ -6,13 +6,17 @@ import php from "./php.js";
 import python from "./python.js";
 
 // Each runtime tracer module default-exports:
-//   { runtime, label, prepare({ recordingDirectory, sourceRoot, recordingId, targetKind }) }
+//   { runtime, label, prepare({ recordingDirectory, sourceRoot, recordingId, targetKind }), unsetEnvironment(environment) }
 // prepare is pure (no I/O beyond stats of its own runtime files and the host's runtime packs) and returns
 //   { available: true, environment, prependEnvironment, nodePreload? }
 // or { available: false, reason }.
 // - environment values are set as given;
 // - prependEnvironment values are prepended to any existing value
 //   (PYTHONPATH, PHP_INI_SCAN_DIR) by mergePrependEnvironment();
+// - unsetEnvironment(launch environment) answers the value a prepended
+//   variable stands for while the launch sets none, which the merge then
+//   keeps ({} for none). Purity gives way here: PHP's runs `php --ini` once
+//   per binary, since a wrapper's scan folder (Nix) is not PHP's empty segment.
 // - nodePreload is an absolute path handed to the exec helper's
 //   usageRecordingPreload launch field, never an environment variable.
 // The three variables from usageRecordingEnvironment() are added by the
@@ -29,18 +33,20 @@ function recordingUnavailableReason(runtimes = []) {
 }
 
 /**
- * A tracer's prependEnvironment value goes before any existing value. Neither
- * side is trimmed: an unset or empty existing value leaves the tracer's value
+ * A tracer's prependEnvironment value goes before any existing value: the
+ * environment's, or when that is unset or empty the tracer's unsetEnvironment
+ * value. Neither side is trimmed: no existing value leaves the tracer's value
  * as given, a value already ending in the separator is followed directly by
  * the existing one, and any other value is joined with one separator. So PHP's
- * "<ours>:" keeps its trailing empty segment (the default scan directory), and
- * a person's own leading empty segment is kept too.
+ * "<ours>:" is followed by the scan folder its PHP reads by itself, or keeps
+ * its trailing empty segment (the compiled-in folder), and a person's own
+ * leading empty segment is kept too.
  */
-function mergePrependEnvironment(prepend, environment, separator = path.delimiter) {
+function mergePrependEnvironment(prepend, environment, separator = path.delimiter, unset = {}) {
   const merged = {};
   for (const [name, value] of Object.entries(prepend || {})) {
     const ours = String(value);
-    const existing = String(environment?.[name] ?? "");
+    const existing = String(environment?.[name] || unset[name] || "");
     merged[name] = !existing ? ours : ours.endsWith(separator) ? `${ours}${existing}` : `${ours}${separator}${existing}`;
   }
   return merged;

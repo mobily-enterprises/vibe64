@@ -300,15 +300,16 @@ function createService({
     /**
      * A launched target inherits this server's environment beneath the
      * launch's own variables, so a prepended value joins the one the process
-     * would otherwise see, such as a PHP_INI_SCAN_DIR the server was started
-     * with or a person's own PYTHONPATH.
+     * would otherwise see (a PHP_INI_SCAN_DIR the server was started with, a
+     * person's own PYTHONPATH), or with none the tracer's unsetEnvironment.
      */
     const recorderEnvironment = (environment = {}) => {
       const result = usageRecordingEnvironment({ recordingDirectory: directory, sourceRoot: context.sourceRoot, targetKind: target.kind });
       const inherited = { ...process.env, ...environment };
       let usageRecordingPreload = "";
-      for (const { prepared } of tracers) {
-        Object.assign(result, prepared.environment || {}, mergePrependEnvironment(prepared.prependEnvironment, inherited));
+      for (const { tracer, prepared } of tracers) {
+        const merged = mergePrependEnvironment(prepared.prependEnvironment, inherited, path.delimiter, tracer.unsetEnvironment(inherited));
+        Object.assign(result, prepared.environment || {}, merged);
         usageRecordingPreload = prepared.realPreload || usageRecordingPreload;
       }
       return { environment: result, usageRecordingPreload };

@@ -100,6 +100,8 @@ test("each runtime tracer follows the tracer interface", async (t) => {
   assert.deepEqual(tracers.map((tracer) => tracer.runtime), USAGE_TRACER_RUNTIMES);
   for (const tracer of tracers) {
     assert.equal(typeof tracer.label, "string");
+    const unset = tracer.unsetEnvironment({ PATH: "" });
+    assert.ok(Object.values(unset).every((value) => typeof value === "string"), `${tracer.runtime} unsetEnvironment`);
     for (const targetKind of ["web", "terminal"]) {
       const result = await tracer.prepare({ recordingDirectory: directory, sourceRoot: directory, recordingId: "rec_abcdefghijklmnopqrst", targetKind });
       if (result.available === false) {

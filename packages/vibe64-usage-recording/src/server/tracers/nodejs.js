@@ -18,5 +18,9 @@ export default Object.freeze({
       // Missing recorder files are reported below.
     }
     return { available: false, reason: "The Node.js recorder files are missing." };
+  },
+  // Node.js prepends nothing.
+  unsetEnvironment() {
+    return {};
   }
 });
