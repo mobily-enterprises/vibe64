@@ -917,7 +917,14 @@ named in the result, and is logged as the operational warning
 `vibe64.project_runtime.dormant_close_failed` with the project and session IDs.
 Idle cleanup decides and closes inside the project's open queue, so an open
 requested meanwhile waits for that Close and then reopens the project instead
-of being refused or undone. A read that finds the open marker missing (the
+of being refused or undone. The page's open (`project-runtime.open`) runs as
+held work (`heldProjectRuntimeOpen.js`, keyed by project): as a Close can
+outlast the hosted edge's minute, it answers with the open's result within two
+seconds, and otherwise `{ ok: true, opening: true, waitingFor: "project-close" }`.
+The page's open command (`useVibe64AppPage.js`) sends it through a client that
+repeats it with `followHeldRequest` while it is held and after an answer that
+never came back, so the command sees only the outcome, and a failure the server
+did not word reads "The project could not be opened. Try again." A read that finds the open marker missing (the
 page's Preview status, agent reconciliation) closes what is still running in the
 same queue, so it neither refuses nor undoes an open either. A Main send
 (`sendAgentMessage` in `sessionMessages.js`) opens the project runtime through

@@ -12,6 +12,8 @@ import { vibe64SessionToolIdFromDashboardPath } from "@/lib/vibe64SessionToolDef
 import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+import { followHeldRequest } from "@/lib/vibe64HeldRequest.js";
 import {
   useVibe64ProjectsResource
 } from "@/composables/useVibe64ProjectsResource.js";
@@ -48,6 +50,18 @@ const USAGE_RECORDING_HOST_ID = "studio-home-shell-usage-recording";
 const USAGE_RECORDING_STRIP_HOST_ID = "studio-home-shell-usage-recording-strip";
 const PHONE_BAR_MEDIA_QUERY = "(max-width: 600px)";
 const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
+const PROJECT_OPEN_NOT_WORDED = "The project could not be opened. Try again.";
+const PROJECT_OPEN_LOST_CONTACT = "Vibe64 could not be reached to open this project. Check your connection and try again.";
+// An open that arrives while idle cleanup closes the project waits for that Close, which can outlast the hosted
+// edge's minute: the server answers opening while it waits, and the same open is repeated until its outcome, after an
+// answer that never came back too. The command shows only that outcome.
+const PROJECT_OPEN_CLIENT = Object.freeze({
+  request: (path, options) => followHeldRequest(() => getHttpWebClient().request(path, options), {
+    heldAs: "opening",
+    lostContact: PROJECT_OPEN_LOST_CONTACT,
+    notWorded: PROJECT_OPEN_NOT_WORDED
+  })
+});
 // The project panes the header's Preview | Dash switch chooses between. Learn
 // mode's lesson is not one of them: it is its own on/off flag (the Lesson
 // toggle beside the switch, ?lesson=1), a sheet covering whichever of these
@@ -115,6 +129,7 @@ function useVibe64AppPage() {
   const openProjectRuntimeCommand = useCommand({
     access: "never",
     apiSuffix: "/vibe64/project-runtime/open",
+    client: PROJECT_OPEN_CLIENT,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
       path: scopedDevelopmentApiUrl(PROJECT_RUNTIME_OPEN_API_PATH, context?.projectSlug)

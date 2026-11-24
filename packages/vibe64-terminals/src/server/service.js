@@ -41,6 +41,7 @@ import { createServiceAgentProviders } from "./serviceAgentProviders.js";
 import { sessionAssistantWorking } from "./serviceSessionRecords.js";
 import { createProjectPasses } from "./projectPasses.js";
 import { createHeldAgentSessionPreparation } from "./heldAgentSessionPreparation.js";
+import { createHeldProjectRuntimeOpen } from "./heldProjectRuntimeOpen.js";
 
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
@@ -537,6 +538,7 @@ function createService({
     beginShutdown: shutdown.beginShutdown,
     close: shutdown.close,
     openProjectRuntime: projectRuntime.openProjectRuntime,
+    openProjectRuntimeForPage: createHeldProjectRuntimeOpen({ openProjectRuntime: projectRuntime.openProjectRuntime, logger }),
     noteProjectRuntimeActivity: projectRuntime.noteProjectRuntimeActivity,
     closeDormantProjectRuntime: projectRuntime.closeDormantProjectRuntime,
     closeDormantProjectRuntimes: projectRuntime.closeDormantProjectRuntimes,

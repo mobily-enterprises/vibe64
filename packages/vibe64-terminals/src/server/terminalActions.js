@@ -125,7 +125,7 @@ function createTerminalActions({ terminals }) {
       id: ACTION_OPEN_PROJECT_RUNTIME,
       input: projectRuntimeInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => terminals.openProjectRuntime(input)
+      execute: (input) => terminals.openProjectRuntimeForPage(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
