@@ -26,19 +26,12 @@ import { config } from "../config/public.js";
 import {
   bootBrowserLifecycle
 } from "./lib/browserLifecycleBootstrap.js";
-import { resolveStudioRequestUrl } from "./lib/studioUrls.js";
+import { createVibe64HttpClient } from "./lib/vibe64HttpClient.js";
 import { readAppearance } from "./lib/appearance.js";
 import { theme } from "./theme/index.js";
 import { hasWindowFunction } from "./lib/browser.js";
 
-configureHttpWebClient({
-  csrf: {
-    enabled: false
-  },
-  resolveRequestUrl(url) {
-    return resolveStudioRequestUrl(url);
-  }
-});
+configureHttpWebClient(createVibe64HttpClient());
 
 bootBrowserLifecycle();
 
