@@ -1,4 +1,4 @@
-import { effectScope, nextTick, ref } from "vue";
+import { effectScope, nextTick, ref, watch } from "vue";
 import { QueryClient } from "@tanstack/vue-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -306,6 +306,69 @@ describe("useVibe64MountedSessionData", () => {
     expect(httpMocks.request).toHaveBeenCalledTimes(1);
     expect(endpointMocks.resource.query.refetch).toHaveBeenCalledTimes(1);
     scope.stop();
+  });
+
+  // A cold assistant can outlast the hosted edge's minute: the server answers within two seconds that it is
+  // preparing, and the page repeats the same request until the assistant is ready.
+  async function connectPreparedSession() {
+    const scope = effectScope();
+    const statuses = [];
+    const controller = scope.run(() => {
+      const mounted = useVibe64MountedSessionData({
+        active: ref(true),
+        sessionId: ref("session-a"),
+        sessionsApiPath: ref("/api/vibe64/sessions"),
+        summarySession: ref(null)
+      });
+      watch(mounted.agentConnectionStatus, (status) => statuses.push(status), { flush: "sync" });
+      return mounted;
+    });
+    endpointMocks.resource.data.value = {
+      agentSession: { turn: { active: false, state: "idle" } },
+      revision: 10,
+      sessionId: "session-a"
+    };
+    endpointMocks.resource.isInitialLoading.value = false;
+    endpointMocks.resource.isLoading.value = false;
+    await nextTick();
+    realtimeMocks.socket.connected = true;
+    realtimeMocks.handlers.get("connect")();
+    return { controller, scope, statuses };
+  }
+
+  it("follows a held preparation with the same request until the assistant is ready", async () => {
+    httpMocks.request
+      .mockResolvedValueOnce({ ok: true, preparing: true, sessionId: "session-a", waitingFor: "preparing" })
+      .mockResolvedValueOnce({ ok: true });
+    const { controller, scope, statuses } = await connectPreparedSession();
+    try {
+      await vi.waitFor(() => {
+        expect(controller.agentConnectionStatus.value).toBe("connected");
+      });
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+      expect(httpMocks.request.mock.calls[1][0]).toBe("/api/vibe64/sessions/session-a/agent-session");
+      expect(statuses).not.toContain("unknown");
+    } finally {
+      scope.stop();
+    }
+  });
+
+  it.each([0, 502, 504])("repeats a preparation whose answer was lost with status %s, and never shows that failure", async (status) => {
+    httpMocks.request
+      .mockRejectedValueOnce(Object.assign(new Error(`Request failed with status ${status}.`), { status }))
+      .mockResolvedValueOnce({ ok: true });
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    const { controller, scope, statuses } = await connectPreparedSession();
+    try {
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+      expect(statuses).not.toContain("unknown");
+      expect(controller.agentConnectionError.value).toBe("");
+    } finally {
+      scope.stop();
+      vi.useRealTimers();
+    }
   });
 
   it("leaves active assistant status unknown when reconnect reconciliation fails", async () => {

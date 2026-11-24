@@ -56,7 +56,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       ["GET", "/sessions/:sessionId/work-plan", "work-plan.read", "readSessionWorkPlan", { offset: 0, limit: 1000 }],
       ["POST", "/sessions/:sessionId/work-plan/archive", "work-plan.archive", "archiveSessionWorkPlan", { expectedRevision: "a".repeat(64), expectedProgressRevision: "" }],
       ["POST", "/sessions/:sessionId/work-plan/restore", "work-plan.restore", "restoreSessionWorkPlan", { archiveId: "b".repeat(64) }],
-      ["POST", "/sessions/:sessionId/agent-session", "agent-session.prepare", "ensureAgentSession", {}]
+      ["POST", "/sessions/:sessionId/agent-session", "agent-session.prepare", "prepareAgentSession", {}]
     ];
     for (const [prefix, suffix, read, close, write] of [
       ["output-terminal", "/sessions/:sessionId/output-runs/:terminalSessionId/terminal", "readOutputTargetTerminal", "closeOutputTargetTerminal"],
