@@ -6,6 +6,7 @@ import path from "node:path";
 import { CONVERSATION_TURN_ID_PATTERN } from "./sessionRecordRules.js";
 import {
   LEGACY_TRANSCRIPT_FILE,
+  MOVED_TRANSCRIPT_NOTE,
   TRANSCRIPT_LOG_FILE,
   legacyTranscriptJson,
   parseLegacyTranscript,
@@ -25,12 +26,17 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
    * whose one line is the same record, which later messages append to. Main and
    * temporary chats of active and closing sessions, archives and prepared renewal
    * archives; nothing else changes. The new file is published before the old one
-   * is removed, and each conversion is read back through the new reader and
-   * compared with the old record before anything is staged.
-   * @param {{ temporaryRoot: string, apply: boolean }} options
+   * becomes MOVED_TRANSCRIPT_NOTE, and each conversion is read back through the
+   * new reader and compared with the old record before anything is staged. A
+   * chat whose transcript.json is the note is converted already; one whose new
+   * file was published by an apply that stopped before its note is converted
+   * again from its old file, which the previous release may have written to
+   * since; publishedEarlier says whether a new file is still exactly what an
+   * earlier run published.
+   * @param {{ temporaryRoot: string, apply: boolean, publishedEarlier: (filePath: string, contents: string) => Promise<boolean> }} options
    * @returns {Promise<{ updates: object[], chats: number, perTurnLayouts: number }>}
    */
-  async function prepareChatTranscriptLogUpgrade({ temporaryRoot, apply }) {
+  async function prepareChatTranscriptLogUpgrade({ temporaryRoot, apply, publishedEarlier }) {
     let chats = 0;
     let perTurnLayouts = 0;
     const updates = await prepareSessionStateUpgrade({
@@ -47,9 +53,6 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
           const legacyPath = path.join(scope.conversationLogRoot, LEGACY_TRANSCRIPT_FILE);
           const logPath = path.join(scope.conversationLogRoot, TRANSCRIPT_LOG_FILE);
           const legacy = await checkedPath(legacyPath);
-          if (legacy && await checkedPath(logPath)) {
-            throw new Error(`A chat has both an old and a new transcript: ${scope.conversationLogRoot}. Inspect it and any earlier upgrade backup before upgrading.`);
-          }
           if (!legacy) {
             // Older still: the per-turn layout, which 20261002-session-conversations converts before this upgrade runs.
             if (entries.some((entry) => CONVERSATION_TURN_ID_PATTERN.test(entry.name) || ["rewound.json", "message-ids.json"].includes(entry.name))) {
@@ -61,6 +64,21 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
             continue;
           }
           const original = await readRegularText(legacyPath);
+          const converted = await checkedPath(logPath);
+          if (original === MOVED_TRANSCRIPT_NOTE) {
+            if (!converted) throw new Error(`A converted chat has lost its transcript: ${logPath}. Restore it from the upgrade backup before upgrading.`);
+            continue;
+          }
+          // Only an apply that stopped between this chat's two files leaves a new one beside an old one, and nothing
+          // writes to it before every chat is converted: the old one holds the chat, with anything the previous
+          // release wrote since. Any other new file means something else happened: inspect it.
+          let leftover = null;
+          if (converted) {
+            leftover = await readRegularText(logPath);
+            if (!await publishedEarlier(logPath, leftover)) {
+              throw new Error(`A chat has both an old transcript and a new one this upgrade did not publish or that has been written to since: ${scope.conversationLogRoot}. Inspect it and the upgrade backups before upgrading.`);
+            }
+          }
           let record;
           let contents;
           try {
@@ -79,7 +97,7 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
             throw new Error(`Chat transcript ${legacyPath} did not convert exactly, and nothing was changed. Inspect it before upgrading.`);
           }
           chats += 1;
-          changes.push({ filePath: logPath, original: null, contents }, { filePath: legacyPath, original, contents: null });
+          changes.push({ filePath: logPath, original: leftover, contents }, { filePath: legacyPath, original, contents: MOVED_TRANSCRIPT_NOTE });
         }
         return changes;
       }

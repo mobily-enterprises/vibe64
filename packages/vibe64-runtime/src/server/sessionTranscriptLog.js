@@ -40,6 +40,14 @@ import { CONVERSATION_MESSAGE_ROLES, CONVERSATION_TURN_ID_PATTERN } from "./sess
 const TRANSCRIPT_LOG_FILE = "transcript.jsonl";
 /** The previous release's whole-record transcript, which only the offline state upgrade reads. */
 const LEGACY_TRANSCRIPT_FILE = "transcript.json";
+/**
+ * What the upgrade leaves in a converted chat's transcript.json: a note naming
+ * the file that replaced it, which this release never reads. The previous
+ * release refuses it ("unsupported or damaged format"), so that release, put
+ * back on a workspace whose upgrade stopped part way, refuses a converted chat
+ * instead of opening it as an empty one and writing a second history beside it.
+ */
+const MOVED_TRANSCRIPT_NOTE = `${JSON.stringify({ version: 2, movedTo: "transcript.jsonl" })}\n`;
 const TRANSCRIPT_LOG_VERSION = 2;
 const NEWLINE = 0x0a;
 const SNAPSHOT_FIELDS = new Set(["version", "metadata", "rewound", "turns", "summary"]);
@@ -486,6 +494,7 @@ function legacyTranscriptJson(record) {
 
 export {
   LEGACY_TRANSCRIPT_FILE,
+  MOVED_TRANSCRIPT_NOTE,
   TRANSCRIPT_LOG_FILE,
   emptyTranscriptRecord,
   legacyTranscriptJson,
