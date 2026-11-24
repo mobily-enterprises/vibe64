@@ -102,8 +102,14 @@ own write and the ledger write. There is no automatic downgrade: never restart
 an older executable against partly upgraded state without assessing schema
 compatibility and restoring a consistent backup where necessary.
 
-`upgrades/apply.lock` excludes other apply processes. If a process is killed,
-confirm it and all other writers have stopped before removing the stale lock.
+`upgrades/apply.lock` excludes other apply processes. It names the process
+that holds it (its pid and, on Linux, its boot id and start time), and the next
+apply takes over a lock whose process is provably gone: one from an earlier
+boot (a power cut), one whose pid names no process (a start step killed at its
+time limit), or one whose pid a later process reused. A lock held by a running
+process is refused, and so is one that names no process this release can check
+(an older release's empty lock, or a damaged one): confirm its process and all
+other writers have stopped before removing it.
 Do not delete or edit `applied.json` to force a repair. Malformed, reordered,
 unknown, or newer ledger history is an error requiring operator inspection.
 Backups live below `upgrades/backups/<upgrade-id>/`, with private permissions;
