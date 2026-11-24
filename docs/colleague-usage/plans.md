@@ -122,11 +122,12 @@ A turn that ended asking you a question gets the check too: the note tells the
 AI that Senior's review, the plan's passes and Save are never a question for
 you, and to ask any other question again, which then waits for your answer.
 
-In Auto, Junior's work goes on to Senior's review of the plan whenever every
-item is built, also when Junior's turn ended asking you something, and after
-the check when the AI left the plan exactly as the check found it. Senior
-verifies every item against the work and ticks it, and the plan then moves on
-to its passes. An item whose last proof can't run in the session (a real phone,
+In Auto and in a Senior chat, the work goes on to Senior's review of the plan
+whenever every item is built, also when the turn ended asking you something,
+and after the check when the AI left the plan exactly as the check found it.
+Senior verifies every item against the work and ticks it, and the plan then
+moves on to its passes (a Senior chat whose items are all proven goes straight
+to them). A Junior chat has no Senior turns: its built plan waits for Senior. An item whose last proof can't run in the session (a real phone,
 a suite only CI runs) stays half-ticked until Senior's review asks you about it:
 **Needs you**, a numbered question with a recommended answer, also written in
 Progress. So a plan never waits at its last item, nor on a question about steps

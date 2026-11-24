@@ -131,8 +131,9 @@ function createAssistantRoutingRecords({
     const pass = assistantPlanPass(state);
     const handoff = stage === "planning" ? state.planHandoff : null;
     const reviewer = state.mode === "auto" ? "Senior" : assistantModeLabel(state.resolvedMode);
-    // Auto's Senior reviews a plan Junior implemented; without one it verifies a review.
-    const checksPlan = stage === "review" && state.mode === "auto" && state.planInvolved;
+    // Auto's Senior reviews a plan Junior implemented, and a Senior chat's its own built plan; without one it verifies
+    // a review.
+    const checksPlan = stage === "review" && (state.mode === "auto" || state.planReview === true) && state.planInvolved;
     let displayMessage = stage === "planning" ? "Continue planning." : "Continue implementation.";
     if (handoff) displayMessage = handoff.implementing ? "Senior changes the plan." : "Senior makes the plan.";
     if (stage === "review") displayMessage = checksPlan ? "Senior reviews the plan." : `Continue ${reviewer} review.`;

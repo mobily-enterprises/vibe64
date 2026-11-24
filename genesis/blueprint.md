@@ -766,7 +766,8 @@ checklist and update it or record that nothing needs a new mark, also when the
 turn ended asking the person (the AI asks again; the plan's passes and Save are
 Vibe64's next steps, never a question for the person). In Auto, Junior's work
 goes on to Senior's review of the plan, which verifies and ticks every item,
-when every item is built (also when Junior's turn ended asking the person) or
+and so does a Senior chat's own work, when every item is built (also when the
+turn ended asking the person) or
 the AI left the plan as the check found it, so a plan never waits at its last
 item; what can't be proven in the session becomes Senior's Needs you question,
 numbered with a recommended answer. Vibe64 states only these facts and never
