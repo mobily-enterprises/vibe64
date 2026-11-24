@@ -371,6 +371,37 @@ describe("useVibe64MountedSessionData", () => {
     }
   });
 
+  it("stops a check cancelled during a lost answer's wait at once, leaving no wait and sending no repeat", async () => {
+    httpMocks.request
+      .mockRejectedValueOnce(Object.assign(new Error("Request failed with status 0."), { status: 0 }))
+      .mockResolvedValue({ ok: true });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const { controller, scope } = await connectPreparedSession();
+    try {
+      await vi.advanceTimersByTimeAsync(500);
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+      const check = controller.retryAgentConnection();
+      let settled = false;
+      void check.then(() => {
+        settled = true;
+      });
+
+      realtimeMocks.socket.connected = false;
+      realtimeMocks.handlers.get("disconnect")();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(settled).toBe(true);
+      expect(controller.agentConnectionStatus.value).toBe("disconnected");
+      // Nothing waits on: the cancelled check's wait ended with it.
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+    } finally {
+      scope.stop();
+      vi.useRealTimers();
+    }
+  });
+
   it("leaves active assistant status unknown when reconnect reconciliation fails", async () => {
     httpMocks.request.mockResolvedValue({
       error: "Provider unavailable.",

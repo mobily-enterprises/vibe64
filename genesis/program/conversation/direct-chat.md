@@ -3647,8 +3647,10 @@ workspace, Save, Update) refuses in its own words, retryably;
 storage lock's `vibe64_agent_attachment_busy`, and after an answer that never
 came back (status 0, or a 5xx without a code), waiting 1, 2, 3 and then 5
 seconds for up to twelve attempts, then says the holder's words or that Vibe64
-could not be reached. An upload stored but never answered leaves an unsent file
-that expires. `uploadFileRequest` never words a failure with its HTTP status. Admission rechecks the session after waiting, so renewal or archive
+could not be reached. A cancel ends a wait at once (`delay` from
+`vibe64HeldRequest.js`, which `followHeldRequest` also waits with), so the next
+queued file does not wait for it. An upload stored but never answered leaves an
+unsent file that expires. `uploadFileRequest` never words a failure with its HTTP status. Admission rechecks the session after waiting, so renewal or archive
 cannot be bypassed by a queued upload. Vibe64 configures JSKIT's shared attachment
 queue for one upload at a time, matching this storage boundary; selected files
 appear immediately as queued and proceed automatically. Concurrent requests from
@@ -4848,7 +4850,8 @@ running preparation; one after it ended prepares again, which a prepared
 assistant answers at once. `useVibe64MountedSessionData` sends it through
 `followHeldRequest`, repeating while it is held and after an answer that never
 came back (status 0, or a 5xx without a code), so the status never reads
-unknown for a slow start; a cancelled check stops repeating. Turn recovery
+unknown for a slow start; a cancelled check stops at once, during a wait too,
+and sends no repeat. Turn recovery
 still calls `ensureAgentSession` directly and waits for it.
 Its explicit Learning write grant rechecks the saved learner/attempt/session
 before preparation; the Learning transport exposes this one readiness operation
