@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -653,11 +653,11 @@ test("execution helper centrally assigns the shared workspace TMPDIR, a session'
   assert.match(source, /const MANAGED_ROOT = "\/var\/lib\/vibe64"/u);
   assert.match(source, /helperChildEnv\(payload\.env \|\| \{\}, targetUser, owner\.username, operation\)/u);
   assert.match(source, /helperChildEnv\(payload\.env \|\| \{\}, targetUser, owner\.username, commandOperation\)/u);
-  assert.match(source, /env\.TMPDIR = targetUser\.stagingAccount\s+\? "\/tmp"\s+: sessionTempDirectory\(input\.TMPDIR, targetUser, ownerUsername\) \|\| workspaceTempRoot\(ownerUsername\)/u);
+  assert.match(source, /env\.TMPDIR = targetUser\.stagingAccount\s+\? path\.join\(path\.dirname\(targetUser\.home\), "tmp"\)\s+: sessionTempDirectory\(input\.TMPDIR, targetUser, ownerUsername\) \|\| workspaceTempRoot\(ownerUsername\)/u);
   assert.equal(
     source.match(/Environment=TMPDIR=\$\{systemdUnitSafeValue\(workspaceTempRoot\(owner\.username\)\)\}/gu)?.length,
     1,
-    "managed services; a staging service has its own private /tmp"
+    "managed services; a staging service has its own, in its area"
   );
   assert.doesNotMatch(source, /actorTemp|FLOCK_PATH|mkdtemp/u);
 });
@@ -1044,6 +1044,81 @@ test("a staging service unit loads its environment as its user, then becomes its
   assert.notEqual(refused.status, 0);
   assert.equal(refused.output, "", "the start script never runs");
   assert.match(refused.errors, /this host's staging area is not mounted nosuid at \//u);
+});
+
+// /tmp, a staging service's private one included, may be noexec (mobilynet's is), so its unit names its own temporary
+// folder in its area, beside its home, where programs may start. Each start makes it afresh, as a private /tmp was.
+test("a staging service starts with its own temporary folder made afresh, and a JVM told to use it", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-staging-temporary-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const app = path.join(root, "area", "app");
+  const temporaryFolder = path.join(app, "tmp");
+  const elsewhere = path.join(root, "elsewhere");
+  await mkdir(path.join(app, "home"), { recursive: true });
+  await mkdir(elsewhere);
+  await writeFile(path.join(elsewhere, "kept"), "kept");
+  const environmentFile = path.join(root, "environment");
+  const startScript = path.join(root, "start.sh");
+  await writeFile(environmentFile, "JAVA_TOOL_OPTIONS=-Xmx64m\n", { mode: 0o600 });
+  await writeFile(startScript, '#!/bin/sh\nprintf "%s|%s" "$TMPDIR" "$JAVA_TOOL_OPTIONS"\n', { mode: 0o700 });
+  const start = async (unitEnvironment) => {
+    const child = spawn(process.execPath, [new URL(HELPER_SOURCE_URL).pathname, "run-staging-unit", environmentFile, startScript], {
+      cwd: "/dev/shm", env: { HOME: path.join(app, "home"), PATH: "/usr/bin:/bin", ...unitEnvironment },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let output = "";
+    let errors = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { errors += chunk; });
+    const status = await new Promise((resolve) => child.once("close", resolve));
+    assert.equal(status, 0, errors);
+    start.errors = errors;
+    return output;
+  };
+  const jvm = `-Djava.io.tmpdir=${temporaryFolder} -Djna.tmpdir=${temporaryFolder} -Xmx64m`;
+
+  // What the last start left goes, a link the application planted there included, never followed.
+  await mkdir(path.join(temporaryFolder, "left"), { recursive: true });
+  await writeFile(path.join(temporaryFolder, "left", "file"), "old");
+  await symlink(elsewhere, path.join(temporaryFolder, "link"));
+  assert.equal(await start({ TMPDIR: temporaryFolder }), `${temporaryFolder}|${jvm}`, "the Env file's own JVM options follow");
+  assert.deepEqual(await readdir(temporaryFolder), []);
+  assert.equal((await stat(temporaryFolder)).mode & 0o7777, 0o700);
+  assert.deepEqual(await readdir(elsewhere), ["kept"]);
+
+  // The folder itself replaced by a link: the link goes, never what it names.
+  await rm(temporaryFolder, { recursive: true });
+  await symlink(elsewhere, temporaryFolder);
+  assert.equal(await start({ TMPDIR: temporaryFolder }), `${temporaryFolder}|${jvm}`);
+  assert.equal((await lstat(temporaryFolder)).isDirectory(), true);
+  assert.deepEqual(await readdir(elsewhere), ["kept"]);
+  // And a missing one is made.
+  await rm(temporaryFolder, { recursive: true });
+  assert.equal(await start({ TMPDIR: temporaryFolder }), `${temporaryFolder}|${jvm}`);
+  assert.deepEqual(await readdir(temporaryFolder), []);
+  // What it cannot remove (a folder it made read-only) stays, said in its log, and it starts all the same.
+  const locked = path.join(temporaryFolder, "locked");
+  await mkdir(locked);
+  await writeFile(path.join(locked, "file"), "old");
+  await chmod(locked, 0o500);
+  try {
+    assert.equal(await start({ TMPDIR: temporaryFolder }), `${temporaryFolder}|${jvm}`);
+    if (process.getuid() !== 0) {
+      assert.match(start.errors, /Vibe64 left what remains in the staging service's temporary folder .*: EACCES/u);
+    }
+  } finally {
+    await chmod(locked, 0o700);
+  }
+
+  // Only that folder: a unit installed before it, with its private /tmp, starts as it did, and no other folder a
+  // unit's TMPDIR names is ever emptied.
+  assert.equal(await start({ TMPDIR: "/tmp" }), "/tmp|-Xmx64m");
+  for (const other of [elsewhere, path.join(root, "area", "tmp"), path.join(app, "home"), `${temporaryFolder}/`]) {
+    await mkdir(other, { recursive: true });
+    await writeFile(path.join(other, "kept-too"), "kept");
+    assert.equal(await start({ TMPDIR: other }), `${other}|-Xmx64m`, other);
+    assert.ok((await readdir(other)).includes("kept-too"), other);
+  }
 });
 
 

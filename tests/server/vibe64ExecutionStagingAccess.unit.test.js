@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import fs, { existsSync, readlinkSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -281,6 +281,7 @@ test("a staging login finds the account's own staging unit as root installed it,
     path: "/opt/vibe64/runtime-packs/node26/bin:/usr/bin:/bin",
     runtimePackRoot: "",
     startScript: "/var/lib/vibe64-staging/test/shop/handover/r2/start.sh",
+    tmpdir: "/var/lib/vibe64-staging/test/shop/app/tmp",
     workingDirectory: "/var/lib/vibe64-staging/test/shop/app/releases/r2/workspace"
   });
   // With none running, the last of its own; another account's unit is never its.
@@ -317,6 +318,52 @@ test("a staging login and staging-enter run with the runtime pack folder the ser
   assert.equal("VIBE64_RUNTIME_PACK_ROOT" in stagingLoginEnvironment(plain, { env: {}, helperPath: HELPER, readEnvironment: () => ({}) }), false);
   assert.equal("VIBE64_RUNTIME_PACK_ROOT" in stagingEnterCommand({ command: [], env: {}, helperPath: HELPER,
     mountNamespace: "mnt:[4026532800]", pid: 4242, unit: plain, user }).env, false);
+});
+
+// /tmp may be noexec (mobilynet's is), so the service runs with its own temporary folder in its area, which its unit
+// names; a login and staging-enter take it from there as they take its PATH, and tell a JVM, which ignores TMPDIR.
+test("a staging login and staging-enter run with the temporary folder the service's unit names", async (t) => {
+  const folder = "/var/lib/vibe64-staging/test/shop/app/tmp";
+  const jvm = `-Djava.io.tmpdir=${folder} -Djna.tmpdir=${folder}`;
+  const unit = runningStagingUnit(ACCOUNT, { isActive: () => true, units: () => [stagingUnitLines()] });
+  assert.equal(unit.tmpdir, folder);
+  const login = (environment) => stagingLoginEnvironment(unit, { env: { TMPDIR: "/tmp" }, helperPath: HELPER,
+    readEnvironment: () => environment });
+  assert.equal(login({}).TMPDIR, folder);
+  assert.equal(login({}).JAVA_TOOL_OPTIONS, jvm);
+  // The release's Env follows, as it does for the service: its own JVM options after these, and a TMPDIR it names wins.
+  assert.equal(login({ JAVA_TOOL_OPTIONS: "-Xmx64m" }).JAVA_TOOL_OPTIONS, `${jvm} -Xmx64m`);
+  assert.deepEqual([login({ TMPDIR: "/srv/own" }).TMPDIR, login({ TMPDIR: "/srv/own" }).JAVA_TOOL_OPTIONS],
+    ["/srv/own", "-Djava.io.tmpdir=/srv/own -Djna.tmpdir=/srv/own"]);
+  const user = { gid: 990, home: "/var/lib/vibe64-staging/test/shop/app/home", uid: 991, username: ACCOUNT };
+  const entered = stagingEnterCommand({ command: [], env: { TMPDIR: "/tmp" }, helperPath: HELPER,
+    mountNamespace: "mnt:[4026532800]", pid: 4242, unit, user });
+  assert.equal(entered.env.TMPDIR, folder);
+
+  // Inside the service's namespace, staging-enter reads the release's Env and then tells a JVM.
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-staging-enter-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const environmentFile = path.join(root, "environment");
+  const startScript = path.join(root, "start.sh");
+  await writeFile(environmentFile, "JAVA_TOOL_OPTIONS=-Xmx64m\n");
+  await writeFile(startScript, "#!/bin/sh\n");
+  const enter = (env) => {
+    let executed = null;
+    runStagingEnter(["mnt:[4026532800]", environmentFile, startScript, process.cwd(), "java", "-version"], {
+      env, execve: (file, args, environment) => { executed = environment; }, link: () => "mnt:[4026532800]"
+    });
+    return executed;
+  };
+  assert.equal(enter(entered.env).JAVA_TOOL_OPTIONS, `${jvm} -Xmx64m`);
+  assert.equal(enter(entered.env).TMPDIR, folder);
+
+  // A unit that names none gives none, and its JVM keeps its own options alone.
+  const plain = { ...unit, tmpdir: "" };
+  assert.equal("TMPDIR" in stagingEnterCommand({ command: [], env: { TMPDIR: "/tmp" }, helperPath: HELPER,
+    mountNamespace: "mnt:[4026532800]", pid: 4242, unit: plain, user }).env, false);
+  const unnamed = stagingLoginEnvironment(plain, { env: {}, helperPath: HELPER, readEnvironment: () => ({ JAVA_TOOL_OPTIONS: "-Xmx64m" }) });
+  assert.deepEqual([unnamed.TMPDIR, unnamed.JAVA_TOOL_OPTIONS], [undefined, "-Xmx64m"]);
+  assert.equal(enter({ PATH: "/usr/bin:/bin" }).JAVA_TOOL_OPTIONS, "-Xmx64m");
 });
 
 test("a staging login runs bash without profile or rc files, the client's command through it or an SFTP server", () => {
