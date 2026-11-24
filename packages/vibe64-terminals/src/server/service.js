@@ -150,6 +150,7 @@ function createService({
   let mainConversationHost;
 
   const workspaceSetup = createWorkspaceSetupRunner({
+    logger,
     project,
     // The Git commands are built with the command services below; a missing copy is made through them.
     connectedPreparation: options => prepareConnectedRepositories({

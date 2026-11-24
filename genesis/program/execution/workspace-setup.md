@@ -305,6 +305,17 @@ and the Genesis migration run to their end first; a step whose processes could
 not be drained keeps that failure. The retry is refused to everyone else while the task changes the
 repository.
 
+Every run is in the server's log at warn, so the default level keeps it
+(`workspaceSetupExecution.js`, `logPreparation`): `vibe64.workspace_setup.run`
+when the recipe's run starts (with its step count) and finishes (with its
+outcome and `durationMs`), and `vibe64.workspace_setup.step` for each step's
+start, its finish (outcome, `durationMs`, the exit code, a timeout) or its skip
+by its prepared record, each with the session id, step index and redacted
+label; connected preparation logs its own step the same way
+(`workspaceSetupStart.js`). No Env value or command output is logged. On 24 Nov
+2026 a hosted session's preparation after a restart ran for minutes while a
+message waited for it, and the log had no line about it.
+
 
 Successful setup may record the resource provider's opaque identity in its existing
 `workspace_setup` metadata. Only the completed command recipe establishes that

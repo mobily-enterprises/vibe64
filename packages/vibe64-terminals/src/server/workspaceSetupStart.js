@@ -227,14 +227,28 @@ function createWorkspaceSetupStart({
   }) {
     let connectedUpdates = [];
     if (!runtime.learningScope && setup?.connectedDevelopment) {
+      const preparedAt = Date.now();
+      let connectedLogged = false;
+      const logConnected = (phase, outcome) => {
+        if (connectedLogged) return;
+        connectedLogged = Boolean(outcome);
+        setupExecution.logPreparation("vibe64.workspace_setup.step", sessionId, {
+          phase,
+          label: CONNECTED_PREPARATION_STEP_LABEL,
+          ...(outcome ? { outcome, durationMs: Date.now() - preparedAt } : {})
+        });
+      };
+      logConnected("started");
       try {
         const prepared = await connectedPreparation({ mode: "prepare", onProgress, runtime, session, vibe64User });
+        logConnected("finished", "succeeded");
         connectedUpdates = prepared?.lines || [];
         await onProgress("Checking connected repositories");
         session = await runtime.getSessionWithoutSource(sessionId);
         setup = await runnerState.inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
         await setupExecution.connectedSourceRoots(setup, runtime, session);
       } catch (error) {
+        logConnected("finished", "failed");
         const transcript = appendWorkspaceSetupTranscript(attemptStarted ? stateBase.transcript : "", toText(error?.message));
         if (toText(error?.code) === CONNECTED_PREPARATION_PERSON_REQUIRED) {
           // Nothing failed: Prepare workspace runs it again as the person who selects it.
