@@ -39,7 +39,7 @@ save must be reported, and a chat outline alone is not a saved plan.
 Every turn works on the plan with its role, also one that only answers a
 question such as **Are you going to do it?**: Senior's and Junior's ticks and
 Progress are saved. A pass you start on its own outside the plan, a **Custom**
-chat, and a turn that no request of the chat is running can only read the plan.
+chat, and a turn the chat has no running request for can only read the plan.
 When such a turn tries a change, the AI hears which turn it is and tells you how
 to get the change: ask for it in a new message once the pass ends, or in a
 **Senior**, **Junior** or **Auto** chat.
