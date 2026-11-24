@@ -100,7 +100,7 @@ test("offline development copy stops saved main and temporary work while preserv
       state: "active", providerThreadId: "native-codex", providerGoalStatus: "active", pendingUserMessageClientIds: ["pending"]
     } });
     await parent.writeBackgroundTaskEvent("one", "setup", { patch: { status: "running" } });
-    const original = await readFile(path.join(parent.paths("one").conversationLogRoot, "transcript.json"), "utf8");
+    const original = await readFile(path.join(parent.paths("one").conversationLogRoot, "transcript.jsonl"), "utf8");
     const guest = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: destinationRoot });
     await parent.mutateSession("one", async () => {
       await cp(sourceRoot, destinationRoot, { recursive: true });
@@ -140,7 +140,7 @@ test("offline development copy stops saved main and temporary work while preserv
     assert.equal(copiedClaude.executionId, "");
     assert.equal(copiedClaude.turnId, "native-turn");
     assert.equal(copiedClaude.accountIdentity, "same-account");
-    assert.equal(await readFile(path.join(parent.paths("one").conversationLogRoot, "transcript.json"), "utf8"), original);
+    assert.equal(await readFile(path.join(parent.paths("one").conversationLogRoot, "transcript.jsonl"), "utf8"), original);
     assert.equal((await parent.readAgentRuns("one"))[0].active, true);
     assert.equal((await parent.readSession("one")).metadata.claude_conversation_native, claude);
     assert.equal((await parent.listSessionConversations("one"))[0].status, "inProgress");

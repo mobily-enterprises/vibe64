@@ -28,6 +28,7 @@ import { createSessionCreation } from "./sessionCreation.js";
 import { createSessionRenewalTransitions } from "./sessionRenewalTransitions.js";
 import { createSessionStateUpgrades } from "./sessionStateUpgrades.js";
 import { createSessionTemporaryConversationRemoval } from "./sessionTemporaryConversationRemoval.js";
+import { createSessionTranscriptLogUpgrade } from "./sessionTranscriptLogUpgrade.js";
 
 /**
  * A project runtime's session store. Each concern is built once, in
@@ -119,6 +120,10 @@ function createVibe64SessionStore(options = {}) {
     archiveAccess,
     conversationStore
   });
+  const transcriptLogUpgrade = createSessionTranscriptLogUpgrade({
+    recordFiles,
+    prepareSessionStateUpgrade: upgrades.prepareSessionStateUpgrade
+  });
   const temporaryConversationRemoval = createSessionTemporaryConversationRemoval({
     storePaths,
     recordFiles,
@@ -137,6 +142,7 @@ function createVibe64SessionStore(options = {}) {
     publishSessionArchive: archivePublishing.publishSessionArchive,
     prepareRenewalSessionArchive: renewalArchives.prepareRenewalSessionArchive,
     prepareAssistantRoutingStateUpgrade: upgrades.prepareAssistantRoutingStateUpgrade,
+    prepareChatTranscriptLogUpgrade: transcriptLogUpgrade.prepareChatTranscriptLogUpgrade,
     prepareConversationStorageUpgrade: upgrades.prepareConversationStorageUpgrade,
     prepareConversationMessageDataUpgrade: upgrades.prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade: upgrades.prepareLearningSessionBindingUpgrade,
