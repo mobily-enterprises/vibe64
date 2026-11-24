@@ -6,6 +6,7 @@ import { useRealtimeEvent } from '@jskit-ai/realtime/client/composables/useRealt
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { useEndpointResource } from '@jskit-ai/http-web/client/composables/useEndpointResource';
 import { transform } from 'esbuild';
+import * as sessionWorkOutcome from '../../src/lib/vibe64SessionWorkOutcome.js';
 
 const source = await readFile(new URL('../../packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js', import.meta.url), 'utf8');
 const { code } = await transform(source, { format: 'cjs' });
@@ -28,6 +29,8 @@ test('a retained inactive graph reader cannot break the visible reader sharing i
     if (name === 'vue') return vue;
     if (name === '@jskit-ai/realtime/client/composables/useRealtimeEvent') return { useRealtimeEvent };
     if (name === '/src/composables/useVibe64ProjectScope.js') return { useVibe64ProjectSlug: () => vue.ref('test-project') };
+    // A refresh's lost answer is told apart from a failed scan by the editor's own rule.
+    if (name === '/src/lib/vibe64SessionWorkOutcome.js') return sessionWorkOutcome;
     if (name === '@jskit-ai/http-web/client/composables/useEndpointResource') {
       return { useEndpointResource: options => useEndpointResource({ ...options, client }) };
     }
@@ -89,6 +92,8 @@ test('fresh and retained viewers reconcile scan progress, completion and failure
     if (name === 'vue') return vue;
     if (name === '@jskit-ai/realtime/client/composables/useRealtimeEvent') return { useRealtimeEvent };
     if (name === '/src/composables/useVibe64ProjectScope.js') return { useVibe64ProjectSlug: () => projectSlug };
+    // A refresh's lost answer is told apart from a failed scan by the editor's own rule.
+    if (name === '/src/lib/vibe64SessionWorkOutcome.js') return sessionWorkOutcome;
     if (name === '@jskit-ai/http-web/client/composables/useEndpointResource') return { useEndpointResource: options => useEndpointResource({ ...options, client }) };
     assert.equal(name, '@jskit-ai/shell-web/client/navigation/usePaths');
     return { usePaths: () => ({ api: suffix => '/api/app' + suffix }) };
