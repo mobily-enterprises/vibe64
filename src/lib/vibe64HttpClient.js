@@ -8,7 +8,8 @@ import { resolveStudioRequestUrl } from "./studioUrls.js";
 // hosted edge says 502 or 503, or the connection is refused) until the next server does.
 //
 // - A read (GET, HEAD) that finds the editor unreachable (no answer, or 502, 503 or 504) is sent again quietly, after
-//   RETRY_DELAYS_MS, for up to RECONNECT_WINDOW_MS from its start. Reading twice changes nothing.
+//   RETRY_DELAYS_MS, for up to RECONNECT_WINDOW_MS from its start (or its own timeoutMs, when shorter). Reading
+//   twice changes nothing.
 // - A write is sent again only when the editor cannot have done it:
 //   - while the page already knows the editor is unreachable, a write waits and is not sent. It goes out once the
 //     editor answers (a GET of HEALTH_PATH watches for that), or fails after RECONNECT_WINDOW_MS saying it was not
@@ -177,7 +178,11 @@ function createVibe64HttpClient({
     const method = String(requestOptions.method || "GET").trim().toUpperCase();
     const write = !SAFE_METHODS.has(method);
     const signal = requestOptions.signal || null;
-    const deadline = Date.now() + RECONNECT_WINDOW_MS;
+    // A request's own time limit bounds its whole wait, as it bounded its one attempt before.
+    const ownLimit = Number(requestOptions.timeoutMs);
+    const deadline = Date.now() + (Number.isSafeInteger(ownLimit) && ownLimit > 0
+      ? Math.min(ownLimit, RECONNECT_WINDOW_MS)
+      : RECONNECT_WINDOW_MS);
     for (let retry = 0; ; retry += 1) {
       signal?.throwIfAborted();
       if (write && reconnect.unreachable() && !await editorAnswersBy(deadline, signal)) {
