@@ -23,6 +23,14 @@ function fakeEditor() {
       return new Response("<html><body><h1>503 Service Unavailable</h1>No server is available to handle this " +
         "request.</body></html>", { status: 503, headers: { "content-type": "text/html" } });
     }
+    if (mode === "no-backend" || mode === "no-backend-502") {
+      // The hosted edge answers itself while no editor runs, and marks its own answer: the request reached no editor.
+      const status = mode === "no-backend" ? 503 : 502;
+      return new Response(`<html><body><h1>${status}</h1>No server is available to handle this request.</body></html>`, {
+        status,
+        headers: { "content-type": "text/html", "x-mobilynet-no-backend": "1" }
+      });
+    }
     if (mode === "stopping") {
       // The stopping editor answers before any handler runs, and says so.
       return new Response(JSON.stringify({ error: "Service Unavailable" }), {
@@ -183,6 +191,38 @@ describe("the page through an editor restart", () => {
     expect(await write).toMatchObject({ ok: true, value: { method: "POST" } });
     expect(editor.writes()).toEqual(["POST /api/notes"]);
     expect(errorsShownOrReported(runtime)).toEqual([]);
+  });
+
+  it("sends again, once the editor is back, a write the edge answered itself because no editor ran", async () => {
+    const { client, editor, runtime } = await openPage();
+
+    editor.set("no-backend");
+    const write = pageAction(runtime, () => client.request("/api/notes", { method: "POST", body: { text: "keep" } }));
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(editor.writes()).toEqual([]);
+    editor.set("up");
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(await write).toMatchObject({ ok: true, value: { method: "POST" } });
+    expect(editor.writes()).toEqual(["POST /api/notes"]);
+    expect(errorsShownOrReported(runtime)).toEqual([]);
+  });
+
+  it("never sends again a write that got the edge's 503 without its marker, or a 502 even with it", async () => {
+    for (const mode of ["edge", "no-backend-502"]) {
+      const { client, editor, runtime } = await openPage();
+
+      editor.set(mode);
+      const write = pageAction(runtime, () => client.request("/api/notes", { method: "POST", body: { text: "keep" } }));
+      await vi.advanceTimersByTimeAsync(500);
+      editor.set("up");
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      const outcome = await write;
+      expect(outcome.ok, mode).toBe(false);
+      expect(outcome.error.message, mode).toMatch(/can't tell whether/iu);
+      expect(editor.writes(), mode).toEqual([]);
+    }
   });
 
   it("never sends again a write whose answer was lost after the editor did it, and says so in words", async () => {
