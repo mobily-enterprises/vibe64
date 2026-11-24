@@ -111,9 +111,10 @@ describe("useAccountAuthSessions", () => {
     });
 
     await authSessions.startDeviceAuth("codex");
-    await expect(authSessions.pollAuthSessions()).rejects.toThrow("Account login session did not return status.");
+    const unanswered = "Vibe64 did not say how this sign-in is going. It checks again shortly.";
+    await expect(authSessions.pollAuthSessions()).rejects.toThrow(unanswered);
 
-    expect(authSessions.localError.value).toBe("Account login session did not return status.");
+    expect(authSessions.localError.value).toBe(unanswered);
     expect(accounts.readAuthSession).toHaveBeenCalledWith("auth-session-1");
   });
 
@@ -416,6 +417,25 @@ describe("useAccountAuthSessions", () => {
     expect(accounts.reloadLocalStatus).toHaveBeenCalledOnce();
     expect(accounts.refresh).not.toHaveBeenCalled();
     reload.resolve({});
+  });
+
+  it("treats a sign-in the editor no longer knows (it restarted meanwhile) as cancelled, so Start again starts anew", async () => {
+    const session = { id: "lost-login", account: { id: "claude" }, mode: "browser", status: "authenticating" };
+    const unknown = Object.assign(new Error("Account auth session not found."), { code: "unknown_auth_session", status: 400 });
+    const accounts = {
+      loadError: "", startAuthCommand: {}, refresh: vi.fn(),
+      startAuth: vi.fn().mockResolvedValue(session),
+      readAuthSession: vi.fn().mockResolvedValue(session),
+      cancelAuthSession: vi.fn().mockRejectedValue(unknown)
+    };
+    const auth = await mountAccountAuthSessions(accounts, {
+      accountRows: [{ id: "claude" }], browserWindow: null,
+      clearIntervalFn: vi.fn(), setIntervalFn: vi.fn(() => 1)
+    });
+    await auth.startBrowserAuth("claude");
+    expect(await auth.cancelSession(session)).toBe(true);
+    expect(auth.activeSessionFor("claude")).toBe(null);
+    expect(auth.localError.value).toBe("");
   });
 
   it("does not reopen routing from a cancelled login's late status response", async () => {
