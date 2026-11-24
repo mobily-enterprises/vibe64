@@ -13,10 +13,10 @@ function saveWorkButtonPress({ checking, checkAvailable, disabled }) {
   return disabled ? "explain" : "save";
 }
 
-// Why the Save or Update notice's Review resolved conflicts or Create draft PR waits, shown as text beside them, or ""
-// when the buttons shown can act. A session renewal holds every source operation; otherwise Save's own reason
-// (saveWorkTitle) says what holds Save and Update, as the header's Save shows it.
 /**
+ * Why the Save or Update notice's Review resolved conflicts or Create draft PR waits, shown as text beside them, or ""
+ * when the buttons shown can act. A session renewal holds every source operation; otherwise Save's own reason
+ * (saveWorkTitle) says what holds Save and Update, as the header's Save shows it.
  * @param {{ held: boolean, renewing: boolean, saveWorkTitle: string }} state
  * @returns {string}
  */
