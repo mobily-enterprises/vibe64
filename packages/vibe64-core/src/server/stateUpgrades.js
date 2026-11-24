@@ -1,6 +1,7 @@
-import { lstat, mkdir, open, readdir, readFile, realpath, rm } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import { writeJsonFileAtomic } from "./atomicFile.js";
+import { acquireUpgradeLock } from "./stateUpgradeLock.js";
 import codexLoginId from "./stateUpgrades/20260923-codex-login-id.js";
 import routingV2 from "./stateUpgrades/20260923-routing-v2.js";
 import nativeConversationLifecycle from "./stateUpgrades/20260925-native-conversation-lifecycle.js";
@@ -168,24 +169,24 @@ function requireSystemRoot(systemRoot) {
 
 /**
  * One apply.lock excludes ordinary upgrades, explicit repairs, baselines and
- * backup retention. busy() answers for a held lock; without it, that is an error.
+ * backup retention. It names its process, and one whose process is provably
+ * gone (an earlier boot's, or a killed one's) is taken over
+ * (stateUpgradeLock.js). busy() answers for a held lock; without it, that is an
+ * error.
  */
 async function withUpgradeLock(upgradeRoot, operation, options = {}) {
   const { busy = null } = options;
   const lockPath = path.join(upgradeRoot, "apply.lock");
-  let lock;
-  try {
-    lock = await open(lockPath, "wx", 0o600);
-  } catch (error) {
-    if (error.code !== "EEXIST") throw error;
+  const release = await acquireUpgradeLock(lockPath);
+  if (!release) {
     if (busy) return busy();
-    throw new Error("State upgrade lock exists. Check for a running upgrade; remove a stale lock only after confirming it has stopped.");
+    throw new Error("State upgrade lock exists, and the process it names is still running or cannot be checked (an older " +
+      "release's lock names none). Check for a running upgrade; remove a stale lock only after confirming it has stopped.");
   }
   try {
     return await operation(lockPath);
   } finally {
-    await lock.close();
-    await rm(lockPath);
+    await release();
   }
 }
 

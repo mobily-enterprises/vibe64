@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -393,6 +393,40 @@ test("an existing apply lock is never stolen or removed", async t => {
   await assert.rejects(f.run(true), /lock exists/);
   assert.equal(await readFile(lockPath, "utf8"), "other process");
   assert.equal(await readCodexLoginId(f.systemRoot), "");
+});
+
+test("an apply lock whose process is gone (an earlier boot's, exited, or its pid reused) is taken over; a running one's is kept", async t => {
+  const bootId = await readFile("/proc/sys/kernel/random/boot_id", "utf8").then(text => text.trim(), () => null);
+  if (!bootId) {
+    t.skip("Linux's /proc names the boot and each process's start; elsewhere only a pid that names no process is gone");
+    return;
+  }
+  const running = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  t.after(() => running.kill());
+  const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+  await new Promise(resolve => exited.on("exit", resolve));
+  const processStat = await readFile(`/proc/${running.pid}/stat`, "utf8");
+  const live = { pid: running.pid, bootId, started: processStat.slice(processStat.lastIndexOf(")") + 2).split(" ")[19] };
+  for (const [name, holder, gone] of [
+    ["a power cut: an earlier boot's", { ...live, bootId: "00000000-0000-0000-0000-000000000000" }, true],
+    ["a killed apply: an exited process's", { pid: exited.pid, bootId, started: "1" }, true],
+    ["a pid a later process reused", { ...live, started: String(Number(live.started) + 1) }, true],
+    ["a running process's", live, false]
+  ]) {
+    const f = await fixture(t);
+    await f.marker();
+    const upgradeRoot = path.join(f.systemRoot, "upgrades");
+    await mkdir(upgradeRoot);
+    await writeFile(path.join(upgradeRoot, "apply.lock"), JSON.stringify(holder));
+    if (gone) {
+      assert.deepEqual((await f.run(true)).applied, upgradeIds, name);
+      assert.deepEqual((await readdir(upgradeRoot)).filter(entry => entry.startsWith("apply.lock")), [], name);
+    } else {
+      await assert.rejects(f.run(true), /lock exists, and the process it names is still running/u, name);
+      assert.equal(await readFile(path.join(upgradeRoot, "apply.lock"), "utf8"), JSON.stringify(holder), name);
+      assert.equal(await readCodexLoginId(f.systemRoot), "", name);
+    }
+  }
 });
 
 test("conflicting backups block repair instead of silently replacing the recovery copy", async t => {
