@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PULL_REQUEST_LOST_CONTACT,
+  PULL_REQUEST_NOT_CREATED,
   createPullRequestFollowed
 } from "../../src/lib/vibe64PullRequestCreate.js";
 
@@ -14,21 +15,24 @@ describe("following a pull request the dialog creates", () => {
       { ok: true, creating: true, requestId: "r", waitingFor: "creating" },
       { ok: true, pullRequest: { number: 12 } }
     ];
-    let sends = 0;
-    const result = await createPullRequestFollowed(async () => answers[sends++], { wait: noWait });
+    const repeats = [];
+    const result = await createPullRequestFollowed(async (repeat) => {
+      repeats.push(repeat);
+      return answers[repeats.length - 1];
+    }, { wait: noWait });
     expect(result).toEqual({ ok: true, pullRequest: { number: 12 } });
-    expect(sends).toBe(3);
+    expect(repeats).toEqual([false, true, true]);
   });
 
   it.each([0, 502, 504])("repeats the same request after an answer lost with status %s", async (status) => {
-    let sends = 0;
-    const result = await createPullRequestFollowed(async () => {
-      sends += 1;
-      if (sends === 1) throw lost(status);
+    const repeats = [];
+    const result = await createPullRequestFollowed(async (repeat) => {
+      repeats.push(repeat);
+      if (repeats.length === 1) throw lost(status);
       return { ok: true, pullRequest: { number: 12 } };
     }, { wait: noWait });
     expect(result.pullRequest.number).toBe(12);
-    expect(sends).toBe(2);
+    expect(repeats).toEqual([false, true]);
   });
 
   it("says in words, never with a status code, when it cannot reach Vibe64 to follow the creation", async () => {
@@ -54,5 +58,12 @@ describe("following a pull request the dialog creates", () => {
     }, { wait: noWait }).catch(error => error);
     expect(failure).toBe(refusal);
     expect(sends).toBe(1);
+  });
+
+  it("says a failure the server did not word in words, never with its status code", async () => {
+    const failure = await createPullRequestFollowed(async () => {
+      throw Object.assign(new Error("Request failed with status 404."), { status: 404 });
+    }, { wait: noWait }).catch(error => error);
+    expect(failure.message).toBe(PULL_REQUEST_NOT_CREATED);
   });
 });

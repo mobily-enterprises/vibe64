@@ -59,12 +59,12 @@ test("a pull request the dialog names answers within two seconds while it is cre
     const first = await within(world.service.startSessionPullRequest("session-1", CREATE), ANSWER_MS,
       "Create pull request waited for its Save and GitHub");
     assert.deepEqual(first, { ok: true, creating: true, requestId: CREATE.requestId, waitingFor: "creating" });
-    const repeated = await within(world.service.startSessionPullRequest("session-1", CREATE), ANSWER_MS,
+    const repeated = await within(world.service.startSessionPullRequest("session-1", { ...CREATE, repeat: true }), ANSWER_MS,
       "The repeat waited for the creation");
     assert.equal(repeated.creating, true, JSON.stringify(repeated));
     assert.equal(world.state.creations, 1, "a repeat never creates a second time");
     world.finish();
-    const created = await within(world.service.startSessionPullRequest("session-1", CREATE), ANSWER_MS,
+    const created = await within(world.service.startSessionPullRequest("session-1", { ...CREATE, repeat: true }), ANSWER_MS,
       "The repeat after the creation ended waited");
     assert.equal(created.ok, true, JSON.stringify(created));
     assert.equal(created.pullRequest.number, 12);
@@ -82,6 +82,23 @@ test("a pull request created within two seconds answers with its result, as befo
   });
   assert.equal(created.ok, true, JSON.stringify(created));
   assert.equal(created.pullRequest.number, 12);
+});
+
+// GitHub mutations are never retried automatically: a repeat the editor no longer holds (it restarted, or the first
+// request never arrived) creates nothing, and the dialog says to check the session's pull request.
+test("a repeat this editor does not hold creates nothing and says to check the session's pull request", async () => {
+  const world = creatingWorld();
+  world.finish();
+  const repeated = await world.service.startSessionPullRequest("session-1", {
+    ...CREATE,
+    repeat: true,
+    requestId: "33333333-3333-4333-8333-333333333333"
+  });
+  assert.equal(repeated.ok, false, JSON.stringify(repeated));
+  assert.equal(repeated.code, "vibe64_session_pull_request_not_followed");
+  assert.match(repeated.error, /Check the session's pull request/u);
+  assert.doesNotMatch(repeated.error, /\d{3}/u);
+  assert.equal(world.state.creations, 0);
 });
 
 test("the dialog's create is its own action, which the assistant's tools do not offer", () => {
