@@ -84,12 +84,13 @@ function entriesOf(archive) {
     const field = (offset, length) => tar.subarray(at + offset, at + offset + length).toString("utf8").replace(/\0.*$/su, "");
     const size = Number.parseInt(field(124, 12).trim() || "0", 8);
     const type = field(156, 1);
+    const prefix = field(345, 155);
+    const ustarName = prefix ? `${prefix}/${field(0, 100)}` : field(0, 100);
     const data = Buffer.from(tar.subarray(at + 512, at + 512 + size));
     at += 512 + Math.ceil(size / 512) * 512;
     if (type === "x") paxPath = /(?:^|\n)\d+ path=([^\n]*)\n/u.exec(data.toString("utf8"))?.[1] ?? null;
     if (type === "x" || type === "g") continue;
-    const prefix = field(345, 155);
-    const name = paxPath ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
+    const name = paxPath ?? ustarName;
     paxPath = null;
     entries[name] = entries[name] ? [...[entries[name]].flat(), data] : data;
   }
