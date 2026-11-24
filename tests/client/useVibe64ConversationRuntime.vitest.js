@@ -735,12 +735,14 @@ describe("a Main chat message the server holds while its delivery waits", () => 
   it("after a reload, a message the server still holds stays pending in words, never unconfirmed, until it arrives", async () => {
     reloadedWith([restored("held-r1", "Fix the login page")]);
     try {
+      // The fixture answers every request plainly; the server's delivery check is set right after it, before the
+      // recovery's first check.
+      const f = fixture(); const runtime = f.runtime.value;
       const checks = heldServer("held-r1", [
         { status: "pending", messageId: "held-r1", waitingFor: "workspace-preparation" },
         { status: "pending", messageId: "held-r1", waitingFor: "workspace-preparation" },
         { status: "accepted", messageId: "held-r1" }
       ]);
-      const f = fixture(); const runtime = f.runtime.value;
       const statuses = [runtime.delivery.find("held-r1")?.status];
       watch(() => runtime.delivery.find("held-r1")?.status, status => statuses.push(status), { flush: "sync" });
       await vi.waitFor(() => expect(runtime.delivery.find("held-r1")?.waiting)
@@ -755,13 +757,13 @@ describe("a Main chat message the server holds while its delivery waits", () => 
   it("after a reload, a message the server knows nothing of ends unconfirmed in words, and one it refused ends not sent", async () => {
     reloadedWith([restored("lost-r1", "Fix the footer"), restored("refused-r1", "Fix the header")]);
     try {
+      const f = fixture(); const runtime = f.runtime.value;
       mocks.request.mockImplementation(async (url) => {
         if (url.endsWith("/deliveries/lost-r1/inspect")) return { status: "unknown", messageId: "lost-r1" };
         if (url.endsWith("/deliveries/refused-r1/inspect")) return { status: "not-sent", messageId: "refused-r1",
           code: "vibe64_agent_message_server_restarting", error: "Vibe64 restarted before this message reached the assistant. Send it again." };
         return { ok: true };
       });
-      const f = fixture(); const runtime = f.runtime.value;
       await vi.waitFor(() => expect(runtime.delivery.find("refused-r1")).toMatchObject({ status: "failed",
         error: "Vibe64 restarted before this message reached the assistant. Send it again." }), { timeout: 5_000 });
       await vi.waitFor(() => expect(runtime.delivery.find("lost-r1")?.status).toBe("uncertain"), { timeout: 8_000 });
