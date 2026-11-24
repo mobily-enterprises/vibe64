@@ -11,6 +11,8 @@ import { registerRoutes as projectRoutes } from "../../packages/vibe64-project/s
 import { registerRoutes as sessionRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
+const CREATE_REQUEST_ID = "11111111-1111-4111-8111-111111111111";
+
 test("PR tools preserve reviewed targets and HTTP behavior with bounded native results", async () => {
   await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
     const actor = { username: "owner", role: "owner" };
@@ -47,6 +49,12 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
       }) }),
       ...createSessionActions({ sessions: {
         async createSessionPullRequest(sessionId, input) { record({ sessionId, ...input }); return results.create; },
+        // The dialog's create names its request, so a repeat joins it; the tool waits for the creation.
+        async startSessionPullRequest(sessionId, { requestId, ...input }) {
+          assert.equal(requestId, CREATE_REQUEST_ID);
+          record({ sessionId, ...input });
+          return results.create;
+        },
         async createSession(input) { record(input); return { ok: true, sessionId: "opened-pr", workspaceSetup: { status: "running" } }; }
       } })
     ].map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
@@ -66,6 +74,7 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
       ["merge", "POST", "/pull-requests/:number/merge", { review, mergeMethod: "squash" }],
       ["create", "POST", "/sessions/:sessionId/pull-request", { title: "A requested change", body: "Exact description\n", destinationReview: destination }]
     ];
+    const httpBody = (operation, input) => (operation === "create" ? { ...input, requestId: CREATE_REQUEST_ID } : input);
     for (const [operation, method, path, input] of cases) {
       const isCreate = operation === "create";
       const actionId = isCreate ? "vibe64.sessions.pull-request.create" : `vibe64.project.pull-requests.${operation}`;
@@ -78,10 +87,12 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
         assert.deepEqual([...parameters.definitions[reference].required].sort(), Object.keys(review).sort());
       }
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${path}` });
-      const request = { params: routeProjectParams({ number: "7", sessionId: "session-1" }), input: { [method === "GET" ? "query" : "body"]: input },
+      const httpActionId = isCreate ? "vibe64.sessions.pull-request.start" : actionId;
+      const request = { params: routeProjectParams({ number: "7", sessionId: "session-1" }),
+        input: { [method === "GET" ? "query" : "body"]: httpBody(operation, input) },
         executeAction({ actionId: actual, input }) {
-          assert.equal(actual, actionId);
-          return actions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
+          assert.equal(actual, httpActionId);
+          return actions.execute({ actionId: actual, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
         } };
       const reply = testReply();
       await route.handler(request, reply);
@@ -137,6 +148,11 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
       }
       if (isCreate) {
         for (const patch of [{ title: "" }, { sessionId: "" }, { destinationReview: {} }]) assert.equal((await execute(patch)).ok, false);
+        assert.equal(Object.hasOwn(parameters.properties, "requestId"), false, "the tool waits for its creation");
+        for (const body of [input, { ...input, requestId: "not-a-request-id" }]) {
+          await assert.rejects(route.handler({ ...request, input: { body } }, testReply()),
+            error => error.statusCode >= 400 && error.statusCode < 500, JSON.stringify(body.requestId));
+        }
       }
       assert.equal(calls.length, count, "invalid and revoked calls cannot reach the service");
     }
