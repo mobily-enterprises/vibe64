@@ -162,7 +162,9 @@ External package declarations have no project source link.
 
 Ordinary source indexing retains an unchanged UI map. If source or Stack changes
 invalidate that evidence, **UI map needs refresh** offers **Re-scan project** to
-run the project's configured inspector. Engine files remain browsable meanwhile.
+run the project's configured inspector. Engine files remain browsable meanwhile. A
+re-scan goes on in the background with its progress shown, even through a
+dropped connection, and only a scan that fails shows an error.
 
 A coding conversation can inspect source and propose corrections to the
 subsystem responsibilities, public-operation explanations and boundary roots in

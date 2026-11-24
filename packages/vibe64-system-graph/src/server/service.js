@@ -14,6 +14,7 @@ import { writeManagedGitExcludes } from "@local/vibe64-project/server/projectEnv
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { vibe64RuntimePacks } from "@local/vibe64-terminals/server/vibe64OutputTargets";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
+import { createHeldWork } from "@local/vibe64-core/server/heldWork";
 import { pathExists, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 import {
   sessionSourcePath
@@ -333,6 +334,9 @@ function createService({
   refresher = refreshGenesisCities
 }) {
   const refreshes = new Map();
+  // A scan, a configured inspector included, can run longer than the hosted edge lets a request wait (about a
+  // minute): its request answers within two seconds, and the refresh status follows the rest.
+  const heldScans = createHeldWork({ component: "vibe64.architecture_refresh", logger });
 
   function refreshSnapshot(pending) {
     if (!pending) return null;
@@ -490,106 +494,116 @@ function createService({
         await publishRefresh(context);
       };
       refreshes.set(context.sourceRoot, pending);
-      try {
-        await publishRefresh(context);
-        const exclusive = await runVibe64AgentWriteExclusive(context.runtime, context.sessionId, async () => {
-          const current = await systemContext(context.sessionId);
-          // This scan supersedes the loaded snapshot; do not hold it through the scan.
-          releaseGenesisCities(current.sourceRoot);
-          releaseCallWeb(current.sourceRoot);
-          const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
-          if (inspection.status === "blocked") {
-            throw systemError(
-              "Architecture inspection declarations need attention.",
-              "vibe64_architecture_inspection_blocked",
-              { diagnostics: inspection.diagnostics }
-            );
-          }
-          const realSourceRoot = await realpath(current.sourceRoot);
-          for (const inspector of inspection.inspectors || []) {
-            await assertInspectorPrerequisites(current.sourceRoot, realSourceRoot, inspector, runtimeReader);
-          }
-          await progress("Scanning project source and existing Genesis documents…");
-          const observations = inspection.inspectors?.length ? async architecture => {
-            const documents = [];
-            for (const inspector of inspection.inspectors) {
-              const request = architectureInspectionRequest(
-                architecture,
-                inspection,
-                await inspectorCacheDirectory(current, realSourceRoot, inspector)
-              );
-              documents.push(await runArchitectureInspector({
-                inspector,
-                request,
-                current,
-                signal: controller.signal,
-                progress,
-                runCommand,
-                project,
-                runtimeReader
-              }));
-            }
-            await progress("Validating UI observations…");
-            const merged = mergeArchitectureObservations(documents, { files: architecture.files, packages: architecture.packages || [] });
-            const finalInspection = await inspectorReader({ projectRoot: current.sourceRoot });
-            if (finalInspection.stackHash !== inspection.stackHash) {
+      // The scan's stages are logged from its arrival (`session-write`, `prerequisites`, `scanning`, `publishing`).
+      const scan = async ({ stage }) => {
+        try {
+          await publishRefresh(context);
+          stage("session-write");
+          const exclusive = await runVibe64AgentWriteExclusive(context.runtime, context.sessionId, async () => {
+            stage("prerequisites");
+            const current = await systemContext(context.sessionId);
+            // This scan supersedes the loaded snapshot; do not hold it through the scan.
+            releaseGenesisCities(current.sourceRoot);
+            releaseCallWeb(current.sourceRoot);
+            const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
+            if (inspection.status === "blocked") {
               throw systemError(
-                "Stack changed during architecture inspection. Retry after changes settle.",
-                "vibe64_architecture_stack_changed"
+                "Architecture inspection declarations need attention.",
+                "vibe64_architecture_inspection_blocked",
+                { diagnostics: inspection.diagnostics }
               );
             }
-            await progress("Updating the browsing index…");
-            return merged;
-          } : null;
-          if (controller.signal.aborted) throw architectureCancelled();
-          await excludeCallWeb(current.sourceRoot);
-          return refresher({
-            projectRoot: current.sourceRoot,
-            write: true,
-            callWeb: true,
-            ...(observations ? { observations } : {}),
-            signal: controller.signal
-          });
-        }, { operation: "architecture-refresh" });
-        if (!exclusive.acquired) {
-          throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
+            const realSourceRoot = await realpath(current.sourceRoot);
+            for (const inspector of inspection.inspectors || []) {
+              await assertInspectorPrerequisites(current.sourceRoot, realSourceRoot, inspector, runtimeReader);
+            }
+            stage("scanning");
+            await progress("Scanning project source and existing Genesis documents…");
+            const observations = inspection.inspectors?.length ? async architecture => {
+              const documents = [];
+              for (const inspector of inspection.inspectors) {
+                const request = architectureInspectionRequest(
+                  architecture,
+                  inspection,
+                  await inspectorCacheDirectory(current, realSourceRoot, inspector)
+                );
+                documents.push(await runArchitectureInspector({
+                  inspector,
+                  request,
+                  current,
+                  signal: controller.signal,
+                  progress,
+                  runCommand,
+                  project,
+                  runtimeReader
+                }));
+              }
+              await progress("Validating UI observations…");
+              const merged = mergeArchitectureObservations(documents, { files: architecture.files, packages: architecture.packages || [] });
+              const finalInspection = await inspectorReader({ projectRoot: current.sourceRoot });
+              if (finalInspection.stackHash !== inspection.stackHash) {
+                throw systemError(
+                  "Stack changed during architecture inspection. Retry after changes settle.",
+                  "vibe64_architecture_stack_changed"
+                );
+              }
+              await progress("Updating the browsing index…");
+              return merged;
+            } : null;
+            if (controller.signal.aborted) throw architectureCancelled();
+            await excludeCallWeb(current.sourceRoot);
+            return refresher({
+              projectRoot: current.sourceRoot,
+              write: true,
+              callWeb: true,
+              ...(observations ? { observations } : {}),
+              signal: controller.signal
+            });
+          }, { operation: "architecture-refresh" });
+          if (!exclusive.acquired) {
+            throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
+          }
+          stage("publishing");
+          const result = exclusive.value;
+          const machine = validateGenesisCity(result?.machine, "machine");
+          const program = validateGenesisCity(result?.program, "program");
+          pending.progress = { ...pending.progress, status: "complete", message: "Analysis complete." };
+          // Report the new Cities' status like readStatus; views read the
+          // documents themselves, so the large native results end here.
+          return {
+            changedFiles: Array.isArray(result.changedFiles) ? result.changedFiles : [],
+            cities: {
+              machine: cityStatus({ city: machine, exists: true, path: GENESIS_MACHINE_CITY_PATH }),
+              program: cityStatus({ city: program, exists: true, path: GENESIS_PROGRAM_CITY_PATH })
+            },
+            diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
+            ok: true,
+            status: toText(result.status) || "ready",
+            summary: toText(result.summary)
+          };
+        } catch (error) {
+          pending.cancelled = controller.signal.aborted;
+          const failure = pending.cancelled ? architectureCancelled() : error;
+          pending.progress = {
+            ...pending.progress,
+            status: pending.cancelled ? "cancelled" : "failed",
+            message: String(failure.message),
+            code: String(failure.code || "vibe64_system_graph_failed"),
+            commandOutput: String(failure.details?.commandOutput || "")
+          };
+          throw failure;
+        } finally {
+          pending.progress = { ...pending.progress, finishedAt: Date.now(), updatedAt: Date.now() };
+          // Keep only the last small status for this source, never the City results.
+          // A returning view can observe completion or failure without replaying work.
+          pending.controller = null;
+          complete();
+          await publishRefresh(context);
         }
-        const result = exclusive.value;
-        const machine = validateGenesisCity(result?.machine, "machine");
-        const program = validateGenesisCity(result?.program, "program");
-        pending.progress = { ...pending.progress, status: "complete", message: "Analysis complete." };
-        // Report the new Cities' status like readStatus; views read the
-        // documents themselves, so the large native results end here.
-        return {
-          changedFiles: Array.isArray(result.changedFiles) ? result.changedFiles : [],
-          cities: {
-            machine: cityStatus({ city: machine, exists: true, path: GENESIS_MACHINE_CITY_PATH }),
-            program: cityStatus({ city: program, exists: true, path: GENESIS_PROGRAM_CITY_PATH })
-          },
-          diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
-          ok: true,
-          status: toText(result.status) || "ready",
-          summary: toText(result.summary)
-        };
-      } catch (error) {
-        pending.cancelled = controller.signal.aborted;
-        const failure = pending.cancelled ? architectureCancelled() : error;
-        pending.progress = {
-          ...pending.progress,
-          status: pending.cancelled ? "cancelled" : "failed",
-          message: String(failure.message),
-          code: String(failure.code || "vibe64_system_graph_failed"),
-          commandOutput: String(failure.details?.commandOutput || "")
-        };
-        throw failure;
-      } finally {
-        pending.progress = { ...pending.progress, finishedAt: Date.now(), updatedAt: Date.now() };
-        // Keep only the last small status for this source, never the City results.
-        // A returning view can observe completion or failure without replaying work.
-        pending.controller = null;
-        complete();
-        await publishRefresh(context);
-      }
+      };
+      const answer = await heldScans.run(pending.progress.id, scan);
+      if (answer.settled) return answer.result;
+      return { ok: true, refreshing: true, refresh: refreshSnapshot(pending) };
     });
   }
 

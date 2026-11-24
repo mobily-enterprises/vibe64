@@ -64,6 +64,13 @@ view which submitted the request. A local timer advances elapsed display from
 the server start; inactive/disposed views release timers and listeners. Terminal
 status refreshes the status and Architecture readers. No persisted state format changes or
 restart replay are introduced.
+The refresh request answers within two seconds (`createHeldWork`, its stages
+`session-write`, `prerequisites`, `scanning` and `publishing` logged from
+arrival): with the scan's result when it ends by then, and otherwise
+`{ ok: true, refreshing: true, refresh }` while it goes on, as the hosted edge
+ends a request after about a minute. A request whose answer is lost on the way
+(status 0, or a 5xx without the server's code) leaves no error when the status
+shows the scan it started; the status tells that scan's outcome.
 
 `inspectGenesisStackComponents` validates the current project format and requires
 an explicitly saved Stack before returning normalized components and its hash.
