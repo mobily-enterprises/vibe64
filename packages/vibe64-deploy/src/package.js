@@ -115,15 +115,16 @@ function archiveEntry(tar, name) {
     const field = (offset, length) => tar.subarray(at + offset, at + offset + length).toString("utf8").replace(/\0.*$/su, "");
     const size = Number.parseInt(field(124, 12).trim() || "0", 8);
     const type = field(156, 1) || "0";
+    const prefix = field(345, 155);
+    const ustarName = prefix ? `${prefix}/${field(0, 100)}` : field(0, 100);
     const data = tar.subarray(at + TAR_BLOCK, at + TAR_BLOCK + size);
-    at += TAR_BLOCK + Math.ceil(size / TAR_BLOCK) * TAR_BLOCK;
+    at += TAR_BLOCK + Math.ceil(size / TAR_BLOCK) * TAR_BLOCK; // the header's fields are read above, before this
     if (type === "g") continue;
     if (type === "x") {
       paxPath = /(?:^|\n)\d+ path=([^\n]*)\n/u.exec(data.toString("utf8"))?.[1] ?? null;
       continue;
     }
-    const prefix = field(345, 155);
-    const entry = (paxPath ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100))).replace(/\/$/u, "");
+    const entry = (paxPath ?? ustarName).replace(/\/$/u, "");
     paxPath = null;
     if (entry === name) return { type, bytes: Buffer.from(data) };
   }
