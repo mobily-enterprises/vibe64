@@ -1,4 +1,11 @@
 import { VIBE64_LEARNING_ROUTES, text } from "@/lib/vibe64LearningModel.js";
+import { followHeldRequest } from "@/lib/vibe64HeldRequest.js";
+
+// What each step action's server answers while it goes on (a declared check, an AI review): the lesson repeats the
+// same request until its result.
+const HELD_STEP_ANSWERS = Object.freeze({ check: "checking", review: "reviewing" });
+const STEP_NOT_CONFIRMED = "The step result was not confirmed. Try again.";
+const STEP_LOST_CONTACT = "Vibe64 could not be reached for this step's result. Try again; it is never recorded twice.";
 
 /** @typedef {import("./vibe64LearningModel.js").LearningState} LearningState */
 /** @typedef {import("./vibe64LearningModel.js").LearningRequest} LearningRequest */
@@ -45,8 +52,11 @@ function createLearningStepActions({ state, request, pending, currentLesson, mod
     state.busy = `${kind}:${stepId}`;
     state.lessonError = "";
     try {
-      const result = await request(route(attemptId), { method: "POST", body: { stepId, ...extra, requestId } });
-      if (result?.ok === false) throw new Error(result.error || "The step result was not confirmed. Try again.");
+      // A repeat (after a held or lost answer) sends the same requestId, which joins the step's check or review or
+      // replays its saved result.
+      const result = await followHeldRequest(() => request(route(attemptId), { method: "POST", body: { stepId, ...extra, requestId } }),
+        { heldAs: HELD_STEP_ANSWERS[kind] || "", lostContact: STEP_LOST_CONTACT, notWorded: STEP_NOT_CONFIRMED });
+      if (result?.ok === false) throw new Error(result.error || STEP_NOT_CONFIRMED);
       pending.forget(key);
       if (expected === viewer && attemptId === state.attemptId) {
         await currentLesson.loadLesson(attemptId);
@@ -54,7 +64,7 @@ function createLearningStepActions({ state, request, pending, currentLesson, mod
       }
       return result;
     } catch (cause) {
-      if (expected === viewer) state.lessonError = String(cause?.message || "The step result was not confirmed. Try again.");
+      if (expected === viewer) state.lessonError = String(cause?.message || STEP_NOT_CONFIRMED);
       return null;
     } finally {
       if (state.busy === `${kind}:${stepId}`) state.busy = "";

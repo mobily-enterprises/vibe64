@@ -2,6 +2,8 @@ import { availableStepIds } from "./lessonAvailability.js";
 import { boundedTrainingResult, conflictFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
 import { attemptSummary, pick, practiceSlug, signedInLearner, toTrainingOperationError } from "./trainingResults.js";
+import { createHeldWork } from "@local/vibe64-core/server/heldWork";
+import { learnerIdentity } from "./learnerRecords.js";
 
 /** @typedef {import("./types.js").TrainingContent} TrainingContent */
 /** @typedef {import("./types.js").TrainingExercises} TrainingExercises */
@@ -138,6 +140,29 @@ function createTrainingStepOperations({
   const notify = async (actor, attempt, reason) => {
     await publishLearnerChanged({ actor, attemptId: attempt, reason });
   };
+  // The learner's own Check and Check my work run a declared check or an AI review, which can outlast the hosted
+  // edge's minute: their request answers within two seconds, as checking or reviewing while it goes on. A repeat with
+  // the same requestId joins it, or once it has ended replays its saved result.
+  const heldSteps = createHeldWork({ component: "vibe64.training_step", logger });
+
+  /**
+   * The learner's browser request (`api`) of a step operation, held while it goes on; Colleague's waits for it.
+   * @param {(input: object, actor: object, context: object) => Promise<object>} operation
+   * @param {"checking" | "reviewing"} heldAs
+   */
+  function heldForLearner(operation, heldAs) {
+    return async (input, context) => {
+      if (context?.channel !== "api") return runLessonOperation(operation, input, context);
+      const key = [learnerIdentity(signedInLearner(context)).id, input.attemptId, input.stepId, input.requestId].join("\0");
+      const answer = await heldSteps.run(key, ({ stage }) => {
+        stage(heldAs);
+        return runLessonOperation(operation, input, context);
+      });
+      if (answer.settled) return answer.result;
+      return { ok: true, [heldAs]: true, stepId: input.stepId, requestId: input.requestId, waitingFor: answer.waitingFor };
+    };
+  }
+
   const deletingUnavailable = Object.freeze({
     ok: false,
     available: false,
@@ -357,13 +382,10 @@ function createTrainingStepOperations({
   }
 
   /**
-   * Runs a step's declared check.
-   * @param {object} input
-   * @param {object} context
+   * Runs a step's declared check; the learner's own is held while it runs (`heldForLearner`).
+   * @type {(input: object, context: object) => Promise<object>}
    */
-  function runStepCheck(input, context) {
-    return runLessonOperation(runStepCheckForLearner, input, context);
-  }
+  const runStepCheck = heldForLearner(runStepCheckForLearner, "checking");
 
   /**
    * Records the learner's answer to a choice step.
@@ -384,13 +406,10 @@ function createTrainingStepOperations({
   }
 
   /**
-   * Runs the review of a review step.
-   * @param {object} input
-   * @param {object} context
+   * Runs the review of a review step, held while it runs (`heldForLearner`).
+   * @type {(input: object, context: object) => Promise<object>}
    */
-  function runStepReview(input, context) {
-    return runLessonOperation(runStepReviewForLearner, input, context);
-  }
+  const runStepReview = heldForLearner(runStepReviewForLearner, "reviewing");
 
   /**
    * The evidence a review step would be reviewed on.
