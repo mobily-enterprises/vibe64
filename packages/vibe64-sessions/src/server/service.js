@@ -83,6 +83,7 @@ function createService({
   });
   const archive = createSessionArchive({
     archivePreparation,
+    logger,
     project,
     terminals,
     setupRunner,
@@ -172,6 +173,7 @@ function createService({
     readConversationContext: authority.conversationContextGrant,
 
     archiveSession: archive.archiveSession,
+    startSessionArchive: archive.startSessionArchive,
     resumeSessionArchives: archive.resumeSessionArchives,
 
     resumeInterruptedWork: startupRecovery.start,
@@ -210,9 +212,9 @@ function createService({
     inspectSessionChanges: work.inspectSessionChanges,
     inspectSessionWork: work.inspectSessionWork,
     saveSessionWork: work.saveSessionWork,
-    // The Saves and Updates the buttons started, and the creations and pull requests the page holds.
+    // The Saves and Updates the buttons started, and the creations, archives and pull requests the page holds.
     settleStartedWork: async () => {
-      await Promise.all([work.settleStartedWork(), creation.close()]);
+      await Promise.all([work.settleStartedWork(), creation.close(), archive.close()]);
     },
     startSessionPullRequest: work.startSessionPullRequest,
     startSessionSave: work.startSessionSave,

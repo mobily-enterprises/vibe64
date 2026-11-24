@@ -594,6 +594,21 @@ state.
 Archive lives in Sessions' archive module, one function per durable phase,
 composed into the one session service, as renewal is.
 
+The page's archive (`POST .../sessions/:sessionId/archive`) runs
+`vibe64.sessions.archive.start`, which the assistant's tools do not offer, with
+a `requestId` the page makes for each archive (`startSessionArchive`, a held
+request from `heldRequests.js`). It answers with the archived session when that
+comes within two seconds, and otherwise `{ ok: true, archiving: true, requestId,
+waitingFor }` while it goes on (`session-write`, `stopping`, `preparing`,
+`resources`, then `source`), as the hosted edge ends a request after about a
+minute. The page (`useVibe64SessionDialogs.js`, `followHeldRequest`) repeats it
+with `repeat: true`, which joins the archive or reads its outcome and never
+archives again, also after an answer that never came back, and shows one
+outcome in words. A repeat this editor does not hold answers
+`vibe64_session_archive_not_followed`, saying to check the session list; startup
+still resumes an archive whose stage it recorded. The tool and startup run
+`archiveSession` and wait.
+
 A host provides its preparation as the optional
 `vibe64.sessions.archive-preparation` capability, resolved once when Sessions is
 set up; it runs after terminal shutdown, under the existing agent-write lock and

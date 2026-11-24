@@ -446,6 +446,12 @@ const currentSessionInputValidator = actionInput({
 });
 
 const sessionIdInputValidator = actionInput(withSessionId(optionalOrigin));
+// The page's archive names its request, so its repeat after a held or lost answer joins it and never archives again.
+const sessionArchiveStartInputValidator = actionInput(withSessionId({
+  ...optionalOrigin,
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true },
+  repeat: { type: "boolean", required: false }
+}));
 
 const sessionSaveInputValidator = actionInput({
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
@@ -590,6 +596,7 @@ export {
   sessionChangesInputValidator,
   sessionCreateInputValidator,
   sessionCreateStartInputValidator,
+  sessionArchiveStartInputValidator,
   sessionPullRequestInputValidator,
   sessionPullRequestStartInputValidator,
   sessionIdInputValidator,

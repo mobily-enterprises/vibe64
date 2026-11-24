@@ -16,7 +16,7 @@ import {
 } from "./inputSchemas.js";
 import {
   ACTION_APPROVE_MAIN_CHAT_APPROVAL,
-  ACTION_ARCHIVE_SESSION,
+  ACTION_START_SESSION_ARCHIVE,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CANCEL_SESSION_RENEWAL,
   ACTION_CHECK_SESSION_UPDATES,
@@ -357,8 +357,10 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     summary: "Publish the page displayed in a Vibe64 managed preview."
   });
 
+  // An archive answers within two seconds, as archiving while the session's work stops and its source goes: the
+  // hosted edge ends a request after about a minute. The page repeats it with the same requestId until its outcome.
   routes.actionRoute("POST", "/sessions/:sessionId/archive", {
-    actionId: ACTION_ARCHIVE_SESSION,
+    actionId: ACTION_START_SESSION_ARCHIVE,
     buildInput: sessionBodyWithoutUserInput,
     summary: "Archive a Vibe64 session."
   });
