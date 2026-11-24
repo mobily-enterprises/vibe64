@@ -229,14 +229,21 @@ test("every saved change replays to exactly the record its transaction committed
       }
     }
     const line = transcriptChangeLine(saved, next);
+    let snapshot = false;
     if (line !== null) {
       assert.equal(line.indexOf("\n"), line.length - 1, "One change is one line.");
-      if (JSON.parse(line).version === 2) snapshots += 1;
+      snapshot = JSON.parse(line).version === 2;
       file += line;
     } else assert.deepEqual(asSaved(next), asSaved(saved), "Only an unchanged record writes nothing.");
     const { record, validBytes } = parseTranscriptLog(Buffer.from(file));
     assert.equal(validBytes, Buffer.byteLength(file));
     assert.equal(JSON.stringify(asSaved(record)), JSON.stringify(asSaved(next)), `Step ${step} replays exactly, key order included.`);
+    // A later snapshot replaces everything before it (just checked), so the file goes on from it alone: each step
+    // parses a short file instead of the whole history of whole records.
+    if (snapshot) {
+      snapshots += 1;
+      file = line;
+    }
     saved = next;
   }
   assert.equal({}.polluted, undefined, "A saved __proto__ key stays a key.");
