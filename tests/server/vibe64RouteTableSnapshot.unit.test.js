@@ -287,7 +287,7 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/preview-identity public app - vib
 POST /api/app/:slug/vibe64/sessions/:sessionId/preview-state public app - vibe64.sessions.preview-state.broadcast
 POST /api/app/:slug/vibe64/sessions/:sessionId/prompt-hints public app - vibe64.terminals.prompt-hints.generate
 POST /api/app/:slug/vibe64/sessions/:sessionId/prompt-hints/cancel public app - vibe64.terminals.prompt-hints.cancel
-POST /api/app/:slug/vibe64/sessions/:sessionId/pull-request public app 300000 vibe64.sessions.pull-request.create
+POST /api/app/:slug/vibe64/sessions/:sessionId/pull-request public app 300000 vibe64.sessions.pull-request.start
 POST /api/app/:slug/vibe64/sessions/:sessionId/renewal/cancel public app 32768 vibe64.sessions.renewal.cancel
 POST /api/app/:slug/vibe64/sessions/:sessionId/renewal/confirm public app 32768 vibe64.sessions.renewal.confirm
 POST /api/app/:slug/vibe64/sessions/:sessionId/renewal/draft public app 32768 vibe64.sessions.renewal.draft.request

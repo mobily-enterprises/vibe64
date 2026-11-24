@@ -302,6 +302,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.presence.update",
     "vibe64.sessions.preview-state.broadcast",
     "vibe64.sessions.pull-request.create",
+    "vibe64.sessions.pull-request.start",
     "vibe64.sessions.rename",
     "vibe64.sessions.renewal.cancel",
     "vibe64.sessions.renewal.confirm",
