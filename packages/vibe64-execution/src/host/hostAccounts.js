@@ -2,7 +2,7 @@
 // and the root commands that change accounts.
 
 import { spawnSync } from "node:child_process";
-import { chmodSync, chownSync, closeSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
+import { chmodSync, chownSync, closeSync, lstatSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -161,11 +161,32 @@ function accountDatabaseOptions(database = "files") {
 const PEOPLE_HOME_ROOT = "/home";
 const PERSON_SHELL = "/bin/bash";
 
+// Why a new person cannot have `home`, or "" when nothing is there. Anything already there (a folder an account
+// removed outside Vibe64 left, whatever uid owns it, even the one the new account would get; one a machine kept when
+// it dropped the account at boot; a link or a file) is not the new person's, and whose it is is an administrator's
+// judgment, so it stays exactly as it is and the person is not made. One short line: the member accounts step sends
+// vibe64.dev a failure's last line, after the login and its own words, within 300 characters.
+function existingHomeProblem(username = "", home = "") {
+  let stats;
+  try {
+    stats = lstatSync(home);
+  } catch (error) {
+    if (error.code === "ENOENT") return "";
+    throw error;
+  }
+  const kind = stats.isSymbolicLink() ? "a link" : stats.isDirectory() ? "a folder" : "a file";
+  return `${username} gets no account: ${home} is already there (${kind} of uid ${stats.uid}), which a new person must ` +
+    `never get. An administrator moves it away (sudo mv ${home} /root/${username}-old) and the next member list makes ` +
+    `${username}.`;
+}
+
 // A person made here (add-person, personRegistry.js) has no password: Vibe64 signs people in itself, never with one
 // of the host's. The account goes to the account database the host's helper settings name, numbered as the host
 // numbers the helper's new people (numberOptions, hostSettings.js), in a group of its own, with the login shell
 // those settings name, and with an empty home of its own (0750, whatever the umask), as a host whose people are made
-// at boot makes them. A home already there is a person's data and stays as it is. Answers the account.
+// at boot makes them. The home is always one this makes: with anything already in its place no account is made at
+// all (existingHomeProblem), and one that appears while the account is made (only root writes the homes' folder) takes
+// the account away again, so no later run finds an account whose home is not its own. Answers the account.
 function createPerson(username = "", {
   database = "files",
   homeRoot = PEOPLE_HOME_ROOT,
@@ -175,14 +196,18 @@ function createPerson(username = "", {
   shell = PERSON_SHELL
 } = {}) {
   const home = path.join(homeRoot, username);
+  const problem = existingHomeProblem(username, home);
+  if (problem) throw new Error(problem);
   run("useradd", [...accountDatabaseOptions(database), ...numberOptions, "--user-group", "--no-create-home",
     "--home-dir", home, "--shell", shell, username]);
   const user = resolveUser(username);
   try {
     mkdirSync(home, { mode: 0o700 });
   } catch (error) {
-    if (error.code === "EEXIST") return user;
-    throw error;
+    if (error.code !== "EEXIST") throw error;
+    run("userdel", [...accountDatabaseOptions(database), username]);
+    throw new Error(existingHomeProblem(username, home) || `${username} gets no account: ${home} appeared while it was ` +
+      "being made.");
   }
   chownSync(home, user.uid, user.gid);
   chmodSync(home, 0o750);
