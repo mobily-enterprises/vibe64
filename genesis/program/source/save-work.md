@@ -36,7 +36,9 @@ the Save header's hint repeats the notice's "needs attention" reason. The header
 button is never inert while Save and Update cannot act (`saveWorkButtonPress()`):
 it stays reachable, dimmed with `aria-disabled`, and a press shows the reason
 (`saveWorkTitle`) in a tooltip beside it for six seconds, since a disabled button
-takes no tap, hover or focus. A stored
+takes no tap, hover or focus. The notice's **Review resolved conflicts** and
+**Create draft PR** wait for the same reasons (and during a session renewal),
+with the reason as text beside them (`saveWorkNoticeHeldReason()`). A stored
 failure the notice mirrored leaves it once the record is no longer failed. The
 same reading feeds the session assistant's `vibe64-helper session status`
 (`repository`) and Colleague's work tool (`repositoryProblem`), so neither has
