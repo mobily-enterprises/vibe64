@@ -14,6 +14,7 @@ import {
   vibe64Driver,
   vibe64HostContextResolverPath
 } from "../../packages/vibe64-genesis/src/server/index.js";
+import { reportHostGuidanceCut } from "../../packages/vibe64-terminals/src/server/sessionGuidanceInput.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 // Nothing Genesis does on a person's path stops it: each test breaks Genesis
@@ -44,6 +45,10 @@ function broken() {
   const mode = process.env.BROKEN_GENESIS;
   if (mode === "throw") throw new TypeError("Cannot read properties of undefined (reading 'sections')");
   if (mode === "hang") return new Promise(() => {});
+  if (mode === "cut") {
+    return { contract: "genesis.session-context.v1", output: "Genesis guidance.\\n\\nHOST CONTEXT\\n\\nVibe64 rule.\\n[cut]",
+      warnings: [{ code: "HOST_CONTEXT_TRUNCATED", message: "The registered host driver's session contribution is 40000 bytes." }] };
+  }
   return { contract: 7, output: ["not", "text"], prompt: { not: "text" }, task: 42 };
 }
 export const generatePrompt = broken;
@@ -109,6 +114,40 @@ for (const mode of ["throw", "hang", "garbage"]) {
     });
   });
 }
+
+test("a Genesis that cut Vibe64's guidance to fit gives the conversation its guidance and the host its warning", {
+  skip: process.platform === "win32"
+}, async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectRoot = await initializedProject(root);
+    const loader = await brokenGenesisLoader(root);
+    const { stdout } = await execFileAsync(process.execPath, ["--import", loader, "--input-type=module", "-e", `
+      import { vibe64ConversationInstructions } from ${JSON.stringify(boundary)};
+      const unavailable = [];
+      const cuts = [];
+      const instructions = await vibe64ConversationInstructions({ workdir: ${JSON.stringify(projectRoot)},
+        promptContext: ${JSON.stringify(PROMPT_CONTEXT)} }, {
+        onGenesisUnavailable: (error) => unavailable.push(error.message), onHostGuidanceCut: (warning) => cuts.push(warning) });
+      process.stdout.write(JSON.stringify({ instructions, unavailable, cuts }));
+      process.exit(0);
+    `], { env: { ...process.env, BROKEN_GENESIS: "cut" }, timeout: 20_000 });
+    const { instructions, unavailable, cuts } = JSON.parse(stdout);
+    assert.equal(instructions, "Genesis guidance.\n\nHOST CONTEXT\n\nVibe64 rule.\n[cut]");
+    assert.deepEqual(unavailable, []);
+    assert.deepEqual(cuts, [{ code: "HOST_CONTEXT_TRUNCATED", message: "The registered host driver's session contribution is 40000 bytes." }]);
+    // The engines log it, naming the size.
+    const logged = [];
+    reportHostGuidanceCut({ warn: (fields, message) => logged.push({ fields, message }) }, { engineId: "claude", sessionId: "s1" })(cuts[0]);
+    assert.equal(logged.length, 1);
+    const { fields } = logged[0];
+    assert.equal(fields.event, "vibe64.agent_guidance.host_guidance_cut");
+    assert.equal(fields.code, "HOST_CONTEXT_TRUNCATED");
+    assert.equal(fields.component, "vibe64.agent_guidance");
+    assert.equal(fields.engineId, "claude");
+    assert.equal(fields.sessionId, "s1");
+    assert.match(fields.error, /40000 bytes/u);
+  });
+});
 
 test("a session Genesis cannot read keeps Vibe64's guidance with a note", async () => {
   await withTemporaryRoot(async (root) => {

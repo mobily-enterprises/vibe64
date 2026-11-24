@@ -236,6 +236,8 @@ async function vibe64DriverInputFromRegistry(request = {}, {
 }
 
 export {
+  VIBE64_OPTIONAL_SESSION_CAPABILITIES,
+  VIBE64_SESSION_CAPABILITIES,
   vibe64Driver,
   vibe64DriverInputFromRegistry
 };

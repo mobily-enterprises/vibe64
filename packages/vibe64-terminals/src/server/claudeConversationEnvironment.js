@@ -12,7 +12,7 @@ import {
 } from "@local/vibe64-genesis/server";
 import { claudeFlagSettings } from "./claudeCodeProcess.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
-import { reportGenesisGuidanceUnavailable, sessionGuidanceInput } from "./sessionGuidanceInput.js";
+import { reportGenesisGuidanceUnavailable, reportHostGuidanceCut, sessionGuidanceInput } from "./sessionGuidanceInput.js";
 import { claudeConversationError, claudeTerminalNamespace } from "./terminalShared.js";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { learningSessionExecutionRoot } from "./mainConversationContext.js";
@@ -103,7 +103,8 @@ function createClaudeConversationEnvironment({
 }) {
   function guidanceInstructions(entry, workdir) {
     return vibe64ConversationInstructions({ workdir, promptContext: sessionGuidance(entry) }, {
-      onGenesisUnavailable: reportGenesisGuidanceUnavailable(logger, { engineId: ENGINE, sessionId: entry.context.sessionId })
+      onGenesisUnavailable: reportGenesisGuidanceUnavailable(logger, { engineId: ENGINE, sessionId: entry.context.sessionId }),
+      onHostGuidanceCut: reportHostGuidanceCut(logger, { engineId: ENGINE, sessionId: entry.context.sessionId })
     });
   }
 

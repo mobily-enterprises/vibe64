@@ -45,4 +45,22 @@ function reportGenesisGuidanceUnavailable(logger, fields) {
   }, "Genesis project guidance is unavailable; the conversation goes on with Vibe64's guidance alone.");
 }
 
-export { reportGenesisGuidanceUnavailable, sessionGuidanceInput };
+/**
+ * Reports a conversation whose Vibe64 guidance Genesis cut to fit its limit (its HOST_CONTEXT_TRUNCATED warning, which
+ * names the sizes): the conversation goes on with Genesis's guidance whole and Vibe64's up to the cut, which
+ * genesisHostContextRegistry.unit.test.js keeps from happening.
+ * @param {RuntimeLogger} logger
+ * @param {{ engineId: string, sessionId: string }} fields
+ * @returns {(warning: { code: string, message: string }) => void}
+ */
+function reportHostGuidanceCut(logger, fields) {
+  return (warning) => logOperationalEvent(logger, "warn", {
+    ...fields,
+    code: warning.code,
+    component: "vibe64.agent_guidance",
+    error: String(warning.message || ""),
+    event: "vibe64.agent_guidance.host_guidance_cut"
+  }, "Genesis cut Vibe64's session guidance to fit its limit; the conversation has Genesis's guidance and Vibe64's up to the cut.");
+}
+
+export { reportGenesisGuidanceUnavailable, reportHostGuidanceCut, sessionGuidanceInput };

@@ -3,8 +3,15 @@ import { access, chmod, mkdtemp, readdir, readFile, rm, stat } from "node:fs/pro
 import path from "node:path";
 import test from "node:test";
 
+import * as genesisCompiler from "genesis-compiler";
+
 import { createVibe64HostContextRegistry } from "../../packages/vibe64-genesis/src/server/hostContextRegistry.js";
-import { vibe64Driver, vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
+import {
+  VIBE64_OPTIONAL_SESSION_CAPABILITIES,
+  VIBE64_SESSION_CAPABILITIES,
+  vibe64Driver,
+  vibe64DriverInputFromRegistry
+} from "../../packages/vibe64-genesis/src/server/promptContext.js";
 
 function context(conversationKind) {
   return { scope: "session", conversationKind, session: {
@@ -34,18 +41,35 @@ test("a chat agent answers a message sent while it works in visible text, not on
   }
 });
 
-test("every session capability combination fits Genesis's 24 KiB host contribution limit", () => {
+// Release 9's sessions with every capability on passed Genesis's 24 KiB bound, which then dropped all of Genesis's
+// project guidance (2026-11-24): this test counted only the first four capabilities, never the Pages block
+// (managedPages, 2026-11-06). It counts every capability the driver takes, optional ones included, with the largest
+// host guidance, against the bound the installed Genesis exports, and keeps 2 KiB of it spare, so the next addition
+// fails here rather than being cut in production. genesis-compiler 1.10.27 and before export no bound (theirs was
+// 24 KiB, which this guidance passes): the platform release pins the Genesis that does, and its CI gate runs this.
+const GENESIS_SESSION_BOUND = genesisCompiler.HOST_CONTEXT_MAX_BYTES?.session;
+
+test("every session capability combination stays 2 KiB under Genesis's host contribution bound", {
+  skip: Number.isInteger(GENESIS_SESSION_BOUND) ? false
+    : "the installed genesis-compiler exports no HOST_CONTEXT_MAX_BYTES; the platform release pins one that does"
+}, () => {
+  const bound = GENESIS_SESSION_BOUND;
+  const SPARE = 2 * 1024;
   const hostGuidance = "é".repeat(512); // 1024 UTF-8 bytes, not characters.
+  const capabilities = [...VIBE64_SESSION_CAPABILITIES, ...VIBE64_OPTIONAL_SESSION_CAPABILITIES];
   for (const conversationKind of ["main", "temporary"]) {
-    for (let mask = 0; mask < 16; mask++) {
-      const input = context(conversationKind);
-      Object.keys(input.session).forEach((key, bit) => { input.session[key] = Boolean(mask & (1 << bit)); });
-      const output = vibe64Driver({ ...input, hostGuidance });
-      // genesis-compiler's HOST_CONTEXT_MAX_BYTES.session (24 * 1024 since 1.8.5).
-      assert.ok(Buffer.byteLength(output, "utf8") <= 24 * 1024, `${conversationKind} capabilities ${mask} exceeds Genesis's limit`);
+    for (let mask = 0; mask < 2 ** capabilities.length; mask++) {
+      const session = Object.fromEntries(capabilities.map((name, bit) => [name, Boolean(mask & (1 << bit))]));
+      const output = vibe64Driver({ scope: "session", conversationKind, session, hostGuidance });
+      const bytes = Buffer.byteLength(output.trim(), "utf8");
+      assert.ok(bytes + SPARE <= bound,
+        `${conversationKind} with ${JSON.stringify(session)} is ${bytes} bytes, less than ${SPARE} under Genesis's ${bound}`);
       assert.ok(output.includes(hostGuidance), "host guidance is retained in full");
     }
   }
+  // The combination with everything on has the Pages block, which the earlier loop never turned on.
+  const everything = Object.fromEntries(capabilities.map((name) => [name, true]));
+  assert.match(vibe64Driver({ scope: "session", conversationKind: "main", session: everything }), /vibe64-helper pages publish/u);
   assert.throws(() => vibe64Driver({ ...context("main"), hostGuidance: hostGuidance + "é" }), /bounded text/);
 });
 

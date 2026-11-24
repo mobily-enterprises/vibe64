@@ -337,27 +337,31 @@ function genesisGuidanceUnavailableNote(error) {
  * Nothing Genesis does stops the conversation: when Genesis fails, does not
  * answer within the deadline or answers without guidance, the conversation gets
  * Vibe64's own contribution and a note that Genesis's guidance is missing.
+ * Genesis's warning that it cut Vibe64's part to its bound goes to `onHostGuidanceCut`.
  * @param {object} request
  * @param {object} request.promptContext
  * @param {string} request.workdir
  * @param {object} [options]
  * @param {(error: Error) => void} [options.onGenesisUnavailable] reports why Genesis's guidance is missing
+ * @param {(warning: { code: string, message: string }) => void} [options.onHostGuidanceCut] reports Genesis's cut
  * @param {number} [options.timeoutMs]
  */
 async function vibe64ConversationInstructions({ workdir, promptContext }, {
   onGenesisUnavailable = ignoreGenesisUnavailable,
+  onHostGuidanceCut = () => undefined,
   timeoutMs = GENESIS_USER_PATH_TIMEOUT_MS
 } = {}) {
   const contribution = vibe64Driver(promptContext);
   if (promptContext.scope === "ephemeral") return contribution;
   let failure;
   try {
-    const result = await withinGenesisDeadline(() => runGenesisOperation(genesisCompiler.projectSessionContext, {
-      projectRoot: workdir,
-      hostDriver: vibe64Driver,
-      hostDriverInput: promptContext
-    }), timeoutMs);
-    if (typeof result?.output === "string" && result.output.trim()) return result.output;
+    const options = { projectRoot: workdir, hostDriver: vibe64Driver, hostDriverInput: promptContext };
+    const result = await withinGenesisDeadline(() => runGenesisOperation(genesisCompiler.projectSessionContext, options), timeoutMs);
+    if (typeof result?.output === "string" && result.output.trim()) {
+      const cuts = Array.isArray(result.warnings) ? result.warnings.filter((warning) => warning?.code === "HOST_CONTEXT_TRUNCATED") : [];
+      cuts.forEach((warning) => onHostGuidanceCut(warning));
+      return result.output;
+    }
     failure = new Error("Genesis returned no session guidance.");
   } catch (error) {
     failure = error;
