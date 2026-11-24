@@ -17,12 +17,12 @@ import {
 } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
 
 // A busy editor's stop, end to end, in a real server process (fixtures/stopBudgetServer.mjs): a request waiting on a
-// long command, a background job's long command and a poller starting a command every 50 ms. On release 10's stop of
-// mercmobily (24 Nov 2026) the editor went on starting helper calls after SIGTERM and took 3.33 s to stop, while the
-// edge in front of it answered 502 and 503. On SIGTERM the editor must stop in under a second: it closes its listener
-// at once, starts no new command, gives the request in flight a short drain, ends the commands it started, leaves
-// nothing of them running, and records its stop as planned, so the next server resumes the turns it interrupted as a
-// restart. The stop is logged at warn, which a hosted editor's default level keeps, with how long it took.
+// long command, a background job's long command and a poller starting a command every 50 ms. On release 10's stop of a
+// hosted workspace (24 Nov 2026) the editor went on starting helper calls after SIGTERM and took 3.33 s to stop, while
+// the edge in front of it answered 502 and 503. On SIGTERM the editor must stop in under a second: it closes its
+// listener at once, starts no new command, gives the request in flight a short drain, ends the commands it started,
+// leaves nothing of them running, and records its stop as planned, so the next server resumes the turns it interrupted
+// as a restart. The stop is logged at warn, which a hosted editor's default level keeps, with how long it took.
 
 const APP_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const SERVER = fileURLToPath(new URL("./fixtures/stopBudgetServer.mjs", import.meta.url));
