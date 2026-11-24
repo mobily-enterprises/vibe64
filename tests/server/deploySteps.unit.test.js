@@ -26,6 +26,9 @@ import { HOST, runningShop, settle, world } from "./vibe64DeployStandInHelpers.j
 // A two-service app deployed through the engine alone, against mobilynet's stand-in, with no database: the record is
 // the steps' own, the stand-in's request log what mobilynet was asked.
 const DOMAIN = "memobot.example.com";
+// The domain's other names: one under it, one elsewhere.
+const WWW = `www.${DOMAIN}`;
+const OLD = "memobot.example.org";
 const HOLDER = "Vibe64 on laptop";
 
 /** The two-service Stack's inspection and needs, its lines changed by `edit`, with these resources. */
@@ -50,14 +53,18 @@ const ENV = {
 
 /**
  * A release of a commit: the archive (one file naming the commit) and each service's declaration and settings, its
- * Migrate the release's migrate task, with the Production Env's entries (`records`) and values.
+ * Migrate the release's migrate task, with the Production Env's entries (`records`) and values, and the domain's other
+ * names where given (a release from before them has none).
  */
-function releaseOf(commit, { deployment, needs }, { env = ENV, records = ENV_RECORDS, migratesAsItStarts = false } = {}) {
+function releaseOf(commit, { deployment, needs }, { env = ENV, records = ENV_RECORDS, migratesAsItStarts = false, aliases } = {}) {
   const settings = settingsPerService(needs, records.filter((record) => needs.services.some((one) => (record.services ?? ["web"]).includes(one.id))));
   const { declarations } = servicePackages({ app: "memobot", deployment, needs, settings });
   // A release as the engine made them until 23 Nov: no migrate task, so each of its instances migrates as it starts.
   if (migratesAsItStarts) for (const declaration of Object.values(declarations)) delete declaration.tasks;
-  return { id: commit, archive: withRootFile(gzipSync(Buffer.alloc(1024)), "commit.txt", commit).bytes, declarations, settings, env, domain: DOMAIN };
+  return {
+    id: commit, archive: withRootFile(gzipSync(Buffer.alloc(1024)), "commit.txt", commit).bytes, declarations, settings, env, domain: DOMAIN,
+    ...(aliases ? { aliases } : {})
+  };
 }
 
 /** The stand-in with a verified-later domain, the adapter over it (leases on), and a Deploy helper that plans first. */
@@ -67,12 +74,12 @@ function setup() {
   parts.standIn.setQuota(parts.projectId, { vcpus: 96, memoryGib: 192 });
   const adapter = createMobilynetAdapter({ client: parts.client, project: parts.projectId, leases: true });
   const run = async ({
-    stack = stackOf(), record, commit, env, records, migratesAsItStarts, choices = {}, decisions = {}, planHash, save, report, stopAsked,
-    pause = () => parts.standIn.advance()
+    stack = stackOf(), record, commit, env, records, migratesAsItStarts, aliases, choices = {}, decisions = {}, planHash, save, report, stopAsked,
+    pause = () => parts.standIn.advance(), using = adapter
   }) => {
     const plan = planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer(), choices, decisions });
     const result = await deploy({
-      adapter, needs: stack.needs, record, choices, decisions, planHash: planHash ?? plan.hash, release: releaseOf(commit, stack, { env, records, migratesAsItStarts }), holder: HOLDER,
+      adapter: using, needs: stack.needs, record, choices, decisions, planHash: planHash ?? plan.hash, release: releaseOf(commit, stack, { env, records, migratesAsItStarts, aliases }), holder: HOLDER,
       pause, ...(save ? { save } : {}), ...(report ? { report } : {}), ...(stopAsked ? { stopAsked } : {})
     });
     return { ...result, plan };
@@ -1326,6 +1333,171 @@ test("the domain step waits for the public service to serve its release, fails w
   assert.equal(domainHolder(record, thingOf, DOMAIN, things.svc_site).name, "web");
   assert.equal(domainHolder(record, thingOf, DOMAIN, things.svc_web), null, "never the service itself");
   assert.equal(domainHolder({ items: { "service.site": record.items["service.site"] } }, thingOf, DOMAIN, things.svc_site), null, "a service the record doesn't hold is no holder");
+});
+
+test("the domain's other names: a Deploy adds each to the project as it adds the domain, makes the public App Service routed at the domain and each, with its DNS records, and gives that service alone APP_REDIRECT_HOSTS", async () => {
+  const { standIn, adapter, run, record } = setup();
+  const events = [];
+  const before = standIn.requests().length;
+  const first = await run({ record, commit: "c1", aliases: [WWW, OLD], report: (event) => events.push(event) });
+  assert.equal(first.outcome, "live", first.message);
+  const { items } = first.record;
+  const [web, computers] = [items["service.web"].id, items["service.computers"].id];
+  const asked = requestsAfter(standIn, before);
+  // Each name a domain of the project, the domain first, each added before any App Service is made.
+  const domainsAdded = asked.filter((request) => request.method === "POST" && request.path === `/v1/projects/${standIn.projectId}/domains`);
+  assert.deepEqual(domainsAdded.map((request) => request.body.name), [DOMAIN, WWW, OLD]);
+  assert.deepEqual(first.steps.filter((step) => step === "ensureDomain").length, 3);
+  const said = events.filter((event) => event.kind === "step" && event.phase === "start").map((event) => event.words);
+  assert.ok(said.includes(`Adding the domain ${DOMAIN}`), said.join(" | "));
+  assert.ok(said.includes(`Adding ${WWW}, which sends people to ${DOMAIN}`), said.join(" | "));
+  assert.ok(said.includes(`Adding ${OLD}, which sends people to ${DOMAIN}`), said.join(" | "));
+  assert.ok(said.includes(`Making App Service web, public behind the load balancer at ${DOMAIN}, with ${WWW} and ${OLD}`), said.join(" | "));
+  // web is made routed at all three, computers at none.
+  const made = asked.find((request) => request.method === "POST" && request.path.endsWith("/services") && request.body?.name === "memobot-web");
+  assert.deepEqual(made.body.routes, [{ host: DOMAIN, tls: "edge" }, { host: WWW, tls: "edge" }, { host: OLD, tls: "edge" }]);
+  const hostsOf = (id) => standIn.routes().filter((route) => route.serviceId === id).map((route) => route.host).sort();
+  assert.deepEqual(hostsOf(web), [DOMAIN, OLD, WWW].sort());
+  assert.deepEqual(hostsOf(computers), []);
+  // Each name's DNS records read as the domain's are: mobilynet's TXT while it is unverified, and its own route's CNAME.
+  for (const name of [WWW, OLD]) {
+    const route = standIn.routes().find((one) => one.host === name);
+    const shown = await adapter.domainRecords(name);
+    assert.deepEqual(shown.records.map((one) => [one.type, one.name]), [["TXT", `_mobilynet.${name}.`], ["CNAME", `${name}.`]], name);
+    assert.equal(shown.records[1].data, `${route.target}.`, name);
+    assert.equal(shown.target, route.target, name);
+  }
+  // The public service alone is given its other names, in their order; computers is not.
+  const settingsOf = (id) => standIn.services.instances(id).filter((one) => !one.removedReason).map((one) => one.settings.APP_REDIRECT_HOSTS);
+  assert.deepEqual([...new Set(settingsOf(web))], [`${WWW},${OLD}`]);
+  assert.deepEqual([...new Set(settingsOf(computers))], [undefined]);
+  assert.equal(standIn.services.instances(web)[0].settings.APP_PUBLIC_URL, `https://${DOMAIN}`);
+});
+
+test("a name added to the domain's other names is routed to the running public App Service with its settings, the domain kept and no release; with none left the setting goes and the routes stay until moveDomain", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1", aliases: [WWW] });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  const web = first.record.items["service.web"].id;
+  const [domainRoute, wwwRoute] = [DOMAIN, WWW].map((host) => standIn.routes().find((route) => route.host === host));
+  const at = standIn.requests().length;
+  const events = [];
+  const second = await run({ record: first.record, commit: "c1", aliases: [WWW, OLD], report: (event) => events.push(event) });
+  assert.equal(second.outcome, "live", second.message);
+  assert.deepEqual(second.steps.filter((step) => !step.startsWith("wait")),
+    ["ensureDomain", "ensureDomain", "ensureDomain", "keepRelease computers", "keepRelease web", "putSettings web", "checkRefresh web", "takeDomain web"]);
+  assert.deepEqual(writesAfter(standIn, at), [
+    ["POST", `/v1/projects/${standIn.projectId}/domains`], ["PUT", `/v1/services/${web}/settings`], ["PATCH", `/v1/services/${web}`]
+  ]);
+  const patch = requestsAfter(standIn, at).find((request) => request.method === "PATCH");
+  // The whole list, as mobilynet replaces it: the names web has kept, the new one added, none taken from anyone.
+  assert.deepEqual(patch.body, { routes: [{ host: DOMAIN, tls: "edge" }, { host: WWW, tls: "edge" }, { host: OLD, tls: "edge" }] });
+  assert.ok(events.some((event) => event.kind === "step" && event.words === `Routing ${DOMAIN}, ${WWW} and ${OLD} to App Service web`));
+  // The domain and www keep their routes, and so their DNS targets.
+  assert.deepEqual([DOMAIN, WWW].map((host) => standIn.routes().find((route) => route.host === host)).map((one) => [one.id, one.serviceId, one.target]),
+    [[domainRoute.id, web, domainRoute.target], [wwwRoute.id, web, wwwRoute.target]]);
+  const serving = () => standIn.services.instances(web).filter((one) => !one.removedReason);
+  assert.ok(serving().every((one) => one.settings.APP_REDIRECT_HOSTS === `${WWW},${OLD}`));
+
+  // None left: web's settings lose APP_REDIRECT_HOSTS; the Deploy routes nothing (the owner's change of the names moves
+  // them at once, through moveDomain).
+  settle(standIn);
+  const later = standIn.requests().length;
+  const third = await run({ record: second.record, commit: "c1", aliases: [] });
+  assert.equal(third.outcome, "live", third.message);
+  assert.deepEqual(writesAfter(standIn, later), [["PUT", `/v1/services/${web}/settings`]]);
+  assert.ok(serving().every((one) => !Object.hasOwn(one.settings, "APP_REDIRECT_HOSTS")));
+  // A release from before other names (none given) is the same as none: nothing to change.
+  settle(standIn);
+  const last = standIn.requests().length;
+  const fourth = await run({ record: third.record, commit: "c1" });
+  assert.equal(fourth.outcome, "live", fourth.message);
+  assert.deepEqual(writesAfter(standIn, last), []);
+});
+
+test("a provider that can't route other names refuses a Deploy with them before it asks anything; without them it deploys as before", async () => {
+  const { standIn, adapter, run, record } = setup();
+  const unroutable = { ...adapter, title: "a provider" };
+  delete unroutable.takeDomain;
+  const at = standIn.requests().length;
+  await assert.rejects(run({ record, commit: "c1", aliases: [WWW], using: unroutable }), {
+    code: "production_deploy_aliases_unsupported",
+    status: 409,
+    message: `a provider can't answer at other names than the domain (${WWW}): remove them, then deploy to production.`
+  });
+  assert.deepEqual(requestsAfter(standIn, at).filter(isWrite), [], "nothing made, and no lease taken");
+  const plain = await run({ record, commit: "c1", aliases: [], using: unroutable });
+  assert.equal(plain.outcome, "live", plain.message);
+});
+
+test("a renamed public service with other names is made with no route and, once healthy, takes the domain and each name the old one has, and is routed at a new name too", async () => {
+  const { standIn, run, record } = setup();
+  const first = await run({ record, commit: "c1", aliases: [WWW] });
+  assert.equal(first.outcome, "live", first.message);
+  const kept = standIn.routes().map((one) => [one.host, one.id, one.target]).sort();
+  const renamed = stackOf((lines) => lines.map((line) => line.replace("### Service `web`", "### Service `site`")));
+  const records = ENV_RECORDS.map((one) => ({ ...one, services: (one.services ?? ["web"]).map((name) => (name === "web" ? "site" : name)) }));
+  const before = standIn.requests().length;
+  const events = [];
+  const second = await run({ stack: renamed, record: first.record, commit: "c1", records, aliases: [WWW, OLD], report: (event) => events.push(event) });
+  assert.equal(second.outcome, "live", second.message);
+  const site = second.record.items["service.site"].id;
+  const asked = requestsAfter(standIn, before);
+  const made = asked.find((request) => request.method === "POST" && request.path.endsWith("/services") && request.body?.name === "memobot-site");
+  assert.deepEqual(made.body.routes, [], "made with no route while web holds the domain and www");
+  const take = asked.find((request) => request.method === "PATCH" && request.path === `/v1/services/${site}`);
+  assert.deepEqual(take.body, { routes: [{ host: DOMAIN, tls: "edge", take: true }, { host: WWW, tls: "edge", take: true }, { host: OLD, tls: "edge" }] });
+  assert.ok(events.some((event) => event.kind === "step"
+    && event.words === `Moving ${DOMAIN} and ${WWW} from App Service web to site, at the same DNS targets, and routing ${OLD} to it`), "its words");
+  assert.ok(events.some((event) => event.kind === "step"
+    && event.words === `Making App Service site, public behind the load balancer: it takes ${DOMAIN} from web once healthy, with ${WWW} and ${OLD}`), "its words");
+  assert.deepEqual(standIn.routes().filter((one) => one.host !== OLD).map((one) => [one.host, one.id, one.target]).sort(), kept);
+  assert.deepEqual(standIn.routes().map((one) => one.serviceId), [site, site, site]);
+});
+
+test("the domain step routes each other name the public service lacks with the domain, the whole list each time, moving only a name a service the record holds has", () => {
+  const service = { id: "site" };
+  const thing = { id: "svc_site", hosts: [DOMAIN] };
+  const step = (more) => domainStep({ service, thing, domain: DOMAIN, holder: null, serving: true, failure: null, ...more });
+  const plain = (host) => ({ host, holder: null });
+  assert.equal(step({ thing: { ...thing, hosts: [DOMAIN, WWW] }, aliases: [plain(WWW)] }), null, "it has every name");
+  assert.equal(step({ thing: { ...thing, hosts: [DOMAIN, WWW, OLD] }, aliases: [plain(WWW)] }), null, "a Deploy routes no name away");
+  assert.deepEqual(step({ aliases: [plain(WWW)] }), { kind: "takeDomain", service: "site", id: "svc_site", domain: DOMAIN, aliases: [{ host: WWW, take: false }] });
+  assert.deepEqual(step({ thing: { ...thing, hosts: [DOMAIN, WWW] }, aliases: [plain(WWW), plain(OLD)] }),
+    { kind: "takeDomain", service: "site", id: "svc_site", domain: DOMAIN, aliases: [{ host: WWW, take: false }, { host: OLD, take: false }] });
+  assert.deepEqual(step({ serving: false, aliases: [plain(WWW)] }), { kind: "wait", words: `Waiting for site to be healthy before it takes ${WWW}` });
+  assert.deepEqual(step({ thing: { ...thing, hosts: [] }, serving: false, aliases: [plain(WWW)] }),
+    { kind: "wait", words: `Waiting for site to be healthy before it takes ${DOMAIN} and ${WWW}` });
+  assert.deepEqual(step({ thing: { ...thing, hosts: [] }, holder: { name: "web" }, aliases: [{ host: WWW, holder: { name: "web" } }, plain(OLD)] }),
+    { kind: "takeDomain", service: "site", id: "svc_site", domain: DOMAIN, from: "web", aliases: [{ host: WWW, take: true }, { host: OLD, take: false }] });
+});
+
+test("moveDomain routes the running public App Service at the domain and its other names, each added where none covers it; a name no longer asked for keeps its route, sending to nothing", async () => {
+  const parts = setup();
+  const { standIn, adapter, run, record } = parts;
+  const stack = stackOf();
+  const first = await run({ stack, record, commit: "c1", aliases: [WWW] });
+  assert.equal(first.outcome, "live", first.message);
+  settle(standIn);
+  const web = first.record.items["service.web"].id;
+  const hosts = () => standIn.routes().filter((route) => route.serviceId === web).map((route) => route.host).sort();
+  const at = standIn.requests().length;
+  assert.deepEqual(await moveDomain(adapter, first.record, stack.needs, { domain: DOMAIN, aliases: [WWW, OLD] }), { service: "web", domain: DOMAIN });
+  assert.deepEqual(writesAfter(standIn, at), [["POST", `/v1/projects/${standIn.projectId}/domains`], ["PATCH", `/v1/services/${web}`]]);
+  assert.deepEqual(requestsAfter(standIn, at).find((request) => request.method === "POST").body.name, OLD);
+  assert.deepEqual(requestsAfter(standIn, at).find((request) => request.method === "PATCH").body,
+    { routes: [{ host: DOMAIN, tls: "edge" }, { host: WWW, tls: "edge" }, { host: OLD, tls: "edge" }] });
+  assert.deepEqual(hosts(), [DOMAIN, OLD, WWW].sort());
+  assert.deepEqual(standIn.services.refreshes(web).map((one) => one.kind), ["create"], "no release, no refresh");
+
+  // The domain with no other names: web answers there alone; www and the other keep their routes, sending to nothing.
+  const next = standIn.requests().length;
+  const wwwRoute = standIn.routes().find((route) => route.host === WWW);
+  await moveDomain(adapter, first.record, stack.needs, { domain: DOMAIN, aliases: [] });
+  assert.deepEqual(requestsAfter(standIn, next).find((request) => request.method === "PATCH").body, { routes: [{ host: DOMAIN, tls: "edge" }] });
+  assert.deepEqual(hosts(), [DOMAIN]);
+  assert.deepEqual(standIn.routes().filter((route) => route.host === WWW).map((one) => [one.id, one.serviceId, one.target]), [[wwwRoute.id, null, wwwRoute.target]]);
 });
 
 test("a Deploy that goes live reports the address's DNS target once: the first names it, one with the same target says nothing, a record kept before any was reported hears it once, and a changed one is named with the one before", async () => {

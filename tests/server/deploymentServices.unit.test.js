@@ -160,6 +160,8 @@ test("each wrong service or resource line is refused at its line, saying what is
   refused(parse(memobotWith({ 19: "- Reaches: `computers` as `MEMOBOT_COMPUTERS_SECRET`" })), 19, /Deployment's generated secret/u);
   refused(parse(memobotWith({ 31: ["- Setting `X`: `1`", "- Setting `X`: `2`"] })), 32, /names the setting X twice/u);
   refused(parse(memobotWith({ 31: "- Setting `APP_PUBLIC_URL`: `x`" })), 31, /APP_PUBLIC_URL is a setting the host gives/u);
+  refused(parse(memobotWith({ 31: "- Setting `APP_REDIRECT_HOSTS`: `www.example.com`" })), 31,
+    /APP_REDIRECT_HOSTS is the host's, given to the public service while its domain has other names/u);
   // SIDE_EFFECTS, which APP_ENV replaced, is no setting the host gives but no setting at all.
   refused(parse(memobotWith({ 31: "- Setting `SIDE_EFFECTS`: `live`" })), 31,
     /SIDE_EFFECTS was replaced by APP_ENV, which the host gives every step\. Remove SIDE_EFFECTS from Deployment\./u);

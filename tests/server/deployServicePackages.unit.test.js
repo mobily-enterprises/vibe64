@@ -214,6 +214,24 @@ test("mobilynet's count is the names a service is sent with its links' fields, e
   assert.throws(() => settingsPerService(NEEDS, [{ key: "PORT", secret: false, valuePresent: false }]), { code: "vibe64_production_env_invalid" });
 });
 
+test("Production gives a service the domain's other names as APP_REDIRECT_HOSTS, comma-separated, beside APP_PUBLIC_URL; with none it gives no such setting; no Env entry may set it", () => {
+  const declared = settingsPerService(NEEDS, []).web;
+  const given = (aliases) => settingValues({ declared, env: {}, domain: "app.example.com", aliases, trustedProxies: "10.0.0.0/8", port: 3000 });
+  const both = given(["www.app.example.com", "app.example.org"]);
+  assert.equal(both.settings.APP_REDIRECT_HOSTS, "www.app.example.com,app.example.org");
+  assert.equal(both.settings.APP_PUBLIC_URL, "https://app.example.com");
+  assert.equal(Object.hasOwn(both.secrets, "APP_REDIRECT_HOSTS"), false);
+  for (const none of [[], undefined]) {
+    const values = given(none);
+    assert.equal(Object.hasOwn(values.settings, "APP_REDIRECT_HOSTS"), false, JSON.stringify(none));
+    assert.notEqual(values.hash, both.hash, "the settings' hash follows the names");
+  }
+  assert.equal(given([]).hash, given(undefined).hash);
+  // Its release declares no such setting: what a release is made of is the code and the Stack alone.
+  assert.equal(Object.hasOwn(stackSettingsPerService(NEEDS).web, "APP_REDIRECT_HOSTS"), false);
+  assert.match(envEntryProblem({ key: "APP_REDIRECT_HOSTS" }, NEEDS), /APP_REDIRECT_HOSTS is set by Production itself/u);
+});
+
 test("each service's script exports its settings, its resources' names, the instance facts from _mobilynet and its own settings, then serves; its migrate task's exports them and migrates", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-deploy-serve-"));
   t.after(() => rm(root, { recursive: true, force: true }));

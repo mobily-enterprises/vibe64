@@ -184,6 +184,9 @@ test("needs whose services break a rule of the Stack are refused, naming the ser
   assert.match(withServices([{ ...web, reaches: [{ service: "computers", setting: "STAGING_REACHES_REAL_PEOPLE" }] }, computers]),
     /reaches other services/u);
   assert.match(withServices([web, { ...computers, settings: { APP_PUBLIC_URL: "x" } }]), /settings are its own/u);
+  // Nor the domain's other names, which Production gives the public service.
+  assert.match(withServices([{ ...web, settings: { APP_REDIRECT_HOSTS: "www.example.com" } }, computers]), /settings are its own/u);
+  assert.match(withServices([{ ...web, reaches: [{ service: "computers", setting: "APP_REDIRECT_HOSTS" }] }, computers]), /reaches other services/u);
   assert.match(withServices([{ ...web, settings: { MEMOBOT_COMPUTERS_URL: "x" } }, computers]), /settings are its own/u);
   // Nor SIDE_EFFECTS, which APP_ENV replaced and no host gives.
   assert.match(withServices([{ ...web, reaches: [{ service: "computers", setting: "SIDE_EFFECTS" }] }, computers]), /reaches other services/u);
