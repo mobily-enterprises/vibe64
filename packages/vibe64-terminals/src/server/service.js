@@ -618,6 +618,7 @@ function createService({
     archiveSessionWorkPlan: agentConversations.archiveSessionWorkPlan,
     restoreSessionWorkPlan: agentConversations.restoreSessionWorkPlan,
     ensureAgentSession: assistant.ensureAgentSession,
+    prepareAgentSession: assistant.prepareAgentSession,
     assertSessionRenewalIdle: agentConversations.assertSessionRenewalIdle,
     sessionAiWorkRunning: agentConversations.sessionAiWorkRunning,
     invalidateAgentRuntimes: shutdown.invalidateAgentRuntimes,

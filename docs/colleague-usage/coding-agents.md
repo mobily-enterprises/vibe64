@@ -43,7 +43,8 @@ unavailable while Vibe64 is checking the connection; your draft is kept.
 **Reconnect** starts a new connection attempt at once, even while Vibe64 is
 waiting before its next automatic attempt. The button shows its progress and
 the notice says **Reconnecting…** until the attempt ends. When it connects, the
-chat checks the assistant and the notice closes; when it fails, the notice says
+chat checks the assistant (one that is still starting is waited for, even past a
+minute) and the notice closes; when it fails, the notice says
 **Reconnect failed** with the reason, and Vibe64 keeps trying automatically.
 That message goes as soon as one of those automatic attempts connects, while the
 chat checks the assistant again. In the

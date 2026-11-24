@@ -4650,6 +4650,22 @@ escaping. The original lifecycle tests now use the actual shared schema validato
 
 The mounted Learning Main uses the original `agent-session.prepare` terminal
 action and `ensureAgentSession` service through the same HTTP route builder.
+
+## Assistant preparation answers within two seconds
+
+The page's `POST /sessions/:sessionId/agent-session` (`agent-session.prepare`)
+runs `prepareAgentSession` in `serviceAssistant.js`: `ensureAgentSession` as
+held work (`createHeldWork`, component `vibe64.agent_session_prepare`, keyed by
+project, session and user). It answers with the preparation's result within two
+seconds, and otherwise `{ ok: true, preparing: true, sessionId, waitingFor }`,
+since a cold assistant (setup holding the session's write lock, its provider
+starting or resuming) can outlast the hosted edge's minute. A repeat joins the
+running preparation; one after it ended prepares again, which a prepared
+assistant answers at once. `useVibe64MountedSessionData` sends it through
+`followHeldRequest`, repeating while it is held and after an answer that never
+came back (status 0, or a 5xx without a code), so the status never reads
+unknown for a slow start; a cancelled check stops repeating. Turn recovery
+still calls `ensureAgentSession` directly and waits for it.
 Its explicit Learning write grant rechecks the saved learner/attempt/session
 before preparation; the Learning transport exposes this one readiness operation
 without exposing manual/global terminals, attachments or temporary conversations.

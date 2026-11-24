@@ -295,7 +295,7 @@ function createTerminalActions({ terminals }) {
       id: ACTION_PREPARE_AGENT_SESSION,
       input: sessionInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => terminals.ensureAgentSession(input.sessionId, input)
+      execute: (input) => terminals.prepareAgentSession(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,

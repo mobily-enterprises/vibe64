@@ -10,6 +10,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "@local/vibe64-runtime/shared";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { refetchEndpointResource } from "@/lib/vibe64EndpointResourceRefetch.js";
+import { followHeldRequest } from "@/lib/vibe64HeldRequest.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -301,18 +302,26 @@ function useVibe64MountedSessionData({
         agentConnectionStatus.value = "initializing";
         return session.value;
       }
-      const result = await getHttpWebClient().request(
-        vibe64SessionPath(
-          activeSessionsApiPath.value,
-          activeSessionId.value,
-          "/agent-session"
-        ),
-        {
+      const preparePath = vibe64SessionPath(
+        activeSessionsApiPath.value,
+        activeSessionId.value,
+        "/agent-session"
+      );
+      // A cold assistant can outlast the hosted edge's minute: the server answers that it is preparing, and the same
+      // request is repeated, also after an answer that never came back, until the assistant is ready. A cancelled
+      // check stops repeating.
+      const result = await followHeldRequest(() => {
+        if (controller.signal.aborted) throw new Error("The assistant check was cancelled.");
+        return getHttpWebClient().request(preparePath, {
           body: {},
           method: "POST",
           signal: controller.signal
-        }
-      );
+        });
+      }, {
+        heldAs: "preparing",
+        lostContact: "Vibe64 could not be reached to start the assistant. Please retry.",
+        notWorded: "The assistant could not be started. Please retry."
+      });
       if (result?.ok !== true) {
         throw Object.assign(new Error(result?.error || "Assistant status could not be reconciled."), {
           code: result?.code
