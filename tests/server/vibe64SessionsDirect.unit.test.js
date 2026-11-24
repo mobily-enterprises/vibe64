@@ -1009,6 +1009,39 @@ test("session work inspection includes the durable native Save operation", async
   assert.deepEqual(result.updateOperation, { id: "update-session", status: "ready" });
 });
 
+test("session work inspection names a repository AI task while it runs, with the reason Save and Update wait for it", async () => {
+  let conversations = [
+    { conversationId: "temporary-1", task: { active: true, repository: false, title: "Fix tests" } },
+    { conversationId: "temporary-2", task: { active: true, repository: true, title: "Fix Update" } }
+  ];
+  const service = createService({
+    project: {
+      async createRuntime() {
+        return {
+          async getSession() { return { sessionId: "session-1", status: "active" }; },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+          store: {
+            async listSessionConversations() { return conversations; },
+            async readBackgroundTask(_sessionId, taskId) {
+              return taskId === "update-session" ? { id: taskId, code: "vibe64_session_update_conflict", status: "failed" } : null;
+            }
+          }
+        };
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
+    },
+    terminals: {
+      async inspectSessionWork() { return { unsaved: true }; }
+    }
+  });
+
+  const running = await service.inspectSessionWork("session-1", {});
+  assert.deepEqual(running.repositoryAiTask, { message: "Fix Update is still running. Wait for it to finish first.", title: "Fix Update" });
+  conversations = [{ conversationId: "temporary-2", task: { active: false, repository: true, title: "Fix Update" } }];
+  const ended = await service.inspectSessionWork("session-1", {});
+  assert.equal(Object.hasOwn(ended, "repositoryAiTask"), false, "an ended task no longer holds the session");
+});
+
 test("overlapping work reads share one inspection only for the same project and source version", async () => {
   let projectRoot = "/project-a";
   let canonicalCommit = "canonical-a";
