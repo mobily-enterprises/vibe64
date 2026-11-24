@@ -365,8 +365,8 @@ function createDatabaseAssistantTasks({
    * @param {{ sessionId: string, requestId: string, repeat?: boolean, vibe64User?: object }} input
    */
   function startAssistantQuestion(input) {
-    return heldQuestions.run([toText(input.sessionId), actorKey(input.vibe64User)], input,
-      (question, { stage }) => askAssistant(question, { stage }));
+    const scope = [toText(input.sessionId), actorKey(input.vibe64User)];
+    return heldQuestions.run(scope, input, (question, { stage }) => askAssistant(question, { stage }));
   }
 
   /**

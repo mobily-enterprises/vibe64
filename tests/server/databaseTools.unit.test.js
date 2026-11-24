@@ -1972,7 +1972,8 @@ test("a database question the page names answers within two seconds while its AI
       starts += 1;
       await options.onEvent({ type: "thread", threadId: "held-question-thread" });
       await turn.promise;
-      return { ok: true, threadId: "held-question-thread", text: databaseFinalResponse({ answer: "Held answer", intent: "explain", sql: "" }) };
+      return { ok: true, threadId: "held-question-thread", executionProfile: databaseExecutionProfile(),
+        text: databaseFinalResponse({ answer: "Held answer", intent: "explain", sql: "" }) };
     },
     deleteEphemeralAgentConversation: async () => ({ ok: true })
   };
