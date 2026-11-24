@@ -444,7 +444,7 @@ function createAgentSessionCommandService({
       try {
         // The AI's change records the session's source as it is now: the plan view counts the files changed since.
         result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, planInput, role, {
-          ...(role === "pass" ? { passItem: request.pass.item } : {}), sourceState: () => sessionSourceState(store, sessionId, descriptor)
+          ...(role === "pass" ? { passItem: request.pass.item } : {}), sourceState: () => sessionSourceState(store, sessionId, descriptor), agent: true
         });
       } catch (error) {
         throw await refusedPlanChange({ sessionId, request, input, error, handPlanToSenior, logger });

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { __testables, readWorkPlan, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { __testables, readWorkPlan, readWorkPlanPage, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createWritesWhileAssistantWorks } from "../../packages/vibe64-terminals/src/server/writesWhileAssistantWorks.js";
@@ -286,8 +286,16 @@ async function planCommands(f) {
     const readNative = f.agent.sessionState;
     f.agent.sessionState = async () => ({ turn: { active: true, id: f.state().turnId } });
     try {
-      return await commands.managePlan("session-1", input);
+      // As an agent does, a write of the whole Plan or Progress follows a read of every page, whose last gives readThrough.
+      const replaces = ["write", "progress-write"].includes(input.operation) && input.readThrough === undefined;
+      return await commands.managePlan("session-1", replaces ? { ...input, readThrough: await readThrough() } : input);
     } finally { f.agent.sessionState = readNative; }
+  }
+  async function readThrough() {
+    let page = await readWorkPlanPage(f.context);
+    const paired = { expectedRevision: page.revision, expectedProgressRevision: page.progressRevision };
+    while (page.hasMore) page = await readWorkPlanPage(f.context, { offset: page.nextOffset, ...paired });
+    return page.readThrough;
   }
   const revisions = async () => {
     const current = await readWorkPlan(f.context);

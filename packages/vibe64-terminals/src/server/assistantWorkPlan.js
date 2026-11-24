@@ -348,9 +348,13 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
     offset,
     nextOffset,
     totalCharacters,
-    hasMore: nextOffset < totalCharacters
+    hasMore: nextOffset < totalCharacters,
+    ...(nextOffset >= totalCharacters && !archiveId && plan.artifactRevision ? { readThrough: readThroughOf(plan) } : {})
   };
 }
+
+// What only a read's last page, or a write's answer, gives: proof that Plan and Progress were read through to the end.
+const readThroughOf = (plan) => sha256Hex("vibe64-plan-read-through-v1\0" + plan.artifactRevision);
 
 async function writePlan(file, text) {
   const directory = path.dirname(file);
@@ -438,8 +442,8 @@ const OPERATION_FIELDS = Object.freeze({
   read: ["offset", "limit", ...PAIRED, "archiveId"],
   history: [],
   new: ["text", ...PAIRED, "archiveCurrent"],
-  write: ["text", ...PAIRED],
-  "progress-write": ["text", ...PAIRED],
+  write: ["text", ...PAIRED, "readThrough"],
+  "progress-write": ["text", ...PAIRED, "readThrough"],
   checked: PAIRED,
   complete: PAIRED,
   archive: PAIRED,
@@ -479,12 +483,14 @@ function refuseUnreadInput(input) {
  * change the ticks outside Passes. Any role that may tick may record that it checked the plan and
  * found nothing to change (checked). With `sourceState`, the AI's change records the session's
  * source as it is now as the plan's mark (MARKING_OPERATIONS); a plan replaced or archived drops it.
+ * With `agent` (the agent's plan command), write and progress-write need the readThrough a read's last page or the
+ * last write returned: never text built from a first page alone.
  * @param {object} context
  * @param {object} input
  * @param {string} role senior, review, junior, pass or user
- * @param {{ passItem?: string, sourceState?: () => Promise<object | null> }} [options]
+ * @param {{ passItem?: string, sourceState?: () => Promise<object | null>, agent?: boolean }} [options]
  */
-async function manageWorkPlan(context, input, role, { passItem = "", sourceState } = {}) {
+async function manageWorkPlan(context, input, role, { passItem = "", sourceState, agent = false } = {}) {
   // Read before the plan's queue: Git's status of the source takes longer than the plan's own reads.
   const marking = Boolean(sourceState) && MARKING_OPERATIONS.includes(input.operation);
   const source = marking ? await sourceState().catch(() => null) : null;
@@ -522,6 +528,13 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
     }
     if (current && expectedProgressRevision !== (current.progressRevision || "")) {
       throw planError("Progress changed. Read both documents before editing them.", "vibe64_work_plan_progress_changed");
+    }
+    if (agent && current && ["write", "progress-write"].includes(operation) && input.readThrough !== readThroughOf(current)) {
+      const fix = "read every page of Plan and Progress (follow nextOffset while hasMore), then write from all of them. Nothing changed.";
+      throw planError(
+        `plan ${operation} replaces the whole ${TEXT_OPERATIONS[operation]}, so it needs readThrough from the read's last page or your last write's answer: ${fix}`,
+        "vibe64_work_plan_read_through_required"
+      );
     }
     if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_revision_missing");
     if (["write", "progress-write", "checked", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.", "vibe64_work_plan_missing");
@@ -607,6 +620,8 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
     if (operation === "reopen" && archiveId) await rm(pairPath(context, archiveId));
     await retireUnreferencedDocuments(context);
     const result = await readWorkPlanPageUnlocked(context);
+    // The writer read both documents through and wrote one of them whole: its next write needs no new read.
+    if (["write", "progress-write"].includes(operation)) result.readThrough = readThroughOf(result);
     if (current && (replacing || operation === "archive")) {
       result.notice = "Archived “" + current.title + "”. It remains available in Plan history.";
     }
@@ -628,7 +643,7 @@ function workPlanInstructions(role, { autoOutcome = false, auto = false } = {}) 
     "A request to make, create, write or prepare a plan means save a Vibe64 checklist through vibe64-helper plan, unless the user explicitly asks for a chat-only draft or another format.",
     "The conversation has one current plan, active or completed, and preserved archived snapshots outside the project repository.",
     "Use vibe64-helper plan --help, then vibe64-helper plan read or history to inspect it. Use the plan helper for ALL edits and lifecycle operations; never edit its storage files directly or copy them into the repository.",
-    "Plan commands take a JSON object on stdin. Writes require expectedRevision and expectedProgressRevision from the latest paired read. Read every page of BOTH text and progressText before working; a link is not a read. New/write take text containing a Markdown title and checklists (- [ ] / - [~] / - [x]); other headings and structure are your choice. progress-write takes the whole new Progress as text too, never as progressText.",
+    "Plan commands take a JSON object on stdin. Writes require expectedRevision and expectedProgressRevision from the latest paired read. write and progress-write replace the whole Plan or Progress, so build them from every page and pass readThrough: only the read's last page (hasMore false) returns it, and so does each write's answer. Read every page of BOTH text and progressText before working; a link is not a read. New/write take text containing a Markdown title and checklists (- [ ] / - [~] / - [x]); other headings and structure are your choice. progress-write takes the whole new Progress as text too, never as progressText.",
     "Keep the agreed Plan scope stable: start with a short summary of the proposed changes written for a nontechnical user, followed by a checklist of agreed deliverables and acceptance requirements; when one item is a foundation that others build on, split it or say so in the item, so the marks can move as the work goes. Then include a ## Technical details section containing a VERY detailed technical implementation plan that Junior can follow carefully: actual owners/files, ordered steps, constraints, edge cases and verification. The viewer collapses Technical details for the person, who can expand them; this is presentation only. Junior and review MUST read and follow the complete technical section, not just the summary/checklist. Each checklist item carries one of three marks: - [ ] not done yet, - [~] built (implemented, and its own focused checks pass) and - [x] proven by the plan's final checks. Update checklist ticks with write as you go; do not wait until the whole plan or turn is finished. Half-tick each item (- [~]) as soon as it is implemented and its own focused checks pass, and full-tick it (- [x]) when the plan's final proof covers it: the whole run, the review or the proof the plan states. Never leave a built item empty: tick each item the moment it is built and its own checks pass, not at the end of the turn, and the last item too before your turn ends. When work on one item also builds others, walk the whole checklist: half-tick each item that is built and checked, note in Progress what is partly built, and never hold every tick until the first item is finished. When a turn changed files but not the marks or Progress, Vibe64's plan check asks you once to walk the checklist and update them, or to run plan checked (paired revisions, nothing changes) when nothing needs a new mark; in Auto and in a Senior chat, Senior's review of the plan follows when every item is built or the check left the plan unchanged, and when every item is built and your turn ends without reporting continue, also if it asked the person something. An item built whose remaining proof can't run in this session (a real phone, a suite only CI runs) is half-ticked (- [~]) with what is unproven and why in Progress; never end your turn asking about it: Senior's review asks the person, as a numbered question with a recommended answer. A partial item stays - [ ]; an item whose evidence is missing or that regressed moves back to - [~] or - [ ], including when review finds it. Keep checklist wording and technical scope unchanged when updating ticks. Record supporting evidence and blockers in the paired Progress document with progress-write, then use its returned paired revisions for the checklist write. Do not append progress logs or evidence to Plan. The optional link in Plan is only a convenience; Plan and Progress are one artifact.",
     "Human instructions take precedence. Keep agreed scope and completed evidence; do not invent additional requirements. Discussion alone never changes plan status.",
     "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan.",
