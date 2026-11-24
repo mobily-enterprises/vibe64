@@ -464,3 +464,167 @@ describe("host list errors", () => {
     } finally { f.app.unmount(); }
   });
 });
+
+// Save and Update answer their request once the work starts, and run on at the server (on 24 Nov 2026 a hosted
+// Update answered "Request failed with status 504." after the edge's minute, while it went on updating). The host
+// follows the work's task to the outcome its request used to wait for.
+describe("host Save and Update answered once they start", () => {
+  const SAVE_STARTED = "2026-11-24T03:38:00.000Z";
+
+  /** The session's Save and Update tasks as its detail and its work inspection both show them. */
+  function hostWorkServer(f, answers) {
+    const tasks = { "save-work": null, "update-session": null };
+    mountedHostMocks.request.mockImplementation(async (path) => {
+      if (path.endsWith("/work")) {
+        const active = Object.values(tasks).find((task) => task?.status === "running");
+        return { ok: true, sessionId: "working-one", unsaved: false, operation: tasks["save-work"],
+          updateOperation: tasks["update-session"],
+          activeOperation: active ? { kind: active.id === "save-work" ? "save" : "update", operationId: active.operationId } : null };
+      }
+      const answer = Object.entries(answers).find(([suffix]) => path.endsWith(suffix))?.[1];
+      // The repository status registry checks the session for updates as it opens.
+      if (!answer) return path.endsWith("/updates/check") ? { ok: true, updateAvailable: true } : { ok: true };
+      return typeof answer === "function" ? answer() : answer;
+    });
+    return {
+      requests: (suffix) => mountedHostMocks.request.mock.calls.filter(([path]) => path.endsWith(suffix)),
+      async show(task) {
+        tasks[task.id] = task;
+        f.mountedSession.value = { ...f.mountedSession.value, backgroundTasks: Object.values(tasks).filter(Boolean) };
+        await settle();
+      }
+    };
+  }
+
+  async function settle() {
+    for (let turn = 0; turn < 5; turn += 1) {
+      await nextTick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  function tracked(promise) {
+    const state = { done: false };
+    state.result = promise.then((value) => { state.done = true; return value; },
+      (error) => { state.done = true; throw error; });
+    // The test's own expectation reads the rejection; until then it is not unhandled.
+    state.result.catch(() => {});
+    return state;
+  }
+
+  const running = (id, operationId, startedAt = SAVE_STARTED) => ({
+    events: [{ kind: id === "save-work" ? "save-started" : "update-started", status: "running" }],
+    id, operationId, startedAt, status: "running"
+  });
+
+  it("follows a started Update past an earlier one's outcome to its own, with the update check it recorded", async () => {
+    const f = mountedHostFixture();
+    const server = hostWorkServer(f, {
+      "/updates/apply": { ok: true, operation: running("update-session", "update-2"), operationId: "update-2", running: true },
+      "/updates/check": { ok: true, behind: 0, checkedAt: "2026-11-24T03:40:00.000Z", updateAvailable: false }
+    });
+    try {
+      await settle();
+      await server.show({ id: "update-session", operationId: "update-1", startedAt: "2026-11-23T09:00:00.000Z", status: "ready" });
+      const update = tracked(f.host.updateSessionWork());
+      await settle();
+      expect(update.done).toBe(false);
+      await server.show({ ...running("update-session", "update-2"), events: [
+        { kind: "update-started", status: "running" },
+        { kind: "connected", message: "genesis-compiler updated to 5c179f06d770.", status: "running" }
+      ] });
+      expect(update.done).toBe(false);
+      const checks = server.requests("/updates/check").length;
+      await server.show({ ...running("update-session", "update-2"), status: "ready", updatedPathCount: 2 });
+      await expect(update.result).resolves.toMatchObject({
+        ok: true, behind: 0, checkedAt: "2026-11-24T03:40:00.000Z", operation: { operationId: "update-2", status: "ready" },
+        updateAvailable: false, updatedPathCount: 2
+      });
+      expect(server.requests("/updates/apply")).toHaveLength(1);
+      // The check the finished Update recorded, read unforced as its waited-for answer carried it.
+      expect(server.requests("/updates/check").slice(checks).map(([, options]) => options.body)).toContainEqual({ force: false });
+    } finally { f.app.unmount(); }
+  });
+
+  it("throws a started Update's conflict as its request did, with the recovery its notice offers", async () => {
+    const f = mountedHostFixture();
+    const server = hostWorkServer(f, {
+      "/updates/apply": { ok: true, operation: running("update-session", "update-2"), operationId: "update-2", running: true }
+    });
+    try {
+      const update = tracked(f.host.updateSessionWork());
+      await settle();
+      const conflictRecovery = { conflictPaths: ["src/app.js"], connectedRepository: "genesis-compiler", reviewId: "review-1" };
+      await server.show({ ...running("update-session", "update-2"), code: "vibe64_session_update_conflict",
+        conflictPaths: ["src/app.js"], conflictRecovery, connectedRepository: "genesis-compiler",
+        error: "genesis-compiler has conflicts to review.", status: "failed" });
+      await expect(update.result).rejects.toMatchObject({
+        code: "vibe64_session_update_conflict",
+        details: { conflictPaths: ["src/app.js"], conflictRecovery, connectedRepository: "genesis-compiler" },
+        message: "genesis-compiler has conflicts to review."
+      });
+    } finally { f.app.unmount(); }
+  });
+
+  it("follows the Update an edge's 504 hid, through the operation the session reports running", async () => {
+    const f = mountedHostFixture();
+    const server = hostWorkServer(f, {
+      "/updates/apply": async () => {
+        // The Update started before its answer was lost.
+        await server.show(running("update-session", "update-3"));
+        throw Object.assign(new Error("Request failed with status 504."), { status: 504 });
+      },
+      "/updates/check": { ok: true, updateAvailable: false }
+    });
+    try {
+      const update = tracked(f.host.updateSessionWork());
+      await settle();
+      expect(update.done).toBe(false);
+      await server.show({ ...running("update-session", "update-3"), status: "ready" });
+      await expect(update.result).resolves.toMatchObject({ ok: true, operation: { operationId: "update-3" } });
+    } finally { f.app.unmount(); }
+  });
+
+  it("still reports a lost answer when no Update started", async () => {
+    const f = mountedHostFixture();
+    hostWorkServer(f, {
+      "/updates/apply": async () => { throw Object.assign(new Error("Request failed with status 504."), { status: 504 }); }
+    });
+    try {
+      await expect(f.host.updateSessionWork()).rejects.toMatchObject({ message: "Request failed with status 504.", status: 504 });
+    } finally { f.app.unmount(); }
+  });
+
+  it("refuses a started Save that found the session needs an Update first, as its request did", async () => {
+    const f = mountedHostFixture();
+    const server = hostWorkServer(f, {
+      "/save": { ok: true, operation: running("save-work", "save-2"), operationId: "save-2", running: true }
+    });
+    try {
+      const save = tracked(f.host.saveSessionWork({ destinationReview: { sessionId: "working-one" } }));
+      await settle();
+      expect(save.done).toBe(false);
+      await server.show({ ...running("save-work", "save-2"), code: "vibe64_session_save_update_required",
+        events: [{ kind: "save-started", status: "running" },
+          { kind: "save-update-required", message: "Update this session first.", status: "ready" }],
+        status: "ready", updateRequired: true });
+      await expect(save.result).rejects.toMatchObject({
+        code: "vibe64_session_save_update_required", message: "Update this session first."
+      });
+    } finally { f.app.unmount(); }
+  });
+
+  it("stops following when the person opens another session; the work runs on at the server", async () => {
+    const f = mountedHostFixture();
+    hostWorkServer(f, {
+      "/save": { ok: true, operation: running("save-work", "save-2"), operationId: "save-2", running: true }
+    });
+    try {
+      const save = tracked(f.host.saveSessionWork());
+      await settle();
+      expect(save.done).toBe(false);
+      f.props.sessionId = "another-session";
+      await expect(save.result).resolves.toBe(false);
+    } finally { f.app.unmount(); }
+  });
+});

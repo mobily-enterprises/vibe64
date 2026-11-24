@@ -100,12 +100,24 @@ that nothing was pushed, the original rejection remains visible or an
 uncertain attempt becomes explicitly retryable. Colleague can inspect work and
 explain that result; a new Save still requires your instruction.
 
-Save and Update can take time. Existing temporary chats and an open
+Save and Update can take minutes, for example while they update or save several
+connected repositories. Choosing **Save** or **Update session from main** (or
+**Update this session (rebase)**) starts the work on the Vibe64 server, and its
+notice shows each step as it happens. The work runs to its end on the server
+whatever happens to the page: closing or reloading the tab, losing the connection,
+or a proxy between the browser and the server cutting off a long request neither
+stops it nor counts as its failure. When it ends, the notice shows its outcome,
+with **Review resolved conflicts**, **Fix it with AI** and **Retry** where they
+apply; opening the session again shows a Save or Update that is still running, or
+one that failed. Choosing the same action again while it runs, from another tab
+for instance, follows the one that is running instead of starting a second. A
+refusal that stops it before it starts, such as another repository operation
+holding the session, is reported at once.
+
+Existing temporary chats and an open
 [AI task](ai-tasks.md)'s Chat remain readable, and plain text typed in them is saved
 without waiting for the source operation. A new assistant send or change to its model or attachments waits
-until that operation finishes. If the Update request loses its response, inspect
-the current Update operation in this session before starting another one; a
-disconnected browser does not prove that Update failed or succeeded.
+until that operation finishes.
 
 Use **Dismiss** to hide an inactive Save or Update notice. This browser remembers
 each dismissed operation in that project and session, including after reload or

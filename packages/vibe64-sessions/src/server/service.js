@@ -206,6 +206,9 @@ function createService({
     inspectSessionChanges: work.inspectSessionChanges,
     inspectSessionWork: work.inspectSessionWork,
     saveSessionWork: work.saveSessionWork,
+    settleStartedWork: work.settleStartedWork,
+    startSessionSave: work.startSessionSave,
+    startSessionUpdate: work.startSessionUpdate,
     updateSessionWork: work.updateSessionWork,
 
     checkSessionUpdates: repositoryUpdates.checkSessionUpdates,

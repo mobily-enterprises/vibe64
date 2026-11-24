@@ -124,6 +124,104 @@ for (const width of [390, 1440]) {
   });
 }
 
+// On 24 Nov 2026 a hosted Update session from main showed its connected repositories' progress, then "Request
+// failed with status 504." about a minute in, while the Update went on at the server: it ran inside its request, which
+// the hosted edge ends after about a minute. The Update request now answers as soon as the work has started; the
+// notice shows the work's progress and outcome from its task, and a lost answer is followed the same way.
+for (const answer of ["started", "lost to the edge"]) {
+  test(`@update-background an Update whose request ${answer === "started" ? "answers once it starts" : "the edge cut off"} shows its task's progress and outcome`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockLaunchTerminalSocket(page);
+    const session: Record<string, unknown> = { ...sessionPayload(), revision: 1 };
+    await mockLaunchSession(page, { session });
+    const startedAt = new Date().toISOString();
+    const task: Record<string, unknown> = {
+      events: [{ at: startedAt, kind: "update-started", message: "Updating this session (rebase).", status: "running" }],
+      id: "update-session", operationId: "update-background", startedAt, status: "running", updatedAt: startedAt
+    };
+    let behind = true;
+    let started = false;
+    // The session's detail and work inspection show the task as the server records it.
+    const record = async (patch: Record<string, unknown>, reason: string) => {
+      Object.assign(task, patch, { updatedAt: new Date().toISOString() });
+      session.backgroundTasks = [{ ...task, events: [...(task.events as unknown[])] }];
+      session.revision = Number(session.revision) + 1;
+      await publishChatSessionChange(page, { reason, sessionId: SESSION_ID });
+    };
+    const running = () => started && task.status === "running";
+    // The project's main the update checks report; the session is on it once updated.
+    const canonicalCommit = "main-after-genesis-compiler";
+    await page.route("**/sessions/*/work", (route) => fulfillJson(route, {
+      activeOperation: running() ? { kind: "update", operationId: task.operationId } : null,
+      canonicalCommit,
+      checkedAt: new Date().toISOString(),
+      ok: true,
+      unsaved: true,
+      updateAvailable: behind,
+      updateOperation: started ? task : null
+    }));
+    await page.route("**/sessions/*/updates/check", (route) => fulfillJson(route, {
+      canonicalCommit, checkedAt: new Date().toISOString(), ok: true, updateAvailable: behind
+    }));
+    let starts = 0;
+    await page.route("**/sessions/*/updates/apply", async (route) => {
+      starts += 1;
+      // The server records the start before it answers.
+      started = true;
+      session.backgroundTasks = [{ ...task }];
+      session.revision = Number(session.revision) + 1;
+      if (answer === "started") {
+        await fulfillJson(route, { ok: true, operation: task, operationId: task.operationId, running: true }, { status: 202 });
+      } else {
+        await route.fulfill({ body: "<html><body>504 Gateway Time-out</body></html>", contentType: "text/html", status: 504 });
+      }
+    });
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    const update = page.getByRole("button", { name: "Update session", exact: true });
+    await expect(update).toBeEnabled();
+    await update.click();
+    await expect.poll(() => starts).toBe(1);
+    // The server announces the start it recorded; a page whose answer was lost reads it from the session's work.
+    if (answer === "started") await publishChatSessionChange(page, { reason: "session-update-started", sessionId: SESSION_ID });
+    const notice = page.locator(".vibe64-temporary-action-terminal__line:visible");
+    await expect(notice.filter({ hasText: "Updating this session (rebase)." })).toBeVisible();
+    await expect(update).toBeDisabled();
+    await record({ events: [...(task.events as unknown[]), {
+      at: new Date().toISOString(), kind: "connected", message: "[Connected] genesis-compiler updated to 5c179f06d770.", status: "running"
+    }] }, "session-update-progress");
+    await expect(notice.filter({ hasText: "[Connected] genesis-compiler updated to 5c179f06d770." })).toBeVisible();
+    await expect(update).toBeDisabled();
+    await expect(page.getByText(/Request failed with status/u)).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("update-running.png") });
+    if (answer === "started") {
+      const conflictRecovery = { conflictPaths: ["genesis/stack.md"], connectedRepository: "genesis-compiler", reviewId: "review-1" };
+      await record({
+        code: "vibe64_session_update_conflict", conflictPaths: ["genesis/stack.md"], conflictRecovery,
+        connectedRepository: "genesis-compiler", error: "genesis-compiler conflicts with main in genesis/stack.md.",
+        events: [...(task.events as unknown[]), { at: new Date().toISOString(), kind: "update-failed",
+          message: "genesis-compiler conflicts with main in genesis/stack.md.", status: "failed" }],
+        status: "failed"
+      }, "session-update-failed");
+      await expect(page.getByText(/Update session( from main)? needs attention/u).first()).toBeVisible();
+      await expect(page.getByText("genesis-compiler conflicts with main in genesis/stack.md.").first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "Review resolved conflicts", exact: true })).toBeVisible();
+    } else {
+      behind = false;
+      await record({
+        events: [...(task.events as unknown[]), { at: new Date().toISOString(), kind: "updated",
+          message: "This session was updated.", status: "ready" }],
+        status: "ready"
+      }, "session-update-completed");
+      await expect(page.getByText(/needs attention/u)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Review selected session changes", exact: true })).toBeEnabled();
+      await expect(update).toHaveCount(0);
+    }
+    await expect(page.getByText(/Request failed with status/u)).toHaveCount(0);
+    expect(starts).toBe(1);
+    await page.screenshot({ path: testInfo.outputPath("update-outcome.png") });
+  });
+}
+
 for (const width of [390, 1440]) {
   for (const first of ["HTTP", "realtime"]) {
     test(`@rebase-discovery ${first} shows Rebase before work inspection at ${width}px`, async ({ page }, testInfo) => {

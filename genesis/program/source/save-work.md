@@ -800,6 +800,33 @@ Save and Update then run whether or not a main-chat turn is open. If preparation
 timeout, the failure identifies reconnection and offers a later retry. The lock
 is never bypassed and the browser does not automatically resubmit publication.
 
+The Save and Update buttons' requests (`POST .../save`, `POST .../updates/apply`)
+run `vibe64.sessions.work.save.start` and `vibe64.sessions.updates.start`, which
+answer `202` with `{ running: true, operationId, operation }` once the work has
+recorded its start in its task (`startSessionWork` in `sessionWork.js`): a hosted
+workspace's edge ends a request after about a minute, while a Save or Update of
+several connected repositories runs for minutes, and on 24 Nov 2026 an Update
+answered `504` while it went on at the server. A refusal before the start (an
+AI task running, the agent-write lock still held after its ten seconds, a
+superseded or unreadable publication) is still the answer, with the same code
+and status. The work then runs to its end whatever happens to the request; no
+signal ties it to the connection. A request while one of the same kind runs or
+is starting gets that one's answer instead of a second run. Update publishes
+`session-update-progress` at each step, as Save publishes `session-save-progress`.
+The browser follows the task to its outcome (`workRequestOutcome` in
+`useVibe64SessionRuntimeHost.js`, `vibe64SessionWorkOutcome.js`): the task that
+leaves running with that operation id, or a later one of its kind, becomes the
+result the request used to wait for, so the notice's progress, refusals,
+conflict recovery and Save's update-first answer are unchanged. An answer lost
+on the way (a dropped connection, an edge's 5xx without the server's code) is
+followed through the operation `/work` then reports running, or a newer finished
+one; with neither, the transport error is reported as before. Leaving the
+session or the page ends only the browser's following. The server's shutdown
+waits for a started Save or Update to record its outcome (`settleStartedWork`,
+called by `stopSessionWork`), as it once waited for its request. The assistant's
+`work.save` and `updates.apply` tools, `vibe64-helper` and an AI task's check still
+wait for the outcome in process.
+
 An AI task's Cancel passes Update an `AbortSignal`. It stops the checkpoint,
 prepare and regeneration stages, whose child forwards the stop to its own Git
 process groups, and every later stage; Update then fails with

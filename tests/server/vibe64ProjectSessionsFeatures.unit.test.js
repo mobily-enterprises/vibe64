@@ -311,8 +311,10 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.renewal.retry",
     "vibe64.sessions.updates.apply",
     "vibe64.sessions.updates.check",
+    "vibe64.sessions.updates.start",
     "vibe64.sessions.work.inspect",
     "vibe64.sessions.work.save",
+    "vibe64.sessions.work.save.start",
     "vibe64.sessions.workspace-setup.retry"
   ]);
   const contextRead = sessionActions[0].actions.find(action => action.id === "vibe64.sessions.conversation.context.read");
@@ -322,7 +324,10 @@ test("project and sessions register routes and captured actions during setup", a
   assert.deepEqual(internalActionIds, [
     "vibe64.sessions.conversation.context.read"
   ]);
-  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - internalActionIds.length,
+  // The Save and Update buttons' routes run the actions that answer once the work starts; the actions that wait for
+  // its outcome are the assistant's tools.
+  const routedByStartActions = ["vibe64.sessions.updates.apply", "vibe64.sessions.work.save"];
+  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - internalActionIds.length - routedByStartActions.length,
     "internal actions, including the conversation access query, have no HTTP route");
   assert.equal(sessionActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);
   const resumed = await sessionOutputs.sessions.resumeIntegrationContinuation("session-1", {
@@ -468,6 +473,8 @@ function withStartupRecovery(sessions, logger = silentLogger) {
     resumeSessionRenewals: () => sessions.resumeSessionRenewals()
   });
   return {
+    // No Save or Update started from a button runs in these doubles.
+    settleStartedWork: async () => {},
     ...sessions,
     resumeInterruptedWork: recovery.start,
     stopResumingInterruptedWork: recovery.stop

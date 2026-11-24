@@ -292,7 +292,7 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/renewal/cancel public app 32768 v
 POST /api/app/:slug/vibe64/sessions/:sessionId/renewal/confirm public app 32768 vibe64.sessions.renewal.confirm
 POST /api/app/:slug/vibe64/sessions/:sessionId/renewal/draft public app 32768 vibe64.sessions.renewal.draft.request
 POST /api/app/:slug/vibe64/sessions/:sessionId/renewal/retry public app 32768 vibe64.sessions.renewal.retry
-POST /api/app/:slug/vibe64/sessions/:sessionId/save public app - vibe64.sessions.work.save
+POST /api/app/:slug/vibe64/sessions/:sessionId/save public app - vibe64.sessions.work.save.start
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/:explanationId/followups/stream public app 131072 -
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/:explanationId/stop public app 131072 vibe64.source-editor.explanation.stop
 POST /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/cleanup public app 16384 vibe64.source-editor.explanations.cleanup
@@ -304,7 +304,7 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/stack/services public app 16384 v
 POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations public app - vibe64.terminals.temporary-conversation.create
 POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/stop public app - vibe64.terminals.temporary-conversation.stop
 POST /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId/turns public app - vibe64.terminals.temporary-conversation.turn.start
-POST /api/app/:slug/vibe64/sessions/:sessionId/updates/apply public app - vibe64.sessions.updates.apply
+POST /api/app/:slug/vibe64/sessions/:sessionId/updates/apply public app - vibe64.sessions.updates.start
 POST /api/app/:slug/vibe64/sessions/:sessionId/updates/check public app - vibe64.sessions.updates.check
 POST /api/app/:slug/vibe64/sessions/:sessionId/work-plan/archive public app - vibe64.terminals.work-plan.archive
 POST /api/app/:slug/vibe64/sessions/:sessionId/work-plan/restore public app - vibe64.terminals.work-plan.restore
