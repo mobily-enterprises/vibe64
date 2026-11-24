@@ -336,6 +336,10 @@ status code. A repeat this editor does not hold (it restarted, or the first
 request never arrived) creates nothing and answers
 `vibe64_session_creation_not_followed`, saying to check the session list. The
 assistant's tool and the server's own creations run `createSession` and wait.
+The `requestId` is optional on every held request (create, archive, Create pull
+request, the database copilot's question): a request without one (a script,
+the helper, a page cached before the release) runs and waits for its outcome as
+before, is never joined, and a `repeat` without one starts nothing.
 
 Session listing projects saved agent-run activity and its session revision into
 `agentActivity`; unreadable activity remains unknown. Agent-run files are kept

@@ -25,6 +25,12 @@ function createHeldRequests({ component, heldAs, logger, notFollowed }) {
    */
   async function run(scope, input, work) {
     const { requestId, repeat = false, ...request } = input;
+    // A request with no id (a script, the helper, an older page) cannot be joined: it waits for its work, as such
+    // requests always did, and a repeat of one starts nothing.
+    if (!normalizeText(requestId)) {
+      if (repeat === true) return { ...notFollowed, ok: false };
+      return work(request, { stage() {}, signal: new AbortController().signal });
+    }
     const key = [currentProjectScopeKey(), ...scope.map(normalizeText), normalizeText(requestId)].join("\0");
     const operation = held.inspect(key);
     if (operation?.settled) {

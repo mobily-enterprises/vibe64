@@ -310,7 +310,7 @@ const sessionPullRequestInputValidator = actionInput(sessionPullRequestFields);
 // The dialog's create names its request, so its repeat after a held or lost answer joins it.
 const sessionPullRequestStartInputValidator = actionInput({
   ...sessionPullRequestFields,
-  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true },
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: false },
   // The dialog's repeat of a create it sent: it never starts one.
   repeat: { type: "boolean", required: false }
 });
@@ -337,7 +337,7 @@ const sessionCreateInputValidator = actionInput(sessionCreateFields);
 // The page's create names its request, so its repeat after a held or lost answer joins it and never creates again.
 const sessionCreateStartInputValidator = actionInput({
   ...sessionCreateFields,
-  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true },
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: false },
   repeat: { type: "boolean", required: false }
 });
 
@@ -449,7 +449,7 @@ const sessionIdInputValidator = actionInput(withSessionId(optionalOrigin));
 // The page's archive names its request, so its repeat after a held or lost answer joins it and never archives again.
 const sessionArchiveStartInputValidator = actionInput(withSessionId({
   ...optionalOrigin,
-  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true },
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: false },
   repeat: { type: "boolean", required: false }
 }));
 
