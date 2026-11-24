@@ -78,6 +78,9 @@
       />
     </v-sheet>
     <GitStandInIdentityNotice v-if="saveWorkStandInIdentity" @close="saveWorkStandInIdentity = false" />
+    <v-alert v-if="saveWorkNote" type="info" variant="tonal" density="compact" closable role="status" data-vibe64-save-note @click:close="saveWorkNote = ''">
+      {{ saveWorkNote }}
+    </v-alert>
     <v-alert v-if="saveWorkConnectedResults.length" type="info" variant="tonal" closable @click:close="saveWorkConnectedResults = []">
       <p class="mb-2">Connected repositories saved:</p>
       <ul>
@@ -220,7 +223,7 @@ const {
   props, requestSessionRenewal, resourceRecoveryControl,
   retrySaveWork, retryWorkspaceSetup, reviewResolvedUpdate, saveWorkActivityDismissed,
   saveWorkActivityIsUpdate, saveWorkActivityKey, saveWorkActivityLabel, saveWorkCanResolveWithAi,
-  saveWorkConnectedResults, saveWorkDisabled, saveWorkError, saveWorkFailure, saveWorkOperationActive,
+  saveWorkConnectedResults, saveWorkDisabled, saveWorkNote, saveWorkError, saveWorkFailure, saveWorkOperationActive,
   saveWorkOutput, saveWorkRequiresUpdate, saveWorkRetryable, saveWorkSending, saveWorkStage,
   saveWorkStandInIdentity, saveWorkStatus,
   sessionId, sessionPullRequest, sourceOperationsSuspended, testApproval,

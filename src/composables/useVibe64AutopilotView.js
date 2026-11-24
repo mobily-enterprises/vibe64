@@ -566,6 +566,7 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkConfirmOpen: saveWork.saveWorkConfirmOpen,
     saveWorkConflictFailure: saveWork.saveWorkConflictFailure,
     saveWorkConnectedResults: saveWork.saveWorkConnectedResults,
+    saveWorkNote: saveWork.saveWorkNote,
     saveWorkDisabled: saveWork.saveWorkDisabled,
     saveWorkError: saveWork.saveWorkError,
     saveWorkFailure: saveWork.saveWorkFailure,

@@ -16,6 +16,8 @@ function eventTimeLabel(at = "", now = new Date()) {
   return (date.toDateString() === now.toDateString() ? EVENT_TIME_FORMAT : EVENT_DATE_TIME_FORMAT).format(date);
 }
 
+const NOTHING_TO_SAVE_CODE = "vibe64_session_save_no_changes";
+
 function repositoryFailureFromError(error) {
   return error && typeof error === "object"
     ? {
@@ -40,6 +42,8 @@ function useVibe64SessionSaveWork(props, {
   const saveWorkConfirmOpen = ref(false);
   const saveWorkReview = ref(null);
   const saveWorkConnectedResults = ref([]);
+  // Save found nothing to save: the server's own words, shown as a note rather than a failure.
+  const saveWorkNote = ref("");
   // The last Save was recorded with the stand-in Git name and email.
   const saveWorkStandInIdentity = ref(false);
   const saveWorkError = ref("");
@@ -431,10 +435,19 @@ function useVibe64SessionSaveWork(props, {
     saveWorkConnectedResults.value = [];
     saveWorkStandInIdentity.value = false;
     saveWorkConfirmOpen.value = false;
+    saveWorkNote.value = "";
     return runRepositoryRequest("save", "Session work could not be saved.", () => props.saveSessionWork({
       destinationReview: saveWorkReview.value
+    }).catch((error) => {
+      // Refused before it started: still nothing to save, not a failure.
+      if (repositoryFailureFromError(error)?.code !== NOTHING_TO_SAVE_CODE) throw error;
+      return { code: NOTHING_TO_SAVE_CODE, message: error.message, ok: false };
     }), {
       onSuccess(result) {
+        if (result?.code === NOTHING_TO_SAVE_CODE) {
+          saveWorkNote.value = String(result.message || result.events?.at(-1)?.message || "");
+          return;
+        }
         saveWorkConnectedResults.value = result?.connected || [];
         saveWorkStandInIdentity.value = result?.standInIdentity === true;
         if (result) reportActivity("saved", { projectSlug: projectSlug.value, sessionId: sessionId.value });
@@ -447,6 +460,7 @@ function useVibe64SessionSaveWork(props, {
     saveWorkConfirmOpen.value = false;
     saveWorkConnectedResults.value = [];
     saveWorkStandInIdentity.value = false;
+    saveWorkNote.value = "";
     resolvedUpdateReview.value = null;
     saveWorkSending.value = false;
     saveWorkAttempt.value = null;
@@ -471,6 +485,7 @@ function useVibe64SessionSaveWork(props, {
     saveWorkConfirmOpen,
     saveWorkConflictFailure,
     saveWorkConnectedResults,
+    saveWorkNote,
     saveWorkDisabled,
     saveWorkError,
     saveWorkFailure,

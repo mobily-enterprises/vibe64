@@ -422,25 +422,29 @@ function createSessionWork({
           throw error;
         }
         const updateRequired = error?.code === "vibe64_session_save_update_required";
+        // Nothing to save is Save's answer, not a failure the session needs help with: a note, as Update first is.
+        const nothingToSave = error?.code === "vibe64_session_save_no_changes";
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
           event: {
-            kind: updateRequired ? "save-update-required" : "save-failed",
-            message: normalizeText(error?.message) || "Session Save failed.",
-            status: updateRequired ? "ready" : "failed"
+            kind: updateRequired ? "save-update-required" : nothingToSave ? "save-no-changes" : "save-failed",
+            message: nothingToSave
+              ? "Nothing to save: this session has no unsaved work."
+              : normalizeText(error?.message) || "Session Save failed.",
+            status: updateRequired || nothingToSave ? "ready" : "failed"
           },
           patch: {
             code: normalizeText(error?.code),
             ...(updateRequired
               ? { updateRequired: true }
-              : { error: normalizeText(error?.message) || "Session Save failed." }),
+              : nothingToSave ? {} : { error: normalizeText(error?.message) || "Session Save failed." }),
             operationId,
-            status: updateRequired ? "ready" : "failed"
+            status: updateRequired || nothingToSave ? "ready" : "failed"
           }
         });
         await publishSessionChanged(sessionId, {
           operation: "updated",
           originId: normalizeText(input.originId),
-          reason: updateRequired ? "session-save-update-required" : "session-save-failed",
+          reason: updateRequired ? "session-save-update-required" : nothingToSave ? "session-save-completed" : "session-save-failed",
           session: await runtime.getSessionWithoutSource(sessionId),
           task
         });

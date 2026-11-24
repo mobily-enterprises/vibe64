@@ -286,7 +286,9 @@ notice**); the notice returns with its controls, and on phones chat is revealed.
 Screen readers hear the same reason and next step in the tab's name, and the
 **Save** button's hover text repeats it. The failure does not disable Save:
 **Save** is unavailable only when the session has nothing to save, and its
-hover text then says **No work to save**.
+hover text then says **No work to save**. A Save that finds nothing left to
+save (another tab or the AI saved it first) shows **Nothing to save** as a
+note, never a failure.
 
 A repair made outside Save and Update counts. If you or the session's AI fixed
 the repository with Git (for example, rebased onto the latest saved version and
