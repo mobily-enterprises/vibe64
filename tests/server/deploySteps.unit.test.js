@@ -1390,7 +1390,7 @@ test("a name added to the domain's other names is routed to the running public A
   assert.deepEqual(writesAfter(standIn, at), [
     ["POST", `/v1/projects/${standIn.projectId}/domains`], ["PUT", `/v1/services/${web}/settings`], ["PATCH", `/v1/services/${web}`]
   ]);
-  const patch = requestsAfter(standIn, at).find((request) => request.method === "PATCH");
+  const patch = requestsAfter(standIn, at).find((request) => request.method === "PATCH" && request.path === `/v1/services/${web}`);
   // The whole list, as mobilynet replaces it: the names web has kept, the new one added, none taken from anyone.
   assert.deepEqual(patch.body, { routes: [{ host: DOMAIN, tls: "edge" }, { host: WWW, tls: "edge" }, { host: OLD, tls: "edge" }] });
   assert.ok(events.some((event) => event.kind === "step" && event.words === `Routing ${DOMAIN}, ${WWW} and ${OLD} to App Service web`));
