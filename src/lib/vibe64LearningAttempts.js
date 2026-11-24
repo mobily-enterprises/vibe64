@@ -1,9 +1,14 @@
 import { shallowRef } from "vue";
 import { EMPTY_PRACTICE, VIBE64_LEARNING_ROUTES, VIBE64_LESSON_IN_PROGRESS_CODE, normalizePractice } from "@/lib/vibe64LearningModel.js";
+import { followHeldRequest } from "@/lib/vibe64HeldRequest.js";
 
 // The learner's attempts: the In progress / Archived list (Courses), and the
 // changes to them: start, resume, restart, finish and delete. Every change is
 // one Training action, followed by fresh reads.
+
+// What a restart's and a finish's server answers while it goes on.
+const HELD_ATTEMPT_ANSWERS = Object.freeze({ restart: "preparing", finish: "finishing" });
+const ATTEMPT_LOST_CONTACT = "Vibe64 could not be reached to confirm this lesson change. Try again; it is never made twice.";
 
 /** @typedef {import("./vibe64LearningModel.js").LearningState} LearningState */
 /** @typedef {import("./vibe64LearningModel.js").LearningRequest} LearningRequest */
@@ -179,7 +184,15 @@ function createLearningAttempts({ state, request, pending, modes, practiceList }
     state.busy = kind;
     practiceList.showActionError("");
     try {
-      const result = await request(url, { method: "POST", body: await body() });
+      const sent = await body();
+      // A restart prepares a fresh practice project and a finish archives one, which can outlast the hosted edge's
+      // minute: the server answers preparing or finishing while it goes on, and the same request is repeated until
+      // its outcome.
+      const heldAs = HELD_ATTEMPT_ANSWERS[kind];
+      const result = heldAs
+        ? await followHeldRequest(() => request(url, { method: "POST", body: sent }),
+          { heldAs, lostContact: ATTEMPT_LOST_CONTACT, notWorded: fallback })
+        : await request(url, { method: "POST", body: sent });
       if (result?.ok !== true) throw new Error(result?.error || fallback);
       if (expected === viewer) await Promise.all([modes.readLearningMode(), practiceList.readPractice()]);
       return result;

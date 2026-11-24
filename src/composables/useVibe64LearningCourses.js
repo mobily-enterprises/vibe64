@@ -4,7 +4,12 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { followHeldRequest } from "@/lib/vibe64HeldRequest.js";
 import { VIBE64_LEARNING_ROUTES, VIBE64_LESSON_IN_PROGRESS_CODE } from "@/lib/vibe64Learning.js";
+
+const LESSON_NOT_CONFIRMED = "The lesson request was not confirmed. Retry the same request before starting another lesson.";
+const LESSON_LOST_CONTACT = "Vibe64 could not be reached to confirm this lesson. Retry the same request; it never " +
+  "starts a lesson twice.";
 
 /**
  * The Courses overlay's adapter. It owns neither admission nor progress:
@@ -90,7 +95,7 @@ export function useVibe64LearningCourses({ active }) {
     suppressSuccessMessage: true,
     buildRawPayload: (_model, { context }) => context.body,
     buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context.path }),
-    fallbackRunError: "The lesson request was not confirmed. Retry the same request before starting another lesson."
+    fallbackRunError: LESSON_NOT_CONFIRMED
   });
 
   function capture() {
@@ -127,8 +132,11 @@ export function useVibe64LearningCourses({ active }) {
   // still current here, before the progress reread. The caller then closes
   // Courses to show the lesson at once, so from that point only another person
   // or revoked access (not Courses closing) makes the outcome not current.
+  // A start or resume prepares the practice project, which can outlast the hosted edge's minute: the server answers
+  // `preparing` while it goes on, and the same request is repeated until its outcome.
   async function prepare(path, body, scope, { attemptId = "", onAdmitted = null } = {}) {
-    const result = await command.run({ path, body });
+    const result = await followHeldRequest(() => getHttpWebClient().request(path, { method: "POST", body }),
+      { heldAs: "preparing", lostContact: LESSON_LOST_CONTACT, notWorded: LESSON_NOT_CONFIRMED });
     if (!result || result.ok !== true || result.available !== true) {
       throw new Error("The lesson request did not return a confirmed saved attempt. Retry the same request.");
     }
