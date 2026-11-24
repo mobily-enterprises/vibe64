@@ -9,7 +9,7 @@ import { serializeVibe64AssistantSelection, VIBE64_ASSISTANT_SELECTION_METADATA 
 import { ASSISTANT_ROUTING_METADATA } from "@local/vibe64-runtime/shared/assistantRouting";
 import { ASSISTANT_NO_FINISHING } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
-import { createHeldRequests } from "./heldRequests.js";
+import { createHeldRequests } from "@local/vibe64-core/server/heldRequests";
 import { sessionsOccupyingPolicySlots } from "./sessionPolicySlots.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
