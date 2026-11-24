@@ -39,15 +39,23 @@ function registerSlowRequestLog(fastify, { logger = fastify.log, slowMs = SLOW_A
     // which may not report it once the body was read, as for every POST.
     reply.raw.once("close", () => {
       if (reply.raw.headersSent) return;
-      log("vibe64.server.request_abandoned", request, { elapsedMs: Math.round(performance.now() - request[STARTED]) },
-        "A request's client closed before its answer, measured from its arrival.");
+      log(
+        "vibe64.server.request_abandoned",
+        request,
+        { elapsedMs: Math.round(performance.now() - request[STARTED]) },
+        "A request's client closed before its answer, measured from its arrival."
+      );
     });
   });
   fastify.addHook("onSend", async (request, reply, payload) => {
     const elapsedMs = Math.round(performance.now() - (request[STARTED] ?? performance.now()));
     if (elapsedMs >= slowMs) {
-      log("vibe64.server.slow_answer", request, { statusCode: reply.statusCode, elapsedMs },
-        "A request was answered late, measured from its arrival.");
+      log(
+        "vibe64.server.slow_answer",
+        request,
+        { statusCode: reply.statusCode, elapsedMs },
+        "A request was answered late, measured from its arrival."
+      );
     }
     return payload;
   });

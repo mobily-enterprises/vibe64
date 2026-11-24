@@ -57,7 +57,10 @@ function messageWorld({ preparing = true, deliver = async (input) => ({ ok: true
   const state = { preparing };
   const delivered = [];
   const publications = [];
+  // The service's conversations read their access through the same catalogue the routes execute.
+  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const service = createSessionsService({
+    actions,
     project: { async createRuntimeWithoutSource() { return runtime; } },
     async publishSessionChanged(_sessionId, event) { publications.push(event.reason); },
     terminals: {
@@ -76,12 +79,11 @@ function messageWorld({ preparing = true, deliver = async (input) => ({ ok: true
     state.preparing = false;
     preparation.resolve({ status: "succeeded" });
   }
-  return { delivered, finishPreparation, publications, service };
+  return { actions, delivered, finishPreparation, publications, service };
 }
 
 /** The sessions routes on a real Fastify server, over a real socket, as the browser reaches them. */
-async function listen(service, { apiBase, apiRouteBase, projectContext, slug }) {
-  const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
+async function listen({ actions, service }, { apiBase, apiRouteBase, projectContext, slug }) {
   actions.register({ contributorId: "session-messages", domain: "vibe64", actions: createSessionActions({ sessions: service })
     .map((action) => ({ ...action, channels: ["api", "automation", "internal"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => owner, authorizeProject: async () => {} });
@@ -134,7 +136,7 @@ async function listen(service, { apiBase, apiRouteBase, projectContext, slug }) 
 test("a message sent while the workspace is prepared answers at once, held, and is delivered once when it ends", async (t) => {
   await withRouteProject(async (project) => {
     const world = messageWorld();
-    const server = await listen(world.service, project);
+    const server = await listen(world, project);
     const message = { message: "Fix the login page", messageId: "message_tab_held_1" };
     try {
       const sentAt = Date.now();
@@ -186,7 +188,7 @@ test("a held message the assistant refuses reports that refusal to its delivery 
         });
       }
     });
-    const server = await listen(world.service, project);
+    const server = await listen(world, project);
     try {
       const held = await within(server.send({ message: "Add a footer", messageId: "message_tab_held_2" }), ANSWER_WAIT_MS,
         "the send did not answer while the workspace was being prepared");
@@ -213,7 +215,7 @@ test("a held message the assistant refuses reports that refusal to its delivery 
 test("a message sent to a prepared workspace answers with its delivery, as before", async () => {
   await withRouteProject(async (project) => {
     const world = messageWorld({ preparing: false });
-    const server = await listen(world.service, project);
+    const server = await listen(world, project);
     try {
       const sent = await within(server.send({ message: "Hello", messageId: "message_tab_prepared_1" }), ANSWER_WAIT_MS,
         "the send did not answer");
@@ -230,7 +232,7 @@ test("a message sent to a prepared workspace answers with its delivery, as befor
 test("an editor stopping while a held message waits refuses it, unsent, and its delivery check says so", async () => {
   await withRouteProject(async (project) => {
     const world = messageWorld();
-    const server = await listen(world.service, project);
+    const server = await listen(world, project);
     try {
       const held = await within(server.send({ message: "Add a footer", messageId: "message_tab_held_3" }), ANSWER_WAIT_MS,
         "the send did not answer while the workspace was being prepared");

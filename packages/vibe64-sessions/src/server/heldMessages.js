@@ -24,8 +24,12 @@ function heldReceipt(messageId, entry) {
   const { result, error } = entry.outcome;
   if (!error) {
     if (result?.ok === false) {
-      return { status: "not-sent", messageId, error: String(result.error || "The message was not sent."),
-        ...(result.code ? { code: String(result.code) } : {}) };
+      return {
+        status: "not-sent",
+        messageId,
+        error: String(result.error || "The message was not sent."),
+        ...(result.code ? { code: String(result.code) } : {})
+      };
     }
     return { status: "accepted", messageId };
   }
@@ -89,8 +93,10 @@ function createHeldMessages({ logger = silentLogger, answerMs = SEND_ANSWER_MS, 
         } catch {
           // Timing is diagnostic only.
         }
-        const forget = setTimeout(() => { if (entries.get(id) === entry) entries.delete(id); }, outcomeMs);
-        forget.unref?.();
+        const forget = setTimeout(() => {
+          if (entries.get(id) === entry) entries.delete(id);
+        }, outcomeMs);
+        forget.unref();
         return outcome;
       });
     entries.set(id, entry);
@@ -154,7 +160,11 @@ function createHeldMessages({ logger = silentLogger, answerMs = SEND_ANSWER_MS, 
     await Promise.allSettled([...entries.values()].map(entry => entry.done));
   }
 
-  return Object.freeze({ close, inspect, send });
+  return Object.freeze({
+    close,
+    inspect,
+    send
+  });
 }
 
 export { createHeldMessages, SEND_ANSWER_MS };

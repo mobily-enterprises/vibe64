@@ -5,12 +5,14 @@ import { conversationTransportSchema } from "../../packages/vibe64-sessions/src/
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { temporaryConversationUpdateInputValidator } from "../../packages/vibe64-terminals/src/server/inputSchemas.js";
 import { colleagueConversationSelectionSchema } from "../../packages/vibe64-colleague/src/server/colleagueSchemas.js";
+// No Main chat send is held by these conversations' sessions.
+const noHeldMessage = () => null;
 
 const selectBody = (schema) => createSchema({ selection: { type: "object", required: true, schema } });
 
 function facade() {
   const temporary = temporaryConversationUpdateInputValidator.schema.getFieldDefinitions();
-  return createMainBrowserConversations({ actions: { execute() {} }, terminals: { openBrowserConversation() {},
+  return createMainBrowserConversations({ actions: { execute() {} }, inspectHeldMessage: noHeldMessage, terminals: { openBrowserConversation() {},
     temporaryConversationSelectionSchema: createSchema({ agentSettings: temporary.agentSettings, assistantRouting: temporary.assistantRouting })
   } });
 }
