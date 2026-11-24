@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:prepare": "node ./scripts/prepare-database.js",
+    "db:migrate": "knex --knexfile ./knexfile.js migrate:latest",
+    "db:migrate:rollback": "knex --knexfile ./knexfile.js migrate:rollback",
+    "db:migrate:status": "knex --knexfile ./knexfile.js migrate:list",
+    "test": "jskit test --databases"
+  },
+  "dependencies": {
+    "@jskit-ai/database-runtime": "0.1.283",
+    "@jskit-ai/database-runtime-mysql": "0.1.281"
+  }
+}
