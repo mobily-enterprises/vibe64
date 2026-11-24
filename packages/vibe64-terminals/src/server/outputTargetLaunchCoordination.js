@@ -213,17 +213,18 @@ function createOutputTargetLaunchCoordination({
   function launchInterruptedSince(sessionId, count) {
     const latest = interruptions.get(String(sessionId || "global"));
     if (!latest || latest.count === count) return null;
-    return latest.reason === "closed"
-      ? {
+    if (latest.reason === "closed") {
+      return {
         ok: false,
         code: "vibe64_session_closing",
         error: "The session closed while its workspace was being prepared, so Preview did not start."
-      }
-      : {
-        ok: false,
-        code: "vibe64_preview_stopped",
-        error: "Preview was stopped while the workspace was being prepared. Use Start preview to run it again."
       };
+    }
+    return {
+      ok: false,
+      code: "vibe64_preview_stopped",
+      error: "Preview was stopped while the workspace was being prepared. Use Start preview to run it again."
+    };
   }
 
   function launchAdmissionFailure(sessionId = "", session = null) {
