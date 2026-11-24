@@ -18,11 +18,22 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", async importOriginal
 });
 // Same feedback resource interface; original tests have no practical commands.
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: vi.fn() }) }));
+// The runtime takes the account event names from their own module: the accounts client entry loads every account
+// setup screen, which took this file 2.7 s of a 12 s load on its own (24 Nov), for one constant.
+vi.mock("@local/vibe64-accounts/client", () => {
+  throw new Error("The conversation runtime loaded @local/vibe64-accounts/client, every account setup screen with it.");
+});
+// Likewise its voice accessor: the voice client entry loads the avatar artwork and settings screens as well.
+vi.mock("@local/vibe64-voice/client", () => {
+  throw new Error("The conversation runtime loaded @local/vibe64-voice/client, every voice screen with it.");
+});
 import { useVibe64ConversationRuntime } from "../../src/composables/useVibe64ConversationRuntime.js";
 import { createProjectVoiceBinding } from "../../packages/vibe64-voice/src/client/projectVoiceBinding.js";
+import VoiceHost from "../../packages/vibe64-voice/src/client/Vibe64VoiceHost.vue";
+import { useVibe64Voice, VIBE64_VOICE_KEY } from "../../packages/vibe64-voice/src/client/voiceHost.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { VIBE64_SESSION_CHANGED_EVENT } from "../../src/lib/vibe64SessionRequestConfig.js";
-import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 import { createConversationFixtureSocket, provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
 import { provideVoiceDouble } from "./helpers/shellContext.js";
 const renderer = createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
@@ -424,9 +435,6 @@ describe("retained project conversation ownership", () => {
 // Deferred first hydration uses the original reader, mounted product host,
 // controller, session and transport. Only their browser/service endpoints are controlled.
 async function mountedOriginalMainVoice({ preferences, preparePreferences } = {}) {
-  const { default: VoiceHost } = await import("../../packages/vibe64-voice/src/client/Vibe64VoiceHost.vue");
-  const { useVibe64Voice, VIBE64_VOICE_KEY } = await import("../../packages/vibe64-voice/src/client/voiceHost.js");
-  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
   let voice;
   const Probe = { setup() { voice = useVibe64Voice(); return () => h("div"); } };
   // The test pipeline compiles SFCs for SSR; retain the actual Host setup and
@@ -610,8 +618,6 @@ describe("actual shared VoiceHost restores loaded saved review policy before rep
 
 
 it("invites Main's own voice session to speak after a new typed request, never another conversation's", async () => {
-  const { provide } = await import("vue");
-  const { VIBE64_VOICE_KEY } = await import("../../packages/vibe64-voice/src/client/voiceHost.js");
   const inviteSpeech = vi.fn();
   // A failed or hidden reply left this session silent (speechSuppressed).
   const state = reactive({ binding: { conversationId: "another-conversation" }, session: { inviteSpeech } });

@@ -6,6 +6,7 @@
   "description": "Vibe64 conversation bindings, authorized speech connections and assistant avatar artwork.",
   "exports": {
     "./client": "./src/client/index.js",
+    "./client/voiceHost": "./src/client/voiceHost.js",
     "./shared/avatars": "./src/shared/avatars.js",
     "./shared/routes": "./src/shared/routes.js",
     "./server": "./src/server/Vibe64VoiceFeature.js",

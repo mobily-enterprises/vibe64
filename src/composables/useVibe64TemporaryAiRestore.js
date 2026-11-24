@@ -1,5 +1,5 @@
 import { onBeforeUnmount, ref, watch } from "vue";
-import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { normalizeVibe64AgentSettings } from "@local/vibe64-runtime/shared";

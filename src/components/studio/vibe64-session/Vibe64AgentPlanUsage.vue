@@ -1,6 +1,6 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted, ref, unref, watch } from "vue";
-import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 import { AssistantGoalControl } from "@jskit-ai/assistant-core/client/conversation";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
