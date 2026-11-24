@@ -27,7 +27,7 @@ const owner = Object.freeze({ username: "tony", role: "owner", preferredName: "T
 const ana = Object.freeze({ username: "ana", role: "member", preferredName: "Ana" });
 const bob = Object.freeze({ username: "bob", role: "member", preferredName: "Bob" });
 
-function harness({ turnActive = false, deliver = async () => ({ ok: true, delivered: true }) } = {}) {
+function harness({ turnActive = false, deliver = async () => ({ ok: true, delivered: true }), preparation = null } = {}) {
   const metadata = new Map();
   let queue = Promise.resolve();
   const store = {
@@ -52,7 +52,11 @@ function harness({ turnActive = false, deliver = async () => ({ ok: true, delive
       async sendAgentMessage(sessionId, input, options) {
         sent.push({ sessionId, input, options });
         return deliver(input, options);
-      }
+      },
+      ...(preparation ? {
+        waitForWorkspaceSetup: () => preparation.running ? preparation.done.promise : null,
+        workspaceSetupIsRunning: () => preparation.running
+      } : {})
     }
   });
   const entries = () => JSON.parse(metadata.get(MAIN_CHAT_APPROVALS_METADATA) || "{\"entries\":[]}").entries;
@@ -198,6 +202,41 @@ test("a failed approval returns to waiting with its error and retries with the s
   assert.deepEqual(sent.map(({ input }) => input.messageId), ["approval_message-0005_1", "approval_message-0005_1"]);
   assert.equal(entries()[0].status, "sent");
   assert.equal(entries()[0].error, "");
+});
+
+// On 24 Nov 2026 a message sent while the workspace was being prepared after a restart waited inside its request for
+// that preparation and showed "Request failed with status 504."; Approve sends through the same path.
+test("an approval while the workspace is prepared answers at once, sending, and delivers once when it ends", async () => {
+  const preparation = { running: true, done: Promise.withResolvers() };
+  const { service, sent, entries } = harness({ preparation });
+  try {
+    await service.sendAgentMessage("s1", { message: "Fix the header", messageId: "message-0006", vibe64User: ana });
+    let timer;
+    const answered = await Promise.race([
+      service.approveMainChatApproval("s1", "message-0006", { expectedRevision: 1, vibe64User: owner }, {}),
+      new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error("the approval waited for the preparation")), 5_000); })
+    ]).finally(() => clearTimeout(timer));
+    assert.equal(answered.ok, true);
+    assert.equal(answered.status, "sending");
+    assert.equal(answered.waitingFor, "workspace-preparation");
+    assert.equal(sent.length, 0);
+    assert.equal(entries()[0].status, "sending");
+    // Approve again while it waits: the same delivery, never a second.
+    assert.equal((await service.approveMainChatApproval("s1", "message-0006", { expectedRevision: 1, vibe64User: owner }, {})).status, "sending");
+    // An edit while it is sending is still refused.
+    await assert.rejects(service.approveMainChatApproval("s1", "message-0006", { expectedRevision: 1, text: "Fix the footer", vibe64User: owner }, {}),
+      { statusCode: 409, code: "vibe64_main_chat_approval_sending" });
+    preparation.running = false;
+    preparation.done.resolve({ status: "succeeded" });
+    for (const deadline = Date.now() + 5_000; entries()[0].status !== "sent" && Date.now() < deadline;) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(entries()[0].status, "sent");
+    assert.deepEqual(sent.map(({ input }) => input.messageId), ["approval_message-0006_1"]);
+  } finally {
+    preparation.running = false;
+    preparation.done.resolve({ status: "succeeded" });
+  }
 });
 
 test("everyone with access reads the queue with their own viewer facts", async () => {

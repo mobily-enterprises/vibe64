@@ -24,6 +24,7 @@ async function slowServer(logger) {
     return { ok: true };
   });
   app.get("/never/:id", () => new Promise(() => {}));
+  app.post("/never/:id", () => new Promise(() => {}));
   await app.listen({ host: "127.0.0.1", port: 0 });
   return app;
 }
@@ -42,22 +43,29 @@ test("a late answer and a request its client gave up on are logged with their ro
     assert.equal(late[0].statusCode, 200);
     assert.ok(late[0].elapsedMs >= 100);
 
-    // A client (the edge) that ends the request before its answer.
+    // A client (the edge) that ends the request before its answer, with and without a body the server read.
     const { port } = app.server.address();
-    await new Promise((resolve) => {
-      const request = http.get({ host: "127.0.0.1", port, path: "/never/2?token=secret" });
-      request.on("error", resolve);
-      setTimeout(() => { request.destroy(); }, 150);
-    });
+    for (const method of ["GET", "POST"]) {
+      await new Promise((resolve) => {
+        const body = method === "POST" ? JSON.stringify({ message: "secret words" }) : "";
+        const request = http.request({ host: "127.0.0.1", port, method, path: "/never/2?token=secret",
+          headers: body ? { "content-type": "application/json", "content-length": Buffer.byteLength(body) } : {} });
+        request.on("error", resolve);
+        request.end(body);
+        setTimeout(() => { request.destroy(); }, 150);
+      });
+    }
     const deadline = Date.now() + 5_000;
-    while (!lines.some(({ event }) => event === "vibe64.server.request_abandoned") && Date.now() < deadline) {
+    const abandoned = () => lines.filter(({ event }) => event === "vibe64.server.request_abandoned");
+    while (abandoned().length < 2 && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    const abandoned = lines.find(({ event }) => event === "vibe64.server.request_abandoned");
-    assert.ok(abandoned, "a request its client gave up on is logged");
-    assert.equal(abandoned.level, "warn");
-    assert.equal(abandoned.route, "/never/:id");
-    assert.ok(abandoned.elapsedMs >= 100);
+    assert.deepEqual(abandoned().map(({ method }) => method).sort(), ["GET", "POST"], "a request its client gave up on is logged");
+    for (const line of abandoned()) {
+      assert.equal(line.level, "warn");
+      assert.equal(line.route, "/never/:id");
+      assert.ok(line.elapsedMs >= 100);
+    }
     assert.equal(JSON.stringify(lines).includes("secret"), false, "a query is never logged");
   } finally {
     await app.close();
