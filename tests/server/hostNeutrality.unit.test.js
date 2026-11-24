@@ -25,7 +25,10 @@ const OTHER_SOFTWARE_LOCATIONS = new Set([
   // service's login, as mobilynet's catalogue apps keep a /run folder of their own (packages/vibe64-deploy's
   // adapters/mobilynet/declaration.js). And that machine's service environment (/etc/mobilynet/service.env: PATH and
   // git's settings), which the migrate task hands the script it runs as the service's login.
-  "/run/mobilynet", "/run/app-settings", "/etc/mobilynet"
+  "/run/mobilynet", "/run/app-settings", "/etc/mobilynet",
+  // The example application's own tool folder, which its machine setup script installs into on the machines a
+  // Production build makes (docs/colleague-usage/deployment-machine-setup.md and deployMachineSetup's fixture).
+  "/opt/shop-tools"
 ]);
 // Known blocker: the privileged helper (every module of its folder), its test
 // files and its release packaging still describe the host they run on.

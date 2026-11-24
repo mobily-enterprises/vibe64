@@ -141,7 +141,7 @@ test("Machine setup names one committed file by its path from the project's root
     assert.match(error.message, pattern);
     return true;
   }, entry);
-  for (const outside of ["/opt/setup.sh", "../setup.sh", "deploy/../setup.sh", "./setup.sh", "deploy/./setup.sh", "deploy//setup.sh",
+  for (const outside of ["/srv/setup.sh", "../setup.sh", "deploy/../setup.sh", "./setup.sh", "deploy/./setup.sh", "deploy//setup.sh",
     "deploy/", ".", "-setup.sh", "deploy/-x.sh", "set up.sh", "$HOME/setup.sh", "deploy\\setup.sh", "a*.sh",
     Array.from({ length: 17 }, () => "a").join("/"), `deploy/${"a".repeat(256)}.sh`]) {
     refused(`- Machine setup: \`${outside}\``, /Deployment Machine setup names one committed file of the project by its path from the project's root/u);
