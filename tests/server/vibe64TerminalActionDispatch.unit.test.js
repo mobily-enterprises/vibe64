@@ -39,7 +39,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     const cases = [
       ["GET", "/codex-terminal", "global-terminal.status", "globalCodexTerminalState", {}],
       ["POST", "/codex-terminal", "global-terminal.start", "startGlobalCodexTerminal", {}],
-      ["POST", "/project-runtime/open", "project-runtime.open", "openProjectRuntime", { reason: "project-open" }],
+      ["POST", "/project-runtime/open", "project-runtime.open", "openProjectRuntimeForPage", { reason: "project-open" }],
       ["POST", "/project-runtime/close", "project-runtime.close", "closeProjectRuntime", { reason: "user-request" }],
       ["GET", "/sessions/:sessionId/outputs", "outputs.read", "outputTargetStatus", {}],
       ["POST", "/sessions/:sessionId/preview-diagnostics", "preview-diagnostics.record", "recordPreviewDiagnostic", { enabled: true, event: "resource.failed", resourceUrl: "https://preview.example/src/jobs.js" }],

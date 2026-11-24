@@ -45,7 +45,7 @@ async function startDormancyFixture(t, { onCreateRuntime = () => {} } = {}) {
   const project = {
     createSessionStore() { return {}; },
     async createRuntime() {
-      onCreateRuntime();
+      await onCreateRuntime();
       runtime ||= new Vibe64SessionRuntime({
         projectContextRoot: targetRoot,
         projectRuntimeRoot: runtimeRoot,
@@ -149,6 +149,43 @@ test("opening a project during idle cleanup waits for its Close and opens the pr
   assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, true);
   assert.deepEqual(published.map((event) => event.realtime?.payload?.action).filter(Boolean),
     ["runtime-closed", "runtime-opened"]);
+});
+
+// A page's open that arrives during idle cleanup waits for its Close (every
+// session's processes stopping), which can outlast the hosted edge's minute.
+test("a page's open during idle cleanup answers within two seconds while it waits for the Close, and its repeat joins it", async (t) => {
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let holdClose = false;
+  const { outputs, runtimeRoot } = await startDormancyFixture(t, {
+    async onCreateRuntime() {
+      if (!holdClose) return;
+      holdClose = false;
+      entered.resolve();
+      await release.promise;
+    }
+  });
+  await outputs.terminals.openProjectRuntime();
+  holdClose = true;
+  const idle = outputs.terminals.closeDormantProjectRuntimes({ nowMs: Date.now() + 31 * 60 * 1000 });
+  try {
+    await entered.promise;
+    const timer = Promise.withResolvers();
+    const timeout = setTimeout(() => timer.resolve("waited"), 2_900);
+    const held = await Promise.race([outputs.terminals.openProjectRuntimeForPage({ reason: "project-open" }), timer.promise])
+      .finally(() => clearTimeout(timeout));
+    assert.deepEqual(held, { ok: true, opening: true, waitingFor: "project-close" }, "The open waited for the Close");
+    const repeat = outputs.terminals.openProjectRuntimeForPage({ reason: "project-open" });
+    release.resolve();
+    const reopened = await repeat;
+    assert.equal(reopened.ok, true);
+    assert.equal(reopened.runtime.open, true);
+    assert.deepEqual((await idle).results.map((result) => [result.reason, result.dormant, result.ok]), [["idle-timeout", true, true]]);
+    assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, true);
+  } finally {
+    release.resolve();
+    await idle.catch(() => null);
+  }
 });
 
 // 2026-11-05: a Main message sent as idle cleanup closed its project never
