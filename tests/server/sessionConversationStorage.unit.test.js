@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 import { verifyConversationStorageContract } from "@jskit-ai/assistant-core/testing/conversation-storage";
-import { markHistoricalConversationRewound } from "./vibe64TestHelpers.js";
+import { markHistoricalConversationRewound, upgradeChatTranscripts } from "./vibe64TestHelpers.js";
 
 const at = "2026-10-02T09:00:00.000Z";
 const exec = promisify(execFile);
@@ -77,9 +77,12 @@ test("session runtime storage commits transcript, receipts and metadata together
 test("failed record publication preserves both history and native binding", async t => {
   const f = await fixture(t);
   await f.store.createSession({ sessionId: "one", runtimeKind: "genesis" });
-  await f.store.writeConversationUserMessage("one", { text: "Retained", messageId: "original" });
-  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.json");
-  const original = await readFile(file, "utf8");
+  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.jsonl");
+  const uncommitted = () => f.store.conversationStorage.write("one", async tx => {
+    await tx.writeMetadata({ runtime: { binding: { id: "uncommitted-native" } } });
+    await tx.appendMessage(await tx.nextTurnId(), { role: "user", text: "Uncommitted", at });
+  });
+  // A chat's first record is published whole: a failed publication leaves no chat.
   const realRename = fs.rename;
   fs.rename = async (from, to) => {
     if (to === file) throw new Error("publication failed");
@@ -87,18 +90,29 @@ test("failed record publication preserves both history and native binding", asyn
   };
   syncBuiltinESMExports();
   try {
-    await assert.rejects(f.store.conversationStorage.write("one", async tx => {
-      await tx.writeMetadata({ runtime: { binding: { id: "uncommitted-native" } } });
-      await tx.appendMessage(await tx.nextTurnId(), { role: "user", text: "Uncommitted", at });
-    }), /publication failed/);
+    await assert.rejects(uncommitted(), /publication failed/);
   } finally { fs.rename = realRename; syncBuiltinESMExports(); }
+  await assert.rejects(readFile(file), { code: "ENOENT" });
+  // Every later record is appended: a failed append leaves the chat as it was.
+  await f.store.writeConversationUserMessage("one", { text: "Retained", messageId: "original" });
+  const original = await readFile(file, "utf8");
+  const handle = await fs.open(file, "r");
+  const prototype = Object.getPrototypeOf(handle);
+  await handle.close();
+  const realSync = prototype.datasync;
+  prototype.datasync = async function () { throw new Error("publication failed"); };
+  try {
+    await assert.rejects(uncommitted(), /publication failed/);
+  } finally { prototype.datasync = realSync; }
   assert.equal(await readFile(file, "utf8"), original);
+  assert.deepEqual(await f.createStore().conversationStorage.read("one", tx => tx.readMetadata()), {});
+  assert.deepEqual((await f.createStore().readConversationLog("one")).map(turn => turn.user.text), ["Retained"]);
 });
 
 test("a missing transcript read remains a valid snapshot when its first record is published", async t => {
   const f = await fixture(t);
   await f.store.createSession({ sessionId: "one", runtimeKind: "genesis" });
-  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.json");
+  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.jsonl");
   const realOpen = fs.open;
   let intercepted = false;
   let saved;
@@ -128,15 +142,15 @@ test("a missing transcript read remains a valid snapshot when its first record i
 test("unchanged transcripts are parsed once, written compactly and reread after an external change", async t => {
   const f = await fixture(t);
   await f.store.createSession({ sessionId: "one", runtimeKind: "genesis" });
-  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.json");
+  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.jsonl");
   await f.store.writeConversationUserMessage("one", { text: "First", messageId: "first" });
   const text = await readFile(file, "utf8");
-  assert.equal(text.includes("\n  "), false, "The transcript is compact JSON.");
-  assert.equal(JSON.parse(text).turns.length, 1);
+  assert.equal(text.includes("\n  ") || text.includes("\n\n"), false, "The transcript is compact JSON lines.");
+  assert.equal(JSON.parse(text.split("\n")[0]).turns.length, 1);
   const realParse = JSON.parse;
   let transcriptParses = 0;
   JSON.parse = (source, ...rest) => {
-    if (typeof source === "string" && source.startsWith('{"version":1')) transcriptParses += 1;
+    if (typeof source === "string" && /^\[?\{"version":2/u.test(source)) transcriptParses += 1;
     return realParse(source, ...rest);
   };
   try {
@@ -144,9 +158,9 @@ test("unchanged transcripts are parsed once, written compactly and reread after 
     assert.equal(await f.store.conversationMessageIdExists("one", "first"), true);
     assert.equal(await f.store.conversationMessageIdExists("one", "missing"), false);
     assert.equal(transcriptParses, 0, "The writer's record serves later reads.");
-    const changed = realParse(text);
+    const changed = realParse(text.split("\n")[0]);
     changed.turns[0][1].messages[0].text = "Edited elsewhere";
-    await writeFile(file, JSON.stringify(changed));
+    await writeFile(file, `${JSON.stringify(changed)}\n`);
     assert.equal((await f.store.readConversationLog("one"))[0].user.text, "Edited elsewhere");
     await f.store.readConversationLog("one");
     assert.equal(transcriptParses, 1);
@@ -174,7 +188,7 @@ test("submitted-turn and turn lookups match the conversation log and omit rewoun
 test("an existing empty transcript is rejected as corrupt storage", async t => {
   const f = await fixture(t);
   await f.store.createSession({ sessionId: "one", runtimeKind: "genesis" });
-  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.json");
+  const file = path.join(f.store.paths("one").conversationLogRoot, "transcript.jsonl");
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, "");
   await assert.rejects(f.store.readConversationLog("one"), {
@@ -271,6 +285,18 @@ test("offline conversion covers live, closing, archived and temporary histories 
   await assert.rejects(readFile(path.join(liveRoot, "transcript.json")), { code: "ENOENT" });
   await assert.rejects(readFile(path.join(f.backupRoot, "manifest.json")), { code: "ENOENT" });
   await f.upgrade(true);
+  const preparedArchive = path.join(preparedRoot, "archived.tar.gz");
+  const members = (await exec("tar", ["-tzf", preparedArchive])).stdout.split("\n");
+  const transcript = members.find(name => name.endsWith("/conversation-log/transcript.json"));
+  assert.ok(transcript, "Prepared renewal archives must be upgraded as well.");
+  const prepared = JSON.parse((await exec("tar", ["-xOf", preparedArchive, transcript])).stdout);
+  assert.equal(prepared.turns[0][1].messages.find(message => message.role === "user").text, "archived question");
+  assert.equal(JSON.parse(await readFile(path.join(closingRoot, "conversation-log/transcript.json"))).turns[0][1].messages[0].text, "Original answer");
+  const converted = await readFile(path.join(liveRoot, "transcript.json"), "utf8");
+  await f.upgrade(true);
+  assert.equal(await readFile(path.join(liveRoot, "transcript.json"), "utf8"), converted);
+  // The next upgrade, 20261124-chat-transcript-log, makes each record the appended transcript the store reads.
+  await upgradeChatTranscripts(f.systemRoot);
   const log = await f.createStore().readConversationLog("live");
   assert.equal(log.length, 1);
   assert.equal(log[0].user.text, "live question");
@@ -280,19 +306,10 @@ test("offline conversion covers live, closing, archived and temporary histories 
   assert.equal(await f.store.conversationMessageIdExists("live", "undone"), true);
   assert.equal((await f.store.readConversationLog({ sessionId: "live", conversationId: "temporary" })).length, 1);
   assert.equal((await f.store.readConversationLog("archived"))[0].user.text, "archived question");
-  const preparedArchive = path.join(preparedRoot, "archived.tar.gz");
-  const members = (await exec("tar", ["-tzf", preparedArchive])).stdout.split("\n");
-  const transcript = members.find(name => name.endsWith("/conversation-log/transcript.json"));
-  assert.ok(transcript, "Prepared renewal archives must be upgraded as well.");
-  const prepared = JSON.parse((await exec("tar", ["-xOf", preparedArchive, transcript])).stdout);
-  assert.equal(prepared.turns[0][1].messages.find(message => message.role === "user").text, "archived question");
-  assert.equal(JSON.parse(await readFile(path.join(closingRoot, "conversation-log/transcript.json"))).turns[0][1].messages[0].text, "Original answer");
   assert.equal(await readFile(decisionFile, "utf8"), "preserved application decision");
   const originalPath = path.join(liveRoot, "000001/user.20261002T090000000Z.request-one.md");
   assert.equal(await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, originalPath)), "utf8"), "live question\n");
   await assert.rejects(readFile(originalPath), { code: "ENOENT" });
-  await f.upgrade(true);
-  assert.deepEqual(await f.store.readConversationLog("live"), log);
 });
 
 test("interrupted offline publication resumes prepared bytes without replacing original backups", async t => {
@@ -307,6 +324,7 @@ test("interrupted offline publication resumes prepared bytes without replacing o
   await f.upgrade();
   await f.upgrade(true);
   assert.equal(await readFile(path.join(f.backupRoot, "manifest.json"), "utf8"), manifest);
+  await upgradeChatTranscripts(f.systemRoot);
   assert.equal((await f.store.readConversationLog("one"))[0].user.text, "Original question");
   await assert.rejects(readFile(path.join(root, "000001/metadata.json")), { code: "ENOENT" });
 });

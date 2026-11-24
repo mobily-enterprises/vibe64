@@ -2712,7 +2712,7 @@ test("offline practice binding stages only the authoritative initial session and
     const other = await legacy.createSession({ sessionId: "intentional-working", runtimeKind: "genesis", metadata: sourceMetadata(root, "intentional-working") });
     await legacy.writeConversationUserMessage(id, { text: "Retain my original message", messageId: "original-practice-message" });
     const manifest = await readFile(legacy.paths(id).manifestPath);
-    const history = await readFile(path.join(legacy.paths(id).conversationLogRoot, "transcript.json"));
+    const history = await readFile(path.join(legacy.paths(id).conversationLogRoot, "transcript.jsonl"));
     const working = await legacy.readSession(other.sessionId);
     const scratch = path.join(path.dirname(root), "upgrade-scratch");
     await mkdir(scratch, { mode: 0o700 });
@@ -2732,7 +2732,7 @@ test("offline practice binding stages only the authoritative initial session and
     assert.deepEqual(adopted.learning, { schemaVersion: 1, ...scope, conversationId: id });
     assert.equal((await own.readSession(id)).metadata.agent_identity_conversation_id, "retained-native-thread");
     assert.deepEqual(await readFile(own.paths(id).manifestPath), manifest);
-    assert.deepEqual(await readFile(path.join(own.paths(id).conversationLogRoot, "transcript.json")), history);
+    assert.deepEqual(await readFile(path.join(own.paths(id).conversationLogRoot, "transcript.jsonl")), history);
     assert.deepEqual(await legacy.readSession(other.sessionId), working);
     assert.deepEqual((await legacy.prepareLearningSessionBindingUpgrade({ temporaryRoot: scratch, sessionId: id, learningScope: scope })).updates, []);
     await assert.rejects(legacy.readSession(id), { code: "vibe64_learning_session_scope_mismatch" });

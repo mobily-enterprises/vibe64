@@ -137,6 +137,7 @@ function createVibe64SessionStore(options = {}) {
     publishSessionArchive: archivePublishing.publishSessionArchive,
     prepareRenewalSessionArchive: renewalArchives.prepareRenewalSessionArchive,
     prepareAssistantRoutingStateUpgrade: upgrades.prepareAssistantRoutingStateUpgrade,
+    prepareChatTranscriptLogUpgrade: upgrades.prepareChatTranscriptLogUpgrade,
     prepareConversationStorageUpgrade: upgrades.prepareConversationStorageUpgrade,
     prepareConversationMessageDataUpgrade: upgrades.prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade: upgrades.prepareLearningSessionBindingUpgrade,
