@@ -305,8 +305,10 @@ function ensureStagingArea(identity = {}, owner = {}, user = {}, {
     opened.push(openAreaDirectory(project, "handover", { gid: user.gid, mode: 0o2750, uid: owner.uid }).descriptor);
     const app = openAreaDirectory(project, "app", application).descriptor;
     opened.push(app);
-    // The application's own home may be anything it made of it.
+    // The application's own home and temporary folder (its TMPDIR, where programs may start, as /tmp may not let
+    // them) may be anything it made of them.
     opened.push(openAreaDirectory(app, "home", application, { verify: false }).descriptor);
+    opened.push(openAreaDirectory(app, "tmp", application, { verify: false }).descriptor);
     const database = openAreaDirectory(project, "database", application);
     opened.push(database.descriptor);
     // The daemon may look up a database there by name, never list or read it.

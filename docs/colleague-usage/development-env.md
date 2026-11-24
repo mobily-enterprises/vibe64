@@ -103,7 +103,8 @@ on staging itself, to find out what is wrong there:
 
 - `ssh staging` logs in to the staging host as the staging release's own
   staging account, in its folder, with the Env it runs with (its database
-  connection included). `scp`, `sftp` and `rsync` reach `staging:<path>` the
+  connection included) and its temporary folder (`TMPDIR`), the app's own,
+  where programs may start, as the service has. `scp`, `sftp` and `rsync` reach `staging:<path>` the
   same way. Inside, `staging-logs [--lines <n>] [--since <time>]`,
   `staging-status` and `staging-restart` read or restart the app's own
   service, and `staging-enter [command]` runs the command, or a shell, where
