@@ -28,6 +28,12 @@ and archives the current lesson only on your request.
 - **Delete**: removes the attempt's practice project and conversation without
   archiving them.
 
+Starting, resuming or restarting a lesson prepares its practice project, and
+finishing archives it; on a busy workspace that can take a minute or more. The
+page keeps waiting for it to finish, even through a dropped connection, and
+never starts, restarts or finishes the lesson twice. If it says Vibe64 could
+not be reached, retry the same button: the lesson is not changed twice.
+
 Archiving the current lesson to start another one ends it like **Restart**,
 without finishing it. Once an attempt has ended, its step results and the code
 it recorded for code steps are removed; the archived bundle keeps what you

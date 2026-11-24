@@ -14,6 +14,8 @@ import {
 } from "./trainingResults.js";
 import { text } from "./actionSchemas.js";
 import { conflictFailure } from "./errors.js";
+import { learnerIdentity } from "./learnerRecords.js";
+import { createHeldWork } from "@local/vibe64-core/server/heldWork";
 
 /** @typedef {import("./types.js").InstalledTrainingCatalogue} InstalledTrainingCatalogue */
 /** @typedef {import("./types.js").TrainingContent} TrainingContent */
@@ -391,13 +393,37 @@ function createTrainingOperations({
     return runForLearner(createCourseForLearner, input, context, toCourseCreationError);
   }
 
+  // A start, resume or restart prepares the lesson's practice project (its Git project, first session and Workspace
+  // setup) and a finish archives it, which can outlast the hosted edge's minute: the learner's own request (the api
+  // channel) answers within two seconds, as preparing or finishing while it goes on, and its repeat joins it; once it
+  // has ended, a repeat runs it again, which replays the same request. Colleague's calls wait for the outcome.
+  const heldLessons = createHeldWork({ component: "vibe64.training_lesson", logger });
+
+  /**
+   * @param {(input: object, actor: object, context: object) => Promise<object>} operation
+   * @param {object} input
+   * @param {object} context
+   * @param {"preparing" | "finishing"} heldAs
+   * @param {unknown[]} identity what the request is, within the learner's own requests
+   */
+  async function runHeldLesson(operation, input, context, heldAs, identity) {
+    if (context?.channel !== "api") return runForLearner(operation, input, context, toLessonError);
+    const key = [learnerIdentity(signedInLearner(context)).id, ...identity].join("\0");
+    const answer = await heldLessons.run(key, ({ stage }) => {
+      stage(heldAs);
+      return runForLearner(operation, input, context, toLessonError);
+    });
+    if (answer.settled) return answer.result;
+    return { ok: true, [heldAs]: true, ...pick(input, ["attemptId", "requestId"]), waitingFor: answer.waitingFor };
+  }
+
   /**
    * Starts a lesson, or returns the one already in progress.
    * @param {object} input
    * @param {object} context
    */
   function startLesson(input, context) {
-    return runForLearner(startLessonForLearner, input, context, toLessonError);
+    return runHeldLesson(startLessonForLearner, input, context, "preparing", ["start", input.requestId]);
   }
 
   /**
@@ -406,7 +432,7 @@ function createTrainingOperations({
    * @param {object} context
    */
   function resumeLesson(input, context) {
-    return runForLearner(resumeLessonForLearner, input, context, toLessonError);
+    return runHeldLesson(resumeLessonForLearner, input, context, "preparing", ["resume", input.attemptId]);
   }
 
   /**
@@ -415,7 +441,7 @@ function createTrainingOperations({
    * @param {object} context
    */
   function restartLesson(input, context) {
-    return runForLearner(restartLessonForLearner, input, context, toLessonError);
+    return runHeldLesson(restartLessonForLearner, input, context, "preparing", ["restart", input.attemptId, input.requestId]);
   }
 
   /**
@@ -424,7 +450,7 @@ function createTrainingOperations({
    * @param {object} context
    */
   function finishLesson(input, context) {
-    return runForLearner(finishLessonForLearner, input, context, toLessonError);
+    return runHeldLesson(finishLessonForLearner, input, context, "finishing", ["finish", input.attemptId]);
   }
 
   return Object.freeze({

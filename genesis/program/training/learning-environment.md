@@ -166,6 +166,17 @@ A change of viewer resets every part.
   step action path repeats the same request ID through `followHeldRequest`
   while it is held and after an answer that never came back; a repeat joins
   the running check or review, or replays its saved result.
+- Held lesson requests: the learner's own start, resume and restart (which
+  prepare the practice project) and finish (which archives it) from the
+  browser run as held work (`runHeldLesson` in `trainingOperations.js`, keyed
+  by learner, operation and its request or attempt ID). Each answers with its
+  result within two seconds, and otherwise `{ ok: true, preparing: true }` or
+  `{ ok: true, finishing: true }` with its `attemptId` or `requestId` and
+  `waitingFor`; Colleague's calls still wait for the outcome. Courses' start
+  and resume (`useVibe64LearningCourses.prepare`) and the attempt actions'
+  restart and finish (`vibe64LearningAttempts.js`) repeat the same request
+  through `followHeldRequest`; a repeat joins the running work, and once it
+  has ended runs it again, which replays the same request.
 - I'm stuck (`stuck(stepId)`): offered until the step passes, by the bar on a
   do beat and in the final state of an `auto` or `review` step, and by the step
   view on such steps (focus also reports `learningBeat`, the bar's beat index); it records a Colleague request of kind
