@@ -8,6 +8,8 @@ import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/session
 import { serializeVibe64AssistantSelection, VIBE64_ASSISTANT_SELECTION_METADATA } from "@local/vibe64-runtime/shared";
 import { ASSISTANT_ROUTING_METADATA } from "@local/vibe64-runtime/shared/assistantRouting";
 import { ASSISTANT_NO_FINISHING } from "@local/vibe64-runtime/shared/assistantFinishing";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { createHeldRequests } from "./heldRequests.js";
 import { sessionsOccupyingPolicySlots } from "./sessionPolicySlots.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
@@ -38,11 +40,22 @@ function sessionCreationLimitError(policy) {
   );
 }
 
+// A session the page creates and Vibe64 no longer holds (it restarted, or the first request never arrived): its repeat
+// creates nothing, as the session may already exist.
+const CREATION_NOT_FOLLOWED = Object.freeze({
+  code: "vibe64_session_creation_not_followed",
+  error: "Vibe64 restarted or lost this new session while creating it. Check the session list before creating another."
+});
+
 /**
  * A new session, admitted under the project's session limit, started on its
- * resolved assistant, and its workspace preparation begun.
+ * resolved assistant, and its workspace preparation begun. `createSession` is
+ * the assistant tool's and the server's own; `startSessionCreation` is the
+ * page's, held while it goes on (`heldRequests.js`), and `close`, at shutdown,
+ * resolves once every held creation has ended.
  * @param {object} dependencies
  * @param {SessionAssistant} dependencies.assistant
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
@@ -51,6 +64,7 @@ function sessionCreationLimitError(policy) {
  */
 function createSessionCreation({
   assistant,
+  logger,
   project,
   publishSessionChanged,
   setupRunner,
@@ -58,12 +72,15 @@ function createSessionCreation({
   workspaceSetup
 }) {
   /**
-   * Only an internal caller may supply a server-reserved identity.
+   * Only an internal caller may supply a server-reserved identity. `stage` names what the creation does: `assistant`
+   * (resolving its assistant), `session-policy` (waiting for the project's session admission), `source` (making
+   * the session's source), then `workspace-setup` (starting its preparation).
    */
   async function createSession(input, options = {}) {
     const {
       sessionId,
-      expectedCommit
+      expectedCommit,
+      stage = doNothing
     } = options;
     return sessionResult(async () => {
       assertProjectEffectAdmission();
@@ -104,6 +121,7 @@ function createSessionCreation({
         throw vibe64Error("Choose a branch or a pull request for this session.", "vibe64_session_source_choice_conflict");
       }
       // A new chat starts in Auto, a lesson in Junior.
+      stage("assistant");
       const { assistantSelection, assistantRouting: startRouting } = await assistant.resolveSessionStart(input, {
         vibe64User,
         ...(learningRuntime ? { mode: "junior" } : {})
@@ -136,6 +154,7 @@ function createSessionCreation({
         } : {})
       });
       let created;
+      stage("session-policy");
       if (runtime.learningScope?.noExercise) {
         await runtime.store.assertSessionCreationAbsent(sessionId);
         created = { session: await createAdmittedSession() };
@@ -156,6 +175,7 @@ function createSessionCreation({
             selection: input.repositoryBranch,
             vibe64User
           }) : null;
+          stage("source");
           const session = await createAdmittedSession({ repositoryBranch });
           const updatedPolicy = await project.developmentDatabasePolicy({
             openSessions: [...openSessions, session]
@@ -169,6 +189,7 @@ function createSessionCreation({
         });
       }
       let setup = null;
+      stage("workspace-setup");
       try {
         if (!runtime.learningScope?.noExercise) {
           setup = await setupRunner.start({
@@ -218,7 +239,27 @@ function createSessionCreation({
     }, "Vibe64 could not create a chat session.");
   }
 
-  return Object.freeze({ createSession });
+  const heldCreations = createHeldRequests({
+    component: "vibe64.session_creation",
+    heldAs: "creating",
+    logger,
+    notFollowed: CREATION_NOT_FOLLOWED
+  });
+
+  /**
+   * The page's new session (`POST /sessions`), named by its `requestId`: making its source (the worktree and its
+   * connected copies) and starting its preparation can outlast the hosted edge's minute.
+   * @param {{ requestId: string, repeat?: boolean }} input
+   */
+  function startSessionCreation(input) {
+    return heldCreations.run([], input, (creation, { stage }) => createSession(creation, { stage }));
+  }
+
+  return Object.freeze({
+    close: heldCreations.close,
+    createSession,
+    startSessionCreation
+  });
 }
 
 export { createSessionCreation };

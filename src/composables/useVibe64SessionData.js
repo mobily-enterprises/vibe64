@@ -145,7 +145,6 @@ function useVibe64SessionData() {
   let emptySessionListObservedForProject = "";
   const {
     createSession,
-    createSessionCommand,
     createSessionRunning
   } = useVibe64SessionCreation({
     projectSlug,
@@ -525,7 +524,6 @@ function useVibe64SessionData() {
     canCreateSession,
     clearSelectedSession,
     createSession,
-    createSessionCommand,
     createSessionRunning,
     createSessionVisible,
     createSessionTitle,

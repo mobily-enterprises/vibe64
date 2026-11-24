@@ -319,6 +319,24 @@ The creation dialog uses its existing pending state to prevent outside-click,
 Escape, Close and Cancel dismissal until creation succeeds or fails. Success
 closes the dialog; failure leaves the selection available for retry or dismissal.
 
+The page's create (`POST /sessions`) runs `vibe64.sessions.create.start`, which
+the assistant's tools do not offer, with a `requestId` the page makes for each
+creation (`startSessionCreation` in `sessionCreation.js`, a held request from
+`heldRequests.js`). It answers with the created session when that comes within
+two seconds, and otherwise `{ ok: true, creating: true, requestId, waitingFor }`
+while the creation goes on (`assistant`, `session-policy`, `source`, then
+`workspace-setup`): a hosted workspace's edge ends a request after about a
+minute, while making a large project's source and its connected copies takes
+longer. The page (`useVibe64SessionCreation.js`, `followHeldRequest` in
+`vibe64HeldRequest.js`) sends the same request again with `repeat: true`, which
+joins the creation or reads its outcome for fifteen minutes after it ended and
+never creates a second session, also after an answer that never came back
+(status 0, or a 5xx without the server's code), and shows one outcome, never a
+status code. A repeat this editor does not hold (it restarted, or the first
+request never arrived) creates nothing and answers
+`vibe64_session_creation_not_followed`, saying to check the session list. The
+assistant's tool and the server's own creations run `createSession` and wait.
+
 Session listing projects saved agent-run activity and its session revision into
 `agentActivity`; unreadable activity remains unknown. Agent-run files are kept
 for a session's whole life, so the store remembers each session's answer by its

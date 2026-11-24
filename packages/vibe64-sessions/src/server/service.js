@@ -112,6 +112,7 @@ function createService({
   });
   const creation = createSessionCreation({
     assistant,
+    logger,
     project,
     publishSessionChanged,
     setupRunner,
@@ -197,6 +198,7 @@ function createService({
     updateSessionPresence: catalogue.updateSessionPresence,
 
     createSession: creation.createSession,
+    startSessionCreation: creation.startSessionCreation,
 
     inspectAssistantAccess: assistant.inspectAssistantAccess,
     listAssistantCapabilities: assistant.listAssistantCapabilities,
@@ -208,7 +210,10 @@ function createService({
     inspectSessionChanges: work.inspectSessionChanges,
     inspectSessionWork: work.inspectSessionWork,
     saveSessionWork: work.saveSessionWork,
-    settleStartedWork: work.settleStartedWork,
+    // The Saves and Updates the buttons started, and the creations and pull requests the page holds.
+    settleStartedWork: async () => {
+      await Promise.all([work.settleStartedWork(), creation.close()]);
+    },
     startSessionPullRequest: work.startSessionPullRequest,
     startSessionSave: work.startSessionSave,
     startSessionUpdate: work.startSessionUpdate,

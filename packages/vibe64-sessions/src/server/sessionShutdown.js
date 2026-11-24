@@ -4,8 +4,9 @@
 /**
  * Stops a sessions service's work at server shutdown: renewal admission,
  * presence and startup recovery close, every agent runtime is invalidated, and
- * a Save or Update the Save and Update buttons started records its outcome
- * before the server exits, as it did when it ran inside its request, and a
+ * a Save or Update the Save and Update buttons started, and a session or pull
+ * request the page is creating, records its outcome before the server exits,
+ * as it did when it ran inside its request, and a
  * held Main chat message still waiting is refused, unsent, once its delivery ends.
  * Each step runs even when another fails; the failures are reported together.
  * @param {object} dependencies

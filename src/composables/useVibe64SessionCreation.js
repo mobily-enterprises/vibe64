@@ -1,11 +1,8 @@
-import { onScopeDispose, ref } from "vue";
+import { computed, onScopeDispose, ref } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
-import {
-  VIBE64_SESSIONS_API_SUFFIX,
-  VIBE64_SURFACE_ID
-} from "@/lib/vibe64SessionRequestConfig.js";
+import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
+import { followHeldRequest } from "@/lib/vibe64HeldRequest.js";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -13,6 +10,10 @@ import {
   vibe64SessionDebugSummary
 } from "@/lib/vibe64SessionDebugLog.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
+
+const CREATION_FAILED = "Vibe64 session could not be created.";
+const CREATION_LOST_CONTACT =
+  "Vibe64 could not be reached to follow this new session. Check the session list before creating another.";
 
 /**
  * Creates a session in the selected project, one at a time. The new session joins the cached list
@@ -34,28 +35,27 @@ function useVibe64SessionCreation({
   sessionsApiPath
 }) {
   const queryClient = useQueryClient();
-  const createSessionCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context?.apiPath }),
-    buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({
-      assistantSelection: context?.assistantSelection || {},
-      ...(context?.repositoryBranch ? { repositoryBranch: context.repositoryBranch } : {}),
-      ...(context?.pullRequestNumber ? { pullRequestNumber: context.pullRequestNumber } : {})
-    }),
-    fallbackRunError: "Vibe64 session could not be created.",
-    messages: {
-      error: "Vibe64 session could not be created.",
-      success: "Vibe64 session created."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.create",
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
+  // The request names its creation (`requestId`), and the server answers within two seconds, as creating while the
+  // session's source is made; the page repeats it (`repeat: true`) until the session, and shows one outcome.
+  const createSessionResource = useEndpointResource({
+    path: sessionsApiPath,
+    queryKey: computed(() => ["vibe64.sessions.create", sessionsApiPath.value]),
+    enabled: false
   });
-  // useCommand's observable operation state is shared by placement source. It
-  // may still describe a creation in another project after project navigation,
-  // so it cannot own this page's local loading state.
+  const feedback = useUiFeedback({ source: "vibe64.sessions.create" });
+
+  /** Sends the page's creation until its outcome (`followHeldRequest`). */
+  function createFollowed(apiPath, { assistantSelection, pullRequestNumber, repositoryBranch }) {
+    const request = vibe64RealtimeOriginPayload({
+      assistantSelection: assistantSelection || {},
+      ...(repositoryBranch ? { repositoryBranch } : {}),
+      ...(pullRequestNumber ? { pullRequestNumber } : {}),
+      requestId: globalThis.crypto.randomUUID()
+    });
+    return followHeldRequest(repeat => createSessionResource.save(repeat ? { ...request, repeat } : request,
+      { method: "POST", path: apiPath }), { lostContact: CREATION_LOST_CONTACT, notWorded: CREATION_FAILED });
+  }
+  // The page's own loading state: a creation in another project, after project navigation, never owns it.
   const createSessionRunning = ref(false);
   let createSessionInFlight = null;
   let disposed = false;
@@ -75,7 +75,8 @@ function useVibe64SessionCreation({
     createSessionRunning.value = true;
     createSessionInFlight = (async () => {
       try {
-        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, repositoryBranch, apiPath: creationApiPath });
+        const response = await createFollowed(creationApiPath, { assistantSelection, pullRequestNumber, repositoryBranch });
+        feedback.success("Vibe64 session created.");
         if (
           !disposed &&
           creationProjectSlug === String(projectSlug.value || "").trim()
@@ -133,6 +134,7 @@ function useVibe64SessionCreation({
           durationMs: vibe64SessionDebugDurationMs(startedAtMs),
           error: vibe64SessionDebugError(error)
         });
+        feedback.error(error, CREATION_FAILED);
         throw error;
       } finally {
         createSessionRunning.value = false;
@@ -144,7 +146,6 @@ function useVibe64SessionCreation({
 
   return {
     createSession,
-    createSessionCommand,
     createSessionRunning
   };
 }

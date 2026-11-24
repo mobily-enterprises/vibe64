@@ -315,7 +315,7 @@ const sessionPullRequestStartInputValidator = actionInput({
   repeat: { type: "boolean", required: false }
 });
 
-const sessionCreateInputValidator = actionInput({
+const sessionCreateFields = {
   repositoryBranch: {
     type: "object",
     required: false,
@@ -332,6 +332,13 @@ const sessionCreateInputValidator = actionInput({
     required: false
   },
   ...optionalOrigin
+};
+const sessionCreateInputValidator = actionInput(sessionCreateFields);
+// The page's create names its request, so its repeat after a held or lost answer joins it and never creates again.
+const sessionCreateStartInputValidator = actionInput({
+  ...sessionCreateFields,
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true },
+  repeat: { type: "boolean", required: false }
 });
 
 const assistantCapabilitiesInputValidator = actionInput({
@@ -582,6 +589,7 @@ export {
   sessionChangeDiffInputValidator,
   sessionChangesInputValidator,
   sessionCreateInputValidator,
+  sessionCreateStartInputValidator,
   sessionPullRequestInputValidator,
   sessionPullRequestStartInputValidator,
   sessionIdInputValidator,
