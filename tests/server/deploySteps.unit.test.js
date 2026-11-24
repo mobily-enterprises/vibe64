@@ -1427,6 +1427,20 @@ test("a provider that can't route other names refuses a Deploy with them before 
     message: `a provider can't answer at other names than the domain (${WWW}): remove them, then deploy to production.`
   });
   assert.deepEqual(requestsAfter(standIn, at).filter(isWrite), [], "nothing made, and no lease taken");
+  // Names an app's server would refuse to start with (APP_REDIRECT_HOSTS) are refused by any provider, and by moveDomain.
+  const refusals = [
+    [[DOMAIN], `${DOMAIN} is the domain itself`],
+    [[WWW, OLD, WWW], `${WWW} is named twice`],
+    [["https://www.memobot.example.com"], '"https://www.memobot.example.com" is no lowercase host name, such as www.example.com'],
+    [["WWW.memobot.example.com"], '"WWW.memobot.example.com" is no lowercase host name, such as www.example.com'],
+    [["10.0.0.1"], '"10.0.0.1" is no lowercase host name, such as www.example.com'],
+    [["*.memobot.example.com"], '"*.memobot.example.com" is no lowercase host name, such as www.example.com']
+  ];
+  for (const [aliases, why] of refusals) {
+    const refused = { code: "production_deploy_aliases_invalid", status: 422, message: `The domain's other names are refused: ${why}.` };
+    await assert.rejects(run({ record, commit: "c1", aliases }), refused, JSON.stringify(aliases));
+  }
+  assert.deepEqual(requestsAfter(standIn, at).filter(isWrite), [], "nothing made, and no lease taken");
   const plain = await run({ record, commit: "c1", aliases: [], using: unroutable });
   assert.equal(plain.outcome, "live", plain.message);
 });
@@ -1490,6 +1504,10 @@ test("moveDomain routes the running public App Service at the domain and its oth
     { routes: [{ host: DOMAIN, tls: "edge" }, { host: WWW, tls: "edge" }, { host: OLD, tls: "edge" }] });
   assert.deepEqual(hosts(), [DOMAIN, OLD, WWW].sort());
   assert.deepEqual(standIn.services.refreshes(web).map((one) => one.kind), ["create"], "no release, no refresh");
+  const asked = standIn.requests().length;
+  await assert.rejects(moveDomain(adapter, first.record, stack.needs, { domain: DOMAIN, aliases: [WWW, DOMAIN] }),
+    { code: "production_deploy_aliases_invalid", status: 422, message: `The domain's other names are refused: ${DOMAIN} is the domain itself.` });
+  assert.deepEqual(writesAfter(standIn, asked), []);
 
   // The domain with no other names: web answers there alone; www and the other keep their routes, sending to nothing.
   const next = standIn.requests().length;

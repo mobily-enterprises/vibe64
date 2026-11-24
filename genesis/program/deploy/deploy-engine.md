@@ -68,7 +68,7 @@ mobilynet, Google Cloud and AWS.
   what it does through the caller's `report`. `takeOffline()` takes the services
   down and `deleteResource()` deletes a disconnected resource, each its own call;
   `setInstances()` and `moveDomain()` change a running App Service's count and
-  domain at its provider at once.
+  domain (with the domain's other names) at its provider at once.
 - `createRecordStore()`, `newRecord()`, `labelsFor()` and `rebuildFromLabels()`
   are the record of what a deployment made, a file written against the revision
   it read. Everything the engine makes carries the deployment's labels
@@ -342,7 +342,14 @@ making it twice. In order:
 
 1. a service whose exposure changed is deleted, to be made again;
 2. each resource's hosted service is made, labelled, or resized, and waited for;
-3. the domain is added to the provider project when none covers it;
+3. the domain is added to the provider project when none covers it, then each
+   of the domain's other names (the release's `aliases`, such as its www name;
+   none when it gives none). A release with other names is refused before the
+   provider is asked anything, `production_deploy_aliases_invalid` (422) when
+   one is no lowercase host name, is the domain itself or is named twice (the
+   app's server would refuse to start with them), and
+   `production_deploy_aliases_unsupported` (409) by an adapter without
+   `takeDomain()` (Google Cloud's, AWS's), which can't route them: never dropped;
 4. each internal service, then the public one, in two passes. First every
    service that runs a release and is to be handed a new one is readied on the
    version it runs. It is linked to each resource it isn't linked to at the
@@ -353,9 +360,10 @@ making it twice. In order:
    23:42:09, and its first instance started at 23:42:10). Every service is
    linked before the Deploy hands any release. Its settings go with its release,
    never ahead of it (below). Then, each service in turn: its release is uploaded and its App Service made (labelled,
-   internal ones with no routes, the public one routed at the domain with a
-   connection to each service it reaches, or made without the domain while
-   another App Service the record holds has it: 7) with the count the Plan chose for
+   internal ones with no routes, the public one routed at the domain and its
+   other names with a connection to each service it reaches, or made with no
+   route while another App Service the record holds has the domain or one of
+   them: 7) with the count the Plan chose for
    it, or it is handed the release, bringing its settings where they differ from
    those it was given. Each resource it is still not linked to is
    linked the moment that refresh is open, and the refresh is waited for.
@@ -479,7 +487,12 @@ making it twice. In order:
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
    setting the reached service's private address, the Production Env's values
-   for the names it is given) where they differ from those it was given: a
+   for the names it is given, and the public service's `APP_REDIRECT_HOSTS`, the
+   domain's other names comma-separated, while it has any: a JSKIT app's server
+   answers a request for one with a 301 to the same path at `APP_PUBLIC_URL`.
+   No release declares it, so adding or removing a name is a settings refresh
+   of the release the service runs, and neither a Production Env entry nor a
+   Stack service's `Setting` or `Reaches` may name it) where they differ from those it was given: a
    service that kept its release, so that a change of the Production Env alone
    is a settings refresh of the release it runs, or one handed its release
    without them (4: they name a service this Deploy made). Then the services it reaches and its size, only once
@@ -491,10 +504,14 @@ making it twice. In order:
    fails leaves the service with those it had, so the next Deploy gives them
    again, and after a Deploy that stopped while one ran, the next gives them
    again unless it reads that it succeeded: one still running may yet fail;
-7. the domain, where the adapter lists the names each App Service's routes
-   send it (`hosts`, mobilynet's inventory) and the public service lacks it, is
-   routed to it once it runs its release healthy (`takeDomain`, `address.js`):
-   moved in one call from the App Service the record holds that has it, so a
+7. the domain and its other names, where the adapter lists the names each App
+   Service's routes send it (`hosts`, mobilynet's inventory) and the public
+   service lacks any, are routed to it once it runs its release healthy
+   (`takeDomain`, `address.js`), the whole list in one call (mobilynet replaces
+   a service's names), each moved only from the App Service the record holds
+   that has it. A Deploy routes no name away: the owner's change of the names
+   moves them at once (`moveDomain`). The domain is moved in one call from the
+   App Service the record holds that has it, so a
    renamed public service (made in 4 without the domain while the one it
    replaces still served, where mobilynet refused it `name_taken` until 20 Nov)
    takes the address with no gap and the same DNS target before the old one is
@@ -713,21 +730,25 @@ live once that many are healthy.
 Which domain a deployment serves is its caller's configuration, never the
 record's. A Deploy routes its release's `domain` to the
 public service (above: made with it, or step 7 once the service serves the
-release). A running public service also moves to another domain at once, with
-no release, by its owner's own action: `moveDomain(adapter, record, needs, {
-domain })` (`domain.js`) is refused `production_deploy_item_unknown` (404) when the
-record holds no item for the Stack's public service, and
+release). A running public service also moves to another domain, or answers at
+other names for it, at once, with no release, by its owner's own action:
+`moveDomain(adapter, record, needs, { domain, aliases })` (`domain.js`, `aliases`
+none when left out) is refused `production_deploy_item_unknown` (404) when the
+record holds no item for the Stack's public service,
 `production_deploy_domain_move_unsupported` (409) by an adapter without
-`takeDomain()` (Google Cloud's, AWS's), before the provider is asked anything;
-then the adapter's `ensureDomain()` (the provider project's domain covering it,
-added when none does) and `takeDomain(id, domain, { take: false })`, the same
-call step 7 makes, each under an idempotency key of its own each time. It
+`takeDomain()` (Google Cloud's, AWS's), and `production_deploy_aliases_invalid`
+(422) for names as a Deploy refuses them, before the provider is asked anything;
+then the adapter's `ensureDomain()` for the domain and each name (the provider
+project's domain covering it, added when none does) and `takeDomain(id, domain,
+{ take: false, aliases })`, the same call step 7 makes, each under an
+idempotency key of its own each time. The names reach the app's
+`APP_REDIRECT_HOSTS` at the next Deploy. It
 answers `{ service, domain }` and leaves the record unchanged. Never with
 `take`: a name another App Service, a machine or a group of the project answers at
 stays theirs, and mobilynet refuses it `409 name_taken`. On mobilynet the
-service's routes become the new name's alone, with no refresh; the old name's
-route is kept, sending to nothing, with its DNS target, and a move back takes
-it again.
+service's routes become the names asked for alone, with no refresh; a name no
+longer asked for keeps its route, sending to nothing, with its DNS target, and
+a move back takes it again.
 
 ## The mobilynet adapter
 
@@ -792,9 +813,11 @@ the same name and DNS target. A name another App Service's route sends to is
 refused `409 name_taken` with `{ host, routeId }` unless the service's route
 entry says `take: true`, which moves it in one call; the routes API makes,
 moves (`PATCH`, its id, name and target kept) or deletes any route. The adapter
-lists each App Service's route names (`hosts`), makes a public service with no
-route while `domain` is null, and answers `takeDomain(id, domain, { take })`
-(one `PATCH /v1/services/{id}` of its `routes`) and `domainRecords(domain)` in
+lists each App Service's route names (`hosts`), makes a public service routed
+at the domain and its other names (`aliases`), or with no route while `domain`
+is null, and answers `takeDomain(id, domain, { take, aliases })` (one `PATCH
+/v1/services/{id}` of its `routes`, the domain's and each other name's, each
+with `take` where asked) and `domainRecords(domain)` in
 the other adapters' shape, with `live`, `waitingFor` and `target`: mobilynet's
 TXT (and a wildcard's challenge CNAME) while the domain is unverified, and the
 CNAME of the name to its route's own name while it has a route, Offline too.
@@ -1062,6 +1085,7 @@ request's signature (or the gateway's token), for the engine's tests.
 - `deploy()` — a whole Deploy, step by step, under the lease, stopped where `deployStopOf()` allows when asked.
 - `takeOffline()`, `deleteResource()` — Take Production offline and Delete (`offline.js`).
 - `domainStep()`, `addressChange()` — the domain routed to the public service, and its DNS target told once.
+- `aliasesProblem()` — why the domain's other names can't be routed and given to the app, or "".
 - `setInstances()` — how many instances a running App Service runs, set at its provider at once.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
 - `createGoogleAdapter()` — the same for Google Cloud; `createGoogleClient()` its REST client.

@@ -8,9 +8,9 @@
 // each hosted service Vibe64 made with the links mobilynet holds of it, which the steps believe over the record's.
 // Every App Service it makes drains for mobilynet's shortest time (DRAIN_SECONDS).
 //
-// The domain: a public App Service asks for the domain's name in its `routes`, and mobilynet sends the name's route to
-// it, making the route or taking the one the name has (kept, sending to nothing, after Take offline; or moved with
-// `take` from the public service it replaces: takeDomain). The route is the name's: its `target`, the CNAME the owner
+// The domain: a public App Service asks for the domain's name, and each of the domain's other names, in its `routes`,
+// and mobilynet sends each name's route to it, making the route or taking the one the name has (kept, sending to
+// nothing, after Take offline; or moved with `take` from the public service it replaces: takeDomain). The route is the name's: its `target`, the CNAME the owner
 // adds once, is its own name (`rte-…`), which stays through Take offline, every Deploy and a replaced App Service
 // (domainRecords). A mobilynet whose service routes still answer the service's own name (`svc-…`) gives no target.
 //
@@ -321,9 +321,10 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     },
     /**
      * Makes an App Service, its labels its tags, with mobilynet's drain: internal ones with no routes, public ones
-     * routed at the domain (none while `domain` is null: another public service has it, which takeDomain moves it from).
+     * routed at the domain and its other names (`aliases`; none while `domain` is null: another public service has it,
+     * which takeDomain moves it from).
      */
-    async createService({ name, exposure, size, instances, app, version, settings, secrets, domain, connections, labels, task = null }, { idempotencyKey }) {
+    async createService({ name, exposure, size, instances, app, version, settings, secrets, domain, aliases = [], connections, labels, task = null }, { idempotencyKey }) {
       const { service, refresh } = await calls.createService({
         name,
         region,
@@ -334,7 +335,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         app: { name: app, version },
         settings,
         secrets,
-        ...(exposure === "public" ? { routes: domain ? [{ host: domain, tls: "edge" }] : [] } : {}),
+        ...(exposure === "public" ? { routes: domain ? [domain, ...aliases].map((host) => ({ host, tls: "edge" })) : [] } : {}),
         ...(connections.length > 0 ? { connections } : {}),
         tags: labels,
         ...(task ? { task } : {})
@@ -387,12 +388,14 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     putSettings: async (id, { settings, secrets }, { idempotencyKey }) => (await client.putServiceSettings(id, { settings, secrets }, { idempotencyKey })).refresh?.id ?? null,
     changeService: async (id, change, { idempotencyKey }) => (await client.changeService(id, change, { idempotencyKey })).refresh?.id ?? null,
     /**
-     * Routes the domain to a public App Service: its route made or taken, and with `take` moved from the service that
-     * has it, in one call; mobilynet refuses a name a machine, a group or another service has, without `take`, `409
-     * name_taken`.
+     * Routes the domain and its other names (`aliases`, each `{ host, take }`) to a public App Service: each name's route
+     * made or taken, and with `take` moved from the service that has it, in one call that replaces the service's names
+     * (one it no longer asks for keeps its route, sending to nothing); mobilynet refuses a name a machine, a group or
+     * another service has, without `take`, `409 name_taken`.
      */
-    takeDomain: async (id, domain, { take, idempotencyKey }) => {
-      await client.changeService(id, { routes: [{ host: domain, tls: "edge", ...(take ? { take: true } : {}) }] }, { idempotencyKey });
+    takeDomain: async (id, domain, { take, aliases = [], idempotencyKey }) => {
+      const routes = [{ host: domain, take }, ...aliases].map((one) => ({ host: one.host, tls: "edge", ...(one.take ? { take: true } : {}) }));
+      await client.changeService(id, { routes }, { idempotencyKey });
     },
     deleteService: (id) => client.deleteService(id),
     /** The port a service reaches another on: every service listens on 3000. */

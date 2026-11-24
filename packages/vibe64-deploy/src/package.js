@@ -17,6 +17,9 @@ const PACKAGE_MAX_BYTES = Math.floor((64 * 1024 * 1024 - 64 * 1024) * 3 / 4);
 // The settings Production gives every service itself: the environment, where it listens, its public address and the
 // proxies it believes.
 const PRODUCTION_SETTINGS = Object.freeze(["APP_ENV", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"]);
+// The domain's other names, which Production gives the public service where the domain has any: its server sends a
+// request for one on to APP_PUBLIC_URL (JSKIT's kernel). No release declares it, as no Env entry or Stack setting sets it.
+const REDIRECT_SETTING = "APP_REDIRECT_HOSTS";
 // A host gives it to a Staging that real people use; a production server refuses to start with it.
 const STAGING_REAL_PEOPLE_SETTING = "STAGING_REACHES_REAL_PEOPLE";
 const TAR_BLOCK = 512;
@@ -172,14 +175,16 @@ function settingsPerService(needs, envRecords = []) {
  * The values a service is given, split into settings and secrets as declared: Production's own (APP_ENV=production,
  * HOST=0.0.0.0, PORT, APP_PUBLIC_URL at the domain, TRUSTED_PROXIES as the provider names them), each Reaches setting
  * the reached service's private address, and the Production Env's values (generated secrets and the setup code
- * among them) for the names it declares. A declared name without a value is left out, never blanked.
+ * among them) for the names it declares. A declared name without a value is left out, never blanked. The domain's
+ * other names (`aliases`, the public service's alone) are given as APP_REDIRECT_HOSTS, comma-separated, which no
+ * release declares; with none there is no such setting.
  * @param {object} options
  * @param {Record<string, { secret: boolean, required: boolean }>} options.declared the service's settings (settingsPerService)
  * @param {Record<string, string>} options.env the Production Env's values by name
- * @param {string} options.domain @param {string} options.trustedProxies @param {number} options.port
+ * @param {string} options.domain @param {string[]} [options.aliases] @param {string} options.trustedProxies @param {number} options.port
  * @param {Record<string, string>} [options.reached] each of the service's Reaches settings with the reached service's address
  */
-function settingValues({ declared, env, domain, trustedProxies, port, reached = {} }) {
+function settingValues({ declared, env, domain, aliases = [], trustedProxies, port, reached = {} }) {
   const own = { APP_ENV: "production", HOST: "0.0.0.0", PORT: String(port), APP_PUBLIC_URL: `https://${domain}`, TRUSTED_PROXIES: trustedProxies };
   const all = { ...env, ...reached, ...own };
   const settings = {};
@@ -187,6 +192,7 @@ function settingValues({ declared, env, domain, trustedProxies, port, reached = 
   for (const [name, { secret }] of Object.entries(declared)) {
     if (typeof all[name] === "string") (secret ? secrets : settings)[name] = all[name];
   }
+  if (aliases.length > 0) settings[REDIRECT_SETTING] = aliases.join(",");
   return { settings, secrets, hash: `sha256:${sha256Of(Buffer.from(JSON.stringify([sortedObject(settings), sortedObject(secrets)])))}` };
 }
 
@@ -223,7 +229,8 @@ function envEntryProblem(record, needs) {
     return `${record.key} says real people use a Staging, so Production never takes it: an app refuses to start with it there.`;
   }
   const own = needs.services.flatMap((service) => [...Object.keys(service.settings), ...service.reaches.map((reach) => reach.setting)]);
-  if (PRODUCTION_SETTINGS.includes(record.key) || record.key.startsWith("V64_") || boundSettings(needs).has(record.key) || own.includes(record.key)) {
+  if (PRODUCTION_SETTINGS.includes(record.key) || record.key === REDIRECT_SETTING || record.key.startsWith("V64_") || boundSettings(needs).has(record.key)
+    || own.includes(record.key)) {
     return `${record.key} is set by Production itself (from genesis/stack.md's resources and services), so the Production Env can't set it.`;
   }
   return "";
@@ -249,6 +256,7 @@ function megabytes(bytes) {
 export {
   PACKAGE_MAX_BYTES,
   PRODUCTION_SETTINGS,
+  REDIRECT_SETTING,
   archiveProblem,
   declaredSettingsOf,
   envEntryProblem,

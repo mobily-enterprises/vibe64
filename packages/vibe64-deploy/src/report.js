@@ -1,27 +1,31 @@
 // What a Deploy and a Take offline say as they go (steps.js): each step in the engine's own words, the event a report
 // gets of it, and the caller's report itself, stamped with the time and never failing the run it reports on. A report
 // names the step, the service or resource and the refresh it started, never a setting's value.
+import { namesWords } from "./address.js";
 import { MIGRATING } from "./migrations.js";
 
 /**
  * What a step does, in the words a person reads in a Deploy's log: the step and the service or resource it is for.
- * @param {any} step nextStep's step @param {{ needs?: any, release?: { domain?: string } }} [context]
+ * @param {any} step nextStep's step @param {{ needs?: any, release?: { domain?: string, aliases?: string[] } }} [context]
  */
 function stepWords(step, { needs, release } = {}) {
   const exposure = needs?.services.find((one) => one.id === step.service)?.exposure;
+  const others = release?.aliases?.length > 0 ? `, with ${namesWords(release.aliases)}` : "";
   switch (step.kind) {
     case "createResource": return `Making the hosted service for ${step.resource}`;
     case "resizeResource": return `Resizing the hosted service of ${step.resource} to ${step.size}`;
     case "adopt": return `Taking up ${step.item === "service" ? "App Service" : "the hosted service of"} ${step.name}, made by a Deploy cut short`;
-    case "ensureDomain": return `Adding the domain ${step.domain}`;
+    case "ensureDomain": return step.alias
+      ? `Adding ${step.domain}, which sends people to ${release?.domain ?? "the domain"}`
+      : `Adding the domain ${step.domain}`;
     case "uploadRelease": return `Uploading the release of ${step.service}`;
     case "keepRelease": return `${step.service} keeps the release it runs: the same commit, Stack and engine`;
     case "releaseService": return `Handing App Service ${step.service} the new release${step.task ? MIGRATING : ""}`;
     case "createService": return (exposure !== "public"
       ? `Making App Service ${step.service}, internal: only the app's other services reach it`
       : step.withoutDomain
-        ? `Making App Service ${step.service}, public behind the load balancer: it takes ${release?.domain ?? "its domain"} from ${step.withoutDomain} once healthy`
-        : `Making App Service ${step.service}, public behind the load balancer at ${release?.domain ?? "its domain"}`) + (step.task ? MIGRATING : "");
+        ? `Making App Service ${step.service}, public behind the load balancer: it takes ${release?.domain ?? "its domain"} from ${step.withoutDomain} once healthy${others}`
+        : `Making App Service ${step.service}, public behind the load balancer at ${release?.domain ?? "its domain"}${others}`) + (step.task ? MIGRATING : "");
     case "link": return `Linking ${step.service} to ${step.resource}`;
     case "checkRefresh": return `Reading how the update of ${step.service} ended`;
     case "unlink": return `Unlinking ${step.resource}, no longer in genesis/stack.md, from ${step.service}`;
@@ -31,9 +35,14 @@ function stepWords(step, { needs, release } = {}) {
       if (change.connections) return `Updating the services ${step.service} reaches`;
       return `Resizing App Service ${step.service} to ${change.size}`;
     }
-    case "takeDomain": return step.from
-      ? `Moving ${step.domain} from App Service ${step.from} to ${step.service}, at the same DNS target`
-      : `Routing ${step.domain} to App Service ${step.service}`;
+    case "takeDomain": {
+      const aliases = step.aliases ?? [];
+      if (!step.from) return `Routing ${namesWords([step.domain, ...aliases.map((one) => one.host)])} to App Service ${step.service}`;
+      const moved = [step.domain, ...aliases.filter((one) => one.take).map((one) => one.host)];
+      const routed = aliases.filter((one) => !one.take).map((one) => one.host);
+      return `Moving ${namesWords(moved)} from App Service ${step.from} to ${step.service}, at the same DNS target${moved.length > 1 ? "s" : ""}`
+        + (routed.length > 0 ? `, and routing ${namesWords(routed)} to it` : "");
+    }
     case "deleteService": return step.replaced
       ? `Deleting App Service ${step.service}, to make it again: its exposure changed`
       : `Deleting App Service ${step.service}, no longer in genesis/stack.md`;

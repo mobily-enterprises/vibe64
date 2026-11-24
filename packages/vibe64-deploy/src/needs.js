@@ -20,9 +20,10 @@ const SERVICES_MAX = 8;
 const SERVICE_ID = /^[a-z][a-z0-9-]{0,15}$/u;
 const SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
 // The settings Production gives every service itself, and the instance facts (V64_*): no service sets one. Nor does
-// one set STAGING_REACHES_REAL_PEOPLE, which only a host's Staging that real people use is given.
+// one set STAGING_REACHES_REAL_PEOPLE, which only a host's Staging that real people use is given, or APP_REDIRECT_HOSTS,
+// the domain's other names Production gives the public service.
 const HOST_SETTINGS = Object.freeze([
-  "APP_ENV", "STAGING_REACHES_REAL_PEOPLE", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"
+  "APP_ENV", "STAGING_REACHES_REAL_PEOPLE", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES", "APP_REDIRECT_HOSTS"
 ]);
 // Nor SIDE_EFFECTS, which APP_ENV replaced: a JSKIT app refuses to start while it is set.
 const RETIRED_SETTINGS = Object.freeze(["SIDE_EFFECTS"]);

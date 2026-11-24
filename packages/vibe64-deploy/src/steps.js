@@ -5,7 +5,10 @@
 //
 //   1. a service whose exposure changed is deleted first (it holds no data), to be made again;
 //   2. each resource's hosted service is made (labelled) or resized, and waited for;
-//   3. the public service's domain is added to the provider project when none covers it;
+//   3. the public service's domain is added to the provider project when none covers it, then each of the domain's
+//      other names (the release's `aliases`, such as its www name): a release with them is refused before anything is
+//      asked by a provider that can't route a running service (no takeDomain), and one naming the domain itself, a
+//      name twice or something that is no host name, which the app's server would refuse to start with;
 //   4. each internal service, then each public one, in two passes. First, every service that runs a release and is to
 //      be handed a new one is linked to each resource it isn't linked to at the provider, every one before this Deploy
 //      hands any release, so the instances its next release starts have them however soon the provider starts them
@@ -23,8 +26,8 @@
 //      Env has no value for fails the Deploy before any change, naming it. A service whose settings name one this
 //      Deploy still makes (a Reaches of a new service) is handed its release without them, and given them in 6.
 //      Then, each service in turn: its release is uploaded, then its service made (internal: no routes; public: routed
-//      at the domain, with a connection to each service it reaches; without it while another service the record holds
-//      has it: address.js), with the count the plan chose for a service it makes, or handed the release, which rolls to the count the service runs (a provider's refresh rolls to the count the service has as
+//      at the domain and its other names, with a connection to each service it reaches; without any while another
+//      service the record holds has one: address.js), with the count the plan chose for a service it makes, or handed the release, which rolls to the count the service runs (a provider's refresh rolls to the count the service has as
 //      it rolls, as mobilynet's does); then each resource it is still not linked to is linked the moment that refresh
 //      is open, and the refresh waited for.
 //      A service still running the release it was last handed, made from the same upload (the archive and its
@@ -42,14 +45,16 @@
 //      carries the migrations, once, unless the database ran that code's (the record's `migrated`);
 //   5. a resource the Stack no longer names is unlinked from every service that stays, now that none runs a release
 //      naming it, and kept running with its data;
-//   6. each service's settings (package.js settingValues) when they differ from those it was given (one that kept its
+//   6. each service's settings (package.js settingValues, the public one's with the other names as APP_REDIRECT_HOSTS,
+//      which its server sends on to the domain) when they differ from those it was given (one that kept its
 //      release gets them here, so a change of the Production Env alone is a settings refresh of the release it runs;
 //      one handed a release got them with it, in 4), the services it reaches, then its size as the plan's choices say:
 //      after every move ended, since a provider may refuse a settings replace while a link made ahead of a refresh is
 //      open (mobilynet does). A size change alone is only that, and the record's choices follow it, so the next plan
 //      starts from what runs. The record counts settings as given (their hash and names) once the refresh that brought
 //      them succeeded: one that failed left the service with those it had, which the next Deploy gives again;
-//   7. the domain, where the public service lacks it, is routed to it once it serves its release (address.js);
+//   7. the domain and its other names, where the public service lacks any, are routed to it once it serves its
+//      release (address.js);
 //   8. a service the Stack no longer names is deleted (its links end with it);
 //   9. live, once every service runs its release with as many healthy instances as it runs at the provider and its
 //      last refresh did not fail; the address's DNS target is told once (address.js).
@@ -90,7 +95,7 @@
 // keeping its record is made whole by the labels: the next one finds the thing labelled as that item and adopts it.
 import { createHash, randomBytes } from "node:crypto";
 
-import { addressChange, addressWords, domainHolder, domainStep } from "./address.js";
+import { addressChange, addressWords, aliasesProblem, domainHolder, domainStep } from "./address.js";
 import { settleLastRun } from "./lastRun.js";
 import { MIGRATED_NOTE, migrationDue, migrationsOf, noteHandOver, noteTask } from "./migrations.js";
 import { planOf, stableJson } from "./plan.js";
@@ -152,7 +157,8 @@ function valuesOf(service, { record, release }, byId) {
     reached[reach.setting] = address;
   }
   return settingValues({
-    declared: release.settings[service.id], env: release.env, domain: release.domain, trustedProxies: release.trustedProxies, port: release.port, reached
+    declared: release.settings[service.id], env: release.env, domain: release.domain, aliases: service.exposure === "public" ? release.aliases ?? [] : [],
+    trustedProxies: release.trustedProxies, port: release.port, reached
   });
 }
 
@@ -194,8 +200,8 @@ const backoffPauses = (failures) => Math.min(2 ** (failures - 1), BACKOFF_PAUSES
  * @param {any} context.needs needsOfStack's needs
  * @param {any} context.record the record, its `run` this Deploy's
  * @param {any[]} context.observed the adapter's inventory now
- * @param {{ id: string, declarations: Record<string, any>, digests: Record<string, string>, settings: Record<string, any>, env: Record<string, string>, domain: string, trustedProxies: string, port: number }} context.release
- *   `digests` each service's releaseDigest
+ * @param {{ id: string, declarations: Record<string, any>, digests: Record<string, string>, settings: Record<string, any>, env: Record<string, string>, domain: string, aliases?: string[], trustedProxies: string, port: number }} context.release
+ *   `digests` each service's releaseDigest, `aliases` the domain's other names
  */
 function nextStep({ plan, needs, record, observed, release }) {
   const run = record.run;
@@ -257,8 +263,11 @@ function nextStep({ plan, needs, record, observed, release }) {
   }
   if (starting) return { kind: "wait", words: `Starting ${starting}` };
 
-  // 3. The domain the public service is routed at.
+  // 3. The domain the public service is routed at, then each of its other names.
+  const aliases = release.aliases ?? [];
   if (!run.domain) return { kind: "ensureDomain", domain: release.domain };
+  const unadded = aliases.find((alias) => !(run.aliases ?? []).includes(alias));
+  if (unadded) return { kind: "ensureDomain", domain: unadded, alias: true };
 
   // 4. Each service: readied on the version it runs, every one before any release; then its release, its App
   // Service, its refresh, its links.
@@ -304,7 +313,7 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (leaving) return { kind: "wait", words: `Waiting for the old ${service.id} to go` };
       const values = valuesOf(service, { record, release }, byId);
       if (!values) return { kind: "wait", words: `Waiting for the services ${service.id} reaches` };
-      const held = service.exposure === "public" ? domainHolder(record, thingOf, release.domain) : null;
+      const held = service.exposure === "public" ? [release.domain, ...aliases].map((name) => domainHolder(record, thingOf, name)).find(Boolean) : null;
       return { kind: "createService", service: service.id, values, ...(held ? { withoutDomain: held.name } : {}), ...migrateTask(service.id) };
     }
     // A service runs one refresh at a time, the rest queued behind it, and shows the one under way, else the next: this
@@ -345,7 +354,8 @@ function nextStep({ plan, needs, record, observed, release }) {
   const routed = needs.services.find((one) => one.exposure === "public");
   const front = routed ? thingOf(itemOf("service", routed.id)) : null;
   const routing = front && domainStep({
-    service: routed, thing: front, domain: release.domain, holder: domainHolder(record, thingOf, release.domain, front), serving: serves(routed, front), failure: failureOf(routed, front)
+    service: routed, thing: front, domain: release.domain, holder: domainHolder(record, thingOf, release.domain, front),
+    aliases: aliases.map((host) => ({ host, holder: domainHolder(record, thingOf, host, front) })), serving: serves(routed, front), failure: failureOf(routed, front)
   });
   if (routing) return routing;
 
@@ -409,7 +419,8 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       break;
     case "ensureDomain":
       await adapter.ensureDomain(step.domain, { idempotencyKey: keyOf(record, "domain", "public", step.domain) });
-      run.domain = step.domain;
+      if (step.alias) run.aliases = [...(run.aliases ?? []), step.domain];
+      else run.domain = step.domain;
       break;
     case "uploadRelease":
       stateOf(step.service).version = (await adapter.uploadRelease(release.declarations[step.service].name, upload(step.service))).version;
@@ -439,10 +450,12 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       const connections = connectionsOf(service, record, release.port);
       const name = release.declarations[service.id].name;
       const state = stateOf(service.id);
+      // A public service is routed at the other names with the domain; an adapter that can't route them never gets one.
+      const aliases = service.exposure === "public" && !step.withoutDomain ? release.aliases ?? [] : [];
       const made = await adapter.createService({
         name, exposure: service.exposure, size: choice.size, instances: choice.instances, app: name, version: state.version,
         settings: values.settings, secrets: values.secrets, domain: step.withoutDomain ? null : release.domain, connections, labels: labelsFor(record, { kind: "service", name: service.id }),
-        ...(step.task ? { task: step.task } : {})
+        ...(aliases.length > 0 ? { aliases } : {}), ...(step.task ? { task: step.task } : {})
       }, { idempotencyKey: keyOf(record, "service", service.id, name) });
       record.items[`service.${service.id}`] = {
         kind: "service", name: service.id, id: made.id, providerName: name, origin: "made", size: choice.size,
@@ -525,7 +538,10 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       break;
     }
     case "takeDomain":
-      await adapter.takeDomain(step.id, step.domain, { take: Boolean(step.from), idempotencyKey: keyOf(record, "takeDomain", step.service, step.domain) });
+      await adapter.takeDomain(step.id, step.domain, {
+        take: Boolean(step.from), ...(step.aliases ? { aliases: step.aliases } : {}),
+        idempotencyKey: keyOf(record, "takeDomain", step.service, step.aliases ? { domain: step.domain, aliases: step.aliases } : step.domain)
+      });
       break;
     case "deleteService":
       await adapter.deleteService(step.id);
@@ -565,7 +581,8 @@ async function takeDeployLease(adapter, record, holder) {
  * @param {any} options.record the environment's record (record.js newRecord before the first deploy)
  * @param {object} [options.choices] @param {object} [options.decisions]
  * @param {string} options.planHash the hash of the plan the owner confirmed
- * @param {any} options.release `{ id, archive, declarations, settings, env, domain }` (archive: packArchive's bytes)
+ * @param {any} options.release `{ id, archive, declarations, settings, env, domain, aliases? }` (archive: packArchive's
+ *   bytes; aliases: the domain's other names, none when left out)
  * @param {string} options.holder who holds the lease, such as "Vibe64 on my-workstation"
  * @param {(record: any) => Promise<any> | any} [options.save] keeps the record after each step, answering it as kept
  * @param {() => Promise<void> | void} [options.pause] between steps, while the provider works
@@ -587,6 +604,14 @@ async function deploy({
   stopAsked = () => false, maxSteps = 1000
 }) {
   const tell = reporterOf(report);
+  // The domain's other names, refused before the provider is asked anything where they can't be served.
+  const aliases = release.aliases ?? [];
+  const aliasesRefused = aliasesProblem(release.domain, aliases);
+  if (aliasesRefused) throw deployError("production_deploy_aliases_invalid", `The domain's other names are refused: ${aliasesRefused}.`, 422);
+  if (aliases.length > 0 && typeof adapter.takeDomain !== "function") {
+    throw deployError("production_deploy_aliases_unsupported",
+      `${adapter.title} can't answer at other names than the domain (${aliases.join(", ")}): remove them, then deploy to production.`, 409);
+  }
   const [offer, observed] = await Promise.all([adapter.offer(), adapter.inventory()]);
   const plan = planOf({ needs, record: start, observed, offer, choices, decisions });
   if (plan.hash !== planHash) throw deployError("production_deploy_plan_stale", "What this Deploy would do changed since the plan was read: read the plan again, then deploy to production.");

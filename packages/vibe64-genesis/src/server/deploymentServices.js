@@ -55,6 +55,8 @@ const RESOURCE_DEVELOPMENT_MODES = Object.freeze(["local folder", "own bucket"])
 const HOST_OWNED_SETTINGS = Object.freeze(["APP_ENV", "HOST", "PORT", "APP_PUBLIC_URL", "TRUSTED_PROXIES"]);
 const HOST_OWNED_SETTING_PREFIX = "V64_";
 const STAGING_REAL_PEOPLE_SETTING = "STAGING_REACHES_REAL_PEOPLE";
+// The domain's other names, which Production gives the public service while its domain has any.
+const REDIRECT_SETTING = "APP_REDIRECT_HOSTS";
 
 const DEPLOYMENT_HEADING_FORMS = Object.freeze(["### Service `id`: summary", "### Resource `id`"]);
 const DEPLOYMENT_SERVICE_ENTRY_FORMS = Object.freeze([
@@ -85,6 +87,7 @@ function hostOwnedSetting(name) {
   if (name === STAGING_REAL_PEOPLE_SETTING) {
     return `${name} is the host's, given to a Staging only while the project's owner marks that real people use it`;
   }
+  if (name === REDIRECT_SETTING) return `${name} is the host's, given to the public service while its domain has other names`;
   if (name.startsWith(HOST_OWNED_SETTING_PREFIX)) {
     return `${name} starts with ${HOST_OWNED_SETTING_PREFIX}, which names the facts the host gives each instance`;
   }
