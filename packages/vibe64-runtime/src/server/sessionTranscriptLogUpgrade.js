@@ -97,7 +97,10 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
             throw new Error(`Chat transcript ${legacyPath} did not convert exactly, and nothing was changed. Inspect it before upgrading.`);
           }
           chats += 1;
-          changes.push({ filePath: logPath, original: leftover, contents }, { filePath: legacyPath, original, contents: MOVED_TRANSCRIPT_NOTE });
+          changes.push(
+            { filePath: logPath, original: leftover, contents },
+            { filePath: legacyPath, original, contents: MOVED_TRANSCRIPT_NOTE }
+          );
         }
         return changes;
       }
