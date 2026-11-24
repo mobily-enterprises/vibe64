@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, open, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -735,4 +735,88 @@ test("direct pair readers hold the original per-path queue until referenced docu
       mock.mock.restore();
     }
   }
+});
+
+// A plan file Vibe64 cannot read (on 24 Nov 2026 a hosted session's plans/archive record belonged to another
+// account, so every plan command failed with EACCES) is named, with what to do, and the plan keeps working.
+test("an archived plan Vibe64 cannot read is named and left out of History, and plans still change without retiring what it may reference", async t => {
+  if (process.getuid?.() === 0) return t.skip("root reads every file, so no file is unreadable");
+  const f = await fixture(t);
+  await f.change("new", "senior", { text: openText });
+  await f.change("progress-write", "junior", { text: "# Progress\nFirst evidence\n" });
+  const first = await readWorkPlan(f.context);
+  await f.change("archive");
+  await f.change("new", "senior", { text: "# Second plan\n- [ ] Second requirement\n" });
+  await f.change("archive");
+  await f.change("new", "senior", { text: "# Current plan\n- [ ] Current requirement\n" });
+  const directory = path.dirname(workPlanPath(f.context));
+  const firstRecord = path.join(directory, "archive", first.artifactRevision + ".json");
+  await chmod(firstRecord, 0o000);
+  t.after(() => chmod(firstRecord, 0o600).catch(() => {}));
+
+  const history = await manageWorkPlan(f.context, { operation: "history" }, "user");
+  assert.deepEqual(history.history.map(item => item.title), ["Second plan"]);
+  assert.equal(history.planFileProblems.length, 1);
+  assert.equal(history.planFileProblems[0].path, firstRecord);
+  assert.match(history.planFileProblems[0].problem, /not allowed to read it/);
+  assert.ok(history.warning.includes(firstRecord), "the warning names the file");
+  assert.match(history.warning, /The current plan and the rest of Plan history still work/);
+
+  const page = await readWorkPlanPage(f.context);
+  assert.equal(page.title, "Current plan");
+  assert.deepEqual(page.history.map(item => item.title), ["Second plan"]);
+  assert.equal(page.planFileProblems[0].path, firstRecord);
+  assert.equal((await readWorkPlanPage(f.context, { summary: true })).planFileProblems[0].path, firstRecord);
+
+  // Writes still work, and cleanup keeps the documents the unreadable archive may still reference.
+  const written = await f.change("progress-write", "junior", { text: "# Progress\nCurrent evidence\n" });
+  assert.equal(written.progressText, "# Progress\nCurrent evidence\n");
+  assert.equal(written.planFileProblems[0].path, firstRecord);
+  await f.change("archive");
+  await f.change("new", "senior", { text: "# Fourth plan\n- [ ] Fourth requirement\n" });
+
+  await chmod(firstRecord, 0o600);
+  assert.deepEqual((await planHistory(f.context)).map(item => item.title).sort(), ["Current plan", "Reporting tree", "Second plan"]);
+  const restored = await readWorkPlanPage(f.context, { archiveId: first.artifactRevision });
+  assert.equal(restored.progressText, "# Progress\nFirst evidence\n", "the unreadable archive's documents were kept");
+  assert.equal(restored.planFileProblems, undefined);
+});
+
+test("cleanup keeps a stray or unreadable file among plan documents, names it, and the plan still changes", async t => {
+  if (process.getuid?.() === 0) return t.skip("root reads every file, so no file is unreadable");
+  const f = await fixture(t);
+  await f.change("new", "senior", { text: openText });
+  const directory = path.dirname(workPlanPath(f.context));
+  const stray = path.join(directory, "plan", "notes.txt");
+  await writeFile(stray, "kept\n");
+  const unreadable = path.join(directory, "progress", "f".repeat(64) + ".md");
+  await mkdir(path.dirname(unreadable), { recursive: true });
+  await writeFile(unreadable, "# Progress\nSomeone else's\n", { mode: 0o000 });
+  t.after(() => chmod(unreadable, 0o600).catch(() => {}));
+
+  const written = await f.change("progress-write", "junior", { text: "# Progress\nKept going\n" });
+  assert.equal(written.progressText, "# Progress\nKept going\n");
+  assert.deepEqual(written.planFileProblems.map(problem => problem.path).sort(), [unreadable, stray].sort());
+  assert.ok(written.warning.includes(stray) && written.warning.includes(unreadable), "the warning names both files");
+  assert.equal(await readFile(stray, "utf8"), "kept\n");
+  await chmod(unreadable, 0o600);
+  assert.equal(await readFile(unreadable, "utf8"), "# Progress\nSomeone else's\n", "the unreadable document was kept");
+});
+
+test("a current plan Vibe64 cannot read is refused with its file named and what to do", async t => {
+  if (process.getuid?.() === 0) return t.skip("root reads every file, so no file is unreadable");
+  const f = await fixture(t);
+  await f.change("new", "senior", { text: openText });
+  await f.change("archive");
+  await f.change("new", "senior", { text: "# Current plan\n- [ ] Current requirement\n" });
+  const current = path.join(path.dirname(workPlanPath(f.context)), "current.json");
+  await chmod(current, 0o000);
+  t.after(() => chmod(current, 0o600).catch(() => {}));
+  const refused = await readWorkPlanPage(f.context).then(() => null, error => error);
+  assert.equal(refused?.code, "vibe64_work_plan_file_unreadable");
+  assert.equal(refused.status, 409);
+  assert.ok(refused.message.includes(current), "the refusal names the file");
+  assert.match(refused.message, /not allowed to read it/);
+  assert.equal(refused.params?.path, current);
+  assert.deepEqual((await planHistory(f.context)).map(item => item.title), ["Reporting tree"], "History still works");
 });
