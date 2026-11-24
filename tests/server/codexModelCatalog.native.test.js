@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import test from "node:test";
+import test from "../fixtures/codexNativeNetwork.js";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
 import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import { createCodexProviderConnectionStore, codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";

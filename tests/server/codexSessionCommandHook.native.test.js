@@ -5,7 +5,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test from "../fixtures/codexNativeNetwork.js";
 import { setTimeout as delay } from "node:timers/promises";
 import { gunzipSync, zstdDecompressSync } from "node:zlib";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";

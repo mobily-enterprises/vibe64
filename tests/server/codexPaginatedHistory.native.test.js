@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test from "../fixtures/codexNativeNetwork.js";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
