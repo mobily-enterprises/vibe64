@@ -1671,6 +1671,19 @@ function createDeterministicHold() {
   };
 }
 
+// A cross-project check holds one project's work and runs the other project's step, and releases the hold only after
+// that step ends, so a step that waits for the held work never ends. The timer only ends that wait, so it times the
+// held step alone: around it, the two projects' controller fixtures take longer than three seconds on an overloaded
+// host (r11p2-verify: a whole such test took 0.4 to 1.5 s alone but over 3 s beside the suite). It keeps the timers
+// it was loaded with, since a test may mock setTimeout.
+const { setTimeout: unmockedSetTimeout, clearTimeout: unmockedClearTimeout } = globalThis;
+function withoutWaitingFor(heldWork, step) {
+  let guard;
+  return Promise.race([step(), new Promise((_resolve, reject) => {
+    guard = unmockedSetTimeout(() => reject(new Error(`It waited for ${heldWork}.`)), 3_000);
+  })]).finally(() => unmockedClearTimeout(guard));
+}
+
 test("routing refuses to relocate an existing Codex conversation into another provider home", async () => {
   await withConversationController(async () => {
     for (const saved of [
@@ -8375,7 +8388,7 @@ test("same raw session closes remain isolated across project request contexts", 
 });
 
 test("same raw session delivery admission remains independent across project request contexts", {
-  timeout: 3_000
+  timeout: 15_000
 }, async () => {
   await withConversationController(async ({
     controller,
@@ -8432,9 +8445,12 @@ test("same raw session delivery admission remains independent across project req
         messageId: "same-message"
       })
     ));
-    await betaMessageHold.entered;
-    alphaMessageHold.release();
-    betaMessageHold.release();
+    try {
+      await withoutWaitingFor("alpha's held message delivery", () => betaMessageHold.entered);
+    } finally {
+      alphaMessageHold.release();
+      betaMessageHold.release();
+    }
     assert.equal((await alphaMessage).ok, true);
     assert.equal((await betaMessage).ok, true);
 
@@ -8469,9 +8485,12 @@ test("same raw session delivery admission remains independent across project req
         messageId: "same-temporary-message"
       })
     ));
-    await betaTurnHold.entered;
-    alphaTurnHold.release();
-    betaTurnHold.release();
+    try {
+      await withoutWaitingFor("alpha's held Temporary AI turn", () => betaTurnHold.entered);
+    } finally {
+      alphaTurnHold.release();
+      betaTurnHold.release();
+    }
     assert.equal((await alphaTurn).ok, true);
     assert.equal((await betaTurn).ok, true);
     await Promise.all([
@@ -8625,7 +8644,7 @@ test("renewal cleanup cannot observe or delete another project's Temporary AI st
 });
 
 test("renewal cleanup cannot drain another project's notification queue", {
-  timeout: 3_000
+  timeout: 15_000
 }, async () => {
   await withConversationController(async ({
     captures,
@@ -8699,28 +8718,32 @@ test("renewal cleanup cannot drain another project's notification queue", {
     });
     await notificationHold.entered;
 
-    await runWithProjectRequestContext(
-      alpha.context,
-      () => controller.createConversation(sessionId, { ephemeral: true })
-    );
-    captures.stopRuntimeResult = {
-      processExitVerified: true,
-      runtimeDirPreserved: true,
-      stopped: true
-    };
-    await runWithProjectRequestContext(alpha.context, () => (
-      controller.closeAllForSession(sessionId, {
-        renewalCleanup: {
-          kind: "predecessor",
-          renewalId: "alpha-notification-renewal",
-          sourceSessionId: sessionId
-        },
-        runtime: alpha.runtime,
-        session: alpha.session
-      })
-    ));
-
-    notificationHold.release();
+    try {
+      await withoutWaitingFor("beta's held notification", async () => {
+        await runWithProjectRequestContext(
+          alpha.context,
+          () => controller.createConversation(sessionId, { ephemeral: true })
+        );
+        captures.stopRuntimeResult = {
+          processExitVerified: true,
+          runtimeDirPreserved: true,
+          stopped: true
+        };
+        await runWithProjectRequestContext(alpha.context, () => (
+          controller.closeAllForSession(sessionId, {
+            renewalCleanup: {
+              kind: "predecessor",
+              renewalId: "alpha-notification-renewal",
+              sourceSessionId: sessionId
+            },
+            runtime: alpha.runtime,
+            session: alpha.session
+          })
+        ));
+      });
+    } finally {
+      notificationHold.release();
+    }
     await runWithProjectRequestContext(
       beta.context,
       () => controller.closeAllForSession(sessionId)
@@ -8731,7 +8754,7 @@ test("renewal cleanup cannot drain another project's notification queue", {
 
 test("renewal cleanup cannot cancel another project's finalizing recovery timer", {
   concurrency: false,
-  timeout: 3_000
+  timeout: 15_000
 }, async (t) => {
   t.mock.timers.enable({ apis: ["Date", "setTimeout"] });
   try {
@@ -8821,38 +8844,43 @@ test("renewal cleanup cannot cancel another project's finalizing recovery timer"
       });
       await notificationHold.entered;
 
-      await runWithProjectRequestContext(
-        alpha.context,
-        () => controller.createConversation(sessionId, { ephemeral: true })
-      );
-      captures.stopRuntimeResult = {
-        processExitVerified: true,
-        runtimeDirPreserved: true,
-        stopped: true
-      };
-      await runWithProjectRequestContext(alpha.context, () => (
-        controller.closeAllForSession(sessionId, {
-          renewalCleanup: {
-            kind: "predecessor",
-            renewalId: "alpha-finalizing-renewal",
-            sourceSessionId: sessionId
-          },
-          runtime: alpha.runtime,
-          session: alpha.session
-        })
-      ));
+      try {
+        await withoutWaitingFor("beta's held notification", async () => {
+          await runWithProjectRequestContext(
+            alpha.context,
+            () => controller.createConversation(sessionId, { ephemeral: true })
+          );
+          captures.stopRuntimeResult = {
+            processExitVerified: true,
+            runtimeDirPreserved: true,
+            stopped: true
+          };
+          await runWithProjectRequestContext(alpha.context, () => (
+            controller.closeAllForSession(sessionId, {
+              renewalCleanup: {
+                kind: "predecessor",
+                renewalId: "alpha-finalizing-renewal",
+                sourceSessionId: sessionId
+              },
+              runtime: alpha.runtime,
+              session: alpha.session
+            })
+          ));
+        });
 
-      const readsBeforeRecovery = calls.filter(([operation]) => operation === "read").length;
-      const recoveryRead = new Promise((resolve) => {
-        captures.onReadThread = resolve;
-      });
-      t.mock.timers.tick(10_001);
-      await recoveryRead;
-      captures.onReadThread = null;
-      assert.ok(
-        calls.filter(([operation]) => operation === "read").length > readsBeforeRecovery
-      );
-      notificationHold.release();
+        const readsBeforeRecovery = calls.filter(([operation]) => operation === "read").length;
+        const recoveryRead = new Promise((resolve) => {
+          captures.onReadThread = resolve;
+        });
+        t.mock.timers.tick(10_001);
+        await withoutWaitingFor("a recovery timer that alpha's cleanup cancelled", () => recoveryRead);
+        captures.onReadThread = null;
+        assert.ok(
+          calls.filter(([operation]) => operation === "read").length > readsBeforeRecovery
+        );
+      } finally {
+        notificationHold.release();
+      }
       await runWithProjectRequestContext(
         beta.context,
         () => controller.closeAllForSession(sessionId)
