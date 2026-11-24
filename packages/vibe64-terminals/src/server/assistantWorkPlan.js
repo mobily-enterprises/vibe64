@@ -24,6 +24,52 @@ function planError(message, code, params) {
   return new AppError(409, message, { code, params });
 }
 
+// What is wrong with a plan file Vibe64 cannot use, in a few words: its permissions, or the plan refusal's own message.
+function planFileProblem(error) {
+  if (error?.params?.problem) return error.params.problem;
+  if (["EACCES", "EPERM"].includes(error?.code)) {
+    return "Vibe64 is not allowed to read it: it belongs to another account or its permissions changed";
+  }
+  if (error instanceof AppError) return error.message;
+  return `Vibe64 could not read it (${error?.code || error?.message || "unknown error"})`;
+}
+
+/**
+ * The refusal for a plan file the plan cannot do without (the current plan's record or documents): the file,
+ * what is wrong with it and what to do. A plan refusal of its own keeps its code and message and gains the file.
+ * @param {string} file
+ * @param {Error} error
+ */
+function planFileError(file, error) {
+  if (error instanceof AppError && error.params?.path) return error;
+  const problem = planFileProblem(error);
+  if (error instanceof AppError) {
+    return planError(`${error.message} The file is ${file}.`, error.code, { ...error.params, path: file, problem });
+  }
+  const permission = ["EACCES", "EPERM"].includes(error?.code);
+  return planError(
+    `${problem}, so Vibe64 cannot use the plan file ${file}. ` + (permission
+      ? "Give that file back to the account Vibe64 runs as (its owner and permissions), then run the plan command again."
+      : "Check the disk and that file, then run the plan command again."),
+    "vibe64_work_plan_file_unreadable",
+    { path: file, problem }
+  );
+}
+
+// One sentence naming each plan file a read or cleanup skipped and what was skipped, for the AI and the person.
+function planFileWarning(problems) {
+  if (!problems.length) return "";
+  const named = problems.map(({ path: file, problem }) => `${file} (${problem})`).join("; ");
+  return `Vibe64 skipped ${problems.length === 1 ? "a plan file" : `${problems.length} plan files`} it cannot use: ${named}. ` +
+    "The current plan and the rest of Plan history still work; an archived plan in such a file is not listed, and " +
+    "nothing it may still need is cleaned up. To bring it back, give the file back to the account Vibe64 runs as, " +
+    "or restore it from a backup.";
+}
+
+function withPlanFileProblems(result, problems) {
+  return problems.length ? { ...result, planFileProblems: problems, warning: planFileWarning(problems) } : result;
+}
+
 // A refusal names at most this many unproven items, each cut to this many characters.
 const UNPROVEN_NAMED = 8;
 const UNPROVEN_ITEM_CHARACTERS = 120;
@@ -93,7 +139,7 @@ async function readPlanFile(file, options = {}) {
     };
   } catch (error) {
     if (error.code === "ENOENT") return null;
-    throw error;
+    throw planFileError(file, error);
   } finally {
     await handle?.close();
   }
@@ -181,9 +227,15 @@ async function readPair(context, id = "") {
   const progressText = record.progressRevision === null
     ? null
     : await readPlanFile(documentPath(context, "progress", record.progressRevision), { plainText: true });
-  if (!plan || plan.revision !== record.planRevision || (record.progressRevision !== null &&
-      (progressText === null || sha256Hex(progressText) !== record.progressRevision))) {
-    throw planError("A plan or progress document is missing or changed. Restore the saved pair before continuing.", "vibe64_work_plan_pair_missing");
+  // The refusal names the document that is missing or changed.
+  const broken = !plan || plan.revision !== record.planRevision
+    ? documentPath(context, "plan", record.planRevision)
+    : record.progressRevision !== null && (progressText === null || sha256Hex(progressText) !== record.progressRevision)
+      ? documentPath(context, "progress", record.progressRevision)
+      : "";
+  if (broken) {
+    throw planError(`The plan document ${broken} is missing or changed. Restore the saved pair before continuing.`,
+      "vibe64_work_plan_pair_missing", { path: broken, problem: "it is missing or no longer matches its saved plan" });
   }
   return {
     ...plan,
@@ -260,11 +312,17 @@ async function readArchivedSummary(context, id) {
   rememberHistorySummary(records[0], { identities: [...recordIdentities, ...documentIdentities].join("\n"), documents, summary: entry });
   return { ...entry };
 }
+/**
+ * Plan history: each archived plan's summary, newest first, and the plan files it could not use. An archived plan
+ * whose record or documents Vibe64 cannot read or trust is left out and named instead (`problems`), so one bad file
+ * never stops the plan.
+ * @returns {Promise<{ history: object[], problems: { path: string, problem: string }[] }>}
+ */
 async function readWorkPlanHistoryUnlocked(context) {
   try {
     if (!(await lstat(planDirectory(context))).isDirectory()) throw planError("The plan directory must not be a link.", "vibe64_work_plan_directory_link");
   } catch (error) {
-    if (error.code === "ENOENT") return [];
+    if (error.code === "ENOENT") return { history: [], problems: [] };
     throw error;
   }
   const directory = path.join(planDirectory(context), "archive");
@@ -273,12 +331,17 @@ async function readWorkPlanHistoryUnlocked(context) {
     if (!(await lstat(directory)).isDirectory()) throw planError("Plan history must not be a link.", "vibe64_work_plan_history_link");
     entries = await readdir(directory);
   } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
+    if (error.code === "ENOENT") return { history: [], problems: [] };
+    throw planFileError(directory, error);
   }
   const ids = new Set(entries.filter(name => /^[a-f0-9]{64}\.(md|json)$/u.test(name)).map(name => name.slice(0, 64)));
-  const history = await Promise.all([...ids].map(id => readArchivedSummary(context, id)));
-  return history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
+  const problems = [];
+  const read = await Promise.all([...ids].map(id => readArchivedSummary(context, id).catch((error) => {
+    problems.push({ path: error.params?.path || pairPath(context, id), problem: planFileProblem(error) });
+    return null;
+  })));
+  const history = read.filter(Boolean).sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
+  return { history, problems: problems.sort((a, b) => a.path.localeCompare(b.path)) };
 }
 /**
  * The current plan's summary carries its step, read from the plan each time, for the chat's status line, and when it
@@ -312,8 +375,8 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   } = options;
   if (summaryOnly) {
     const current = await readWorkPlanUnlocked(context);
-    const history = await readWorkPlanHistoryUnlocked(context);
-    return { available: Boolean(current), current: await currentPlanSummary(context, current), history };
+    const { history, problems } = await readWorkPlanHistoryUnlocked(context);
+    return withPlanFileProblems({ available: Boolean(current), current: await currentPlanSummary(context, current), history }, problems);
   }
   if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16000) {
     throw planError("Invalid plan page bounds.", "vibe64_work_plan_page_bounds_invalid");
@@ -323,9 +386,9 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   }
   const current = await readWorkPlanUnlocked(context);
   const plan = archiveId ? await readArchived(context, archiveId) : current;
-  const history = offset === 0 ? await readWorkPlanHistoryUnlocked(context) : undefined;
+  const { history, problems } = offset === 0 ? await readWorkPlanHistoryUnlocked(context) : { problems: [] };
   const summary = await currentPlanSummary(context, current);
-  if (!plan) return { available: false, current: summary, ...(history ? { history } : {}) };
+  if (!plan) return withPlanFileProblems({ available: false, current: summary, ...(history ? { history } : {}) }, problems);
   if (expectedRevision && expectedRevision !== plan.revision || (offset > 0 || expectedProgressRevision) &&
       expectedProgressRevision !== (plan.progressRevision || "")) {
     throw planError("The plan or progress changed. Read both again from the beginning.", "vibe64_work_plan_read_changed");
@@ -335,7 +398,7 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
   const totalCharacters = characters.length + progress.length;
   if (offset > totalCharacters) throw planError("The plan page begins after the end of the document.", "vibe64_work_plan_offset_invalid");
   const nextOffset = Math.min(offset + limit, totalCharacters);
-  return {
+  return withPlanFileProblems({
     ...plan,
     available: true,
     archiveId,
@@ -349,7 +412,7 @@ async function readWorkPlanPageUnlocked(context, options = {}) {
     nextOffset,
     totalCharacters,
     hasMore: nextOffset < totalCharacters
-  };
+  }, problems);
 }
 
 async function writePlan(file, text) {
@@ -384,17 +447,22 @@ async function archiveCurrent(context, current) {
 }
 
 /**
- * Retain only current/archived document references, not a second progress journal.
+ * Retain only current/archived document references, not a second progress journal. A file cleanup cannot read or
+ * does not recognise is kept and named, and while an archived plan cannot be read nothing is retired at all, since
+ * its documents may be among them; the plan's change goes on either way.
+ * @returns {Promise<{ path: string, problem: string }[]>} the plan files cleanup skipped
  */
 async function retireUnreferencedDocuments(context) {
   const current = await readWorkPlanUnlocked(context);
-  const history = await readWorkPlanHistoryUnlocked(context);
+  const { history, problems } = await readWorkPlanHistoryUnlocked(context);
+  if (problems.length) return problems;
   const records = [current, ...history].filter(Boolean);
   const retained = {
     plan: new Set(records.map(record => record.revision)),
     progress: new Set(records.map(record => record.progressRevision).filter(Boolean))
   };
   const retired = [];
+  const skipped = [];
   for (const kind of ["plan", "progress"]) {
     const directory = path.join(planDirectory(context), kind);
     let names;
@@ -403,18 +471,38 @@ async function retireUnreferencedDocuments(context) {
       names = await readdir(directory);
     } catch (error) {
       if (error.code === "ENOENT") continue;
-      throw error;
+      throw planFileError(directory, error);
     }
     for (const name of names) {
-      if (!/^[a-f0-9]{64}\.md$/u.test(name)) throw planError("Unknown plan document. Inspect the owned directory before cleanup.", "vibe64_work_plan_document_unknown");
+      if (!/^[a-f0-9]{64}\.md$/u.test(name)) {
+        skipped.push({ path: path.join(directory, name), problem: "it is not a plan document, so cleanup leaves it" });
+        continue;
+      }
       const revision = name.slice(0, 64);
       const file = documentPath(context, kind, revision);
-      const text = await readPlanFile(file, { plainText: true });
-      if (text === null || sha256Hex(text) !== revision) throw planError("A plan document has changed; cleanup refused.", "vibe64_work_plan_cleanup_refused");
+      let text;
+      try {
+        text = await readPlanFile(file, { plainText: true });
+      } catch (error) {
+        skipped.push({ path: file, problem: planFileProblem(error) });
+        continue;
+      }
+      if (text === null) continue;
+      if (sha256Hex(text) !== revision) {
+        skipped.push({ path: file, problem: "it no longer matches its saved content, so cleanup leaves it" });
+        continue;
+      }
       if (!retained[kind].has(revision)) retired.push(file);
     }
   }
-  for (const file of retired) await rm(file);
+  for (const file of retired) {
+    try {
+      await rm(file);
+    } catch (error) {
+      skipped.push({ path: file, problem: `cleanup could not remove it (${error.code || error.message})` });
+    }
+  }
+  return skipped.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 async function withWorkPlan(context, operation) {
@@ -498,7 +586,10 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
     } = input;
     if (["read", "history"].includes(operation)) refuseUnreadInput(input);
     if (operation === "read") return readWorkPlanPageUnlocked(context, input);
-    if (operation === "history") return { history: await readWorkPlanHistoryUnlocked(context) };
+    if (operation === "history") {
+      const { history, problems } = await readWorkPlanHistoryUnlocked(context);
+      return withPlanFileProblems({ history }, problems);
+    }
     if (!["new", "write", "progress-write", "checked", "complete", "archive", "reopen"].includes(operation)) {
       throw planError("Unknown plan operation.", "vibe64_work_plan_operation_unknown");
     }
@@ -605,8 +696,10 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
     if (marking) await writeMark(context, "updated", source);
     // Keep the original safe until the reopened current document is written.
     if (operation === "reopen" && archiveId) await rm(pairPath(context, archiveId));
-    await retireUnreferencedDocuments(context);
-    const result = await readWorkPlanPageUnlocked(context);
+    const skipped = await retireUnreferencedDocuments(context);
+    const page = await readWorkPlanPageUnlocked(context);
+    const known = new Set((page.planFileProblems || []).map(problem => problem.path));
+    const result = withPlanFileProblems(page, [...(page.planFileProblems || []), ...skipped.filter(problem => !known.has(problem.path))]);
     if (current && (replacing || operation === "archive")) {
       result.notice = "Archived “" + current.title + "”. It remains available in Plan history.";
     }

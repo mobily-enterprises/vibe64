@@ -2172,6 +2172,13 @@ progress journal. All public current/page/history reads and mutations share the 
 per-path queue for the entire pair read or publication/cleanup; internal owner
 reads remain unlocked to avoid recursive queue waits. Reads reject missing,
 linked, conflicting or changed documents.
+A plan file the owner cannot use never stops the plan: an unreadable current
+record or document refuses with vibe64_work_plan_file_unreadable naming the file
+and its fix. An unreadable or changed archive is left out of History and named in
+the read's planFileProblems and warning, which the History view shows, while
+the current plan and every other archive keep working. Cleanup then removes
+nothing, since that archive may still reference documents, and it keeps and
+names a stray or unreadable file among the documents instead of failing.
 Legacy current.md and archive/<planRevision>.md remain readable unchanged. Mutation
 requires the stopped-writer 20261008-plan-progress upgrade, which reuses the original
 Runtime session/archive/prepared-renewal inventory and Core verified backup publisher.

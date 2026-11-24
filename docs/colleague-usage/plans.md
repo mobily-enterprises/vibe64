@@ -292,6 +292,16 @@ waiting Auto Planning notice. The viewer itself has no Implement button.
 A loading placeholder means the selected document has not arrived yet. A load
 error includes **Retry**. Do not treat a partially loaded plan as the whole record.
 
+A plan file Vibe64 cannot use (one that belongs to another account, lost its
+permissions or no longer matches its saved content) never stops the plan.
+**History** then shows a warning above the list naming each such file and what
+is wrong with it; the archived plan it holds is not listed, and the current plan
+and every other archived plan work as usual. Cleanup keeps everything that
+plan may still need. To bring it back, someone who administers the computer
+gives the file back to the account Vibe64 runs as, or restores it from a backup;
+it then reappears in History. When the current plan's own file is unreadable,
+the plan command and the viewer refuse with that file's name and the same fix.
+
 Colleague can explain these steps and, when its plan-reading action is available
 for the session, offer to read the plan or summarize the recorded work and blockers from both documents, including
 how many requirements are built and how many proven, and how current the plan

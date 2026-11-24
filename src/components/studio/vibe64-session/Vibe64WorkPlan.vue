@@ -89,6 +89,8 @@ const history = computed(() => (plan.value?.history || []).map(item => ({ ...ite
   requirements: requirementsProgress(item)
 })));
 const planRequirements = computed(() => plan.value ? requirementsProgress(plan.value) : "");
+// The plan files the server skipped because it cannot use them, each named, so History says why a plan is missing.
+const planFileWarning = computed(() => plan.value?.planFileProblems?.length ? String(plan.value.warning || "") : "");
 const selectedArchive = computed(() => history.value.find(item => item.id === archiveId.value));
 const selectedPlanReady = computed(() => Boolean(plan.value) && (plan.value.archiveId || "") === archiveId.value);
 const canChangePlan = computed(() => !props.busy && !pendingOperation.value && selectedPlanReady.value);
@@ -273,6 +275,9 @@ watch(() => props.active, (active) => {
           <v-btn variant="text" @click="resource.reload()">Retry</v-btn>
         </v-alert>
         <template v-if="showHistory">
+          <v-alert v-if="planFileWarning" type="warning" variant="tonal" density="compact" class="work-plan-file-warning mb-4" data-vibe64-plan-file-warning>
+            {{ planFileWarning }}
+          </v-alert>
           <v-list v-if="history.length" aria-label="Archived plans" class="pa-0 bg-transparent">
             <v-list-item
               v-for="item in history" :key="item.id" :aria-label="`Open archived plan: ${item.title}`" role="button"
@@ -346,5 +351,6 @@ watch(() => props.active, (active) => {
 .work-plan-archive-context { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
 .work-plan-archive-copy { min-width: 0; }
 .work-plan-history-title { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.work-plan-file-warning { overflow-wrap: anywhere; }
 .work-plan-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; min-height: 12rem; }
 </style>
