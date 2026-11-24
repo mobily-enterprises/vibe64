@@ -6,9 +6,12 @@
 // and what it runs with are those of any Git with the token (githubTokenGit.js).
 //
 // Only commands that reach GitHub carry the token; every other command keeps
-// its freedom, none of this applying to it.
+// its freedom, none of this applying to it. Git in the session's temporary
+// folder, plain local Git that takes none of the shell's program or config
+// variables either, refuses those the same way (temporaryFolderEnvRefusal).
 
 import { normalizeText } from "@local/vibe64-execution/server";
+import { commandFailure } from "./commandFailure.js";
 import { parseGitInvocation } from "./codexGitCommandOperations.js";
 import { SUBCOMMAND_VALUE_OPTIONS, subcommandArguments } from "./codexGitCommandPlaces.js";
 import { configRefusalReason, TOKEN_RULE, tokenRefusal } from "./githubTokenGit.js";
@@ -20,8 +23,9 @@ const LOCAL_REPOSITORY = /^(?:\/|~|\.\.?(?:\/|$)|file:)/iu;
 
 // The shell variables that point Git at a program or config. None ever
 // reaches a command (the wrapper forwards only CODEX_GIT_COMMAND_FORWARDED_ENV_NAMES),
-// so one carrying the token refuses them rather than run without them unseen.
-// Every agent shell has GIT_CONFIG_COUNT=0 of Vibe64's own.
+// so one carrying the token, or run in the temporary folder, refuses them
+// rather than run without them unseen. Every agent shell has GIT_CONFIG_COUNT=0
+// of Vibe64's own; GIT_CONFIG_KEY_<n> and GIT_CONFIG_VALUE_<n> count only below it.
 const CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES = Object.freeze([
   "GIT_ASKPASS",
   "GIT_CONFIG",
@@ -176,15 +180,51 @@ function subcommandOptionRefusal(operation, values) {
   return null;
 }
 
-function programEnvRefusal(env) {
+const TEMPORARY_FOLDER_RULE = "Git in this session's temporary folder is plain local Git, which takes only GIT_DIR, " +
+  "GIT_WORK_TREE and the author's and committer's names, emails and dates from its shell.";
+const TEMPORARY_FOLDER_ENV_REFUSED_CODE = "vibe64_codex_git_command_temp_env_refused";
+
+/**
+ * Why a command may not run with the shell's Git program and config variables, which never reach it, or "".
+ * @param {unknown} env what the wrapper sent from the command's shell
+ * @param {string} rule what the command takes instead
+ */
+function programEnvRefusalMessage(env, rule) {
   const record = env && typeof env === "object" && !Array.isArray(env) ? env : {};
   const names = CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES.filter((name) => typeof record[name] === "string" && record[name] !== "" &&
     (name !== "GIT_CONFIG_COUNT" || Number(record[name]) > 0));
-  if (!names.length) return null;
-  return tokenRefusal(`This shell sets ${names.join(", ")}, which point${names.length === 1 ? "s" : ""} Git at a program ` +
-    `or config. ${TOKEN_RULE} It never takes ${names.length === 1 ? "it" : "them"} from the shell, so it refuses rather ` +
-    `than ignore ${names.length === 1 ? "it" : "them"}: unset ${names.length === 1 ? "it" : "them"} for this command ` +
-    `(env ${names.map((name) => `-u ${name}`).join(" ")} git ...).`);
+  if (!names.length) return "";
+  const count = Number(record.GIT_CONFIG_COUNT);
+  const shown = names.map((name) => {
+    if (name !== "GIT_CONFIG_COUNT" || !Number.isInteger(count)) return name;
+    return count === 1
+      ? "GIT_CONFIG_COUNT with GIT_CONFIG_KEY_0 and GIT_CONFIG_VALUE_0"
+      : `GIT_CONFIG_COUNT with GIT_CONFIG_KEY_0 to GIT_CONFIG_KEY_${count - 1} and GIT_CONFIG_VALUE_0 to GIT_CONFIG_VALUE_${count - 1}`;
+  });
+  const one = names.length === 1;
+  return `This shell sets ${shown.join(", ")}, which point${one ? "s" : ""} Git at a program or config. ${rule} ` +
+    `It never takes ${one ? "it" : "them"} from the shell, so it refuses rather than ignore ${one ? "it" : "them"}: ` +
+    `unset ${one ? "it" : "them"} for this command (env ${names.map((name) => `-u ${name}`).join(" ")} git ...).`;
+}
+
+function programEnvRefusal(env) {
+  const message = programEnvRefusalMessage(env, TOKEN_RULE);
+  return message ? tokenRefusal(message) : null;
+}
+
+/**
+ * Why a command in the session's temporary folder may not run as its shell gives it, or null: a shell variable that
+ * would point Git at a program or config, which plain local Git there never takes.
+ * @param {unknown} env what the wrapper sent from the command's shell
+ */
+function temporaryFolderEnvRefusal(env) {
+  const message = programEnvRefusalMessage(env, TEMPORARY_FOLDER_RULE);
+  if (!message) return null;
+  return commandFailure(
+    `${message} Config the command needs goes on its command line (git -c <key>=<value> ...).`,
+    TEMPORARY_FOLDER_ENV_REFUSED_CODE,
+    { statusCode: 403 }
+  );
 }
 
 function ghCommandRefusal(args) {
@@ -218,5 +258,6 @@ function githubTokenCommandRefusal({ args, command, env }) {
 export {
   CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES,
   commandRequiresGithubToken,
-  githubTokenCommandRefusal
+  githubTokenCommandRefusal,
+  temporaryFolderEnvRefusal
 };

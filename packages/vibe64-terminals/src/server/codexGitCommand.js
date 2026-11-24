@@ -38,7 +38,7 @@ import {
 } from "./codexGitCommandOperations.js";
 import { commandFailure } from "./commandFailure.js";
 import { createSessionGitPlaces, forwardedGitEnv, placeGitCommand, placeGithubCommand } from "./codexGitCommandPlaces.js";
-import { commandRequiresGithubToken, githubTokenCommandRefusal } from "./codexGitCommandToken.js";
+import { commandRequiresGithubToken, githubTokenCommandRefusal, temporaryFolderEnvRefusal } from "./codexGitCommandToken.js";
 import { GITHUB_TOKEN_COMMAND_ENV, githubTokenConfigRefusal } from "./githubTokenGit.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -501,8 +501,10 @@ function createCodexGitCommandService({
     const commandRoot = placed.place.root;
     const commandRoots = [...new Set([commandRoot, ...await cwdRoots()])];
     if (placed.place.kind === "temp") {
-      // Plain local Git: no credential, no GitHub token and no person's
-      // identity, so it needs no access to the project's GitHub either.
+      // Plain local Git: no credential, GitHub token or person's identity, so no access to the project's GitHub
+      // either; it takes none of the shell's Git program or config variables, so a command that sets one is refused.
+      const envRefusal = temporaryFolderEnvRefusal(input.env);
+      if (envRefusal) return finish(envRefusal, { ...actor, cwd: commandCwd });
       stage = "command";
       const result = await runWithinBudget({
         ...plainGitRequest({
