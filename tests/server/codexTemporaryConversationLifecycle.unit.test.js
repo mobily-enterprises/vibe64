@@ -1916,6 +1916,7 @@ async function withConversationController(operation, {
     project
   });
   let closeController = true;
+  let operationFailed = false;
   try {
     await operation({
       calls,
@@ -1932,6 +1933,9 @@ async function withConversationController(operation, {
       subscribers,
       temporaryRoot
     });
+  } catch (error) {
+    operationFailed = true;
+    throw error;
   } finally {
     if (closeController) {
       await controller.closeAllForSession("session-1");
@@ -1941,7 +1945,11 @@ async function withConversationController(operation, {
     } else {
       process.env.VIBE64_RUNTIME_NAMESPACE = previousRuntimeNamespace;
     }
-    await rm(temporaryRoot, { force: true, recursive: true });
+    // After a failed check, work it released may still be writing here (ENOTEMPTY): the failure stays the check's
+    // own, and the process's exit removes the root once more.
+    await rm(temporaryRoot, { force: true, recursive: true }).catch(error => {
+      if (!operationFailed) throw error;
+    });
   }
 }
 
