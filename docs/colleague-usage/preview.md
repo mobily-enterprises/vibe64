@@ -192,6 +192,14 @@ application's own error, such as "The application could not open". Form posts an
 other requests that carry data are never sent twice: one sent during the restart
 still fails, and the application reports it as usual.
 
+**Start preview** answers at once. While the start waits, for the workspace
+preparation (after a restart it can take minutes) or for another Preview change,
+Preview says what it waits for, for example **Starting preview: App. Waiting for
+the workspace preparation to finish.**, and opens the app once it runs, so you
+do not need to press it again. If Vibe64 restarts meanwhile, Preview says
+**Vibe64 restarted while Preview was starting. Start it again.** A refused start
+shows its reason, as before.
+
 If the page opens while the application has not answered yet, or stays
 unreachable for longer than that, Preview shows **Starting preview.** and waits.
 It checks about once a second and opens the page by itself, in its default
