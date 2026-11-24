@@ -1476,7 +1476,8 @@ for (const viewportWidth of [390, 960, 1600]) {
     await mockLaunchTerminalSocket(page);
     const launchSession = await mockLaunchSession(page, {
       attachmentUploadOutcomes: ["failure", "success"],
-      attachmentUploadResponseDelayMs: 800,
+      // Each upload answers when the test releases it, so its Uploading state lasts until the test has seen it.
+      holdAttachmentUploads: true,
       realChat: true
     });
 
@@ -1516,6 +1517,7 @@ for (const viewportWidth of [390, 960, 1600]) {
       name: `Cancel ${fileName}`
     })).toBeVisible();
     await expect(sendMessage).toBeDisabled();
+    launchSession.releaseAttachmentUpload();
 
     await expect(row).toContainText("Upload failed");
     await expect(queue).not.toHaveAttribute("aria-busy", "true");
@@ -1525,6 +1527,7 @@ for (const viewportWidth of [390, 960, 1600]) {
     }).click();
 
     await expect(row).toContainText("Uploading");
+    launchSession.releaseAttachmentUpload();
     await expect(row).toContainText("Ready");
     await expect(sendMessage).toBeEnabled();
     await expect.poll(() => launchSession.getAttachmentUploads().length).toBe(2);
@@ -4481,6 +4484,7 @@ async function mockLaunchSession(page: Page, {
   assistantCatalog = assistantCatalogPayload(),
   attachmentUploadOutcomes = [],
   attachmentUploadResponseDelayMs = 0,
+  holdAttachmentUploads = false,
   conversationLog = [],
   initialLaunchStatus = null,
   launchStatusSequence = null,
@@ -4509,6 +4513,7 @@ async function mockLaunchSession(page: Page, {
   assistantCatalog?: ReturnType<typeof assistantCatalogPayload>;
   attachmentUploadOutcomes?: Array<"failure" | "success">;
   attachmentUploadResponseDelayMs?: number;
+  holdAttachmentUploads?: boolean;
   conversationLog?: unknown[];
   initialLaunchStatus?: ReturnType<typeof launchStatusPayload> | null;
   launchStatusSequence?: unknown[] | null;
@@ -4548,6 +4553,10 @@ async function mockLaunchSession(page: Page, {
   const sequencedLaunchStatuses = Array.isArray(launchStatusSequence) ? launchStatusSequence : [];
   const queuedSessionCreationOutcomes = [...sessionCreationOutcomes];
   const sessionCreationReleases: Array<() => void> = [];
+  // With holdAttachmentUploads, each upload waits for releaseAttachmentUpload(); a release before the upload
+  // arrives lets the next one through.
+  const heldAttachmentUploads: Array<() => void> = [];
+  let releasedAttachmentUploads = 0;
   let launchStarted = sequencedLaunchStatuses.length > 0
     ? Boolean((sequencedLaunchStatuses[0] as { activeTerminal?: unknown })?.activeTerminal)
     : !initialLaunchStatus || Boolean(initialLaunchStatus.activeTerminal);
@@ -4802,6 +4811,13 @@ async function mockLaunchSession(page: Page, {
           setTimeout(resolve, attachmentUploadResponseDelayMs);
         });
       }
+      if (holdAttachmentUploads && releasedAttachmentUploads > 0) {
+        releasedAttachmentUploads -= 1;
+      } else if (holdAttachmentUploads) {
+        await new Promise<void>((resolve) => {
+          heldAttachmentUploads.push(resolve);
+        });
+      }
       if (queuedAttachmentUploadOutcomes.shift() === "failure") {
         await fulfillJson(route, {
           errors: [{
@@ -5021,6 +5037,11 @@ async function mockLaunchSession(page: Page, {
     },
     getAttachmentUploads() {
       return [...attachmentUploads];
+    },
+    releaseAttachmentUpload() {
+      const held = heldAttachmentUploads.shift();
+      if (held) held();
+      else releasedAttachmentUploads += 1;
     },
     getAttachmentDeletes() {
       return [...attachmentDeletes];
