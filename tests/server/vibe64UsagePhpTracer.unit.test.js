@@ -8,6 +8,7 @@ import path from "node:path";
 import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { configureVibe64Host } from "@local/vibe64-execution/server/hostProfile";
 import { mergePrependEnvironment } from "@local/vibe64-usage-recording/server/tracers";
 import { usageScopeKind, usageTraceLineProblem } from "@local/vibe64-usage-recording/shared/contract";
 import php from "../../packages/vibe64-usage-recording/src/server/tracers/php.js";
@@ -191,6 +192,24 @@ test("prepare says what to run while the module is not built", () => {
   assert.equal(result.available, false);
   assert.match(result.reason, /runtime\/php\/build\.mjs/u);
   assert.match(result.reason, /phpize/u);
+});
+
+test("on a host whose PHP comes without its development files, prepare says recording isn't available there yet", (t) => {
+  // A host that supplies the runtimes (its runtime packs): the person cannot install PHP's development package.
+  const packs = fs.mkdtempSync(path.join(SCRATCH, "packs-"));
+  fs.mkdirSync(path.join(packs, "php", "bin"), { recursive: true });
+  fs.writeFileSync(path.join(packs, "php", "bin", "php"), "#!/bin/sh\n", { mode: 0o755 });
+  configureVibe64Host({ runtimePackRoot: packs });
+  t.after(() => configureVibe64Host(null));
+  const prepare = () => php.prepare({ recordingDirectory: SCRATCH, sourceRoot: FIXTURE, recordingId: "rec_abcdefghijklmnopqrst", targetKind: "web" });
+  assert.deepEqual(prepare(), {
+    available: false,
+    reason: "PHP usage recording isn't available on this workspace yet: its PHP comes without the development files " +
+      "(phpize and php-config) the recording module is built with."
+  });
+  // Once the host's PHP has them, the module can be built there, and prepare says what to run.
+  fs.writeFileSync(path.join(packs, "php", "bin", "php-config"), "#!/bin/sh\n", { mode: 0o755 });
+  assert.match(prepare().reason, /runtime\/php\/build\.mjs/u);
 });
 
 
