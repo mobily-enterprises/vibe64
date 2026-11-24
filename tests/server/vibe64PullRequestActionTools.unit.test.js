@@ -149,7 +149,7 @@ test("PR tools preserve reviewed targets and HTTP behavior with bounded native r
       if (isCreate) {
         for (const patch of [{ title: "" }, { sessionId: "" }, { destinationReview: {} }]) assert.equal((await execute(patch)).ok, false);
         assert.equal(Object.hasOwn(parameters.properties, "requestId"), false, "the tool waits for its creation");
-        for (const body of [input, { ...input, requestId: "not-a-request-id" }]) {
+        for (const body of [input, { ...input, requestId: "not-a-request-id" }, { ...input, requestId: CREATE_REQUEST_ID, repeat: "yes" }]) {
           await assert.rejects(route.handler({ ...request, input: { body } }, testReply()),
             error => error.statusCode >= 400 && error.statusCode < 500, JSON.stringify(body.requestId));
         }
