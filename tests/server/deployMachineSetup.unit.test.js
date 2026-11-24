@@ -21,7 +21,7 @@ import { SHOP, refusal, refused, world } from "./vibe64DeployStandInHelpers.js";
 
 // A Deployment's `- Machine setup:` names a committed script a host that builds the app's machine runs on it once, as
 // root, keeping what it installs read-only for every machine built with the same script (mobilynet's setup layer, its
-// docs/colleague-usage/setup-scripts.md). Mercbot Online's Production build output was 2,452 MiB on 25 Nov, 1,647 MiB
+// docs/colleague-usage/setup-scripts.md). One real project's Production build output was 2,452 MiB, 1,647 MiB
 // of it pinned tool downloads fetched, stored and copied at every Deploy though they change only with a pin. Here: the
 // grammar, the archive carrying the script at its root byte for byte, each mobilynet declaration's build.setup and the
 // stand-in taking (or refusing) it as mobilynet does, and the AWS and Google images running it as root before the release.

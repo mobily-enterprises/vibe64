@@ -182,8 +182,8 @@ What it writes to `/opt`, `/usr` and `/etc` becomes a read-only layer under
 every machine of that service's release. A layer is the project's, base's,
 packages' and script's, so each service (whose packages may differ) builds its
 layer once and reuses it while those stay the same; a pin change in the script's
-text builds a new one. So pinned tools leave the build's output: on 25 Nov
-Mercbot Online's output was 2,452 MiB, 1,647 MiB of it tool downloads fetched,
+text builds a new one. So pinned tools leave the build's output: one real
+project's output was 2,452 MiB, 1,647 MiB of it tool downloads fetched,
 stored and copied onto the server at every Deploy. mobilynet refuses a
 declaration whose `build.setup` names no such root file (`422`,
 `declaration.build.setup`), so a script is never left out silently; its stand-in

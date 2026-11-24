@@ -76,7 +76,7 @@ by its path from the project's root:
 | --- | --- |
 | Production on mobilynet | Each service's build runs the script once on its own setup layer, before Prepare. A service whose packages change gets a new layer. |
 | Production on a container provider | The image's build runs it as root, after its packages and before the app's release. The image's system is Nix's, so `apt-get` isn't there. |
-| A host's staging (Vibe64 Online's Publish to staging) | It doesn't run there. Staging runs the app on the workspace's own machine, which nothing builds for the app, and runs none of the app's code as root, so publishing to staging is refused before anything starts and the release on staging keeps serving. A project with a machine setup script is deployed to production only. |
+| A host's staging | It doesn't run there. A host's staging runs the app on the host's own machine, which nothing builds for the app, and runs none of the app's code as root, so publishing to staging is refused before anything starts and the release on staging keeps serving. A project with a machine setup script is deployed to production only. |
 | Development and Preview | It never runs. Workspace setup or Prepare provides the same tools in development, in the session's own folder. |
 
 ## When a deploy refuses it
