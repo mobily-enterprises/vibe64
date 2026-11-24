@@ -15,6 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
@@ -1150,6 +1151,34 @@ test("assistant preparation waits for overlapping admission instead of reporting
   }
   assert.equal((await checking).ok, true);
   assert.equal(lock.attempts[1].waitMs, 10_000);
+});
+
+// The page prepares a session's assistant when it opens; a cold assistant (its provider starting, or setup holding the
+// session) can outlast the hosted edge's minute.
+test("the page's assistant preparation answers within two seconds while it waits, and its repeat joins it", async (t) => {
+  const lock = agentWriteLockHarness({
+    holdFirst: true,
+    secondValue: { ok: true }
+  });
+  const { service, session } = await terminalServiceFixture(t, lock, { assistantSelection: CODEX_SELECTION });
+  const preparing = service.prepareWorkspaceSetup(session.sessionId, { retry: true });
+  await lock.firstEntered;
+  try {
+    const first = await Promise.race([
+      service.prepareAgentSession(session.sessionId),
+      delay(3_000, "still waiting", { ref: false })
+    ]);
+    assert.notEqual(first, "still waiting", "the preparation waited for the assistant");
+    assert.deepEqual(first, { ok: true, preparing: true, sessionId: session.sessionId, waitingFor: "preparing" });
+    const repeated = service.prepareAgentSession(session.sessionId);
+    lock.releaseFirst();
+    assert.equal((await repeated).ok, true);
+    assert.equal(lock.attempts.filter((attempt) => attempt.waitMs === 10_000).length, 1,
+      "the repeat joined the running preparation");
+  } finally {
+    lock.releaseFirst();
+    await preparing;
+  }
 });
 
 test("assistant reconciliation retains structured failure diagnostics", async (t) => {
