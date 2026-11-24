@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test from "../fixtures/codexNativeNetwork.js";
 
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createService as createAccountsService } from "../../packages/vibe64-accounts/src/server/service.js";

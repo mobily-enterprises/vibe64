@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test from "../fixtures/codexNativeNetwork.js";
 import { zstdDecompressSync, gunzipSync } from "node:zlib";
 import { createCodexProviderConnectionStore, codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
