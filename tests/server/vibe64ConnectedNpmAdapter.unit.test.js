@@ -183,6 +183,24 @@ test("npm: the proof fails the moment a swap is undone, and applying again puts 
   assert.equal((await f.proof()).inEffect, true);
 });
 
+test("npm: keep runs nothing while the swap is in effect, and puts back what an install undid", { timeout: 120_000 }, async t => {
+  const f = await fixture(t);
+  assert.equal((await f.step("apply")).ok, true);
+  const top = path.join(f.app, "node_modules", "@proof", "lib");
+  f.calls.length = 0;
+  assert.deepEqual(await f.step("keep"), { ok: true, output: "[Connected] Lib is in effect." });
+  assert.deepEqual(f.calls, [], "no npm and no Git while nothing undid the swap");
+
+  // An ordinary install puts the lockfile's published copy back, and keep swaps it again.
+  await exec("npm", ["install"], { cwd: f.app, env: f.registry.env });
+  assert.equal(await installedVersion(top), "1.0.0");
+  const kept = await f.step("keep");
+  assert.equal(kept.ok, true, kept.error);
+  assert.match(kept.output, /@proof\/lib 1\.1\.0 in effect in 2 installed copies/u);
+  assert.equal(await installedVersion(top), "1.1.0");
+  assert.equal((await f.proof()).inEffect, true);
+});
+
 test("npm: a disconnected repository's packages are the published copies again", { timeout: 120_000 }, async t => {
   const f = await fixture(t);
   assert.equal((await f.step("apply")).ok, true);
@@ -386,6 +404,8 @@ test("npm: a connection no tree installs leaves preparation going, and status sa
   const before = await f.tracked();
   assert.deepEqual(await f.step("apply"), { ok: true, output: `[Connected] ${said}` });
   assert.deepEqual(await f.step("proof"), { ok: true, output: `[Connected] ${said}` });
+  // Between Prepare steps a later step may still install it: the apply after the last one says it.
+  assert.deepEqual(await f.step("keep"), { ok: true, output: "" });
   const proof = await f.proof();
   assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, said]);
   // Nothing was swapped or installed for it.

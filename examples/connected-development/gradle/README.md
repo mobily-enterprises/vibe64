@@ -35,9 +35,10 @@ command environment for any command whose folder is in a tree holding Vibe64's s
 command that names its own `GRADLE_USER_HOME` keeps it. Staging and Production build elsewhere,
 with their own Gradle home, so they always build the published module.
 
-**Apply** (after every Prepare step) runs no Gradle. It checks that the session source and each
-checkout are Gradle builds that do not overlap, refuses an init script Vibe64 did not write, and
-refuses a session that tracks anything in `.development/gradle-home`. It then writes
+**Apply** (after the last Prepare step, and after an earlier one that undid it) runs no Gradle. It
+checks that the session source and each checkout are Gradle builds that do not overlap, refuses
+an init script Vibe64 did not write, and refuses a session that tracks anything in
+`.development/gradle-home`. It then writes
 `.development/gradle-home/init.d/vibe64-connected.init.gradle.kts`, which covers every `gradle`
 connection in Sources-file order:
 

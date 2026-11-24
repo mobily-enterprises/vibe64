@@ -230,6 +230,22 @@ test("workspace readiness includes both recipes and the exact session source sel
   });
 });
 
+test("each typed dependency is kept in effect after every Prepare step but the last, Workspace setup's and the connected ones, put in effect after the last and proved after the Verify steps", async () => {
+  await withTemporaryRoot(async target => {
+    const { input } = await fixture(target);
+    await materializeConnectedDevelopmentInputs(input);
+    const step = (label, phase) => ({ label, ...(phase ? { phase } : {}), argv: ["sh", `${label}.sh`], runtimeRequirements: ["shell"], workdir: "." });
+    const setup = { status: "ready", recipeHash: "ordinary", diagnostics: [], steps: [step("Install dependencies"), step("Prepare database")] };
+    const adapted = await inspectConnectedWorkspaceSetup({ session: input.session, setup,
+      inspection: { ...input.inspection, steps: [step("Compose", "prepare"), step("Verify", "verify")], customRunner: null } });
+    assert.equal(adapted.status, "ready", JSON.stringify(adapted.diagnostics));
+    const keep = "Keep connected Library in effect (npm)";
+    assert.deepEqual(adapted.steps.map(entry => entry.label), ["Install dependencies", keep, "Prepare database", keep,
+      "Compose", "Put connected Library in effect (npm)", "Verify", "Check connected Library is in effect (npm)"]);
+    assert.deepEqual(adapted.steps.filter(entry => entry.connectedAdapter).map(entry => entry.argv[2]), ["keep", "keep", "apply", "proof"]);
+  });
+});
+
 test("every non-custom dependency type gets Vibe64's own steps and no project command; a composition keeps its Verify", async () => {
   await withTemporaryRoot(async target => {
     const { root, connection, input } = await fixture(target);

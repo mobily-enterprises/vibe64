@@ -216,12 +216,18 @@ changes.
 Use the existing **Prepare workspace** action (or its **Retry** action after a
 failure). When Stack declares `Connected development`, preparation makes this
 session's missing copies, writes the `Sources file` when Stack names one, runs
-ordinary Workspace setup, then runs in order any project Prepare commands, one
-`Put connected <name> in effect (<type>)` step per typed Dependency, any project
-Verify commands (custom scripts included), and one `Check connected <name> is in
-effect (<type>)` step per typed Dependency. Success requires every step. A failed
-check stops preparation with `Connected <name> is not in effect: <reason>`, and
-Preview waits; Vibe64 never falls back to the published package silently.
+ordinary Workspace setup and any project Prepare commands, with one `Keep
+connected <name> in effect (<type>)` step per typed Dependency after each of
+those steps but the last, then runs in order one `Put connected <name> in effect
+(<type>)` step per typed Dependency, any project Verify commands (custom scripts
+included), and one `Check connected <name> is in effect (<type>)` step per typed
+Dependency. A Keep step prints `[Connected] <name> is in effect.` when nothing
+undid the connection, and puts it back when the step before it did (an install
+puts the published package back), so a later step that runs the app, such as
+preparing its database, always runs it with the connected copy. Success
+requires every step. A failed check stops preparation with `Connected <name> is
+not in effect: <reason>`, and Preview waits; Vibe64 never falls back to the
+published package silently.
 
 A connection that stops being in effect later (for example an ordinary
 `npm install` put the published package back) makes the workspace unprepared:
@@ -231,8 +237,9 @@ The session status (`vibe64-helper session status --json`) shows each copy's
 `inEffect` and `reason`.
 
 A typed Dependency that nothing in the session installs is unused, and it never
-fails preparation or Preview: its steps print `[Connected] <name> is connected,
-but nothing here installs it: remove it or install it.` followed by why, and
+fails preparation or Preview: its Put and Check steps print `[Connected] <name>
+is connected, but nothing here installs it: remove it or install it.` followed
+by why (its Keep steps print nothing, since a later step may install it), and
 preparation goes on with the other steps. Session status and **Connected
 repositories** say unused exactly when preparation does. Each type decides from
 the project's own files and toolchain:

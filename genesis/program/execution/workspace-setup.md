@@ -88,11 +88,20 @@ missing connected repository copies (`prepareConnectedRepositories` in
 Sources file pointing at those copies, and takes back what an adapter generated
 for a connection that left the list (`restoreDisconnected`). Project reports
 `inputs-prepared`; it does not run the recipe. Preparation then executes
-ordinary setup, the connected Prepare commands, one adapter apply step per
-typed dependency, the Verify commands and one adapter proof step per typed
-dependency through the existing managed runner. Adapter steps
+ordinary setup and the connected Prepare commands, with one adapter keep step
+per typed dependency after each of those Prepare steps but the last, then one
+adapter apply step per typed dependency, the Verify commands and one adapter
+proof step per typed dependency, through the existing managed runner
+(`inspectConnectedWorkspaceSetup` in `vibe64-project/src/server/connectedDevelopment.js`).
+A keep step reads the adapter's proof without the toolchain, as session status
+does, and applies again only when it fails: a step before it undid the
+connection (an install puts the published package back), and the next one may
+run the project (a database preparation migrates with it). A keep that finds
+the connection unused says nothing, since a later step may install it; the
+apply step does the whole work every time and says so. Adapter steps
 (`connectedAdapterSteps` in `vibe64-project/src/server/connectedAdapters/index.js`)
-carry `connectedAdapter: { action, type, repository }`; the runner hands them
+carry `connectedAdapter: { action, type, repository }`, the action `keep`,
+`apply` or `proof`; the runner hands them
 to `project.runConnectedAdapterStep`, which runs the type's adapter with a
 managed command function, so the adapter's commands stay inside the session's
 trees and runtimes. Each adapter (`connectedAdapters/<type>.js`) implements

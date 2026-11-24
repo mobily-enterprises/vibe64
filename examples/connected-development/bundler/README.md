@@ -29,7 +29,7 @@ Gemfile selected with Bundler's `gemfile` setting
 which `eval_gemfile`s the tracked Gemfile and gives each connected gem a
 [`path:` source](https://bundler.io/guides/gemfile.html).
 
-Apply (after the project's own Workspace setup):
+Apply (after the last Prepare step, and after an earlier one that undid it):
 
 1. Takes each connected copy's single `*.gemspec` (named after its gem, which
    Ruby confirms by loading it) and refuses a gem the tracked `Gemfile.lock`

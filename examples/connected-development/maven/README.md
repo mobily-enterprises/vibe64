@@ -26,7 +26,7 @@ which provides `java` and `mvn`, and in `git`. `prove.sh` drives it through
 `examples/connected-development/vibe64-adapter.mjs` (`apply`, `proof`, `locked`, and Save's
 `bump`), the way workspace preparation, session status and Save do.
 
-**Apply** (after every Prepare step) does this:
+**Apply** (after the last Prepare step, and after an earlier one that undid it) does this:
 
 1. It checks the session source and each checkout have a `pom.xml` and do not overlap. It also
    checks that Maven is 3.9.3 or later.

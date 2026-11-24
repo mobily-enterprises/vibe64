@@ -17,7 +17,7 @@ effect, and the project writes no Prepare or Verify command. `prove.sh` calls
 `../vibe64-adapter.mjs` (the adapter steps workspace preparation runs) and
 `../vibe64-adapter.mjs bump` (what Save asks of the adapter).
 
-**Apply** (after the project's Prepare steps):
+**Apply** (after the last Prepare step, and after an earlier one that undid it):
 
 - Reads `[package] name`/`version` from each connected `sourceRoot/Cargo.toml`.
 - Refuses a `.cargo/config.toml` it did not write, a tracked

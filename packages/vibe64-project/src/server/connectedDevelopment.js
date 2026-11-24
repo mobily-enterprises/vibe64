@@ -268,16 +268,20 @@ async function inspectConnectedWorkspaceSetup({
         });
       }
     }
-    // Each typed dependency gets Vibe64's own steps: put in effect after every Prepare step (the
-    // project's install would undo it), proved after every Verify step.
+    // Each typed dependency gets Vibe64's own steps: kept in effect after each Prepare step but the
+    // last, Workspace setup's and the connected ones, so no step runs the project on a published
+    // copy an install before it put back (a database preparation migrates with it); put in effect
+    // after the last; proved after the Verify steps.
     const adapterSteps = connectedAdapterSteps(expected.filter(connection =>
       connection.relationship === "dependency" && connectedPackageTypeHasAdapter(connection.type)));
-    const connectedSteps = [...steps, ...customSteps, ...adapterSteps];
-    const recipeSteps = [...setup.steps,
-      ...connectedSteps.filter(step => step.phase === "prepare" && !step.connectedAdapter),
-      ...connectedSteps.filter(step => step.phase === "prepare" && step.connectedAdapter),
-      ...connectedSteps.filter(step => step.phase === "verify" && !step.connectedAdapter),
-      ...connectedSteps.filter(step => step.phase === "verify" && step.connectedAdapter)];
+    const adapterStepsFor = action => adapterSteps.filter(step => step.connectedAdapter.action === action);
+    const projectSteps = [...steps, ...customSteps];
+    const prepareSteps = [...setup.steps, ...projectSteps.filter(step => step.phase === "prepare")];
+    const recipeSteps = [
+      ...prepareSteps.flatMap((step, index) => [step, ...(index < prepareSteps.length - 1 ? adapterStepsFor("keep") : [])]),
+      ...adapterStepsFor("apply"),
+      ...projectSteps.filter(step => step.phase === "verify"),
+      ...adapterStepsFor("proof")];
     return {
       ...setup,
       status: "ready",
@@ -288,7 +292,7 @@ async function inspectConnectedWorkspaceSetup({
         sourcesFile: inspection.sourcesFile || "",
         inputsHash,
         recipeHash: inspection.recipeHash || "",
-        adapters: adapterSteps.some(step => step.connectedAdapter.action === "proof"),
+        adapters: adapterStepsFor("proof").length > 0,
         saveSteps
       }
     };

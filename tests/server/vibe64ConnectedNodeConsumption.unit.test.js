@@ -43,7 +43,9 @@ async function writeLibrary(root, message) {
   await writeFile(path.join(root, "index.js"), `export function message() { return ${JSON.stringify(message)}; }\n`);
 }
 
-async function createTask(target, name, releaseRoot, env) {
+const installLine = "- Prepare `Install normal dependencies` with `nodejs`: `npm` `ci` `--offline` `--ignore-scripts` `--no-audit` `--no-fund`";
+
+async function createTask(target, name, releaseRoot, env, setupLines = [installLine]) {
   const root = sourcePath(target, name);
   const copyRoot = path.join(path.dirname(root), "connected", "library");
   await mkdir(root, { recursive: true });
@@ -53,8 +55,7 @@ async function createTask(target, name, releaseRoot, env) {
   await appendFile(path.join(root, ".gitignore"), "\nnode_modules/\n");
   // Vibe64 puts a typed dependency in effect itself: the Stack only names the default type.
   await writeFile(path.join(root, "genesis/stack.md"), [
-    "# Stack", "", "## Components", "", "## Workspace setup", "",
-    "- Prepare `Install normal dependencies` with `nodejs`: `npm` `ci` `--offline` `--ignore-scripts` `--no-audit` `--no-fund`",
+    "# Stack", "", "## Components", "", "## Workspace setup", "", ...setupLines,
     "", "## Connected development", "",
     "- Default package type: `npm`", ""
   ].join("\n"));
@@ -192,8 +193,7 @@ test("Vibe64 swaps a typed npm dependency into each task's own tree, keeps it in
   await writeFile(path.join(first.root, "undo-swap.mjs"),
     `import { writeFileSync } from 'node:fs'; writeFileSync('node_modules/${packageName}/index.js', 'export const message = () => "undone";\\n');\n`);
   await writeFile(path.join(first.root, "genesis/stack.md"), [
-    "# Stack", "", "## Components", "", "## Workspace setup", "",
-    "- Prepare `Install normal dependencies` with `nodejs`: `npm` `ci` `--offline` `--ignore-scripts` `--no-audit` `--no-fund`",
+    "# Stack", "", "## Components", "", "## Workspace setup", "", installLine,
     "", "## Connected development", "",
     "- Sources file: `.development/connected.json`",
     "- Default package type: `npm`",
@@ -214,6 +214,99 @@ test("Vibe64 swaps a typed npm dependency into each task's own tree, keeps it in
   await exec("npm", ["ci", ...npmOptions], { cwd: freshRelease, env });
   assert.equal((await exec(process.execPath, ["consume.mjs"], { cwd: freshRelease, env })).stdout.trim(), "published library");
   assert.deepEqual(await Promise.all(["package.json", "package-lock.json"].map(file => readFile(path.join(freshRelease, file), "utf8"))), releaseInputs);
+});
+
+// A library that ships its own migrations, as JSKIT's packages do.
+async function writeMigratingLibrary(root, version, migrations) {
+  await mkdir(path.join(root, "migrations"), { recursive: true });
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ name: packageName, version, type: "module", exports: "./index.js" }));
+  await writeFile(path.join(root, "index.js"),
+    "import { readdirSync } from 'node:fs';\nexport const migrations = () => readdirSync(new URL('./migrations/', import.meta.url)).sort();\n");
+  for (const name of migrations) await writeFile(path.join(root, "migrations", name), "module.exports = {};\n");
+}
+
+// The project's database preparation, as knex migrates: a migration the database recorded must
+// still be among the installed package's.
+const migrateScript = `import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { migrations } from '${packageName}';
+const ledger = '.data/migrations.json';
+const applied = existsSync(ledger) ? JSON.parse(readFileSync(ledger, 'utf8')) : [];
+const missing = applied.filter(name => !migrations().includes(name));
+if (missing.length) {
+  console.error('The migration directory is corrupt, the following files are missing: ' + missing.join(', '));
+  process.exit(1);
+}
+mkdirSync('.data', { recursive: true });
+writeFileSync(ledger, JSON.stringify([...new Set([...applied, ...migrations()])]));
+console.log('Migrated with ' + migrations().join(', '));
+`;
+
+test("a Workspace setup step after the install runs the project with the typed npm dependency in effect, every preparation", { timeout: 180_000 }, async t => {
+  const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
+  process.env.VIBE64_RUNTIME_NAMESPACE = "connected-node-setup-order";
+  t.after(() => {
+    if (previousNamespace === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE;
+    else process.env.VIBE64_RUNTIME_NAMESPACE = previousNamespace;
+  });
+  const tempRoot = await mkdtemp(path.join(tmpdir(), "vibe64-connected-node-order-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const env = { ...process.env, npm_config_cache: path.join(tempRoot, "npm-cache") };
+  const published = path.join(tempRoot, "published-library");
+  const releaseRoot = path.join(tempRoot, "release");
+  await writeMigratingLibrary(published, "1.0.0", ["001_base.cjs"]);
+  await mkdir(path.join(releaseRoot, "release"), { recursive: true });
+  const packed = await exec("npm", ["pack", "--json", "--ignore-scripts", "--offline", "--pack-destination", path.join(releaseRoot, "release")], { cwd: published, env });
+  await writeFile(path.join(releaseRoot, "package.json"), JSON.stringify({
+    name: "connected-setup-order-proof", version: "1.0.0", private: true, type: "module",
+    dependencies: { [packageName]: `file:./release/${JSON.parse(packed.stdout)[0].filename}` }
+  }));
+  await writeFile(path.join(releaseRoot, "migrate.mjs"), migrateScript);
+  await writeFile(path.join(releaseRoot, ".gitignore"), ".data/\n");
+  await exec("npm", ["install", ...npmOptions], { cwd: releaseRoot, env });
+  const task = await createTask(path.join(tempRoot, "project"), "task-order", releaseRoot, env, [installLine,
+    "- Prepare `Prepare database` with `nodejs`: `node` `migrate.mjs`", "- Prepare `Check database` with `nodejs`: `node` `migrate.mjs`"]);
+  t.after(() => stopConnectedSync(task.session.sessionId));
+  // The connected copy has a migration no published version has yet.
+  await writeMigratingLibrary(task.copyRoot, "1.1.0", ["001_base.cjs", "002_sign_in_facts.cjs"]);
+  const runner = connectedWorkspaceRunner([task]);
+  const prepare = async (options = {}) => {
+    const session = await task.runtime.getSessionWithoutSource(task.session.sessionId);
+    const started = await runner.start({ runtime: task.runtime, session, ...options });
+    return (await started.completion) || started.state;
+  };
+  const keep = "Keep connected Library in effect (npm)";
+  const ordered = ["Install normal dependencies", keep, "Prepare database", keep, "Check database",
+    "Put connected Library in effect (npm)", "Check connected Library is in effect (npm)"];
+  // The output keeps earlier attempts above the last one.
+  const lastAttempt = transcript => transcript.slice(Math.max(0, transcript.lastIndexOf("Workspace preparation retry started.")));
+  const stepsRun = transcript => lastAttempt(transcript).split("\n")
+    .map(line => line.match(/^\[(.+)\] Succeeded\.$/u)?.[1]).filter(label => ordered.includes(label));
+  const migrated = "Migrated with 001_base.cjs, 002_sign_in_facts.cjs";
+
+  const first = await prepare();
+  assert.equal(first.status, "succeeded", JSON.stringify(first));
+  // The app runs with the connected copy, and migrates with it (Preview's start does).
+  const app = await runVibe64Command({ actor: "app", command: "node", args: ["migrate.mjs"],
+    cwd: task.root, allowedRoots: [task.root, task.copyRoot], baseEnv: env,
+    envPolicy: "session", mode: "capture", purpose: "source",
+    runtimes: vibe64RuntimePacks(["nodejs"]).runtimes, timeout: 30_000 });
+  assert.equal(app.ok, true, app.output);
+  // Each preparation's install puts the published package back, and its database step still migrates
+  // with the connected one.
+  for (const attempt of [1, 2]) {
+    const again = await prepare({ retry: true });
+    assert.equal(again.status, "succeeded", `preparation ${attempt}: ${JSON.stringify(again)}`);
+    assert.deepEqual(stepsRun(again.transcript), ordered);
+    assert.ok(lastAttempt(again.transcript).includes(migrated), again.transcript);
+    // The install undid the swap, so the keep after it swapped again; the database steps did not.
+    const keeps = lastAttempt(again.transcript).split(`[${keep}] Running.`).slice(1).map(part => part.split(`[${keep}] Succeeded.`)[0].trim());
+    assert.equal(keeps.length, 2);
+    assert.match(keeps[0], /@connected-proof\/library 1\.1\.0 in effect in 1 installed copy/u);
+    assert.equal(keeps[1], "[Connected] Library is in effect.");
+  }
+  assert.deepEqual(stepsRun(first.transcript), ordered);
+  assert.ok(first.transcript.includes(migrated), "the first preparation migrates with the connected copy too");
+  assert.deepEqual(JSON.parse(await readFile(path.join(task.root, ".data/migrations.json"), "utf8")), ["001_base.cjs", "002_sign_in_facts.cjs"]);
 });
 
 test("a typed npm dependency nothing installs leaves preparation succeeding, says to remove or install it, and keeps the session prepared", { timeout: 120_000 }, async t => {

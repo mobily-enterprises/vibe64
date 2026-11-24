@@ -27,7 +27,7 @@ virtual environment, `.venv` at the session source, plus an editable install
 PEP 660) of each connected checkout, in the same resolution as the app's
 tracked requirements.
 
-**Apply** (after the project's Prepare steps):
+**Apply** (after the last Prepare step, and after an earlier one that undid it):
 
 1. Reads each connected distribution's name and version from
    `sourceRoot/pyproject.toml` (`[project]`).

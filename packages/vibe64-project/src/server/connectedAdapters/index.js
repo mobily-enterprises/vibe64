@@ -1,7 +1,9 @@
 // Vibe64's own treatment of each connected package type. Every `dependency` connection of a type
-// other than custom gets two workspace preparation steps: its adapter puts the session's copy of
-// the repository in effect after every Prepare step, and proves it after every Verify step. Neither
-// runs a project command; the runner hands both to the adapter here.
+// other than custom gets its own workspace preparation steps: its adapter keeps the session's copy
+// of the repository in effect after each Prepare step but the last (an install puts the published
+// package back, and the next step may run the project), puts it in effect after the last, and
+// proves it after the Verify steps. None runs a project command; the runner hands each to the
+// adapter here.
 //
 // The contract every adapter implements (one module per type):
 //   type                 the package type it treats
@@ -65,8 +67,8 @@ function connectedAdapterFor(type) {
 }
 
 /**
- * The preparation steps of the typed dependencies: one apply and one proof each. Their argv only
- * identifies them (resource accounting keys by it); the runner hands them to the adapter.
+ * The preparation steps of the typed dependencies: a keep, an apply and a proof each. Their argv
+ * only identifies them (resource accounting keys by it); the runner hands them to the adapter.
  * @param {Array<{ name: string, repository: string, type: string }>} connections
  */
 function connectedAdapterSteps(connections) {
@@ -81,6 +83,7 @@ function connectedAdapterSteps(connections) {
       connectedAdapter: { action, type: connection.type, repository: connection.repository }
     });
     return [
+      step("keep", "prepare", `Keep connected ${connection.name} in effect (${connection.type})`, adapter.runtimeRequirements),
       step("apply", "prepare", `Put connected ${connection.name} in effect (${connection.type})`, adapter.runtimeRequirements),
       // The proof may ask the toolchain how the build resolves the connection.
       step("proof", "verify", `Check connected ${connection.name} is in effect (${connection.type})`, adapter.runtimeRequirements)
@@ -123,7 +126,7 @@ function unusedText(connection, reason) {
  * preparation's transcript, `error` its failure. A connection nothing installs is no failure:
  * preparation goes on, and the output says so.
  * @param {object} input
- * @param {"apply" | "proof"} input.action
+ * @param {"keep" | "apply" | "proof"} input.action
  * @param {string} input.repository the step's connection
  * @param {Array<object>} input.repositories the session's prepared connections
  * @param {string} input.sessionSourceRoot
@@ -137,7 +140,15 @@ async function runConnectedAdapterStep({ action, repository, repositories, sessi
   const adapter = connectedAdapterFor(connection.type);
   try {
     const context = adapterContext({ connection, repositories, sessionSourceRoot, runCommand });
-    if (action === "apply") {
+    if (action === "keep") {
+      // Between Prepare steps the adapter applies again only what a step undid, judged as session
+      // status judges it, without the toolchain. The apply after the last Prepare step does the whole
+      // work, and says when nothing installs the connection.
+      const proof = await adapter.proof(adapterContext({ connection, repositories, sessionSourceRoot })).catch(() => null);
+      if (proof?.inEffect === true) return { ok: true, output: `[Connected] ${connection.name} is in effect.` };
+      if (proof?.unused === true) return { ok: true, output: "" };
+    }
+    if (action === "apply" || action === "keep") {
       // A sync of the same trees waits for the swap, and the swap for it.
       const { lines = [], unused } = await serializeForTrees(sessionSourceRoot, () => adapter.apply(context));
       return { ok: true, output: [...lines, ...(unused ? [`[Connected] ${unusedText(connection, unused)}`] : [])].join("\n") };
