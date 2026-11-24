@@ -16,22 +16,28 @@
 
     <v-tooltip
       v-if="saveWorkHeaderVisible"
-      :model-value="saveWorkChecking"
+      :model-value="saveWorkChecking || saveWorkReasonShown"
       location="bottom"
+      max-width="min(20rem, calc(100vw - 2rem))"
       :open-on-click="false"
       :open-on-focus="false"
       :open-on-hover="false"
+      @update:model-value="(open) => { if (!open) saveWorkReasonShown = false; }"
     >
       <template #activator="{ props: checkingProps }">
         <v-btn
           v-bind="checkingProps"
           :aria-busy="saveWorkSending || saveWorkChecking ? 'true' : undefined"
           :aria-label="saveWorkChecking ? 'Checking repository status' : saveWorkCheckAvailable ? 'Check for updates' : saveWorkHeaderAriaLabel"
+          :aria-disabled="saveWorkPress === 'explain' ? 'true' : undefined"
           class="studio-autopilot__save-work"
-          :class="{ 'studio-autopilot__save-work--check': saveWorkCheckAvailable }"
+          :class="{
+            'studio-autopilot__save-work--check': saveWorkCheckAvailable,
+            'studio-autopilot__save-work--unavailable': saveWorkPress === 'explain'
+          }"
           data-vibe64-guide="save"
           :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'error' : undefined)"
-          :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable)"
+          :disabled="saveWorkChecking"
           icon
           :title="saveWorkHeaderHint"
           type="button"
@@ -46,7 +52,7 @@
           <v-icon v-else icon="$save" />
         </v-btn>
       </template>
-      <span role="status">Checking…</span>
+      <span role="status">{{ saveWorkChecking ? "Checking…" : saveWorkTitle }}</span>
     </v-tooltip>
     <v-chip
       v-if="mainChatApprovals.isOwner && mainChatApprovals.waitingCount"
@@ -212,12 +218,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import { splitVibe64SessionHeaderActions, vibe64SessionNameStripWidth } from "@/lib/vibe64SessionToolbarVisibility.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64SessionSaveTarget } from "@/lib/vibe64SessionSaveTarget.js";
+import { saveWorkButtonPress } from "@/lib/vibe64SaveWorkButton.js";
 
 // The session header: the session names, Save, this session's actions and
 // Session actions, which holds whatever does not fit.
@@ -344,8 +351,27 @@ const saveWorkHeaderHint = computed(() => {
   return `${action} to ${target.text}\n${status}`;
 });
 
+// While Save and Update cannot act, a press shows why beside the button for a while.
+const saveWorkPress = computed(() => saveWorkButtonPress({
+  checking: saveWorkChecking.value,
+  checkAvailable: saveWorkCheckAvailable.value,
+  disabled: saveWorkDisabled.value
+}));
+const saveWorkReasonShown = ref(false);
+let saveWorkReasonTimer = null;
+watch(saveWorkPress, (press) => {
+  if (press !== "explain") saveWorkReasonShown.value = false;
+});
+onBeforeUnmount(() => clearTimeout(saveWorkReasonTimer));
+
 async function requestSessionSaveWork() {
-  if (saveWorkChecking.value) return;
+  if (saveWorkPress.value === "wait") return;
+  if (saveWorkPress.value === "explain") {
+    saveWorkReasonShown.value = true;
+    clearTimeout(saveWorkReasonTimer);
+    saveWorkReasonTimer = setTimeout(() => { saveWorkReasonShown.value = false; }, 6000);
+    return;
+  }
   if (saveWorkCheckAvailable.value) {
     saveWorkChecking.value = true;
     try {
@@ -450,7 +476,8 @@ watch(() => [
   flex: 0 0 auto;
 }
 
-.studio-autopilot__save-work--check {
+.studio-autopilot__save-work--check,
+.studio-autopilot__save-work--unavailable {
   opacity: var(--v-disabled-opacity);
 }
 
