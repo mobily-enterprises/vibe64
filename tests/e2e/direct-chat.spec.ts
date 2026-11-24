@@ -1221,8 +1221,13 @@ test.describe("direct chat", () => {
     }));
     await routeApiEndpoint(page, "/vibe64/sessions", route => {
       if (route.request().method() === "POST") {
-        submissions.push(requestBodyWithoutOrigin(route.request()));
-        return fulfillJson(route, { ok: true, ...directSession() });
+        const body = requestBodyWithoutOrigin(route.request());
+        submissions.push(body);
+        // The first answer is held, as a creation still preparing its source answers after two seconds; the page
+        // repeats the same request until the session.
+        return fulfillJson(route, submissions.length === 1
+          ? { ok: true, creating: true, requestId: body.requestId, waitingFor: "source" }
+          : { ok: true, ...directSession() });
       }
       return fulfillJson(route, { ok: true, sessions: [directSession()],
         creation: { canCreate: true, showCreateAction: true, mode: "direct" }, limits: { openSessionCount: 1 } });
@@ -1232,8 +1237,10 @@ test.describe("direct chat", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("checkbox", { name: "Choose a branch (advanced)" })).toHaveCount(0);
     await dialog.getByRole("button", { name: "Create session", exact: true }).click();
-    await expect.poll(() => submissions.length).toBe(1);
-    expect(submissions[0]).toEqual({ assistantSelection: {}, pullRequestNumber: 7 });
+    await expect.poll(() => submissions.length).toBe(2);
+    expect(submissions[0]).toEqual({ assistantSelection: {}, pullRequestNumber: 7,
+      requestId: expect.stringMatching(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u) });
+    expect(submissions[1], "the repeat names the same creation").toEqual({ ...submissions[0], repeat: true });
   });
 
   hintTest("waits for assistant activity to settle before reviewing changes", async ({ page }) => {
