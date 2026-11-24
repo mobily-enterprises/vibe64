@@ -2,7 +2,7 @@ import { serverStopBegun, VIBE64_SERVER_STOPPING_CODE } from "@local/vibe64-exec
 import { endCaptures } from "@local/vibe64-execution/server";
 
 // The editor's answers while its stop runs. The listener closes as the stop begins (stopAcceptingConnections), but a
-// browser's kept-alive connection can still carry a request: it is answered at once, before any other hook, route or
+// browser's kept-alive connection can still carry a request: it is answered at once, before any route runs or its
 // body is read, with 503, `Connection: close` and the header below, which tells the page that nothing of it ran, so it
 // may send it again, writes included, once the next server answers. An answer the stop lets finish closes its
 // connection too, so the page's next request reaches the next server.
@@ -14,7 +14,7 @@ const STOP_DRAIN_MS = 600;
 const STOP_COMMAND_GRACE_MS = 75;
 
 /**
- * Registers the gate. Called first on the server's root Fastify instance, so it covers every route.
+ * Registers the gate on the server's root Fastify instance before any plugin or route, so it covers every route.
  * @param {import("fastify").FastifyInstance} app
  */
 function registerStopGate(app) {
