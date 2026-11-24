@@ -124,9 +124,13 @@ test("plan history reads an archived plan in full once and again only when its f
     for (let index = 0; index < 3; index += 1) assert.deepEqual((await service.readSessionWorkPlan(sessionId)).history, archived.history);
     assert.equal(opened.filter(target => target === document).length, 0, "An unchanged archived plan is not read again.");
     await writeFile(document, text.replace("Count", "Count again"));
+    // A changed archived plan is read and checked again: it is left out of History and its changed document is
+    // named, and the plan itself keeps working.
     const changed = await service.readSessionWorkPlan(sessionId);
-    assert.equal(changed.ok, false);
-    assert.equal(changed.code, "vibe64_work_plan_pair_missing", "A changed archived plan is read and checked again.");
+    assert.equal(changed.ok, true, changed.error);
+    assert.deepEqual(changed.history, [], "A changed archived plan is read and checked again.");
+    assert.deepEqual(changed.planFileProblems, [{ path: document, problem: "it is missing or no longer matches its saved plan" }]);
+    assert.ok(changed.warning.includes(document), "the warning names the changed document");
   } finally {
     fs.open = realOpen;
     syncBuiltinESMExports();
