@@ -628,6 +628,17 @@ Native Claude command construction and JSON handshake now use JSKIT's
 `/server/claude-process`. Public Vibe64 supplies its managed execution facility,
 account/model selection and managed command hooks. Its stdio bridge belongs to
 the execution gateway and only transports bytes inside that owned scope.
+The bridge's first connection carries those bytes unchanged both ways, and a
+drop ends the native process group, unless a handover file
+(`stdioBridgeClient.js` `handOverStdioBridge`, at most 60 s) sits beside the
+socket: then the bridge waits that long for one reconnect
+(`resumeStdioBridge`), which names the output offset it has and gets every byte
+from there out of a 1 MiB ring; an offset the ring no longer holds is refused
+and ends the group. A drop while the native process holds a partial input line
+ends the group whatever the handover says, and after a reconnect input reaches
+the native process in whole lines only (`stdioBridgeProtocol.js`). Nothing
+writes a handover yet: taking a running native process over in the next
+server is a later step.
 JSKIT also owns stopping a retained Claude process or recovering its saved
 execution identity. Vibe64 records the stop result and publishes run/checkpoint
 state only after native cleanup is confirmed; failed cleanup retains the identity
@@ -1463,6 +1474,9 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/claudeCodeProcess.js`
 - `packages/vibe64-execution/src/server/conversationExecution.js`
 - `packages/vibe64-execution/src/server/engines/stdioBridge.js`
+- `packages/vibe64-execution/src/server/engines/stdioBridgeClient.js`
+- `packages/vibe64-execution/src/server/engines/stdioBridgeProtocol.js`
+- `tests/server/stdioBridgeReconnect.unit.test.js`
 
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
 - `packages/vibe64-sessions/src/server/projectWatch.js`

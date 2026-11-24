@@ -19,6 +19,8 @@ import { fileURLToPath } from "node:url";
 //       process a partial line; a drop while the native process holds a partial line ends the group. The first
 //       connection stays byte for byte what it was.
 
+import { handOverStdioBridge, resumeStdioBridge } from "../../packages/vibe64-execution/src/server/engines/stdioBridgeClient.js";
+
 const BRIDGE = fileURLToPath(new URL("../../packages/vibe64-execution/src/server/engines/stdioBridge.js", import.meta.url));
 const RESUME = "vibe64-stdio-resume";
 
@@ -131,7 +133,8 @@ test("a drop with a handover is picked up again from its offset: nothing lost, n
 });
 
 test("input after a reconnect reaches the native process, and a second drop needs a second handover", { timeout: 20_000 }, async (t) => {
-  const f = await startBridge(t, "process.stdin.on('data', (chunk) => process.stdout.write(`in:${chunk}`)); setInterval(() => {}, 1000);");
+  // This native process ends when its input does.
+  const f = await startBridge(t, "process.stdin.on('data', (chunk) => process.stdout.write(`in:${chunk}`)); process.stdin.on('end', () => process.exit(0));");
   const first = await connect(f.socketPath);
   // The first connection is the bridge as it always was: a partial line goes straight through.
   first.write("abc");
@@ -150,13 +153,16 @@ test("input after a reconnect reaches the native process, and a second drop need
   again.socket.write("yz\nnext");
   const lines = await readUntil(again.socket, (bytes) => bytes.toString().includes("\n"));
   assert.equal(Buffer.concat([again.rest, lines]).toString(), "in:xyz\n", "one whole line, without the partial one after it");
-  // A drop now (no handover) ends the group, and the native process never saw the partial "next".
+  // A drop now, without a handover, is the bridge as it always was: the native process gets the end of its input,
+  // without the partial "next", and nothing waits for a reconnect.
   const droppedAt = Date.now();
   again.socket.destroy();
   const exit = await f.exited;
-  assert.ok(exit.at - droppedAt < 1_000, `the group ended ${exit.at - droppedAt} ms after a drop without a handover`);
+  assert.deepEqual([exit.code, exit.signal], [0, null], f.stderr());
+  assert.ok(exit.at - droppedAt < 1_000, `the bridge ended ${exit.at - droppedAt} ms after a drop without a handover`);
 });
 
+// A drop is noticed when output to the dropped socket fails, as before: this native process is still writing.
 test("a drop without a handover ends the native process group at once, as before", { timeout: 20_000 }, async (t) => {
   const f = await startBridge(t, `${SEQUENCE(100)} setInterval(() => {}, 1000);`);
   const first = await connect(f.socketPath);
@@ -194,6 +200,7 @@ test("a reconnect from an offset older than the bridge's ring is refused and end
   assert.ok(exit.at - refusedAt < 1_000, `the group ended ${exit.at - refusedAt} ms after the refusal`);
 });
 
+// This native process is silent and ignores the end of its input: before, nothing noticed the drop until it wrote.
 test("a drop while the native process holds a partial input line ends the group, handover or not", { timeout: 20_000 }, async (t) => {
   const f = await startBridge(t, "process.stdin.on('data', (chunk) => process.stdout.write(`in:${chunk}`)); setInterval(() => {}, 1000);");
   const first = await connect(f.socketPath);
@@ -204,4 +211,29 @@ test("a drop while the native process holds a partial input line ends the group,
   first.destroy();
   const exit = await f.exited;
   assert.ok(exit.at - droppedAt < 1_000, `the group ended ${exit.at - droppedAt} ms after the drop`);
+});
+
+test("the editor's side hands a bridge over and picks it up again from its offset", { timeout: 20_000 }, async (t) => {
+  const f = await startBridge(t, SEQUENCE(3000));
+  const first = await connect(f.socketPath);
+  const before = await readUntil(first, (bytes) => LINES(bytes) >= 700);
+  assert.throws(() => handOverStdioBridge(f.socketPath, { waitMs: 120_000 }), RangeError, "a handover's wait is bounded");
+  handOverStdioBridge(f.socketPath, { waitMs: 5_000 });
+  first.destroy();
+
+  const socket = await resumeStdioBridge(f.socketPath, before.length);
+  const after = await readAll(socket);
+  assert.equal(Buffer.concat([before, after]).toString(), sequence(3000), "every line once, in order");
+  assert.deepEqual([(await f.exited).code, (await f.exited).signal], [0, null], f.stderr());
+});
+
+test("the editor's side is told when a bridge no longer holds its offset", { timeout: 20_000 }, async (t) => {
+  const f = await startBridge(t, `${SEQUENCE(2000)} setInterval(() => {}, 1000);`, { ringBytes: 4096 });
+  const first = await connect(f.socketPath);
+  await readUntil(first, (bytes) => LINES(bytes) >= 1500);
+  handOverStdioBridge(f.socketPath, { waitMs: 5_000 });
+  first.destroy();
+
+  await assert.rejects(resumeStdioBridge(f.socketPath, 0), { code: "vibe64_stdio_resume_refused" });
+  await f.exited;
 });

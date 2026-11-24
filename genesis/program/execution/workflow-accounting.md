@@ -9,6 +9,8 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - Main: `packages/vibe64-execution/src/server/managedExecution.js`
 - `packages/vibe64-execution/src/server/conversationExecution.js`
 - `packages/vibe64-execution/src/server/engines/stdioBridge.js`
+- `packages/vibe64-execution/src/server/engines/stdioBridgeClient.js`
+- `packages/vibe64-execution/src/server/engines/stdioBridgeProtocol.js`
 - `packages/vibe64-execution/src/server/request.js`
 - `packages/vibe64-execution/src/server/engines/capture.js`
 - `packages/vibe64-execution/src/server/engines/captureProcess.js`
