@@ -39,6 +39,13 @@ function fakeEditor() {
       });
     }
     handled.push(`${method} ${pathname}`);
+    if (mode === "busy") {
+      // The editor itself answers that it can't do this right now, in its own JSON and words.
+      return new Response(JSON.stringify({ message: "Suggestions unavailable" }), {
+        status: 503,
+        headers: { "content-type": "application/json; charset=utf-8" }
+      });
+    }
     if (mode === "applied-then-lost") {
       // The editor did the work, but its answer never came back: the edge says 502.
       return new Response("<html><body><h1>502 Bad Gateway</h1></body></html>", {
@@ -291,6 +298,33 @@ describe("the page through an editor restart", () => {
     expect(outcome.error.message).not.toMatch(STATUS_TEXT);
     expect(outcome.error.messageCode ?? "").not.toBe("http.request.networkFailed");
     expect(shouldRetryTransientQueryFailure(0, outcome.error)).toBe(false);
+  });
+
+  it("fails at once, in the route's words, a read or write the editor itself answered 503, and starts no health watch", async () => {
+    const { client, editor, runtime } = await openPage();
+
+    editor.set("busy");
+    let settled = 0;
+    const read = pageAction(runtime, () => client.request("/api/suggestions")).finally(() => {
+      settled += 1;
+    });
+    const write = pageAction(runtime, () => client.request("/api/notes", { method: "POST", body: { text: "keep" } }))
+      .finally(() => {
+        settled += 1;
+      });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(settled).toBe(2);
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    const [readOutcome, writeOutcome] = [await read, await write];
+    for (const outcome of [readOutcome, writeOutcome]) {
+      expect(outcome.ok).toBe(false);
+      expect(outcome.error.status).toBe(503);
+      expect(outcome.error.message).toBe("Suggestions unavailable");
+    }
+    expect(editor.handled).toEqual(["GET /api/sessions/status", "GET /api/suggestions", "POST /api/notes"]);
+    expect(shownMessages(runtime)).not.toContain(UPDATING);
+    expect(runtime.reports.filter((entry) => entry.message === UPDATING)).toEqual([]);
   });
 
   it("reconnects a realtime socket that lost the editor as soon as the editor answers again, and refetches", async () => {
