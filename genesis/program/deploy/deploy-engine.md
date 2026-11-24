@@ -436,11 +436,20 @@ making it twice. In order:
      until then, and a Deploy reading how a stopped one's refresh ended
      (`settleLastRun`) counts them only if it succeeded. A record kept before
      the names were has no names, so after that release succeeds it keeps no
-     hash and 6 replaces the settings once, dropping names no longer given. A
-     service whose settings name one this Deploy still makes (a Reaches of a
-     new service) is handed its release without them and given them in 6, on
-     that release. Google and AWS bring them the same way, in the release's own
-     revision or template.
+     hash and 6 replaces the settings once, dropping names no longer given: the
+     one Deploy after an editor before 7f3529167 kept a record rolls each
+     service whose settings it brings twice (Mercbot's production Deploy of 24
+     Nov), and none after it does, its names kept; on 25 Nov no Production
+     record from before it remained, so that roll is not needed for day 0. A
+     service whose settings name
+     one this Deploy still makes (a Reaches of a new service) is handed its
+     release without them and given them in 6, on that release. A service to
+     make that reaches one not made yet is made after it, whatever the Stack's
+     order (an internal service reaching the public one waited for it before 25
+     Nov, so their first Deploy never made either); of services that reach each
+     other, none made yet, the first is made without the addresses and
+     connections of those not made, and given them in 6. Google and AWS bring
+     them the same way, in the release's own revision or template.
    - A refresh that fails ends the links mobilynet made against the release it
      moved to, which the record lets go so the next Deploy makes them again,
      and fails the Deploy with the service's reason. Services not yet moved keep
