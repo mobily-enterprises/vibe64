@@ -3760,9 +3760,15 @@ async function holdSessionWrite(terminals, sessionId, options, work) {
   return { release: () => release.resolve(), working };
 }
 
-// Within a moment: it did not wait for the lock a Save or Update holds.
-const promptlyDuringWrite = (promise, work) => Promise.race([promise,
-  new Promise((_resolve, reject) => setTimeout(() => reject(new Error(`It waited for ${work} instead of answering.`)), 2000))]);
+// It answers while Save or Update still holds the lock (the test frees it only afterwards): a call that waits for the
+// lock never answers before then, so the timer only ends that wait. A two-second timer failed a call that answered
+// without the lock on an overloaded host.
+const promptlyDuringWrite = (promise, work) => {
+  let guard;
+  return Promise.race([promise, new Promise((_resolve, reject) => {
+    guard = setTimeout(() => reject(new Error(`It waited for ${work} instead of answering.`)), 30_000);
+  })]).finally(() => clearTimeout(guard));
+};
 
 for (const work of ["Save", "Update"]) {
   test(`Stop and a steer while ${work} holds the agent-write lock reach the running turn at once, and the stop is recorded`, async () => {
