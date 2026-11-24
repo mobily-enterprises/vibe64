@@ -1422,6 +1422,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingInterruptions.js`
 - `packages/vibe64-terminals/src/server/assistantPlanHandoff.js`
+- `packages/vibe64-terminals/src/server/assistantPlanCheck.js`
+- `packages/vibe64-terminals/src/server/planSourceChanges.js`
 - `packages/vibe64-terminals/src/server/afterPlanBase.js`
 - `packages/vibe64-terminals/src/server/afterPlanPassesUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261114-after-plan-passes.js`
@@ -2210,8 +2212,11 @@ updating only Progress retains expansion of the same Plan.
 Progress shows actual work, evidence and blockers. Checklist marks update as the
 work goes: the guidance half-ticks an item (`[~]`) as soon as it is implemented
 and its own focused checks pass, full-ticks it (`[x]`) once the plan's final proof
-covers it, never leaves a built item empty, and moves unsupported or regressed
-claims back to `[~]` or `[ ]`. `Vibe64WorkPlanSections` shows `[~]` as the
+covers it, never leaves a built item empty, ticks each item the moment it is
+built rather than at the end of the turn, walks the whole checklist when work on
+one item builds parts of others, and moves unsupported or regressed
+claims back to `[~]` or `[ ]`. Senior writes a foundation item that others
+build on as its own item, or says so in it. `Vibe64WorkPlanSections` shows `[~]` as the
 indeterminate checkbox labelled Built, not yet proven, `[x]` as the checked one
 labelled Proven and `[ ]` as Not done yet. The plan owner's reads count `built`
 (`[~]` and `[x]`), `checked` (`[x]`) and `total`, which the viewer shows as N
@@ -2500,7 +2505,51 @@ pass and its place among the plan's passes, or completed), unless the chat's
 routing request waits for the person's answer or shows questions (needs you,
 with their number), waits for Implement plan, or is otherwise paused. The plan
 viewer exposes that step from its summary read, which reloads on every plan
-change.
+change. While files changed since the plan's last update the line ends with
+that count ("· 12 files changed since the plan's last update"), never with the
+minutes, so the live status is not read out again as the clock moves.
+
+How current an active plan is rests on facts only (`planSourceChanges`): a
+source state is each repository's HEAD (the session's source and each connected
+copy) and the paths `git --no-optional-locks status --porcelain=v2` reports
+changed or untracked there, each with its modification time and size, at most
+1000 per repository (past that a count says "or more"). Files changed since a
+state are those HEAD's move touched, those changed now and not then or changed
+again, and those changed then and not now. The plan command's `new`, `write`,
+`progress-write`, `reopen` and `checked` (`MARKING_OPERATIONS`), run by the AI,
+write `plans/updated.json` beside `current.json`: when (the source state's
+time, read before Git), how (`updated` or `checked`) and that source state.
+`checked` takes the paired revisions and changes nothing else: it is the AI's
+explicit answer that nothing needs a new mark. A plan replaced or archived drops
+the record; a plan without one (from before it) reports its pair's save time as
+`saved`, and an unreadable record leaves the time unknown without making the
+plan unreadable. The summary's `current` carries `updatedAt` and `updatedHow`,
+and the session's work-plan read adds `changedSince` (`{ files, more }`, read at
+most every 5 s per record) for an active plan. `workPlanFreshness` turns them
+into "Updated 47 min ago · 12 files changed since", which the viewer shows
+beside the plan's progress, out of its live region, and exposes for the status
+line; its minutes move on every 30 s.
+
+The plan check (`assistantPlanCheck`, `createAssistantPlanCheck`): delivery of a main chat turn that may
+tick an active plan (Senior's, Junior's or Senior's review, from
+`assistantPlanRole`; never a pass, a task, an answer turn or a Custom chat)
+reads the plan's revisions, its record and the source state while the turn's
+selection is prepared, and keeps them in memory by request key and message
+(`planCheckTurns`). When that turn completes, unless the person stopped it, a
+goal is active, it ends asking the person, or a restart or disconnected
+schedule lost the start, routing compares: the same active plan, Progress and
+record, and changed files, send one follow-up (`preparePlanCheck`) to the same
+AI in the same stage before anything else follows. It is Vibe64's note
+(`vibe64Note`, shown as Vibe64's system row) whose display gives the file count
+and whose message names up to five files and asks the AI to walk the checklist
+item by item, not only the item it was on, half-tick what is built, record
+Progress or run `plan checked`, then stop; it renders planning's instructions
+(manage the plan, change no application files), no Genesis task and no workflow
+outcome instructions. Its own turn gets no check. When it ends, an outcome the turn before it reported stands for it
+(rebound to its turn, with the plan's revisions as the check left them when the
+plan's scope is unchanged), and the request settles as it would have. A check
+that never left settles the request at once; one that may have reached the AI
+waits as an uncertain delivery.
 
 Every workflow turn's instructions (`assistantWorkflowInstructions`, composed
 by routing delivery for Auto and direct chats alike) end with how the turn ends

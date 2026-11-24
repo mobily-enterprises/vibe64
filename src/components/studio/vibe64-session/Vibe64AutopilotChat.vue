@@ -316,10 +316,12 @@ const composerSendButton = ref(null);
 const composerSettingsOpen = ref(false);
 const composerSettingsButton = ref(null);
 const workPlanViewer = ref(null);
-// While a plan is open, one line says where it is: read from the plan itself, with the chat's waiting request and questions.
+// While a plan is open, one line says where it is: read from the plan itself, with the chat's waiting request and
+// questions, and how many files changed since the plan was last brought up to date when any did.
 const planStatusLine = computed(() => workPlanStatusLine(workPlanViewer.value?.step || null, {
   questions: agentActive.value ? 0 : numberedQuestions.value.length,
-  request: routingRequest.value
+  request: routingRequest.value,
+  freshness: workPlanViewer.value?.freshness || null
 }));
 const thinkingStatusId = `studio-autopilot-thinking-${useId()}`;
 const composerAttachmentState = ref({

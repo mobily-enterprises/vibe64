@@ -1,8 +1,8 @@
 <script setup>
-import { computed, inject, nextTick, onBeforeUnmount, ref, unref, watch, watchEffect } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, unref, watch, watchEffect } from "vue";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
-import { parseWorkPlanLines } from "@local/vibe64-terminals/shared/assistantWorkPlan";
+import { parseWorkPlanLines, workPlanFreshness } from "@local/vibe64-terminals/shared/assistantWorkPlan";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
@@ -101,7 +101,16 @@ function showPlan(requestedView = "default") {
 }
 // The current plan's step, read from the plan on each change, for the chat's status line.
 const step = computed(() => overview.value?.current?.step || null);
-defineExpose({ showPlan, step });
+// When the AI last brought the active plan up to date and how many files changed since: the facts that keep a plan
+// behind its work from looking current. The minutes move on with the clock; the count with each change event.
+const now = ref(Date.now());
+let clock = null;
+onMounted(() => {
+  clock = setInterval(() => { now.value = Date.now(); }, 30_000);
+});
+onBeforeUnmount(() => clearInterval(clock));
+const freshness = computed(() => workPlanFreshness(overview.value?.current, now.value));
+defineExpose({ showPlan, step, freshness });
 
 /** @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof planViewer>} */
 const colleaguePlan = inject(VIBE64_COLLEAGUE_PLAN_KEY);
@@ -299,6 +308,13 @@ watch(() => props.active, (active) => {
               <span class="text-high-emphasis">{{ plan.status === 'completed' ? 'Completed' : archiveId ? 'Unfinished' : 'Active' }}</span>
             </v-chip>
             <span class="text-body-small on-surface-variant">{{ planRequirements }}</span>
+            <!-- The minutes move on with the clock: not read out each time, as the rest of this status is. -->
+            <span v-if="!archiveId && freshness" class="d-inline-flex align-center flex-wrap ga-2" aria-live="off" data-testid="vibe64-plan-freshness">
+              <span class="text-body-small on-surface-variant">{{ freshness.updated }}</span>
+              <v-chip v-if="freshness.changed" :color="freshness.behind ? 'warning' : undefined" variant="tonal" size="small">
+                <span class="text-high-emphasis">{{ freshness.changed }}</span>
+              </v-chip>
+            </span>
           </div>
           <v-tabs v-model="planDocument" grow height="48" aria-label="Plan documents" class="mb-4">
             <v-tab value="plan">Plan</v-tab>

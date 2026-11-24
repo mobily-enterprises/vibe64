@@ -754,7 +754,16 @@ passes is completed by Senior's review. Chat links to that session's plan
 history. While a plan is open, one status line above the message box says where
 it is, read from the plan itself: implementing item 2 of 6 and its title, Senior
 review, a pass and its place among the plan's passes, needs you with the number
-of questions, paused for Continue, ready for Implement plan, or completed. Unfinished, interrupted,
+of questions, paused for Continue, ready for Implement plan, or completed. A
+plan behind its work never looks current: the plan says when the AI last brought
+it up to date and how many of the session's files changed since ("Updated 47 min
+ago · 12 files changed since"), and the status line adds the count while files
+changed. The AI ticks each item as it is built, across the whole checklist when
+work on one item builds others. When a turn of Senior, Junior or Senior's review
+changed the session's files but not the plan's marks or Progress, Vibe64 sends
+that AI one note in the same chat, shown as Vibe64's, asking it to walk the
+checklist and update it or record that nothing needs a new mark; Vibe64 states
+only these facts and never judges which item a change built. Unfinished, interrupted,
 replaced and unrelated plans stay current; a new planning discussion does not
 silently replace them.
 Interrupted-review notices disappear; errors and recovery actions remain.

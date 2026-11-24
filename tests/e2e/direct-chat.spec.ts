@@ -3302,3 +3302,55 @@ for (const width of [390, 1280]) {
     }
   });
 }
+
+for (const width of [390, 1280]) {
+  test(`@plan-freshness a plan behind its work never looks current, and Vibe64's plan check shows as its own note at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    const note = "4 files of the session's source changed in this turn, but the plan's checklist marks and Progress did not. " +
+      "Vibe64 asked the AI to bring the plan up to date.";
+    const server = await assistantStatusServer();
+    try {
+      const session = server.state.session;
+      session.agentSession.turn.active = false;
+      server.state.conversationLog = [
+        { turnId: "000001", user: { role: "user", messageId: "request-1", text: "Build the contact threads." },
+          assistant: { role: "assistant", text: "The thread store is built." } },
+        // The plan check: Vibe64's note in the chat, never the person's words.
+        { turnId: "000002", metadata: { vibe64Note: true, actorId: "app", actorDisplayName: "Vibe64" },
+          user: { role: "user", messageId: "plan-check-1", text: note }, assistant: { role: "assistant", text: "Nothing to tick yet." } }
+      ];
+      const text = "Status: active\n# Contact threads\n\n- [ ] Store contact threads\n- [ ] List a contact's threads\n" +
+        "- [ ] Reply in a thread\n- [ ] Move old messages into threads\n";
+      const progressText = "# Progress\n\nImplementation has not started.\n";
+      const current = { title: "Contact threads", status: "active", revision: "c".repeat(64), progressRevision: "d".repeat(64),
+        step: { step: "implementation", item: 1, items: 4, title: "Store contact threads" },
+        updatedAt: new Date(Date.now() - 47 * 60_000).toISOString(), updatedHow: "updated", changedSince: { files: 12, more: false } };
+      const total = Array.from(text).length + Array.from(progressText).length;
+      await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/work-plan`, route => fulfillJson(route, {
+        ok: true, sessionId: session.sessionId, available: true, status: "active", title: current.title, revision: current.revision,
+        built: 0, checked: 0, total: 4, archiveId: "", current, history: [], text, progressRevision: current.progressRevision,
+        progressAvailable: true, progressText, offset: 0, nextOffset: total, totalCharacters: total, hasMore: false
+      }));
+      await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+      await expect(page.locator(".assistant-transcript__system").filter({ hasText: note })).toHaveCount(1);
+      await expect(page.getByText(note, { exact: true })).toHaveCount(1);
+      // The chat's status line: where the plan is, and the fact that it is behind.
+      await expect(page.getByTestId("vibe64-plan-status"))
+        .toHaveText("Plan: implementing item 1 of 4, Store contact threads · 12 files changed since the plan's last update");
+      await page.getByRole("button", { name: "View active plan", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Plan and history", exact: true });
+      await expect(dialog).toBeVisible();
+      const freshness = dialog.getByTestId("vibe64-plan-freshness");
+      await expect(freshness).toContainText("Updated 47 min ago");
+      await expect(freshness).toContainText("12 files changed since");
+      await page.screenshot({ path: testInfo.outputPath(`plan-freshness-${width}.png`) });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await dialog.getByRole("button", { name: "Close plan", exact: true }).click();
+      expect(server.state.messages).toEqual([]);
+    } finally {
+      await page.close();
+      await server.close();
+    }
+  });
+}

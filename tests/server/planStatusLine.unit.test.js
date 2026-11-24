@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { workPlanStatusLine, workPlanStep } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
+import { workPlanFreshness, workPlanStatusLine, workPlanStep } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 
 const plan = (items, passes = [], status = "active") => ({
   status,
@@ -49,4 +49,31 @@ test("the chat's status line says where the plan is, or that it needs the person
   assert.equal(workPlanStatusLine(implementing, { request: waiting({ stopped: true }) }), "Plan: paused, Continue to resume");
   assert.equal(workPlanStatusLine({ step: "completed" }, { request: waiting({}) }), "Plan: completed");
   assert.equal(workPlanStatusLine(null, { questions: 2 }), "");
+});
+
+test("a plan behind its work never looks current: it says when it was last updated and how many files changed since", () => {
+  const now = Date.parse("2026-11-24T12:00:00Z");
+  const ago = (minutes) => new Date(now - minutes * 60_000).toISOString();
+  const current = (fields) => ({ status: "active", updatedAt: ago(47), updatedHow: "updated", ...fields });
+  // Facts only: when, and how many files changed since.
+  assert.deepEqual(workPlanFreshness(current({ changedSince: { files: 12, more: false } }), now),
+    { text: "Updated 47 min ago · 12 files changed since", updated: "Updated 47 min ago", changed: "12 files changed since", behind: true });
+  assert.equal(workPlanFreshness(current({ changedSince: { files: 1, more: false } }), now).text, "Updated 47 min ago · 1 file changed since");
+  assert.equal(workPlanFreshness(current({ changedSince: { files: 1000, more: true } }), now).text, "Updated 47 min ago · 1000+ files changed since");
+  // Checked and found nothing to change counts as up to date, from when it was checked.
+  assert.deepEqual(workPlanFreshness(current({ updatedAt: ago(0.5), updatedHow: "checked", changedSince: { files: 0, more: false } }), now),
+    { text: "Checked just now · no files changed since", updated: "Checked just now", changed: "no files changed since", behind: false });
+  // A plan the AI never brought up to date (no mark): only when it was saved, no count.
+  assert.equal(workPlanFreshness(current({ updatedAt: ago(180), updatedHow: "saved", changedSince: null }), now).text, "Updated 3 h ago");
+  assert.equal(workPlanFreshness(current({ updatedAt: ago(60 * 49) }), now).text, "Updated 2 days ago");
+  assert.equal(workPlanFreshness(current({ status: "completed" }), now), null);
+  assert.equal(workPlanFreshness(null, now), null);
+  // The status line, which the person reads first, adds the facts while files changed since; a current plan's line is unchanged.
+  const implementing = { step: "implementation", item: 1, items: 10, title: "Store threads" };
+  assert.equal(workPlanStatusLine(implementing, { freshness: workPlanFreshness(current({ changedSince: { files: 12, more: false } }), now) }),
+    "Plan: implementing item 1 of 10, Store threads · 12 files changed since the plan's last update");
+  assert.equal(workPlanStatusLine(implementing, { freshness: workPlanFreshness(current({ changedSince: { files: 0, more: false } }), now) }),
+    "Plan: implementing item 1 of 10, Store threads");
+  assert.equal(workPlanStatusLine({ step: "completed" }, { freshness: workPlanFreshness(current({ changedSince: { files: 3 } }), now) }),
+    "Plan: completed");
 });

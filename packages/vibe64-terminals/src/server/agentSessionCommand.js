@@ -75,6 +75,7 @@ import {
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
+import { sessionSourceState } from "./planSourceChanges.js";
 import { handPlanOver, refusedPlanChange } from "./assistantPlanHandoff.js";
 import { commandLineFailure } from "./commandFailure.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
@@ -441,17 +442,16 @@ function createAgentSessionCommandService({
         ? { ...input, text: await withAfterPlanPasses(input.text, store, sessionId) } : input;
       let result;
       try {
-        result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, planInput, role, role === "pass" ? { passItem: request.pass.item } : {});
+        // The AI's change records the session's source as it is now: the plan view counts the files changed since.
+        result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, planInput, role, {
+          ...(role === "pass" ? { passItem: request.pass.item } : {}), sourceState: () => sessionSourceState(store, sessionId, descriptor)
+        });
       } catch (error) {
         throw await refusedPlanChange({ sessionId, request, input, error, handPlanToSenior, logger });
       }
       // A plan becoming current marks where its changes start, unless a base is recorded.
-      if (["new", "reopen"].includes(input.operation)) {
-        await rememberAfterPlanBase(store, { ...descriptor, sessionId }, { onlyWhenUnset: true });
-      }
-      if (!["read", "history"].includes(input.operation)) {
-        await publishSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice || "" } });
-      }
+      if (["new", "reopen"].includes(input.operation)) await rememberAfterPlanBase(store, { ...descriptor, sessionId }, { onlyWhenUnset: true });
+      if (!["read", "history"].includes(input.operation)) await publishSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice || "" } });
       return {
         ok: true,
         ...result,
