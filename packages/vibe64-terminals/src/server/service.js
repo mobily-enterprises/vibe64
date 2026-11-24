@@ -40,6 +40,7 @@ import { createServiceCommandServices } from "./serviceCommandServices.js";
 import { createServiceAgentProviders } from "./serviceAgentProviders.js";
 import { sessionAssistantWorking } from "./serviceSessionRecords.js";
 import { createProjectPasses } from "./projectPasses.js";
+import { createHeldAgentSessionPreparation } from "./heldAgentSessionPreparation.js";
 
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
@@ -618,7 +619,7 @@ function createService({
     archiveSessionWorkPlan: agentConversations.archiveSessionWorkPlan,
     restoreSessionWorkPlan: agentConversations.restoreSessionWorkPlan,
     ensureAgentSession: assistant.ensureAgentSession,
-    prepareAgentSession: assistant.prepareAgentSession,
+    prepareAgentSession: createHeldAgentSessionPreparation({ ensureAgentSession: assistant.ensureAgentSession, logger }),
     assertSessionRenewalIdle: agentConversations.assertSessionRenewalIdle,
     sessionAiWorkRunning: agentConversations.sessionAiWorkRunning,
     invalidateAgentRuntimes: shutdown.invalidateAgentRuntimes,
