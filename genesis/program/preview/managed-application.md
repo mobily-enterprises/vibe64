@@ -254,6 +254,12 @@ identifies tests as not started and directs the agent to pin the project's
 `@playwright/test` exactly to that version, rather than asking the operator for
 another runtime, while retaining the interactive browser entry point.
 
+Managed-session instructions forbid starting Playwright directly (`npx
+playwright`, `playwright test`, or a package script that runs it, such as a
+repository's own `test:e2e`), even when the repository's own instructions say
+to: the agent runs the same suite and arguments through `vibe64-helper
+playwright test` or `npm-run`, and runs the project's own Playwright only when
+that command reports no managed browser runtime on the computer.
 Managed-session instructions and command help require browser suites and live
 Preview browser actions to run sequentially. The coding agent waits on the
 original suite through cleanup and restoration, confirms no active managed run

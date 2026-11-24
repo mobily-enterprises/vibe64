@@ -255,6 +255,15 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /continue independent setup work/u);
   assert.match(session, /vibe64-helper --help/u);
   assert.doesNotMatch(session, /vibe64-(?:preview|playwright|env|database|github)\b/u);
+  // A repository's own instructions and scripts (npx playwright, a test:e2e script) never start Playwright in a
+  // managed session: the same suite runs through vibe64-helper playwright, the helper's no-runtime advice aside.
+  assert.match(session, /Never start Playwright directly in this session, even when the repository's own instructions or scripts say to: not `npx playwright`, not `playwright test`, and not an npm or package script that runs it, such as a repository's `test:e2e`\./u);
+  assert.match(session, /Run the same suite and arguments with `vibe64-helper playwright test <args>` \(a package script: `vibe64-helper playwright npm-run <script>`\)/u);
+  assert.match(session, /run the project's own Playwright only when `vibe64-helper playwright` says this computer has no managed browser runtime\./u);
+  assert.doesNotMatch(vibe64Driver({
+    conversationKind: "main", scope: "session",
+    session: { managedDatabaseRefresh: false, managedEnvironment: false, managedGit: false, managedPreview: false }
+  }), /Never start Playwright directly/u);
   assert.match(session, /vibe64-helper env status/u);
   assert.match(session, /refers to a saved key, account or accounts hub, run `vibe64-helper env saved`/u);
   assert.match(session, /vibe64-helper database refresh/u);
