@@ -167,13 +167,10 @@ function createOutputTargetLaunchStart({
   }
 
   /**
-   * Starts an output target once the session's workspace is prepared. A start never holds the session's launch
-   * lock while a preparation runs, so the outputs read, Open, the identity switch, Stop, the session's close and
-   * other starts answer meanwhile: it waits for the preparation outside the lock, then starts again from its checks
-   * without asking for another. A Stop or a close while it waited ends it unstarted. `stage` names what it waits on:
-   * `launch-queue` (the lock), `workspace-preparation`, then `starting`.
-   * @param {string} sessionId
-   * @param {object} [input]
+   * Starts an output target once the session's workspace is prepared. A start waits for a running preparation
+   * outside the session's launch lock, so the session's other Preview requests answer meanwhile, then starts again
+   * from its checks without asking for another; a Stop or a close meanwhile ends it unstarted. `stage` names what it
+   * waits on: `launch-queue` (the lock), `workspace-preparation`, then `starting`.
    * @param {{ stage?: (name: string) => void }} [controls]
    */
   async function startTerminal(sessionId, input = {}, { stage = doNothing } = {}) {
@@ -185,7 +182,7 @@ function createOutputTargetLaunchStart({
       if (!attempt?.[PREPARING]) return attempt;
       stage("workspace-preparation");
       const failure = await attempt[PREPARING].then(() => null, error => error);
-      if (failure) return vibe64Result(async () => { throw failure; });
+      if (failure) return vibe64Result(() => Promise.reject(failure));
       const interrupted = launchCoordination.launchInterruptedSince(sessionId, interruptions);
       if (interrupted) return interrupted;
       prepared = true;
