@@ -3,6 +3,32 @@
 Every abnormal end of the editor server is recorded and shown until someone who
 can fix its cause has seen it, because a crash is a defect in Vibe64 itself.
 
+## Sources
+
+- Main: `packages/studio-health/src/server/crashes.js`
+- `server.js`
+- `packages/vibe64-core/src/server/crashRecords.js`
+- `packages/vibe64-core/src/server/crashWatch.js`
+- `packages/vibe64-core/src/shared/crashText.js`
+- `packages/studio-health/src/server/studioHealthActions.js`
+- `packages/studio-health/src/server/registerRoutes.js`
+- `packages/studio-health/src/server/inputSchemas.js`
+- `packages/studio-health/src/server/StudioHealthFeature.js`
+- `src/composables/useVibe64Crashes.js`
+- `src/lib/vibe64CrashPresentation.js`
+- `src/components/studio/Vibe64CrashBanner.vue`
+- `src/components/studio/Vibe64CrashesScreen.vue`
+- `src/components/StudioAppShellLayout.vue`
+- `src/pages/app/crashes.vue`
+- `tests/server/crashRecords.unit.test.js`
+- `tests/server/crashRecordsServer.integration.test.js`
+- `tests/e2e/support/start-crash-test-server.mjs`
+- `tests/e2e/crash-banner.spec.ts`
+- `tests/client/crashPresentation.vitest.js`
+- `docs/colleague-usage/crashes.md`
+
+## Public contract
+
 `startServer` (`server.js`, used by public's `bin/server.js` and Vibe64 Online's
 launcher alike) starts a crash watch once the server listens. The watch holds a
 running marker, its heartbeat rewritten every 30 s, in
@@ -50,27 +76,3 @@ bar on every page (owner: the error, **See crashes**, **Copy for a bug report**,
 **Acknowledge**; member: a smaller line without the error), re-read when the
 realtime connection returns and when the tab is focused, and `/app/crashes`
 lists every record with its stack.
-
-## Sources
-
-- `server.js`
-- `packages/vibe64-core/src/server/crashRecords.js`
-- `packages/vibe64-core/src/server/crashWatch.js`
-- `packages/vibe64-core/src/shared/crashText.js`
-- `packages/studio-health/src/server/crashes.js`
-- `packages/studio-health/src/server/studioHealthActions.js`
-- `packages/studio-health/src/server/registerRoutes.js`
-- `packages/studio-health/src/server/inputSchemas.js`
-- `packages/studio-health/src/server/StudioHealthFeature.js`
-- `src/composables/useVibe64Crashes.js`
-- `src/lib/vibe64CrashPresentation.js`
-- `src/components/studio/Vibe64CrashBanner.vue`
-- `src/components/studio/Vibe64CrashesScreen.vue`
-- `src/components/StudioAppShellLayout.vue`
-- `src/pages/app/crashes.vue`
-- `tests/server/crashRecords.unit.test.js`
-- `tests/server/crashRecordsServer.integration.test.js`
-- `tests/e2e/support/start-crash-test-server.mjs`
-- `tests/e2e/crash-banner.spec.ts`
-- `tests/client/crashPresentation.vitest.js`
-- `docs/colleague-usage/crashes.md`
