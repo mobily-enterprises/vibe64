@@ -54,10 +54,11 @@ async function submit() {
   pending.value = true;
   try {
     // One request id per Create: its repeats, while the server answers that it is creating or after a lost answer,
-    // join that creation and never start a second.
+    // join that creation and never start one.
     const request = { title: title.value.trim(), body: body.value, draft: draft.value, destinationReview: destinationReview.value,
       requestId: globalThis.crypto.randomUUID() };
-    const result = await createPullRequestFollowed(() => resource.save(request, { method: "POST" }));
+    const result = await createPullRequestFollowed(repeat => resource.save(repeat ? { ...request, repeat } : request,
+      { method: "POST" }));
     feedback.success("Pull request created. Future commits update its source branch.");
     emit("created", result.pullRequest);
     emit("update:modelValue", false);

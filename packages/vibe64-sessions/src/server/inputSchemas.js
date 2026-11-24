@@ -310,7 +310,9 @@ const sessionPullRequestInputValidator = actionInput(sessionPullRequestFields);
 // The dialog's create names its request, so its repeat after a held or lost answer joins it.
 const sessionPullRequestStartInputValidator = actionInput({
   ...sessionPullRequestFields,
-  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true }
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true },
+  // The dialog's repeat of a create it sent: it never starts one.
+  repeat: { type: "boolean", required: false }
 });
 
 const sessionCreateInputValidator = actionInput({

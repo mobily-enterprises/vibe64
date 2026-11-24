@@ -16,21 +16,23 @@ function delay(ms) {
 }
 
 /**
- * Creates a pull request through the dialog's request, `send`, which names the same request each time: while the
- * server answers that it is creating, or after an answer that never came back, it sends it again, which joins the
- * creation or reads its outcome. A refusal is passed on as it is, and a failure the server did not word, or Vibe64
- * staying unreachable, is said in words.
+ * Creates a pull request through the dialog's request, `send(repeat)`, which names the same request each time: while
+ * the server answers that it is creating, or after an answer that never came back, it sends it again as a repeat,
+ * which joins the creation or reads its outcome and never starts one. A refusal is passed on as it is, and a failure
+ * the server did not word, or Vibe64 staying unreachable, is said in words.
  * @template T
- * @param {() => Promise<T>} send
+ * @param {(repeat: boolean) => Promise<T>} send
  * @param {{ wait?: (ms: number) => Promise<unknown> }} [options]
  * @returns {Promise<T>}
  */
 async function createPullRequestFollowed(send, { wait = delay } = {}) {
   let lost = 0;
+  let repeat = false;
   for (;;) {
     let answer;
     try {
-      answer = await send();
+      answer = await send(repeat);
+      repeat = true;
     } catch (error) {
       if (!workAnswerLost(error)) {
         throw !error?.code && HTTP_CLIENT_FAILURE.test(String(error?.message || "")) ? new Error(PULL_REQUEST_NOT_CREATED) : error;
@@ -38,6 +40,7 @@ async function createPullRequestFollowed(send, { wait = delay } = {}) {
       if (lost >= MAX_LOST_ANSWERS) throw new Error(PULL_REQUEST_LOST_CONTACT);
       await wait(LOST_ANSWER_DELAYS_MS[Math.min(lost, LOST_ANSWER_DELAYS_MS.length - 1)]);
       lost += 1;
+      repeat = true;
       continue;
     }
     if (answer?.creating !== true) return answer;

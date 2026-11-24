@@ -252,19 +252,29 @@ function createSessionWork({
    * The pull request dialog's create: `createSessionPullRequest`, answered with its outcome when that comes within
    * two seconds, and otherwise `{ ok: true, creating: true, requestId, waitingFor }` while it goes on. It saves and
    * pushes the session's work and then asks GitHub, for minutes on a large or slow one, and a hosted workspace's edge
-   * ends a request after about a minute. The dialog repeats it with the same `requestId`, which joins the creation,
-   * or reads its outcome for fifteen minutes after it ended; it waits for the session's repository write
+   * ends a request after about a minute. The dialog repeats it with the same `requestId` (`repeat`), which joins the
+   * creation, or reads its outcome for fifteen minutes after it ended, and never starts one: GitHub mutations are
+   * never retried automatically, so a repeat this editor does not hold (it restarted, or the first request never
+   * arrived) says to check the session's pull request. A creation waits for the session's repository write
    * (`session-write`), then creates (`creating`).
    * @param {string} sessionId
    * @param {object} input
    */
   async function startSessionPullRequest(sessionId, input) {
-    const { requestId, ...create } = input;
+    const { requestId, repeat = false, ...create } = input;
     const key = [currentProjectScopeKey(), normalizeText(sessionId), normalizeText(requestId)].join("\0");
-    const ended = heldPullRequests.inspect(key);
-    if (ended?.settled) {
-      if (ended.error) throw ended.error;
-      return ended.result;
+    const held = heldPullRequests.inspect(key);
+    if (held?.settled) {
+      if (held.error) throw held.error;
+      return held.result;
+    }
+    if (!held && repeat === true) {
+      return {
+        code: "vibe64_session_pull_request_not_followed",
+        error: "Vibe64 restarted or lost this pull request while creating it, so it cannot say whether it was created. " +
+          "Check the session's pull request before creating it again.",
+        ok: false
+      };
     }
     const answer = await heldPullRequests.run(key, ({ stage }) => {
       stage("session-write");

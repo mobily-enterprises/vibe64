@@ -353,7 +353,8 @@ request branch; see [Work in connected repositories](connected-repositories.md).
 A copy behind its main stops it with the same **Update first** refusal.
 The dialog says it is creating while Vibe64 saves the work and asks GitHub, which
 can take minutes for a large change, and follows it to the end; a dropped
-connection meanwhile never creates a second pull request.
+connection never creates a second pull request. If Vibe64 restarted meanwhile,
+the dialog asks you to check the session's pull request before creating again.
 
 Colleague can explain these workflows, open their views, inspect bounded saved-work
 status, request native Save/Update, and use supported issue/PR actions when asked.
