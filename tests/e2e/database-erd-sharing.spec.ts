@@ -657,6 +657,7 @@ for (const view of ["Overview", "ERD"] as const) {
     const actor = [...definition.actors].sort((a, b) => b.tables.length - a.tables.length)[0];
     const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: definition });
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+    let tracing = false;
     try {
       const page = await context.newPage();
       const errors: string[] = [];
@@ -674,31 +675,50 @@ for (const view of ["Overview", "ERD"] as const) {
       await expect(diagram.getByText("Arranging tables…", { exact: true })).toHaveCount(0, { timeout: 60_000 });
       await page.getByRole("button", { name: "Fit", exact: true }).click();
       await waitForDiagramViewport(page);
-      const points = await diagram.locator(".vue-flow__edge-interaction").evaluateAll((paths: SVGPathElement[]) => {
-        const points = [];
-        for (const path of paths) {
-          for (const fraction of [.3, .5, .7]) {
-            const point = path.getPointAtLength(path.getTotalLength() * fraction);
-            const screen = new DOMPoint(point.x, point.y).matrixTransform(path.getScreenCTM()!);
-            if (document.elementFromPoint(screen.x, screen.y)?.closest(".vue-flow__edge") === path.closest(".vue-flow__edge")) {
-              points.push({ x: screen.x, y: screen.y });
-              break;
+      let points: { x: number, y: number }[] = [];
+      if (interaction === "crossing relationships") {
+        // Up to 12 connections are crossed, each where the pointer reaches it rather than a card or another
+        // connection: an actor drawing fewer is crossed at every one, and one drawing none fails.
+        const crossings = await diagram.locator(".vue-flow__edge-interaction").evaluateAll((paths: SVGPathElement[]) => {
+          const points = [];
+          for (const path of paths) {
+            for (const fraction of [.3, .5, .7]) {
+              const point = path.getPointAtLength(path.getTotalLength() * fraction);
+              const screen = new DOMPoint(point.x, point.y).matrixTransform(path.getScreenCTM()!);
+              if (document.elementFromPoint(screen.x, screen.y)?.closest(".vue-flow__edge") === path.closest(".vue-flow__edge")) {
+                points.push({ x: screen.x, y: screen.y });
+                break;
+              }
             }
+            if (points.length === 12) break;
           }
-          if (points.length === 12) break;
-        }
-        return points;
-      });
-      expect(points).toHaveLength(12);
+          return { drawn: paths.length, points };
+        });
+        expect(crossings.drawn, "connections the explored diagram draws").toBeGreaterThan(0);
+        expect(crossings.points).toHaveLength(Math.min(12, crossings.drawn));
+        points = crossings.points;
+      }
       const profiler = await context.newCDPSession(page);
       await profiler.send("Profiler.enable");
       await profiler.send("Profiler.start");
-      const latencies = [];
-      if (interaction === "crossing relationships") for (const point of points) {
-        const start = await page.evaluate(() => performance.now());
-        await page.mouse.move(point.x, point.y);
-        const end = await page.evaluate(() => new Promise<number>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(performance.now())))));
+      // Chrome's trace records every task the page's main thread runs with the CPU time it took. Each input is marked
+      // from just before it until two frames after it, when it has been drawn.
+      await browser.startTracing(page, { categories: ["-*", "toplevel", "blink.user_timing"] });
+      tracing = true;
+      const inputs: number[] = [];
+      const latencies: number[] = [];
+      const measure = async (input: () => Promise<void>) => {
+        const start = await page.evaluate(() => { performance.mark("erd-input"); return performance.now(); });
+        await input();
+        const end = await page.evaluate(() => new Promise<number>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+          performance.mark("erd-input-drawn");
+          resolve(performance.now());
+        }))));
+        inputs.push(start);
         latencies.push(end - start);
+      };
+      if (interaction === "crossing relationships") for (const point of points) {
+        await measure(() => page.mouse.move(point.x, point.y));
         await expect(diagram.locator(".vue-flow__edge-text")).not.toHaveCount(0);
       }
       if (interaction === "zooming") {
@@ -711,10 +731,7 @@ for (const view of ["Overview", "ERD"] as const) {
         // Real wheel input must change the diagram, not scroll the page. Sample
         // both directions and include paint time, not just event dispatch.
         for (const delta of [...Array(18).fill(-70), ...Array(18).fill(70)]) {
-          const start = await page.evaluate(() => performance.now());
-          await page.mouse.wheel(0, delta);
-          const end = await page.evaluate(() => new Promise<number>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(performance.now())))));
-          latencies.push(end - start);
+          await measure(() => page.mouse.wheel(0, delta));
           const current = await camera.getAttribute("style");
           expect(current).not.toBe(previous);
           previous = current;
@@ -724,23 +741,37 @@ for (const view of ["Overview", "ERD"] as const) {
         if (view === "ERD") {
           const finalZoom = Number(previous!.match(/scale\(([^)]+)\)/)![1]);
           await expect.poll(() => (server.saves.at(-1)?.layout as { viewport: { zoom: number } } | undefined)?.viewport.zoom).toBeCloseTo(finalZoom, 5);
-          // The final camera is saved, without a write/reload for every tick.
-          expect(server.saves.length - savesBeforeZoom).toBeLessThanOrEqual(2);
+          // The final camera is saved, without a write/reload for every tick. The camera saves once it has settled
+          // for 600 ms after a gesture ends, so a host slow enough to pause that long between two ticks saves there.
+          const pauses = inputs.slice(1).filter((input, index) => input - inputs[index] > 600).length;
+          expect(server.saves.length - savesBeforeZoom).toBeLessThanOrEqual(2 + pauses);
         } else expect(server.saves).toHaveLength(0);
       }
+      const trace = JSON.parse(String(await browser.stopTracing()));
+      tracing = false;
       const { profile } = await profiler.send("Profiler.stop");
       await writeFile(testInfo.outputPath(`${interaction}.cpuprofile`), JSON.stringify(profile));
       await profiler.detach();
+      const longestTasks = longestMainThreadTasks(trace.traceEvents, "erd-input", "erd-input-drawn");
       const timingPath = testInfo.outputPath(`${interaction}-frame-latencies.json`);
-      await writeFile(timingPath, JSON.stringify({ view, interaction, tables: schema.tables.length, latencies }));
+      await writeFile(timingPath, JSON.stringify({ view, interaction, tables: schema.tables.length, latencies, longestTasks }));
       await testInfo.attach(`${interaction}-frame-latencies`, { path: timingPath, contentType: "application/json" });
-      // Broad enough for local scheduling noise; rejects repeated half-second
-      // main-thread freezes when a hover rebuilds the entire graph.
-      const median = [...latencies].sort((a, b) => a - b)[Math.floor(latencies.length / 2)];
-      expect(median).toBeLessThan(250);
-      expect(Math.max(...latencies)).toBeLessThan(750);
+      // A freeze is read in CPU time, not by the clock: for each input, the longest task the main thread ran from just
+      // before it until it was drawn. The wall-clock latencies, kept above, also count Playwright's round trips and
+      // trace snapshots, the frames and the host's load: on an idle desktop most of their 150-210 ms median is
+      // Playwright's. On mobilynet's schema (135 tables, 64 in its largest actor) an input's longest task took a median
+      // of 27-45 ms of CPU and at most 114 ms, alone or sharing 2 CPUs with four busy loops; a hover that replaces every
+      // table and connection, as before 9957a962d, took a median of 248-361 ms, and a zoom gesture that does, 94-156 ms.
+      expect(longestTasks).toHaveLength(latencies.length);
+      const median = [...longestTasks].sort((a, b) => a - b)[Math.floor(longestTasks.length / 2)];
+      expect(median).toBeLessThan(80);
+      expect(Math.max(...longestTasks)).toBeLessThan(250);
       expect(errors).toEqual([]);
-    } finally { await context.close(); await server.close(); }
+    } finally {
+      if (tracing) await browser.stopTracing();
+      await context.close();
+      await server.close();
+    }
   });
 }
 
