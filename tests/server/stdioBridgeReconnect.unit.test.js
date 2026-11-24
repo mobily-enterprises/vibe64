@@ -127,6 +127,8 @@ test("a drop with a handover is picked up again from its offset: nothing lost, n
   assert.equal(again.answer, "vibe64-stdio-resumed", f.stderr());
   const after = Buffer.concat([again.rest, await readAll(again.socket)]);
   assert.equal(Buffer.concat([before, after]).toString(), sequence(3000), "every line once, in order");
+  // The bridge, as before, keeps its client until the client ends its side too.
+  again.socket.end();
   const exit = await f.exited;
   assert.deepEqual([exit.code, exit.signal], [0, null], f.stderr());
   assert.equal(existsSync(path.join(f.root, "handover")), false, "a handover is used once");
@@ -224,6 +226,7 @@ test("the editor's side hands a bridge over and picks it up again from its offse
   const socket = await resumeStdioBridge(f.socketPath, before.length);
   const after = await readAll(socket);
   assert.equal(Buffer.concat([before, after]).toString(), sequence(3000), "every line once, in order");
+  socket.end();
   assert.deepEqual([(await f.exited).code, (await f.exited).signal], [0, null], f.stderr());
 });
 
