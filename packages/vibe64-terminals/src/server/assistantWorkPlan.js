@@ -234,8 +234,11 @@ async function readPair(context, id = "") {
       ? documentPath(context, "progress", record.progressRevision)
       : "";
   if (broken) {
-    throw planError(`The plan document ${broken} is missing or changed. Restore the saved pair before continuing.`,
-      "vibe64_work_plan_pair_missing", { path: broken, problem: "it is missing or no longer matches its saved plan" });
+    throw planError(
+      `The plan document ${broken} is missing or changed. Restore the saved pair before continuing.`,
+      "vibe64_work_plan_pair_missing",
+      { path: broken, problem: "it is missing or no longer matches its saved plan" }
+    );
   }
   return {
     ...plan,
