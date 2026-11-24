@@ -171,6 +171,10 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
       calls.push(["close"]);
       captures.closes += 1;
     },
+    // JSKIT's notification queue hands a failed notification to the provider, as the real one takes it.
+    failObservation(error) {
+      calls.push(["failObservation", error?.message || String(error)]);
+    },
     currentConnectionGeneration() {
       return captures.connectionGeneration;
     },
