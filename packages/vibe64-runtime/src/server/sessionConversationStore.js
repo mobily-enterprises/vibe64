@@ -368,8 +368,9 @@ function createSessionConversationStore({
 
   /**
    * The session lease owns cross-process exclusion; JSKIT owns the transaction.
-   * One appended line commits messages, native receipts and runtime metadata
-   * together.
+   * One appended line (or, when the lines after the snapshot outgrow their
+   * share, the chat saved whole) commits messages, native receipts and runtime
+   * metadata together.
    */
   function conversationRecordTransaction(sessionPaths, callback, write = false, newTurnMetadata = null) {
     let loaded;

@@ -2111,11 +2111,11 @@ evidence: `sessionTempFolderUpgrade.unit.test.js` and
 ## Appended chat transcripts (`20261124-chat-transcript-log`)
 
 A chat's transcript was one record, `conversation-log/transcript.json`, which
-every message replaced whole: 4 ms at 50 turns, 49-64 ms and the whole file
-(12 MB) written again at 5,000 turns, and a crash during that write was a
-crash during the chat's only copy. It is now `conversation-log/transcript.jsonl`,
-which each saved change appends to as one line, so a message costs the same at
-5,000 turns as at 50. Runtime's `sessionTranscriptLog.js` owns the format:
+every message replaced whole: 4 ms and 131 KB written at 50 turns, 49-85 ms
+and the whole 11.8 MB file written again at 5,000 turns, and a crash during
+that write was a crash during the chat's only copy. It is now
+`conversation-log/transcript.jsonl`, which each saved change appends to as one
+line, so a message writes the same 1.6 KB at 5,000 turns as at 50. Runtime's `sessionTranscriptLog.js` owns the format:
 
 - The first line is the chat whole, a snapshot:
   `{"version":2,"metadata":{...},"rewound":[...],"turns":[[turnId,{messages,metadata}],...],"summary":{...}}`,
@@ -2129,8 +2129,12 @@ which each saved change appends to as one line, so a message costs the same at
   `[path, value]` (set) or `[path]` (remove), the empty path being the whole
   object, so a status change, a red interruption entry, a native receipt or
   the runtime's `seen` map costs its own bytes.
-- A change no line can say (a turn removed or moved, rewind markers changed)
-  is written as a new snapshot line, which replaces everything before it.
+- A change no line can say (a turn removed or moved, rewind markers changed),
+  and the change that would take the lines after the snapshot past a
+  thirty-second of it (64 KiB at least), saves the chat whole instead: one
+  snapshot line, published in one atomic step. A load parses the record and at
+  most that share more, and over many messages each one writes a bounded
+  multiple of its own line, at 5,000 turns as at 50.
 
 A crash can leave only the line being appended unfinished. Reading ignores the
 bytes after the last newline, and a last line that is not JSON (blocks that
@@ -2160,7 +2164,8 @@ changes nothing. Nothing reads or converts an old record at run time: opening
 or writing an unconverted chat refuses with
 `vibe64_conversation_upgrade_required`. Run it as the OS user that owns the
 session state, with Vibe64 and every session process stopped. Converting a
-5,040-turn chat takes MEASURED_CONVERSION. Focused evidence:
+5,040-turn (10 MB) chat took about 2 s to apply and under 1 s to check on a
+busy test host. Focused evidence:
 `chatTranscriptLog.unit.test.js` and `stateUpgrades.unit.test.js`.
 
 ## Auto plan handoff (no upgrade)

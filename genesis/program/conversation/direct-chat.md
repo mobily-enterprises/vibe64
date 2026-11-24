@@ -1111,10 +1111,15 @@ nine-method transaction behavior; Vibe64 holds the existing session mutation
 lease and appends what each committed transaction changed as one synced line, so
 a message costs the same however long the chat is. The first line is the whole
 record (a snapshot); each later line names the turns that changed, the messages
-each keeps and gains, and patches to turn and chat metadata and the summary, and
-a change no line can say (a turn removed or moved) is a new snapshot line.
-Messages, runtime metadata, tool receipts and per-turn attribution commit
-together in one line, or a failed transaction leaves the previous record: a
+each keeps and gains, and patches to turn and chat metadata and the summary. A
+change no line can say (a turn removed or moved, rewind markers changed), and
+the change that would take the lines after the snapshot past a thirty-second of
+it (64 KiB at least), saves the chat whole instead: one snapshot line published
+in one atomic step. A load therefore parses the record and at most that share
+more, and over many messages each one writes a bounded multiple of its own line
+at any chat length. Messages, runtime metadata, tool receipts and per-turn
+attribution commit together in one save, or a failed transaction leaves the
+previous record: a
 failed append is cut off, and an append a crash left unfinished (bytes after
 the last newline, or a last line that is not JSON) is ignored by reads and cut
 off by the next save. Any earlier unreadable line refuses the chat. The
