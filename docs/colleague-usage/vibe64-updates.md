@@ -45,3 +45,29 @@ restarted does not show the banner.
 Colleague can explain the banner and what reloading keeps or loses. It cannot
 see whether a tab shows the banner and cannot reload your tab: choosing
 **Reload** requires your interaction.
+
+## While Vibe64 restarts
+
+Vibe64 is unreachable for a few seconds while it restarts for an update. An
+open tab carries on by itself, and you don't need to do anything:
+
+- After a moment without an answer, a banner at the top of the page says
+  **Updating…**. It goes away by itself when Vibe64 answers again, usually
+  within half a minute. Closing it only hides it.
+- What the page was loading finishes once Vibe64 is back. Live updates (chat,
+  status, lists) catch up by themselves.
+- Something you do while the banner shows (sending, saving, starting) waits
+  and is done once Vibe64 is back, exactly once.
+- If Vibe64 stays unreachable for about a minute, the page says so in words:
+  **Vibe64 can't reach the editor. It may be updating; try again in a
+  moment.** Something you did then says **Vibe64 couldn't reach the editor, so
+  this wasn't done. Try again in a moment.**
+- If the restart cut off something already under way, Vibe64 may not know
+  whether it finished. It never repeats it on its own, and says **Vibe64 lost
+  contact with the editor while doing this, so it can't tell whether it was
+  done. Check, then try again if it wasn't.** Look at the result first, for
+  example the file, the list or the chat, before you try again.
+- The banner and messages are the same on desktop and phone.
+
+Colleague can explain the banner and these messages. It cannot see whether a
+tab shows them, and waiting for Vibe64 to come back needs nothing from you.
