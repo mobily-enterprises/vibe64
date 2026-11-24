@@ -7,55 +7,40 @@
     </details>
     <div v-else-if="!followupNeedsAction" class="text-body-small">{{ label }}</div>
     <p v-if="actionError" class="text-body-small mb-1" role="alert">{{ actionError }}</p>
-    <div v-if="followupNeedsAction" class="vibe64-routing-notice__actions d-flex flex-wrap ga-1">
-      <v-btn v-if="canImplement" :variant="pendingAction === 'implement' ? 'text' : 'flat'" color="primary" size="small" density="compact" :disabled="Boolean(pendingAction) || busy" :aria-busy="pendingAction === 'implement'" @click="$emit('implement')">
-        <span :class="{ 'action-label-pending': pendingAction === 'implement' }">Implement plan</span>
-        <span v-if="pendingAction === 'implement'" class="position-absolute">Starting…</span>
+    <div v-if="action" class="vibe64-routing-notice__actions d-flex flex-wrap align-center ga-1">
+      <v-btn :variant="action.kind === 'implement' && !action.progress ? 'flat' : 'text'" :color="action.kind === 'implement' ? 'primary' : undefined" size="small" density="compact" :disabled="!action.enabled" :aria-busy="Boolean(action.progress)" :aria-describedby="action.waits ? waitsId : undefined" @click="$emit(action.kind === 'implement' ? 'implement' : 'retry')">
+        <span :class="{ 'action-label-pending': action.progress }">{{ action.label }}</span>
+        <span v-if="action.progress" class="position-absolute">{{ action.progress }}</span>
       </v-btn>
-      <v-btn v-if="canImplement && !pendingAction" variant="text" size="small" density="compact" @click="$emit('view-plan')">View plan</v-btn>
-      <v-btn v-if="!canImplement" variant="text" size="small" density="compact" :disabled="Boolean(pendingAction) || busy && request.delivery !== 'uncertain'" :aria-busy="pendingAction === 'continue'" @click="$emit('retry')">
-        <span :class="{ 'action-label-pending': pendingAction === 'continue' }">{{ retryLabel }}</span>
-        <span v-if="pendingAction === 'continue'" class="position-absolute">{{ request.delivery === 'uncertain' ? 'Checking…' : 'Continuing…' }}</span>
-      </v-btn>
-      <v-btn v-if="request.delivery === 'pending' && !pendingAction" variant="text" size="small" density="compact" @click="$emit('skip')">
+      <v-btn v-if="action.kind === 'implement' && !pendingAction" variant="text" size="small" density="compact" @click="$emit('view-plan')">View plan</v-btn>
+      <v-btn v-if="notice.stop && !pendingAction" variant="text" size="small" density="compact" @click="$emit('skip')">
         Stop
       </v-btn>
+      <!-- A held action says why it can't be pressed, in the words the plan's status line uses. -->
+      <span v-if="action.waits" :id="waitsId" class="text-body-small vibe64-routing-notice__waits">{{ action.waits.charAt(0).toUpperCase() + action.waits.slice(1) }}.</span>
     </div>
   </v-alert>
 </template>
 
 <script setup>
-import { computed, watch } from "vue";
+import { computed, useId, watch } from "vue";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
-import { assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRouting";
 
-const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, pendingAction: { type: String, default: "" }, actionError: { type: String, default: "" }, busy: Boolean });
+const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, pendingAction: { type: String, default: "" }, actionError: { type: String, default: "" },
+  // What holds the chat: "turn" (the assistant's turn), "message" (the person's message being sent) or "voice".
+  busy: { type: String, default: "" } });
 defineEmits(["retry", "skip", "implement", "view-plan"]);
 const feedback = useShellWebErrorRuntime();
-const previousAttempt = computed(() => props.request?.stopped && props.request?.delivery === "uncertain" &&
-  assistantRoutingRequestCanBeReplaced(props.request, props.selection));
-const label = computed(() => previousAttempt.value ? "Previous assistant delivery unconfirmed" : assistantRoutingStatusLabel(props.request));
-const followupNeedsAction = computed(() => {
-  const request = props.request;
-  // While Auto waits for the person's answer only their reply (or Implement plan) moves on.
-  if (request?.awaitingAnswer) return canImplement.value;
-  const resumable = request?.followup || request?.delivery === "accepted" && (request?.workflow || request?.stage === "planning");
-  return Boolean(request?.status === "waiting" && resumable ||
-    request?.delivery === "uncertain" && (request?.followup || previousAttempt.value));
-});
-const canImplement = computed(() => props.mode === "auto" && props.request?.stage === "planning" &&
-  props.request.status === "waiting" && ["pending", "accepted"].includes(props.request.delivery) &&
-  !props.request.helper && props.request.workPlan?.status === "active" && Boolean(props.request.workPlan.revision));
-const retryLabel = computed(() => props.request?.delivery === "uncertain" ? "Check delivery" : ({
-  planning: "Continue planning", implementation: "Continue implementation", review: "Continue review", pass: "Continue the passes"
-}[props.request?.stage] || "Continue request"));
-const actionable = computed(() => {
-  const request = props.request;
-  if (!request || request.stopped && !request.followup && !request.attemptedMessageId && !request.helper && !followupNeedsAction.value) return false;
-  // Original unsent-message delivery controls remain on their message bubble.
-  if (!request.followup && !request.helper && !previousAttempt.value && ["failed", "uncertain"].includes(request.delivery)) return false;
-  return Boolean(label.value && (request.error || followupNeedsAction.value));
-});
+const waitsId = `vibe64-routing-notice-waits-${useId()}`;
+const notice = computed(() => assistantRoutingNotice(props.request, {
+  mode: props.mode, selection: props.selection, busy: props.busy, pendingAction: props.pendingAction
+}));
+const previousAttempt = computed(() => notice.value.previousAttempt);
+const label = computed(() => notice.value.label);
+const followupNeedsAction = computed(() => notice.value.needsAction);
+const actionable = computed(() => notice.value.shown);
+const action = computed(() => notice.value.action);
 watch(() => [props.request?.messageId, props.request?.status], ([id, status], [previousId, previousStatus]) => {
   if (!props.active || !id || id !== previousId || status !== "waiting" || previousStatus === "waiting" || !props.request.stopped) return;
   feedback.report({ source: "vibe64.chat.review", message: label.value, intent: "action-feedback",
@@ -91,6 +76,10 @@ details[open] {
 
 .vibe64-routing-notice__actions :deep(.v-btn) {
   padding-inline: 8px;
+}
+
+.vibe64-routing-notice__waits {
+  padding-inline: 4px;
 }
 
 summary {

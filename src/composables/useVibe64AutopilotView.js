@@ -322,6 +322,21 @@ function useVibe64AutopilotView(props, emit, {
       (answerChoices.value.length && selectedAnswerChoice.value) || composerDraft.value.trim()
     );
   });
+  // A draft the send arrow can't take says why beside the composer, not only in the arrow's title. A disabled
+  // composer, a message being sent, and connection, recovery and routing states have their own visible labels.
+  const composerHeldReason = computed(() => {
+    if (approvalMode.value || composerCanSubmit.value || !composerDraft.value.trim() || composerDisabled.value ||
+        !props.conversationRuntime?.canSubmit.value || composerSending.value && !composerQueueing.value) return "";
+    if (interrupting.value) return "Send is available once Stop is confirmed.";
+    if (repositoryOperationActive.value) return "Send is available once Save or Update finishes.";
+    if (!agentActive.value || composerConnectionStatus.value !== "connected" || agentObservationLost.value) return "";
+    if (!agentNativeTurnReady.value && !composerStartupQueueing.value) {
+      return ["", "starting"].includes(normalizeText(activeAgentTurn.value.state)) || !normalizeText(activeAgentTurn.value.id)
+        ? "Send is available once the assistant's turn has started." : "Send is available when this answer ends.";
+    }
+    if (!agentSteerable.value && composerAttachments.value.length) return "A message with files can be sent when this answer ends.";
+    return "";
+  });
   const agentStopVisible = computed(() => agentActive.value || routingBusy.value);
   const agentStopEnabled = computed(() => Boolean(
     agentStopVisible.value &&
@@ -434,6 +449,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   const chatPane = useVibe64AutopilotChatPane(props, {
+    agentWorking,
     composerSending,
     messageDelivery,
     preferredName,
@@ -648,6 +664,7 @@ function useVibe64AutopilotView(props, emit, {
     agentStopEnabled,
     agentStopVisible,
     answerChoices,
+    composerHeldReason,
     prefillComposer,
     askAssistantAboutFile,
     attachPreviewDiagnostics,

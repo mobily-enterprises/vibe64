@@ -563,6 +563,37 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value).toEqual([]);
   });
 
+  it("while a paused plan's assistant answers, Send steers that answer and its bubble says what it waits for", async () => {
+    // Seen on 25 Nov 2026: a Senior chat's plan paused, the assistant working, and the person's message only "Pending".
+    const delivery = deferredResult();
+    const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn(() => delivery.promise) });
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "plan-request", status: "waiting",
+      stage: "implementation", workflow: true, delivery: "pending", mode: "senior", resolvedMode: "senior",
+      followup: { messageId: "followup-1" }, input: { message: "Implement the plan." }, assignments: {} });
+    props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
+    view.composerDraft.value = "Also say which tests cover it.";
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(view.composerSubmitMode.value).toBe("steer");
+    expect(view.composerHeldReason.value).toBe("");
+    const sending = view.submitComposerMessage();
+    await vi.waitFor(() => expect(props.sendAgentMessage).toHaveBeenCalledOnce());
+    expect(props.sendAgentMessage.mock.calls[0][0].submissionKind).toBe("steer");
+    // Until the assistant takes it, the bubble says it is on its way into the running answer.
+    expect(view.chatTurns.value).toHaveLength(1);
+    expect(view.chatTurns.value[0].optimistic).toMatchObject({ status: "pending", waiting: "Sending to the assistant's current turn" });
+    delivery.resolve(true);
+    await sending;
+    expect(view.chatTurns.value.some((turn) => turn.optimistic?.status === "pending")).toBe(false);
+    // A turn that has not started yet holds Send, and says why beside the composer, not only in the arrow's title.
+    props.session.agentSession.turn = { active: true, id: "turn-2", state: "starting" };
+    view.composerDraft.value = "One more thing.";
+    expect(view.composerCanSubmit.value).toBe(false);
+    expect(view.composerHeldReason.value).toBe("Send is available once the assistant's turn has started.");
+    props.session.agentSession.turn = { active: true, id: "turn-2", state: "active" };
+    expect(view.composerHeldReason.value).toBe("");
+  });
+
   it("treats required preparation neutrally but exposes actual setup and start failures", async () => {
     const { view, props } = await createViewWithProps({ session: { ...viewProps().session,
       workspaceSetup: { status: "required", diagnostic: "Install updated dependencies.", transcript: "Previous setup output." }
@@ -853,16 +884,20 @@ describe("useVibe64AutopilotView direct chat", () => {
     view.composerAttachments.value = [{ attachmentId: "image-1", name: "layout.png" }];
     expect(view.composerCanSubmit.value).toBe(false);
     expect(view.composerAttachmentsEnabled.value).toBe(false);
+    // The held arrow says why beside the composer.
+    expect(view.composerHeldReason.value).toBe("A message with files can be sent when this answer ends.");
     expect(await view.submitComposerMessage()).toBe(false);
     view.composerAttachments.value = [];
-    for (const turn of [
-      { active: true, id: "opencode-turn", state: "active", status: "observation_lost" },
-      { active: true, state: "starting" },
-      { active: true, id: "opencode-turn", state: "finalizing" }
+    for (const [turn, reason] of [
+      // A lost observation has its own notice.
+      [{ active: true, id: "opencode-turn", state: "active", status: "observation_lost" }, ""],
+      [{ active: true, state: "starting" }, "Send is available once the assistant's turn has started."],
+      [{ active: true, id: "opencode-turn", state: "finalizing" }, "Send is available when this answer ends."]
     ]) {
       props.session.agentSession.turn = turn;
       expect(view.composerCanSubmit.value).toBe(false);
       expect(view.composerSubmitMode.value).toBe("waiting");
+      expect(view.composerHeldReason.value).toBe(reason);
     }
     props.session.agentSession.turn = { active: true, id: "opencode-turn", state: "active" };
     props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "route-1", status: "working", delivery: "routing" });

@@ -168,31 +168,42 @@ function workPlanFreshness(current, now = Date.now()) {
 /**
  * The chat's one line saying where an open plan is: its step, unless the chat's
  * request is waiting: for the person's answer (or questions the chat shows), for
- * Implement plan before a planned plan starts, or paused for Continue. A plan
- * behind its work says so: how many files changed since its last update.
+ * Implement plan before a planned plan starts, or paused. A waiting plan names
+ * the workflow action the chat offers (`action`, the notice's own) by its exact
+ * label: what to press when it can be pressed, when it becomes available while
+ * other work holds it, or that it is starting; with no action, a message moves
+ * it on. A plan behind its work says so: how many files changed since its last
+ * update.
  * @param {ReturnType<typeof workPlanStep>} step
  * @param {{ questions?: number, request?: { status?: string, stage?: string | null, awaitingAnswer?: boolean,
- *   resumeImplementation?: boolean } | null, freshness?: ReturnType<typeof workPlanFreshness> }} [state]
- *   questions: the questions the chat offers answers for; freshness: the plan's
+ *   resumeImplementation?: boolean } | null, freshness?: ReturnType<typeof workPlanFreshness>,
+ *   action?: { kind: string, label: string, enabled: boolean, waits: string, progress: string } | null }} [state]
+ *   questions: the questions the chat offers answers for; freshness: the plan's; action: the workflow action the
+ *   chat's notice offers for the request (assistantRoutingNotice's), null when it offers none
  */
-function workPlanStatusLine(step, { questions = 0, request = null, freshness = null } = {}) {
-  const line = workPlanStepLine(step, { questions, request });
+function workPlanStatusLine(step, { questions = 0, request = null, freshness = null, action = null } = {}) {
+  const line = workPlanStepLine(step, { questions, request, action });
   if (!line || step.step === "completed" || !freshness?.behind) return line;
   // No minutes here: the line is a live status, read out again whenever it changes.
   return `${line} · ${freshness.changed.replace(/ since$/u, " since the plan's last update")}`;
 }
 
-function workPlanStepLine(step, { questions, request }) {
+function workPlanStepLine(step, { questions, request, action }) {
   if (!step) return "";
   if (step.step === "completed") return "Plan: completed";
   const waiting = request?.status === "waiting";
   if (waiting && request.awaitingAnswer || questions > 0) {
     return `Plan: needs you${questions > 0 ? ` (${questions} ${questions === 1 ? "question" : "questions"})` : ""}`;
   }
-  if (waiting && request.stage === "planning" && !request.resumeImplementation && step.step === "implementation") {
-    return "Plan: ready, Implement plan to start";
+  if (waiting) {
+    const ready = request.stage === "planning" && !request.resumeImplementation && step.step === "implementation" &&
+      action?.kind === "implement";
+    const head = ready ? "Plan: ready" : "Plan: paused";
+    if (!action) return `${head}, send a message to go on`;
+    if (action.enabled) return `${head}, ${action.label} to ${ready ? "start" : "resume"}`;
+    if (action.progress) return `${head} · ${action.progress}`;
+    return `${head} · ${action.label} is ${action.waits}`;
   }
-  if (waiting) return "Plan: paused, Continue to resume";
   // Senior's review runs in Auto and a Senior chat; anywhere else nothing runs it until the person asks Senior.
   if (step.step === "review") return request?.status === "working" ? "Plan: Senior review" : "Plan: ready for Senior review, ask Senior to start it";
   if (step.step === "pass") return `Plan: pass ${step.title.replace(/ pass$/u, "")} (${step.item} of ${step.items})`;

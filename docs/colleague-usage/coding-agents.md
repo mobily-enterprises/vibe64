@@ -145,7 +145,8 @@ When an assistant cannot start, stops by itself or reports a failure, see [When 
    Steering never stops running work: Claude moves a running command (such as
    a deploy) to the background, where it keeps running and reports when it
    finishes, and reads the instruction within moments; Codex adds it to the
-   active turn. Use **Stop** when you want to cancel. When the assistant reads your
+   active turn. If the send arrow can't take a message yet, a line above the
+   box says why. Use **Stop** when you want to cancel. When the assistant reads your
    message it first answers it in a short reply (a direct question gets a direct
    answer), then continues. Its progress lines show its thinking; they are not
    that reply. Each progress update is one short summary. Claude sends several

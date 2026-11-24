@@ -160,3 +160,50 @@ it("collapses saved and projected workflow explanations without changing history
   const html = await renderToString(createSSRApp(ConversationStatus, { message: { messageId: "recovery-error", blocks: [{ type: "paragraph", text: "Recovery failed." }] } }));
   expect(html).toContain("Recovery failed."); expect(html).not.toContain("<details");
 });
+
+describe("Pending while the assistant works", () => {
+  it("drops Pending once the server sent the message's prompt to its running turn", async () => {
+    const delivery = createAssistantMessageDelivery();
+    const sending = delivery.send({ message: "Hello" }, { messageId: request.messageId, deliver: () => new Promise(() => {}) });
+    expect(delivery.find(request.messageId).status).toBe("pending");
+    // The server saved the attempt just before writing the prompt, and the assistant's turn for it is running.
+    const started = { ...request, attemptedMessageId: request.messageId };
+    const [turn] = chatTurnsWithRouting(delivery.turns([]), started, false, { working: true });
+    expect(turn.optimistic).toMatchObject({ id: request.messageId, status: "accepted", error: "" });
+    expect(turn.optimistic.waiting).toBeUndefined();
+    expect(turn.system).toBeUndefined();
+    // Shown from its route alone (after a reload, say), it is the same.
+    expect(chatTurnsWithRouting([], started, false, { working: true })[0].optimistic.status).toBe("accepted");
+    // Before its prompt is sent, or with no turn running, it is still on its way.
+    expect(chatTurnsWithRouting(delivery.turns([]), request, false, { working: true })[0].optimistic.status).toBe("pending");
+    expect(chatTurnsWithRouting(delivery.turns([]), started)[0].optimistic.status).toBe("pending");
+    // A receipt that never comes makes it unconfirmed.
+    expect(chatTurnsWithRouting([], { ...started, status: "waiting", delivery: "uncertain" }, false,
+      { working: true })[0].optimistic.status).toBe("uncertain");
+    void sending;
+  });
+
+  it("says what a message the assistant has not taken waits for", async () => {
+    const delivery = createAssistantMessageDelivery();
+    const never = () => new Promise(() => {});
+    void delivery.send({ message: "Also check the tests." }, { messageId: "steer", deliver: never });
+    void delivery.send({ message: "Next question." }, { messageId: "send", deliver: never, queue: true });
+    void delivery.send({ message: "Held by the server." }, { messageId: "held", deliver: never, queue: true });
+    void delivery.send({ message: "Deferred by the page." }, { messageId: "deferred", deliver: never, queue: true });
+    delivery.wait("held", "Waiting for the assistant to start");
+    delivery.wait("deferred", "Waiting for the assistant to finish this step");
+    const activity = { working: true, steering: (id) => id === "steer" };
+    const waiting = Object.fromEntries(chatTurnsWithRouting(delivery.turns([]), null, false, activity)
+      .map((turn) => [turn.optimistic.id, turn.optimistic.waiting]));
+    expect(waiting).toEqual({
+      steer: "Sending to the assistant's current turn",
+      send: "Waiting for the assistant's current turn to end",
+      held: "Waiting for the assistant's current turn to end",
+      deferred: "Waiting for the assistant to finish this step"
+    });
+    // With no turn running, Pending keeps the reasons it had.
+    const idle = chatTurnsWithRouting(delivery.turns([]), null, false, { working: false });
+    expect(idle.map((turn) => turn.optimistic.waiting)).toEqual([undefined, undefined, "Waiting for the assistant to start",
+      "Waiting for the assistant to finish this step"]);
+  });
+});

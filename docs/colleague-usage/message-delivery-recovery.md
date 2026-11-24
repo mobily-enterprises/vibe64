@@ -52,6 +52,13 @@ same session starts its assistant (a slow Claude start can take 15–20 seconds)
 It shows **Pending** meanwhile and is refused only if that start takes longer
 than a minute.
 
+While the assistant works on an answer, a message it has not taken yet says
+what it waits for: **Pending: Sending to the assistant's current turn** for
+guidance sent into that answer, or **Pending: Waiting for the assistant's
+current turn to end** for a new request, which is sent when the answer ends.
+Once the assistant has started the turn for your message, the bubble is no
+longer Pending, even before its delivery is recorded.
+
 A Main chat message that is still **Pending** when you switch to another
 session is not marked failed and does not wait for you to return. It is sent,
 once and with the same identity, as soon as the assistant can take it, even
