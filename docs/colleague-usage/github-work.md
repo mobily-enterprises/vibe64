@@ -8,8 +8,8 @@ uses, marked **(not main)** when that is not the project's main branch (see
 [Create and switch sessions](sessions.md#switch-between-open-sessions)).
 
 Open **Changes** in Dashboard to inspect the work. Use the session's **Save**
-control for its native review and save workflow. A dimmed **Save** cannot act
-right now: tap or click it to see why beside it. When the selected session has
+control to review and save; a dimmed **Save** says why when you tap or click it.
+When the selected session has
 unsaved changes, the **Save** button is red, matching the red save icon on that
 session's tab. A green tick on the tab means **All work is saved**. While that
 session's assistant is working (its dot pulses), the tick is grey and reads
