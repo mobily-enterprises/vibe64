@@ -172,7 +172,9 @@ test("a chat whose changes outgrow a thirty-second of its snapshot (64 KiB at le
   t.after(() => rm(root, { recursive: true, force: true }));
   const lineCount = async file => (await readFile(file, "utf8")).split("\n").length - 1;
   const sizes = [];
-  for (const [turns, messages] of [[50, 120], [1500, 160]]) {
+  // 3 KB messages: two whole saves at 50 turns (each past 64 KiB of lines), one at 1,500 (past a 32nd of 2.9 MB).
+  const messages = 45;
+  for (const turns of [50, 1500]) {
     const file = path.join(root, `${turns}.jsonl`);
     let saved = await writeTranscriptLog(file, null, parseLegacyTranscript(JSON.stringify(legacyDocument(turns))));
     let written = 0;
@@ -182,7 +184,7 @@ test("a chat whose changes outgrow a thirty-second of its snapshot (64 KiB at le
       const before = await stat(file, { bigint: true });
       const id = String(turns + 2 + index).padStart(6, "0");
       const next = { ...saved.record, turns: new Map(saved.record.turns).set(id, {
-        messages: [{ role: "user", text: text(index, 1500), at: at(turns + 2 + index), messageId: `extra-${index}` }] }) };
+        messages: [{ role: "user", text: text(index, 3000), at: at(turns + 2 + index), messageId: `extra-${index}` }] }) };
       saved = await writeTranscriptLog(file, saved, next);
       const after = await stat(file, { bigint: true });
       if (after.ino === before.ino) {
