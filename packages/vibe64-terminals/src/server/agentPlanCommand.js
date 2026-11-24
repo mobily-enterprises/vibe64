@@ -9,7 +9,7 @@ import http from "node:http";
 const [operation, ...extra] = process.argv.slice(2);
 if (!operation || ["--help", "-h"].includes(operation)) {
   console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|checked|complete|archive|reopen|outcome|handoff>\\n'
-    + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven).\\n'
+    + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven). progress-write requires text too: the whole new Progress. A field an operation does not read is refused, never ignored.\\n'
     + 'For read pagination or archive selection, use read --input with JSON on stdin. Bare read/history never wait for stdin.\\n'
     + 'Mutations require expectedRevision and expectedProgressRevision from the current paired read, unless no current plan exists.\\n'
     + 'Read returns BOTH text (Plan) and progressText (Progress). Read every page using offset/limit/expectedRevision/expectedProgressRevision; follow nextOffset while hasMore before working or reviewing.\\n'

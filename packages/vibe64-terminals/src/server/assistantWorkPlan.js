@@ -431,6 +431,43 @@ function readWorkPlanPage(context, options) {
 // The AI's changes that bring the plan up to date, which record the source as it is then (the plan's mark).
 const MARKING_OPERATIONS = Object.freeze(["new", "write", "progress-write", "reopen", "checked"]);
 
+// The fields each operation reads. Any other is refused, never ignored: a text sent under a name the operation does not
+// read would otherwise be accepted and keep nothing.
+const PAIRED = ["expectedRevision", "expectedProgressRevision"];
+const OPERATION_FIELDS = Object.freeze({
+  read: ["offset", "limit", ...PAIRED, "archiveId"],
+  history: [],
+  new: ["text", ...PAIRED, "archiveCurrent"],
+  write: ["text", ...PAIRED],
+  "progress-write": ["text", ...PAIRED],
+  checked: PAIRED,
+  complete: PAIRED,
+  archive: PAIRED,
+  reopen: [...PAIRED, "archiveId", "archiveCurrent"]
+});
+// What an operation's text is: the whole new Plan, or the whole new Progress.
+const TEXT_OPERATIONS = Object.freeze({
+  new: "Plan",
+  write: "Plan",
+  "progress-write": "Progress"
+});
+
+/** Refuses a field the operation does not read, and a text operation's missing or empty text, naming what it takes. */
+function refuseUnreadInput(input) {
+  const { operation } = input;
+  const fields = OPERATION_FIELDS[operation];
+  if (!fields) return;
+  const unread = Object.keys(input).filter((name) => name !== "operation" && !fields.includes(name));
+  if (unread.length) {
+    throw planError(`plan ${operation} does not read ${unread.join(", ")}: nothing changed. It takes ${fields.join(", ") || "no input"}.`,
+      "vibe64_work_plan_input_unknown", { unread, fields });
+  }
+  if (TEXT_OPERATIONS[operation] && (typeof input.text !== "string" || !input.text.trim())) {
+    throw planError(`plan ${operation} takes the whole new ${TEXT_OPERATIONS[operation]} as text, a string that is not empty: nothing changed.` +
+      (operation === "progress-write" ? " A read returns the current Progress as progressText." : ""), "vibe64_work_plan_text_required");
+  }
+}
+
 /**
  * The helper derives role from the admitted turn, never from command payloads. A plan's pass turn
  * ("pass") may write Progress and change only its own Passes item's tick (passItem); Junior may
@@ -454,6 +491,7 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
       archiveId = "",
       archiveCurrent: acknowledgeArchive = false
     } = input;
+    if (["read", "history"].includes(operation)) refuseUnreadInput(input);
     if (operation === "read") return readWorkPlanPageUnlocked(context, input);
     if (operation === "history") return { history: await readWorkPlanHistoryUnlocked(context) };
     if (!["new", "write", "progress-write", "checked", "complete", "archive", "reopen"].includes(operation)) {
@@ -468,6 +506,7 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
         "vibe64_work_plan_senior_required"
       );
     }
+    refuseUnreadInput(input);
     const current = await readWorkPlanUnlocked(context);
     if (current?.legacy) throw planError("This plan needs the stopped-service plan-progress upgrade before it can be changed.", "vibe64_work_plan_progress_upgrade_required");
     if (role === "user" && operation === "reopen" && current) {
@@ -489,7 +528,7 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
     switch (operation) {
       case "new":
       case "write": {
-        const body = String(input.text || "").replace(/^Status: .*\r?\n?/gmu, "").trim();
+        const body = input.text.replace(/^Status: .*\r?\n?/gmu, "").trim();
         if (!/^# .+/mu.test(body) || !parseWorkPlanLines(body).some((item) => item.checked !== undefined)) {
           throw planError("A plan needs a title and Markdown checklists (- [ ] item). No other fixed structure is required.", "vibe64_work_plan_structure_invalid");
         }
@@ -525,7 +564,7 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
         return { ...await readWorkPlanPageUnlocked(context), notice: "Recorded that the plan was checked: its marks and Progress stay as they are." };
       case "progress-write":
         next = current.text;
-        progressText = String(input.text ?? "");
+        progressText = input.text;
         if (Buffer.byteLength(progressText) > PLAN_LIMIT) throw planError("Progress is too large.", "vibe64_work_plan_progress_too_large");
         break;
       case "complete": {
@@ -584,7 +623,7 @@ function workPlanInstructions(role, { autoOutcome = false, auto = false } = {}) 
     "A request to make, create, write or prepare a plan means save a Vibe64 checklist through vibe64-helper plan, unless the user explicitly asks for a chat-only draft or another format.",
     "The conversation has one current plan, active or completed, and preserved archived snapshots outside the project repository.",
     "Use vibe64-helper plan --help, then vibe64-helper plan read or history to inspect it. Use the plan helper for ALL edits and lifecycle operations; never edit its storage files directly or copy them into the repository.",
-    "Plan commands take a JSON object on stdin. Writes require expectedRevision and expectedProgressRevision from the latest paired read. Read every page of BOTH text and progressText before working; a link is not a read. New/write take text containing a Markdown title and checklists (- [ ] / - [~] / - [x]); other headings and structure are your choice.",
+    "Plan commands take a JSON object on stdin. Writes require expectedRevision and expectedProgressRevision from the latest paired read. Read every page of BOTH text and progressText before working; a link is not a read. New/write take text containing a Markdown title and checklists (- [ ] / - [~] / - [x]); other headings and structure are your choice. progress-write takes the whole new Progress as text too, never as progressText.",
     "Keep the agreed Plan scope stable: start with a short summary of the proposed changes written for a nontechnical user, followed by a checklist of agreed deliverables and acceptance requirements; when one item is a foundation that others build on, split it or say so in the item, so the marks can move as the work goes. Then include a ## Technical details section containing a VERY detailed technical implementation plan that Junior can follow carefully: actual owners/files, ordered steps, constraints, edge cases and verification. The viewer collapses Technical details for the person, who can expand them; this is presentation only. Junior and review MUST read and follow the complete technical section, not just the summary/checklist. Each checklist item carries one of three marks: - [ ] not done yet, - [~] built (implemented, and its own focused checks pass) and - [x] proven by the plan's final checks. Update checklist ticks with write as you go; do not wait until the whole plan or turn is finished. Half-tick each item (- [~]) as soon as it is implemented and its own focused checks pass, and full-tick it (- [x]) when the plan's final proof covers it: the whole run, the review or the proof the plan states. Never leave a built item empty: tick each item the moment it is built and its own checks pass, not at the end of the turn, and the last item too before your turn ends. When work on one item also builds others, walk the whole checklist: half-tick each item that is built and checked, note in Progress what is partly built, and never hold every tick until the first item is finished. When a turn changed files but not the marks or Progress, Vibe64's plan check asks you once to walk the checklist and update them, or to run plan checked (paired revisions, nothing changes) when nothing needs a new mark; in Auto, Senior's review of the plan follows when every item is built or the check left the plan unchanged, and when every item is built and your turn ends without reporting continue, also if it asked the person something. A partial item stays - [ ]; an item whose evidence is missing or that regressed moves back to - [~] or - [ ], including when review finds it. Keep checklist wording and technical scope unchanged when updating ticks. Record supporting evidence and blockers in the paired Progress document with progress-write, then use its returned paired revisions for the checklist write. Do not append progress logs or evidence to Plan. The optional link in Plan is only a convenience; Plan and Progress are one artifact.",
     "Human instructions take precedence. Keep agreed scope and completed evidence; do not invent additional requirements. Discussion alone never changes plan status.",
     "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan.",

@@ -153,7 +153,7 @@ const commandServers = createSessionCommandServers({
       token: "controlToken"
     },
     "/agent-session-command/plan": {
-      handle: ({ commandService, input, sessionId }) => commandService.managePlan(sessionId, input),
+      handle: ({ commandService, fields, sessionId }) => commandService.managePlan(sessionId, fields),
       status: vibe64StatusCode,
       token: "controlToken"
     },

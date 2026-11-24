@@ -339,6 +339,11 @@ test("the installed plan command uses the admitted role, emits live changes and 
   assert.equal(ticked.progressText, checkedText);
   const proven = await command("write", { text: provenText, expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision });
   assert.equal(proven.checked, 2);
+  // Through the installed helper too, a text under a name the command does not read is refused, never accepted empty;
+  // the control fields the helper adds are not the agent's.
+  await assert.rejects(command("progress-write", { progressText: "# Progress\nKept nowhere.\n", expectedRevision: proven.revision,
+    expectedProgressRevision: proven.progressRevision }), /plan progress-write does not read progressText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision\./u);
+  assert.equal((await command("read")).progressText, checkedText);
   // A Junior chat's own review (one upgraded in flight) records Progress but leaves the plan active for Senior.
   request = { schemaVersion: 7, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
   await assert.rejects(command("complete", { expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision }), /Only Senior/);
@@ -448,6 +453,35 @@ test("paired progress writes preserve scope and explicit Senior completion rejec
   assert.equal(completed.status, "completed");
   assert.equal(completed.checked, 2);
   assert.equal(completed.progressText, updated.progressText);
+});
+
+test("a plan write whose text is missing, empty or under a name the operation does not read is refused, naming what it takes", async t => {
+  const f = await fixture(t);
+  await f.change("new", "senior", { text: openText });
+  await f.change("progress-write", "junior", { text: "# Progress\nThe supervisor is saved.\n" });
+  const before = await readWorkPlan(f.context);
+  // A read returns Progress as progressText: a write naming it so used to be accepted and keep an empty Progress.
+  for (const [operation, extra, refusal] of [
+    ["progress-write", { progressText: "# Progress\nAccess is restricted.\n" }, /^plan progress-write does not read progressText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision\.$/u],
+    ["progress-write", {}, /^plan progress-write takes the whole new Progress as text, a string that is not empty: nothing changed\. A read returns the current Progress as progressText\.$/u],
+    ["progress-write", { text: null }, /takes the whole new Progress as text/u],
+    ["progress-write", { text: ["# Progress"] }, /takes the whole new Progress as text/u],
+    ["progress-write", { text: " \n" }, /takes the whole new Progress as text/u],
+    ["write", { planText: provenText }, /^plan write does not read planText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision\.$/u],
+    ["write", { text: "" }, /^plan write takes the whole new Plan as text, a string that is not empty: nothing changed\.$/u],
+    ["checked", { messageId: "request-1" }, /^plan checked does not read messageId: nothing changed\. It takes expectedRevision, expectedProgressRevision\.$/u]
+  ]) {
+    await assert.rejects(f.change(operation, "junior", extra), (error) => {
+      assert.match(error.message, refusal, `${operation} ${JSON.stringify(extra)}`);
+      assert.ok(["vibe64_work_plan_input_unknown", "vibe64_work_plan_text_required"].includes(error.code), error.code);
+      return true;
+    });
+  }
+  await assert.rejects(manageWorkPlan(f.context, { operation: "read", progressOffset: 10 }, "junior"), /^plan read does not read progressOffset/u);
+  const after = await readWorkPlan(f.context);
+  assert.deepEqual([after.text, after.progressText, after.progressRevision], [before.text, before.progressText, before.progressRevision]);
+  assert.notEqual(after.progressRevision, createHash("sha256").update("").digest("hex"), "never the empty Progress");
+  assert.match(workPlanInstructions("junior"), /progress-write takes the whole new Progress as text too, never as progressText/u);
 });
 
 test("archive replacement and reopen retain one exact pair and start replacement progress fresh", async t => {

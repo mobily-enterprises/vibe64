@@ -232,8 +232,9 @@ async function listenUnixJsonCommandServer(server, socketPath = "") {
  * its own Unix socket and accepts only requests that carry its random token,
  * its session and its generation; the agent receives all three in its
  * environment. `routes` maps each route path to { handle, token, status }:
- * `handle` receives { commandService, input, request, response, sessionId }
- * and returns the JSON result, or undefined after writing the response itself;
+ * `handle` receives { commandService, input, fields, request, response,
+ * sessionId }, where `fields` is the input without the token, session and
+ * generation that admitted it, and returns the JSON result, or undefined after writing the response itself;
  * `token` names the entry token the route accepts (default "token"); `status`
  * maps a result to its HTTP status (default 200). `<routePrefix>/health` is
  * served for every server.
@@ -295,6 +296,7 @@ function createSessionCommandServers({
       const result = await route.handle({
         commandService: entry.commandService,
         input,
+        fields: Object.fromEntries(Object.entries(input).filter(([name]) => !["token", "sessionId", "generationId"].includes(name))),
         request,
         response,
         sessionId: entry.sessionId
