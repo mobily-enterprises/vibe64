@@ -1,4 +1,4 @@
-import { updateTerminalSessionMetadata } from "@local/vibe64-execution/server/terminalSessions";
+import { beginTerminalNamespaceOperation, updateTerminalSessionMetadata } from "@local/vibe64-execution/server/terminalSessions";
 import { terminalNoGithubActorMetadata } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
   captureProjectRequestContext,
@@ -97,7 +97,12 @@ async function startWhenPrepared(launchCoordination, startOnce, sessionId, input
     const attempt = await startOnce(sessionId, input, { interruptions, prepared, stage });
     if (!attempt?.[PREPARING]) return attempt;
     stage("workspace-preparation");
-    const failure = await attempt[PREPARING].then(() => null, error => error);
+    let failure;
+    try {
+      failure = await attempt[PREPARING].then(() => null, error => error);
+    } finally {
+      attempt.admission.release();
+    }
     if (failure) return vibe64Result(() => Promise.reject(failure));
     const interrupted = launchCoordination.launchInterruptedSince(sessionId, interruptions);
     if (interrupted) return interrupted;
@@ -231,7 +236,11 @@ function createOutputTargetLaunchStart({
           // reports the stored failure instead of rerunning it unasked.
           rerunFailedSetup: input.automatic !== true
         });
-        if (read.preparing) return { [PREPARING]: read.preparing };
+        // The wait outside the launch lock keeps a count in the Preview's terminal admission, taken while this
+        // launch still holds one, so a renewal cannot freeze the namespace while this start waits for the preparation.
+        if (read.preparing) {
+          return { [PREPARING]: read.preparing, admission: beginTerminalNamespaceOperation(outputTargetTerminalNamespace(sessionId)) };
+        }
         stage("starting");
         const { context } = read;
         const unavailable = launchCoordination.launchAdmissionFailure(sessionId, context.session);
