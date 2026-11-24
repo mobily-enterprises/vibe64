@@ -1798,6 +1798,21 @@ test("concurrent attachment uploads wait for one another and all retain their by
   assert.equal(new Set(results.map((result) => result.attachmentId)).size, 6);
 });
 
+// A hosted workspace's edge ends a request after about a minute, so an upload waiting behind a long holder (setup
+// preparing the workspace, Save, Update) must hear the holder's worded refusal well before that, never the edge's 504.
+test("an upload waits for the session's write lock for at most thirty seconds", async (t) => {
+  const lock = agentWriteLockHarness();
+  const { service, session } = await terminalServiceFixture(t, lock);
+  const uploaded = await service.uploadAgentAttachment(session.sessionId, {
+    fileName: "bounded-wait.txt",
+    stream: Readable.from(["bounded"])
+  });
+  assert.equal(uploaded.ok, true, JSON.stringify(uploaded));
+  assert.deepEqual(lock.attempts, [
+    { operationName: "agent-write-mode", sessionId: session.sessionId, waitMs: 30_000 }
+  ]);
+});
+
 test("an upload waiting behind renewal rechecks session admission before writing", async (t) => {
   const waiting = deferred();
   const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {
