@@ -46,9 +46,17 @@ function inspect(lines, resources = []) {
   });
 }
 
-/** The two-service app of the container tests, its shared entries naming the machine setup script, or not. */
+/**
+ * The two-service app of the container tests, its shared entries (above its first `### Service`, beside its shared
+ * Packages; the workers service has Packages of its own) naming the machine setup script, or not.
+ */
 function stackOf({ setup = true, file = "deploy/machine-setup.sh" } = {}) {
-  return workersStack((lines) => (setup ? lines.flatMap((line) => (line.startsWith("- Packages:") ? [line, `- Machine setup: \`${file}\``] : [line])) : lines));
+  return workersStack((lines) => {
+    if (!setup) return lines;
+    const shared = lines.indexOf("- Packages: `git` `ripgrep`");
+    assert.ok(shared >= 0 && shared < lines.findIndex((line) => line.startsWith("### ")), "the fixture's shared Packages");
+    return lines.toSpliced(shared + 1, 0, `- Machine setup: \`${file}\``);
+  });
 }
 
 /** A repository with one commit of these files (text, bytes, or `{ link }` for a symbolic link), and git run in it. */
