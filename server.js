@@ -408,13 +408,13 @@ async function createServer(options = {}) {
   // Before any upgrade handler (WebSocket routes, realtime, a host's own), so no upgrade's connection is ever left
   // without an error listener.
   handleUpgradeSocketErrors(app.server, { logger: app.log });
-  // Before any plugin or route, so a request that arrives while the server stops runs none of them. Hooks that only
-  // time or label answers may come before it.
-  registerStopGate(app);
   // Before any plugin or route, so every answer, the release bundle's included, refuses other sites' frames.
   registerEditorFraming(app, { env: runtimeEnv });
   // Before any route, so a late answer or a request its client gave up on is logged from its arrival.
   registerSlowRequestLog(app, { logger: app.log });
+  // Before any plugin or route, so a request that arrives while the server stops runs none of them. Hooks that only
+  // time or label answers may come before it.
+  registerStopGate(app);
   for (const warning of loggerOptions.warnings) {
     logOperationalEvent(
       app.log,
