@@ -32,7 +32,11 @@ trying again). The projection carries both, so the tab icon's tooltip, the tab's
 accessible name and its info's **Why** and **Next** facts show them on desktop
 and touch screens. For the selected session the info also offers **Show Update
 notice** or **Show Save notice**, which brings back a dismissed notice in chat;
-the Save header's hint repeats the notice's "needs attention" reason. A stored
+the Save header's hint repeats the notice's "needs attention" reason. The header
+button is never inert while Save and Update cannot act (`saveWorkButtonPress()`):
+it stays reachable, dimmed with `aria-disabled`, and a press shows the reason
+(`saveWorkTitle`) in a tooltip beside it for six seconds, since a disabled button
+takes no tap, hover or focus. A stored
 failure the notice mirrored leaves it once the record is no longer failed. The
 same reading feeds the session assistant's `vibe64-helper session status`
 (`repository`) and Colleague's work tool (`repositoryProblem`), so neither has
