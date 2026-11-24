@@ -15,6 +15,7 @@ import {
   unsupportedRuntimes,
   unsupportedSandboxAllowances
 } from "../../packages/vibe64-deploy/src/adapters/mobilynet/declaration.js";
+import { CATALOGUE } from "../../packages/vibe64-deploy/src/adapters/mobilynet/standIn/catalogue.js";
 
 // The package Vibe64 hands mobilynet for an app: its mobilynet.json in mobilynet's build model, and its build and
 // service scripts, run here by bash and jq as mobilynet would run them.
@@ -115,6 +116,16 @@ test("the build script runs Prepare then Build, and the service exports its sett
   assert.equal(await readFile(path.join(root, "steps"), "utf8"), "serve staging it's $HOME `x`\n");
   assert.ok((await exec("test", ["-d", signIns]).then(() => true)), "the sign-in folder is made");
   assert.match(scripts["vibe64-app/serve-web.sh"], /^if \[ -z "\$\{TRUSTED_PROXIES\+set\}" \]; then export TRUSTED_PROXIES='loopback'; fi$/mu);
+});
+
+// An app's postgresql runtime gives it the PostgreSQL tools (psql, pg_dump, pg_restore) of the server Production links
+// it to: the only PostgreSQL mobilynet's catalogue runs as a hosted service. pg_dump refuses a server newer than itself,
+// and pg_restore a dump from a newer pg_dump.
+test("an app that declares the postgresql runtime gets the PostgreSQL tools of the major mobilynet's catalogue runs", () => {
+  const hosted = CATALOGUE.filter((app) => app.provides.interface === "postgresql");
+  assert.deepEqual(hosted.map((app) => app.provides.version), ["18"]);
+  const { declaration } = appPackage({ ...SHOP, runtimes: ["node26", "postgresql"] });
+  assert.deepEqual(declaration.requiredPackages.filter((name) => name.startsWith("postgresql")), [`postgresql_${hosted[0].provides.version}`]);
 });
 
 test("a python app's build points the release's native modules at the libraries its runtime declares, and a node app's build is as before", async (t) => {

@@ -65,7 +65,7 @@ const RUNTIME_PACKAGES = Object.freeze({
   mariadb: Object.freeze(["mariadb"]),
   node26: Object.freeze(["nodejs_26", "corepack"]),
   php: Object.freeze(["php84"]),
-  postgresql: Object.freeze(["postgresql_16"]),
+  postgresql: Object.freeze(["postgresql_18"]),
   python: Object.freeze(["python313", "python313Packages.pip", "python313Packages.virtualenv", "gcc-unwrapped^lib", "zlib"])
 });
 // The python runtime's last build step, with patchelf, which only the build VM gets (the build block's `packages`). The
