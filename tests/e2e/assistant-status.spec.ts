@@ -570,9 +570,11 @@ test("failed display refresh does not invalidate a successful provider check", a
   await openChat(page);
   await composer(page).fill("The provider is verified.");
   await expect(steer(page)).toBeEnabled();
-  await expect.poll(() => server.state.detailCount).toBeGreaterThan(2);
-  await expect(steer(page)).toBeEnabled();
-  await expect(warning(page)).toHaveCount(0);
+  // The refresh after the check fails at once, in the editor's own words (its own 503, which nothing repeats):
+  // Steer stays usable and no warning shows while it comes back and after.
+  await expect.poll(() => server.state.detailCount).toBeGreaterThan(1);
+  await expectSteady(async () => ({ steer: await steer(page).isEnabled(), warnings: await warning(page).count() }),
+    { steer: true, warnings: 0 }, 1_000);
   expect(server.state.checkCount).toBe(1);
 });
 
