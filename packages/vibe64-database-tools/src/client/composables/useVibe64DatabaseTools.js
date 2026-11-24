@@ -10,6 +10,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { VIBE64_DATABASE_LAYOUT_CHANGED_EVENT } from "../../shared/events.js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
@@ -167,12 +168,7 @@ function useVibe64DatabaseTools({
   // A question runs an AI turn and its queries, which can outlast the hosted edge's minute: the server answers within
   // two seconds, as answering while it goes on, and this repeats the same question (`requestId`, `repeat: true`)
   // until its answer, also after an answer that never came back. It is the bounded task's command: `run` and
-  // `isRunning`, with one failure shown.
-  const assistantResource = useEndpointResource({
-    enabled: false,
-    path: sessionPath,
-    queryKey: computed(() => ["vibe64", "database", normalizedProjectSlug.value, normalizedSessionId.value, "assistant"])
-  });
+  // `isRunning`, with one failure shown; its request goes out on its own, beside the state resource.
   const assistantFeedback = useUiFeedback({ source: "vibe64.database.assistant.ask" });
   const asking = ref(false);
   const assistantCommand = reactive({
@@ -181,8 +177,10 @@ function useVibe64DatabaseTools({
       asking.value = true;
       const question = { ...payload, requestId: globalThis.crypto.randomUUID() };
       try {
-        return await followHeldRequest(repeat => assistantResource.save(repeat ? { ...question, repeat } : question,
-          { method: "POST", path }), { heldAs: "answering", lostContact: ASSISTANT_LOST_CONTACT, notWorded: ASSISTANT_FAILED });
+        return await followHeldRequest(repeat => getHttpWebClient().request(path, {
+          method: "POST",
+          body: repeat ? { ...question, repeat } : question
+        }), { heldAs: "answering", lostContact: ASSISTANT_LOST_CONTACT, notWorded: ASSISTANT_FAILED });
       } catch (error) {
         assistantFeedback.error(error, ASSISTANT_FAILED);
         throw error;
