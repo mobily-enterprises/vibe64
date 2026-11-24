@@ -2440,15 +2440,23 @@ numbered question and a bare yes or OK to making one, with the failing
 phrasings seen live as examples; a plan is a change, never conversation, and
 agreeing to one authorises no implementation. Admission resolves reason
 `planning` to Senior whatever role Router or the message names. When such a
-request still reaches Junior, or a turn that may only answer, the turn writes
-nothing: Auto's Junior guidance (`workPlanInstructions` with `auto`) and Auto's
-conversation intent tell it to run `vibe64-helper plan handoff`, which reads no
-input (`handPlanOver` in `assistantPlanHandoff.js`), and end its turn with one
-short line. The plan command acts as the running turn's role (`assistantPlanRole`:
-none for an answer-only turn or task, `pass` for a plan's pass); when it refuses
+request still reaches Junior, or a turn Router took for conversation, the turn
+writes nothing: Auto's Junior guidance (`workPlanInstructions` with `auto`) and
+Auto's conversation intent tell it to run `vibe64-helper plan handoff`, which
+reads no input (`handPlanOver` in `assistantPlanHandoff.js`), and end its turn
+with one short line. The plan command acts as the running turn's role
+(`assistantPlanRole`: the routed role, also for a turn that only answers, so a
+Senior chat's "Are you going to do it?" ticks the plan as Senior and a Junior
+chat's as Junior; `pass` for a plan's pass; none, read only, for a task or a
+turn with no working, accepted request). A role that may change nothing
+(`PLAN_CHANGING_ROLES` lacks it: none, Custom, Fix it with AI) hears
+`readOnlyPlanRefusal` (`vibe64_work_plan_read_only`) for any change, ticks and
+Progress included: which turn it is, that it can only read the plan, and how the
+person gets the change, never the scope refusal. When the command refuses
 `new`, `write`, `reopen` or `archive` with `vibe64_work_plan_senior_required` to
-an Auto turn that is not Senior's (`assistantPlanHandsOff`: Junior's, or an
-answer-only turn's), `refusedPlanChange` hands over the same way. Both call
+an Auto turn that hands over (`assistantPlanHandsOff`: Junior's, or any
+conversation turn's, whose plan request is Senior's planning turn's),
+`refusedPlanChange` hands over the same way. Both call
 routing's `handPlanToSenior`, which checks the request and its active native turn
 under the routing lock and records `planHandoff` (that turn, its role and reason,
 the operation, and `implementing` when the turn was implementing the plan the
@@ -2641,7 +2649,8 @@ line; its minutes move on every 30 s.
 
 The plan check (`assistantPlanCheck`, `createAssistantPlanCheck`): delivery of a main chat turn that may
 tick an active plan (Senior's, Junior's or Senior's review, from
-`assistantPlanRole`; never a pass, a task, an answer turn or a Custom chat)
+`assistantPlanRole`; never a pass, a task, a Custom chat or a conversation turn,
+which may tick the plan but is not asked to)
 reads the plan's revisions, its record and the source state while the turn's
 selection is prepared, and keeps them in memory by request key and message
 (`planCheckTurns`). When that turn completes, unless the person stopped it, a

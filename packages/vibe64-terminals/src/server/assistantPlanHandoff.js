@@ -6,7 +6,8 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
-import { assistantPlanHandsOff } from "./assistantRoutingRequests.js";
+import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
+import { PLAN_CHANGING_ROLES, assistantPlanHandsOff, assistantPlanRole } from "./assistantRoutingRequests.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
@@ -71,10 +72,36 @@ async function handPlanOver({ sessionId, request, handPlanToSenior }) {
 }
 
 /**
- * What a turn hears when the plan command refuses its role a plan change. In Auto, creating a plan, reopening or
- * archiving it, and any plan change an answer-only turn makes, is Senior's: the request goes to Senior's planning turn
- * once this turn ends, without what the turn wrote. Junior's own refused Plan content write is often a slip while ticking
- * marks, so it goes to no one. A Junior or Custom chat keeps the refusal, saying how the person gets the change.
+ * What a turn whose role may only read the plan hears when it changes the plan, ticks and Progress included: which
+ * turn it is, that it only reads the plan, and how the person gets the change. Never the scope refusal, which sent a
+ * Senior agent hunting for a scope change its ticks never made.
+ * @param {object | null} request the saved routing request
+ */
+function readOnlyPlanRefusal(request) {
+  const purpose = assistantTaskPurpose(request?.task);
+  const role = assistantPlanRole(request);
+  const only = ", so it can only read the plan (vibe64-helper plan read and history): nothing was saved, ticks and Progress included.";
+  const task = { deslop: "Deslop", ui_pass: "the UI pass" }[purpose] || `the pass ${request?.task}`;
+  const next = purpose
+    ? `This turn runs ${task}, which the person started on its own, outside the plan${only} Say in your reply what the ` +
+      "plan should record; the person gets it on the plan by asking for it in a new message once this turn ends."
+    : role === "custom"
+      ? `This is a Custom chat${only} Tell the person that a Senior, Junior or Auto chat changes a plan (Junior its ` +
+        "ticks and Progress), which they choose in Chat mode, and to ask again there."
+      : role === "fix"
+        ? `This is a ${assistantModeLabel("fix")} chat${only} Tell the person to ask for the plan change in Main chat ` +
+          "once this repair is done."
+        : `This turn belongs to no running request of this chat${only} Tell the person what the plan should record; ` +
+          "they get it by asking for it in a new message in this chat.";
+  return vibe64Error(`${next} Do not repeat the plan command.`, "vibe64_work_plan_read_only", { status: 409 });
+}
+
+/**
+ * What a turn hears when the plan command refuses its role a plan change. A turn whose role may only read the plan
+ * hears so (readOnlyPlanRefusal). In Auto, creating a plan, reopening or archiving it is Senior's: Junior's request,
+ * or one a turn Router took for conversation makes, goes to Senior's planning turn once this turn ends, without what
+ * the turn wrote. Junior's own refused Plan content write is often a slip while ticking marks, so it goes to no one. A
+ * Junior or Custom chat keeps the refusal, saying how the person gets the change.
  * @param {object} refusal
  * @param {string} refusal.sessionId
  * @param {object | null} refusal.request the saved routing request
@@ -84,6 +111,9 @@ async function handPlanOver({ sessionId, request, handPlanToSenior }) {
  * @param {RuntimeLogger} refusal.logger
  */
 async function refusedPlanChange({ sessionId, request, input, error, handPlanToSenior, logger }) {
+  if (error?.code === "vibe64_work_plan_senior_required" && !PLAN_CHANGING_ROLES.includes(assistantPlanRole(request))) {
+    return readOnlyPlanRefusal(request);
+  }
   if (!PLAN_HANDOFF_OPERATIONS.includes(input.operation)) return error;
   if (error?.code === "vibe64_work_plan_content_senior_only") {
     const scopeChange = request?.mode === "auto"

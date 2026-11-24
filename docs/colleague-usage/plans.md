@@ -36,6 +36,14 @@ asking again (see [Auto](auto-workflow.md)). In a **Junior** chat, Junior writes
 nothing and tells you that plans need **Senior** or **Auto**. An unsuccessful
 save must be reported, and a chat outline alone is not a saved plan.
 
+Every turn works on the plan with its role, also one that only answers a
+question such as **Are you going to do it?**: Senior's and Junior's ticks and
+Progress are saved. A pass you start on its own outside the plan, a **Custom**
+chat, and a turn that no request of the chat is running can only read the plan.
+When such a turn tries a change, the AI hears which turn it is and tells you how
+to get the change: ask for it in a new message once the pass ends, or in a
+**Senior**, **Junior** or **Auto** chat.
+
 The plan's last section, **Passes**, lists the passes that run once Senior has
 reviewed it, one item each, such as **Security pass: the plan's changes**. It
 starts with the passes ticked under **After a plan** in [Passes](passes.md);

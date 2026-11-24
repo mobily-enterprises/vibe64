@@ -21,26 +21,29 @@ const MAX_CANCELLED_MESSAGES = 50;
 
 const activeMessage = state => state.followup || state.input;
 /**
- * The role the plan command acts as for the request's running turn: "" (read only) for an answer-only turn, a task, or
- * no working request; "pass" for a plan's pass, which ticks only its own Passes item; "review" for Auto's Senior check
- * in a review follow-up; otherwise the routed role, so a Junior or Custom chat's agent keeps its own.
+ * The role the plan command acts as for the request's running turn: "" (read only) for a task or no working request;
+ * "pass" for a plan's pass, which ticks only its own Passes item; "review" for Auto's Senior check in a review
+ * follow-up; otherwise the routed role, so a Senior, Junior or Custom chat's agent keeps its own, also in a turn that
+ * only answers (reason conversation): a person asking "Are you going to do it?" gets their plan ticked.
  * @param {object | null} request the saved routing request
  */
 function assistantPlanRole(request) {
-  if (request?.reason === "conversation" || assistantTaskPurpose(request?.task) ||
-      request?.status !== "working" || request.delivery !== "accepted") return "";
+  if (assistantTaskPurpose(request?.task) || request?.status !== "working" || request.delivery !== "accepted") return "";
   if (request.stage === "pass") return request.pass ? "pass" : "";
   return request.stage === "review" && request.followup && assistantWorkflowRole(request) === "senior" ? "review" : request.resolvedMode;
 }
+// The plan roles that may change the plan in some way; any other may only read it.
+const PLAN_CHANGING_ROLES = Object.freeze(["senior", "review", "junior", "pass"]);
 /**
- * Whether the request's running turn hands a plan change its role may not make to Senior's planning turn: in Auto
- * only, for a routed turn that is not Senior's (an answer-only turn or Junior's), never for a pass or task.
+ * Whether the request's running turn hands a plan change to Senior's planning turn: in Auto only, for a routed turn
+ * whose role may not make it (Junior's) and for a turn Router took for conversation, whose plan request Senior's
+ * planning turn makes, never for a pass or task.
  * @param {object | null} request the saved routing request
  */
 function assistantPlanHandsOff(request) {
   return request?.mode === "auto" && !request.stopped && Boolean(request.turnId) && !assistantTaskPurpose(request.task) &&
     request.stage !== "pass" && request.status === "working" && request.delivery === "accepted" &&
-    !["senior", "review"].includes(assistantPlanRole(request));
+    (request.reason === "conversation" || !["senior", "review"].includes(assistantPlanRole(request)));
 }
 const usesWorkPlan = state => state.planInvolved === true;
 function failure(message, code) {
@@ -152,6 +155,7 @@ export {
   ASSISTANT_ROUTING_REQUEST_SCHEMA,
   CANCELLED_KEY,
   MAX_CANCELLED_MESSAGES,
+  PLAN_CHANGING_ROLES,
   STATE_KEY,
   activeMessage,
   assistantCancelledMessageIds,
