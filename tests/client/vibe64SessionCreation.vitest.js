@@ -60,9 +60,12 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: (options = {}) => {
     const queryKey = options.queryKey?.value || options.queryKey || [];
-    // The new session request: its payload goes to the test's createRun.
+    // The new session and archive requests: their payloads go to the test's createRun and archiveRun.
     if (Array.isArray(queryKey) && queryKey[0] === "vibe64.sessions.create") {
       return { save: (payload, saveOptions) => creationHarness.createRun(payload, saveOptions) };
+    }
+    if (Array.isArray(queryKey) && queryKey[0] === "vibe64.sessions.archive") {
+      return { save: (payload, saveOptions) => creationHarness.archiveRun(payload, saveOptions) };
     }
     if (String(options.path?.value || options.path || "").endsWith("/vibe64/sessions")) {
       creationHarness.listOptions = options;
