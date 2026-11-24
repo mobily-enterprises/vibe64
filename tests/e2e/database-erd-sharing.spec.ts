@@ -728,9 +728,10 @@ for (const view of ["Overview", "ERD"] as const) {
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
         const positions = await diagram.locator(".vue-flow__node-table").evaluateAll(nodes => nodes.map((node: HTMLElement) => node.style.transform));
         let previous = await camera.getAttribute("style");
-        // Real wheel input must change the diagram, not scroll the page. Sample
-        // both directions and include paint time, not just event dispatch.
-        for (const delta of [...Array(18).fill(-70), ...Array(18).fill(70)]) {
+        // Real wheel input must change the diagram, not scroll the page. Sample both directions and include paint
+        // time, not just event dispatch. Each tick out is followed by one in, so a small actor that Fit already shows
+        // at the largest zoom still moves.
+        for (const delta of Array.from({ length: 36 }, (_, index) => index % 2 ? -70 : 70)) {
           await measure(() => page.mouse.wheel(0, delta));
           const current = await camera.getAttribute("style");
           expect(current).not.toBe(previous);
@@ -759,12 +760,13 @@ for (const view of ["Overview", "ERD"] as const) {
       // A freeze is read in CPU time, not by the clock: for each input, the longest task the main thread ran from just
       // before it until it was drawn. The wall-clock latencies, kept above, also count Playwright's round trips and
       // trace snapshots, the frames and the host's load: on an idle desktop most of their 150-210 ms median is
-      // Playwright's. On mobilynet's schema (135 tables, 64 in its largest actor) an input's longest task took a median
-      // of 27-45 ms of CPU and at most 114 ms, alone or sharing 2 CPUs with four busy loops; a hover that replaces every
-      // table and connection, as before 9957a962d, took a median of 248-361 ms, and a zoom gesture that does, 94-156 ms.
+      // Playwright's. On mobilynet's schema (135 tables, 64 in its largest actor), at loads of 3 to 13, alone or sharing
+      // 2 CPUs with four busy loops, an input's longest task took a median of 19-45 ms of CPU and at most 114 ms; a
+      // hover that replaces every table and connection, as before 9957a962d, took a median of 146-361 ms, and a zoom
+      // gesture that does 73-156 ms.
       expect(longestTasks).toHaveLength(latencies.length);
       const median = [...longestTasks].sort((a, b) => a - b)[Math.floor(longestTasks.length / 2)];
-      expect(median).toBeLessThan(80);
+      expect(median).toBeLessThan(60);
       expect(Math.max(...longestTasks)).toBeLessThan(250);
       expect(errors).toEqual([]);
     } finally {
@@ -988,13 +990,14 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       const trace = JSON.parse(String(await browser.stopTracing()));
       tracing = false;
       // A freeze is read in CPU time, not by the clock: from the routes request until they are drawn, no task may
-      // hold the main thread, and the typing above, for 0.9 s of CPU. A task's CPU time stays close to what its work
+      // hold the main thread, and the typing above, for 0.725 s of CPU. A task's CPU time stays close to what its work
       // costs however many processes share the host, while its wall time grows with them; a loaded host still slows
-      // it somewhat, through the cores and caches it shares. On the desktop the longest task (applying the routes)
-      // took 0.29-0.6 s, alone or sharing 2 CPUs with four busy loops, and computing the routes on the main thread
-      // again 0.91-1.8 s. Applying them as before fbfa93c66 (0.71-1.06 s) also fails the DOM ceiling below.
+      // it, through the cores and caches it shares. On the desktop, at loads of 3 to 13, alone or sharing 2 CPUs with
+      // four busy loops, the longest task (applying the routes) took 0.23-0.6 s and computing the routes on the main
+      // thread again 0.89-1.8 s: the bound sits 1.2 times from both. Applying them as before fbfa93c66 (0.71-1.06 s)
+      // also fails the DOM ceiling below.
       const [longestTask] = longestMainThreadTasks(trace.traceEvents, "erd-routes-requested", "erd-drawn");
-      expect(longestTask).toBeLessThan(900);
+      expect(longestTask).toBeLessThan(725);
       // The cost itself, independent of load: every DOM node drawing the cards and connections. Ports
       // are plain elements and connections draw their own paths; a component per port or per
       // connection adds about 1,900 or 1,400 nodes here and fails this ceiling.
@@ -1039,9 +1042,9 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
 
 // The CPU time, in ms, of the longest task the page's main thread ran in each window from a `from` performance mark to
 // the next `to` mark, from a Chrome trace: the marks name that thread, and the "toplevel" category records each task
-// it runs as a ThreadControllerImpl::RunTask event whose tdur is the thread time it took. Every window holds at least
-// the task that set its first mark, so a window without tasks means the trace no longer records them, and fails
-// rather than measuring nothing.
+// it runs as a ThreadControllerImpl::RunTask event whose tdur is the thread time it took; a task Chrome records without
+// it counts its wall time, which is never less. Every window holds at least the task that set its first mark, so a
+// window without tasks means the trace no longer records them, and fails rather than measuring nothing.
 function longestMainThreadTasks(events: any[], from: string, to: string) {
   const marks = events.filter(event => event.name === from || event.name === to).sort((a, b) => a.ts - b.ts);
   expect(marks.length, `"${from}" and "${to}" marks in the trace`).toBeGreaterThan(0);
@@ -1053,7 +1056,7 @@ function longestMainThreadTasks(events: any[], from: string, to: string) {
     expect(end?.name, `a "${to}" mark after each "${from}" mark`).toBe(to);
     const window = tasks.filter(task => task.ts + task.dur >= start.ts && task.ts < end.ts);
     expect(window.length, "main-thread tasks traced in the window").toBeGreaterThan(0);
-    return [Math.max(...window.map(task => task.tdur / 1000))];
+    return [Math.max(...window.map(task => (task.tdur ?? task.dur) / 1000))];
   });
 }
 
