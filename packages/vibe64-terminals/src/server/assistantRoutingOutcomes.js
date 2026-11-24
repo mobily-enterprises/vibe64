@@ -450,8 +450,8 @@ function createAssistantRoutingOutcomes({
       // A direct chat's implementation turn that ends without reporting is an
       // ordinary reply: nothing is saved, unless Senior reviewed or completed a
       // plan in it, which moves the plan on like a reported completion.
-      if (state.mode !== "auto" && state.stage === "implementation" && !state.stopped && run.state === "completed" &&
-          outcome?.turnId !== state.turnId) {
+      if (state.mode !== "auto" && (state.stage === "implementation" || state.stage === "review" && state.planReview) &&
+          !state.stopped && run.state === "completed" && outcome?.turnId !== state.turnId) {
         const current = state.afterPlan ? await readablePlan(context) : null;
         if (planFinishedDuringRequest(state, current)) {
           completed = await continuePlanPasses(context, state, schedule);
@@ -539,7 +539,7 @@ function createAssistantRoutingOutcomes({
         // Finished implementation ends the work, saved when Automatically save
         // changes is on; only an involved plan Auto's Junior cannot complete gets
         // Senior's turn to check and complete it.
-        if (state.stage === "implementation" && !(assistantPlanCompletionFollows(state) && plan?.status === "active")) {
+        if (state.stage === "implementation" && !((assistantPlanCompletionFollows(state) || outcome.vibe64) && plan?.status === "active")) {
           state.status = "complete";
           await records.save(context, state);
           await records.writeNotice(context, state, assistantRoutingOutcomeNotice(state));

@@ -5,7 +5,7 @@
 // change belongs to is the AI's to judge: Vibe64 never infers it. The note is never repeated for its own turn.
 import { assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantPlanCompletionFollows } from "@local/vibe64-runtime/shared/assistantFinishing";
-import { workPlanScope, workPlanStep } from "../shared/assistantWorkPlan.js";
+import { workPlanAtPasses, workPlanScope, workPlanStep } from "../shared/assistantWorkPlan.js";
 import { readWorkPlan, readWorkPlanMark } from "./assistantWorkPlan.js";
 import { readSourceState, sourceChangesSince } from "./planSourceChanges.js";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
@@ -193,12 +193,15 @@ function createAssistantPlanCheck({ routingState, records, delivery }) {
   }
 
   /**
-   * In Auto, Junior's turn implementing the active plan that would stop the plan (it reported wait, reported nothing
-   * or asked the person) goes on to Senior's review of the plan instead, as Junior's handoff would, when every item
-   * outside Passes is built, or when the AI left the plan exactly as Vibe64's plan check found it. Senior verifies
-   * every item, ticks it, and asks the person what is left as numbered Needs you questions. A plan never waits at its
-   * last item, nor on a question about the steps Vibe64 runs. Vibe64 judges no item: the marks are the AI's. The turn
-   * implements the plan when its request does (Implement plan, or an outcome naming the plan) or it changed the plan.
+   * A turn implementing the active plan that would stop the plan (it reported wait, reported nothing, asked the
+   * person, or, in a Senior chat, reported Done short of the plan's passes) moves the plan on instead, as Auto's
+   * Junior's handoff would, when every item outside Passes is built, or when the AI left the plan exactly as Vibe64's
+   * plan check found it: Senior's review of the plan follows, which verifies every item, ticks it, and asks the person
+   * what is left as numbered Needs you questions; a Senior chat whose plan reached its passes goes on to them. In
+   * Auto that is Junior's turn; in a Senior chat Senior's own (`planReview`). A Junior chat has no Senior turns. A
+   * plan never waits at its last item, nor on a question about the steps Vibe64 runs. Vibe64 judges no item: the
+   * marks are the AI's. The turn implements the plan when its request does (Implement plan, or an outcome naming
+   * the plan) or it changed the plan.
    * @param {{ ignored: boolean, start: object | null }} turn ignored: the plan check's turn left the plan as it found
    *   it; start: what the turn started from
    */
@@ -206,12 +209,15 @@ function createAssistantPlanCheck({ routingState, records, delivery }) {
     if (!routingState.allowAuto || run.state !== "completed" || state.stopped || plan?.status !== "active") return;
     const involved = state.planInvolved === true || Boolean(start) && plan.revision !== start.planRevision;
     const reported = state.outcome?.turnId === state.turnId ? state.outcome.decision : "";
-    if (!assistantPlanCompletionFollows({ ...state, planInvolved: involved }) || ["continue", "handoff", "complete"].includes(reported)) return;
+    const senior = state.mode === "senior" && state.resolvedMode === "senior" && state.workflow === true && state.stage === "implementation";
+    if (!involved || !senior && !assistantPlanCompletionFollows({ ...state, planInvolved: true })) return;
+    // A Done that reached the plan's passes, or completed it, moves it on as it is.
+    if (["continue", "handoff"].includes(reported) || reported === "complete" && (workPlanAtPasses(plan) || !senior)) return;
     // Built: no item outside Passes is still - [ ] (a plan without a checklist never is).
     const built = ["review", "pass"].includes(workPlanStep(plan)?.step);
     if (!built && !ignored) return;
     if (assistantGoalIsActive((await records.currentGoal(context.session.sessionId, context)).goal)) return;
-    Object.assign(state, { planInvolved: true, workPlan: plan });
+    Object.assign(state, { planInvolved: true, workPlan: plan, ...(senior ? { planReview: true } : {}) });
     state.outcome = {
       decision: "handoff",
       explanation: built ? "Every item outside the plan's Passes is built: Senior reviews the plan."

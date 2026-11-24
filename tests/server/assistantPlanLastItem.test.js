@@ -100,3 +100,44 @@ test("a question while an item is still open waits for the person's answer, as b
   assert.equal(workPlanStatusLine(step, { request: f.state() }), "Plan: needs you");
   assert.equal(workPlanStatusLine(step, { questions: 1, request: f.state() }), "Plan: needs you (1 question)");
 });
+
+// The same 09:45 case in a Senior chat, where it happened: Senior's turn half-ticked the last item, whose proof can't
+// run in the session, and asked whether to run the passes or save. Senior's review of the plan follows in the same
+// chat, as Auto's would, and once it full-ticks the items the plan's passes run.
+const SENIOR_PLAN = "Status: active\n# Contact threads\n\nGroup each contact's messages into one thread.\n\n" +
+  "- [x] Store contact threads\n- [x] List a contact's threads\n- [x] Reply in a thread\n- [ ] Move old messages into threads\n\n" +
+  "## Technical details\nsrc/threads.js holds the store; src/migrate.js moves old messages.\n\n## Passes\n\n- [ ] Review: the plan's changes\n";
+
+test("in a Senior chat, every item built and the turn asking whether to run the passes or save, waiting or reporting nothing: Senior's review of the plan follows, then the passes", async (t) => {
+  for (const ending of ["asks the person", "reports wait", "reports nothing"]) {
+    const f = await fixture(t, { mode: "senior" }, { readyPlan: false, source: true });
+    await publishPlanFixture(f.context, SENIOR_PLAN);
+    const request = { messageId: "request-1", message: "Build the migration.", submissionKind: "send" };
+    await f.service.send("session-1", request, f.context);
+    assert.equal(f.sends[0].selection.modelId, f.assignments.senior.modelId, "a Senior chat");
+    await f.source.commit("Move old messages into threads");
+    f.tail = [{ user: { messageId: request.messageId, text: request.message },
+      messages: [{ role: "assistant", text: ending === "asks the person" ? PASSES_OR_SAVE : "The migration is built. Should I run the passes before saving, or save now?" }] }];
+    f.context.runtime.store.readConversationTail = async () => f.tail;
+    const { plan, revisions } = await planCommands(f);
+    await plan({ operation: "progress-write", text: "# Progress\n\nThe migration is built; its unit tests pass. Unproven here: a real phone.\n", ...await revisions() });
+    await plan({ operation: "write", text: (await readWorkPlan(f.context)).text.replace("- [ ] Move", "- [~] Move"), ...await revisions() });
+    if (ending === "reports wait") await reportOutcome(f, "wait", { involved: true, explanation: "Should I run the passes before saving, or save now?" });
+    await f.service.afterTurn("session-1", end(f.state()), f.context);
+    assertSeniorReview(f, 2, `Senior chat, ${ending}`);
+    assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan.");
+    assert.ok(!f.sends[1].input.genesisTask, "Senior's review of the plan is not Genesis's review task");
+    // Senior's review proves the last item and reports Done: the plan's passes run.
+    await plan({ operation: "write", text: (await readWorkPlan(f.context)).text.replace("- [~] Move", "- [x] Move"), ...await revisions() });
+    await reportOutcome(f, "complete", { involved: true });
+    f.tail = [{ user: { messageId: f.state().followup.messageId, text: "Senior reviews the plan." },
+      assistant: { text: "Every item is proven." }, messages: [{ role: "assistant", text: "Every item is proven." }] }];
+    await f.service.afterTurn("session-1", end(f.state()), f.context);
+    assert.equal(f.state().stage, "pass", `Senior chat, ${ending}: the passes follow`);
+    assert.equal(f.sends.length, 3);
+    // Senior was told to half-tick such an item and leave its question to the review, and never to ask about the
+    // passes or Save.
+    assert.match(f.sends[0].input.message, /An item built whose remaining proof can't run in this session \(a real phone, a suite only CI runs\) is half-ticked \(- \[~\]\) with what is unproven and why in Progress; never end your turn asking about it/u);
+    assert.match(f.sends[0].input.message, /Never ask the person whether to run the plan's passes or Save/u);
+  }
+});

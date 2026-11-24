@@ -218,7 +218,7 @@ function createAssistantRoutingDelivery({
     // A pass renders its own Genesis task, and a review Genesis's review task. Senior's
     // check of a plan Junior implemented is not a pass: it renders no task of its own.
     let genesisTask = taskPurpose ? pass?.id || state.task : "";
-    if (!genesisTask && state.stage === "review" && !(followup && state.mode === "auto" && state.planInvolved)) genesisTask = "review";
+    if (!genesisTask && state.stage === "review" && !(followup && (state.mode === "auto" || state.planReview) && state.planInvolved)) genesisTask = "review";
     // The plan check renders no task and reports no outcome: the request settles as the turn before it would have.
     if (planCheck) genesisTask = "";
     // A plan's pass gets its outcome instructions before its request, which stays the last paragraph.
