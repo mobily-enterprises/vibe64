@@ -31,7 +31,7 @@ const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
 const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
 const { createRenderer, ssrContextKey } = await import("vue");
 const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("@/lib/vibe64AssistantHost.js");
-const { VIBE64_ACCOUNTS_CHANGED_EVENT } = await import("@local/vibe64-accounts/client");
+const { VIBE64_ACCOUNTS_CHANGED_EVENT } = await import("@local/vibe64-accounts/shared/accountEvents");
 const { VIBE64_SESSION_CHANGED_EVENT } = await import("@/lib/vibe64SessionRequestConfig.js");
 const { default: PlanUsage } = await import("../../src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue");
 
