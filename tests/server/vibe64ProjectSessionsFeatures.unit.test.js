@@ -473,7 +473,8 @@ function withStartupRecovery(sessions, logger = silentLogger) {
     resumeSessionRenewals: () => sessions.resumeSessionRenewals()
   });
   return {
-    // No Save or Update started from a button runs in these doubles.
+    // No Save or Update started from a button, and no held Main chat message, runs in these doubles.
+    closeHeldMessages: async () => {},
     settleStartedWork: async () => {},
     ...sessions,
     resumeInterruptedWork: recovery.start,

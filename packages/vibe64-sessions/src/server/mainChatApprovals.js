@@ -241,9 +241,15 @@ function createMainChatApprovals({
   /**
    * Approval hands the message to the owner's ordinary send. Its delivery
    * id is stable per revision: approving a message already sending retries
-   * the stored text, and an edited text is a new delivery.
+   * the stored text, and an edited text is a new delivery. `hold` runs that
+   * delivery (and records its outcome) for its delivery id, and may answer
+   * before it ends, as a send waiting for the workspace preparation does: the
+   * approval is then answered as sending, and records sent, or waiting with
+   * its error, when the delivery ends.
    */
-  async function approve(sessionId, approvalId, { expectedRevision, text: editedText }, { vibe64User, browserAuthority = null }) {
+  async function approve(sessionId, approvalId, { expectedRevision, text: editedText }, {
+    vibe64User, browserAuthority = null, hold = (_messageId, run) => run({})
+  }) {
     requireOwner(vibe64User);
     const entry = await change(sessionId, "main-chat-approval-approved", (approvals) => {
       const current = entryFor(approvals, approvalId);
@@ -261,11 +267,22 @@ function createMainChatApprovals({
       current.error = "";
       return { ...current };
     });
+    const messageId = `approval_${entry.id}_${entry.revision}`;
+    const answer = await hold(messageId, controls => deliverApproved(sessionId, approvalId, entry, messageId, {
+      vibe64User, browserAuthority, controls
+    }));
+    if (answer?.status === "queued" && answer.delivered === false) {
+      return { ok: true, delivered: false, approvalId, status: "sending", messageId, waitingFor: answer.waitingFor };
+    }
+    return answer;
+  }
+
+  async function deliverApproved(sessionId, approvalId, entry, messageId, { vibe64User, browserAuthority, controls }) {
     let result;
     try {
       result = await deliver(sessionId, {
         message: entry.text,
-        messageId: `approval_${entry.id}_${entry.revision}`,
+        messageId,
         vibe64User,
         turnMetadata: {
           sender: {
@@ -275,7 +292,7 @@ function createMainChatApprovals({
             approvedBy: entry.decidedBy.displayName
           }
         }
-      }, browserAuthority ? { browserAuthority } : {});
+      }, { ...(browserAuthority ? { browserAuthority } : {}), ...controls });
     } catch (error) {
       result = { ok: false, error: error.message, code: error.code };
     }

@@ -15,6 +15,13 @@ If preparation fails, resolve the reported error and retry; the saved conversati
 is retained and preparation does not send a message. Colleague can explain the
 error; an installation problem requires the workspace operator.
 
+In Main chat, a message whose answer is lost on the way (a dropped connection,
+or the hosted editor's front end giving up after a minute) stays pending with
+**Checking whether the editor received this message** while Vibe64 checks its
+delivery by itself. It becomes sent once it is confirmed; if Vibe64 cannot
+confirm it, the message says so in words and **Retry** checks its receipt
+before sending it again.
+
 ## When a turn is interrupted
 
 When Vibe64 crashes, restarts, is updated or moved while the AI is working, or

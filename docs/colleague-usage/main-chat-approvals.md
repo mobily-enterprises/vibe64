@@ -100,6 +100,8 @@ approving it with edited text.
 
 Approving sends the message exactly as if you had sent it yourself, on your AI:
 
+- The workspace is being prepared (after a restart, for example): the card stays
+  on **Sending…** and the message is sent by itself once preparation ends.
 - No turn running: it starts a new request (in Auto, the Router classifies it).
 - A turn is running that accepts guidance (including Auto working or an active
   goal): it joins that turn as guidance.

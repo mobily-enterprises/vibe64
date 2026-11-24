@@ -222,3 +222,61 @@ test("a message sent to a prepared workspace answers with its delivery, as befor
     }
   });
 });
+
+test("an editor stopping while a held message waits refuses it, unsent, and its delivery check says so", async () => {
+  await withRouteProject(async (project) => {
+    const world = messageWorld();
+    const server = await listen(world.service, project);
+    try {
+      const held = await within(server.send({ message: "Add a footer", messageId: "message_tab_held_3" }), ANSWER_WAIT_MS,
+        "the send did not answer while the workspace was being prepared");
+      assert.equal(held.body.status, "queued");
+      await within(world.service.closeHeldMessages(), ANSWER_WAIT_MS, "the stopping editor waited for the preparation");
+      const { body } = await server.inspect("message_tab_held_3");
+      assert.equal(body.status, "not-sent");
+      assert.equal(body.code, "vibe64_agent_message_server_restarting");
+      assert.equal(world.delivered.length, 0, "a message the editor stopped holding never reaches the assistant");
+    } finally {
+      world.finishPreparation();
+      await server.close();
+    }
+  });
+});
+
+test("held messages deliver each message once, answer a quick delivery with its result and forget an old outcome", async () => {
+  const { createHeldMessages } = await import("../../packages/vibe64-sessions/src/server/heldMessages.js");
+  const logged = [];
+  const logger = { debug() {}, error() {}, info: (fields) => logged.push(fields), warn: (fields) => logged.push(fields),
+    child() { return logger; } };
+  const held = createHeldMessages({ logger, answerMs: 20, outcomeMs: 60 });
+  const release = Promise.withResolvers();
+  let starts = 0;
+  const slow = async ({ stage }) => { starts += 1; stage("workspace-preparation"); await release.promise; return { ok: true, delivered: true }; };
+  try {
+    assert.deepEqual(await held.send("s1", "m1", slow), {
+      ok: true, delivered: false, status: "queued", messageId: "m1", sessionId: "s1", waitingFor: "workspace-preparation"
+    });
+    assert.equal((await held.send("s1", "m1", slow)).status, "queued");
+    assert.equal(starts, 1, "a second send of a held message joins its delivery");
+    // Another session's message of the same id is its own.
+    assert.equal((await held.send("s2", "m1", slow)).status, "queued");
+    assert.equal(starts, 2);
+    release.resolve();
+    await eventually(() => held.inspect("s1", "m1")?.status === "accepted", "the held delivery did not settle");
+    const timing = logged.find(({ event, sessionId }) => event === "vibe64.agent_message.send_timing" && sessionId === "s1");
+    assert.equal(timing.held, true);
+    assert.ok(Number.isFinite(timing.stages["workspace-preparation"]) && Number.isFinite(timing.stages.finished));
+    assert.ok(timing.receivedAt);
+
+    assert.deepEqual(await held.send("s1", "quick", async () => ({ ok: true, delivered: true })), { ok: true, delivered: true });
+    const refusal = Object.assign(new Error("Refused"), { code: "refused", delivery: "not-sent" });
+    await assert.rejects(held.send("s1", "refused", async () => { throw refusal; }), refusal);
+    // A Retry after a refusal delivers again.
+    assert.deepEqual(await held.send("s1", "refused", async () => ({ ok: true, delivered: true })), { ok: true, delivered: true });
+
+    await eventually(() => held.inspect("s1", "m1") === null, "an old outcome was kept");
+  } finally {
+    release.resolve();
+    await held.close();
+  }
+});

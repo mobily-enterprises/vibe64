@@ -16,6 +16,7 @@ import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { isArchivedVibe64Session } from "@/lib/vibe64SessionViewModel.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
+import { followHeldMessage, messageAnswerHeld, messageAnswerLost } from "@/lib/vibe64HeldMessage.js";
 
 function browserDraftStorage(identity) {
   try {
@@ -157,6 +158,8 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
     return Object.freeze(target);
   });
   const { api, ...assistantOptions } = vibe64AssistantConversationOptions();
+  // Each conversation's own delivery, by id, for the held message it follows.
+  const deliveries = new Map();
   const binding = useAssistantConversation({
     ...assistantOptions,
     conversationId: () => {
@@ -166,14 +169,31 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
     },
     actorKey: () => identity.value.actorKey, active, goal: true, deferWhileWorking: true,
     draftStorage: () => browserDraftStorage(identity.value),
-    api: { ...api, sendConversationMessage(id, input, ...options) {
+    api: { ...api, async sendConversationMessage(id, input, options = {}) {
       // As for Colleague, a new request from this page lifts speech silence left
       // by an interrupted or failed reply; history refreshes are not invitations.
       const state = voice.controller.state;
       if (state?.binding?.conversationId === id) state.session?.inviteSpeech(input.messageId);
-      return api.sendConversationMessage(id, input, ...options);
+      // A held message, or one whose answer was lost on the way, is followed
+      // through its delivery check, as its request used to wait for it.
+      const follow = (held, lost = false) => followHeldMessage(held, {
+        inspect: signal => api.inspectConversationDelivery(id, input.messageId, { signal }),
+        wait: label => deliveries.get(id)?.wait(input.messageId, label),
+        pending: () => deliveries.get(id)?.find(input.messageId)?.status === "pending",
+        signal: options.signal,
+        lost
+      });
+      let answer;
+      try {
+        answer = await api.sendConversationMessage(id, input, options);
+      } catch (error) {
+        if (options.signal?.aborted || !messageAnswerLost(error)) throw error;
+        return follow({ messageId: input.messageId }, true);
+      }
+      return messageAnswerHeld(answer) ? follow({ messageId: input.messageId, waitingFor: answer.waitingFor }) : answer;
     } },
     application(conversation) {
+      deliveries.set(conversation.identity.conversationId, conversation.delivery);
       const target = mainConversationTarget(conversation.identity.conversationId);
       return createConversationApplication(conversation, { viewer, summarySession,
         identity: Object.freeze({ ...identity.value, ...target, actorKey: conversation.identity.actorKey }) });

@@ -53,7 +53,9 @@ function operationResult(result) {
     routingCancelled: "boolean",
     operationOutcome: "string",
     retryable: "boolean",
-    refreshRecommended: "boolean"
+    refreshRecommended: "boolean",
+    // A held message's answer names what its delivery waits for.
+    waitingFor: "string"
   };
   return {
     ok: result?.ok !== false,
@@ -65,9 +67,11 @@ function operationResult(result) {
 /**
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
+ * @param {(sessionId: string, messageId: string) => object | null} [dependencies.inspectHeldMessage] a held Main
+ *   chat message's delivery check, which never opens the native conversation
  * @param {TerminalsService} dependencies.terminals
  */
-function createMainBrowserConversations({ actions, terminals }) {
+function createMainBrowserConversations({ actions, inspectHeldMessage = () => null, terminals }) {
   async function open({ id, context }) {
     const temporary = temporaryConversationTarget(id);
     const target = temporary || mainConversationTarget(id);
@@ -136,8 +140,16 @@ function createMainBrowserConversations({ actions, terminals }) {
       return operationResult(await execute(ACTION_UPDATE_ASSISTANT_SELECTION, pickFields(input, selectionFields)));
     }
 
+    /**
+     * A held message answers from its delivery, which may still wait for the workspace preparation, without opening
+     * the native conversation. One whose delivery ended without saying whether it reached the assistant is the
+     * conversation's to answer, which keeps the held refusal's words when it knows no more.
+     */
     async function inspectDelivery(input) {
-      return withConversation(conversation => conversation.inspectDelivery(input));
+      const held = temporary ? null : await withTerminals(() => inspectHeldMessage(target.sessionId, input.messageId));
+      if (held && held.status !== "unknown") return held;
+      const inspected = await withConversation(conversation => conversation.inspectDelivery(input));
+      return held && inspected?.status === "unknown" ? held : inspected;
     }
 
     /**

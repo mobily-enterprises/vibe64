@@ -57,6 +57,29 @@ not prompts, output or credentials. Slow accepted sends and first responses are
 visible at the normal warning log level; faster milestones use information level.
 Observer results are not awaited and errors cannot fail native delivery.
 
+A person's Main chat send answers before its delivery ends when that delivery
+waits: `sessions.sendMainChatMessage` runs each message id's delivery once in
+`heldMessages.js` (`createHeldMessages`), and a send whose delivery has not
+settled within two seconds answers `{ ok: true, delivered: false, status:
+"queued", waitingFor }`, naming the stage it waits on (`project-open`,
+`workspace-preparation` or `assistant`). A second send of the same id while it
+runs joins that delivery; once it ends, a later send delivers again (Retry
+after a refusal). The Main conversation's `inspectDelivery` answers a held
+message from that delivery (`pending` with `waitingFor`, then `accepted` or
+`not-sent` with the refusal) for 15 minutes after it ends, falling back to
+routing's own inspection when the delivery ended without proving either. The
+page (`useVibe64ConversationRuntime`, `src/lib/vibe64HeldMessage.js`) keeps the
+message pending with the stage in words and follows it through that check until
+it settles; a send whose answer was lost (a dropped connection or an edge's
+5xx) is followed the same way, so an edge's status code never shows as the
+message's error. Shutdown ends a held wait for preparation (the delivery is
+refused unsent, `vibe64_agent_message_server_restarting`). Each send logs
+`vibe64.agent_message.send_timing` from its arrival with its stage times, at
+warn when held or slower than a second, and `vibe64.agent_message.held` when it
+answers held. On 24 Nov 2026 a send waited inside its request for a
+workspace preparation after a restart and the hosted edge ended it after a
+minute ("Request failed with status 504."), although it was delivered once.
+
 Routing's admission section is the boundary of a definite rejection. A new
 message refused there, including a busy agent-write lock, an explicit Deslop
 during an open goal or an unavailable route, carries `delivery: "not-sent"`, and
@@ -1352,11 +1375,17 @@ its error. A client `messageId` becomes the entry id, so a retried enqueue is
 idempotent; five waiting entries per sender, 200 kept, attachments refused.
 
 Approve calls the ordinary `sendAgentMessage` as the owner with the owner's
-browser authority, a stable `messageId` `approval:<id>` and
+browser authority, a stable `messageId` `approval_<id>_<revision>` and
 `turnMetadata.sender`. It passes no submission kind: routing steers a running
 turn or starts a request at delivery time, so no separate decision races the
 turn. Routing keeps `sender` in turn metadata and the log shows
 "{sender} · approved by {owner}" under the delivered message.
+The approved delivery is held like the owner's own send (`heldMessages`, keyed
+by that `messageId`): an approval whose delivery waits, for the workspace
+preparation for example, answers `status: "sending"` with `waitingFor`, the
+entry stays `sending`, and the delivery records `sent` or `waiting` with its
+error when it ends. Approving again meanwhile joins that delivery; an edit
+while it is sending is still refused.
 
 `GET /sessions/:id/main-chat-approvals` returns the entries with the viewer's
 role, `practice` and the owner's name. In a member's lesson (`practice`) the
@@ -1371,6 +1400,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 ## Sources
 
 - `packages/vibe64-sessions/src/server/mainChatApprovals.js`
+- `packages/vibe64-sessions/src/server/heldMessages.js`
+- `src/lib/vibe64HeldMessage.js`
 - `src/composables/useVibe64MainChatApprovals.js`
 - `src/components/studio/vibe64-session/Vibe64MainChatApprovals.vue`
 - `tests/server/mainChatApprovals.unit.test.js`

@@ -92,6 +92,14 @@ start in another tab, or the end of an assistant turn, waits for the running
 preparation instead of starting another; a session that is already prepared
 starts its Preview without waiting for anything else.
 
+A Main chat message sent while the workspace is being prepared (after a
+restart, for example) is kept and sent by itself once preparation ends: it
+shows as pending with **Waiting for the workspace preparation to finish**, then
+**Waiting for the assistant to start**, and never needs sending again. An
+owner's **Approve** while preparation runs answers at once too; the approved
+message shows as sending until it reaches the assistant. If Vibe64 restarts
+before the message is sent, the message says so and **Retry** sends it.
+
 **Update this session** started while preparation runs waits for it: Update's
 progress says, for example,
 `The workspace is being prepared (Install dependencies); waiting for it to finish.`

@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
+import { createHeldMessages } from "./heldMessages.js";
 import { createMainChatApprovals } from "./mainChatApprovals.js";
 import { sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
@@ -19,11 +21,39 @@ function messageText(input) {
   return normalizeText(input.message);
 }
 
+/** The refusal of a held message that the server's shutdown stopped before it reached its assistant. */
+function shutdownRefusal() {
+  return Object.assign(new Error("Vibe64 restarted before this message reached the assistant. Send it again."), {
+    code: "vibe64_agent_message_server_restarting",
+    delivery: "not-sent"
+  });
+}
+
+/**
+ * Waits for the session's running workspace preparation, if one runs; a shutdown (`signal`) ends the wait with the
+ * message unsent.
+ * @param {Promise<unknown> | null} running
+ * @param {AbortSignal | null} signal
+ */
+async function untilPrepared(running, signal) {
+  if (!running) return;
+  if (signal?.aborted) throw shutdownRefusal();
+  const stopped = Promise.withResolvers();
+  const stop = () => stopped.reject(shutdownRefusal());
+  signal?.addEventListener("abort", stop, { once: true });
+  try {
+    await Promise.race([running, stopped.promise]);
+  } finally {
+    signal?.removeEventListener("abort", stop);
+  }
+}
+
 /**
  * What people send a session's assistant: a message, sent now or held for
  * the workspace owner's approval, an interrupted turn, and the integration
  * setup a turn asked for.
  * @param {object} dependencies
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger
  * @param {MainBrowserAuthority} dependencies.mainBrowserAuthority
  * @param {ProjectService} dependencies.project
  * @param {PublishProjectChanged} dependencies.publishProjectChanged
@@ -33,6 +63,7 @@ function messageText(input) {
  * @param {TerminalsService} dependencies.terminals
  */
 function createSessionMessages({
+  logger,
   mainBrowserAuthority,
   project,
   publishProjectChanged,
@@ -48,8 +79,18 @@ function createSessionMessages({
     publishProjectChanged,
     deliver: sendAgentMessage
   });
+  const heldMessages = createHeldMessages({ logger });
 
+  /**
+   * Delivers a message to the session's assistant once the project is open and its workspace prepared.
+   * `options.stage` hears what the message waits for next, `options.signal` (the server's shutdown) refuses it,
+   * unsent, while it still waits for the preparation.
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {{ browserAuthority?: object, stage?: (name: string) => void, signal?: AbortSignal | null }} [options]
+   */
   async function sendAgentMessage(sessionId, input, options = {}) {
+    const stage = options.stage || doNothing;
     const request = messageText(input);
     if (!request) {
       return {
@@ -76,6 +117,7 @@ function createSessionMessages({
     // A message sent while idle cleanup closes the project, or after it closed
     // it, waits for that Close and opens the project again before delivery. A
     // project that cannot open leaves the message visibly unsent.
+    stage("project-open");
     try {
       await terminals.openProjectRuntime({ reason: "chat-message" });
     } catch (error) {
@@ -87,7 +129,10 @@ function createSessionMessages({
         sessionId
       };
     }
-    await setupRunner.wait(sessionId);
+    const preparing = setupRunner.wait(sessionId);
+    if (preparing) stage("workspace-preparation");
+    await untilPrepared(preparing, options.signal || null);
+    stage("assistant");
     const runtime = await project.createRuntimeWithoutSource();
     vibe64SessionDebugLog("server.sessions.sendAgentMessage.dispatching", {
       durationMs: Date.now() - startedAt,
@@ -145,10 +190,15 @@ function createSessionMessages({
     return mainChatApprovals.decline(sessionId, approvalId, input, { vibe64User: trustedAssistantUser(input) });
   }
 
+  /**
+   * The approved message's delivery is held like the owner's own send: an approval while the workspace is prepared
+   * answers that the message is sending, and records its outcome once its delivery ends.
+   */
   function approveMainChatApproval(sessionId, approvalId, input, options) {
     return mainChatApprovals.approve(sessionId, approvalId, input, {
       vibe64User: trustedAssistantUser(input),
-      browserAuthority: options.browserAuthority || null
+      browserAuthority: options.browserAuthority || null,
+      hold: (messageId, run) => heldMessages.send(normalizeText(sessionId), messageId, run)
     });
   }
 
@@ -209,7 +259,27 @@ function createSessionMessages({
    * @param {object} context
    */
   function sendMainChatMessage({ sessionId, ...message }, context) {
-    return sendAgentMessage(sessionId, message, { browserAuthority: mainBrowserAuthority(sessionId, context) });
+    const browserAuthority = mainBrowserAuthority(sessionId, context);
+    const messageId = normalizeText(message.messageId);
+    if (!messageId) return sendAgentMessage(sessionId, message, { browserAuthority });
+    // Answers at once with the message held when its delivery waits (for the workspace preparation, the project or
+    // the assistant's start), and the delivery goes on.
+    return heldMessages.send(normalizeText(sessionId), messageId, ({ stage, signal }) =>
+      sendAgentMessage(sessionId, message, { browserAuthority, stage, signal }));
+  }
+
+  /**
+   * A held message's delivery check, or null when none of its sends is held here.
+   * @param {string} sessionId
+   * @param {string} messageId
+   */
+  function inspectHeldMessage(sessionId, messageId) {
+    return heldMessages.inspect(normalizeText(sessionId), normalizeText(messageId));
+  }
+
+  /** At shutdown: held messages still waiting are refused, unsent, and this resolves once every one has ended. */
+  function closeHeldMessages() {
+    return heldMessages.close();
   }
 
   /**
@@ -229,8 +299,10 @@ function createSessionMessages({
   return Object.freeze({
     approveMainChatApproval,
     approveMainChatMessage,
+    closeHeldMessages,
     declineMainChatApproval,
     editMainChatApproval,
+    inspectHeldMessage,
     interruptAgentTurn,
     readMainChatApprovals,
     resumeIntegrationContinuation,
