@@ -94,7 +94,9 @@ Progress. A finished turn or a fully ticked checklist alone does not complete a
 plan. Updates appear while the viewer is open.
 
 The AI ticks each item the moment it is built and its own checks pass, not at
-the end of its turn. When work on one item also builds others (a foundation
+the end of its turn, and the last item too. It never asks you whether to run the
+plan's passes or save: the passes are the plan's next step, which Vibe64 runs
+after Senior's review, and Vibe64 saves the work when the plan completes. When work on one item also builds others (a foundation
 item, say, that the later items use), it walks the whole checklist and
 half-ticks each item that is built, notes in Progress what is only partly built,
 and never holds every tick until the first item is finished. Senior writes a
@@ -116,12 +118,26 @@ plan and nothing needs a new mark. Vibe64 never decides which item a change
 built: that is the AI's to judge. The AI then stops, and the work goes on as it
 would have (Senior's review next, say).
 
-The check runs once per turn: its own turn never gets another, and if the AI
-ignores it, the turn ends normally and the plan shows it is behind. There is no
-check for a plan's pass, an AI task, an answer to a question, a Custom chat, a
-goal, a temporary chat, a turn you stopped, a turn that failed, or a turn that
-ends asking you a question. After the editor restarts, the turn that was
-running when it stopped gets no check.
+A turn that ended asking you a question gets the check too: the note tells the
+AI that Senior's review, the plan's passes and Save are never a question for
+you, and to ask any other question again, which then waits for your answer.
+
+In Auto, Junior's work goes on to Senior's review of the plan whenever every
+item is built, also when Junior's turn ended asking you something, and after
+the check when the AI left the plan exactly as the check found it. Senior
+verifies every item against the work and ticks it, and the plan then moves on
+to its passes. An item whose last proof can't run in the session (a real phone,
+a suite only CI runs) stays half-ticked until Senior's review asks you about it:
+**Needs you**, a numbered question with a recommended answer, also written in
+Progress. So a plan never waits at its last item, nor on a question about steps
+Vibe64 runs. While an item is still open, a question from the AI waits for your
+answer as usual.
+
+The check runs once per turn: its own turn never gets another. Outside Auto, if
+the AI ignores it, the turn ends normally and the plan shows it is behind. There
+is no check for a plan's pass, an AI task, an answer to a question, a Custom
+chat, a goal, a temporary chat, a turn you stopped or a turn that failed. After
+the editor restarts, the turn that was running when it stopped gets no check.
 
 ### How current the plan is
 

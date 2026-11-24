@@ -436,7 +436,9 @@ function createAssistantRoutingOutcomes({
       // message after them. The tail holds every message since the person's latest
       // one, as far as the lookback can read. Their reply is a new request, which
       // goes straight back to a plan's waiting pass; nothing resumes any other.
-      if (!state.stopped && run.state === "completed" && assistantReplyAsksPerson(latestAssistantQuestionsAwaitingUserReply(
+      // Vibe64's own handoff of a built plan to Senior's review goes ahead: Senior asks what is still open.
+      const reviewing = state.outcome?.vibe64 === true && state.outcome.turnId === state.turnId;
+      if (!state.stopped && run.state === "completed" && !reviewing && assistantReplyAsksPerson(latestAssistantQuestionsAwaitingUserReply(
         await context.runtime.store.readConversationTail(sessionId, { userLimit: 1 })
       ))) {
         Object.assign(state, { status: "waiting", awaitingAnswer: true, error: "Waiting for your answer. Reply in chat to continue." });

@@ -131,7 +131,7 @@ test("plan checked is the AI's explicit answer that nothing needs a new mark: th
   assert.match(f.sends[3].input.message, /Vibe64 plan check: 1 file of the session's source changed in this turn \(src\/migrate\.js\)/u);
 });
 
-test("no plan check for a turn that ticked, wrote Progress or checked the plan itself, changed no files, did not complete, ended asking the person, or ran without a plan", async (t) => {
+test("no plan check for a turn that ticked, wrote Progress or checked the plan itself, changed no files, did not complete, or ran without a plan; one that asked the person gets it, and asks again", async (t) => {
   // Ticks as it goes: nothing to check.
   let f = await planned(t);
   await f.service.send("session-1", request, f.context);
@@ -188,7 +188,8 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
   await f.service.cancel("session-1", f.context);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status], [1, "waiting"], "a stopped turn");
-  // A turn that ended with a numbered question for the person waits for the answer instead.
+  // A turn that ended with a numbered question for the person gets the check first, which asks the AI to ask it
+  // again; the question asked again then waits for the person's answer.
   f = await planned(t);
   await f.service.send("session-1", request, f.context);
   await buildAlongTheWay(f);
@@ -196,7 +197,10 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
   f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: "request-1", text: request.message },
     messages: [{ role: "assistant", text: question }] }];
   await f.service.afterTurn("session-1", end(f.state()), f.context);
-  assert.deepEqual([f.sends.length, f.state().awaitingAnswer], [1, true], "a turn asking the person");
+  assert.equal(f.sends.length, 2, "a turn asking the person gets the check");
+  assert.match(f.sends[1].input.message, /If this turn asked the person anything else, ask it again at the end of your reply/u);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.deepEqual([f.sends.length, f.state().awaitingAnswer], [2, true], "the question asked again waits for its answer");
   // A plan completed or archived before the turn: no plan to check.
   f = await fixture(t, { mode: "junior" }, { readyPlan: false, source: true });
   await f.service.send("session-1", request, f.context);
