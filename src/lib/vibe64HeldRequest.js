@@ -8,8 +8,26 @@ const HTTP_CLIENT_FAILURE = /\bstatus \d{3}\b/u;
 const LOST_ANSWER_DELAYS_MS = Object.freeze([1_000, 2_000, 3_000, 5_000]);
 const MAX_LOST_ANSWERS = 12;
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+/**
+ * Waits `ms`, or until `signal` aborts (at once when it already has); either way its timer and listener are removed.
+ * @param {number} ms
+ * @param {AbortSignal | null} [signal]
+ * @returns {Promise<void>}
+ */
+function delay(ms, signal = null) {
+  return new Promise(resolve => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+  });
 }
 
 /**
@@ -17,13 +35,15 @@ function delay(ms) {
  * request each time. While the server answers that it is held (`answer[heldAs] === true`), or after an answer that
  * never came back, it sends it again as a repeat, which joins the work or reads its outcome and never starts it. A
  * refusal is passed on as it is; a failure the server did not word (`notWorded`), or Vibe64 staying unreachable
- * (`lostContact`), is said in words.
+ * (`lostContact`), is said in words. When `signal` aborts during a wait, the wait ends at once and nothing is sent
+ * again: the signal's reason is thrown.
  * @template T
  * @param {(repeat: boolean) => Promise<T>} send
- * @param {{ heldAs?: string, lostContact: string, notWorded: string, wait?: (ms: number) => Promise<unknown> }} options
+ * @param {{ heldAs?: string, lostContact: string, notWorded: string, signal?: AbortSignal | null,
+ *   wait?: (ms: number, signal?: AbortSignal | null) => Promise<unknown> }} options
  * @returns {Promise<T>}
  */
-async function followHeldRequest(send, { heldAs = "creating", lostContact, notWorded, wait = delay }) {
+async function followHeldRequest(send, { heldAs = "creating", lostContact, notWorded, signal = null, wait = delay }) {
   let lost = 0;
   let repeat = false;
   for (;;) {
@@ -36,7 +56,8 @@ async function followHeldRequest(send, { heldAs = "creating", lostContact, notWo
         throw !error?.code && HTTP_CLIENT_FAILURE.test(String(error?.message || "")) ? new Error(notWorded) : error;
       }
       if (lost >= MAX_LOST_ANSWERS) throw new Error(lostContact);
-      await wait(LOST_ANSWER_DELAYS_MS[Math.min(lost, LOST_ANSWER_DELAYS_MS.length - 1)]);
+      await wait(LOST_ANSWER_DELAYS_MS[Math.min(lost, LOST_ANSWER_DELAYS_MS.length - 1)], signal);
+      signal?.throwIfAborted();
       lost += 1;
       repeat = true;
       continue;
@@ -46,4 +67,4 @@ async function followHeldRequest(send, { heldAs = "creating", lostContact, notWo
   }
 }
 
-export { followHeldRequest };
+export { delay, followHeldRequest };

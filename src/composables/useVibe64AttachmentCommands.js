@@ -10,6 +10,7 @@ import {
   vibe64AgentAttachmentPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { uploadFileRequest } from "@/lib/vibe64FileUpload.js";
+import { delay } from "@/lib/vibe64HeldRequest.js";
 import { workAnswerLost } from "@/lib/vibe64SessionWorkOutcome.js";
 
 function missingSessionResponse() {
@@ -40,8 +41,8 @@ const ATTACHMENT_UPLOAD_MESSAGES = Object.freeze({
 // Contention a later attempt gets past: the session's write lock, which setup preparing the workspace, Save or Update
 // hold for minutes (the server waits thirty seconds for it, then refuses in the holder's words), and the attachment
 // storage lock. An upload refused for either, or whose answer never came back (the hosted edge cut it, or the
-// connection dropped), is sent again after these waits, the last repeating; an upload stored but never answered
-// leaves an unsent file that expires.
+// connection dropped), is sent again after these waits, the last repeating, which a cancel ends at once; an upload
+// stored but never answered leaves an unsent file that expires.
 const RETRYABLE_UPLOAD_REFUSALS = new Set(["vibe64_agent_write_mode_busy", "vibe64_agent_attachment_busy"]);
 const UPLOAD_RETRY_DELAYS_MS = Object.freeze([1_000, 2_000, 3_000, 5_000]);
 const MAX_UPLOAD_ATTEMPTS = 12;
@@ -51,8 +52,8 @@ function retryableUploadRefusal(value) {
   return RETRYABLE_UPLOAD_REFUSALS.has(String(value?.code || ""));
 }
 
-function uploadRetryDelay(attempt) {
-  return new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_DELAYS_MS[Math.min(attempt, UPLOAD_RETRY_DELAYS_MS.length - 1)]));
+function uploadRetryDelay(attempt, signal) {
+  return delay(UPLOAD_RETRY_DELAYS_MS[Math.min(attempt, UPLOAD_RETRY_DELAYS_MS.length - 1)], signal);
 }
 
 function useVibe64AttachmentCommands() {
@@ -120,11 +121,11 @@ function useVibe64AttachmentCommands() {
       } catch (error) {
         if (signal?.aborted || (!retryableUploadRefusal(error) && !workAnswerLost(error))) throw error;
         if (last) throw retryableUploadRefusal(error) ? error : new Error(UPLOAD_LOST_CONTACT);
-        await uploadRetryDelay(attempt);
+        await uploadRetryDelay(attempt, signal);
         continue;
       }
       if (result?.ok !== false || !retryableUploadRefusal(result) || last) return result;
-      await uploadRetryDelay(attempt);
+      await uploadRetryDelay(attempt, signal);
     }
   }
 

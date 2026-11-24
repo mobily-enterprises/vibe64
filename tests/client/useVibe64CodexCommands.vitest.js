@@ -28,9 +28,12 @@ vi.mock("@/composables/useVibe64TerminalCommands.js", () => ({
   })
 }));
 
+import { ref } from "vue";
+
 import {
   useVibe64CodexCommands
 } from "../../src/composables/useVibe64CodexCommands.js";
+import { useAgentAttachments } from "../../src/composables/useAgentAttachments.js";
 
 class FakeXmlHttpRequest {
   static instances = [];
@@ -451,23 +454,67 @@ describe("useVibe64CodexCommands attachment uploads", () => {
       await expectNoFurtherAttempt(1);
     });
 
-    it("stops sending the file when it is cancelled during a wait", async () => {
+    it("settles as cancelled at once when it is cancelled during a wait, and sends nothing more", async () => {
       const commands = useVibe64CodexCommands();
       const controller = new AbortController();
       const upload = commands.uploadAttachment("session-1", attachmentFile(), {
         signal: controller.signal
       });
       const failure = upload.catch(error => error);
+      let settled = false;
+      void failure.then(() => {
+        settled = true;
+      });
 
       FakeXmlHttpRequest.instances[0].failNetwork();
       await vi.advanceTimersByTimeAsync(500);
+      expect(settled).toBe(false);
       controller.abort();
-      await expectNoFurtherAttempt(1);
+      await vi.advanceTimersByTimeAsync(0);
 
+      expect(settled).toBe(true);
       expect(await failure).toMatchObject({
         message: "Attachment upload was cancelled.",
         name: "AbortError"
       });
+      await expectNoFurtherAttempt(1);
+    });
+
+    it("starts the next queued file at once when the file waiting to be sent again is cancelled", async () => {
+      const commands = useVibe64CodexCommands();
+      const attachments = useAgentAttachments({
+        sessionId: ref("session-1"),
+        uploadAttachment: commands.uploadAttachment
+      });
+      const uploaded = attachments.uploadFiles([
+        new File(["first"], "first.txt", { type: "text/plain" }),
+        new File(["second"], "second.txt", { type: "text/plain" })
+      ]);
+      try {
+        await vi.advanceTimersByTimeAsync(0);
+        expect(FakeXmlHttpRequest.instances).toHaveLength(1);
+        expect(FakeXmlHttpRequest.instances[0].body.get("file").name).toBe("first.txt");
+        FakeXmlHttpRequest.instances[0].failNetwork();
+        await vi.advanceTimersByTimeAsync(500);
+        expect(FakeXmlHttpRequest.instances).toHaveLength(1);
+
+        attachments.cancelAttachment(attachments.queueItems.value[0]);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(FakeXmlHttpRequest.instances).toHaveLength(2);
+        expect(FakeXmlHttpRequest.instances[1].body.get("file").name).toBe("second.txt");
+        FakeXmlHttpRequest.instances[1].respond(201, {
+          attachmentId: "attachment-2",
+          fileName: "second.txt",
+          ok: true
+        });
+        expect((await uploaded).map(attachment => attachment.fileName)).toEqual(["second.txt"]);
+        await expectNoFurtherAttempt(2);
+      } finally {
+        // Disposal waits for every upload to settle: a cancelled one still waiting settles once its wait has passed.
+        await vi.advanceTimersByTimeAsync(60_000);
+        await attachments.disposeAttachments();
+      }
     });
   });
 });

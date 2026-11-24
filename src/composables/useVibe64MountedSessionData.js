@@ -309,7 +309,7 @@ function useVibe64MountedSessionData({
       );
       // A cold assistant can outlast the hosted edge's minute: the server answers that it is preparing, and the same
       // request is repeated, also after an answer that never came back, until the assistant is ready. A cancelled
-      // check stops repeating.
+      // check stops repeating, at once during a wait.
       const result = await followHeldRequest(() => {
         if (controller.signal.aborted) throw new Error("The assistant check was cancelled.");
         return getHttpWebClient().request(preparePath, {
@@ -320,7 +320,8 @@ function useVibe64MountedSessionData({
       }, {
         heldAs: "preparing",
         lostContact: "Vibe64 could not be reached to start the assistant. Please retry.",
-        notWorded: "The assistant could not be started. Please retry."
+        notWorded: "The assistant could not be started. Please retry.",
+        signal: controller.signal
       });
       if (result?.ok !== true) {
         throw Object.assign(new Error(result?.error || "Assistant status could not be reconciled."), {
