@@ -37,7 +37,7 @@ function launchPreviewEmptyText({
     return launchStatusText;
   }
   if (loadError) {
-    return `Preview status request failed: ${String(loadError || "").trim()}`;
+    return String(loadError || "").trim();
   }
   if (loading) {
     return "Checking preview status.";

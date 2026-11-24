@@ -98,28 +98,34 @@ function launchStatusShouldRetry(failureCount = 0, error = null) {
     status >= 500;
 }
 
+// A person never sees a status code, an error code or a route: the HTTP client's own "Request failed with status
+// N." is replaced by words.
+const STATUS_UNANSWERED = "Vibe64 did not answer while Preview read its status.";
+const STATUS_UNREADABLE = "Preview's status could not be read.";
+const HTTP_CLIENT_FAILURE = /\bstatus \d{3}\b/u;
+
+/**
+ * What a failed outputs read says: a read the hosted edge cut or that never arrived (status 0 or a 5xx without the
+ * server's code) in words, a refusal in the server's own words, and anything else as unreadable.
+ */
 function launchStatusErrorText({
   error = null,
-  fallback = "",
-  path = ""
+  fallback = ""
 } = {}) {
   const fallbackText = String(fallback || "").trim();
   if (!error) {
-    return fallbackText;
+    return HTTP_CLIENT_FAILURE.test(fallbackText) ? STATUS_UNREADABLE : fallbackText;
   }
   if (launchStatusAgentWriteBusy(error)) {
     return "";
   }
-  const message = String(error?.message || fallbackText || "Request failed.").trim();
   const status = normalizeHttpStatus(error?.status ?? error?.statusCode);
   const code = String(error?.code || "").trim();
-  const requestPath = String(path || error?.path || error?.url || "").trim();
-  const details = [
-    status === 0 ? "network" : status == null ? "" : `HTTP ${status}`,
-    code,
-    requestPath
-  ].filter(Boolean).join(", ");
-  return details ? `${message} (${details})` : message;
+  if (!code && (status === 0 || status >= 500)) {
+    return STATUS_UNANSWERED;
+  }
+  const message = String(error?.message || "").trim();
+  return code && message && !HTTP_CLIENT_FAILURE.test(message) ? message : STATUS_UNREADABLE;
 }
 
 function launchStatusAgentWriteBusy(error = null) {
