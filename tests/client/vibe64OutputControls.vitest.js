@@ -891,14 +891,16 @@ function fakeStorage() {
 }
 
 import { routeLocationKey } from "vue-router";
+import * as Vue from "vue";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
+import { configureHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+import { useVibe64OutputControls } from "../../src/composables/useVibe64OutputControls.js";
+import { previewDiagnosticInputValidator } from "../../packages/vibe64-terminals/src/server/inputSchemas.js";
 import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
 
+// The composable and the server's input schemas load with the file, not inside this file's first test, whose
+// five-second limit then measures only its own work: on a busy host their first load alone took longer.
 it("Preview diagnostic browser payload passes the HTTP schema with project authority in the route", async () => {
-  const Vue = await import("vue");
-  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
-  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
-  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
-  const { previewDiagnosticInputValidator } = await import("../../packages/vibe64-terminals/src/server/inputSchemas.js");
   const requests = [];
   vi.stubGlobal("window", { location: new URL("http://localhost/app/project/compas-next"),
     localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });

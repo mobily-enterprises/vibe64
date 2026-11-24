@@ -137,14 +137,22 @@ async function writeExecutable(filePath, content = "") {
   await chmod(filePath, 0o755);
 }
 
+// Waits until the terminal's output shows the text, or its command has ended (its output is then complete). A fixed
+// one-second wait failed on a busy host, where the command (a login shell, say) had not printed yet.
 async function waitForTerminalOutput(id, namespace, expectedText = "") {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
+  // Only a command that hangs, neither printing nor ending, reaches it.
+  const hangAt = Date.now() + 30_000;
+  while (Date.now() < hangAt) {
     const snapshot = readTerminalSession(id, {
       namespace
     });
-    if (String(snapshot.output || "").includes(expectedText)) {
+    if (String(snapshot.output || "").includes(expectedText) || !snapshot.ok) {
       return snapshot;
+    }
+    if (snapshot.exitCode !== null && snapshot.exitCode !== undefined) {
+      // Output the terminal had read when the command ended is in the next snapshot.
+      await new Promise((resolve) => setImmediate(resolve));
+      break;
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
