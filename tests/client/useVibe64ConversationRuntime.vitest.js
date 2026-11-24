@@ -727,7 +727,8 @@ describe("a Main chat message the server holds while its delivery waits", () => 
       JSON.stringify({ draft: "", attachments: [], messages })]]);
     vi.stubGlobal("window", { sessionStorage: { getItem: key => saved.get(key) ?? null,
       setItem: (key, value) => saved.set(key, String(value)), removeItem: key => saved.delete(key) },
-    requestAnimationFrame: callback => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout });
+    location: new URL("http://vibe64.local/"), requestAnimationFrame: callback => setTimeout(callback, 0),
+    cancelAnimationFrame: clearTimeout });
   }
   const restored = (id, text) => ({ id, text, payload: { message: text }, status: "pending", createdAt: new Date().toISOString() });
 
