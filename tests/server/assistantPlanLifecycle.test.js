@@ -356,8 +356,10 @@ test("the installed plan command uses the admitted role, emits live changes and 
   // In Auto, Senior's check of the plan completes it.
   request = { schemaVersion: 7, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "auto", resolvedMode: "junior" };
   assert.equal((await command("complete", { expectedRevision: reviewed.revision, expectedProgressRevision: reviewed.progressRevision })).status, "completed");
-  request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "senior", reason: "conversation" };
-  await assert.rejects(command("reopen", { expectedRevision: (await command("read")).revision }), /Only Senior/);
+  // A pass the person started on its own only reads the plan, and says so.
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "senior", task: "deslop" };
+  await assert.rejects(command("reopen", { expectedRevision: (await command("read")).revision }),
+    /This turn runs Deslop, which the person started on its own, outside the plan, so it can only read the plan/u);
   assert.equal(events.filter(event => event.reason === "work-plan-changed").length, 5);
   assert.deepEqual((await command("history")).history, [], "read-only commands finish even with stdin open");
   // Handoff takes no input either; a Junior chat has no Senior to hand the plan to.
