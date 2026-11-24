@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
-import { createHeldRequests } from "./heldRequests.js";
+import { createHeldRequests } from "@local/vibe64-core/server/heldRequests";
 import { sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 

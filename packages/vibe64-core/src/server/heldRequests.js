@@ -1,6 +1,6 @@
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
-import { createHeldWork } from "@local/vibe64-core/server/heldWork";
-import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { createHeldWork } from "./heldWork.js";
+import { currentProjectScopeKey } from "./projectRequestContext.js";
 
 /**
  * Requests a page names (`requestId`) and repeats (`repeat: true`) until their work's outcome, which a hosted
