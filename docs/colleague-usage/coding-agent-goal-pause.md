@@ -40,7 +40,9 @@ input or resolve the prerequisite, then choose **Goal** → **Resume goal**, or 
 Claude in chat to resume the goal.
 Running background agents or checks are work in progress, not an external blocker.
 This works directly after **Start goal** or **Resume goal**, without a separate
-chat message. Goal commands retain the same current-access checks as ordinary
+chat message, and in the steps Vibe64 sends by itself for you, such as an Auto
+workflow's next **Continue implementation** or a turn resumed after a server
+restart. Goal commands retain the same current-access checks as ordinary
 chat: the selected local editor project in the standalone editor, or the
 signed-in session where the server requires sign-in. The model's structured action changes status; merely saying
 “blocked” does not.

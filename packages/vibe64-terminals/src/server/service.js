@@ -24,6 +24,7 @@ import { createServiceAssistantContext } from "./serviceAssistantContext.js";
 import { createServiceAssistantPreparation } from "./serviceAssistantPreparation.js";
 import { createServiceSessionTerminals } from "./serviceSessionTerminals.js";
 import { createServiceGoals } from "./serviceGoals.js";
+import { createMainTurnAuthority } from "./mainTurnAuthority.js";
 import { createServiceAssistant } from "./serviceAssistant.js";
 import { createServiceMainConversationHost } from "./serviceMainConversationHost.js";
 import { createServiceAgentConversations } from "./serviceAgentConversations.js";
@@ -163,6 +164,8 @@ function createService({
     project,
     publishSessionChanged
   });
+  // The authority a Main turn Vibe64 sends for a person carries for its application tools (mainTurnAuthority.js).
+  const { turnAuthorityFor } = createMainTurnAuthority({ actions, state, sessionAccess, logger });
   const passes = createProjectPasses({ sessionContext: (sessionId) => sessionAccess.sessionContext(sessionId) });
   const workspacePreparation = createServiceWorkspacePreparation({
     sessionAccess,
@@ -325,7 +328,11 @@ function createService({
       vibe64AssistantSelectionFromMetadata(context.session.metadata);
       const note = pendingMainChatNote(context.session);
       const noted = messageWithMainChatNote(input, note);
-      const result = requireOwnDeliveryResult(await sessionAgent.sendMessage(sessionId, noted || input, context), input.messageId);
+      // A send no browser request carries (a workflow's next step, a turn resumed after a restart, a plan's pass, a
+      // project message) is Vibe64's, for the person who started the work: its tools act as them.
+      const sendContext = context.browserAuthority ? context
+        : { ...context, browserAuthority: await turnAuthorityFor(sessionId, context.vibe64User) };
+      const result = requireOwnDeliveryResult(await sessionAgent.sendMessage(sessionId, noted || input, sendContext), input.messageId);
       if (noted && result?.delivered === true &&
         await context.runtime.store.readMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY) === note) {
         await context.runtime.store.deleteMetadataValue(sessionId, MAIN_CHAT_NOTE_METADATA_KEY);

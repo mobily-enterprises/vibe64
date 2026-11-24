@@ -120,6 +120,14 @@ Auto waits after two consecutive turns without reported progress or eight
 automatic steps. Inspect the reason and select **Continue planning**, **Continue implementation**, or **Continue review**,
 matching the waiting stage, to continue with a fresh allowance. This does not grant permission to change the product scope.
 
+The steps Vibe64 sends by itself (the next **Continue implementation**, a review,
+a plan's pass, or a turn resumed after a server restart) run as you, the person
+who sent the request, with your current access. Claude in Main chat can use the
+application's actions in them as in your own messages, for example to pause or
+resume its goal or to look up what it can do. If your access to the workspace or
+project was removed meanwhile, such a step still runs, but every application
+action it tries is refused.
+
 If implementation is blocked on a requirement you want to defer, say so explicitly
 in **Auto**: for example, “Exclude actual email delivery from this implementation.
 Keep email setup and real delivery testing as future work before release, and

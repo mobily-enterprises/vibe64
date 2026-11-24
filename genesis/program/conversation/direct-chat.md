@@ -694,6 +694,21 @@ The authorized Send action retains its resolved actor/project authority through
 Sessions and the agent manager for both new messages and steering. Tool execution
 rechecks that authority; entering through the browser action route must behave
 like the inner conversation, without trusting authority supplied in message data.
+A Main turn that no browser Send carries is Vibe64's own send for the person who
+started the work: a workflow's next step (Continue implementation, a review, a
+plan's pass), a turn resumed after a restart, a project message. Routing's
+dispatch ([service.js](../../../packages/vibe64-terminals/src/server/service.js))
+gives it the same retained authority for that person, the routing request's
+sender or the project message's actor, as a goal's Set or Resume issues one
+([mainTurnAuthority.js](../../../packages/vibe64-terminals/src/server/mainTurnAuthority.js)):
+the configured assistant host's action context for them, which resolves them
+afresh on every action, and the session's conversation grant read through it. Without it the turn's first
+application tool call is refused (`vibe64_main_goal_control_request_required`),
+as every Continue implementation turn's was until 24 Nov. A person the
+host no longer resolves, or who may no longer open the session, gets no
+authority: the turn still runs, each tool call is refused, and
+`vibe64.agent_message.tool_authority_refused` records why. The person's own
+Continue of a waiting workflow is their browser Send and keeps its authority.
 The existing SDK MCP transport validates the admitted top-level native tool use;
 the Main binding rechecks its authored request, actor, project and assistant
 access, then derives the native goal identity on the server. It invokes the same
@@ -1414,6 +1429,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/components/studio/vibe64-session/Vibe64WorkPlanSections.vue`
 - `packages/vibe64-terminals/src/server/terminalActions.js`
 - `packages/vibe64-terminals/src/server/mainGoalControl.js`
+- `packages/vibe64-terminals/src/server/mainTurnAuthority.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `packages/vibe64-terminals/src/server/planPasses.js`
 - `packages/vibe64-terminals/src/server/passesInPlansUpgrade.js`

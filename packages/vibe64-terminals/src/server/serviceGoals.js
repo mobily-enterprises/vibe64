@@ -27,6 +27,7 @@ import { GOAL_RECOVERY_RETRY_DELAYS_MS, createServiceGoalRecovery } from "./serv
 import { createServiceGoalLimitReset } from "./serviceGoalLimitReset.js";
 import { createServiceGoalChatContinuation } from "./serviceGoalChatContinuation.js";
 import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
+import { issueMainTurnAuthority } from "./mainTurnAuthority.js";
 import { NO_SERVER_RUN } from "./turnInterruptions.js";
 import { createServiceGoalInterruptions } from "./serviceGoalInterruptions.js";
 
@@ -523,20 +524,14 @@ function createServiceGoals({
             // identity, so each later goal tool rechecks current project access.
             const requestMeta = currentProjectActionRequestMeta();
             if ((actor || requestMeta) && !prepared.context.browserAuthority) {
-              const projectSlug = sessionAccess.projectRuntimeContext().projectSlug;
-              const requestContext = requestMeta ? { surface: "app", channel: "internal", requestMeta }
-                : await state.assistantRuntime.createActionContext(actor);
-              const grant = await actions.execute({
-                actionId: "vibe64.sessions.conversation.context.read",
-                input: { projectSlug, sessionId },
-                context: requestContext
-              });
-              prepared.context.browserAuthority = {
+              prepared.context.browserAuthority = await issueMainTurnAuthority({
+                actions,
+                assistantRuntime: state.assistantRuntime,
                 sessionId,
-                projectSlug,
-                actorId: grant.actor.id,
-                requestContext
-              };
+                projectSlug: sessionAccess.projectRuntimeContext().projectSlug,
+                actor,
+                requestMeta
+              });
             }
             await changeGoalIntent(sessionId, context, latest => {
               if (!latest?.active || latest.id !== intent.id) throw goalRefusal("vibe64_goal_stopped_during_preparation");

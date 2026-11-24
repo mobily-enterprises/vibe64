@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
@@ -13,7 +14,7 @@ import { configureStudioProjectContext } from "@local/vibe64-core/server/studioP
 import { defineVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
-import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import { createSessionsService as createSessionService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 
@@ -22,8 +23,8 @@ configureStudioProjectContext({ env: process.env });
 
 const PROJECT_SLUG = "claude-goal-restart";
 
-// Three test files use this harness (claudeGoalRestart, claudeGoalRestartControls
-// and claudeGoalUsageLimit), which the suite runs at once within the machine's
+// Four test files use this harness (claudeGoalRestart, claudeGoalRestartControls,
+// claudeGoalUsageLimit and claudeMainApplicationTools), which the suite runs at once within the machine's
 // test budget. Their ten tests were one file: one after another they took 50
 // to 95 s on a busy test host, past the 60 s file budget, while the file's
 // process spent three quarters of that waiting on the processes each terminal
@@ -35,7 +36,11 @@ const PROJECT_SLUG = "claude-goal-restart";
  * owner, managed process transport and session store. Only Claude's inference
  * is synthetic: a /goal command, or a message asking Claude to keep working,
  * keeps its turn working until the process stops, as a goal or a long turn
- * Claude is still working on does; any other message completes.
+ * Claude is still working on does; any other message completes. A message
+ * naming APP-TOOLS has Claude search the application's actions first (a
+ * long turn's once Vibe64 continues it), and with REPORT-CONTINUE it then
+ * reports a workflow outcome through the plan helper's socket: continue, or
+ * wait when its previous outcome was that continue.
  * @param {{ after: (callback: () => unknown) => void }} t
  * @param {{ root?: string }} [options] root: the folder of a harness another process set up, which this one serves
  *   too (as a server later killed mid-turn); the harness that made it removes it.
@@ -103,6 +108,7 @@ async function goalHarness(t, { root: sharedRoot = "" } = {}) {
   await writeFile(command, `#!${process.execPath}
 const { createInterface } = require('node:readline');
 const { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
 const args = process.argv.slice(2);
 const emit = value => process.stdout.write(JSON.stringify(value) + '\\n');
@@ -122,7 +128,30 @@ const conversationId = args[args.indexOf(flag) + 1];
 const directory = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/gu, '-'));
 mkdirSync(directory, { recursive: true });
 const record = value => appendFileSync(path.join(directory, conversationId + '.jsonl'), JSON.stringify(value) + '\\n');
-createInterface({ input: process.stdin }).on('line', line => {
+// An application tool call, as Claude makes one through its application MCP server.
+const applicationTool = (name, id, input) => {
+  emit({ type: 'assistant', uuid: id + '-message', message: { content: [{ type: 'tool_use', id, name: 'mcp__application__' + name, input }] } });
+  emit({ type: 'control_request', request_id: id, request: { subtype: 'mcp_message', server_name: 'application',
+    message: { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: input, _meta: { 'claudecode/toolUseId': id } } } } });
+};
+// The plan helper's request (vibe64-helper plan), on the session command socket the turn was given.
+const plan = input => new Promise((resolve, reject) => {
+  const control = JSON.parse(process.env.VIBE64_SESSION_RENAME_CONTROL || 'null');
+  if (!control) throw new Error('Plan controls are unavailable.');
+  const body = JSON.stringify({ ...input, token: control.token, sessionId: control.sessionId, generationId: control.generationId });
+  const request = http.request({ socketPath: control.socketPath, method: 'POST', path: '/agent-session-command/plan', timeout: 15000,
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, response => {
+    let data = '';
+    response.setEncoding('utf8');
+    response.on('data', chunk => { data += chunk; });
+    response.on('end', () => { try { resolve(JSON.parse(data)); } catch (error) { reject(error); } });
+  });
+  request.on('error', reject);
+  request.end(body);
+});
+// The message each application tool call was made for, by its call id.
+const toolTurns = new Map();
+createInterface({ input: process.stdin }).on('line', async line => {
   const frame = JSON.parse(line);
   trace({ frame });
   if (frame.type === 'control_request') {
@@ -130,6 +159,27 @@ createInterface({ input: process.stdin }).on('line', line => {
     emit({ type: 'control_response', response: { subtype: 'success', request_id: frame.request_id,
       response: { models: [{ value: 'sonnet', supportedEffortLevels: ['high'] }] } } });
     if (frame.request.subtype === 'interrupt') emit({ type: 'result', subtype: 'success', terminal_reason: 'aborted_streaming', result: '' });
+    return;
+  }
+  if (frame.type === 'control_response' && toolTurns.has(frame.response?.request_id)) {
+    const id = frame.response.request_id;
+    const text = toolTurns.get(id);
+    toolTurns.delete(id);
+    const receipt = { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: JSON.stringify(frame.response.response) }] } };
+    record(receipt);
+    emit(receipt);
+    let reply = 'Searched the application actions';
+    if (text.includes('REPORT-CONTINUE')) {
+      const continued = text.includes('Previous outcome: More work remains');
+      try {
+        const read = await plan({ operation: 'read' });
+        const reported = await plan({ operation: 'outcome', ...read.workflow, ...(continued
+          ? { decision: 'wait', explanation: 'Waiting for the person to check the report', progress: false }
+          : { decision: 'continue', explanation: 'More work remains', progress: true }) });
+        if (reported.ok !== true) reply = 'The outcome was refused: ' + JSON.stringify(reported);
+      } catch (error) { reply = 'The outcome failed: ' + error.message; }
+    }
+    emit({ type: 'result', subtype: 'success', result: reply });
     return;
   }
   if (frame.type !== 'user') return;
@@ -193,6 +243,11 @@ createInterface({ input: process.stdin }).on('line', line => {
   }
   record(frame);
   emit(frame);
+  if (text.includes('APP-TOOLS') && (!text.includes('Keep working') || text.includes('Continue the authorised work'))) {
+    toolTurns.set(frame.uuid + '-search', text);
+    applicationTool('assistant_action_search', frame.uuid + '-search', {});
+    return;
+  }
   if (text.includes('Keep working')) {
     emit({ type: 'stream_event', event: { type: 'message_start', message: { id: frame.uuid + '-reply' } } });
     return;
@@ -202,6 +257,7 @@ createInterface({ input: process.stdin }).on('line', line => {
 `, { mode: 0o700 });
   const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const actor = { username: "goal-owner", uid: 71, role: "owner" };
+  let accessRevoked = false;
   const warnings = [];
   const createService = () => {
     const value = createTerminalService(terminalsServiceCollaborators({ project, actions,
@@ -213,7 +269,10 @@ createInterface({ input: process.stdin }).on('line', line => {
     }));
     value.configureAssistantRuntime({
       resolveAssistantUser: async user => user?.username === actor.username ? actor : user,
-      createActionContext: () => ({ channel: "internal", surface: "app", resolveAssistantUser: async () => actor }),
+      createActionContext: () => ({ channel: "internal", surface: "app", resolveAssistantUser: async () => {
+        if (accessRevoked) throw new AppError(403, "The user who requested this AI task no longer has workspace access.", { code: "vibe64_assistant_actor_unavailable" });
+        return actor;
+      } }),
       authorizeProjectMessage: async user => user?.username === actor.username ? actor : user
     });
     return value;
@@ -259,6 +318,12 @@ createInterface({ input: process.stdin }).on('line', line => {
     get service() { return service; },
     root,
     routeAsSenior,
+    /** The person sends to Main chat from the editor, as its chat does: through the send action, from their own request. */
+    sendAsPerson: input => actions.execute({ actionId: ACTION_SEND_AGENT_MESSAGE,
+      input: { projectSlug: PROJECT_SLUG, sessionId: "test", ...input },
+      context: { channel: "internal", surface: "app", requestMeta: { request: { headers: {} } } } }),
+    /** The assistant host no longer resolves the person (their account was disabled), as Online refuses then. */
+    revokeAccess() { accessRevoked = true; },
     options, store, warnings, actor, goalCommands, intent, turnActive, waitFor, trace,
     failNextStart: () => writeFile(failStartPath, ""),
     inProject: operation => runWithProjectRequestContext({ ...goalProject, vibe64User: null }, operation),
