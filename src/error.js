@@ -1,6 +1,8 @@
 import { createDefaultErrorPolicy } from "@jskit-ai/shell-web/client/error";
+import { editorReconnect, UPDATING_MESSAGE } from "./lib/vibe64EditorReconnect.js";
 
 const ERROR_RUNTIME_LOG_UNSUBSCRIBE_KEY = "__vibe64JskitErrorRuntimeLogUnsubscribe";
+const UPDATING_NOTICE_UNSUBSCRIBE_KEY = "__vibe64UpdatingNoticeUnsubscribe";
 
 /**
  * A reported error's cause, as the console shows it.
@@ -72,11 +74,40 @@ function installJskitErrorConsoleTrail(runtime) {
 }
 
 /**
+ * While the editor does not answer (it restarts for each release), the page says "Updating…" in words, in the
+ * shell's banner, which every page has whatever its layout, and the banner goes once the editor answers again.
+ * @param {import("@jskit-ai/shell-web/client/types").ShellErrorRuntime} runtime
+ */
+function installUpdatingNotice(runtime) {
+  const previousUnsubscribe = globalThis[UPDATING_NOTICE_UNSUBSCRIBE_KEY];
+  if (typeof previousUnsubscribe === "function") {
+    previousUnsubscribe();
+  }
+  let presentationId = "";
+  globalThis[UPDATING_NOTICE_UNSUBSCRIBE_KEY] = editorReconnect.subscribe((event) => {
+    if (event.type === "updating" && !presentationId) {
+      const shown = runtime.report({
+        source: "vibe64.editor.updating",
+        message: UPDATING_MESSAGE,
+        channel: "banner",
+        severity: "info",
+        persist: true
+      });
+      presentationId = String(shown?.presentationId || "");
+    } else if (event.type === "answered" && presentationId) {
+      runtime.dismiss(presentationId);
+      presentationId = "";
+    }
+  });
+}
+
+/**
  * The app's error presentation, which shell-web reads with its error toolkit.
  * @param {{ runtime: import("@jskit-ai/shell-web/client/types").ShellErrorRuntime }} toolkit
  */
 export default function configureVibe64ErrorRuntime({ runtime }) {
   installJskitErrorConsoleTrail(runtime);
+  installUpdatingNotice(runtime);
 
   return Object.freeze({
     defaultPresenterId: "material.snackbar",

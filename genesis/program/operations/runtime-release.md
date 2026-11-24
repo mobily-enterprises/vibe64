@@ -114,6 +114,25 @@ from `index.html`'s `<title>`. Vibe64 adds no code of its own for this. Nothing
 polls, the page never reloads by itself, and a development (`npm run dev`) page
 has no build to compare. See `docs/colleague-usage/vibe64-updates.md`.
 
+While the editor restarts, the page carries on. Its one HTTP client
+(`src/lib/vibe64HttpClient.js`, configured in `src/main.js`) sends a read that
+finds no editor (no answer, or a 502, 503 or 504 from the edge) again with
+backoff for up to a minute. It sends a write again only when the editor cannot
+have done it. A write made while the page already knows the editor is
+unreachable waits unsent until the editor answers. A write the stopping server
+refused before any handler ran (503 with `x-vibe64-stopping: 1`) is sent again.
+Any other failed write may come after the editor did the work, so it is never
+sent again: its error keeps the transport's status and code for the callers
+that follow their own lost answers (`vibe64HeldMessage.js`, the Preview start,
+Create pull request), and its words say Vibe64 cannot tell whether it was done.
+`src/lib/vibe64EditorReconnect.js` holds whether the editor answers. After
+1.5 s without an answer `src/error.js` shows **Updating…** in the shell's
+banner, and clears it when the editor answers. While it is unreachable, a GET
+of `/api/health` watches for that answer. Once the editor answers, a realtime
+socket that lost it reconnects at once and the live queries refetch
+(`packages/main/src/client/vibe64RealtimeQueries.js`).
+`tests/client/editorReconnect.vitest.js` drives a 5 s and a 30 s gap.
+
 Task-oriented Colleague usage guides under `docs/colleague-usage/` ship with the
 matching application runtime. The builder also ships `docs/training-content.md`
 and the copyable `docs/templates/learn-topic/` authoring template. Its explicit
