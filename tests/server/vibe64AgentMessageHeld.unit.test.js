@@ -46,12 +46,23 @@ async function eventually(check, message) {
  * The sessions service over an in-memory session, with the terminals stubbed: the workspace preparation runs until
  * the test ends it (`preparation`), and the assistant's delivery answers at once (`deliver`).
  */
-function messageWorld({ preparing = true, deliver = async (input) => ({ ok: true, delivered: true, messageId: input.messageId }) } = {}) {
+function messageWorld({ preparing = true, deliver = async (input) => ({ ok: true, delivered: true, messageId: input.messageId }),
+  metadata = new Map() } = {}) {
   const session = { agentRuns: [], metadata: {}, sessionId: SESSION_ID, status: "active" };
+  // The session's records, which outlive the editor's process (`metadata`, shared by a restarted world).
+  let queue = Promise.resolve();
   const runtime = {
     async getSession() { return session; },
     getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
-    store: {}
+    store: {
+      mutateSession(_sessionId, operation) {
+        const run = queue.then(() => operation());
+        queue = run.catch(() => {});
+        return run;
+      },
+      async readMetadataValue(_sessionId, name) { return metadata.get(name) || ""; },
+      async writeMetadataValue(_sessionId, name, value) { metadata.set(name, value); }
+    }
   };
   const preparation = Promise.withResolvers();
   const state = { preparing };
@@ -242,6 +253,65 @@ test("an editor stopping while a held message waits refuses it, unsent, and its 
       assert.equal(body.status, "not-sent");
       assert.equal(body.code, "vibe64_agent_message_server_restarting");
       assert.equal(world.delivered.length, 0, "a message the editor stopped holding never reaches the assistant");
+    } finally {
+      world.finishPreparation();
+      await server.close();
+    }
+  });
+});
+
+// A restart during the preparation is the case the 24 Nov 2026 send came close to: the editor's memory of the held
+// message is gone, the assistant never saw it, and its delivery check must still say it was not sent, so Retry sends
+// it, instead of leaving it unconfirmed for good.
+test("after a restart, by a shutdown or a crash, a message the editor held is not sent by its delivery check", async () => {
+  await withRouteProject(async (project) => {
+    for (const stop of ["shutdown", "crash"]) {
+      const metadata = new Map();
+      const messageId = `message_tab_restart_${stop}`;
+      const before = messageWorld({ metadata });
+      const first = await listen(before, project);
+      try {
+        const held = await within(first.send({ message: "Add a footer", messageId }), ANSWER_WAIT_MS,
+          "the send did not answer while the workspace was being prepared");
+        assert.equal(held.body.status, "queued");
+        if (stop === "shutdown") await before.service.closeHeldMessages();
+      } finally {
+        await first.close();
+      }
+      // The editor starts again over the same session records.
+      const after = messageWorld({ metadata, preparing: false });
+      const restarted = await listen(after, project);
+      try {
+        const { body } = await restarted.inspect(messageId);
+        assert.equal(body.status, "not-sent", `${stop}: ${JSON.stringify(body)}`);
+        assert.equal(body.code, "vibe64_agent_message_server_restarting");
+        assert.equal(body.messageId, messageId);
+        assert.match(body.error, /Send it again/u);
+        assert.equal(before.delivered.length + after.delivered.length, 0);
+      } finally {
+        await restarted.close();
+        // The crashed world's process is still this test's: stop its held wait without delivering it.
+        await before.service.closeHeldMessages();
+        before.finishPreparation();
+      }
+    }
+  });
+});
+
+test("a held message that was delivered, or that the assistant knows, keeps no record that outlives it", async () => {
+  await withRouteProject(async (project) => {
+    const metadata = new Map();
+    const world = messageWorld({ metadata });
+    const server = await listen(world, project);
+    try {
+      const held = await within(server.send({ message: "Fix the login page", messageId: "message_tab_record_1" }),
+        ANSWER_WAIT_MS, "the send did not answer while the workspace was being prepared");
+      assert.equal(held.body.status, "queued");
+      world.finishPreparation();
+      await eventually(async () => (await server.inspect("message_tab_record_1")).body.status === "accepted",
+        "the held message was not delivered");
+      const records = JSON.parse(metadata.get("held_agent_messages") || "{\"entries\":[]}").entries;
+      assert.deepEqual(records, []);
     } finally {
       world.finishPreparation();
       await server.close();
