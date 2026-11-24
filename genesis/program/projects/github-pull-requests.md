@@ -138,10 +138,12 @@ not merge it or advance the PR base branch.
 The form's request (`POST .../sessions/:sessionId/pull-request`) runs
 `vibe64.sessions.pull-request.start`, which the assistant's tools do not offer,
 with a `requestId` the form makes for each Create (`startSessionPullRequest` in
-`sessionWork.js`, held work from `@local/vibe64-core/server/heldWork`). It
+`sessionPullRequests.js`, a held request from `heldRequests.js` over
+`@local/vibe64-core/server/heldWork`). It
 answers with the creation's outcome when that comes within two seconds, and
 otherwise `{ ok: true, creating: true, requestId, waitingFor }` while it goes
-on (`session-write`, then `creating`): a hosted workspace's edge ends a request
+on (`received`, then `creating` once it holds the session's repository write):
+a hosted workspace's edge ends a request
 after about a minute, while saving and pushing a large change and asking
 GitHub can take minutes. The form says it is creating and sends the same
 request again as a repeat (`repeat: true`, `createPullRequestFollowed` in

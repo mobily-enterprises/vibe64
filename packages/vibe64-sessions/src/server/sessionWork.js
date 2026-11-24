@@ -1,8 +1,7 @@
 import crypto from "node:crypto";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
-import { createHeldWork } from "@local/vibe64-core/server/heldWork";
-import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { createSessionPullRequests } from "./sessionPullRequests.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
 import { refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
@@ -129,8 +128,6 @@ function createSessionWork({
   const startingWork = Object.freeze({ save: new Map(), update: new Map() });
   // The Saves and Updates a button started, until each has ended.
   const startedWork = new Set();
-  // The pull request dialog's creations, by project, session and the dialog's request id (`startSessionPullRequest`).
-  const heldPullRequests = createHeldWork({ component: "vibe64.session_pull_request", logger });
 
   /**
    * The session's work, with each connected copy's in `connected`, after
@@ -220,69 +217,7 @@ function createSessionWork({
     }, "Vibe64 could not inspect this changed file.");
   }
 
-  async function createSessionPullRequest(sessionId, input) {
-    return sessionResult(async () => {
-      const vibe64User = trustedAssistantUser(input);
-      const runtime = await project.createRuntimeWithoutSource();
-      const session = await runtime.getSessionWithoutSource(sessionId);
-      try {
-        return await terminals.createSessionPullRequest(sessionId, {
-          destinationReview: input.destinationReview,
-          title: input.title,
-          body: input.body,
-          draft: input.draft,
-          onRepositoryWriteAcquired: input.onRepositoryWriteAcquired,
-          operationId: crypto.randomUUID(),
-          runtime,
-          session,
-          vibe64User
-        });
-      } finally {
-        await publishSessionChanged(sessionId, {
-          operation: "updated",
-          originId: normalizeText(input.originId),
-          reason: "session-pull-request",
-          session: await runtime.getSessionWithoutSource(sessionId)
-        });
-      }
-    }, "The pull request could not be confirmed. Retry to check GitHub and continue.");
-  }
-
-  /**
-   * The pull request dialog's create: `createSessionPullRequest`, answered with its outcome when that comes within
-   * two seconds, and otherwise `{ ok: true, creating: true, requestId, waitingFor }` while it goes on. It saves and
-   * pushes the session's work and then asks GitHub, for minutes on a large or slow one, and a hosted workspace's edge
-   * ends a request after about a minute. The dialog repeats it with the same `requestId` (`repeat`), which joins the
-   * creation, or reads its outcome for fifteen minutes after it ended, and never starts one: GitHub mutations are
-   * never retried automatically, so a repeat this editor does not hold (it restarted, or the first request never
-   * arrived) says to check the session's pull request. A creation waits for the session's repository write
-   * (`session-write`), then creates (`creating`).
-   * @param {string} sessionId
-   * @param {object} input
-   */
-  async function startSessionPullRequest(sessionId, input) {
-    const { requestId, repeat = false, ...create } = input;
-    const key = [currentProjectScopeKey(), normalizeText(sessionId), normalizeText(requestId)].join("\0");
-    const held = heldPullRequests.inspect(key);
-    if (held?.settled) {
-      if (held.error) throw held.error;
-      return held.result;
-    }
-    if (!held && repeat === true) {
-      return {
-        code: "vibe64_session_pull_request_not_followed",
-        error: "Vibe64 restarted or lost this pull request while creating it, so it cannot say whether it was created. " +
-          "Check the session's pull request before creating it again.",
-        ok: false
-      };
-    }
-    const answer = await heldPullRequests.run(key, ({ stage }) => {
-      stage("session-write");
-      return createSessionPullRequest(sessionId, { ...create, onRepositoryWriteAcquired: () => stage("creating") });
-    });
-    if (answer.settled) return answer.result;
-    return { ok: true, creating: true, requestId, waitingFor: answer.waitingFor };
-  }
+  const pullRequests = createSessionPullRequests({ logger, project, publishSessionChanged, terminals });
 
   /**
    * What a Save or Update button's request is answered with once its work runs: the operation and its task as it is
@@ -345,7 +280,7 @@ function createSessionWork({
    * recorded its outcome, as the server's shutdown once waited for them inside their requests.
    */
   async function settleStartedWork() {
-    await Promise.allSettled([...startedWork, heldPullRequests.close()]);
+    await Promise.allSettled([...startedWork, pullRequests.close()]);
   }
 
   async function saveSessionWork(sessionId, input) {
@@ -730,14 +665,14 @@ function createSessionWork({
   }
 
   return Object.freeze({
-    createSessionPullRequest,
+    createSessionPullRequest: pullRequests.createSessionPullRequest,
     inspectSessionChangeDiff,
     inspectSessionChanges,
     inspectSessionWork,
     saveSessionWork,
     saveToCurrentDestination,
     settleStartedWork,
-    startSessionPullRequest,
+    startSessionPullRequest: pullRequests.startSessionPullRequest,
     startSessionSave,
     startSessionUpdate,
     updateSessionWork
