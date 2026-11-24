@@ -3,7 +3,8 @@ import path from "node:path";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { connectedSyncRunning } from "@local/vibe64-project/server/connectedSync";
 import { executionCleanupRequired } from "@local/vibe64-execution/server";
-import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
+import { logOperationalEvent, sanitizeOperationText } from "@local/vibe64-core/server/logging";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import {
   workspaceSetupState,
   workspaceSetupTranscript
@@ -51,6 +52,8 @@ function withoutLastLine(transcript, line) {
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
  * @param {typeof import("@local/vibe64-execution/server").finishVibe64Workflow} dependencies.finishWorkflow
  * @param {ProjectService} dependencies.project
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} [dependencies.logger] hears each run's and step's
+ *   start and finish, at warn so the default level keeps them
  * @param {typeof import("./workspaceSetupTree.js").readStepInputs} dependencies.readInputs
  * @param {typeof import("./workspaceSetupTree.js").readPreparedTree} dependencies.readTree
  * @param {typeof import("@local/vibe64-execution/server").runVibe64Command} dependencies.runCommand
@@ -60,6 +63,7 @@ function withoutLastLine(transcript, line) {
 function createWorkspaceSetupExecution({
   connectedPreparation,
   finishWorkflow,
+  logger = silentLogger,
   project,
   readInputs,
   readTree,
@@ -67,6 +71,23 @@ function createWorkspaceSetupExecution({
   runnerState,
   startWorkflow
 }) {
+  /**
+   * One line of a preparation's progress in the server's log. A preparation can run for minutes after a restart
+   * while a message or a Preview waits for it, so each run and step says when it started and how long it took.
+   */
+  function logPreparation(event, sessionId, fields) {
+    try {
+      logOperationalEvent(logger, "warn", {
+        component: "vibe64.workspace_setup",
+        event,
+        sessionId,
+        ...fields
+      }, event === "vibe64.workspace_setup.run" ? "Workspace preparation run." : "Workspace preparation step.");
+    } catch {
+      // The log is diagnostic only; a failing sink must not fail the preparation.
+    }
+  }
+
   /** The session's prepared connections, checked against the recipe's selection. */
   async function connectedInputs(setup, runtime, session) {
     if (!setup.connectedDevelopment) return { repositories: [], sourceRoots: [] };
@@ -163,9 +184,25 @@ function createWorkspaceSetupExecution({
   }
 
   /**
+   * Runs the recipe's steps, logging the run's start and its finish with its outcome and duration.
    * `preparedSteps` are the step records this run may skip by: none for an explicit retry.
+   * @param {Parameters<typeof executeSteps>[0]} request
    */
-  async function execute({
+  async function execute(request) {
+    const sessionId = request.session.sessionId;
+    const startedAt = Date.now();
+    let outcome = "failed";
+    logPreparation("vibe64.workspace_setup.run", sessionId, { phase: "started", steps: request.recipe.steps.length });
+    try {
+      const state = await executeSteps(request);
+      outcome = toText(state?.status) || "failed";
+      return state;
+    } finally {
+      logPreparation("vibe64.workspace_setup.run", sessionId, { phase: "finished", outcome, durationMs: Date.now() - startedAt });
+    }
+  }
+
+  async function executeSteps({
     context,
     preparedSteps = [],
     recipe,
@@ -256,6 +293,7 @@ function createWorkspaceSetupExecution({
         const inputs = step.recordKey ? await readInputs({ inputs: step.inputs, sourcePath }) : null;
         const record = inputs ? stepRecordValue(inputs, resources) : "";
         if (record && records.get(step.recordKey) === record) {
+          logPreparation("vibe64.workspace_setup.step", session.sessionId, { phase: "skipped", index, label: currentLabel });
           // The first step was announced as running before this run knew it would skip it.
           context.transcript = appendWorkspaceSetupTranscript(
             index === 0 ? withoutLastLine(context.transcript, stepStatus(currentLabel, "Running", redactionSecrets)) : context.transcript,
@@ -280,6 +318,8 @@ function createWorkspaceSetupExecution({
           status: "running",
           transcript: context.transcript
         }, context.renewal);
+        const stepStartedAt = Date.now();
+        logPreparation("vibe64.workspace_setup.step", session.sessionId, { phase: "started", index, label: currentLabel });
         const baseEnv = await runtime.resolvePromptEnvironment();
         const command = (request) => runCommand({
           actor: "app",
@@ -321,6 +361,15 @@ function createWorkspaceSetupExecution({
             })
           })
           : await command({ args: step.argv.slice(1), command: step.argv[0], cwd: step.cwd });
+        logPreparation("vibe64.workspace_setup.step", session.sessionId, {
+          phase: "finished",
+          index,
+          label: currentLabel,
+          outcome: result?.ok === true ? "succeeded" : signal?.aborted ? "stopped" : "failed",
+          durationMs: Date.now() - stepStartedAt,
+          ...(Number.isInteger(result?.exitCode) ? { exitCode: result.exitCode } : {}),
+          ...(result?.timedOut ? { timedOut: true } : {})
+        });
         context.transcript = appendWorkspaceSetupTranscript(
           context.transcript,
           capturedCommandOutput(result, redactionSecrets)
@@ -428,6 +477,7 @@ function createWorkspaceSetupExecution({
     ensureConnectedSync,
     currentTree,
     execute,
+    logPreparation,
     observe
   });
 }

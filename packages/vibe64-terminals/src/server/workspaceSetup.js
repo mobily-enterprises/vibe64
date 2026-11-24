@@ -19,6 +19,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
  * @param {object} dependencies
  * @param {typeof inspectGenesisProjectFormat} [dependencies.inspectProjectFormat]
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} [dependencies.logger] hears each run's and step's start and finish
  * @param {ProjectService} dependencies.project inspects each session's workspace setup
  * @param {(request: object) => Promise<object>} [dependencies.startWorkflow]
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
@@ -29,6 +30,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 function createWorkspaceSetupRunner({
   inspectProjectFormat = inspectGenesisProjectFormat,
   connectedPreparation,
+  logger,
   project,
   startWorkflow = startResourceWorkflow,
   finishWorkflow = finishVibe64Workflow,
@@ -40,6 +42,7 @@ function createWorkspaceSetupRunner({
   const setupExecution = createWorkspaceSetupExecution({
     connectedPreparation,
     finishWorkflow,
+    logger,
     project,
     readInputs,
     readTree,
