@@ -25,7 +25,10 @@ vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
   useRealtimeEvent: (options) => { creationHarness.realtime = options; }
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useUiFeedback", () => ({
-  useUiFeedback: () => ({ error: (...args) => creationHarness.feedback(...args) })
+  useUiFeedback: () => ({
+    error: (...args) => creationHarness.feedback(...args),
+    success: (...args) => creationHarness.feedbackSuccess?.(...args)
+  })
 }));
 
 vi.mock("@tanstack/vue-query", () => ({
@@ -57,6 +60,10 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: (options = {}) => {
     const queryKey = options.queryKey?.value || options.queryKey || [];
+    // The new session request: its payload goes to the test's createRun.
+    if (Array.isArray(queryKey) && queryKey[0] === "vibe64.sessions.create") {
+      return { save: (payload, saveOptions) => creationHarness.createRun(payload, saveOptions) };
+    }
     if (String(options.path?.value || options.path || "").endsWith("/vibe64/sessions")) {
       creationHarness.listOptions = options;
     }
@@ -135,6 +142,7 @@ beforeEach(() => {
   creationHarness.createRun = vi.fn();
   creationHarness.archiveRun = vi.fn(async () => ({ ok: true }));
   creationHarness.feedback = vi.fn();
+  creationHarness.feedbackSuccess = vi.fn();
   creationHarness.updateRun = vi.fn(async () => ({ ok: true }));
   creationHarness.refetch = vi.fn(async () => ({ data: { sessions: [] } }));
   creationHarness.queryData = ref({
@@ -709,6 +717,44 @@ describe("Vibe64 session creation", () => {
     expect(creationHarness.createRun).toHaveBeenCalledTimes(2);
     expect(sessionData.createSessionRunning.value).toBe(false);
     scope.stop();
+  });
+
+  // A hosted workspace's edge ends a request after about a minute, and making a session's source can take longer.
+  it("repeats a creation the server holds with the same request id until the session, showing one success", async () => {
+    creationHarness.createRun
+      .mockResolvedValueOnce({ ok: true, creating: true, requestId: "held", waitingFor: "source" })
+      .mockResolvedValueOnce({ ok: true, sessionId: "session-created" });
+    const { scope, sessionData } = mountSessionData();
+    try {
+      await expect(sessionData.createSession()).resolves.toMatchObject({ sessionId: "session-created" });
+      const [[first], [second]] = creationHarness.createRun.mock.calls;
+      expect(first.requestId).toMatch(/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u);
+      expect(first.repeat).toBeUndefined();
+      expect(second).toMatchObject({ requestId: first.requestId, repeat: true });
+      expect(creationHarness.select).toHaveBeenCalledWith("session-created");
+      expect(creationHarness.feedbackSuccess).toHaveBeenCalledTimes(1);
+      expect(creationHarness.feedback).not.toHaveBeenCalled();
+    } finally {
+      scope.stop();
+    }
+  });
+
+  it.each([0, 502, 504])("repeats a creation whose answer was lost with status %s, and never shows that failure", async (status) => {
+    vi.useFakeTimers();
+    creationHarness.createRun
+      .mockRejectedValueOnce(Object.assign(new Error(`Request failed with status ${status}.`), { status }))
+      .mockResolvedValueOnce({ ok: true, sessionId: "session-created" });
+    const { scope, sessionData } = mountSessionData();
+    try {
+      const creating = sessionData.createSession();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await expect(creating).resolves.toMatchObject({ sessionId: "session-created" });
+      expect(creationHarness.createRun.mock.calls[1][0].repeat).toBe(true);
+      expect(creationHarness.feedback).not.toHaveBeenCalled();
+    } finally {
+      scope.stop();
+      vi.useRealTimers();
+    }
   });
 
   it("does not apply a completed request to a different project or disposed panel", async () => {
