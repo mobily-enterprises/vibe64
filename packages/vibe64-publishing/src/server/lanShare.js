@@ -10,6 +10,7 @@ import http from "node:http";
 import os from "node:os";
 
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
+const SHARED_APK_GONE_MESSAGE = "This APK is no longer on the computer that shared it. Release it again there.";
 
 function lanAddresses(interfaces = os.networkInterfaces()) {
   const addresses = [];
@@ -25,15 +26,17 @@ function lanAddresses(interfaces = os.networkInterfaces()) {
 
 /**
  * @param {object} dependencies
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger
  * @param {() => number} [dependencies.now]
  * @param {string} [dependencies.host]
  * @param {typeof lanAddresses} [dependencies.addresses]
  */
 function createLanShare({
+  logger,
   now = () => Date.now(),
   host = "0.0.0.0",
   addresses = lanAddresses
-} = {}) {
+}) {
   let share = null; // { server, key, file, fileName, url, expiresAt, timer }
 
   async function stop() {
@@ -82,14 +85,17 @@ function createLanShare({
         response.writeHead(404, { "content-type": "text/plain" }).end("Not found");
         return;
       }
-      response.writeHead(200, {
+      const headers = {
         "content-type": "application/vnd.android.package-archive",
         "content-length": details.size,
         "content-disposition": `attachment; filename="${fileName.replace(/"/gu, "")}"`,
         "cache-control": "no-store"
-      });
-      if (request.method === "HEAD") response.end();
-      else createReadStream(file).pipe(response);
+      };
+      if (request.method === "HEAD") {
+        response.writeHead(200, headers).end();
+        return;
+      }
+      sendSharedFile(response, file, headers);
     });
     await new Promise((resolve, reject) => {
       server.once("error", reject);
@@ -109,6 +115,32 @@ function createLanShare({
     };
     share.timer.unref();
     return status();
+  }
+
+  /**
+   * The APK, read as it is sent. A pipe never passes on its source's error: an APK removed while shared would raise
+   * one nobody handles, which ends the editor, and a phone that goes away mid-download would leave the file open.
+   */
+  function sendSharedFile(response, file, headers) {
+    const download = createReadStream(file);
+    download.once("error", (error) => {
+      logger.warn({
+        code: String(error?.code || ""),
+        component: "publishing",
+        event: "vibe64.publishing.shared_apk_unreadable"
+      }, "The shared APK could not be read; the phone's download was refused.");
+      if (response.headersSent) {
+        response.destroy();
+        return;
+      }
+      response.writeHead(410, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" })
+        .end(SHARED_APK_GONE_MESSAGE);
+    });
+    download.once("open", () => {
+      response.writeHead(200, headers);
+      download.pipe(response);
+    });
+    response.once("close", () => download.destroy());
   }
 
   return Object.freeze({
