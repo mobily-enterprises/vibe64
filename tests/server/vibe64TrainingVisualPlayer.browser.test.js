@@ -12,6 +12,7 @@ import { readPinnedTopic } from "../../packages/vibe64-training/src/server/catal
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { alternateVisualResource, browserVisualResource } from "../fixtures/trainingVisualFixture.js";
+import { touchTarget } from "../e2e/support/touch-target.ts";
 
 const enabled = process.env.VIBE64_TRAINING_VISUAL_BROWSER_INTEGRATION === "1";
 const publicRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -50,6 +51,7 @@ async function fixture(t) {
     import { createVuetify } from 'vuetify';
     import * as components from 'vuetify/components';
     import 'vuetify/styles';
+    import '@jskit-ai/material-web/client/material.css';
     import Player from ${JSON.stringify(path.join(publicRoot, "packages/vibe64-training/src/client/TrainingVisualPlayer.vue"))};
     const pilot = ${JSON.stringify(browserVisualResource(resource))};
     const alternate = ${JSON.stringify(alternateVisualResource())};
@@ -169,7 +171,8 @@ test("native isolated SVG player preserves authored transitions, receipts, seman
     assert.match(failure, /not confirm.*not be replayed/u);
     assert.equal((await state()).phase, "failed");
     const recovery = page.getByRole("button", { name: "Reload diagram" });
-    assert.ok((await recovery.boundingBox()).height >= 48);
+    // Its 48dp touch target is JSKIT's (material.css's ::before), as every button's has been since e32cd08bb.
+    assert.ok((await touchTarget(recovery)).height >= 48);
     await recovery.click();
     await page.waitForFunction(() => window.visualFixture.state().phase === "ready");
     assert.notEqual((await state()).playerInstanceId, before);
