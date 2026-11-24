@@ -2797,8 +2797,18 @@ createInterface({ input: process.stdin }).on('line', async line => {
       : !requireGoalRequest || request?.headers?.cookie === originalGoalRequest.headers.cookie ? actor : null,
     authorizeProject: async ({ slug }) => assert.equal(slug, "claude-main-fixture")
   });
-  // Daemon recreation below must leave the browser facade using the current owner.
-  const terminals = new Proxy({}, { get: (_target, key) => service[key] });
+  // Daemon recreation below must leave the browser facade using the current owner. `slowProjectOpenMs` makes the
+  // next Main chat send's project open take that long, as after a restart on a loaded machine.
+  let slowProjectOpenMs = 0;
+  const terminals = new Proxy({}, { get: (_target, key) => {
+    if (key !== "openProjectRuntime" || !slowProjectOpenMs) return service[key];
+    const ms = slowProjectOpenMs;
+    slowProjectOpenMs = 0;
+    return async (...args) => {
+      await new Promise(resolve => setTimeout(resolve, ms));
+      return service.openProjectRuntime(...args);
+    };
+  } });
   const sessions = createSessionService({ actions, project, terminals });
   actions.register({ contributorId: "test.claude-main-goals", domain: "vibe64",
     actions: [...createSessionActions({ sessions: withMainChatOperations(sessions) }), ...createTerminalActions({ terminals })]
@@ -3492,6 +3502,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal((await service.recoverActiveGoals()).results[0].blocked, true);
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, blockedFrames,
         "Restart retains the blocker without invoking Claude again");
+      // On 24 Nov 2026 this send outlasted the editor's two-second answer on a loaded test host and answered as held.
+      slowProjectOpenMs = 2_500;
       const blockedOrdinary = await goalFacade.send({ messageId: "service-blocked-ordinary", text: "Explain the blocker without resuming." });
       assert.equal(blockedOrdinary.delivered, true);
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked");
