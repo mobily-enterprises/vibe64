@@ -1119,6 +1119,66 @@ it("a start names the Preview run the tab shows, or none, so the server keeps a 
   } finally { app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
 });
 
+// A start answers within two seconds, as starting, while its workspace is prepared, and a start whose answer the hosted
+// edge cut (a 504 with no code) is followed the same way: the page shows what it waits for in words, never the status.
+it.each([
+  ["held", () => null],
+  ["cut by the edge", () => Object.assign(new Error("Request failed with status 504."), { status: 504 })]
+])("a %s Preview start is followed in words until it runs", async (_label, cut) => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const target = { id: "app", available: true, default: true, mode: "interactive", presentation: { kind: "web" } };
+  const running = { id: "run-9", status: "running", metadata: { outputTargetId: "app", launchReady: true } };
+  let shown = { ok: true, outputTargets: [target], activeTerminal: null, preview: { state: "stopped", stoppedIntent: true } };
+  const posts = [];
+  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/held-run"),
+    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  vi.stubGlobal("WebSocket", class { static OPEN = 1; readyState = 3; addEventListener() {} send() {} close() {} });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  configureHttpWebClient({ request(url, options) {
+    if (options.method === "POST") {
+      posts.push(options.body);
+      const failure = cut();
+      if (failure) return Promise.reject(failure);
+      return Promise.resolve({ ok: true, starting: true, startId: options.body.startId, waitingFor: "workspace-preparation" });
+    }
+    return Promise.resolve(shown);
+  } });
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  let controls;
+  const app = renderer.createApp({ setup() {
+    controls = useVibe64OutputControls({ session: Vue.ref({ sessionId: "held-run", metadata: { source_kind: "session_clone",
+      source_path: "/controlled/held/sessions/active/held-run/source", source_path_authority: "managed_session_source" },
+    sourcePath: "/controlled/held/sessions/active/held-run/source" }) });
+    return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide(routeLocationKey, { path: "/", params: {} });
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await vi.waitFor(() => expect(controls.loading.value).toBe(false));
+    const started = controls.run(target, { applyDefaultDisplay: false, forceRestart: true });
+    await vi.waitFor(() => expect(posts).toHaveLength(1));
+    const startId = posts[0].startId;
+    expect(startId).toMatch(/^start_/u);
+    shown = { ...shown, launchStarts: [{ startId, status: "starting", waitingFor: "workspace-preparation" }] };
+    await vi.waitFor(() => expect(controls.launchStartWaiting.value).toBe("Waiting for the workspace preparation to finish"),
+      { timeout: 3_000 });
+    expect(controls.launchError.value).toBe("");
+    shown = { ...shown, activeTerminal: running, preview: { state: "ready", href: "http://127.0.0.1:3000/" },
+      launchStarts: [{ startId, status: "started", terminalSessionId: "run-9" }] };
+    await expect(started).resolves.toBe(true);
+    expect(controls.terminalSessionId.value).toBe("run-9");
+    expect(controls.launchError.value).toBe("");
+    expect(controls.launchStartWaiting.value).toBe("");
+    expect(posts).toHaveLength(1);
+  } finally { app.unmount(); queryClient.clear(); configureHttpWebClient(); vi.unstubAllGlobals(); }
+});
+
 it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup and exposes the %s outcome", async outcome => {
   const Vue = await import("vue");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
