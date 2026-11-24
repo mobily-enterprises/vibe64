@@ -196,6 +196,54 @@ test("workspace preparation executes declared argv in order through the managed 
 });
 
 
+// On 24 Nov 2026 a hosted session's preparation after a restart ran for minutes ("Keep connected JSKIT AI in effect
+// (npm)") while a message waited for it, and the server's log had no line about the preparation at all.
+test("workspace preparation logs its run and each step's start, finish and duration", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    const logged = [];
+    const record = level => (fields, message) => logged.push({ level, message, ...fields });
+    const logger = { debug() {}, error: record("error"), info: record("info"), warn: record("warn"), child() { return logger; } };
+    const runner = createWorkspaceSetupRunner({
+      logger,
+      async startWorkflow() { return { ok: true, workflow: { id: "7abcf25f-8c93-4965-91ac-7f6c866ad39c" } }; },
+      async finishWorkflow() {},
+      project: {
+        inspectWorkspaceSetup: () => readySetup({
+          steps: [{ argv: ["npm", "install"], label: "Install JavaScript dependencies", runtimeRequirements: ["nodejs"], workdir: "." },
+            { argv: ["npm", "run", "db:prepare"], label: "Prepare the database", runtimeRequirements: ["nodejs"], workdir: "." }]
+        }),
+        ...readyProject(),
+        async projectExecutionEnvironment() { return { environment: { PROJECT_SETTING: "configured-secret-value" } }; }
+      },
+      async runCommand(request) {
+        return request.args.includes("db:prepare")
+          ? { exitCode: 2, ok: false, output: "configured-secret-value refused\n" }
+          : { exitCode: 0, ok: true, output: "installed\n" };
+      }
+    });
+    const started = await runner.start({ runtime, session });
+    assert.equal((await started.completion).status, "failed");
+    const events = logged.filter(({ event }) => String(event || "").startsWith("vibe64.workspace_setup."));
+    assert.deepEqual(events.map(({ event, phase, label, outcome }) => [event, phase, label ?? "", outcome ?? ""]), [
+      ["vibe64.workspace_setup.run", "started", "", ""],
+      ["vibe64.workspace_setup.step", "started", "Install JavaScript dependencies", ""],
+      ["vibe64.workspace_setup.step", "finished", "Install JavaScript dependencies", "succeeded"],
+      ["vibe64.workspace_setup.step", "started", "Prepare the database", ""],
+      ["vibe64.workspace_setup.step", "finished", "Prepare the database", "failed"],
+      ["vibe64.workspace_setup.run", "finished", "", "failed"]
+    ]);
+    for (const event of events) {
+      assert.equal(event.sessionId, session.sessionId);
+      // The default log level keeps every one of them.
+      assert.equal(event.level, "warn");
+    }
+    for (const event of events.filter(({ phase }) => phase === "finished")) assert.ok(Number.isFinite(event.durationMs));
+    assert.equal(events.find(({ label, phase }) => label === "Prepare the database" && phase === "finished").exitCode, 2);
+    assert.equal(JSON.stringify(events).includes("configured-secret-value"), false);
+  });
+});
+
 test("a requested connected preparation returns at once and records each progress step", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const labels = [];
