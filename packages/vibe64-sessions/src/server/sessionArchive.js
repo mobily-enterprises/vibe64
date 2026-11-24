@@ -3,7 +3,7 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
-import { createHeldRequests } from "./heldRequests.js";
+import { createHeldRequests } from "@local/vibe64-core/server/heldRequests";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
