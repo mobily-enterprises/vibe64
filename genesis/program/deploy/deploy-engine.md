@@ -106,7 +106,10 @@ app at mobilynet, `<app>-<service>` (at most 32 characters), whose upload is the
 archive with that service's `mobilynet.json` added at its root
 (`servicePackages`, `serviceUpload`). Each declaration requires the base's
 packages, the runtime's, the shared Packages and the service's own, each once
-and at most 200; declares the machine features its sandbox allowances need, a
+and at most 200 (a runtime's are its pack's, `RUNTIME_PACKAGES`: `postgresql`
+gives PostgreSQL 18's tools, `postgresql_18`, the major of the only PostgreSQL
+mobilynet's catalogue runs, since `pg_dump` refuses a newer server and
+`pg_restore` a newer dump); declares the machine features its sandbox allowances need, a
 need for every resource, and the settings the Stack names for that service
 (`stackSettingsPerService`), with their types and required flags: Production's
 own and the generated secrets every service, the setup code the public one, and
