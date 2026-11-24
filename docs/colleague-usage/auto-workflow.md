@@ -209,7 +209,11 @@ reason; select it again to collapse it. Restored outcomes are also collapsed.
 A separate delivery or cleanup error retains its own **Details** and recovery
 actions until resolved. Clicking a workflow action immediately shows **Starting…**,
 **Continuing…**, or **Checking…** on that button while it is submitted. Other
-workflow submissions are disabled until it settles. **Continue planning**,
+workflow submissions are disabled until it settles. While the assistant answers
+a message, **Implement plan** and the **Continue** buttons stay greyed out with
+the reason beside them, **Available when this answer ends.** (or **Available
+once your message is sent.** while your message is sent), and the plan's status
+line says the same; **Check delivery** stays available. **Continue planning**,
 **Continue implementation**, and **Continue review** act on the saved workflow
 without resending its original chat message. **Check delivery** inspects the saved
 attempt without starting another copy. If a control cannot start or the saved

@@ -66,17 +66,18 @@
         <Vibe64RoutingNotice
           :request="routingRequest"
           :selection="props.session?.assistantSelection"
-          :mode="assistantRoutingFromMetadata(props.session?.metadata)?.mode || ''"
+          :mode="routingMode"
           :active="props.active && conversationLogVisible"
           :pending-action="routingActionSending"
           :action-error="routingActionError"
-          :busy="agentActive || composerSending || composerBlocked"
+          :busy="chatHold"
           @retry="sendRoutingAction('continue')"
           @implement="sendRoutingAction('implement')"
           @view-plan="workPlanViewer?.showPlan('current')"
           @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
         />
         <div v-if="planStatusLine" class="vibe64-plan-status text-body-small mb-1 px-2" role="status" data-testid="vibe64-plan-status">{{ planStatusLine }}</div>
+        <div v-if="composerHeldReason" :id="composerHeldReasonId" class="text-body-small mb-1 px-2" role="status" data-testid="vibe64-composer-held">{{ composerHeldReason }}</div>
         <Vibe64PassSuggestion v-if="passSuggestionVisible" :passes="passes" :pass="passes.recommendation.value" />
         <Vibe64AutopilotPromptTextarea
           ref="composerInput"
@@ -85,7 +86,7 @@
           v-model="composerDraft"
           aria-label="Message AI assistant"
           :attachments-enabled="composerAttachmentsEnabled"
-          :described-by="composerSupportStatusVisible ? thinkingStatusId : ''"
+          :described-by="[composerSupportStatusVisible ? thinkingStatusId : '', composerHeldReason ? composerHeldReasonId : ''].filter(Boolean).join(' ')"
           :disabled="composerDisabled"
           density="compact"
           :placeholder="composerPromptHintPlaceholder"
@@ -261,7 +262,7 @@
 </template>
 
 <script setup>
-import { assistantGoalIsActive, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalIsActive, assistantRoutingFromMetadata, assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRouting";
 import { workPlanStatusLine } from "@local/vibe64-terminals/shared/assistantWorkPlan";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, nextTick, ref, useId, watch } from "vue";
@@ -295,7 +296,7 @@ const { view } = defineProps({
 });
 /** @type {import("@/composables/useVibe64AutopilotView.js").Vibe64AutopilotViewParts} */
 const {
-  agentActive, agentObservationLost, agentStopEnabled, agentStopVisible, agentWorking, answerChoices,
+  agentActive, agentObservationLost, agentStopEnabled, agentStopVisible, agentWorking, answerChoices, composerHeldReason,
   approvalMode, assistantAccessError, assistantAccessLoading, assistantCanConfigureRouting,
   assistantPurposes, assistantRestrictionMessage, attachPreviewDiagnostics, cancelOptimisticMessage,
   captureVisiblePreview, chatCollapsed, chatReloading, chatTurns, composerAttachments,
@@ -316,14 +317,27 @@ const composerSendButton = ref(null);
 const composerSettingsOpen = ref(false);
 const composerSettingsButton = ref(null);
 const workPlanViewer = ref(null);
+const routingActionSending = ref("");
+const routingActionError = ref("");
+// What holds the chat's workflow actions: the assistant's turn, the person's message being sent, or their spoken one.
+const chatHold = computed(() => {
+  if (agentActive.value) return "turn";
+  if (composerSending.value) return "message";
+  return conversationView.value?.composerBlocked ? "voice" : "";
+});
+const routingMode = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.mode || "");
 // While a plan is open, one line says where it is: read from the plan itself, with the chat's waiting request and
-// questions, and how many files changed since the plan was last brought up to date when any did.
+// questions, the workflow action its notice offers (named as the notice names it, and whether it can be pressed
+// now), and how many files changed since the plan was last brought up to date when any did.
 const planStatusLine = computed(() => workPlanStatusLine(workPlanViewer.value?.step || null, {
   questions: agentActive.value ? 0 : numberedQuestions.value.length,
   request: routingRequest.value,
+  action: assistantRoutingNotice(routingRequest.value, { mode: routingMode.value, selection: props.session?.assistantSelection,
+    busy: chatHold.value, pendingAction: routingActionSending.value }).action,
   freshness: workPlanViewer.value?.freshness || null
 }));
 const thinkingStatusId = `studio-autopilot-thinking-${useId()}`;
+const composerHeldReasonId = `studio-autopilot-held-${useId()}`;
 const composerAttachmentState = ref({
   count: 0,
   hasUnresolved: false,
@@ -373,8 +387,6 @@ function showApprovedMessage(entry) {
   mainChat.value?.querySelector(`.vibe64-conversation-log [data-approval-id="${CSS.escape(entry.id)}"]`)
     ?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
-const routingActionSending = ref("");
-const routingActionError = ref("");
 watch(() => [routingRequest.value?.messageId, routingRequest.value?.stage, routingRequest.value?.status, routingRequest.value?.delivery],
   () => { routingActionError.value = ""; });
 async function sendRoutingAction(action) {

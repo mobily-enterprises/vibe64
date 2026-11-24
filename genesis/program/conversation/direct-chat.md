@@ -2127,7 +2127,12 @@ that main chat runs on the owner's AI.
 Routing progress stays on the message bubble, without a duplicate composer banner.
 Main chat uses the routing notice component: planning, implementation, review and
 delivery-recovery notices share a compact wrapping row, with expandable details,
-small JSKIT buttons and a 44px coarse-pointer summary. Errors and review
+small JSKIT buttons and a 44px coarse-pointer summary. Its workflow action
+(Implement plan, a stage's Continue, or Check delivery) follows the shared
+disabled-says-why pattern: held by other chat work, it stays greyed out with its
+reason beside it ("Available when this answer ends.", tied by
+`aria-describedby`), while Check delivery, which only reads the saved attempt,
+stays available. Errors and review
 recovery actions remain visible, while a newly interrupted or skipped coding review
 uses the shell's brief notification. Restoring a chat does not replay old notices.
 Discussion and planning complete without reporting a skipped implementation review.
@@ -2614,7 +2619,15 @@ While a plan is open, the chat shows one status line above the composer
 (`workPlanStep`: implementing the first item not built, Senior review, the next
 pass and its place among the plan's passes, or completed), unless the chat's
 routing request waits for the person's answer or shows questions (needs you,
-with their number), waits for Implement plan, or is otherwise paused. Senior
+with their number), waits for Implement plan, or is otherwise paused. A waiting
+line names the one workflow action the routing notice offers
+(`assistantRoutingNotice`, which both read so they cannot disagree) by its exact
+label: "Plan: paused, Continue implementation to resume" (or "Plan: ready,
+Implement plan to start") only while that button can be pressed; while an answer,
+a message being sent or a spoken message holds it, "Plan: paused · Continue
+implementation is available when this answer ends" (or "once your message is
+sent"); once pressed, the button's own progress ("Plan: paused · Continuing…");
+and with no action on offer, "Plan: paused, send a message to go on". Senior
 review reads as such only while a request is working; with nothing running it
 (a Junior chat's built plan, say) the line says it is ready for Senior review and
 asks the person to ask Senior. The plan
@@ -5268,6 +5281,21 @@ history remain unchanged, and ordinary authored goal text is preserved.
 The Claude goal dialog closes only when its Set command succeeds for the same
 project, session and viewer. Pending or failed commands preserve the objective
 and open dialog; a late response cannot dismiss another conversation's dialog.
+
+While the assistant works (`chatTurnsWithRouting`'s `working`), the routed
+request's own message stops being Pending once the server has sent its prompt to
+the running turn (delivery `sending` with its `attemptedMessageId`): routing
+refuses a send beside a running turn, so that turn is the message's own, and its
+bubble shows the turn working rather than "awaiting receipt"; a receipt that
+never comes still makes it unconfirmed. Any other Pending message the assistant
+has not taken says what it waits for: "Sending to the assistant's current turn"
+for a steer, otherwise "Waiting for the assistant's current turn to end",
+replacing a held send's "Waiting for the assistant to start" and keeping the
+page's own deferral reason. A draft the send arrow cannot take during a turn says
+why in a status line above the composer (`composerHeldReason`): the turn has not
+started, the answer is ending, a message with files waits for the answer to end,
+Stop is being confirmed, or Save or Update is running; connection, recovery and
+routing states keep their own labels.
 
 A local same-identity retry remains Pending while saved routing metadata still
 contains the previous failure. The routing presentation and retry/edit guards

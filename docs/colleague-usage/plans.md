@@ -209,8 +209,10 @@ from the plan itself each time it changes:
 | **Plan: ready for Senior review, ask Senior to start it** | Every item is built and nothing is reviewing it, as after a Junior chat: choose Senior or Auto and ask for the plan's review |
 | **Plan: pass Security (3 of 6)** | The plan is at its third pass of six |
 | **Plan: needs you (2 questions)** | The chat waits for your answers |
-| **Plan: paused, Continue to resume** | Stopped, or waiting for **Continue** |
-| **Plan: ready, Implement plan to start** | Senior made the plan; it waits for your go-ahead |
+| **Plan: paused, Continue implementation to resume** | Paused; the line names the button above it, such as **Continue review** or **Check delivery** |
+| **Plan: paused · Continue implementation is available when this answer ends** | Paused while the assistant answers; the button stays greyed out, with that reason beside it, until the answer ends |
+| **Plan: paused, send a message to go on** | Paused with no button to resume it; your next message moves it on |
+| **Plan: ready, Implement plan to start** | Senior made the plan; it waits for your go-ahead (during an answer: **Plan: ready · Implement plan is available when this answer ends**) |
 | **Plan: completed** | The plan is completed and not yet archived |
 
 The line updates as items are ticked. While files changed since the AI last

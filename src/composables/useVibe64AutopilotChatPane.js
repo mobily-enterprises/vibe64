@@ -25,6 +25,7 @@ function emptyConversationWelcomeText({
  * welcome shown in an empty conversation, and reloading or paging history.
  * @param {Record<string, any>} props The Autopilot view's props.
  * @param {{
+ *   agentWorking: import("vue").Ref<boolean>,
  *   composerSending: import("vue").Ref<boolean>,
  *   messageDelivery: import("vue").Ref<Record<string, any> | null>,
  *   preferredName: import("vue").Ref<string | undefined>,
@@ -34,6 +35,7 @@ function emptyConversationWelcomeText({
  * }} options
  */
 function useVibe64AutopilotChatPane(props, {
+  agentWorking,
   composerSending,
   messageDelivery,
   preferredName,
@@ -44,10 +46,14 @@ function useVibe64AutopilotChatPane(props, {
   const chatTurns = computed(() => {
     // Hydrate history before appending a restored unsent request to its tail.
     if (!messageDelivery.value || props.conversationLog?.initializing) return [];
+    const delivery = messageDelivery.value;
     return chatTurnsWithRouting(
-      messageDelivery.value.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
+      delivery.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
       routingRequest.value,
-      composerSending.value
+      composerSending.value,
+      // While the assistant works, a message it has not taken yet says what it waits for, and one whose own turn
+      // has started is no longer Pending.
+      { working: agentWorking.value, steering: id => delivery.find(id)?.payload?.request?.steer === true }
     );
   });
   const emptyConversationWelcome = computed(() => (

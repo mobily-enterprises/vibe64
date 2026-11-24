@@ -101,8 +101,30 @@ it("offers explicit implementation and plan viewing only for a saved active plan
     { workPlan: null }, { workPlan: { status: "completed", revision: "done" } }, { helper: { executionId: "pending-cleanup" } }
   ]) expect(await render({ ...value, ...changed })).not.toContain("Implement plan");
   expect(await render(value, null, { mode: "senior" })).not.toContain("Implement plan");
-  const busy = await render(value, null, { busy: true });
+  const busy = await render(value, null, { busy: "turn" });
   expect(busy).toMatch(/disabled[^>]*>[\s\S]*?Implement plan/u);
+  // A held action says why beside it, in the words of the plan's status line.
+  expect(busy).toContain("Available when this answer ends.");
+  expect(busy).toMatch(/aria-describedby="([^"]+)"[\s\S]*id="\1"[^>]*>Available when this answer ends\./u);
+});
+
+it("says why Continue implementation can't be pressed while an answer runs, and when it can", async () => {
+  // Seen on 25 Nov 2026: a greyed-out Continue implementation with no reason, while the assistant answered a question.
+  const paused = request("implementation", "pending");
+  const html = await render(paused, null, { mode: "senior", busy: "turn" });
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*?Continue implementation/u);
+  expect(html).toContain("Available when this answer ends.");
+  expect(html).toMatch(/>\s*Stop\s*</u);
+  for (const [busy, reason] of [["message", "Available once your message is sent."], ["voice", "Available once your spoken message is sent."]]) {
+    expect(await render(paused, null, { mode: "senior", busy })).toContain(reason);
+  }
+  const idle = await render(paused, null, { mode: "senior" });
+  expect(idle).not.toMatch(/<button[^>]*disabled[^>]*>[\s\S]*?Continue implementation/u);
+  expect(idle).not.toContain("Available");
+  // Check delivery only reads the saved attempt, so it stays available, with no reason, during an answer.
+  const checking = await render(request("implementation", "uncertain"), null, { mode: "senior", busy: "turn" });
+  expect(checking).toContain("Check delivery"); expect(checking).not.toContain("Available");
+  expect(checking).not.toMatch(/<button[^>]*disabled[^>]*>[\s\S]*?Check delivery/u);
 });
 
 it("keeps initial delivery failures in their message bubble", () => {
