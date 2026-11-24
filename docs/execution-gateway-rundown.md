@@ -697,7 +697,10 @@ command whose shell sets a variable that points Git at a program or config
 (`GIT_CONFIG_COUNT` with its `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>`,
 `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND` and the rest of
 `CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES`), none of which reaches it, is refused,
-naming them, as one carrying the token is, rather than run without them:
+naming them, as one carrying the token is, rather than run without them (in
+the source and a connected copy, a local command runs without them and ends
+its output with one line naming them, and that its config goes on its command
+line as `git -c <key>=<value>`):
 
 ```js
 await runVibe64Command({

@@ -166,7 +166,7 @@ test("a command with the session's GitHub token refuses an option, a shell varia
   });
 });
 
-test("only Git commands that reach GitHub carry the token; the rest keep their options, the shell's variables and the repository's hooks", async () => {
+test("only Git commands that reach GitHub carry the token; the rest keep their options and the repository's hooks, and say which of the shell's Git variables they ran without", async () => {
   await withTemporaryRoot(async (root) => {
     const session = githubSession(root);
     const source = session.metadata.source_path;
@@ -200,7 +200,19 @@ test("only Git commands that reach GitHub carry the token; the rest keep their o
       assert.equal(calls[0].gitAuthToken, "");
       assert.equal(calls[0].env.GIT_ALLOW_PROTOCOL, undefined);
       assert.equal(calls[0].env.GIT_CONFIG_PARAMETERS, undefined);
+      // The shell's GIT_SSH_COMMAND never reaches Git: the command runs without it, and its output's last line says so.
+      assert.equal(calls[0].env.GIT_SSH_COMMAND, undefined);
+      assert.equal(result.stderr.split("\n").filter(Boolean).at(-1),
+        "Vibe64's Git ignored GIT_SSH_COMMAND from this shell, as it does every variable that points Git at a program or " +
+        "config: config the command needs goes on its command line (git -c <key>=<value> ...).");
     });
+    // GIT_CONFIG_COUNT is named with what it counts; GIT_CONFIG_COUNT=0, every agent shell's own, says nothing.
+    const status = (count) => service.run({ args: ["status"], command: "git", cwd: source, sessionId: session.sessionId,
+      env: { GIT_CONFIG_COUNT: count, GIT_CONFIG_KEY_0: "core.pager", GIT_CONFIG_VALUE_0: "cat" } });
+    const counted = await status("1");
+    assert.equal(counted.ok, true, counted.error);
+    assert.match(counted.stderr, /^Vibe64's Git ignored GIT_CONFIG_COUNT with GIT_CONFIG_KEY_0 and GIT_CONFIG_VALUE_0 from this shell,/u);
+    assert.equal((await status("0")).stderr, "");
     calls.length = 0;
     assert.equal((await service.run({ args: ["fetch", "origin"], command: "git", cwd: source, sessionId: session.sessionId })).ok, true);
     assert.equal(calls.filter(isTokenRead).length, 1);

@@ -38,7 +38,7 @@ import {
 } from "./codexGitCommandOperations.js";
 import { commandFailure } from "./commandFailure.js";
 import { createSessionGitPlaces, forwardedGitEnv, placeGitCommand, placeGithubCommand } from "./codexGitCommandPlaces.js";
-import { commandRequiresGithubToken, githubTokenCommandRefusal, temporaryFolderEnvRefusal } from "./codexGitCommandToken.js";
+import { commandRequiresGithubToken, githubTokenCommandRefusal, ignoredProgramEnvNote, temporaryFolderEnvRefusal } from "./codexGitCommandToken.js";
 import { GITHUB_TOKEN_COMMAND_ENV, githubTokenConfigRefusal } from "./githubTokenGit.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -653,10 +653,9 @@ function createCodexGitCommandService({
     });
     if (githubToken.token) dropRejectedCredentials(credentialKey, result);
     if (phaseElapsedMs) phaseElapsedMs.commandFinished = Math.round(performance.now() - startedAt);
-    return finish(commandResultPayload(result, { commandSubmitted }), {
-      ...actor,
-      cwd: commandCwd
-    });
+    // Git here ran without the shell's program and config variables (one carrying the token refused them), so it says which.
+    const note = command === "git" ? ignoredProgramEnvNote(input.env) : "";
+    return finish(commandResultPayload(result, { commandSubmitted, note }), { ...actor, cwd: commandCwd });
   }
 
   return Object.freeze({
