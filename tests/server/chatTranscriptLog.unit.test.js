@@ -166,6 +166,57 @@ test("a damaged line before the last is never skipped: the chat is refused and l
   assert.equal(await readFile(file, "utf8"), damaged);
 });
 
+test("a chat whose changes outgrow a thirty-second of its snapshot (64 KiB at least) is saved whole again: a load parses little more than its record, and a message writes the same bounded share at any size", async t => {
+  const { parseLegacyTranscript, parseTranscriptLog, writeTranscriptLog } = await import("@local/vibe64-runtime/server/sessionTranscriptLog");
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-chat-checkpoint-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const lineCount = async file => (await readFile(file, "utf8")).split("\n").length - 1;
+  const sizes = [];
+  for (const [turns, messages] of [[50, 120], [1500, 160]]) {
+    const file = path.join(root, `${turns}.jsonl`);
+    let saved = await writeTranscriptLog(file, null, parseLegacyTranscript(JSON.stringify(legacyDocument(turns))));
+    let written = 0;
+    let wholeSaves = 0;
+    const appended = [];
+    for (let index = 0; index < messages; index += 1) {
+      const before = await stat(file, { bigint: true });
+      const id = String(turns + 2 + index).padStart(6, "0");
+      const next = { ...saved.record, turns: new Map(saved.record.turns).set(id, {
+        messages: [{ role: "user", text: text(index, 1500), at: at(turns + 2 + index), messageId: `extra-${index}` }] }) };
+      saved = await writeTranscriptLog(file, saved, next);
+      const after = await stat(file, { bigint: true });
+      if (after.ino === before.ino) {
+        appended.push(Number(after.size - before.size));
+        written += Number(after.size - before.size);
+      } else {
+        wholeSaves += 1;
+        written += Number(after.size);
+        assert.equal(await lineCount(file), 1, "A chat saved whole is one snapshot line.");
+      }
+      assert.ok(saved.changeBytes <= Math.max(64 * 1024, saved.snapshotBytes / 32),
+        `What follows the snapshot stays within its share (${saved.changeBytes} after ${saved.snapshotBytes} at ${turns} turns).`);
+    }
+    const reread = parseTranscriptLog(await readFile(file));
+    assert.equal(JSON.stringify([...reread.record.turns]), JSON.stringify([...saved.record.turns]), "Every message reads back.");
+    assert.equal(reread.changeBytes, saved.changeBytes);
+    assert.ok(wholeSaves >= 1, `The chat was saved whole again at ${turns} turns.`);
+    sizes.push({ turns, line: median(appended), perMessage: written / messages });
+  }
+  const [small, large] = sizes;
+  assert.ok(Math.abs(small.line - large.line) <= 16, `An appended message writes the same at both sizes: ${JSON.stringify(sizes)}.`);
+  for (const { turns, line, perMessage } of sizes) {
+    assert.ok(perMessage <= 34 * line, `Over many messages, one writes at most 34 of its lines at ${turns} turns: ${JSON.stringify(sizes)}.`);
+  }
+  // A change no line can say (a turn removed) is the chat whole too, never a second record after the first.
+  const file = path.join(root, "removed.jsonl");
+  const saved = await writeTranscriptLog(file, null, parseLegacyTranscript(JSON.stringify(legacyDocument(5))));
+  const turns = new Map(saved.record.turns);
+  turns.delete("000004");
+  await writeTranscriptLog(file, saved, { ...saved.record, turns });
+  assert.equal(await lineCount(file), 1);
+  assert.deepEqual([...parseTranscriptLog(await readFile(file)).record.turns.keys()], [...turns.keys()]);
+});
+
 // What a saved record says once written: absent and undefined values alike are left out.
 const asSaved = record => JSON.parse(JSON.stringify({ metadata: record.metadata, rewound: record.rewound,
   turns: [...record.turns], summary: record.summary }));

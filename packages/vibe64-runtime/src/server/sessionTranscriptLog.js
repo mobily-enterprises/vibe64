@@ -19,8 +19,7 @@ import { CONVERSATION_MESSAGE_ROLES, CONVERSATION_TURN_ID_PATTERN } from "./sess
  *   path (a list of keys), `[path]` removes it, and the empty path is the whole
  *   object. Only what changed is written, so a status, a red interruption
  *   entry or a native receipt costs its own bytes, not the chat's.
- * - A change no line can say (a turn removed or moved, rewind markers changed)
- *   is written as a fresh snapshot line, which replaces everything before it.
+ * - A later snapshot line replaces everything before it.
  *
  * Writing a message therefore appends one line whose size does not depend on
  * the chat's length, and syncs it. A crash can leave only the line being
@@ -28,6 +27,14 @@ import { CONVERSATION_MESSAGE_ROLES, CONVERSATION_TURN_ID_PATTERN } from "./sess
  * last line that is not JSON (blocks that never reached the disk), and the next
  * append removes them before it writes. Any other unreadable line is damage,
  * and the chat is refused rather than read without it.
+ *
+ * A change no line can say (a turn removed or moved, rewind markers changed),
+ * and the change that takes the lines after the snapshot past a thirty-second
+ * of it (or past 64 KiB, for a small chat), is saved as the chat whole instead:
+ * one snapshot line, published in one step over the file. Loading a chat then
+ * parses its own record and at most that much more, and over many messages a
+ * message still writes a bounded multiple of its own line, at 50 turns as at
+ * 5,000.
  */
 
 const TRANSCRIPT_LOG_FILE = "transcript.jsonl";
@@ -37,6 +44,9 @@ const TRANSCRIPT_LOG_VERSION = 2;
 const NEWLINE = 0x0a;
 const SNAPSHOT_FIELDS = new Set(["version", "metadata", "rewound", "turns", "summary"]);
 const CHANGE_FIELDS = new Set(["turns", "metadata", "summary"]);
+// The lines a chat keeps after its snapshot before it is saved whole again: the larger of these.
+const CHECKPOINT_SHARE = 32;
+const CHECKPOINT_FLOOR_BYTES = 64 * 1024;
 const TURN_CHANGE_FIELDS = new Set(["keep", "messages", "metadata"]);
 const TURN_FIELDS = new Set(["messages", "metadata"]);
 const CACHE_LIMIT = 8;
@@ -154,25 +164,26 @@ function patchEdits(before, after, keys = [], edits = []) {
 function applyPatch(target, edits) {
   if (!Array.isArray(edits)) throw unsupportedTranscript();
   let root = target;
-  for (const edit of edits) {
-    if (!Array.isArray(edit) || edit.length < 1 || edit.length > 2 || !Array.isArray(edit[0]) ||
-        edit[0].some((key) => typeof key !== "string")) {
-      throw unsupportedTranscript();
-    }
-    const [keys, ...value] = edit;
+  for (let index = 0; index < edits.length; index += 1) {
+    const edit = edits[index];
+    if (!Array.isArray(edit) || edit.length < 1 || edit.length > 2 || !Array.isArray(edit[0])) throw unsupportedTranscript();
+    const keys = edit[0];
     if (!keys.length) {
-      root = value[0];
+      root = edit[1];
       continue;
     }
     let parent = root;
-    for (const key of keys.slice(0, -1)) {
-      if (!isPlainObject(parent) || !Object.hasOwn(parent, key)) throw unsupportedTranscript();
+    for (let depth = 0; depth < keys.length - 1; depth += 1) {
+      const key = keys[depth];
+      if (typeof key !== "string" || !isPlainObject(parent) || !Object.hasOwn(parent, key)) throw unsupportedTranscript();
       parent = parent[key];
     }
-    if (!isPlainObject(parent)) throw unsupportedTranscript();
-    const key = keys.at(-1);
-    if (value.length) Object.defineProperty(parent, key, { value: value[0], enumerable: true, writable: true, configurable: true });
-    else delete parent[key];
+    const key = keys[keys.length - 1];
+    if (typeof key !== "string" || !isPlainObject(parent)) throw unsupportedTranscript();
+    if (edit.length === 1) delete parent[key];
+    // A key named __proto__ is a key here, as in JSON; assigning it would set the object's prototype instead.
+    else if (key === "__proto__") Object.defineProperty(parent, key, { value: edit[1], enumerable: true, writable: true, configurable: true });
+    else parent[key] = edit[1];
   }
   return root;
 }
@@ -182,12 +193,15 @@ function applyChange(record, change) {
       (change.turns !== undefined && !Array.isArray(change.turns))) {
     throw unsupportedTranscript();
   }
-  for (const entry of change.turns || []) {
+  const turns = change.turns || [];
+  for (let index = 0; index < turns.length; index += 1) {
+    const entry = turns[index];
     if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" || !isPlainObject(entry[1]) ||
         Object.keys(entry[1]).some((key) => !TURN_CHANGE_FIELDS.has(key))) {
       throw unsupportedTranscript();
     }
-    const [turnId, { keep, messages = [], metadata }] = entry;
+    const turnId = entry[0];
+    const { keep, messages = [], metadata } = entry[1];
     let turn = record.turns.get(turnId);
     if (!turn) {
       turn = { messages: [] };
@@ -211,68 +225,79 @@ function applyChange(record, change) {
 }
 
 /**
- * The records of a transcript's complete lines and the length of what is
- * readable. Every line is parsed at once when the chat is whole; a line that is
- * not JSON is the unfinished last append only when it is the last line after
- * the snapshot.
+ * The records of a transcript's complete lines and where each line ends.
+ * Every line is parsed at once when the chat is whole; a line that is not JSON
+ * is the unfinished last append only when it is the last line after the
+ * snapshot, and is left out.
  */
 function transcriptLines(buffer) {
   const end = buffer.lastIndexOf(NEWLINE) + 1;
   if (!end) throw damagedTranscript();
-  let count = 0;
-  for (let index = buffer.indexOf(NEWLINE); index >= 0 && index < end; index = buffer.indexOf(NEWLINE, index + 1)) count += 1;
+  const ends = [];
+  for (let index = buffer.indexOf(NEWLINE); index >= 0 && index < end; index = buffer.indexOf(NEWLINE, index + 1)) ends.push(index + 1);
   try {
-    const lines = JSON.parse(`[${buffer.toString("utf8", 0, end - 1).replaceAll("\n", ",")}]`);
-    if (lines.length === count) return { lines, validBytes: end };
+    const text = buffer.toString("utf8", 0, end - 1);
+    const lines = ends.length === 1 ? [JSON.parse(text)] : JSON.parse(`[${text.replaceAll("\n", ",")}]`);
+    if (lines.length === ends.length) return { lines, ends };
   } catch {
     // A line is not JSON: find it below.
   }
   const lines = [];
-  for (let start = 0; start < end;) {
-    const stop = buffer.indexOf(NEWLINE, start);
+  for (let index = 0; index < ends.length; index += 1) {
+    const start = index ? ends[index - 1] : 0;
     try {
-      lines.push(JSON.parse(buffer.toString("utf8", start, stop)));
+      lines.push(JSON.parse(buffer.toString("utf8", start, ends[index] - 1)));
     } catch {
-      if (stop + 1 === end && lines.length) return { lines, validBytes: start };
+      if (index === ends.length - 1 && index) return { lines, ends: ends.slice(0, index) };
       throw damagedTranscript();
     }
-    start = stop + 1;
   }
-  return { lines, validBytes: end };
+  return { lines, ends };
 }
 
 /**
- * The chat a transcript's bytes hold, and how many of those bytes it is read
- * from (the rest are an unfinished append).
+ * The chat a transcript's bytes hold: `{ record, validBytes, snapshotBytes,
+ * changeBytes }`, where validBytes is how many of the bytes it is read from
+ * (the rest are an unfinished append), snapshotBytes the length of its last
+ * snapshot line and changeBytes the length of the lines after that one.
  * @param {Buffer} buffer
  */
 function parseTranscriptLog(buffer) {
-  const { lines, validBytes } = transcriptLines(buffer);
+  const { lines, ends } = transcriptLines(buffer);
   let record = recordFromSnapshot(lines[0]);
+  let snapshot = 0;
   for (let index = 1; index < lines.length; index += 1) {
-    if (isPlainObject(lines[index]) && Object.hasOwn(lines[index], "version")) record = recordFromSnapshot(lines[index]);
-    else applyChange(record, lines[index]);
+    if (isPlainObject(lines[index]) && Object.hasOwn(lines[index], "version")) {
+      record = recordFromSnapshot(lines[index]);
+      snapshot = index;
+    } else applyChange(record, lines[index]);
   }
-  return { record: validateTranscriptRecord(record), validBytes };
+  const validBytes = ends.at(-1);
+  const snapshotEnd = ends[snapshot];
+  return {
+    record: validateTranscriptRecord(record),
+    validBytes,
+    snapshotBytes: snapshotEnd - (snapshot ? ends[snapshot - 1] : 0),
+    changeBytes: validBytes - snapshotEnd
+  };
 }
 
 /**
- * The line that records what changed from the saved record to the next one,
- * or null when nothing did. Only changed turns are visited past a reference
- * comparison: a transaction copies each turn it changes and keeps the saved
- * objects of every other one (and of every message it keeps).
+ * The change line from the saved record to the next one; null when nothing
+ * changed, undefined when no change line can say it. Only changed turns are
+ * visited past a reference comparison: a transaction copies each turn it
+ * changes and keeps the saved objects of every other one (and of every message
+ * it keeps).
  */
-function transcriptChangeLine(saved, next) {
-  if (next.rewound !== saved.rewound && JSON.stringify(next.rewound) !== JSON.stringify(saved.rewound)) {
-    return snapshotLine(validateTranscriptRecord(next));
-  }
+function changeLine(saved, next) {
+  if (next.rewound !== saved.rewound && JSON.stringify(next.rewound) !== JSON.stringify(saved.rewound)) return undefined;
   const turns = [];
   const savedOrder = saved.turns.keys();
   let added = false;
   for (const [turnId, turn] of next.turns) {
     const before = saved.turns.get(turnId);
     if (before === undefined) added = true;
-    else if (added || savedOrder.next().value !== turnId) return snapshotLine(validateTranscriptRecord(next));
+    else if (added || savedOrder.next().value !== turnId) return undefined;
     if (turn === before) continue;
     if (!validTurn(turnId, turn)) throw unsupportedTranscript();
     const savedMessages = before?.messages || [];
@@ -286,7 +311,7 @@ function transcriptChangeLine(saved, next) {
     if (metadata.length) change.metadata = metadata;
     if (before === undefined || Object.keys(change).length) turns.push([turnId, change]);
   }
-  if (!savedOrder.next().done) return snapshotLine(validateTranscriptRecord(next));
+  if (!savedOrder.next().done) return undefined;
   if (!isPlainObject(next.metadata) || !validSummary(next.summary)) throw unsupportedTranscript();
   const change = turns.length ? { turns } : {};
   const metadata = patchEdits(saved.metadata, next.metadata);
@@ -297,6 +322,15 @@ function transcriptChangeLine(saved, next) {
   return Object.keys(change).length ? `${JSON.stringify(change)}\n` : null;
 }
 
+/**
+ * The line that records what changed from the saved record to the next one
+ * (a snapshot line when no change line can say it), or null when nothing did.
+ */
+function transcriptChangeLine(saved, next) {
+  const line = changeLine(saved, next);
+  return line === undefined ? snapshotLine(validateTranscriptRecord(next)) : line;
+}
+
 function remember(filePath, entry) {
   transcriptCache.delete(filePath);
   transcriptCache.set(filePath, entry);
@@ -305,7 +339,8 @@ function remember(filePath, entry) {
 }
 
 /**
- * The saved chat at filePath: `{ identity, record, validBytes }`. Rejects with
+ * The saved chat at filePath: `{ identity, record, validBytes, snapshotBytes, changeBytes }`
+ * (parseTranscriptLog says what the sizes are). Rejects with
  * ENOENT when there is none. The record is shared: never change it in place.
  * @param {string} filePath
  */
@@ -338,28 +373,37 @@ function changedTranscript() {
   );
 }
 
+/** Publishes the record whole, as one snapshot line, over whatever the file held. */
+async function publishSnapshot(filePath, record) {
+  const line = snapshotLine(validateTranscriptRecord(record));
+  const bytes = Buffer.byteLength(line);
+  const stats = await writeFileAtomic(filePath, line);
+  return remember(filePath, { identity: fileIdentity(stats), record, validBytes: bytes, snapshotBytes: bytes, changeBytes: 0 });
+}
+
 /**
- * Saves the next record over the saved one: a new chat's first record is its
- * snapshot, published whole; every later one appends its change line at the
- * end of the readable bytes and syncs it. A failed append is cut off again, so
- * the file keeps only whole records. Callers hold the session's mutation lease.
+ * Saves the next record over the saved one: a new chat's first record, a
+ * change no line can say, and the change that would take the lines after the
+ * snapshot past their share are the chat whole, published in one step; every
+ * other one appends its change line at the end of the readable bytes and syncs
+ * it. A failed append is cut off again, so the file keeps only whole records.
+ * Callers hold the session's mutation lease.
  * @param {string} filePath
- * @param {{ identity: string, record: object, validBytes: number } | null} saved what readTranscriptLog returned; null for no file
+ * @param {{ identity: string, record: object, validBytes: number, snapshotBytes: number, changeBytes: number } | null} saved
+ *   what readTranscriptLog returned; null for no file
  * @param {object} next
  */
 async function writeTranscriptLog(filePath, saved, next) {
-  if (!saved) {
-    const line = snapshotLine(validateTranscriptRecord(next));
-    const stats = await writeFileAtomic(filePath, line);
-    return remember(filePath, { identity: fileIdentity(stats), record: next, validBytes: Buffer.byteLength(line) });
-  }
-  const line = transcriptChangeLine(saved.record, next);
+  if (!saved) return publishSnapshot(filePath, next);
+  const line = changeLine(saved.record, next);
   if (line === null) return remember(filePath, { ...saved, record: next });
-  const bytes = Buffer.from(line, "utf8");
+  const bytes = line === undefined ? null : Buffer.from(line, "utf8");
+  const whole = !bytes || saved.changeBytes + bytes.length > Math.max(CHECKPOINT_FLOOR_BYTES, saved.snapshotBytes / CHECKPOINT_SHARE);
   const handle = await open(filePath, "r+");
   try {
     const current = await handle.stat({ bigint: true });
     if (fileIdentity(current) !== saved.identity) throw changedTranscript();
+    if (whole) return await publishSnapshot(filePath, next);
     if (Number(current.size) > saved.validBytes) {
       // An append a crash left unfinished: it goes before this one is written.
       await handle.truncate(saved.validBytes);
@@ -377,7 +421,8 @@ async function writeTranscriptLog(filePath, saved, next) {
       throw error;
     }
     const stats = await handle.stat({ bigint: true });
-    return remember(filePath, { identity: fileIdentity(stats), record: next, validBytes: saved.validBytes + bytes.length });
+    return remember(filePath, { identity: fileIdentity(stats), record: next, validBytes: saved.validBytes + bytes.length,
+      snapshotBytes: saved.snapshotBytes, changeBytes: saved.changeBytes + bytes.length });
   } finally {
     await handle.close();
   }
