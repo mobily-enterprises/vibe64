@@ -248,7 +248,11 @@ overlap a test run already active for this checkout.
   many test files at once; Playwright runs on JSKIT's browser-test harness,
   `browserTestConfig()` from `@jskit-ai/jskit-catalog/browser-tests`, with one
   worker and app server for every two of those threads, at least one, as each
-  worker also runs a browser. No script or command fixes its own concurrency. Every test file owns its
+  worker also runs a browser. Inside a Vibe64 session, browser suites run
+  through `vibe64-helper playwright` (`vibe64-helper playwright npm-run
+  test:e2e`, or `vibe64-helper playwright test <args>` for chosen specs), never
+  through `npx playwright`, `playwright test` or `npm run test:e2e` directly.
+  No script or command fixes its own concurrency. Every test file owns its
   ports, temporary folders, databases and other state, so it can run beside
   any other; fix a collision where it happens instead of making a file run
   alone.
