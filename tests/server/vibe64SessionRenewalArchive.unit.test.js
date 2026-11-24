@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import {
   pathExists
 } from "@local/vibe64-core/server/core";
+import { sessionTempPath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   VIBE64_SESSION_STATUS,
   createVibe64SessionStore
@@ -346,11 +347,17 @@ test("renewal stages the connected copies with the source, restores them on fail
     await activateSuccessor(fixture);
     await commitPreparedRenewal(fixture);
     // The predecessor's throwaway files end with it.
-    await writeProjectFile(path.join(path.dirname(fixture.sourcePath), "tmp"), "throwaway.txt", "test output\n");
-    await fixture.runtime.commitRenewalSessionSourceRemoval(fixture.sourceSessionId, options);
-    assert.equal(await pathExists(stagedRoot), false);
-    assert.equal(await pathExists(connectedRoot), false);
-    assert.equal(await pathExists(path.dirname(fixture.sourcePath)), false);
+    const temp = sessionTempPath(fixture.sourcePath);
+    try {
+      await writeProjectFile(temp, "throwaway.txt", "test output\n");
+      await fixture.runtime.commitRenewalSessionSourceRemoval(fixture.sourceSessionId, options);
+      assert.equal(await pathExists(stagedRoot), false);
+      assert.equal(await pathExists(connectedRoot), false);
+      assert.equal(await pathExists(path.dirname(fixture.sourcePath)), false);
+      assert.equal(await pathExists(temp), false);
+    } finally {
+      await rm(temp, { force: true, recursive: true });
+    }
   });
 });
 

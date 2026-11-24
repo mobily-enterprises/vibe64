@@ -72,6 +72,7 @@ import afterPlanPasses from "./stateUpgrades/20261114-after-plan-passes.js";
 import stagingEnvScope from "./stateUpgrades/20261114-staging-env-scope.js";
 import stagingFolders from "./stateUpgrades/20261119-staging-folders.js";
 import passesInPlans from "./stateUpgrades/20261123-passes-in-plans.js";
+import sessionTempFolders from "./stateUpgrades/20261124-session-temp-folders.js";
 
 const upgrades = [
   codexLoginId,
@@ -131,7 +132,8 @@ const upgrades = [
   afterPlanPasses,
   stagingEnvScope,
   stagingFolders,
-  passesInPlans
+  passesInPlans,
+  sessionTempFolders
 ];
 
 async function readLedger(ledgerPath) {

@@ -8,9 +8,9 @@
 // - Wholly in the source, or wholly in one copy: that place's rules, as before.
 // - Changing only the temporary folder, reading at most the source or a copy:
 //   plain local Git, with none of the session's credentials or identity.
-// - Anything else (another session, another project, the workspace's
-//   temporary folder, or a change to the source or a copy made from outside
-//   it): refused.
+// - Anything else (another session, another project, the rest of the
+//   temporary folder that holds the session's, or a change to the source or a
+//   copy made from outside it): refused.
 
 import { lstat, realpath } from "node:fs/promises";
 import path from "node:path";
@@ -50,6 +50,11 @@ const SUBCOMMAND_VALUE_OPTIONS = Object.freeze({
 const REMOTE_OPERATIONS = new Set(["fetch", "ls-remote", "pull", "push"]);
 const PROBE_TOPLEVEL_ARGS = Object.freeze(["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir",
   "--is-bare-repository", "--show-toplevel"]);
+
+function ownUid() {
+  // readable-check: allow method-probe - platform object: process.getuid() exists only on POSIX
+  return typeof process.getuid === "function" ? process.getuid() : undefined;
+}
 
 /**
  * The forwarded names the wrapper sent, as plain strings with no NUL.
@@ -141,10 +146,11 @@ function createSessionGitPlaces({ readCopies, sourceRoot }) {
   let temp = null;
   let copies = null;
   const physicalSource = () => (source ||= physicalPath("/", sourceRoot));
-  // The temporary folder counts only as the real folder beside the source: a
-  // link put in its place leads somewhere else.
+  // The temporary folder counts only as the real folder this account made: a
+  // link put in its place leads somewhere else, and another account's is not
+  // the session's.
   const physicalTemp = () => (temp ||= lstat(tempRoot).then(
-    (entry) => entry.isDirectory() && !entry.isSymbolicLink() ? realpath(tempRoot) : "",
+    (entry) => entry.isDirectory() && !entry.isSymbolicLink() && entry.uid === ownUid() ? realpath(tempRoot) : "",
     () => ""
   ));
   const physicalCopies = () => (copies ||= readCopies().then((list) => Promise.all(list.map(async (copy) => ({
@@ -173,15 +179,16 @@ function createSessionGitPlaces({ readCopies, sourceRoot }) {
   }
 
   // Where Git's repository discovery stops: the session's own folder, around
-  // its source, copies and temporary folder.
-  async function sessionFolder() {
-    return path.dirname(await physicalSource());
+  // its source and copies, and the folder that holds its temporary folder.
+  async function discoveryCeilings() {
+    const tempFolder = await physicalTemp();
+    return [path.dirname(await physicalSource()), ...(tempFolder ? [path.dirname(tempFolder)] : [])].join(":");
   }
 
   return Object.freeze({
+    discoveryCeilings,
     insideSource,
     placeOf,
-    sessionFolder,
     sourceRoot,
     tempRoot
   });
@@ -348,7 +355,7 @@ async function placeGitCommand({ args, cwd, env, places, runPlainGit }) {
   // `.git` file or core.worktree can lead elsewhere) and the remotes on this
   // computer it reaches must stay in the session too.
   const globalArgs = values.slice(0, invocation.operationIndex);
-  const lookupEnv = plainEnv(env, locations.env, { ceiling: await places.sessionFolder() });
+  const lookupEnv = plainEnv(env, locations.env, { ceiling: await places.discoveryCeilings() });
   const found = await classify(await probeRepository({ globalArgs, invocation, lookupEnv, runPlainGit, writes }));
   const remotes = await remoteLocations({
     listRemotes: async () => {

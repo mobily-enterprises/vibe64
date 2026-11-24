@@ -16,6 +16,7 @@ import {
   initializeGenesisProject
 } from "../../packages/vibe64-genesis/src/server/index.js";
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
+import { sessionTempPath } from "@local/vibe64-core/server/sessionSourcePath";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 test("agent shell commands run as session-owned managed executions and drain on session close", async (t) => {
@@ -28,6 +29,15 @@ test("agent shell commands run as session-owned managed executions and drain on 
     });
   }
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-session-command-"));
+  // The editor's TMPDIR, which holds the session's own temporary folder.
+  const editorTemp = path.join(temporaryRoot, "tmp");
+  await mkdir(editorTemp);
+  const previousTmpdir = process.env.TMPDIR;
+  process.env.TMPDIR = editorTemp;
+  t.after(() => {
+    if (previousTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpdir;
+  });
   const sessionId = "session-1";
   const projectSlug = "project-1";
   const projectRoot = path.join(temporaryRoot, "project");
@@ -149,8 +159,9 @@ test("agent shell commands run as session-owned managed executions and drain on 
     assert.equal(request.execution.projectSlug, projectSlug);
     assert.equal(request.execution.sessionId, sessionId);
     assert.equal(request.cwd, sourceRoot);
-    // The session's own temporary folder, beside its source, is its commands' TMPDIR.
-    const tempRoot = path.join(path.dirname(sourceRoot), "tmp");
+    // The session's own temporary folder, in the editor's TMPDIR, is its commands' TMPDIR.
+    const tempRoot = sessionTempPath(sourceRoot);
+    assert.equal(path.dirname(tempRoot), editorTemp);
     assert.deepEqual(request.allowedRoots, [sourceRoot, tempRoot]);
     assert.equal(request.tempDirectory, tempRoot);
     assert.equal((await stat(tempRoot)).mode & 0o777, 0o770 & ~process.umask());

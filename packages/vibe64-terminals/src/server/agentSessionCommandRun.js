@@ -288,12 +288,21 @@ function decodedCommand(value = "") {
 /**
  * Where an agent command runs: in the session's source or in its own
  * temporary folder, which this makes when missing and which is the command's
- * TMPDIR, so its throwaway files and repositories stay in the session.
+ * TMPDIR, so its throwaway files and repositories stay apart from every other
+ * session's.
  * @param {string} cwd @param {string} sourceRoot
  */
 async function sessionCommandCwd(cwd = "", sourceRoot = "") {
   const resolvedCwd = path.resolve(toText(cwd) || sourceRoot);
-  const tempDirectory = sourceRoot ? await prepareSessionTempFolder(sourceRoot) : "";
+  let tempDirectory = "";
+  try {
+    tempDirectory = sourceRoot ? await prepareSessionTempFolder(sourceRoot) : "";
+  } catch (error) {
+    // A folder too long for sockets, or something else in its place: the command
+    // fails with what to do, and none runs without its own TMPDIR.
+    if (!String(error?.code || "").startsWith("vibe64_session_temp_folder_")) throw error;
+    return commandLineFailure(error.message, error.code, { cwd: resolvedCwd, sourceRoot });
+  }
   if (!sourceRoot || !(pathInsideOrEqual(sourceRoot, resolvedCwd) || (tempDirectory && pathInsideOrEqual(tempDirectory, resolvedCwd)))) {
     return commandLineFailure(
       "Agent commands must run inside the active session source or its temporary folder.",

@@ -180,12 +180,22 @@ retrying a cleanup that fails.
 
 ## The session's temporary folder
 
-Each session has its own temporary folder, `tmp` beside its source and its
-connected copies. The AI's shell commands, and every program they start, get it
-as `TMPDIR`, so their throwaway files, and the Git repositories tests make, stay
-in this session, apart from every other session's. Commands can also run in it.
-Vibe64 makes it on the AI's first command and empties it when the session is
+Each session has its own temporary folder, `v64s-` and 12 letters and digits,
+in the temporary folder Vibe64 itself runs with (on a hosted workspace, the
+workspace's temporary folder). The AI's shell commands, and every program they
+start, get it as `TMPDIR`, so their throwaway files, and the Git repositories
+tests make, stay apart from every other session's. Commands can also run in it.
+Its path is short whatever the workspace, project and session are called, so
+the Unix sockets that tests and tools such as mobilynet's make below it fit the
+107 characters a socket's path can hold. Vibe64 makes it on the AI's first
+command, only for its own account and group, and empties it when the session is
 archived or renewed; nothing in it is saved or kept in the session's archive.
+
+When Vibe64 itself runs with a temporary folder so long that the session's
+would leave no room for a socket, the AI does not start and each command
+reports **This session's temporary folder … is too long for a Unix socket below
+it**, naming the longest `TMPDIR` that fits. Start Vibe64 again with a shorter
+`TMPDIR`, such as `/tmp`. On a hosted workspace this does not happen.
 
 The AI's Git decides by the repository a command acts on: the folder it names
 with `-C`, `--git-dir`, `--work-tree`, `GIT_DIR` or `GIT_WORK_TREE`, not just the
@@ -198,8 +208,8 @@ the session's source and connected repositories, for example
 `git -C <source> rev-parse --show-toplevel` or a clone of the source; a command
 that changes them follows their own rules, as when it runs inside them, and one
 that would change them from the temporary folder (a clone into the source, a
-push to it) is refused. Git on another session's folder, another project or a
-temporary folder all sessions share is refused too, with a message naming this
+push to it) is refused. Git on another session's folder, another project or the
+temporary folder that holds every session's is refused too, with a message naming this
 session's temporary folder for throwaway repositories. In the source, the Git and
 gh commands that reach GitHub with your sign-in, the AI's and Save's, run no
 program the AI or the repository picked

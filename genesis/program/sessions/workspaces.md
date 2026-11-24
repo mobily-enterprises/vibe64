@@ -53,6 +53,9 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-runtime/src/server/sessionWorktreeArchive.js`
 - `packages/vibe64-runtime/src/server/sessionTempFolder.js`
 - `packages/vibe64-runtime/src/server/connectedRepositoryCopiesUpgrade.js`
+- `packages/vibe64-runtime/src/server/sessionTempFolderUpgrade.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261124-session-temp-folders.js`
+- `tests/server/sessionTempFolderUpgrade.unit.test.js`
 - `tests/server/vibe64Runtime.unit.test.js`
 - `tests/server/vibe64SessionStore.unit.test.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
@@ -188,8 +191,13 @@ renewal rules read the session's own inspection and update check, which include
 the copies. It keeps their recovery, stages the `connected` folder beside the
 source as `connected.renewal-<id>`, restores it when the renewal fails and
 removes it once the predecessor's archive is published. The session's temporary
-folder, `tmp` beside the source (`sessionTempFolder.js`), is the TMPDIR of the
-AI's commands, made on its first shell command; it is never part of a recovery,
+folder, `v64s-` and 12 hex digits of the session folder's path in the editor's
+own TMPDIR (`sessionTempPath`, `sessionTempFolder.js`), is the TMPDIR of the
+AI's commands, made on its first shell command. It is short whatever the
+workspace, project and session are named, so a Unix socket a command makes
+below it fits 107 bytes; a TMPDIR too long for that stops the AI at its start
+and each command (`vibe64_session_temp_folder_too_long`), naming the longest
+TMPDIR that fits, and is never shortened. It is never part of a recovery,
 and archive, renewal's removal and the archive of a session whose source creation
 failed remove it with `removeSessionTempFolder`. They then remove the
 session's own folder around them with `removeEmptySessionSourceFolder`, a plain
@@ -210,6 +218,16 @@ Sources: `packages/vibe64-core/src/server/projectRepository.js`,
 `tests/server/vibe64SessionWorktreeArchive.unit.test.js`,
 `tests/server/vibe64SessionRenewalArchive.unit.test.js` and
 `tests/server/connectedRepositoryCopiesUpgrade.unit.test.js`.
+
+The `20261124-session-temp-folders` state upgrade removes each session's old
+temporary folder, `tmp` beside its recorded managed checkout, with what it
+holds and no backup (throwaway files, which archive removes without a copy
+too). Runtime's `sessionTempFolderUpgrade.js`, supplied by
+`bin/upgrade-state.js`, leaves a link or file of that name, never following a
+link, and reports a folder it cannot remove; without it the old folder would
+keep the session's folder from being removed at archive. Sources:
+`tests/server/sessionTempFolderUpgrade.unit.test.js` and
+`tests/server/sessionTempFolder.unit.test.js`.
 
 Archiving never Saves. The archive confirmation receives the archived session's
 repository work state from the panel's session list. Unsaved work, such as an

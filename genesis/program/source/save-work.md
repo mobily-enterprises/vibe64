@@ -255,13 +255,15 @@ Update brings in their main. Before, only the working directory was checked, so
 session's token and `-C` or `--git-dir` reached any repository; a command now
 naming two of the session's repositories is refused
 (`vibe64_codex_git_command_place_mixed`). The session's temporary folder
-(`sessionTempPath`, `tmp` beside the source, made by `prepareSessionTempFolder`
-on the AI's first shell command and its TMPDIR) gets plain local Git: a command
+(`sessionTempPath`, `v64s-<12 hex>` in the editor's TMPDIR, made by
+`prepareSessionTempFolder` on the AI's first shell command and its TMPDIR, and
+counted only as a real folder this account made) gets plain local Git: a command
 that changes only that folder and reads at most the source or one copy runs with
 `gitTransport: "anonymous"` (no credential and none of Git's credential
 helpers), `gitIdentity: "none"` (the command's own GIT_AUTHOR_* and
 GIT_COMMITTER_*), no user key or session metadata, `GIT_CEILING_DIRECTORIES` at
-the session's folder and, while it reads the source or a copy,
+the session's folder and the folder that holds the temporary folder and, while
+it reads the source or a copy,
 `GIT_OPTIONAL_LOCKS=0`. A `rev-parse` probe follows what Git itself finds there
 (a `.git` file or `core.worktree`) and the local remotes push and fetch reach;
 a change to the source or a copy from the temporary folder is refused

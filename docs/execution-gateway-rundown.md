@@ -455,10 +455,12 @@ the person. It cannot name `HOME`, `LOGNAME`, `PATH`, `TMPDIR`, `USER` or
 `XDG_RUNTIME_DIR`, which the resolver and the helper own.
 
 A session's AI command names its session's temporary folder as `tempDirectory`
-(`tmp` beside the source); the resolver makes it the command's `TMPDIR`, and the
-exec helper keeps it only for the workspace's own commands and only when it is
-a real `projects/<project>/sessions/active/<id>/tmp` folder of that workspace
-(`sessionTempDirectory`), otherwise the workspace's temporary folder.
+(`v64s-<12 hex>` in the editor's own `TMPDIR`, short so sockets fit below it);
+the resolver makes it the command's `TMPDIR`, and the exec helper keeps it only
+for the workspace's own commands and only when it is a real `v64s-<12 hex>`
+folder directly in that workspace's temporary folder (`sessionTempDirectory`),
+otherwise the workspace's temporary folder. The helper also lets the
+workspace's own commands start in such a folder (`sessionTempFolderCwd`).
 
 The host's program folders take `~/.local/bin`'s place on PATH: no login's `~/.local/bin`
 is on the command's PATH, not even one the server's own PATH inherited from a

@@ -304,6 +304,9 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
       }
     }
   }
+  // A session's commands may also start in its own temporary folder.
+  const sessionTempCwd = sessionTempFolderCwd(normalized, targetUser, ownerUsername);
+  if (sessionTempCwd) return sessionTempCwd;
   return resolveAllowedProjectPath(normalized, ownerUsername);
 }
 
@@ -361,9 +364,12 @@ function usageRecordingNodeOptions(preload = "", helperPath = process.argv[1]) {
 }
 
 // A session's own temporary folder, which the editor names as the TMPDIR of
-// the session's commands: `sessions/active/<id>/tmp` below the workspace's
-// projects root, a real folder reached through no link. Anything else, and
-// any command of another user, keeps the workspace's temporary folder.
+// the session's commands: `v64s-` and 12 hex digits (sessionTempPath), directly
+// in the workspace's temporary folder, which is the editor's own TMPDIR, a real
+// folder reached through no link. Anything else, and any command of another
+// user, keeps the workspace's temporary folder.
+const SESSION_TEMP_FOLDER_NAME_PATTERN = /^v64s-[0-9a-f]{12}$/u;
+
 function sessionTempDirectory(requested = "", targetUser = {}, ownerUsername = "", { managedRoot = MANAGED_ROOT } = {}) {
   const value = typeof requested === "string" ? requested : "";
   if (!value || targetUser.stagingAccount || targetUser.username !== ownerUsername ||
@@ -371,11 +377,24 @@ function sessionTempDirectory(requested = "", targetUser = {}, ownerUsername = "
     return "";
   }
   try {
-    const projectsRoot = canonicalPath(path.join(managedRoot, workspaceFromDaemonUsername(safeUsername(ownerUsername)), "projects"));
-    const parts = relativePathParts(projectsRoot, value);
-    const sessionFolder = parts.length >= 5 && parts.at(-1) === "tmp" && /^[A-Za-z0-9_-]+$/u.test(parts.at(-2)) &&
-      parts.at(-3) === "active" && parts.at(-4) === "sessions";
-    return sessionFolder && canonicalPath(value) === value && lstatSync(value).isDirectory() ? value : "";
+    const tempRoot = canonicalPath(path.join(managedRoot, workspaceFromDaemonUsername(safeUsername(ownerUsername)), "tmp"));
+    return path.dirname(value) === tempRoot && SESSION_TEMP_FOLDER_NAME_PATTERN.test(path.basename(value)) &&
+      canonicalPath(value) === value && lstatSync(value).isDirectory() ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+// `cwd` as it really is, when it is in one of the workspace's sessions'
+// temporary folders and the command is the workspace's own, which may start
+// there; "" otherwise.
+function sessionTempFolderCwd(cwd = "", targetUser = {}, ownerUsername = "", { managedRoot = MANAGED_ROOT } = {}) {
+  if (targetUser.stagingAccount || targetUser.username !== ownerUsername) return "";
+  try {
+    const tempRoot = canonicalPath(path.join(managedRoot, workspaceFromDaemonUsername(safeUsername(ownerUsername)), "tmp"));
+    const resolved = canonicalPath(cwd);
+    const parts = relativePathParts(tempRoot, resolved);
+    return parts.length >= 1 && SESSION_TEMP_FOLDER_NAME_PATTERN.test(parts[0]) ? resolved : "";
   } catch {
     return "";
   }
@@ -455,5 +474,6 @@ export {
   resolveAllowedUserHomePath,
   runUserCommand,
   sessionTempDirectory,
+  sessionTempFolderCwd,
   usageRecordingNodeOptions
 };

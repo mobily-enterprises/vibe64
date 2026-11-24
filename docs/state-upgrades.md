@@ -2078,6 +2078,34 @@ before anything is written. A request at another version refuses with
 Focused evidence: `passesInPlansUpgrade.unit.test.js` and
 `stateUpgrades.unit.test.js`.
 
+## Session temporary folders (`20261124-session-temp-folders`)
+
+A session's temporary folder, its AI commands' `TMPDIR`, moved from `tmp`
+beside its source to `v64s-` and 12 hex digits in the editor's own temporary
+folder (on a managed workspace, the workspace's temporary folder), so its path
+is short whatever the workspace, project and session are named and a Unix
+socket a command makes below it fits 107 bytes; beside the source it reached 146
+bytes at the longest names. This upgrade follows `20261123-passes-in-plans` and
+removes the old folders. The owner is Runtime's `sessionTempFolderUpgrade.js`,
+supplied by the candidate CLI; the script refuses to run without it.
+
+It visits every project's sessions in `sessions/active`, whatever their status,
+and for each managed session checkout recorded in `source_path` (kept or
+already removed) looks at `tmp` beside it. A real folder there is removed with
+everything in it. Nothing is backed up: it held only throwaway files, which
+archive and renewal also remove without a copy, and the new folder starts
+empty. Anything else named `tmp` there (a link, a file) is not what Vibe64 made
+and stays, with a warning, and a link is never followed; so does a folder that
+cannot be removed, reported with what to do. Without this upgrade such a folder
+would stay in the session's folder, and archive's final `rmdir` of that folder
+would leave it behind.
+
+Check is read-only: it reports each folder it would remove and how many. A
+rerun finds nothing left to remove. Run it as the OS user that owns the session
+state and checkouts, with Vibe64 and every session process stopped. Focused
+evidence: `sessionTempFolderUpgrade.unit.test.js` and
+`stateUpgrades.unit.test.js`.
+
 ## Auto plan handoff (no upgrade)
 
 The saved Auto request (`assistant_routing_request`, schema version 7) may hold

@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import {
   pathExists
 } from "@local/vibe64-core/server/core";
+import { sessionTempPath } from "@local/vibe64-core/server/sessionSourcePath";
 import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
 import {
   checkpointRefs,
@@ -392,14 +393,19 @@ test("archive removes the session's temporary folder and keeps its folder while 
     await createSessionClone({ baseCommit, branch: `vibe64/${sessionId}`, sourcePath: worktreePath, targetRoot });
     const besideSource = path.join(path.dirname(worktreePath), "notes.txt");
     await writeFile(besideSource, "not the archive's\n", "utf8");
-    const temp = path.join(path.dirname(worktreePath), "tmp");
-    await writeProjectFile(path.join(temp, "throwaway.git"), "HEAD", "ref: refs/heads/main\n");
+    // The session's own temporary folder, in the editor's TMPDIR.
+    const temp = sessionTempPath(worktreePath);
+    try {
+      await writeProjectFile(path.join(temp, "throwaway.git"), "HEAD", "ref: refs/heads/main\n");
 
-    const archiveResult = await runtime.archiveSessionSource(await runtime.getSession(sessionId), { reason: "archived" });
-    assert.equal(archiveResult.removed, true);
-    assert.equal(await pathExists(worktreePath), false);
-    assert.equal(await pathExists(temp), false, "throwaway files end with the session");
-    assert.equal(await readFile(besideSource, "utf8"), "not the archive's\n");
+      const archiveResult = await runtime.archiveSessionSource(await runtime.getSession(sessionId), { reason: "archived" });
+      assert.equal(archiveResult.removed, true);
+      assert.equal(await pathExists(worktreePath), false);
+      assert.equal(await pathExists(temp), false, "throwaway files end with the session");
+      assert.equal(await readFile(besideSource, "utf8"), "not the archive's\n");
+    } finally {
+      await rm(temp, { force: true, recursive: true });
+    }
   });
 });
 
@@ -418,12 +424,18 @@ test("archiving a session whose source creation failed removes its emptied folde
     });
     await assert.rejects(() => runtime.createSession({ metadata: {}, sessionId }), /clone failed/u);
     assert.equal(await pathExists(worktreePath), true);
-    await writeProjectFile(path.join(path.dirname(worktreePath), "tmp"), "throwaway.txt", "made before the failure was seen\n");
+    const temp = sessionTempPath(worktreePath);
+    try {
+      await writeProjectFile(temp, "throwaway.txt", "made before the failure was seen\n");
 
-    await runtime.archiveSession(sessionId);
-    assert.equal((await runtime.store.readSession(sessionId)).status, "archived");
-    assert.equal(await pathExists(worktreePath), false);
-    assert.equal(await pathExists(path.dirname(worktreePath)), false);
+      await runtime.archiveSession(sessionId);
+      assert.equal((await runtime.store.readSession(sessionId)).status, "archived");
+      assert.equal(await pathExists(worktreePath), false);
+      assert.equal(await pathExists(path.dirname(worktreePath)), false);
+      assert.equal(await pathExists(temp), false, "its throwaway files end with it");
+    } finally {
+      await rm(temp, { force: true, recursive: true });
+    }
   });
 });
 

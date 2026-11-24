@@ -88,12 +88,20 @@ namespace. The daemon hands it a staging release's source and Staging Env
 through that area's handover directory, which only the staging account's group
 may read.
 
-A session's temporary folder, `tmp` beside its source and connected copies, is
-the `TMPDIR` of the session's AI commands and part of its namespace. Vibe64
-makes it inside the session's folder with mode `0770`, so it takes `vibe64`,
-setgid and the inherited default ACL from that folder as it is made and the
-writers' umask `0007` leaves it `2770`. Nothing repairs it afterwards; archive
-and renewal remove it with the session's folder.
+A session's temporary folder is the `TMPDIR` of the session's AI commands:
+`v64s-` and 12 hex digits of its session folder's path, directly in the
+workspace's temporary folder (the daemon's own `TMPDIR`, group `vibe64` and
+`2770`). It sits there and not beside the source so its path stays short: at
+the longest workspace, project and session names it is 65 bytes, where
+`sessions/active/<id>/tmp` reached 146 and left no room for a Unix socket (107
+bytes) below it. The daemon makes it with mode
+`0770`, so it takes `vibe64` and setgid from the workspace's temporary folder as
+it is made and the writers' umask `0007` leaves it `2770`. A folder in its place
+that is a link, a file, another account's, or open to other users is refused,
+never repaired. The exec helper gives it as `TMPDIR`, and lets a command start
+in it, only for the workspace's own commands and only as a real folder of that
+name there. Archive and renewal remove it with the session's folder; the
+`20261124-session-temp-folders` state upgrade removed the old `tmp` folders.
 
 The ACL contract must survive or be re-established before exposing a path
 created by clone, copy, atomic replacement, checkout, reset, move, archive

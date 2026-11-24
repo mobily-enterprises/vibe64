@@ -18,6 +18,7 @@ import {
   workspaceSetupState,
   workspaceSetupStateFromMetadata
 } from "@local/vibe64-runtime/server/workspaceSetupState";
+import { assertSessionTempRootFits } from "@local/vibe64-runtime/server/sessionTempFolder";
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
@@ -700,6 +701,7 @@ async function prepareAgentSessionCommand({
       ok: false
     };
   }
+  assertSessionTempRootFits(); // a TMPDIR too long for its sessions' sockets stops the AI here, naming the fix
   await commandService.bindSession(normalizedSessionId, {
     wrapperHostDir: normalizedWrapperHostDir
   });

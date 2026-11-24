@@ -2,9 +2,10 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
@@ -25,7 +26,8 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
-  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
+  sessionTempPath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   createCodexGitCommandService,
@@ -1042,17 +1044,34 @@ test("the AI's Git runs local commands in a connected copy without a credential,
   });
 });
 
+// The editor's TMPDIR for one test, short as a host's is, which holds the
+// session's own temporary folder; it is removed with all in it.
+async function withEditorTemp(callback) {
+  const editorTemp = await realpath(await mkdtemp(path.join(tmpdir(), "v64-et-")));
+  const previous = process.env.TMPDIR;
+  process.env.TMPDIR = editorTemp;
+  try {
+    return await callback(editorTemp);
+  } finally {
+    if (previous === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previous;
+    await rm(editorTemp, { force: true, recursive: true });
+  }
+}
+
 // A session's source with one commit, a connected copy, its own temporary
-// folder, and another session beside it, with the generated wrapper running
-// through the real gateway.
-async function temporaryFolderFixture(root, { identity = {} } = {}) {
+// folder in the editor's TMPDIR, and another session beside it, with the
+// generated wrapper running through the real gateway.
+async function temporaryFolderFixture(root, editorTemp, { identity = {} } = {}) {
   const session = sessionSource(root, "temp-session");
   const source = session.metadata.source_path;
   const sessionRoot = path.dirname(source);
-  const temp = path.join(sessionRoot, "tmp");
+  const temp = sessionTempPath(source);
+  assert.equal(path.dirname(temp), editorTemp);
   const copy = path.join(sessionRoot, "connected", "library");
   const otherSource = path.join(root, "managed", "sessions", "active", "other-session", "source");
-  const sharedTemp = path.join(root, "workspace-tmp");
+  // The rest of the editor's TMPDIR, which every session's folder shares.
+  const sharedTemp = editorTemp;
   const commit = "a".repeat(40);
   session.metadata.connected_copies = JSON.stringify({
     library: { repository: "acme/library", branch: "main", path: copy, baseCommit: commit, canonicalCommit: commit }
@@ -1068,7 +1087,6 @@ async function temporaryFolderFixture(root, { identity = {} } = {}) {
     }
   }
   await mkdir(temp, { mode: 0o770 });
-  await mkdir(sharedTemp);
   const calls = [];
   const service = serviceForSession(session, {
     runGatewayCommand: (request) => {
@@ -1091,8 +1109,8 @@ async function temporaryFolderFixture(root, { identity = {} } = {}) {
 }
 
 test("the AI's Git runs plain local Git in the session's temporary folder and reads the source and its copies from there", async () => {
-  await withTemporaryRoot(async (root) => {
-    const fixture = await temporaryFolderFixture(root, { identity: {
+  await withTemporaryRoot(async (root) => withEditorTemp(async (editorTemp) => {
+    const fixture = await temporaryFolderFixture(root, editorTemp, { identity: {
       GIT_AUTHOR_NAME: "Throwaway Tester", GIT_AUTHOR_EMAIL: "throwaway@example.invalid",
       GIT_COMMITTER_NAME: "Throwaway Tester", GIT_COMMITTER_EMAIL: "throwaway@example.invalid"
     } });
@@ -1111,7 +1129,7 @@ test("the AI's Git runs plain local Git in the session's temporary folder and re
     await ok(["push", "--quiet", "origin", "HEAD:main"], { cwd: work });
     assert.equal(await ok(["--git-dir=remote.git", "log", "--format=%s", "main"]), "first");
     // A test makes its repository below TMPDIR from the source, too.
-    await ok(["-C", "../tmp/work", "commit", "--quiet", "--allow-empty", "-m", "second"], { cwd: source });
+    await ok(["-C", work, "commit", "--quiet", "--allow-empty", "-m", "second"], { cwd: source });
     assert.equal(await ok(["-C", work, "rev-list", "--count", "HEAD"], { cwd: source }), "2");
 
     // From the temporary folder Git reads the session's source and its copies.
@@ -1128,12 +1146,12 @@ test("the AI's Git runs plain local Git in the session's temporary folder and re
       assert.equal(request.userKey, undefined);
       assert.equal(request.session.metadata, undefined);
     }
-  });
+  }));
 });
 
 test("the AI's Git refuses repositories outside the session, whatever -C, --git-dir, GIT_DIR, a link or a .git file names", async () => {
-  await withTemporaryRoot(async (root) => {
-    const fixture = await temporaryFolderFixture(root);
+  await withTemporaryRoot(async (root) => withEditorTemp(async (editorTemp) => {
+    const fixture = await temporaryFolderFixture(root, editorTemp);
     const { calls, copy, git, otherSource, plain, sharedTemp, source, temp } = fixture;
     const otherHead = (await runProcessWithInput("git", ["rev-parse", "HEAD"], { cwd: otherSource, env: plain })).stdout;
     const refused = async (args, code, { cwd = temp, env = {} } = {}) => {
@@ -1189,13 +1207,13 @@ test("the AI's Git refuses repositories outside the session, whatever -C, --git-
     for (const made of [path.join(temp, "stolen"), path.join(otherSource, "made-elsewhere"), path.join(source, "nested")]) {
       assert.equal(await stat(made).then(() => true, () => false), false, made);
     }
-  });
+  }));
 });
 
 test("the AI's Git reaches a remote from the temporary folder with no credential, token or identity of the session", async () => {
-  await withTemporaryRoot(async (root) => {
+  await withTemporaryRoot(async (root) => withEditorTemp(async () => {
     const session = githubSession(root);
-    const temp = path.join(path.dirname(session.metadata.source_path), "tmp");
+    const temp = sessionTempPath(session.metadata.source_path);
     await mkdir(session.metadata.source_path, { recursive: true });
     await mkdir(path.join(temp, "work"), { recursive: true });
     const gatewayCalls = [];
@@ -1237,7 +1255,7 @@ test("the AI's Git reaches a remote from the temporary folder with no credential
       assert.equal(env.GIT_AUTHOR_NAME, "Throwaway Tester");
       assert.equal(env.GIT_TERMINAL_PROMPT, "0");
     }
-  });
+  }));
 });
 
 test("-C and --git-dir from the source no longer take the session's GitHub token to another repository", async () => {
