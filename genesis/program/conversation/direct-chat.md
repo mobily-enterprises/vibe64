@@ -1527,6 +1527,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `tests/client/vibe64WorkPlan.vitest.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
+- `packages/vibe64-runtime/src/shared/assistantRoutingNotice.js`
 - `packages/vibe64-runtime/src/shared/assistantExplicitTask.js`
 - `packages/vibe64-runtime/src/shared/assistantFinishing.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingAssignments.js`

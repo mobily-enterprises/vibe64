@@ -25,7 +25,7 @@
 <script setup>
 import { computed, useId, watch } from "vue";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
-import { assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRoutingNotice";
 
 const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, pendingAction: { type: String, default: "" }, actionError: { type: String, default: "" },
   // What holds the chat: "turn" (the assistant's turn), "message" (the person's message being sent) or "voice".

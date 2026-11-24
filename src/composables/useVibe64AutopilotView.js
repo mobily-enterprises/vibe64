@@ -101,6 +101,20 @@ function composerSubmitTitleFor(mode, approvalOwnerSentence) {
   })[mode] || "Send message";
 }
 
+// Why the send arrow can't take a typed draft, said beside the composer and not only in the arrow's title: Stop being
+// confirmed, Save or Update running, or the assistant's turn (not started yet, ending, or unable to take a message with
+// files). A disabled composer, a message being sent, and connection, recovery and routing states have their own labels.
+function composerHeldReasonFor({ interrupting, repositoryOperationActive, connected, turn, observationLost, ready, steerable, attachments }) {
+  if (interrupting) return "Send is available once Stop is confirmed.";
+  if (repositoryOperationActive) return "Send is available once Save or Update finishes.";
+  if (turn.active !== true || !connected || observationLost) return "";
+  if (!ready) {
+    return ["", "starting"].includes(normalizeText(turn.state)) || !normalizeText(turn.id)
+      ? "Send is available once the assistant's turn has started." : "Send is available when this answer ends.";
+  }
+  return !steerable && attachments ? "A message with files can be sent when this answer ends." : "";
+}
+
 /**
  * The Autopilot view's state and actions: the composer, delivery, questions, Save and Update, workspace
  * preparation and the project side's tools.
@@ -322,21 +336,12 @@ function useVibe64AutopilotView(props, emit, {
       (answerChoices.value.length && selectedAnswerChoice.value) || composerDraft.value.trim()
     );
   });
-  // A draft the send arrow can't take says why beside the composer, not only in the arrow's title. A disabled
-  // composer, a message being sent, and connection, recovery and routing states have their own visible labels.
-  const composerHeldReason = computed(() => {
-    if (approvalMode.value || composerCanSubmit.value || !composerDraft.value.trim() || composerDisabled.value ||
-        !props.conversationRuntime?.canSubmit.value || composerSending.value && !composerQueueing.value) return "";
-    if (interrupting.value) return "Send is available once Stop is confirmed.";
-    if (repositoryOperationActive.value) return "Send is available once Save or Update finishes.";
-    if (!agentActive.value || composerConnectionStatus.value !== "connected" || agentObservationLost.value) return "";
-    if (!agentNativeTurnReady.value && !composerStartupQueueing.value) {
-      return ["", "starting"].includes(normalizeText(activeAgentTurn.value.state)) || !normalizeText(activeAgentTurn.value.id)
-        ? "Send is available once the assistant's turn has started." : "Send is available when this answer ends.";
-    }
-    if (!agentSteerable.value && composerAttachments.value.length) return "A message with files can be sent when this answer ends.";
-    return "";
-  });
+  const composerHeldReason = computed(() => !approvalMode.value && !composerCanSubmit.value && !composerDisabled.value &&
+    props.conversationRuntime?.canSubmit.value === true && composerDraft.value.trim() && !(composerSending.value && !composerQueueing.value)
+    ? composerHeldReasonFor({ interrupting: interrupting.value, repositoryOperationActive: repositoryOperationActive.value,
+      connected: composerConnectionStatus.value === "connected", turn: activeAgentTurn.value, observationLost: agentObservationLost.value,
+      ready: agentNativeTurnReady.value || composerStartupQueueing.value, steerable: agentSteerable.value,
+      attachments: composerAttachments.value.length }) : "");
   const agentStopVisible = computed(() => agentActive.value || routingBusy.value);
   const agentStopEnabled = computed(() => Boolean(
     agentStopVisible.value &&

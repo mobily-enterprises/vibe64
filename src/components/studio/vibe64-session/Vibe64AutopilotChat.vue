@@ -86,7 +86,7 @@
           v-model="composerDraft"
           aria-label="Message AI assistant"
           :attachments-enabled="composerAttachmentsEnabled"
-          :described-by="[composerSupportStatusVisible ? thinkingStatusId : '', composerHeldReason ? composerHeldReasonId : ''].filter(Boolean).join(' ')"
+          :described-by="composerDescribedBy"
           :disabled="composerDisabled"
           density="compact"
           :placeholder="composerPromptHintPlaceholder"
@@ -262,7 +262,8 @@
 </template>
 
 <script setup>
-import { assistantGoalIsActive, assistantRoutingFromMetadata, assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalIsActive, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRoutingNotice";
 import { workPlanStatusLine } from "@local/vibe64-terminals/shared/assistantWorkPlan";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, nextTick, ref, useId, watch } from "vue";
@@ -417,6 +418,9 @@ const {
 const composerSupportStatusVisible = computed(() => Boolean(
   composerAssistantLabel.value || promptHintsVisible.value
 ));
+// The message box is described by the assistant's working status and, when Send can't take the draft, why.
+const composerDescribedBy = computed(() => [composerSupportStatusVisible.value ? thinkingStatusId : "",
+  composerHeldReason.value ? composerHeldReasonId : ""].filter(Boolean).join(" "));
 
 async function sendComposerMessage() {
   if (conversationView.value?.composerBlocked || composerInput.value?.attachmentsCanSubmit() === false) {
