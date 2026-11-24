@@ -15,6 +15,7 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/image.js`
 - `packages/vibe64-deploy/src/plan.js`
 - `packages/vibe64-deploy/src/steps.js`
+- `packages/vibe64-deploy/src/serviceValues.js`
 - `packages/vibe64-deploy/src/address.js`
 - `packages/vibe64-deploy/src/lastRun.js`
 - `packages/vibe64-deploy/src/stop.js`
@@ -350,7 +351,8 @@ making it twice. In order:
    app's server would refuse to start with them), and
    `production_deploy_aliases_unsupported` (409) by an adapter without
    `takeDomain()` (Google Cloud's, AWS's), which can't route them: never dropped;
-4. each internal service, then the public one, in two passes. First every
+4. each service after the services it reaches, else (and among services that
+   reach each other) internal ones first, in two passes. First every
    service that runs a release and is to be handed a new one is readied on the
    version it runs. It is linked to each resource it isn't linked to at the
    provider, so that release's instances start with them however soon the
@@ -441,15 +443,18 @@ making it twice. In order:
      service whose settings it brings twice (Mercbot's production Deploy of 24
      Nov), and none after it does, its names kept; on 25 Nov no Production
      record from before it remained, so that roll is not needed for day 0. A
-     service whose settings name
-     one this Deploy still makes (a Reaches of a new service) is handed its
-     release without them and given them in 6, on that release. A service to
-     make that reaches one not made yet is made after it, whatever the Stack's
-     order (an internal service reaching the public one waited for it before 25
-     Nov, so their first Deploy never made either); of services that reach each
-     other, none made yet, the first is made without the addresses and
-     connections of those not made, and given them in 6. Google and AWS bring
-     them the same way, in the release's own revision or template.
+     service whose settings name one this Deploy still makes (a Reaches of a
+     new service) is handed its release without them and given them in 6, on
+     that release. Until 25 Nov
+     an internal service reaching the public one came first and waited for its
+     address, so their first Deploy never made either. Services that reach each
+     other, none made yet, can't start, since a provider gives an address only
+     once the service is made and mobilynet refuses a release without a setting
+     it declares: the Deploy fails before making any App Service ("computers
+     reaches web, which can't start before computers does, and neither runs
+     yet: take one of their Reaches lines out of genesis/stack.md until both
+     run, then deploy to production."). Google and AWS bring them the same way,
+     in the release's own revision or template.
    - A refresh that fails ends the links mobilynet made against the release it
      moved to, which the record lets go so the next Deploy makes them again,
      and fails the Deploy with the service's reason. Services not yet moved keep
