@@ -156,6 +156,16 @@ A change of viewer resets every part.
   answer or check: the earlier pass kept, or the bare not-passed reason) and
   `reviewRunNote(result, lessonError)`, so every surface says a result the
   same way.
+- Held step results: the learner's own Check (`step.check.run`) and Check my
+  work (`step.review.run`) from the browser (`api` channel) run as held work
+  (`createHeldWork` in `stepOperations.js`, keyed by learner, attempt, step and
+  request ID). Each answers with its result within two seconds, and otherwise
+  `{ ok: true, checking: true }` or `{ ok: true, reviewing: true }` with its
+  `stepId`, `requestId` and `waitingFor`, as the hosted edge ends a request
+  after about a minute; Colleague's check still waits for its diagnostic. The
+  step action path repeats the same request ID through `followHeldRequest`
+  while it is held and after an answer that never came back; a repeat joins
+  the running check or review, or replays its saved result.
 - I'm stuck (`stuck(stepId)`): offered until the step passes, by the bar on a
   do beat and in the final state of an `auto` or `review` step, and by the step
   view on such steps (focus also reports `learningBeat`, the bar's beat index); it records a Colleague request of kind
