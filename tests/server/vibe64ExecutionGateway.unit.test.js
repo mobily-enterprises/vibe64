@@ -926,6 +926,83 @@ test("the editor's own sign-in settings never reach what a session runs, and a p
   }
 });
 
+// 24 Nov: a managed host's terminals and session commands carried the editor's own service environment: the host's
+// variables for the app, the editor's address (HOST, PORT, its public domain), its database and its settings.
+test("a managed host's editor environment never reaches what a session runs, but what a session needs, and a Preview its addresses", (t) => {
+  const kept = {
+    GENESIS_PARSER_ROOT: "/srv/editor/genesis-parsers",
+    HTTPS_PROXY: "http://proxy.internal:3128",
+    LANG: "C.UTF-8",
+    LC_TIME: "C.UTF-8",
+    PHP_INI_SCAN_DIR: "/srv/packs/php/lib",
+    VIBE64_WORKSPACE: "acme"
+  };
+  const addresses = {
+    VIBE64_PREVIEW_PUBLIC_DOMAIN: "acme.apps.example",
+    VIBE64_PUBLIC_PROTOCOL: "https",
+    VIBE64_PUBLIC_USER_DOMAIN: "studio.example"
+  };
+  const dropped = {
+    DATABASE_URL: "mysql://editor:editor-password@127.0.0.1/editor",
+    DB_HOST: "editor-db",
+    DB_PASSWORD: "editor-password",
+    HOST: "0.0.0.0",
+    PORT: "3000",
+    SERVICE_APP_RUN: "/run/editor-app",
+    SERVICE_APP_SETTINGS: "/run/editor-app/settings.json",
+    TRUSTED_PROXIES: "10.0.0.0/8",
+    UV_USE_IO_URING: "0",
+    VIBE64_ACCOUNT_ORIGIN: "https://accounts.example",
+    VIBE64_RUNTIME_NAMESPACE: "acme",
+    VIBE64_STAGING_SSH_POLICY_LINE: "AuthorizedKeysFile /etc/keys/%u"
+  };
+  const editor = { ...kept, ...addresses, ...dropped };
+  const saved = Object.fromEntries(Object.keys(editor).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, editor);
+  t.after(() => {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  const actor = { actor: "app", user: currentActorUser() };
+  const resolve = (baseEnv, request) => resolveCommandEnv({ actor, baseEnv, request: { actor: "app", ...request },
+    resolvedGitIdentityEnv: {} });
+  const names = Object.keys(editor);
+  const editorPart = (env) => Object.fromEntries(names.filter((name) => env[name] !== undefined).map((name) => [name, env[name]]));
+
+  useHost(t, MANAGED_HOST);
+  // A terminal or command started from the editor's environment.
+  const terminal = resolve({ ...process.env }, { envPolicy: "session", purpose: "terminal" });
+  assert.deepEqual(editorPart(terminal), kept);
+  // An agent started from it, and a command the agent runs with its own environment: what the agent set itself
+  // stays, the editor's own does not come back with it, and the project's Env still applies.
+  const agent = resolve({ ...process.env, PROVIDER_HOME: "/srv/agent" }, { envPolicy: "auth", purpose: "codex" });
+  assert.deepEqual(editorPart(agent), kept);
+  const agentCommand = resolve({ ...agent, VIBE64_PUBLIC_USER_DOMAIN: "the-agents-own.example" }, {
+    envPolicy: "session",
+    project: { runtimeConfigEnv: { DB_HOST: "project-db", PORT: "5173" } },
+    purpose: "terminal"
+  });
+  assert.equal(agentCommand.PROVIDER_HOME, "/srv/agent");
+  assert.deepEqual(editorPart(agentCommand), { ...kept, DB_HOST: "project-db", PORT: "5173",
+    VIBE64_PUBLIC_USER_DOMAIN: "the-agents-own.example" });
+  // A Preview, which may be an editor served behind this one, takes the addresses too, and nothing else.
+  const preview = resolve({ ...process.env }, { envPolicy: "preview", purpose: "preview" });
+  assert.deepEqual(editorPart(preview), { ...kept, ...addresses });
+  // The exec helper runs a person's command with what the editor resolved for it.
+  const person = { username: "person", home: path.join(HOST_ROOT, "homes", "person") };
+  const personCommand = resolveCommandEnv({ actor: { actor: "person", requiresRealUser: true, user: person },
+    baseEnv: { ...process.env }, request: { actor: "person", envPolicy: "session", purpose: "terminal" },
+    resolvedGitIdentityEnv: {} });
+  assert.deepEqual(editorPart(helperChildEnv(personCommand, person, "daemon_user", "vibe64-command")), kept);
+
+  // A standalone editor's environment is its person's own shell, but for the editor's own address and server settings.
+  configureVibe64Host(PACK_HOST);
+  const { HOST: _host, PORT: _port, TRUSTED_PROXIES: _proxies, ...standalone } = editor;
+  assert.deepEqual(editorPart(resolve({ ...process.env }, { envPolicy: "session", purpose: "terminal" })), standalone);
+});
+
 test("PTY env factories see the execution id like every other gateway command", async () => {
   const namespace = `gateway-pty-execution-id-${Date.now()}`;
   const terminal = await runVibe64Command({

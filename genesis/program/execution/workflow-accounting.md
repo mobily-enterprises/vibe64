@@ -197,7 +197,27 @@ settings, any name beginning `AUTH_`: the editor is itself a JSKIT application
 whose `AUTH_*` would turn on or redirect a project's own JSKIT sign-in, so a
 command's `AUTH_*` come only from the project's Env, the launch's or caller's
 own env or its Staging Env. A Claude Code process, started from the editor's
-env, gets its project's Env as the project's for the same reason.
+env, gets its project's Env as the project's for the same reason. Nor does it
+take the editor's own address, `HOST` and `PORT`, nor the proxies it believes
+(`TRUSTED_PROXIES`) and the surfaces it serves (`SERVER_SURFACE`,
+`JSKIT_SERVER_SURFACE`), which a project's server reads under the same names:
+its dev server would try the editor's own port. On a managed host (one whose
+helper runs people's commands) the editor is the host's service, so its
+environment is the service's, not a person's: the host's variables for the app,
+the editor's settings, public addresses, database and keys. There the resolver
+drops from the base env every entry the editor's own process has with the same
+value, whoever passed it on, so an agent's command does not bring back what its
+agent was started with, and keeps only what any program there needs: language,
+time and terminal (`LANG`, `LANGUAGE`, `LC_*`, `TZ`, `TERM`, `COLORTERM`), the
+host's proxies and certificates, `TMPDIR`, the Genesis parsers
+(`GENESIS_PARSER_*`), `PHP_INI_SCAN_DIR` and the workspace's name
+(`VIBE64_WORKSPACE`), which a Git identity of last resort names. A Preview also
+keeps the editor's public addresses (`VIBE64_PUBLIC_*`, `VIBE64_PREVIEW_*`) and
+its speech service (`VIBE64_VOICE_*`), since it may be an editor itself served
+behind this one (public Vibe64's `dev:example`). A value a caller set itself,
+and the command's own env, always stay. A standalone editor's environment is its
+person's own shell and is kept, but for the names above that are the editor's
+own.
 A command whose folder is in a tree holding the gradle adapter's init script, in
 `.development/gradle-home/init.d`, gets that session's own Gradle user home as
 `GRADLE_USER_HOME` and the shared read-only dependency cache as

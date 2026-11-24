@@ -150,6 +150,19 @@ settings or the command itself, and Staging gets only its Staging Env's. A
 project that took an `AUTH_*` value from the shell Vibe64 was started in adds
 it to Development Env instead. Colleague can explain this and open Env.
 
+Nor does Vibe64's own address: the `HOST` and `PORT` it listens on (and its
+`TRUSTED_PROXIES`, `SERVER_SURFACE` and `JSKIT_SERVER_SURFACE`) never reach a
+terminal, test or agent command, so a project's dev server never tries Vibe64's
+own port. Preview gives the application its own address; a project that needs
+a fixed `PORT` in its terminals sets it in Development Env. On a host that runs
+Vibe64 as its own service and people's commands as those people, nothing else
+of Vibe64's own environment reaches a session either
+(its database, keys, settings and public addresses): only language and time,
+the host's proxies and certificates, its temporary folder, Genesis's parsers,
+PHP's scan folder and the workspace's name. A Preview also gets the public
+addresses, since it may be a Vibe64 editor itself. Anything else a project
+needs comes from its Development Env. Colleague can explain this and open Env.
+
 `APP_ENV` says where the application runs, and Vibe64 sets it: everything a
 session runs (Preview, terminals, tests and agent commands) gets
 `APP_ENV=development`, whatever the project's own Env or launch says. An
