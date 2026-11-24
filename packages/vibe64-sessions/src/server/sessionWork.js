@@ -4,7 +4,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { createSessionPullRequests } from "./sessionPullRequests.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
-import { refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
+import { refuseDuringRepositoryAiTask, runningRepositoryAiTask, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -173,9 +173,11 @@ function createSessionWork({
       }
       // resolveSupersededUpdateFailure returns null when no Save applies.
       await recovery.resolveRepairedUpdateFailure(runtime, session, updateOperation || recoveredUpdateOperation);
-      const [latestOperation, latestUpdateOperation] = await Promise.all([
+      const [latestOperation, latestUpdateOperation, repositoryAiTask] = await Promise.all([
         runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID),
-        runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID)
+        runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID),
+        // A repository AI task holds Save and Update until it ends: the session shows it being fixed, not needing help.
+        runningRepositoryAiTask(runtime, sessionId)
       ]);
       const activeSaveOperationId = normalizeText(workOperations.operationId("save", sessionId));
       const activeUpdateOperationId = normalizeText(workOperations.operationId("update", sessionId));
@@ -188,6 +190,7 @@ function createSessionWork({
             : null,
         operation: latestOperation || operation,
         updateOperation: latestUpdateOperation || updateOperation,
+        ...(repositoryAiTask ? { repositoryAiTask } : {}),
         ok: true
       };
     }, "Vibe64 could not inspect this session's work.");

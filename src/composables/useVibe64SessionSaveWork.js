@@ -97,6 +97,9 @@ function useVibe64SessionSaveWork(props, {
   const saveWorkRepositoryBusy = computed(() => ["saving", "updating"].includes(
     String(toolbarRepositoryWorkState.value?.state || "")
   ));
+  // The repository AI task (Fix Save, Fix Update) that holds Save and Update, with the server's own reason.
+  const saveWorkRepositoryAiTask = computed(() => props.workState?.repositoryAiTask ||
+    (toolbarRepositoryWorkState.value?.state === "fixing" ? toolbarRepositoryWorkState.value.repositoryAiTask : null) || null);
   const repositoryAssistantStateSettled = computed(() => ["connected", "restricted", "unavailable", "failed"].includes(
     props.agentConnectionStatus
   ));
@@ -107,6 +110,7 @@ function useVibe64SessionSaveWork(props, {
     composerSending.value ||
     saveWorkSending.value ||
     saveWorkRepositoryBusy.value ||
+    Boolean(saveWorkRepositoryAiTask.value) ||
     saveWorkRepositoryState.value?.loading ||
     saveWorkRepositoryState.value?.error
   ));
@@ -135,6 +139,9 @@ function useVibe64SessionSaveWork(props, {
     }
     if (repositoryOperationActive.value || saveWorkRepositoryBusy.value) {
       return "Wait for the current repository operation to finish";
+    }
+    if (saveWorkRepositoryAiTask.value) {
+      return saveWorkRepositoryAiTask.value.message;
     }
     if (composerSending.value) {
       return "Wait for your message to reach the assistant before saving or updating";

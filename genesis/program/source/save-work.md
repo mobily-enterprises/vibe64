@@ -14,6 +14,14 @@ theme's disabled grey and its label says the work was saved at the last check
 while the assistant is still working, because the turn can still change source.
 The projection, other states' colours and the archive warning are unchanged.
 
+While a repository AI task (Fix Save, Fix Update) runs, the work inspection
+carries `repositoryAiTask` (its title and the `vibe64_ai_task_active` refusal's
+own words, from `runningRepositoryAiTask()`, which that refusal also uses), and
+the tab shows **Being fixed with AI** (`fixing`) instead of needing help, after
+a running Save or Update and before a stored failure. Save and Update are held
+with that reason as their hint. The AI task host re-reads the session's work
+when such a task starts or ends.
+
 **Repository needs help** comes from one shared reading of the stored Save and
 Update records, `sessionWorkProblem()` in the terminals package's shared code: a
 failed Save (other than a required Update) or a failed Update, the later one

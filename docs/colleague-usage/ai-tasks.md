@@ -27,6 +27,8 @@ tables** in the Database's Overview ([Browse a project's Database](database.md))
 The button says **Opening…** while it starts, **Being fixed… →** while
 a fix is running, and **See result →** when a fix has ended and waits for you. In
 those last two states it opens the same window again; it never starts a second fix.
+While Fix Save or Fix Update runs, the session's tab reads **Being fixed with AI**
+and **Save** and **Update** are unavailable, their hint saying which fix they wait for.
 
 On a phone or a short screen the window fills the screen. Otherwise it is a dialog
 with a fixed height, so it does not jump as its content changes. Everything works
