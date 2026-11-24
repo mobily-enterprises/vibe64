@@ -626,3 +626,113 @@ it("invites Main's own voice session to speak after a new typed request, never a
   expect(inviteSpeech).toHaveBeenCalledWith("typed-after-failure");
   expect(mocks.request).toHaveBeenCalledTimes(2);
 });
+
+// On 24 Nov 2026 a message sent while the workspace was being prepared after a restart showed "Request failed with
+// status 504." with Retry and Cancel: its send waited inside its request for the whole preparation, past the edge's
+// minute. The send now answers at once with the message held while it waits, and the page follows the held message
+// through its delivery check until its delivery ends, showing what it waits for; an answer lost on the way is
+// followed the same way, and what the page cannot confirm it says in plain words, never as a status code.
+describe("a Main chat message the server holds while its delivery waits", () => {
+  const SENT = /\/conversations\/[^/]+\/messages$/u;
+  function heldServer(messageId, receipts) {
+    const checks = [];
+    mocks.request.mockImplementation(async (url, options) => {
+      if (SENT.test(url)) return { ok: true, delivered: false, status: "queued", messageId, waitingFor: "workspace-preparation" };
+      if (url.endsWith(`/deliveries/${messageId}/inspect`)) {
+        checks.push(url);
+        const next = receipts.length > 1 ? receipts.shift() : receipts[0];
+        if (next instanceof Error) throw next;
+        return typeof next === "function" ? next(options) : next;
+      }
+      return { ok: true };
+    });
+    return checks;
+  }
+  const sends = () => mocks.request.mock.calls.filter(([url]) => SENT.test(url));
+
+  it("stays pending, saying it waits for the workspace preparation, until its delivery check says it arrived", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    const checks = heldServer("held-1", [
+      { status: "pending", messageId: "held-1", waitingFor: "workspace-preparation" },
+      { status: "pending", messageId: "held-1", waitingFor: "assistant" },
+      { status: "accepted", messageId: "held-1" }
+    ]);
+    const sending = runtime.send({ message: "Fix the login page" }, { messageId: "held-1" });
+    await vi.waitFor(() => expect(runtime.delivery.find("held-1")?.waiting).toBe("Waiting for the workspace preparation to finish"));
+    expect(runtime.delivery.find("held-1").status).toBe("pending");
+    await vi.waitFor(() => expect(runtime.delivery.find("held-1")?.waiting).toBe("Waiting for the assistant to start"), { timeout: 5_000 });
+    expect(await sending).toMatchObject({ ok: true });
+    expect(runtime.delivery.find("held-1")?.status).toBe("accepted");
+    expect(checks.length).toBe(3);
+    expect(sends()).toHaveLength(1);
+  }, 10_000);
+
+  it("ends as not sent, with the server's refusal and code, when its held delivery was refused", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    heldServer("held-2", [{ status: "not-sent", messageId: "held-2", code: "vibe64_assistant_routing_request_unresolved",
+      error: "Resolve or cancel the pending request before sending another." }]);
+    await expect(runtime.send({ message: "Add a footer" }, { messageId: "held-2" }))
+      .rejects.toMatchObject({ code: "vibe64_assistant_routing_request_unresolved" });
+    expect(runtime.delivery.find("held-2")).toMatchObject({ status: "failed",
+      error: "Resolve or cancel the pending request before sending another." });
+    expect(sends()).toHaveLength(1);
+  }, 10_000);
+
+  it("is accepted by its transcript receipt and then stops checking", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    const checks = heldServer("held-3", [{ status: "pending", messageId: "held-3", waitingFor: "workspace-preparation" }]);
+    const sending = runtime.send({ message: "Rename the page" }, { messageId: "held-3" });
+    await vi.waitFor(() => expect(checks.length).toBeGreaterThan(0), { timeout: 5_000 });
+    f.receipt(runtime.identity, { user: { messageId: "held-3", text: "Rename the page" } });
+    expect(await sending).toEqual({ ok: true });
+    const seen = checks.length;
+    await new Promise(resolve => setTimeout(resolve, 1_500));
+    expect(checks.length).toBeLessThanOrEqual(seen + 1);
+  }, 10_000);
+
+  it("says in plain words that delivery is unconfirmed when the editor no longer knows the held message", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    heldServer("held-4", [{ status: "unknown", messageId: "held-4" }]);
+    await expect(runtime.send({ message: "Check the footer" }, { messageId: "held-4" })).rejects.toThrow(/Retry checks first/u);
+    const message = runtime.delivery.find("held-4");
+    expect(message.status).toBe("uncertain");
+    expect(message.error).toMatch(/did not confirm it received this message/u);
+    expect(message.error).not.toMatch(/status \d{3}/u);
+  }, 10_000);
+
+  it("follows a send whose answer the edge replaced with a 504, and accepts it once its delivery check says it arrived", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    const edge = Object.assign(new Error("Request failed with status 504."), { status: 504, code: null,
+      messageCode: "http.request.failedWithStatus", messageParams: { status: 504 } });
+    const checks = [];
+    mocks.request.mockImplementation(async (url) => {
+      if (SENT.test(url)) throw edge;
+      if (url.endsWith("/deliveries/edge-1/inspect")) {
+        checks.push(url);
+        return checks.length === 1 ? { status: "pending", messageId: "edge-1", waitingFor: "workspace-preparation" }
+          : { status: "accepted", messageId: "edge-1" };
+      }
+      return { ok: true };
+    });
+    expect(await runtime.send({ message: "Fix the header" }, { messageId: "edge-1" })).toMatchObject({ ok: true });
+    expect(runtime.delivery.find("edge-1")?.status).toBe("accepted");
+    expect(sends()).toHaveLength(1);
+  }, 10_000);
+
+  it("never shows the edge's status code for a lost answer it cannot confirm", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    const edge = Object.assign(new Error("Request failed with status 504."), { status: 504, code: null,
+      messageCode: "http.request.failedWithStatus", messageParams: { status: 504 } });
+    mocks.request.mockImplementation(async (url) => {
+      if (SENT.test(url)) throw edge;
+      if (url.endsWith("/deliveries/edge-2/inspect")) throw edge;
+      return { ok: true };
+    });
+    await runtime.send({ message: "Fix the footer" }, { messageId: "edge-2" }).catch(() => false);
+    const message = runtime.delivery.find("edge-2");
+    expect(message.status).toBe("uncertain");
+    expect(message.error).not.toMatch(/status \d{3}/u);
+    expect(message.error).toMatch(/lost contact with the editor/u);
+    expect(sends()).toHaveLength(1);
+  }, 20_000);
+});
