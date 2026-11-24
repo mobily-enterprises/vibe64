@@ -306,8 +306,9 @@ function createOpenCodeScopedPreparation({
                 const outerTurnId = `opencode:${conversationId}:${tracked.inputMessageId}`;
                 const routingConversationId = input.persistent ? options.routingConversationId : "";
                 if (stoppedByShutdown && routingConversationId) {
-                  // The chat's next read, on the next server, records this turn
-                  // interrupted and makes its checkpoint, as the main chat's
+                  // The chat's next read, on the next server, records how this
+                  // turn ended (completed when OpenCode's history holds its answer,
+                  // else interrupted) and makes its checkpoint, as the main chat's
                   // recovery does. Made here, a Git snapshot would hold up shutdown.
                   await context.runtime.store.writeSessionConversation(sessionId, routingConversationId, {
                     stoppedByShutdown: { runId: tracked.inputMessageId, checkpointTurnId: outerTurnId, routingConversationId }

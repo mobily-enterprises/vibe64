@@ -87,6 +87,18 @@ test("an OpenCode chat turn stopped by shutdown leaves its checkpoint to the cha
   assert.equal(f.checkpoints.length, 1, "a later read makes no second checkpoint");
 });
 
+test("an OpenCode chat turn whose answer arrived as the shutdown stopped it is checkpointed completed, as the next read says", async () => {
+  const f = fixture();
+  await (await f.turnEnd())({ stopped: true, outcome: "interrupted", stoppedByShutdown: true });
+  // JSKIT's read finds the run's completed answer in OpenCode's history and says how the run ended.
+  await (await f.readMark()).ended({ outcome: "completed" });
+  assert.deepEqual(f.checkpoints, [{ checkpointTurnId: OUTER_TURN_ID, checkpointOutcome: "completed" }]);
+  assert.deepEqual(f.records.get(CHAT_ID).stoppedByShutdown, { runId: "msg_run", routingConversationId: CHAT_ID },
+    "its checkpoint is no longer owed");
+  await (await f.readMark()).ended({ outcome: "completed" });
+  assert.equal(f.checkpoints.length, 1, "a later read makes no second checkpoint");
+});
+
 test("outside shutdown an OpenCode chat turn's end still makes its checkpoint at once, and an unmarked chat has no mark", async () => {
   const f = fixture();
   await (await f.turnEnd())({ stopped: true, outcome: "failed", stoppedByShutdown: false });

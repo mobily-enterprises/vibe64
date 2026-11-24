@@ -174,7 +174,10 @@ function createCodexSessionTurnCheckpoint({ project, publishSessionChanged, trac
 /**
  * The chat's run a previous server's shutdown stopped, as its assistant's read
  * takes it. The read that records the run ended makes the checkpoint that
- * shutdown left owed, once.
+ * shutdown left owed, once: completed when the read found the run's answer in
+ * the assistant's history (it arrived as the shutdown stopped the run, and
+ * OpenCode's read says so through `ended({ outcome })`), else the outcome the
+ * stop recorded, else interrupted.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -186,7 +189,7 @@ function shutdownStoppedRun({ project, publishSessionChanged, trackShutdownWork 
   if (!stop?.runId) return null;
   return {
     runId: stop.runId,
-    async ended() {
+    async ended({ outcome } = {}) {
       if (!stop.checkpointTurnId) return;
       const runtime = context.runtime || await project.createRuntimeWithoutSource();
       await checkpointSessionTurn({
@@ -195,7 +198,7 @@ function shutdownStoppedRun({ project, publishSessionChanged, trackShutdownWork 
         session: context.session,
         sessionId: context.sessionId,
         outerTurnId: stop.checkpointTurnId,
-        outcome: stop.outcome || "interrupted",
+        outcome: outcome === "completed" ? outcome : stop.outcome || "interrupted",
         publishSessionChanged,
         trackShutdownWork
       });

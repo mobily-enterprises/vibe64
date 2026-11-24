@@ -62,8 +62,10 @@ crash's record counts the turns it interrupted that Vibe64 resumed.
 
 ## Other recovery
 A turn that finishes while Vibe64 is stopping keeps its reply, and its recovery
-snapshot is likewise saved once Vibe64 runs again. A Claude or OpenCode turn
-that finished then reads as interrupted by the restart; a Claude turn shows
+snapshot is likewise saved once Vibe64 runs again. When the AI's own saved
+history holds that reply, the turn reads as finished: it is not resumed and gets
+no red entry. A Claude or OpenCode turn whose reply is not in that history reads
+as interrupted by the restart and is resumed as above; a Claude turn shows
 **Claude was interrupted when Vibe64 disconnected.**
 When Claude or OpenCode reports a model or execution failure, read the reported
 conversation status and check any reply before deciding whether to send another
