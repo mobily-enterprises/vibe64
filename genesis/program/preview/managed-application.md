@@ -547,6 +547,11 @@ words, then its run or its refusal; a start the editor no longer knows reads
 "Vibe64 restarted while Preview was starting. Start it again." A start without
 a `startId` (the assistant's tool, the editor's own) waits for its run as
 before.
+A failed outputs read is shown in words (`launchStatusErrorText`), never with
+a status code, an error code or a route: "Vibe64 did not answer while Preview
+read its status." for status 0 or a 5xx without the server's code, the
+server's own words for a refusal, and otherwise "Preview's status could not be
+read."
 
 Status inspection resolves the environment without provisioning resources or
 writing project environment files. Confirmed preview readiness supersedes a

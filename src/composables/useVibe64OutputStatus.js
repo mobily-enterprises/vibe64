@@ -118,8 +118,7 @@ function useVibe64OutputStatus({
     const error = outputTargetsResource.query.error.value || null;
     return launchStatusErrorText({
       error,
-      fallback: outputTargetsResource.loadError.value,
-      path: outputTargetsPath.value
+      fallback: outputTargetsResource.loadError.value
     });
   });
   const preview = computed(() => launchPreviewFromStatus(status.value));
