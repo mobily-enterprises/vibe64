@@ -2118,3 +2118,26 @@ completes unstopped: its end removes the field and makes the request Senior's
 planning turn. A stopped turn leaves it unused, the next turn of the same
 request drops it, and a new request replaces the whole record. Focused
 evidence: `assistantWorkflow.test.js`.
+
+## Held Main chat messages (no upgrade)
+
+Session metadata `held_agent_messages` (`heldMessageRecords.js`) is
+`{ schemaVersion: 1, entries: [{ messageId, status, at, error?, code? }] }`,
+at most 50 entries, each kept a day. Only new writes produce it: a Main chat
+send, or an approved message, that answers held while its delivery waits (for
+the workspace preparation, for example) records the message as `waiting`
+before that answer goes out, and the delivery's end removes the entry, or
+keeps it as `not-sent` with its refusal. A quick delivery writes nothing.
+
+Absence reads as nothing held, and so does a value that cannot be read: the
+delivery check answers from routing's own records, as it always did. No
+existing record is transformed or backfilled, and a session saved before the
+key loads and sends unchanged, so no numbered upgrade was needed.
+
+An entry left after a restart (still `waiting`: the editor stopped before the
+message reached its assistant) is refused unsent: the delivery check answers
+`not-sent` with `vibe64_agent_message_server_restarting`, "Vibe64 restarted
+before this message reached the assistant. Send it again.", unless routing's
+own records know the message, whose answer stands. Nothing resends it by
+itself; only the person's Retry, after that check, sends it again. Focused
+evidence: `vibe64AgentMessageHeld.unit.test.js`.
