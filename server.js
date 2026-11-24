@@ -42,6 +42,7 @@ import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
 import { registerEditorFraming } from "@local/vibe64-core/server/editorFraming";
+import { registerSlowRequestLog } from "./server/lib/slowRequestLog.js";
 import {
   createBrowserLifecycleMonitor,
   registerBrowserLifecycleWebSocketRoute
@@ -356,6 +357,8 @@ async function createServer(options = {}) {
   handleUpgradeSocketErrors(app.server, { logger: app.log });
   // Before any plugin or route, so every answer, the release bundle's included, refuses other sites' frames.
   registerEditorFraming(app, { env: runtimeEnv });
+  // Before any route, so a late answer or a request its client gave up on is logged from its arrival.
+  registerSlowRequestLog(app, { logger: app.log });
   for (const warning of loggerOptions.warnings) {
     logOperationalEvent(
       app.log,
