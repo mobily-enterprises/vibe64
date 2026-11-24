@@ -2130,8 +2130,8 @@ line, so a message writes the same 1.6 KB at 5,000 turns as at 50. Runtime's `se
   object, so a status change, a red interruption entry, a native receipt or
   the runtime's `seen` map costs its own bytes.
 - A change no line can say (a turn removed or moved, rewind markers changed),
-  and the change that would take the lines after the snapshot past a
-  thirty-second of it (64 KiB at least), saves the chat whole instead: one
+  and the change that would take the lines after the snapshot past 1/64 of
+  it (64 KiB at least), saves the chat whole instead: one
   snapshot line, published in one atomic step. A load parses the record and at
   most that share more, and over many messages each one writes a bounded
   multiple of its own line, at 5,000 turns as at 50.

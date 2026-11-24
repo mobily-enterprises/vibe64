@@ -1113,8 +1113,8 @@ a message costs the same however long the chat is. The first line is the whole
 record (a snapshot); each later line names the turns that changed, the messages
 each keeps and gains, and patches to turn and chat metadata and the summary. A
 change no line can say (a turn removed or moved, rewind markers changed), and
-the change that would take the lines after the snapshot past a thirty-second of
-it (64 KiB at least), saves the chat whole instead: one snapshot line published
+the change that would take the lines after the snapshot past 1/64 of it (64
+KiB at least), saves the chat whole instead: one snapshot line published
 in one atomic step. A load therefore parses the record and at most that share
 more, and over many messages each one writes a bounded multiple of its own line
 at any chat length. Messages, runtime metadata, tool receipts and per-turn
