@@ -240,6 +240,33 @@ test("a message sent to a prepared workspace answers with its delivery, as befor
   });
 });
 
+// held_agent_messages is an additive session metadata key with no numbered upgrade (docs/state-upgrades.md, Held Main
+// chat messages): a session saved before it, or one whose value cannot be read, must load and send as before.
+test("a session without held_agent_messages, or with an unreadable one, loads and sends as before and gains none", async () => {
+  await withRouteProject(async (project) => {
+    for (const [name, metadata] of [
+      ["without the key", new Map()],
+      ["with an unreadable value", new Map([["held_agent_messages", "{not json"]])]
+    ]) {
+      const before = new Map(metadata);
+      const world = messageWorld({ metadata, preparing: false });
+      const server = await listen(world, project);
+      try {
+        const sent = await within(server.send({ message: "Hello", messageId: "message_tab_old_1" }), ANSWER_WAIT_MS,
+          `${name}: the send did not answer`);
+        assert.equal(sent.body.ok, true, name);
+        assert.equal(sent.body.delivered, true, name);
+        assert.equal(world.delivered.length, 1, name);
+        // A message the editor never held answers from the assistant's own records, never as refused unsent.
+        assert.equal((await server.inspect("message_tab_never_held")).body.status, "unknown", name);
+        assert.deepEqual(metadata, before, `${name}: a quick send changed the session's records`);
+      } finally {
+        await server.close();
+      }
+    }
+  });
+});
+
 test("an editor stopping while a held message waits refuses it, unsent, and its delivery check says so", async () => {
   await withRouteProject(async (project) => {
     const world = messageWorld();
