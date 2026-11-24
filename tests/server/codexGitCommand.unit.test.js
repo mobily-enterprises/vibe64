@@ -458,7 +458,8 @@ test("managed Git waits past five seconds and the executor stops work at its 30-
       stateRoot: root
     });
     const command = path.join(prepared.hostWrapperDir, "git");
-    const options = { cwd, env: { ...process.env, ...prepared.env } };
+    // An agent's shell: a test host's GIT_CONFIG_GLOBAL would be ignored, and said so.
+    const options = { cwd, env: { ...agentShellEnv(), ...prepared.env } };
     const slow = await runProcessWithInput(command, ["status"], options);
     assert.equal(slow.exitCode, 0, slow.stderr);
     assert.equal(slow.stdout, "slow success");
@@ -617,13 +618,10 @@ test("model-visible Git failures retain their stage, budget, execution reference
         sessionId: session.sessionId,
         stateRoot: root
       });
-      // An agent's shell has no Git or gh variables but Vibe64's own
-      // (commandBaseEnv); a test host may set GIT_CONFIG_GLOBAL, which a
-      // command with the token refuses.
-      const agentShellEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(?:GIT|GH)_/u.test(name)));
+      // A test host may set GIT_CONFIG_GLOBAL, which a command with the token refuses.
       const result = await runProcessWithInput(path.join(prepared.hostWrapperDir, "gh"), ["issue", "comment", "43"], {
         cwd: session.metadata.source_path,
-        env: { ...agentShellEnv, ...prepared.env }
+        env: { ...agentShellEnv(), ...prepared.env }
       });
       assert.equal(result.exitCode, 1, scenario);
       const diagnostic = JSON.parse(result.stderr.match(/Managed Git diagnostic: (.+)\n/u)[1]);
@@ -1024,8 +1022,13 @@ test("the AI's Git runs local commands in a connected copy without a credential,
       }
     });
 
-    const shown = await service.run({ args: ["show", "HEAD:index.js"], command: "git", cwd: path.join(copyPath, "src"), sessionId: session.sessionId });
+    const shown = await service.run({ args: ["show", "HEAD:index.js"], command: "git", cwd: path.join(copyPath, "src"), sessionId: session.sessionId,
+      env: { GIT_CONFIG_GLOBAL: path.join(root, "gitconfig") } });
     assert.equal(shown.ok, true);
+    // The copy's Git ran without the shell's GIT_CONFIG_GLOBAL and says so after its own output.
+    assert.equal(gatewayCalls[0].env.GIT_CONFIG_GLOBAL, undefined);
+    assert.equal(shown.stdout, "export default 1;");
+    assert.match(shown.stderr, /^Vibe64's Git ignored GIT_CONFIG_GLOBAL from this shell, .*\(git -c <key>=<value> \.\.\.\)\.\n$/u);
     assert.equal(gatewayCalls.length, 1);
     assert.equal(gatewayCalls[0].cwd, path.join(copyPath, "src"));
     assert.deepEqual(gatewayCalls[0].allowedRoots, [copyPath]);
@@ -1043,6 +1046,12 @@ test("the AI's Git runs local commands in a connected copy without a credential,
     assert.equal(gatewayCalls.length, 1, "only the copy's local command ran");
   });
 });
+
+// An agent's shell has no Git or gh variables but Vibe64's own (commandBaseEnv): this process's environment without
+// those a test host sets for its own Git.
+function agentShellEnv() {
+  return Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(?:GIT|GH)_/u.test(name)));
+}
 
 // The editor's TMPDIR for one test, short as a host's is, which holds the
 // session's own temporary folder; it is removed with all in it.
@@ -1703,7 +1712,7 @@ test("the real Git gateway and generated wrapper preserve bytes and command fail
       sessionId: session.sessionId,
       stateRoot: root
     });
-    const env = { ...process.env, ...prepared.env };
+    const env = { ...agentShellEnv(), ...prepared.env };
     const git = (args, input = "") => runProcessWithInput(path.join(prepared.hostWrapperDir, "git"), args, { cwd, env, input });
     assert.equal((await git(["init", "--quiet"])).exitCode, 0);
     for (const expected of [

@@ -8,7 +8,9 @@
 // Only commands that reach GitHub carry the token; every other command keeps
 // its freedom, none of this applying to it. Git in the session's temporary
 // folder, plain local Git that takes none of the shell's program or config
-// variables either, refuses those the same way (temporaryFolderEnvRefusal).
+// variables either, refuses those the same way (temporaryFolderEnvRefusal);
+// in the source and its copies, which run without them too, the command says
+// which it ignored (ignoredProgramEnvNote).
 
 import { normalizeText } from "@local/vibe64-execution/server";
 import { commandFailure } from "./commandFailure.js";
@@ -189,11 +191,15 @@ const TEMPORARY_FOLDER_ENV_REFUSED_CODE = "vibe64_codex_git_command_temp_env_ref
  * @param {unknown} env what the wrapper sent from the command's shell
  * @param {string} rule what the command takes instead
  */
-function programEnvRefusalMessage(env, rule) {
+/**
+ * The shell's variables that point Git at a program or config (`names`), and how a message names them (`shown`):
+ * GIT_CONFIG_COUNT with the GIT_CONFIG_KEY_<n> and GIT_CONFIG_VALUE_<n> it counts.
+ * @param {unknown} env what the wrapper sent from the command's shell
+ */
+function programEnvNames(env) {
   const record = env && typeof env === "object" && !Array.isArray(env) ? env : {};
   const names = CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES.filter((name) => typeof record[name] === "string" && record[name] !== "" &&
     (name !== "GIT_CONFIG_COUNT" || Number(record[name]) > 0));
-  if (!names.length) return "";
   const count = Number(record.GIT_CONFIG_COUNT);
   const shown = names.map((name) => {
     if (name !== "GIT_CONFIG_COUNT" || !Number.isInteger(count)) return name;
@@ -201,10 +207,29 @@ function programEnvRefusalMessage(env, rule) {
       ? "GIT_CONFIG_COUNT with GIT_CONFIG_KEY_0 and GIT_CONFIG_VALUE_0"
       : `GIT_CONFIG_COUNT with GIT_CONFIG_KEY_0 to GIT_CONFIG_KEY_${count - 1} and GIT_CONFIG_VALUE_0 to GIT_CONFIG_VALUE_${count - 1}`;
   });
+  return { names, shown };
+}
+
+function programEnvRefusalMessage(env, rule) {
+  const { names, shown } = programEnvNames(env);
+  if (!names.length) return "";
   const one = names.length === 1;
   return `This shell sets ${shown.join(", ")}, which point${one ? "s" : ""} Git at a program or config. ${rule} ` +
     `It never takes ${one ? "it" : "them"} from the shell, so it refuses rather than ignore ${one ? "it" : "them"}: ` +
     `unset ${one ? "it" : "them"} for this command (env ${names.map((name) => `-u ${name}`).join(" ")} git ...).`;
+}
+
+/**
+ * The line a Git command in the source or a connected copy ends its output with when it ran without some of the
+ * shell's program or config variables, which never reach it, or "".
+ * @param {unknown} env what the wrapper sent from the command's shell
+ */
+function ignoredProgramEnvNote(env) {
+  const { shown } = programEnvNames(env);
+  return shown.length
+    ? `Vibe64's Git ignored ${shown.join(", ")} from this shell, as it does every variable that points Git at a program ` +
+      "or config: config the command needs goes on its command line (git -c <key>=<value> ...)."
+    : "";
 }
 
 function programEnvRefusal(env) {
@@ -259,5 +284,6 @@ export {
   CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES,
   commandRequiresGithubToken,
   githubTokenCommandRefusal,
+  ignoredProgramEnvNote,
   temporaryFolderEnvRefusal
 };

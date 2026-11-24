@@ -146,8 +146,11 @@ function commandOutput(result = {}) {
     : result.error || result.output);
 }
 
-/** What the wrapper receives for a command that ran. */
-function commandResultPayload(result = {}, { commandSubmitted = false } = {}) {
+/**
+ * What the wrapper receives for a command that ran; `note`, when given, is one more line after the command's own
+ * stderr, unless the platform failed it (its own message is what the wrapper shows then).
+ */
+function commandResultPayload(result = {}, { commandSubmitted = false, note = "" } = {}) {
   let error = "";
   if (result.timedOut && commandSubmitted) {
     error = "Managed Git command timed out.";
@@ -162,10 +165,17 @@ function commandResultPayload(result = {}, { commandSubmitted = false } = {}) {
     ok: result.ok === true,
     outputEncoding: result.outputEncoding || "utf8",
     signal: result.signal || "",
-    stderr: result.stderr || "",
+    stderr: note && !result.timedOut && (result.ok || !result.code) ? withLastLine(result, note) : result.stderr || "",
     stdout: result.stdout || "",
     timedOut: result.timedOut === true
   };
+}
+
+/** The command's stderr, in its own encoding, with `line` after what it wrote. */
+function withLastLine(result, line) {
+  const encoding = result.outputEncoding === "base64" ? "base64" : "utf8";
+  const written = Buffer.from(result.stderr || "", encoding).toString("utf8");
+  return Buffer.from(`${written}${written && !written.endsWith("\n") ? "\n" : ""}${line}\n`, "utf8").toString(encoding);
 }
 
 function commandOutputTail(value = "", limit = 1000) {
