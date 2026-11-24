@@ -86,8 +86,16 @@ test("native provider switches preserve history without restarting, and cold rec
   const adapter = await startCodexHistoryAdapter({ token: randomUUID(), fetchImpl: (_url, options) =>
     fetch(`http://127.0.0.1:${server.address().port}/openai/responses`, options) });
   await writeFile(path.join(root, "config.toml"), "check_for_update_on_startup = false\n");
+  // Every app-server starts as the product starts it (prepareCodexModelCatalog), with the CLI's own model catalogue:
+  // without one, the openai provider's model manager fetches chatgpt.com before each turn and resume.
+  const exported = spawnSync("codex", ["debug", "models", "--bundled", "-c", "check_for_update_on_startup=false"], {
+    env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root, LANG: "C.UTF-8" }, encoding: "utf8", timeout: 20_000
+  });
+  assert.equal(exported.status, 0, exported.stderr);
+  await writeFile(path.join(root, "models.json"), exported.stdout);
+  const catalog = ["-c", `model_catalog_json=${JSON.stringify(path.join(root, "models.json"))}`];
   const socket = path.join(root, "server.sock");
-  const child = spawn("codex", ["app-server", "--listen", `unix://${socket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false", "-c", "features.remote_plugin=false"], {
+  const child = spawn("codex", ["app-server", ...catalog, "--listen", `unix://${socket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false", "-c", "features.remote_plugin=false"], {
     env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"], detached: true
   });
   child.stderr.resume();
@@ -304,7 +312,7 @@ test("native provider switches preserve history without restarting, and cold rec
   const nextHome = path.join(root, "next-home");
   await mkdir(nextHome, { mode: 0o700 });
   const nextSocket = path.join(nextHome, "server.sock");
-  nextChild = spawn("codex", ["app-server", "--listen", `unix://${nextSocket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false", "-c", "features.remote_plugin=false"], {
+  nextChild = spawn("codex", ["app-server", ...catalog, "--listen", `unix://${nextSocket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false", "-c", "features.remote_plugin=false"], {
     env: { PATH: process.env.PATH, HOME: nextHome, CODEX_HOME: nextHome, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"], detached: true
   });
   let nextDiagnostic = "";
@@ -336,7 +344,7 @@ test("native provider switches preserve history without restarting, and cold rec
     await new Promise((resolve) => ownedChild.exitCode !== null || ownedChild.signalCode !== null ? resolve() : ownedChild.once("exit", resolve));
   }
   const coldSocket = path.join(root, "cold.sock");
-  nextChild = spawn("codex", ["app-server", "--listen", `unix://${coldSocket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false"], {
+  nextChild = spawn("codex", ["app-server", ...catalog, "--listen", `unix://${coldSocket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false"], {
     env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"], detached: true
   });
   nextChild.stderr.resume();
