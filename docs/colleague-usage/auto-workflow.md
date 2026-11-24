@@ -35,11 +35,11 @@ Senior. Router decides from your latest message: an earlier "don't change
 anything yet", or a question answered before, never makes a later "make the
 plan" a conversation, and planning always goes to Senior, whatever role Router
 names. If a plan request still reaches Junior (or a turn Router took for a
-conversation), it writes nothing, not even a draft: it hands the request over and ends its
-turn with one short line. A **Senior is making the plan.** notice appears, the
-chat shows the automatic **Senior makes the plan.** message, and as soon as the
-first turn ends Senior writes the plan from your request and the conversation in
-a Planning turn of its own, asking first when a current plan exists and you
+conversation), it writes nothing, not even a draft: it hands the request over
+and ends its turn with one short line. A **Senior is making the plan.** notice
+appears, the chat shows the automatic **Senior makes the plan.** message, and as
+soon as the first turn ends Senior writes the plan from your request and the
+conversation in a Planning turn of its own, asking first when a current plan exists and you
 haven't said whether to update it or archive and replace it. Planning then waits
 for your go-ahead as usual. A plan Junior writes anyway is refused and handed
 over the same way, without its text. **Stop** during the first turn hands
