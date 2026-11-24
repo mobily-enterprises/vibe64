@@ -40,6 +40,9 @@ function createOutputTargetLaunchCoordination({
   // Each session's Stops and closes, counted, so a start that waited for the workspace preparation outside the
   // launch lock knows whether one came meanwhile.
   const interruptions = new Map();
+  // Each session's starts queued for or holding the launch lock: while one is, the outputs read and Stop answer without
+  // queuing behind its slow steps (the preparation check, the project's services, the admission, the spawn).
+  const startsInLock = new Map();
 
   /**
    * The environment, project and command runner a Preview status read or
@@ -190,6 +193,24 @@ function createOutputTargetLaunchCoordination({
     return launchStarts.run(String(sessionId || "global"), operation);
   }
 
+  /** Runs a start under the session's launch lock, counted while it is queued for or holds the lock. */
+  async function withStartLock(sessionId, operation) {
+    const key = String(sessionId || "global");
+    startsInLock.set(key, (startsInLock.get(key) || 0) + 1);
+    try {
+      return await launchStarts.run(key, operation);
+    } finally {
+      const left = startsInLock.get(key) - 1;
+      if (left > 0) startsInLock.set(key, left);
+      else startsInLock.delete(key);
+    }
+  }
+
+  /** Whether a start is queued for or holds the session's launch lock. */
+  function launchStartBusy(sessionId) {
+    return startsInLock.has(String(sessionId || "global"));
+  }
+
   /**
    * A Stop (`stopped`) or the session's close (`closed`) ends the starts waiting for its workspace preparation.
    * @param {string} sessionId
@@ -278,15 +299,28 @@ function createOutputTargetLaunchCoordination({
     });
   }
 
+  /**
+   * Throws the refusal of a start that a Stop or the session's close interrupted, at one of its steps inside the lock.
+   * @param {string} sessionId
+   * @param {number} count `launchInterruptions` when the start began
+   */
+  function throwIfLaunchInterrupted(sessionId, count) {
+    const refusal = launchInterruptedSince(sessionId, count);
+    if (refusal) throw Object.assign(new Error(refusal.error), { code: refusal.code });
+  }
+
   return Object.freeze({
     publishLaunchCleanup,
     ensureReadyLaunchPreviewProxy,
     captureOutputResults,
     markLaunchReady,
     withLaunchStartLock,
+    withStartLock,
+    launchStartBusy,
     interruptLaunches,
     launchInterruptions,
     launchInterruptedSince,
+    throwIfLaunchInterrupted,
     launchAdmissionFailure,
     withLaunchAdmission,
     resolvePreviewStatus

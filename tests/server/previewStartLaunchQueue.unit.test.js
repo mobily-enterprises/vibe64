@@ -188,7 +188,6 @@ test("a Preview start the page names answers within two seconds while the worksp
     assert.equal(world.state.launched, 0);
   });
 
-
 // The start's other steps run inside the launch lock: the preparation check (which may wait for the assistant's
 // write), the project's services (a database's cold start after a reboot), the resource admission and the spawn.
 // Stop, the outputs read and Open must not queue behind them either.

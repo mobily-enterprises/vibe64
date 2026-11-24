@@ -93,10 +93,17 @@ async function readLaunchContext(project, sessionId) {
  * @param {object} options
  * @param {(sessionId: string, context: object) => Promise<object>} options.ensureWorkspacePrepared
  * @param {boolean} options.rerunFailedSetup
+ * @param {() => void} options.interrupted throws when a Stop or a close came while the launch checked its
+ *   preparation
  * @param {boolean} [options.prepared] the launch already waited for the preparation it was given
  * @returns {Promise<{ context: object } | { preparing: Promise<unknown> }>}
  */
-async function readPreparedLaunchContext(project, sessionId, { ensureWorkspacePrepared, rerunFailedSetup, prepared = false }) {
+async function readPreparedLaunchContext(project, sessionId, {
+  ensureWorkspacePrepared,
+  interrupted,
+  rerunFailedSetup,
+  prepared = false
+}) {
   const runtime = await project.createRuntime();
   const session = await runtime.getSession(sessionId);
   assertSourceInspectionHealthy(session.sourceInspection);
@@ -112,6 +119,7 @@ async function readPreparedLaunchContext(project, sessionId, { ensureWorkspacePr
     if (setup?.completion) {
       return { preparing: setup.completion };
     }
+    interrupted();
   }
   return { context: await launchContextFor(project, runtime, await runtime.getSession(sessionId), true) };
 }
