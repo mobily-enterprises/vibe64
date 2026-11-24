@@ -3,7 +3,9 @@
 
 /**
  * Stops a sessions service's work at server shutdown: renewal admission,
- * presence and startup recovery close, and every agent runtime is invalidated.
+ * presence and startup recovery close, every agent runtime is invalidated, and
+ * a Save or Update the Save and Update buttons started records its outcome
+ * before the server exits, as it did when it ran inside its request.
  * Each step runs even when another fails; the failures are reported together.
  * @param {object} dependencies
  * @param {SessionsService} dependencies.sessions
@@ -14,6 +16,7 @@ async function stopSessionWork({ sessions, terminals }) {
     Promise.resolve(sessions.closeSessionRenewalWork()),
     Promise.resolve(sessions.closeSessionPresence()),
     sessions.stopResumingInterruptedWork(),
+    sessions.settleStartedWork(),
     Promise.resolve().then(async () => {
       const result = await terminals.invalidateAgentRuntimes({
         reason: "server-shutdown"

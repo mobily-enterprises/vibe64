@@ -68,8 +68,10 @@ const ACTION_UPDATE_ASSISTANT_SELECTION = "vibe64.sessions.assistant-selection.u
 const ACTION_UPDATE_CURRENT_SESSION = "vibe64.sessions.current.update";
 const ACTION_INSPECT_SESSION_WORK = "vibe64.sessions.work.inspect";
 const ACTION_SAVE_SESSION_WORK = "vibe64.sessions.work.save";
+const ACTION_START_SESSION_SAVE = "vibe64.sessions.work.save.start";
 const ACTION_CHECK_SESSION_UPDATES = "vibe64.sessions.updates.check";
 const ACTION_UPDATE_SESSION_WORK = "vibe64.sessions.updates.apply";
+const ACTION_START_SESSION_UPDATE = "vibe64.sessions.updates.start";
 const ACTION_INSPECT_SESSION = "vibe64.sessions.inspect";
 const ACTION_INSPECT_SESSION_RENEWAL = "vibe64.sessions.renewal.inspect";
 const ACTION_REQUEST_SESSION_RENEWAL_DRAFT = "vibe64.sessions.renewal.draft.request";
@@ -351,6 +353,14 @@ function createSessionActions({ sessions }) {
       },
       execute: (input, context) => sessions.saveSessionWork(input.sessionId, input, context)
     }),
+    // The Save button's: the same Save, answered once it starts; the page follows its task to the outcome.
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_START_SESSION_SAVE,
+      input: { ...sessionSaveInputValidator, mode: "create" },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => sessions.startSessionSave(input.sessionId, input)
+    }),
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_CHECK_SESSION_UPDATES,
@@ -370,6 +380,14 @@ function createSessionActions({ sessions }) {
         vibe64: PROJECT_OPERATION
       },
       execute: (input) => sessions.updateSessionWork(input.sessionId, input)
+    }),
+    // The Update button's: the same Update, answered once it starts; the page follows its task to the outcome.
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_START_SESSION_UPDATE,
+      input: { ...sessionUpdateInputValidator, mode: "create" },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => sessions.startSessionUpdate(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
@@ -538,6 +556,8 @@ export {
   ACTION_RETRY_WORKSPACE_SETUP,
   ACTION_SAVE_SESSION_WORK,
   ACTION_SEND_AGENT_MESSAGE,
+  ACTION_START_SESSION_SAVE,
+  ACTION_START_SESSION_UPDATE,
   ACTION_UPDATE_CURRENT_SESSION,
   ACTION_UPDATE_ASSISTANT_MODEL_ACCESS,
   ACTION_UPDATE_ASSISTANT_SELECTION,

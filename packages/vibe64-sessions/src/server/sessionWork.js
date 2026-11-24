@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
 import { refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
@@ -15,6 +16,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").SessionUpdateChecks} SessionUpdateChecks */
 
 const NOTED_PATH_LIMIT = 20;
+const WORK_TASK_IDS = Object.freeze({ save: SESSION_SAVE_TASK_ID, update: SESSION_UPDATE_TASK_ID });
 
 /**
  * What the main chat's AI is told after Update changed files it may be working on: which ones, so it reads them
@@ -118,6 +120,11 @@ function createSessionWork({
   workspaceSetup
 }) {
   const activeWorkInspections = new Map();
+  // Per kind, by session: the answer to the Save or Update a button started, until that work records its start in
+  // its task or is refused before starting.
+  const startingWork = Object.freeze({ save: new Map(), update: new Map() });
+  // The Saves and Updates a button started, until each has ended.
+  const startedWork = new Set();
 
   /**
    * The session's work, with each connected copy's in `connected`, after
@@ -234,9 +241,74 @@ function createSessionWork({
     }, "The pull request could not be confirmed. Retry to check GitHub and continue.");
   }
 
+  /**
+   * What a Save or Update button's request is answered with once its work runs: the operation and its task as it is
+   * now (null when the task already holds a later operation). The page follows that task to its outcome.
+   * @param {"save" | "update"} kind
+   * @param {string} sessionId
+   * @param {string} operationId
+   * @param {object | null} [task] the task as the work recorded its start, read again when absent
+   */
+  async function runningWorkAnswer(kind, sessionId, operationId, task = null) {
+    const current = task || await (await project.createRuntimeWithoutSource())
+      .store.readBackgroundTask(sessionId, WORK_TASK_IDS[kind]);
+    return {
+      ok: true,
+      operation: normalizeText(current?.operationId) === operationId ? current : null,
+      operationId,
+      running: true
+    };
+  }
+
+  /**
+   * A Save or Update for a request that must not wait for it to finish: the Save and Update buttons'. The hosted edge
+   * in front of a workspace ends a request after about a minute, while an Update or Save of several connected
+   * repositories runs for minutes. The answer comes once the work has recorded its start in its task (the agent-write
+   * lock is waited for at most ten seconds first), or is the refusal that stopped it before it started, the same one
+   * the waiting call returns. The work then runs to its end whatever happens to the request; its task holds its
+   * progress and outcome, and its publications announce them. A request while one runs, or while one is starting,
+   * gets that one, never a second.
+   * @param {"save" | "update"} kind
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {(input: object) => Promise<object>} run the waiting Save or Update, given `onStarted`
+   */
+  async function startSessionWork(kind, sessionId, input, run) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const starting = startingWork[kind].get(normalizedSessionId);
+    if (starting) return starting;
+    const runningId = normalizeText(workOperations.operationId(kind, normalizedSessionId));
+    if (runningId) return runningWorkAnswer(kind, normalizedSessionId, runningId);
+    const answer = Promise.withResolvers();
+    startingWork[kind].set(normalizedSessionId, answer.promise);
+    const settle = (value) => {
+      if (startingWork[kind].get(normalizedSessionId) === answer.promise) startingWork[kind].delete(normalizedSessionId);
+      answer.resolve(value);
+    };
+    // A refusal before the work started settles the answer; once started, the later outcome no longer can.
+    const work = sessionResult(() => run({
+      ...input,
+      onStarted: task => settle(runningWorkAnswer(kind, normalizedSessionId, normalizeText(task?.operationId), task))
+    }), `Vibe64 could not ${kind} this session.`).then((outcome) => {
+      settle(outcome);
+      startedWork.delete(work);
+    });
+    startedWork.add(work);
+    return answer.promise;
+  }
+
+  /**
+   * Resolves once every Save and Update a button started has ended and recorded its outcome, as the server's shutdown
+   * once waited for them inside their requests.
+   */
+  async function settleStartedWork() {
+    await Promise.allSettled([...startedWork]);
+  }
+
   async function saveSessionWork(sessionId, input) {
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
+      const { onStarted = doNothing } = input;
       const runtime = await project.createRuntimeWithoutSource();
       await refuseDuringRepositoryAiTask(runtime, sessionId, input.aiTaskId);
       let session = await runtime.getSessionWithoutSource(sessionId);
@@ -262,7 +334,7 @@ function createSessionWork({
             operationStarted = true;
             workOperations.start("save", sessionId, operationId);
             const savedTask = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
-            await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
+            const startedTask = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
               event: {
                 kind: "save-started",
                 message: "Saving session work.",
@@ -281,6 +353,7 @@ function createSessionWork({
               reason: "session-save-started",
               session: await runtime.getSessionWithoutSource(sessionId)
             });
+            onStarted(startedTask);
           },
           operationId,
           onProgress: async (progress = {}) => {
@@ -430,6 +503,7 @@ function createSessionWork({
    */
   async function updateSessionWork(sessionId, input) {
     return sessionResult(async () => {
+      const { onStarted = doNothing } = input;
       const runtime = await project.createRuntimeWithoutSource();
       await refuseDuringRepositoryAiTask(runtime, sessionId, input.aiTaskId);
       const session = await runtime.getSessionWithoutSource(sessionId);
@@ -453,7 +527,7 @@ function createSessionWork({
           onRepositoryWriteAcquired: async () => {
             operationStarted = true;
             workOperations.start("update", sessionId, operationId);
-            await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
+            const startedTask = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
               event: {
                 kind: "update-started",
                 message: "Updating this session (rebase).",
@@ -468,8 +542,10 @@ function createSessionWork({
               reason: "session-update-started",
               session: await runtime.getSessionWithoutSource(sessionId)
             });
+            onStarted(startedTask);
           },
           operationId,
+          // Each step is published, as Save's are, so a page that only follows the task shows it as it happens.
           onProgress: async (progress = {}) => {
             await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
               event: {
@@ -478,6 +554,12 @@ function createSessionWork({
                 status: "running"
               },
               patch: { ...progress, operationId, status: "running" }
+            });
+            await publishSessionChanged(sessionId, {
+              operation: "updated",
+              originId: normalizeText(input.originId),
+              reason: "session-update-progress",
+              session: await runtime.getSessionWithoutSource(sessionId)
             });
           },
           runtime,
@@ -586,6 +668,24 @@ function createSessionWork({
     }, "Vibe64 could not update this session.");
   }
 
+  /**
+   * The Save button's Save: `saveSessionWork`, answered once it starts (`startSessionWork`).
+   * @param {string} sessionId
+   * @param {object} input
+   */
+  function startSessionSave(sessionId, input) {
+    return startSessionWork("save", sessionId, input, startInput => saveSessionWork(sessionId, startInput));
+  }
+
+  /**
+   * The Update button's Update: `updateSessionWork`, answered once it starts (`startSessionWork`).
+   * @param {string} sessionId
+   * @param {object} input
+   */
+  function startSessionUpdate(sessionId, input) {
+    return startSessionWork("update", sessionId, input, startInput => updateSessionWork(sessionId, startInput));
+  }
+
   return Object.freeze({
     createSessionPullRequest,
     inspectSessionChangeDiff,
@@ -593,6 +693,9 @@ function createSessionWork({
     inspectSessionWork,
     saveSessionWork,
     saveToCurrentDestination,
+    settleStartedWork,
+    startSessionSave,
+    startSessionUpdate,
     updateSessionWork
   });
 }

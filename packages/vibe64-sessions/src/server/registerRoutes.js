@@ -46,15 +46,15 @@ import {
   ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_RETRY_SESSION_RENEWAL,
   ACTION_RETRY_WORKSPACE_SETUP,
-  ACTION_SAVE_SESSION_WORK,
   ACTION_SEND_AGENT_MESSAGE,
   ACTION_SKIP_INTEGRATION_SETUP,
+  ACTION_START_SESSION_SAVE,
+  ACTION_START_SESSION_UPDATE,
   ACTION_UPDATE_ASSISTANT_MODEL_ACCESS,
   ACTION_UPDATE_ASSISTANT_SELECTION,
   ACTION_UPDATE_CURRENT_SESSION,
   ACTION_UPDATE_SESSION_PRESENCE,
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
-  ACTION_UPDATE_SESSION_WORK,
   ACTION_WITHDRAW_MAIN_CHAT_APPROVAL
 } from "./sessionActions.js";
 import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
@@ -243,10 +243,13 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
     summary: "Read the bounded diff for one current project file."
   });
 
+  // Save and Update answer 202 once they start and run on whatever becomes of the request: the page follows their
+  // task to its outcome. A refusal before they start is the answer, as before.
   routes.actionRoute("POST", "/sessions/:sessionId/save", {
-    actionId: ACTION_SAVE_SESSION_WORK,
+    actionId: ACTION_START_SESSION_SAVE,
     buildInput: sessionBodyWithoutUserInput,
-    summary: "Save session work to the project's canonical repository."
+    successStatus: 202,
+    summary: "Start saving session work to the project's canonical repository."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/updates/check", {
@@ -256,9 +259,10 @@ function registerRoutes(http, { localhostCheckBypassed, projectContext }) {
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/updates/apply", {
-    actionId: ACTION_UPDATE_SESSION_WORK,
+    actionId: ACTION_START_SESSION_UPDATE,
     buildInput: sessionBodyWithoutUserInput,
-    summary: "Update this session (rebase) without saving or discarding its work."
+    successStatus: 202,
+    summary: "Start updating this session (rebase) without saving or discarding its work."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/integration-setup/resume", {

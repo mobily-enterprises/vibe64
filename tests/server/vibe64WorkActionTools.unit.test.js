@@ -22,18 +22,21 @@ test("work tools retain exact review identities and project authority through HT
       updateOperation: { status: "failed", code: "update-conflict", error: "Resolve the conflict first.",
         conflictRecovery: { reviewId: "review-1", private: "private-checkpoint" } },
       cacheMaintenance: { status: "retryable", retryable: true, message: "The work was saved; its clone cache needs refresh.", private: "private-cache" } };
+    // The Save and Update buttons' routes run the same Save and Update through the action that answers once it
+    // starts (httpName); the tools wait for its outcome.
     const cases = [
       ["GET", "/work", "work.inspect", "inspectSessionWork", {}],
-      ["POST", "/save", "work.save", "saveSessionWork", { destinationReview: destination }],
+      ["POST", "/save", "work.save", "saveSessionWork", { destinationReview: destination }, "work.save.start", "startSessionSave"],
       ["POST", "/updates/check", "updates.check", "checkSessionUpdates", { force: true }],
       ["POST", "/updates/apply", "updates.apply", "updateSessionWork", { historyReview, reviewedConflictId: "review-1",
-        requestId: "11111111-1111-4111-8111-111111111111" }]
+        requestId: "11111111-1111-4111-8111-111111111111" }, "updates.start", "startSessionUpdate"]
     ];
-    const sessions = Object.fromEntries(cases.map(([, , , name]) => [name, async (...args) => {
+    const operations = cases.flatMap(([, , , name, , , httpOperation]) => [name, httpOperation]).filter(Boolean);
+    const sessions = Object.fromEntries(operations.map(operation => [operation, async (...args) => {
       const context = currentProjectRequestContext();
       // Save and inspect also receive their caller's action context; HTTP and
       // tool calls differ only in channel, so compare the operation inputs.
-      calls.push({ args: args.filter(arg => !arg?.requestMeta), actor: context.vibe64User, project: context.slug });
+      calls.push({ args: args.filter(arg => !arg?.requestMeta), actor: context.vibe64User, operation, project: context.slug });
       return native;
     }]));
     const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
@@ -47,8 +50,9 @@ test("work tools retain exact review identities and project authority through HT
     const toolSet = catalog.resolveToolSet(context);
     const app = testRouteApp();
     registerRoutes(app.http, { localhostCheckBypassed: true, projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
-    for (const [method, suffix, name, , body] of cases) {
+    for (const [method, suffix, name, toolOperation, body, httpName = name, httpOperation = toolOperation] of cases) {
       const actionId = `vibe64.sessions.${name}`;
+      const httpActionId = `vibe64.sessions.${httpName}`;
       const tool = toolSet.tools.find(item => item.actionId === actionId);
       assert.ok(tool, actionId);
       const parameters = catalog.toOpenAiToolSchema(tool).function.parameters;
@@ -57,18 +61,21 @@ test("work tools retain exact review identities and project authority through HT
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64/sessions/:sessionId${suffix}` });
       const request = { params: routeProjectParams({ sessionId: "session-1" }), input: { body },
         executeAction({ actionId: actual, input }) {
-          assert.equal(actual, actionId);
-          return actions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
+          assert.equal(actual, httpActionId);
+          return actions.execute({ actionId: actual, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
         } };
       const reply = testReply();
       await route.handler(request, reply);
       assert.equal(reply.payload, native, "HTTP retains its full result");
-      const httpCall = calls.at(-1);
+      const { operation: httpCalled, ...httpCall } = calls.at(-1);
+      assert.equal(httpCalled, httpOperation);
       const execute = (patch = {}) => catalog.executeToolCall({ toolName: tool.name, toolSet, context,
         argumentsText: JSON.stringify({ projectSlug: slug, sessionId: "session-1", ...body, ...patch }) });
       const result = await execute();
       assert.equal(result.ok, true, JSON.stringify(result));
-      assert.deepEqual(calls.at(-1), httpCall);
+      const { operation: toolCalled, ...toolCall } = calls.at(-1);
+      assert.equal(toolCalled, toolOperation);
+      assert.deepEqual(toolCall, httpCall);
       assert.equal(httpCall.actor, actor);
       assert.equal(httpCall.project, slug);
       assert.deepEqual(result.result.destination, destination);

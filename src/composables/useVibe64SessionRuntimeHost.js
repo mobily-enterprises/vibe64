@@ -15,9 +15,16 @@ import {
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
 import {
+  vibe64SessionCheckUpdatesPath,
   vibe64SessionPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
+import {
+  runningWorkOperationId,
+  workAnswerLost,
+  workTaskFollowed,
+  workTaskOutcome
+} from "@/lib/vibe64SessionWorkOutcome.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { writePageClipboardText } from "@/lib/browser.js";
@@ -403,12 +410,83 @@ function useVibe64SessionRuntimeHost(props, emit) {
     return true;
   }
 
+  // Per pending follow of a started Save or Update, the function that ends it.
+  const workTaskFollows = new Set();
+
+  /**
+   * Resolves with the selected session's Save ("save") or Update ("update") task once the followed operation, or a
+   * later one of its kind, has left running; with null when the person leaves this session, or the page, first. The
+   * task arrives as every change to it does: each publication refreshes the session, and a reconnect reads it again.
+   * @param {"save" | "update"} kind
+   * @param {{ operationId: string, startedAt?: string }} followed
+   */
+  function finishedWorkTask(kind, followed) {
+    const sessionId = selectedSessionId.value;
+    const key = kind === "update" ? "updateOperation" : "operation";
+    return new Promise((resolve) => {
+      let finished = false;
+      let stop = () => {};
+      const finish = (task) => {
+        if (finished) return;
+        finished = true;
+        stop();
+        workTaskFollows.delete(finish);
+        resolve(task);
+      };
+      workTaskFollows.add(finish);
+      stop = watch(() => [selectedSessionId.value, workState.value[key]], ([currentSessionId, task]) => {
+        if (currentSessionId !== sessionId) finish(null);
+        else if (workTaskFollowed(task, followed) && !workTaskActive(task)) finish(task);
+      }, { immediate: true });
+      if (finished) stop();
+    });
+  }
+
+  /**
+   * The outcome of a Save or Update request, as its request answered when it waited for the work: the server answers
+   * once the work starts, so a running answer's outcome is its task's once finished. A finished task's failure is
+   * thrown, as the waited-for request's refusal was (`failureMessage` when it records no message); its success is
+   * completed by `completeFollowed`. An answer lost on the way (a dropped connection, an edge's timeout) is followed
+   * through the operation the session then reports running, or the one it reports finished since the press. False
+   * when the person left the session first.
+   * @param {"save" | "update"} kind
+   * @param {() => Promise<unknown>} send
+   * @param {{ completeFollowed?: (outcome: object) => Promise<object> | object, failureMessage: string }} options
+   */
+  async function workRequestOutcome(kind, send, { completeFollowed = (outcome) => outcome, failureMessage }) {
+    const key = kind === "update" ? "updateOperation" : "operation";
+    const priorOperationId = String(workState.value[key]?.operationId || "");
+    let answer;
+    try {
+      answer = await send();
+    } catch (error) {
+      if (!workAnswerLost(error)) throw error;
+      await refreshWorkState().catch(() => null);
+      const active = workState.value.activeOperation;
+      const latestOperationId = String(workState.value[key]?.operationId || "");
+      const operationId = active?.kind === kind ? String(active.operationId || "")
+        : latestOperationId !== priorOperationId ? latestOperationId : "";
+      if (!operationId) throw error;
+      answer = { ok: true, operationId, running: true };
+    }
+    const operationId = runningWorkOperationId(answer);
+    if (!operationId) return answer;
+    const task = await finishedWorkTask(kind, {
+      operationId,
+      startedAt: String(answer.operation?.operationId || "") === operationId ? String(answer.operation.startedAt || "") : ""
+    });
+    if (!task) return false;
+    const outcome = workTaskOutcome(task);
+    if (outcome.ok === false) throw vibe64ApiError(outcome, failureMessage);
+    return completeFollowed(outcome);
+  }
+
   async function saveSessionWork({ destinationReview } = {}) {
     const sessionId = selectedSessionId.value;
     if (!sessionId) {
       return false;
     }
-    const result = await getHttpWebClient().request(
+    const result = await workRequestOutcome("save", () => getHttpWebClient().request(
       vibe64SessionPath(
         readRefOrGetterValue(props.sessionData.sessionsApiPath),
         sessionId,
@@ -418,7 +496,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         body: { ...vibe64RealtimeOriginPayload(), destinationReview },
         method: "POST"
       }
-    );
+    ), { failureMessage: "Session work could not be saved." });
     await Promise.allSettled([
       refreshSessionData({ reason: "session-work-save" }),
       refreshWorkState()
@@ -437,20 +515,28 @@ function useVibe64SessionRuntimeHost(props, emit) {
     if (!sessionId) {
       return false;
     }
+    const send = () => getHttpWebClient().request(
+      vibe64SessionPath(
+        readRefOrGetterValue(props.sessionData.sessionsApiPath),
+        sessionId,
+        "/updates/apply"
+      ),
+      {
+        body: vibe64RealtimeOriginPayload({ reviewedConflictId, ...(historyReview ? { historyReview } : {}),
+          ...(requestId ? { requestId } : {}) }),
+        method: "POST"
+      }
+    );
+    // A waited-for Update answered with the update check it recorded, which is still fresh once its task finishes.
+    const completeFollowed = async (outcome) => ({
+      ...outcome,
+      ...await updateCheckAfterUpdate(sessionId),
+      ok: true,
+      operation: outcome.operation
+    });
     let result;
     try {
-      result = await getHttpWebClient().request(
-        vibe64SessionPath(
-          readRefOrGetterValue(props.sessionData.sessionsApiPath),
-          sessionId,
-          "/updates/apply"
-        ),
-        {
-          body: vibe64RealtimeOriginPayload({ reviewedConflictId, ...(historyReview ? { historyReview } : {}),
-            ...(requestId ? { requestId } : {}) }),
-          method: "POST"
-        }
-      );
+      result = await workRequestOutcome("update", send, { completeFollowed, failureMessage: "This session could not be updated." });
     } finally {
       await Promise.allSettled([
         refreshSessionData({ reason: "session-work-update" }),
@@ -461,6 +547,23 @@ function useVibe64SessionRuntimeHost(props, emit) {
       throw vibe64ApiError(result, "This session could not be updated.");
     }
     return result;
+  }
+
+  /**
+   * The update check a finished Update recorded, which its waited-for answer included and the repository view shows:
+   * an unforced check answers it from the session while it is fresh. Empty when the check fails; the view checks again.
+   * @param {string} sessionId
+   */
+  async function updateCheckAfterUpdate(sessionId) {
+    try {
+      const check = await getHttpWebClient().request(
+        vibe64SessionCheckUpdatesPath(readRefOrGetterValue(props.sessionData.sessionsApiPath), sessionId),
+        { body: { force: false }, method: "POST" }
+      );
+      return check?.ok === false ? {} : normalizeObject(check);
+    } catch {
+      return {};
+    }
   }
 
   async function cancelAgentMessage(messageId = "") {
@@ -559,6 +662,8 @@ function useVibe64SessionRuntimeHost(props, emit) {
   onBeforeUnmount(() => {
     interruptFeedback.success();
     workStateActive = false;
+    // The work runs on at the server; the page that shows the session next follows its task.
+    for (const finish of [...workTaskFollows]) finish(null);
   });
 
   return {
