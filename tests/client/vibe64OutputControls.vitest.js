@@ -731,19 +731,29 @@ describe("Vibe64 launch controls", () => {
     expect(launchStatusShouldRetry(0, { status: 401 })).toBe(false);
     expect(launchStatusShouldRetry(LAUNCH_STATUS_RETRY_LIMIT, { status: 502 })).toBe(false);
 
+    // A person never sees a status code, a code or a route: a status read the edge cut or that never arrived says so in
+    // words, a refusal keeps the server's own words, and any other failure says the status could not be read.
+    for (const error of [
+      Object.assign(new Error("Request failed."), { status: 502 }),
+      Object.assign(new Error("Request failed with status 504."), { status: 504 }),
+      Object.assign(new Error("Network request failed."), { status: 0 })
+    ]) {
+      expect(launchStatusErrorText({ error, path: "/api/vibe64/sessions/session-1/outputs" }))
+        .toBe("Vibe64 did not answer while Preview read its status.");
+    }
     expect(launchStatusErrorText({
-      error: Object.assign(new Error("Request failed."), {
-        status: 502
+      error: Object.assign(new Error("Session is archiving and preview access is unavailable."), {
+        code: "vibe64_session_closing",
+        status: 409
       }),
       path: "/api/vibe64/sessions/session-1/outputs"
-    })).toBe("Request failed. (HTTP 502, /api/vibe64/sessions/session-1/outputs)");
-
+    })).toBe("Session is archiving and preview access is unavailable.");
     expect(launchStatusErrorText({
-      error: Object.assign(new Error("Network request failed."), {
-        status: 0
-      }),
+      error: Object.assign(new Error("Request failed with status 404."), { status: 404 }),
       path: "/api/vibe64/sessions/session-1/outputs"
-    })).toBe("Network request failed. (network, /api/vibe64/sessions/session-1/outputs)");
+    })).toBe("Preview's status could not be read.");
+    expect(launchStatusErrorText({ fallback: "Request failed with status 504." }))
+      .toBe("Preview's status could not be read.");
 
     expect(launchStatusErrorText({
       error: Object.assign(new Error("Assistant owns the source."), {

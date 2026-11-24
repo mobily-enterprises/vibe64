@@ -57,6 +57,10 @@ describe("Vibe64 launch controls surface", () => {
       launchStarting: true
     })).toBe("Preparing preview.");
 
+    // A failed status read is shown in its own words, with no request wording, status code or route around it.
+    expect(launchPreviewEmptyText({ loadError: "Vibe64 did not answer while Preview read its status." }))
+      .toBe("Vibe64 did not answer while Preview read its status.");
+
     expect(launchPreviewEmptyText({
       launchStarting: true
     })).toBe("Preparing preview.");
