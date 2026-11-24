@@ -4,6 +4,7 @@ import { SESSION_WORK_PROBLEM_LABEL, sessionWorkProblem } from "@local/vibe64-te
 // session work snapshot, and the label and icon each state is shown with.
 const REPOSITORY_WORK_STATE_PRESENTATION = Object.freeze({
   checking: Object.freeze({ icon: "$pending", label: "Checking whether work is saved" }),
+  fixing: Object.freeze({ icon: "$pending", label: "Being fixed with AI" }),
   needs_help: Object.freeze({ icon: "$error", label: SESSION_WORK_PROBLEM_LABEL }),
   saved: Object.freeze({ icon: "$checkCircle", label: "All work is saved" }),
   saving: Object.freeze({ icon: "$pending", label: "Saving work" }),
@@ -34,6 +35,15 @@ function sessionRepositoryWorkState(workState = null) {
     return {
       ...freshness,
       state: "updating"
+    };
+  }
+  // An AI task is repairing the repository; Save and Update wait for it, so it is working, not needing help.
+  if (source.repositoryAiTask?.title) {
+    return {
+      ...freshness,
+      repositoryAiTask: { message: String(source.repositoryAiTask.message || ""), title: String(source.repositoryAiTask.title) },
+      state: "fixing",
+      updateAvailable: source.updateAvailable === true
     };
   }
   const problem = sessionWorkProblem(source);
@@ -104,7 +114,9 @@ function repositoryWorkStateProblem(sessionItem = {}) {
 function repositoryWorkStateDescription(sessionItem = {}) {
   const label = repositoryWorkStateLabel(sessionItem);
   const problem = repositoryWorkStateProblem(sessionItem);
-  return problem ? `${label}: ${problem.message} ${problem.nextStep}` : label;
+  if (problem) return `${label}: ${problem.message} ${problem.nextStep}`;
+  const fixing = repositoryWorkState(sessionItem) === "fixing" ? sessionItem.repositoryWorkState?.repositoryAiTask?.message : "";
+  return fixing ? `${label}: ${fixing}` : label;
 }
 
 function repositoryWorkStateIcon(sessionItem = {}) {

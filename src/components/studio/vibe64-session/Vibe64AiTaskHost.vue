@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { computed, inject, provide } from "vue";
+import { computed, inject, provide, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAiTaskHost, VIBE64_AI_TASKS_KEY, Vibe64AiTaskTray, Vibe64AiTaskWindow } from "@local/vibe64-ai-tasks/client";
 import { useAiTaskConversation } from "@/composables/useAiTaskConversation.js";
@@ -78,6 +78,10 @@ const host = useAiTaskHost({
   fallbackFocus: () => mainChat.value
 });
 provide(VIBE64_AI_TASKS_KEY, host);
+// A repository task's start and end change what the session's tab and Save say, so the session's work is read again.
+watch(() => Boolean(host.task?.active && host.task?.repository), (running, wasRunning) => {
+  if (running !== wasRunning) void viewProps.refreshSessionWork().catch(() => null);
+});
 
 const assistantSelection = computed(() => viewProps.session?.assistantSelection || {});
 const canConfigureRouting = computed(() => assistantCanConfigureRouting.value);

@@ -280,6 +280,9 @@ review before this session can update: package-lock.json, package.json…*, and
 - anything else: **Fix it with AI**, which opens the same window for Save and
   Update, or fix the cause and Save or Update again.
 
+While Fix it with AI works on it, the tab shows a working icon and reads **Being
+fixed with AI**, and **Save** and **Update** wait, their hint naming the fix.
+
 These controls are on the Save or Update notice in chat. If you dismissed it,
 open the selected tab's info and choose **Show Update notice** (or **Show Save
 notice**); the notice returns with its controls, and on phones chat is revealed.

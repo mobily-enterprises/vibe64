@@ -27,9 +27,21 @@ function publicSession(session = {}, extra = {}) {
  * @param {string} [aiTaskId]
  */
 async function refuseDuringRepositoryAiTask(runtime, sessionId, aiTaskId = "") {
-  const conversations = await runtime.store.listSessionConversations(sessionId);
-  const running = conversations.find(({ conversationId, task }) => task?.active && task.repository && conversationId !== aiTaskId);
-  if (running) throw vibe64Error(`${running.task.title} is still running. Wait for it to finish first.`, "vibe64_ai_task_active");
+  const running = await runningRepositoryAiTask(runtime, sessionId, aiTaskId);
+  if (running) throw vibe64Error(running.message, "vibe64_ai_task_active");
 }
 
-export { publicSession, refuseDuringRepositoryAiTask, sessionResult };
+/**
+ * The repository AI task that holds the session's Save and Update, with the reason they wait, or null.
+ * @param {{ store: object }} runtime
+ * @param {string} sessionId
+ * @param {string} [aiTaskId] the task asking, which never holds itself
+ * @returns {Promise<{ message: string, title: string } | null>}
+ */
+async function runningRepositoryAiTask(runtime, sessionId, aiTaskId = "") {
+  const conversations = await runtime.store.listSessionConversations(sessionId);
+  const running = conversations.find(({ conversationId, task }) => task?.active && task.repository && conversationId !== aiTaskId);
+  return running ? { message: `${running.task.title} is still running. Wait for it to finish first.`, title: running.task.title } : null;
+}
+
+export { publicSession, refuseDuringRepositoryAiTask, runningRepositoryAiTask, sessionResult };
