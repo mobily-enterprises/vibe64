@@ -948,13 +948,13 @@ test("a managed host's editor environment never reaches what a session runs, but
     DB_PASSWORD: "editor-password",
     HOST: "0.0.0.0",
     PORT: "3000",
-    SERVICE_APP_RUN: "/run/editor-app",
-    SERVICE_APP_SETTINGS: "/run/editor-app/settings.json",
+    SERVICE_APP_RUN: "editor-app-run",
+    SERVICE_APP_SETTINGS: "editor-app-run/settings.json",
     TRUSTED_PROXIES: "10.0.0.0/8",
     UV_USE_IO_URING: "0",
     VIBE64_ACCOUNT_ORIGIN: "https://accounts.example",
     VIBE64_RUNTIME_NAMESPACE: "acme",
-    VIBE64_STAGING_SSH_POLICY_LINE: "AuthorizedKeysFile /etc/keys/%u"
+    VIBE64_STAGING_SSH_POLICY_LINE: "AuthorizedKeysFile editor-keys/%u"
   };
   const editor = { ...kept, ...addresses, ...dropped };
   const saved = Object.fromEntries(Object.keys(editor).map((name) => [name, process.env[name]]));
