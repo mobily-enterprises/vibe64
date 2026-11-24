@@ -2151,18 +2151,46 @@ publisher, it converts each main and temporary chat of every project's active
 and closing sessions, archives and prepared renewal archives: the old record
 becomes the new file's one snapshot line, unchanged. Before anything is staged
 each conversion is read back through the new reader and compared with the old
-record; an unreadable record, a record with fields this upgrade does not know,
-or a chat holding both files stops it before anything changes. The new file is
-published before the old one is removed, and both are kept under
+record; an unreadable record or one with fields this upgrade does not know
+stops it before anything changes. The new file is published first; only then
+does the old one become a note, `{"version":2,"movedTo":"transcript.jsonl"}`,
+which this release never reads. Both are kept under
 `upgrades/backups/20261124-chat-transcript-log/` (`before/` holds the old
-record, `after/` the new file). A chat still in the per-turn layout is
+record, `after/` the new file and the note) until backup retention removes a
+completed upgrade's backups, 14 days after it completed and after their newest
+file changed. A chat still in the per-turn layout is
 `20261002-session-conversations`'s, which runs first.
 
 Check is read-only and reports, per project, how many chats it would convert.
-An interrupted apply resumes the same prepared files; a rerun after it finished
-changes nothing. Nothing reads or converts an old record at run time: opening
-or writing an unconverted chat refuses with
-`vibe64_conversation_upgrade_required`. Run it as the OS user that owns the
+A rerun after it finished changes nothing. Nothing reads or converts an old
+record at run time: opening or writing an unconverted chat refuses with
+`vibe64_conversation_upgrade_required`.
+
+Putting the previous release back (a rollout's rollback, a live switch undone):
+
+- After the upgrade is recorded, that release does not start: its start's
+  check refuses the newer ledger, so it never reads a converted chat.
+- After an apply that stopped part way (the start step's time limit, a
+  power cut), nothing is recorded and that release starts. A converted chat's
+  `transcript.json` is the note, whose version it refuses ("Conversation
+  storage has an unsupported or damaged format"), so it never opens one as an
+  empty chat or writes a second history beside it. The chats not converted yet
+  are still its own: it reads and writes them, and starts new ones.
+- The next apply prepares again from what the chats hold, in a backup folder of
+  its own (`retry-2/`, `retry-3/`, ... inside the upgrade's), rather than
+  resuming the stopped run's prepared files, which those writes would make
+  stale: it converts what the previous release wrote and the chats it started,
+  and leaves converted chats alone. A chat whose new file was published just
+  before the stop is converted again from its old file, the newer one: nothing
+  appends to a new file before the upgrade is recorded.
+- So an old record never replaces a newer appended file. Only this release
+  appends, once the upgrade is recorded, and by then the previous release no
+  longer starts. If an old record is put back by hand beside an appended file,
+  this release reads the appended file and leaves the record where it is, and
+  an apply that meets one refuses that chat and changes nothing, as it does a
+  note whose new file is gone: an operator compares the record's turns with the
+  appended file's (the backups hold both sides of the conversion) and keeps
+  every message before the chat is opened again. Run it as the OS user that owns the
 session state, with Vibe64 and every session process stopped. Converting a
 5,040-turn (10 MB) chat took about 2 s to apply and under 1 s to check on a
 busy test host. Focused evidence:

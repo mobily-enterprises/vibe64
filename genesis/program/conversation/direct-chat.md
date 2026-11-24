@@ -1103,8 +1103,11 @@ archived and prepared renewal histories. It backs up all original bytes before
 publication and retries the prepared replacements. The numbered
 `20261124-chat-transcript-log` upgrade then turns each resulting
 `transcript.json` into a `transcript.jsonl` whose one snapshot line is the same
-record, verified by reading it back, and removes the old file only after the new
-one is published. Ordinary conversation reads require the upgrades instead of
+record, verified by reading it back, and only after the new one is published
+replaces the old file with a note the previous release refuses to open, so that
+release, put back after an apply that stopped part way, never shows a converted
+chat empty; the next apply prepares again from what the chats then hold.
+Ordinary conversation reads require the upgrades instead of
 converting old state. Nested transcript writes
 share the mutation queue; AI changeover still compares content to preserve
 corrections and missed history.

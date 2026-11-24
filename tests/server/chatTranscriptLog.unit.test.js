@@ -10,6 +10,8 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 const exec = promisify(execFile);
 const at = (turn, second = 0) => new Date(Date.UTC(2026, 9, 1) + turn * 60_000 + second * 1000).toISOString();
 const upgradeId = "20261124-chat-transcript-log";
+// What a converted chat's transcript.json holds, which the previous release refuses to open.
+const movedNote = '{"version":2,"movedTo":"transcript.jsonl"}\n';
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-chat-log-"));
@@ -48,6 +50,11 @@ async function seededChat(f, sessionId, turns) {
 async function chatFile(store, sessionId) {
   const root = store.paths(sessionId).conversationLogRoot;
   const names = (await readdir(root)).filter(name => name.startsWith("transcript."));
+  // A converted chat also keeps its old file's note.
+  if (names.length === 2 && names.includes("transcript.jsonl")) {
+    assert.equal(await readFile(path.join(root, "transcript.json"), "utf8"), movedNote);
+    return path.join(root, "transcript.jsonl");
+  }
   assert.equal(names.length, 1, `One chat file in ${root}: ${names.join(", ")}`);
   return path.join(root, names[0]);
 }
@@ -414,16 +421,23 @@ test("the upgrade converts every old chat (live, temporary, closing, archived, p
   assert.equal(await f.store.conversationMessageIdExists("live", "user-2"), true, "A hidden turn's message still counts as sent.");
   assert.deepEqual(await f.store.conversationStorage.read("live", tx => tx.readSummary()), documents.live.summary);
   assert.deepEqual(await f.store.conversationStorage.read("live", tx => tx.readMetadata()), documents.live.metadata);
-  await assert.rejects(readFile(liveFile), { code: "ENOENT" });
+  // The old file stays as a note the previous release refuses (its own check, which parseLegacyTranscript repeats),
+  // so that release never opens a converted chat as an empty one; the original is in the upgrade's backup.
+  const { MOVED_TRANSCRIPT_NOTE, parseLegacyTranscript } = await import("@local/vibe64-runtime/server/sessionTranscriptLog");
+  assert.equal(MOVED_TRANSCRIPT_NOTE, movedNote);
+  assert.equal(await readFile(liveFile, "utf8"), movedNote);
+  assert.throws(() => parseLegacyTranscript(movedNote), { code: "vibe64_invalid_conversation_storage_format" });
   assert.equal(await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, liveFile)), "utf8"), liveOriginal);
   for (const archive of [path.join(archiveRoot, "archived.tar.gz"), path.join(preparedRoot, "archived.tar.gz")]) {
     const members = (await exec("tar", ["-tzf", archive])).stdout.split("\n");
-    assert.equal(members.some(name => name.endsWith("/conversation-log/transcript.json")), false, archive);
+    const note = members.find(name => name.endsWith("/conversation-log/transcript.json"));
+    assert.equal((await exec("tar", ["-xOzf", archive, note])).stdout, movedNote, archive);
     assert.ok(members.some(name => name.endsWith("/conversation-log/transcript.jsonl")), archive);
   }
   assert.deepEqual(await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, path.join(archiveRoot, "archived.tar.gz")))), archiveOriginal);
   const closingStore = await readdir(path.join(closingRoot, "conversation-log"));
-  assert.deepEqual(closingStore.filter(name => name.startsWith("transcript")), ["transcript.jsonl"]);
+  assert.deepEqual(closingStore.filter(name => name.startsWith("transcript")).sort(), ["transcript.json", "transcript.jsonl"]);
+  assert.equal(await readFile(path.join(closingRoot, "conversation-log/transcript.json"), "utf8"), movedNote);
 
   // Rerunning the finished upgrade (before the services start again) changes nothing.
   const converted = await readFile(await chatFile(f.store, "live"));
@@ -446,7 +460,7 @@ test("an interrupted upgrade resumes its prepared chats and keeps the original c
   const document = legacyDocument(20);
   const { file, contents } = await writeLegacyChat(f.store.paths("one").conversationLogRoot, document);
   const run = (apply, report = () => {}) => upgrade({ systemRoot: f.systemRoot, backupRoot: f.backupRoot, apply, report });
-  // Stopped after the new chat file is published, before the old one is removed.
+  // Stopped after the new chat file is published, before the old one becomes its note.
   await assert.rejects(run(true, (_level, message) => {
     if (message.startsWith("Published state:")) throw new Error("power cut");
   }), /power cut/);
@@ -454,8 +468,78 @@ test("an interrupted upgrade resumes its prepared chats and keeps the original c
   await run(false);
   await run(true);
   assert.deepEqual(await shownLog(f.createStore(), "one"), expectedLog(document));
-  await assert.rejects(readFile(file), { code: "ENOENT" });
+  assert.equal(await readFile(file, "utf8"), movedNote);
   assert.equal(await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, file)), "utf8"), contents);
+});
+
+test("the previous release, put back after an apply that stopped part way, refuses the converted chats, and the next apply converts what it wrote", async t => {
+  const f = await fixture(t);
+  const upgrade = await chatUpgrade();
+  const { parseLegacyTranscript } = await import("@local/vibe64-runtime/server/sessionTranscriptLog");
+  const run = (apply, report = () => {}) => upgrade({ systemRoot: f.systemRoot, backupRoot: f.backupRoot, apply, report });
+  const files = [];
+  for (const sessionId of ["one", "two"]) {
+    await f.store.createSession({ sessionId, runtimeKind: "genesis" });
+    files.push((await writeLegacyChat(f.store.paths(sessionId).conversationLogRoot, legacyDocument(6))).file);
+  }
+  // The start step stops the apply after its third publication: one chat converted (its new file, then its note),
+  // the other's new file published beside its old one.
+  let published = 0;
+  await assert.rejects(run(true, (_level, message) => {
+    if (message.startsWith("Published state:") && ++published === 3) throw new Error("start step timed out");
+  }), /start step timed out/);
+  const notes = [];
+  for (const file of files) notes.push(await readFile(file, "utf8") === movedNote);
+  assert.deepEqual(notes.filter(Boolean).length, 1, "One chat converted, one stopped between its two files.");
+  const [converted, stopped] = notes[0] ? files : [...files].reverse();
+  assert.ok((await readdir(path.dirname(stopped))).includes("transcript.jsonl"));
+
+  // What the previous release then reads (its own check, which parseLegacyTranscript repeats): the converted chat's
+  // file it refuses, never a missing one it would open as an empty chat; the stopped chat as it was, which it can
+  // write to; and a chat it starts.
+  assert.throws(() => parseLegacyTranscript(movedNote), { code: "vibe64_invalid_conversation_storage_format" });
+  const older = JSON.parse(await readFile(stopped, "utf8"));
+  older.turns.push(["000099", { messages: [{ role: "user", text: "Said on the previous release", at: at(99), messageId: "older-1" }] }]);
+  await writeFile(stopped, `${JSON.stringify(older)}\n`);
+  await f.store.createSession({ sessionId: "three", runtimeKind: "genesis" });
+  const started = legacyDocument(1);
+  started.turns[0][1].messages[0].text = "A chat the previous release started";
+  await writeLegacyChat(f.store.paths("three").conversationLogRoot, started);
+
+  // The next apply prepares from what the chats hold, in a backup folder of its own: the stopped chat is converted
+  // again from what the previous release wrote, the new chat as well, and the converted chat is left alone.
+  const convertedLog = await readFile(path.join(path.dirname(converted), "transcript.jsonl"));
+  const reports = [];
+  await run(false, (_level, message) => reports.push(message));
+  assert.ok(reports.some(message => /stopped part way.*retry-2/u.test(message)), JSON.stringify(reports));
+  await run(true);
+  assert.deepEqual(await readFile(path.join(path.dirname(converted), "transcript.jsonl")), convertedLog);
+  const sessionOf = file => path.basename(path.dirname(path.dirname(file)));
+  const reader = f.createStore();
+  assert.equal((await reader.readConversationLog(sessionOf(stopped))).at(-1).user.text, "Said on the previous release");
+  assert.equal((await reader.readConversationLog("three"))[0].user.text, "A chat the previous release started");
+  assert.deepEqual((await reader.readConversationLog(sessionOf(converted))).map(turn => turn.turnId),
+    expectedLog(legacyDocument(6)).map(turn => turn.turnId));
+  for (const file of [stopped, path.join(f.store.paths("three").conversationLogRoot, "transcript.json")]) {
+    assert.equal(await readFile(file, "utf8"), movedNote);
+  }
+  // Every original stays in a backup: the first run's, and the retry's of what the previous release wrote.
+  assert.ok((await readFile(path.join(f.backupRoot, "before", path.relative(f.systemRoot, stopped)), "utf8")).length > 0);
+  assert.deepEqual(JSON.parse(await readFile(path.join(f.backupRoot, "retry-2/before", path.relative(f.systemRoot, stopped)), "utf8")), older);
+
+  // A new file this release has written beside an old one, appended to or saved whole, is never replaced from it.
+  for (const [sessionId, messages] of [["four", 2], ["five", 1]]) {
+    await f.store.createSession({ sessionId, runtimeKind: "genesis" });
+    for (let index = 1; index <= messages; index += 1) {
+      await f.store.writeConversationUserMessage(sessionId, { text: `Written by this release ${index}`, messageId: `${sessionId}-${index}` });
+    }
+    const log = await readFile(await chatFile(f.store, sessionId));
+    const old = (await writeLegacyChat(f.store.paths(sessionId).conversationLogRoot, legacyDocument(2))).file;
+    await assert.rejects(run(true), /both an old transcript and a new one this upgrade did not publish/u);
+    assert.notEqual(await readFile(old, "utf8"), movedNote);
+    assert.deepEqual(await readFile(path.join(path.dirname(old), "transcript.jsonl")), log);
+    await rm(path.join(f.store.paths(sessionId).sessionRoot), { recursive: true });
+  }
 });
 
 test("the upgrade refuses an unreadable or unknown old chat before changing anything", async t => {
