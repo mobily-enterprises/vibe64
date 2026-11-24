@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createService as createAccountsService } from "../../packages/vibe64-accounts/src/server/service.js";
 import { createAccountsRuntime } from "../../packages/vibe64-accounts/src/server/accountsRuntime.js";
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
@@ -19,6 +20,11 @@ test("native account logout and credential restoration drain old processes and c
   skip: version.status !== 0 ? "Codex CLI is not installed" : false,
   timeout: 60_000
 }, async (t) => {
+  // The Codex runtime's names take the server's own namespace (codexAppServerRuntimeIdentityScope reads process.env),
+  // as codexCuratedProviders.native gives it.
+  const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
+  process.env.VIBE64_RUNTIME_NAMESPACE = "native-handover";
+  t.after(() => { if (previousNamespace === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE; else process.env.VIBE64_RUNTIME_NAMESPACE = previousNamespace; });
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-auth-"));
   const toolHome = path.join(root, "home");
   const codexHome = path.join(toolHome, ".codex");
@@ -124,6 +130,8 @@ test("native account logout and credential restoration drain old processes and c
   });
   const accounts = createAccountsService({
     env: process.env,
+    // Each sign-in, logout or key change is logged once it settles (accountChangeLog.js).
+    logger: silentLogger,
     publishAccountChanged: async () => null,
     publishAuthSessionChanged: async () => null,
     accountRuntime: createAccountsRuntime({ env: process.env, daemonHome: toolHome, systemRoot }),
