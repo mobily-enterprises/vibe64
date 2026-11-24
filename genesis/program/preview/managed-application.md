@@ -529,10 +529,13 @@ and local Git excludes. A changed setup runs under assistant-write admission
 until its command completes. Environment preparation and Git alternates repair
 also recheck under that lock before writing. A rejected preparation stops launch.
 Namespace admission prevents renewal from freezing a launch midway through it.
-A start never holds the launch queue or namespace admission while a workspace
-preparation runs (`readPreparedLaunchContext` answers `{ preparing }`): it waits
-for that preparation outside them, so the outputs read, Open, the identity
-switch, Stop, the session's close and renewal's freeze answer meanwhile, then
+A start never holds the launch queue while a workspace preparation runs
+(`readPreparedLaunchContext` answers `{ preparing }`): it waits for that
+preparation outside it, so the outputs read, Open, the identity switch, Stop
+and the session's close answer meanwhile. The wait keeps a count in the
+namespace's admission (`beginTerminalNamespaceOperation`, taken while the
+launch still holds one), so a renewal's freeze is refused as
+`terminal_admission_busy` until the preparation ends. It then
 takes the queue again and reruns its checks without asking for another
 preparation. A Stop or the session's close while it waited
 (`interruptLaunches`) ends it unstarted (`vibe64_preview_stopped`,
