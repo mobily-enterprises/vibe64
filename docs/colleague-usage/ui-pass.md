@@ -5,7 +5,8 @@ guidance: layout, spacing, typography, colours, controls and how screens
 behave at narrow and wide widths. For a Material 3 project it follows that
 guide's method and checks the screens against it. It keeps what each screen
 does; a real defect it finds is fixed separately, proven by a test that failed
-first, and what is outside its scope goes on the plan's **Leftovers** list.
+first. What is outside its scope it fixes too when the session can; only what
+needs you or what the session can't reach goes on the plan's **Leftovers** list.
 Senior checks the screens it changed in the managed browser and reports what
 changed and what it verified. It never commits, pushes or publishes.
 
