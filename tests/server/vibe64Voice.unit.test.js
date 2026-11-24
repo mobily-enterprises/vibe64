@@ -7,7 +7,7 @@ import test from "node:test";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import { WebSocket, WebSocketServer } from "ws";
-import { createVoiceAccessToken } from "@jskit-ai/assistant-voice/server";
+import { createVoiceClientToken } from "@jskit-ai/assistant-voice/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
@@ -25,7 +25,7 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
   const root = await mkdtemp(path.join(os.tmpdir(), "public-voice-"));
   const context = configureStudioProjectContext({ explicitProjectsRoot: root, env: {}, home: root });
   await context.createWorkspaceProjectRecord({ slug: "one" });
-  const token = createVoiceAccessToken({ key: "0123456789abcdef0123456789abcdef", tenant: "fixture" });
+  const token = createVoiceClientToken();
   const tokenFile = path.join(root, "voice.token"); await writeFile(tokenFile, token);
   const upstream = new WebSocketServer({ host: "127.0.0.1", port: 0 }); await once(upstream, "listening");
   const upstreams = []; const upstreamRequests = []; const inspections = []; const actions = [];
