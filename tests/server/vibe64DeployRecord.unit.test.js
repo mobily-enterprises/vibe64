@@ -40,6 +40,8 @@ test("the record file is kept only over the revision its writer read, one file p
 
   const stale = await store.write({ ...where, record: { ...first, choices: { services: {}, resources: {} } }, expectedRevision: 0 }).catch((error) => error);
   assert.deepEqual([stale.code, stale.details], ["production_deploy_record_stale", { expected: 0, current: 1 }]);
+  // In the owner's words, the revisions kept in its details.
+  assert.equal(stale.message, "Production's record changed while this ran, so it stopped before writing over that change: try again.");
   assert.deepEqual(await store.read(where), first, "a stale write changes nothing");
   const second = await store.write({ ...where, record: { ...first, lastPlan: { hash: "h1" } }, expectedRevision: 1 });
   assert.deepEqual([second.revision, second.lastPlan], [2, { hash: "h1" }]);

@@ -217,7 +217,7 @@ test("taking the app offline removes the services and their parts; the resources
 
 test("a failed build, a revision that never gets ready and machines Google can't place each fail the Deploy with Google's reason", async () => {
   for (const [fault, message] of [
-    ["buildFails", /^createService workers: The image of shop-workers did not build \(FAILURE\): Build step 0 .*Its log: https:\/\/console\.cloud\.google\.com\/cloud-build/u],
+    ["buildFails", /^Making App Service workers, internal: only the app's other services reach it: The image of shop-workers did not build \(FAILURE\): Build step 0 .*Its log: https:\/\/console\.cloud\.google\.com\/cloud-build/u],
     ["revisionFails", /web: the release did not go live: Revision 'shop-web-00001-...' is not ready and cannot serve traffic\. The user-provided container failed/u],
     ["stockout", /^workers: the release did not go live: A machine of shop-workers did not start: The zone 'projects\/shop-standin\/zones\/us-central1-a' does not have enough resources/u]
   ]) {
