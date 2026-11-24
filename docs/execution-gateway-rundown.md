@@ -692,7 +692,12 @@ The service decides by the repository a command acts on, not its working
 directory alone (`codexGitCommandPlaces.js`): `-C`, `--git-dir`, `--work-tree`,
 the `GIT_DIR` and `GIT_WORK_TREE` the wrapper forwards, and what `init` and
 `clone` make. The source and each connected copy keep the request above; a
-repository in the session's temporary folder runs as plain local Git:
+repository in the session's temporary folder runs as plain local Git, and a
+command whose shell sets a variable that points Git at a program or config
+(`GIT_CONFIG_COUNT` with its `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>`,
+`GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_GLOBAL`, `GIT_SSH_COMMAND` and the rest of
+`CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES`), none of which reaches it, is refused,
+naming them, as one carrying the token is, rather than run without them:
 
 ```js
 await runVibe64Command({

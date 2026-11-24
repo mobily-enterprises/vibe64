@@ -1258,6 +1258,52 @@ test("the AI's Git reaches a remote from the temporary folder with no credential
   }));
 });
 
+// A test that stood GitHub in with GIT_CONFIG_* (url.<stand-in>.insteadOf) fetched from GitHub itself when those
+// variables went unseen.
+test("the AI's Git in the temporary folder refuses the shell's Git program and config variables, naming them, rather than run without them", async () => {
+  await withTemporaryRoot(async (root) => withEditorTemp(async () => {
+    const session = githubSession(root);
+    const temp = sessionTempPath(session.metadata.source_path);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    await mkdir(path.join(temp, "work"), { recursive: true });
+    const gatewayCalls = [];
+    const service = serviceForSession(session, {
+      async runGatewayCommand(request) {
+        gatewayCalls.push(request);
+        return { exitCode: 0, ok: true, stdout: "" };
+      }
+    });
+    const run = (args, env) => service.run({ args, command: "git", cwd: path.join(temp, "work"), sessionId: session.sessionId, env });
+    const insteadOf = { GIT_CONFIG_KEY_0: "url.file:///stand-in/.insteadOf", GIT_CONFIG_VALUE_0: "https://github.com/" };
+
+    for (const [args, env, named, unset] of [
+      [["fetch", "https://github.com/owner/repo.git", "main"], { GIT_CONFIG_COUNT: "1", ...insteadOf },
+        "GIT_CONFIG_COUNT with GIT_CONFIG_KEY_0 and GIT_CONFIG_VALUE_0", "env -u GIT_CONFIG_COUNT git"],
+      [["status"], { GIT_CONFIG_COUNT: "3", ...insteadOf },
+        "GIT_CONFIG_COUNT with GIT_CONFIG_KEY_0 to GIT_CONFIG_KEY_2 and GIT_CONFIG_VALUE_0 to GIT_CONFIG_VALUE_2", "env -u GIT_CONFIG_COUNT git"],
+      [["log"], { GIT_CONFIG_PARAMETERS: "'core.pager'='cat'" }, "GIT_CONFIG_PARAMETERS", "env -u GIT_CONFIG_PARAMETERS git"],
+      [["fetch", "origin"], { GIT_CONFIG_GLOBAL: path.join(temp, "gitconfig"), GIT_SSH_COMMAND: "ssh -oProxyCommand=id" },
+        "GIT_CONFIG_GLOBAL, GIT_SSH_COMMAND", "env -u GIT_CONFIG_GLOBAL -u GIT_SSH_COMMAND git"]
+    ]) {
+      gatewayCalls.length = 0;
+      const result = await run(args, env);
+      assert.equal(result.code, "vibe64_codex_git_command_temp_env_refused", `git ${args.join(" ")}: ${result.code || "ran"} ${result.error || ""}`);
+      assert.ok(result.error.includes(`This shell sets ${named}, which point`), result.error);
+      assert.ok(result.error.includes(unset), result.error);
+      assert.match(result.error, /plain local Git/u);
+      assert.equal(gatewayCalls.some((request) => JSON.stringify(request.args) === JSON.stringify(args)), false,
+        `git ${args.join(" ")} ran without them`);
+    }
+
+    // Every agent shell has GIT_CONFIG_COUNT=0 of Vibe64's own, and names its commits' author: those still run.
+    gatewayCalls.length = 0;
+    const result = await run(["status"], { GIT_CONFIG_COUNT: "0", GIT_AUTHOR_NAME: "Throwaway Tester" });
+    assert.equal(result.ok, true, result.error);
+    assert.deepEqual(gatewayCalls.at(-1).args, ["status"]);
+    assert.equal(gatewayCalls.at(-1).env.GIT_AUTHOR_NAME, "Throwaway Tester");
+  }));
+});
+
 test("-C and --git-dir from the source no longer take the session's GitHub token to another repository", async () => {
   await withTemporaryRoot(async (root) => {
     const session = githubSession(root);
