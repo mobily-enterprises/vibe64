@@ -923,6 +923,7 @@ for (const saved of [false, true]) {
       nodes: savedNodes, viewport: { x: 20, y: 20, zoom: 0.3 }
     } });
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+    let tracing = false;
     try {
       const page = await context.newPage();
       const errors: string[] = [];
@@ -932,25 +933,35 @@ for (const saved of [false, true]) {
         (window as any).erdRoutingRequests = 0;
         window.Worker = class extends NativeWorker {
           postMessage(message: any, ...args: any[]) {
-            if (message?.kind === "routes") (window as any).erdRoutingRequests += 1;
+            if (message?.kind === "routes" && ++(window as any).erdRoutingRequests === 1) performance.mark("erd-routes-requested");
             super.postMessage(message, ...args);
           }
         };
       });
+      // Chrome's trace records every task the page's main thread runs with the CPU time it took.
+      await browser.startTracing(page, { categories: ["-*", "toplevel", "blink.user_timing"] });
+      tracing = true;
       await openDiagram(page, server.url, { waitForReady: false });
       await expect.poll(() => page.evaluate(() => (window as any).erdRoutingRequests)).toBeGreaterThan(0);
-      const started = Date.now();
+      // Typing lands while the routed connections are drawn.
       const search = page.getByRole("combobox", { name: "Find table or column" });
       await search.fill("table_1");
-      // A clearly-broken bound, not a benchmark: typing here lands while the routed connections are
-      // drawn. It takes about 0.3-1.1 s on a busy 8-thread host; a main-thread freeze like the one that
-      // held it for over 4 s at 4 workers fails, while load and Playwright's trace snapshots do not.
-      expect(Date.now() - started).toBeLessThan(3_000);
       await search.press("Escape");
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__node")).toHaveCount(130, { timeout: 15_000 });
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479, { timeout: 15_000 });
       const reset = page.getByRole("button", { name: "Fit", exact: true });
       await expect(reset).toBeEnabled({ timeout: 15_000 });
+      await page.evaluate(() => performance.mark("erd-drawn"));
+      const trace = JSON.parse(String(await browser.stopTracing()));
+      tracing = false;
+      // A freeze is read in CPU time, not by the clock: from the routes request until they are drawn, no task may
+      // hold the main thread, and the typing above, for 0.9 s of CPU. A task's CPU time stays close to what its work
+      // costs however many processes share the host, while its wall time grows with them; a loaded host still slows
+      // it somewhat, through the cores and caches it shares. On the desktop the longest task (applying the routes)
+      // took 0.29-0.6 s, alone or sharing 2 CPUs with four busy loops, and computing the routes on the main thread
+      // again 0.91-1.8 s. Applying them as before fbfa93c66 (0.71-1.06 s) also fails the DOM ceiling below.
+      const [longestTask] = longestMainThreadTasks(trace.traceEvents, "erd-routes-requested", "erd-drawn");
+      expect(longestTask).toBeLessThan(900);
       // The cost itself, independent of load: every DOM node drawing the cards and connections. Ports
       // are plain elements and connections draw their own paths; a component per port or per
       // connection adds about 1,900 or 1,400 nodes here and fails this ceiling.
@@ -982,9 +993,30 @@ for (const saved of [false, true]) {
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479);
       expect(errors).toEqual([]);
     } finally {
+      if (tracing) await browser.stopTracing();
       await context.close();
       await server.close();
     }
+  });
+}
+
+// The CPU time, in ms, of the longest task the page's main thread ran in each window from a `from` performance mark to
+// the next `to` mark, from a Chrome trace: the marks name that thread, and the "toplevel" category records each task
+// it runs as a ThreadControllerImpl::RunTask event whose tdur is the thread time it took. Every window holds at least
+// the task that set its first mark, so a window without tasks means the trace no longer records them, and fails
+// rather than measuring nothing.
+function longestMainThreadTasks(events: any[], from: string, to: string) {
+  const marks = events.filter(event => event.name === from || event.name === to).sort((a, b) => a.ts - b.ts);
+  expect(marks.length, `"${from}" and "${to}" marks in the trace`).toBeGreaterThan(0);
+  const tasks = events.filter(event => event.pid === marks[0].pid && event.tid === marks[0].tid && event.ph === "X"
+    && event.name === "ThreadControllerImpl::RunTask");
+  return marks.flatMap((start, index) => {
+    if (start.name !== from) return [];
+    const end = marks[index + 1];
+    expect(end?.name, `a "${to}" mark after each "${from}" mark`).toBe(to);
+    const window = tasks.filter(task => task.ts + task.dur >= start.ts && task.ts < end.ts);
+    expect(window.length, "main-thread tasks traced in the window").toBeGreaterThan(0);
+    return [Math.max(...window.map(task => task.tdur / 1000))];
   });
 }
 
