@@ -12,6 +12,14 @@ process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 // 504."). They must answer at once, and a Stop or a close meanwhile must win over the waiting start.
 const ANSWER_MS = 1_000;
 
+async function eventually(check, message) {
+  const until = Date.now() + 5_000;
+  while (!check()) {
+    if (Date.now() > until) assert.fail(message);
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+}
+
 function within(promise, ms, message) {
   let timer;
   return Promise.race([
@@ -28,7 +36,7 @@ function preparingWorld(t) {
   const metadata = {};
   const preparation = Promise.withResolvers();
   const preparing = Promise.withResolvers();
-  const state = { frozen: null, launched: 0, preparations: 0 };
+  const state = { frozen: null, launched: 0, preparations: 0, publications: [] };
   const store = {
     async mutateSession(_id, update) { return update(); },
     async readMetadataValue(_id, key) { return metadata[key] || ""; },
@@ -53,7 +61,9 @@ function preparingWorld(t) {
       },
       createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
-    publishSessionChanged: async () => null,
+    async publishSessionChanged(_sessionId, event = {}) {
+      state.publications.push(event.reason);
+    },
     async runCommand() {
       state.launched += 1;
       return { ok: false, error: "This test never launches a Preview." };
@@ -129,5 +139,43 @@ test("while a Preview start waits for the workspace preparation, the session's c
     const started = await starting;
     assert.equal(started.ok, false, JSON.stringify(started));
     assert.equal(started.code, "vibe64_session_closing");
+    assert.equal(world.state.launched, 0);
+  });
+
+// The start itself waited inside its request for the preparation, so the page's own Start showed the edge's 504. A
+// start the page names (`startId`) answers within two seconds, and the outputs read reports it until it ends.
+const HELD_ANSWER_WAIT_MS = 3_500;
+
+test("a Preview start the page names answers within two seconds while the workspace is prepared, and the outputs read follows it until it ends",
+  async (t) => {
+    const world = preparingWorld(t);
+    const startId = "start_tab_held_1";
+    const start = () => world.controller.startTerminal(world.sessionId, { outputTargetId: "app", startId });
+    const answer = await within(start(), HELD_ANSWER_WAIT_MS, "the start did not answer while the workspace was being prepared");
+    assert.deepEqual(answer, { ok: true, starting: true, startId, waitingFor: "workspace-preparation" });
+    assert.deepEqual(world.controller.launchStarts(world.sessionId), [
+      { startId, status: "starting", waitingFor: "workspace-preparation" }
+    ]);
+    // A repeat of the same start, after a lost answer, joins it and starts nothing more.
+    const repeat = await within(start(), HELD_ANSWER_WAIT_MS, "the repeated start did not answer");
+    assert.equal(repeat.starting, true);
+    assert.equal(world.state.preparations, 1);
+
+    // Stop meanwhile ends it; the outputs read says so in words, and the page hears that the start ended.
+    await world.controller.stopTerminal(world.sessionId, "");
+    world.finishPreparation();
+    await eventually(() => world.controller.launchStarts(world.sessionId)[0]?.status === "failed",
+      "the outputs read never reported how the start ended");
+    assert.deepEqual(world.controller.launchStarts(world.sessionId), [{
+      startId,
+      status: "failed",
+      code: "vibe64_preview_stopped",
+      error: "Preview was stopped while the workspace was being prepared. Use Start preview to run it again."
+    }]);
+    assert.ok(world.state.publications.includes("output-target-start-settled"), JSON.stringify(world.state.publications));
+    // The same start once it has ended reads its outcome; it never starts again.
+    const late = await start();
+    assert.equal(late.code, "vibe64_preview_stopped");
+    assert.equal(world.state.preparations, 1);
     assert.equal(world.state.launched, 0);
   });
