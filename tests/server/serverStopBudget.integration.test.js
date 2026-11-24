@@ -143,6 +143,7 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
   const events = readEvents(root);
   const pids = childPids();
   const report = JSON.stringify({ stopMs, refusedAfterMs, code, signal, slowStatus, events: events.slice(-40), output: output.slice(-6000) });
+  t.diagnostic(`stopped ${stopMs} ms after SIGTERM; new connections refused after ${refusedAfterMs} ms; exit ${code}`);
 
   assert.ok(stopMs < STOP_BUDGET_MS, `the editor stopped ${stopMs} ms after SIGTERM, not within ${STOP_BUDGET_MS} ms: ${report}`);
   assert.deepEqual([code, signal], [0, null], `a stop within its budget is a clean exit: ${report}`);
