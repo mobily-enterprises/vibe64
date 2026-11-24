@@ -30,6 +30,13 @@ const BUILD_CACHE_PREFIX = "- Kept between builds: ";
 const BUILD_CACHE_MAX = 10;
 const BUILD_CACHE_SEGMENT = /^[A-Za-z0-9._@+-]{1,255}$/u;
 const BUILD_CACHE_PATH_MAX = 1024;
+// The script a host that builds the application's machine runs on it once, as root, before Prepare, keeping what it
+// writes to the system (programs under /opt and /usr, configuration under /etc) read-only for every machine built with
+// the same script, packages and base: mobilynet's setup layer. A committed file of the project, by its path from the
+// project's root: 1 to 16 plain names, none starting with -, at most 1024 characters, so every host takes it as it is.
+const MACHINE_SETUP_PREFIX = "- Machine setup: ";
+const MACHINE_SETUP_SEGMENT = /^[A-Za-z0-9._@+][A-Za-z0-9._@+-]{0,254}$/u;
+const MACHINE_SETUP_PATH_MAX = 1024;
 // How many identical copies of the application a host may run at once behind
 // one address: one unless the application says it shares nothing between
 // requests that lives in one copy (files it writes, sign-ins kept in memory).
@@ -65,6 +72,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   `${SANDBOX_ALLOWS_PREFIX}${VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES.map((name) => `\`${name}\``).join(" ")}`,
   `${PACKAGES_PREFIX}\`package\`...`,
   `${BUILD_CACHE_PREFIX}\`~/folder\`...`,
+  `${MACHINE_SETUP_PREFIX}\`path\``,
   `${INSTANCES_PREFIX}\`count\``,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
@@ -190,6 +198,28 @@ function buildCache(source, deploymentPath, line) {
   return values;
 }
 
+function machineSetup(source, deploymentPath, line) {
+  const [value] = backtickedArguments(
+    source.slice(MACHINE_SETUP_PREFIX.length),
+    ERROR_CODE,
+    deploymentPath,
+    "Deployment Machine setup",
+    line,
+    { count: 1 }
+  );
+  const segments = value.split("/");
+  if (value.length > MACHINE_SETUP_PATH_MAX || segments.length > 16
+    || segments.some((segment) => !MACHINE_SETUP_SEGMENT.test(segment) || segment === "." || segment === "..")) {
+    invalid(
+      deploymentPath,
+      "Deployment Machine setup names one committed file of the project by its path from the project's root, plain names "
+        + `separated by /, such as \`deploy/machine-setup.sh\`, never . or ..; ${JSON.stringify(value)} isn't one.`,
+      line
+    );
+  }
+  return value;
+}
+
 function instancesMax(source, deploymentPath, line) {
   const [count] = backtickedArguments(
     source.slice(INSTANCES_PREFIX.length),
@@ -233,6 +263,7 @@ export {
   HOST_OWNED_ENVIRONMENT,
   INSTANCES_MAX,
   INSTANCES_PREFIX,
+  MACHINE_SETUP_PREFIX,
   PACKAGES_PREFIX,
   RESTORE_PATHS_PREFIX,
   SANDBOX_ALLOWS_PREFIX,
@@ -246,6 +277,7 @@ export {
   generatedSecrets,
   instancesMax,
   invalid,
+  machineSetup,
   packages,
   sandboxAllowances,
   setupCode

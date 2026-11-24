@@ -17,8 +17,14 @@
 // serve script migrates, so an instance of any version may start on a database a later release migrated (a production
 // Deploy, 23 Nov: an instance of the version before restarted with new settings, migrated as it started, and knex
 // refused a database holding migrations its code lacked).
+//
+// A Deployment's machine setup script (`- Machine setup:`) is each declaration's `build.setup`: the archive carries it at
+// its root as MACHINE_SETUP_FILE (package.js packArchive), and mobilynet runs it once per setup layer, as root, in the
+// build VM before the build's command, keeping what it wrote to /opt, /usr and /etc read-only on every machine of the
+// release (its docs/colleague-usage/setup-scripts.md and app-builds.md). A layer is the project's, base's, packages'
+// and script's, so a service is built on its own layer once and reuses it until one of them changes.
 
-import { stackSettingsPerService, withRootFile } from "../../package.js";
+import { MACHINE_SETUP_FILE, stackSettingsPerService, withRootFile } from "../../package.js";
 
 /**
  * Where in the release the app's scripts go: `build.sh` (the build VM runs it), `serve-<service>.sh` (a service) and
@@ -283,11 +289,13 @@ function stepLines(role, step) {
  *   features they need (machineFeatures), each one SANDBOX_MACHINE_FEATURES has
  * @param {ReadonlyArray<string>} [app.buildCache] the Deployment's `- Kept between builds:`, folders of the build's home
  *   kept with the runtimes' for the next build (buildCacheOf)
+ * @param {boolean} [app.machineSetup] whether the Deployment names a machine setup script, which the declaration's
+ *   build.setup then names at the archive's root (MACHINE_SETUP_FILE)
  * @typedef {{ command: string, label?: string }} Step
  */
 function appPackage({
   name, login, port, healthPath, runtimes, settings, workdir = ".", steps, needs = [], bindingLines = [], packages = [], sandboxAllowances = [],
-  buildCache = [], service = "web", reached = "any", serviceSettings = {}
+  buildCache = [], machineSetup = false, service = "web", reached = "any", serviceSettings = {}
 }) {
   const serveScript = serveScriptOf(service);
   // Migrate runs as the release's task, once per Deploy, never as an instance starts.
@@ -299,6 +307,7 @@ function appPackage({
     requiredPackages: requiredPackagesOf(runtimes, packages),
     build: {
       ...(pythonLibraries ? { packages: ["patchelf"] } : {}),
+      ...(machineSetup ? { setup: MACHINE_SETUP_FILE } : {}),
       command: `bash ${BUILD_SCRIPT}`,
       cache: buildCacheOf(runtimes, buildCache),
       output: ["."]
@@ -616,6 +625,7 @@ function servicePackages({ app, deployment, needs, settings, settingsMax, defaul
       packages: [...deployment.packages, ...service.packages],
       sandboxAllowances: service.sandboxAllowances,
       buildCache: deployment.buildCache ?? [],
+      machineSetup: Boolean(deployment.machineSetup),
       serviceSettings: service.settings
     });
     declarations[service.id] = made.declaration;

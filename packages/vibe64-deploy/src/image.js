@@ -10,7 +10,13 @@
 // maps them to the names the app reads as mobilynet's does (bindingExportLines). The instance facts are those the
 // runtime gives (V64_INSTANCE_ID, V64_PRIVATE_ADDRESS, V64_INSTANCE_URL, V64_WORK_DIR): a service reached at each
 // instance stops without V64_INSTANCE_URL, naming why.
-import { withRootFile } from "./package.js";
+//
+// A Deployment's machine setup script (`- Machine setup:`), which the archive carries at its root (package.js
+// packArchive), runs as root in the image's build after its packages and before the release is copied in, so the
+// image's layer of what it installed is reused while the script and the packages stay the same. As on mobilynet it is
+// run by bash -e unless its first line names its interpreter, with the packages on PATH and no setting; the image's
+// system is Nix's, which has no apt-get.
+import { MACHINE_SETUP_FILE, withRootFile } from "./package.js";
 import {
   APP_SCRIPTS_FOLDER,
   SERVICE_PORT,
@@ -41,6 +47,8 @@ const APP_USER = "10001:10001";
 const APP_HOME = "/home/app";
 // The nixpkgs the packages come from: one commit of NixOS/nixpkgs, never a branch, so a build is the same every time.
 const NIXPKGS_REVISION = /^[0-9a-f]{40}$/u;
+// Where the image's build puts the machine setup script while it runs it, outside the release.
+const MACHINE_SETUP_PATH = `/${MACHINE_SETUP_FILE}`;
 
 /** A refusal a caller shows as it is, with its code and HTTP status. */
 function imageError({ code, message }) {
@@ -113,7 +121,7 @@ function containerFactLines({ service, reached }) {
  * @param {Record<string, Record<string, { secret: boolean, required: boolean }>>} options.settings each service's
  *   settings (package.js settingsPerService)
  * @param {Record<string, string>} [options.defaults] Serve's own defaults (the Stack's Environment defaults)
- * @returns {{ declarations: Record<string, { name: string, service: string, packages: string[], port: number, healthPath: string, reached: string, machineFeatures: string[], needs: Array<{ resource: string, kind: string, as: string }>, settings: Record<string, { secret: boolean, required: boolean }> }>, scripts: Record<string, string> }}
+ * @returns {{ declarations: Record<string, { name: string, service: string, packages: string[], port: number, healthPath: string, reached: string, machineFeatures: string[], machineSetup?: true, needs: Array<{ resource: string, kind: string, as: string }>, settings: Record<string, { secret: boolean, required: boolean }> }>, scripts: Record<string, string> }}
  */
 function imagePackages({ app, deployment, needs, settings, defaults = {} }) {
   const problem = imagePackagesProblem(deployment);
@@ -163,6 +171,7 @@ function imagePackages({ app, deployment, needs, settings, defaults = {} }) {
       healthPath: service.readyWhen.path,
       reached: service.reached,
       machineFeatures: machineFeaturesOf(service.sandboxAllowances),
+      ...(deployment.machineSetup ? { machineSetup: true } : {}),
       needs: needs.resources.map((resource) => ({ resource: resource.id, kind: resource.kind, as: needAs(resource.id) })),
       settings: structuredClone(settings[service.id] ?? {})
     };
@@ -171,11 +180,12 @@ function imagePackages({ app, deployment, needs, settings, defaults = {} }) {
 }
 
 /**
- * A service's Containerfile: its packages from nixpkgs at `nixpkgs` (a commit), the release, the shared build, then
- * its serve script as the entry point, run as the app's own user on its port.
- * @param {{ service: string, packages: string[], port: number }} declaration @param {{ nixpkgs: string }} source
+ * A service's Containerfile: its packages from nixpkgs at `nixpkgs` (a commit), the machine setup script as root when
+ * the Deployment names one, the release, the shared build, then its serve script as the entry point, run as the app's
+ * own user on its port.
+ * @param {{ service: string, packages: string[], port: number, machineSetup?: boolean }} declaration @param {{ nixpkgs: string }} source
  */
-function containerfileOf({ service, packages, port }, { nixpkgs }) {
+function containerfileOf({ service, packages, port, machineSetup = false }, { nixpkgs }) {
   if (!NIXPKGS_REVISION.test(String(nixpkgs ?? ""))) throw new TypeError("nixpkgs is the 40-character commit of NixOS/nixpkgs the packages come from.");
   return [
     `# Made by Vibe64: service ${service}'s image, built at the provider from this release.`,
@@ -183,6 +193,11 @@ function containerfileOf({ service, packages, port }, { nixpkgs }) {
     `RUN nix --extra-experimental-features 'nix-command flakes' profile install --profile ${PACKAGES_PROFILE} \\`,
     ...packages.map((name, index) => `  ${shellWord(`github:NixOS/nixpkgs/${nixpkgs}#${name}`)}${index < packages.length - 1 ? " \\" : ""}`),
     `ENV PATH=${PACKAGES_PROFILE}/bin:$PATH`,
+    ...(machineSetup ? [
+      `COPY ${MACHINE_SETUP_FILE} ${MACHINE_SETUP_PATH}`,
+      `RUN chmod 0700 ${MACHINE_SETUP_PATH} && bash -c 'read -r -n 2 first < "$0" || true; if [ "$first" = "#!" ]; then "$0"; else bash -e "$0"; fi' `
+        + `${MACHINE_SETUP_PATH} && rm -f ${MACHINE_SETUP_PATH}`
+    ] : []),
     `WORKDIR ${APP_ROOT}`,
     `COPY . ${APP_ROOT}`,
     `RUN bash ${BUILD_SCRIPT}`,

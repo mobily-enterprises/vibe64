@@ -18,6 +18,9 @@ import { MAX_NEEDS, NEED_NAME, interfaceNamed, isRecord, needSettings } from "./
 // and a refresh onto a release whose build was ended builds it again (machines' serviceEngine.js currentRefresh builds
 // one whose build failed). An App
 // Service refreshes onto one and reads its declaration: its first service with a port, its settings and its needs.
+// A build block's `setup` names the release's setup script as mobilynet's declaration.js and releaseArchive.js check it
+// (main 50c51a16): a plain file name, never mobilynet.json, of a regular file at the archive's root holding 1 byte to
+// 64 KiB of UTF-8 text without NUL, each refused `422` under `declaration.build.setup` in mobilynet's words.
 // STAND-IN ONLY: a release from git (`{ git, deployKey }`) is refused; the stand-in takes uploads only.
 
 const SHA256 = /^[0-9a-fA-F]{64}$/u;
@@ -68,16 +71,19 @@ const GONE_FIELDS = Object.freeze({
   setupScript: "Moved: name the setup script in build.setup."
 });
 const BLOCK = 512;
+// A setup script's name and size, as mobilynet's declaration.js takes them.
+const SETUP_SCRIPT = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}$/u;
+const SETUP_SCRIPT_BYTES = 64 * 1024;
 
 /** A tar header's text field, up to its first NUL. @param {Buffer} header @param {number} from @param {number} length */
 const textAt = (header, from, length) => header.subarray(from, from + length).toString("utf8").replace(/\0.*$/su, "");
 
 /**
- * mobilynet.json's bytes at a tar archive's root, or null: ustar and GNU headers (a GNU long name's `L` entry naming
- * the next), each entry's data padded to 512 bytes.
- * @param {Buffer} tar
+ * A file at a tar archive's root, `{ type, bytes }` (its tar type: `0` a regular file), or null: ustar and GNU headers
+ * (a GNU long name's `L` entry naming the next), each entry's data padded to 512 bytes.
+ * @param {Buffer} tar @param {string} file
  */
-function declarationIn(tar) {
+function rootEntryIn(tar, file) {
   let offset = 0;
   let longName = null;
   while (offset + BLOCK <= tar.length) {
@@ -94,9 +100,37 @@ function declarationIn(tar) {
     }
     const name = longName ?? (prefix ? `${prefix}/${textAt(header, 0, 100)}` : textAt(header, 0, 100));
     longName = null;
-    if (["0", ""].includes(type) && name.replace(/^\.\//u, "") === DECLARATION_FILE) return Buffer.from(data);
+    if (name.replace(/^\.\//u, "") === file) return { type: type || "0", bytes: Buffer.from(data) };
   }
   return null;
+}
+
+/** mobilynet.json's bytes at a tar archive's root, or null. @param {Buffer} tar */
+function declarationIn(tar) {
+  const entry = rootEntryIn(tar, DECLARATION_FILE);
+  return entry?.type === "0" ? entry.bytes : null;
+}
+
+/**
+ * Why a declaration's build.setup is refused, in mobilynet's words, or "": a name no setup script has, or no regular
+ * file of 1 byte to 64 KiB of UTF-8 text without NUL at the archive's root.
+ * @param {Buffer} tar @param {unknown} name
+ */
+function setupProblem(tar, name) {
+  if (typeof name !== "string" || !SETUP_SCRIPT.test(name) || name === DECLARATION_FILE) {
+    return "The name of a file in the app's folder, such as setup.sh: letters, digits, dots, hyphens and underscores, at most 100.";
+  }
+  const entry = rootEntryIn(tar, name);
+  if (entry?.type !== "0") return `The declaration's build.setup names ${name}, which isn't a regular file in the app's folder.`;
+  const size = entry.bytes.length;
+  if (size === 0 || size > SETUP_SCRIPT_BYTES) return `${name} must hold 1 byte to 64 KiB; it holds ${size}.`;
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(entry.bytes);
+  } catch {
+    return `${name} isn't UTF-8 text.`;
+  }
+  return text.includes("\u0000") ? `${name} holds a NUL character.` : "";
 }
 
 /**
@@ -140,9 +174,11 @@ function needsErrors(needs, settings) {
  * @returns {{ errors: Record<string, string> } | { declaration: any }}
  */
 function declarationOf(archive, appName) {
+  let tar;
   let bytes;
   try {
-    bytes = declarationIn(gunzipSync(archive));
+    tar = gunzipSync(archive);
+    bytes = declarationIn(tar);
   } catch (error) {
     return { errors: { archive: `Not a gzip tarball: ${error.message}` } };
   }
@@ -168,6 +204,12 @@ function declarationOf(archive, appName) {
     errors["declaration.build.output"] = "Required: the paths the build keeps as the app's output, such as [\"dist\", \"node_modules\", \"package.json\"], or [\".\"].";
   }
   Object.assign(errors, needsErrors(raw.needs, raw.settings), tasksErrors(raw.tasks));
+  if (isRecord(raw.build) && raw.build.setup !== undefined) {
+    // mobilynet reads the script only once the rest of the declaration holds.
+    const named = typeof raw.build.setup === "string" && SETUP_SCRIPT.test(raw.build.setup) && raw.build.setup !== DECLARATION_FILE;
+    const why = named && Object.keys(errors).length > 0 ? "" : setupProblem(tar, raw.build.setup);
+    if (why) errors["declaration.build.setup"] = why;
+  }
   if (Object.keys(errors).length > 0) return { errors };
   return { declaration: { ...raw, needs: (raw.needs ?? []).map((need) => ({ interface: need.interface, as: need.as })) } };
 }
