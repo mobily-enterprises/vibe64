@@ -1076,19 +1076,22 @@ test("a first Deploy whose internal service reaches the public one makes the pub
   assert.ok(standIn.services.instances(computers).filter((one) => !one.removedReason).every((one) => WEB_ADDRESS.test(one.settings.MEMOBOT_WEB_URL ?? "")));
 });
 
-test("a first Deploy of two services that reach each other makes the first without the other's address, then the other with its, then gives the first the address it lacked", async () => {
-  const { standIn, run, record } = setup();
-  const first = await run({ stack: eachReachesTheOther(), record, commit: "c1" });
+test("a first Deploy of two services that reach each other, neither made yet, fails at once in words, making no App Service; with one Reaches line out it goes live, and with it back each is handed its release once", async () => {
+  const { standIn, projectId, run, record } = setup();
+  const failed = await run({ stack: eachReachesTheOther(), record, commit: "c1" });
+  assert.equal(failed.outcome, "failed");
+  assert.equal(failed.message, "computers reaches web, which can't start before computers does, and neither runs yet: take one of their "
+    + "Reaches lines out of genesis/stack.md until both run, then deploy to production.");
+  assert.equal(failed.steps.some((step) => step.startsWith("createService")), false);
+  assert.deepEqual(standIn.services.all().filter((one) => one.state !== "deleted"), [], "no App Service made");
+  const first = await run({ record: failed.record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
-  assert.deepEqual(first.steps.filter((step) => /^(createService|putSettings)/u.test(step)),
-    ["createService computers", "createService web", "putSettings computers"]);
-  const { items } = first.record;
-  const [web, computers] = [items["service.web"].id, items["service.computers"].id];
-  assert.deepEqual([computers, web].map((id) => standIn.services.refreshes(id).map((one) => one.kind)), [["create", "settings"], ["create"]]);
   settle(standIn);
-  const serving = (id) => standIn.services.instances(id).filter((one) => !one.removedReason);
-  assert.ok(serving(computers).every((one) => WEB_ADDRESS.test(one.settings.MEMOBOT_WEB_URL ?? "")), "computers has web's address");
-  assert.ok(serving(web).every((one) => typeof one.settings.MEMOBOT_COMPUTERS_URL === "string"), "web has computers' address");
+  const at = standIn.requests().length;
+  const second = await run({ stack: eachReachesTheOther(), record: first.record, commit: "c2" });
+  assert.equal(second.outcome, "live", second.message);
+  assert.deepEqual(writesAfter(standIn, at).filter(([method]) => method !== "PATCH"),
+    [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web")]);
 });
 
 test("a record an editor before setting names kept (no names; a hash a failed settings refresh dropped) gets each service's settings with its release, then once more in a settings refresh, which a Deploy after it never repeats", async () => {
