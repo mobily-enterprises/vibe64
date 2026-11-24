@@ -2,6 +2,7 @@ import { validatePaymentConfiguration } from "@jskit-ai/payments-core/shared";
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { validateIntegrationConfiguration } from "@jskit-ai/connectors-core/shared/configuration";
 import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
@@ -11,6 +12,7 @@ import { vibe64BrowserTabOriginId } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64SessionPath, VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { integrationConfigurationOnly } from "@/lib/integrationProviderSetup.js";
+import { resumeIntegrationContinuation } from "@/lib/vibe64IntegrationContinuation.js";
 
 // Drafts stay in this tab's memory, never browser storage or source files.
 const drafts = new Map();
@@ -98,7 +100,7 @@ export function useVibe64Integrations(context, selectedId) {
   async function discoverN8n() {
     const selected = configuration.value?.integrations[selectedId.value];
     if (!active.value || staging.value || changedElsewhere.value || context.value.sourceOperationsSuspended ||
-      command.isRunning || setupCommand.isRunning || discoveryCommand.isRunning || selected?.provider !== "n8n") return;
+      command.isRunning || setupBusy() || discoveryCommand.isRunning || selected?.provider !== "n8n") return;
     const requestPath = path.value;
     const id = selectedId.value;
     const serverUrl = selected.settings?.serverUrl;
@@ -131,7 +133,7 @@ export function useVibe64Integrations(context, selectedId) {
   async function registerOAuthClient(callbackUrl) {
     const selected = configuration.value?.integrations[selectedId.value];
     if (!active.value || staging.value || changedElsewhere.value || context.value.sourceOperationsSuspended ||
-      context.value.owner === false || registrationNeedsReview.value || command.isRunning || setupCommand.isRunning ||
+      context.value.owner === false || registrationNeedsReview.value || command.isRunning || setupBusy() ||
       discoveryCommand.isRunning || registrationCommand.isRunning || !OAUTH_CLIENT_REGISTRATION_PROVIDERS.includes(selected?.provider)) return;
     const requestPath = path.value;
     const id = selectedId.value;
@@ -165,6 +167,10 @@ export function useVibe64Integrations(context, selectedId) {
     verificationInput.value = { ...verificationDrafts.get(key) };
   }, { immediate: true, flush: "sync" });
   const connectionError = ref("");
+  // Continue in chat after a verified setup, which goes out as its own request: the setup controls wait for it, as
+  // they wait for the setup command.
+  const continuing = ref(false);
+  const setupBusy = () => setupCommand.isRunning || continuing.value;
   const setupCommand = useIntegrationCommand("POST", {
     apiSuffix: "/vibe64/integrations/setup",
     suppressSuccessMessage: true,
@@ -189,7 +195,7 @@ export function useVibe64Integrations(context, selectedId) {
   watch([connectionKey, dirty, active], () => { paymentResult.value = null; paymentError.value = ""; paymentOperation.value = ""; });
   async function runPaymentOperation({ operation, paymentEnvironment, reviewId, providerId, subjectId, collection, after }) {
     if ((staging.value && (!stagingReleaseId.value || context.value.owner !== true)) || context.value.owner === false || !active.value || dirty.value || changedElsewhere.value ||
-        setupCommand.isRunning || command.isRunning || (!staging.value && context.value.sourceOperationsSuspended)) return;
+        setupBusy() || command.isRunning || (!staging.value && context.value.sourceOperationsSuspended)) return;
     const binding = configuration.value?.extensions?.payments?.environments?.[paymentEnvironment];
     if (!binding || binding.integrationId !== selectedId.value) return;
     if (!["payments-preview", "payments-publish", "payments-readiness", "payments-recover", "payments-history"].includes(operation)) return;
@@ -220,7 +226,7 @@ export function useVibe64Integrations(context, selectedId) {
   watch([connectionKey, dirty, active], () => { adsResult.value = null; adsError.value = ""; });
   async function runAdsOperation({ operation, ads = {} }) {
     if (staging.value || context.value.owner === false || !active.value || dirty.value || changedElsewhere.value ||
-        setupCommand.isRunning || command.isRunning || context.value.sourceOperationsSuspended ||
+        setupBusy() || command.isRunning || context.value.sourceOperationsSuspended ||
         configuration.value?.integrations[selectedId.value]?.provider !== "google-ads") return;
     const key = connectionKey.value;
     adsError.value = "";
@@ -241,7 +247,7 @@ export function useVibe64Integrations(context, selectedId) {
     const selected = configuration.value?.integrations[selectedId.value];
     if (connectorDefinitions.some((provider) => provider.id === selected?.provider && integrationConfigurationOnly(provider, selected?.settings || {}))) return;
     if ((staging.value && (!stagingReleaseId.value || context.value.owner !== true)) || !active.value || !Object.hasOwn(configuration.value?.integrations || {}, selectedId.value) || dirty.value || changedElsewhere.value ||
-        setupCommand.isRunning || command.isRunning || (!staging.value && context.value.sourceOperationsSuspended)) return;
+        setupBusy() || command.isRunning || (!staging.value && context.value.sourceOperationsSuspended)) return;
     const key = connectionKey.value;
     const endpoint = `${path.value}/${encodeURIComponent(selectedId.value)}/setup`;
     const releaseSelection = staging.value ? { stagingReleaseId: stagingReleaseId.value } : {};
@@ -259,16 +265,21 @@ export function useVibe64Integrations(context, selectedId) {
       connection.value = result;
       if (setupRequest.value && result.integrationSetup?.outcome === "completed" &&
           result.integrationSetup.continuation?.status !== "accepted") {
+        // Its own request, outside the setup command, whose feedback would announce each answer lost on the way.
         try {
-          const resumed = await setupCommand.run({
-            path: vibe64SessionPath(readRefOrGetterValue(context.value.sessionsApiPath), sessionId.value,
-              "/integration-setup/resume"),
-            body: { turnId: setupRequest.value.turnId, requestId: setupRequest.value.requestId }
+          continuing.value = true;
+          const resumed = await resumeIntegrationContinuation(getHttpWebClient(), {
+            sessionsApiPath: readRefOrGetterValue(context.value.sessionsApiPath),
+            sessionId: sessionId.value,
+            turnId: setupRequest.value.turnId,
+            requestId: setupRequest.value.requestId
           });
+          if (resumed?.ok !== true) throw new Error(resumed?.error || "Assistant continuation is not yet confirmed.");
           if (!disposed && connectionKey.value === key) {
             connection.value = { ...result, integrationSetup: resumed.integrationSetup };
           }
         } finally {
+          continuing.value = false;
           if (!disposed && connectionKey.value === key && conversationRefreshable()) {
             await context.value.refreshConversation();
           }
@@ -385,5 +396,5 @@ export function useVibe64Integrations(context, selectedId) {
     if (result?.data?.configuration && !result.isError && !disposed && path.value === requestPath) apply(result.data);
   }
 
-  return { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, stagingReleaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard };
+  return { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, stagingReleaseId, connection, connectionError, continuing, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard };
 }

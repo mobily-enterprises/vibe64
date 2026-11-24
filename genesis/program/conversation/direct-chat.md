@@ -3238,6 +3238,17 @@ other selected-session conversation models reread durable history rather than
 trusting event-provided decision data. Status restoration does not publish another
 completion event. After completion, the Integrations screen calls the session-owned
 resume action and reloads conversation state, including when delivery is uncertain.
+The resume (`POST .../integration-setup/resume`) waits for the session's workspace
+setup and then sends the continuation, so it is held (`createHeldWork`, keyed by
+project, session, turn and request): it answers with its outcome within two
+seconds, and otherwise `{ ok: true, resuming: true, sessionId, turnId, waitingFor }`
+(`workspace-setup`, then `continuing`), as the hosted edge ends a request after
+about a minute. Both pages send it through `vibe64IntegrationContinuation.js`,
+which repeats the same request while it is held and after an answer that never
+came back; a repeat joins the running resume, or runs it again once it has
+ended, which only inspects a continuation already sent. The Integrations screen
+sends it outside its setup command, whose feedback would announce each lost
+answer, and its setup controls wait for it. Shutdown waits for held resumes.
 The common conversation API can inspect OpenCode admission of an exact message on its original
 native thread. A matching user message proves acceptance; absent or unavailable
 bounded history leaves admission unknown. Inspection creates no native session,

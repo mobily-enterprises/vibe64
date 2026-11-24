@@ -33,6 +33,12 @@ callback, scopes and previous attempt before authorizing creation or retry.
 A successful client registration fills in **Client ID** without a separate
 message; a failed one says so. Save the configuration afterwards.
 
+When the AI asks in chat for an integration it needs, its card offers
+**Connect**. Once the connection is verified, Vibe64 tells the AI to continue,
+after the session's workspace setup when that is still running, and **Check
+continuation** shows whether the message arrived. Waiting or a dropped
+connection never sends it twice.
+
 For an app-user connection, **Prepare app user connection request** places the
 setup request in the chat draft for review. It does not send it automatically or
 connect the application's users. Once that wiring is implemented, users connect
