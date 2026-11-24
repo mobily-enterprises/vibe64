@@ -281,7 +281,7 @@ test("taking the app offline removes the services and their secrets; the resourc
 
 test("a failed build, tasks that never get healthy and machines that never say they are ready each fail the Deploy with AWS's reason", async () => {
   for (const [fault, message] of [
-    ["buildFails", /^createService workers: shop-workers's image did not build \(BUILD\): Error while executing command: docker build .* Its log is in CloudWatch Logs, \/vibe64\/shop\/production\//u],
+    ["buildFails", /^Making App Service workers, internal: only the app's other services reach it: shop-workers's image did not build \(BUILD\): Error while executing command: docker build .* Its log is in CloudWatch Logs, \/vibe64\/shop\/production\//u],
     ["tasksFail", /web: .*Task failed container health checks/u],
     ["machinesNeverReady", /workers: .*A machine of v64-[a-z2-7]{8}-service-workers did not start: Instance failed to complete user's Lifecycle Action: .*the service never answered its health path/u]
   ]) {
@@ -351,7 +351,7 @@ test("a domain whose records aren't in place: the Deploy waits a while for the c
   assert.equal(result.outcome, "failed");
   const { records, certificate } = await adapter.domainRecords(DOMAIN);
   assert.equal(certificate, "PENDING_VALIDATION");
-  assert.match(result.message, new RegExp(`^ensureDomain: AWS issues ${DOMAIN}'s certificate once two DNS records are in place at the domain's DNS: CNAME ${records[0].name.replace(/\./gu, "\\.")} with the value ${records[0].data.replace(/\./gu, "\\.")}, and ${DOMAIN} pointed at ${records[1].data.slice(0, -1).replace(/\./gu, "\\.")}`, "u"));
+  assert.match(result.message, new RegExp(`^Adding the domain ${DOMAIN.replace(/\./gu, "\\.")}: AWS issues ${DOMAIN}'s certificate once two DNS records are in place at the domain's DNS: CNAME ${records[0].name.replace(/\./gu, "\\.")} with the value ${records[0].data.replace(/\./gu, "\\.")}, and ${DOMAIN} pointed at ${records[1].data.slice(0, -1).replace(/\./gu, "\\.")}`, "u"));
   // It waited (AWS's clock moved past the wait) rather than failing at once.
   assert.ok(result.steps.filter((step) => step === "ensureDomain").length > 10);
   // With the records in place, the next Deploy goes live on the same certificate.

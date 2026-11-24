@@ -402,7 +402,8 @@ test("a Deploy is refused when its plan is stale, and while another Vibe64 holds
     standIn.advance();
   };
   const refused = await run({ record, commit: "c1", pause: lowered });
-  assert.deepEqual([refused.outcome, refused.message], ["failed", "createService computers: The project has used its quota of vcpus (12)."]);
+  assert.deepEqual([refused.outcome, refused.message], ["failed", "Making App Service computers, internal: only the app's other services "
+    + "reach it, which first runs the migrations once: The project has used its quota of vcpus (12)."]);
   assert.deepEqual(Object.keys(refused.record.items).sort(), ["resource.database", "resource.files"]);
   assert.deepEqual(standIn.leases(), []);
   standIn.setQuota(standIn.projectId, { vcpus: 96 });
@@ -1663,6 +1664,71 @@ test("reads of the provider that keep failing while a Deploy waits are tried aga
   assert.deepEqual(retries.map((event) => event.attempt), [1, 2, 3, 4, 5, 6]);
   const gaps = retries.slice(1).map((event, index) => event.pauses - retries[index].pauses);
   assert.deepEqual(gaps, [1, 2, 4, 6, 6]);
+});
+
+test("a Deploy's first reads (the offer, the inventory, the edge's addresses) that get no answer are tried again as its later reads are, and when they keep failing it stops before changing anything, in words without the transport's error", async () => {
+  const { standIn, run, record } = setup();
+  // Which requests of the Deploy's own client mobilynet doesn't answer; the test's own reads of the plan always are.
+  let unanswered = () => false;
+  const client = createMobilynetClient({
+    baseUrl: standIn.baseUrl, credential: standIn.key,
+    fetch: (url, init) => (unanswered(new URL(String(url)).pathname) ? Promise.reject(new TypeError("fetch failed")) : standIn.fetch(url, init))
+  });
+  const flaky = createMobilynetAdapter({ client, project: standIn.projectId, leases: true });
+  // No read is answered until the first pause, then the edge's addresses not until the next: each is read again.
+  const events = [];
+  let pauses = 0;
+  unanswered = () => true;
+  const live = await run({
+    record, commit: "c1", using: flaky, report: (event) => events.push(event),
+    pause: () => {
+      pauses += 1;
+      unanswered = pauses === 1 ? (pathname) => pathname === "/v1/regions" : () => false;
+      standIn.advance();
+    }
+  });
+  assert.equal(live.outcome, "live", live.message);
+  const retries = events.filter((event) => event.kind === "retry");
+  assert.deepEqual(retries.map((event) => [event.words, event.attempt]), [["Reading mobilynet again", 1], ["Reading mobilynet again", 1]]);
+  assert.ok(retries.every((event) => /^mobilynet did not answer: fetch failed/u.test(event.message)), "each retry keeps mobilynet's own words");
+
+  // mobilynet answers none of them: five reads, one pause after the first, then two, four and six, and the Deploy
+  // stops having asked mobilynet nothing else and kept no record.
+  const before = standIn.requests().length;
+  unanswered = () => true;
+  pauses = 0;
+  let saved = 0;
+  const stopped = await run({
+    record: live.record, commit: "c2", using: flaky,
+    save: (one) => {
+      saved += 1;
+      return one;
+    },
+    pause: () => {
+      pauses += 1;
+      standIn.advance();
+    }
+  }).catch((error) => error);
+  assert.deepEqual([stopped.code, stopped.status, stopped.message],
+    ["production_deploy_unanswered", 503, "mobilynet didn't answer, so the Deploy stopped before changing anything. Deploy again."]);
+  assert.deepEqual([pauses, saved], [1 + 2 + 4 + 6, 0]);
+  assert.deepEqual(requestsAfter(standIn, before).filter(isWrite), []);
+});
+
+test("a step the provider refuses fails the Deploy in that step's own words, as its log said them, never in the step's kind", async () => {
+  const { adapter, run, record } = setup();
+  const quota = "This project's quota of hosted services is used up.";
+  const refusing = {
+    ...adapter,
+    createResource: () => Promise.reject(Object.assign(new Error(quota), { code: "quota_exceeded", retryable: false }))
+  };
+  const events = [];
+  const failed = await run({ record, commit: "c1", using: refusing, report: (event) => events.push(event) });
+  const refused = events.find((event) => event.kind === "step" && event.phase === "refused");
+  assert.equal(failed.outcome, "failed");
+  assert.equal(failed.message, `${refused.words}: ${quota}`);
+  assert.match(failed.message, /^Making the hosted service for \w+: /u);
+  assert.equal(failed.record.run.failure, failed.message);
 });
 
 test("a Deploy that stopped while its build ran, the build then failing, is resumed by the next: it reads how that refresh ended, names its reason, lets go of the links made against it and makes them again", async () => {
