@@ -1,4 +1,5 @@
-import { statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 
 import { runtimePackBinPaths } from "@local/vibe64-execution/server";
@@ -21,6 +22,46 @@ function hostPhpWithoutDevelopmentFiles() {
   return folders.length > 0 && !folders.some((folder) => isFile(path.join(folder, "php-config")));
 }
 
+// The scan folder each PHP binary reads while PHP_INI_SCAN_DIR is unset, by the binary's path.
+const ownScanFolders = new Map();
+
+function phpOnPath(searchPath = "") {
+  for (const directory of String(searchPath).split(path.delimiter)) {
+    if (!directory) continue;
+    try {
+      accessSync(path.join(directory, "php"), constants.X_OK);
+      return path.join(directory, "php");
+    } catch {
+      // Not in this directory.
+    }
+  }
+  return "";
+}
+
+/**
+ * What PHP_INI_SCAN_DIR stands for in a launch that sets none: the folder the
+ * first php on the launch's PATH scans by itself, as `php --ini` names it with
+ * the variable unset. That is PHP's compiled-in folder, or the one a wrapper
+ * sets only while the variable is unset (Nix's php.withExtensions), which an
+ * empty segment would not reach. Read once per binary; "" when php is not on
+ * PATH or names none, so the trailing separator keeps the compiled-in folder.
+ */
+function unsetEnvironment(environment = {}) {
+  const binary = phpOnPath(environment.PATH);
+  if (binary && !ownScanFolders.has(binary)) {
+    const unset = { ...environment };
+    delete unset.PHP_INI_SCAN_DIR;
+    const answer = spawnSync(binary, ["--ini"], { encoding: "utf8", env: unset, timeout: 10_000 });
+    if (answer.status === 0) {
+      const named = /^Scan for additional \.ini files in:[ \t]*(.*)$/mu.exec(answer.stdout)?.[1].trim() || "";
+      // PHP 8.5 quotes the folder.
+      const folder = /^"(.*)"$/u.exec(named)?.[1] ?? named;
+      ownScanFolders.set(binary, folder === "(none)" ? "" : folder);
+    }
+  }
+  return { PHP_INI_SCAN_DIR: ownScanFolders.get(binary) || "" };
+}
+
 /**
  * PHP records through a small extension (runtime/php/ext) built once per PHP
  * API version by runtime/php/build.mjs. A recorded process loads it from a
@@ -35,8 +76,9 @@ function prepare() {
     };
   }
   if (isFile(path.join(scanDirectory, PHP_USAGE_INI_NAME))) {
-    // The trailing separator keeps PHP's own scan directory, and with it the
-    // extensions PHP is installed with, when nothing else is set.
+    // What follows the trailing separator is the launch's own value, or
+    // unsetEnvironment's folder when it sets none: the extensions PHP is
+    // installed with keep loading.
     return { available: true, environment: {}, prependEnvironment: { PHP_INI_SCAN_DIR: `${scanDirectory}${path.delimiter}` } };
   }
   if (hostPhpWithoutDevelopmentFiles()) {
@@ -55,5 +97,6 @@ function prepare() {
 export default Object.freeze({
   runtime: "php",
   label: "PHP",
-  prepare
+  prepare,
+  unsetEnvironment
 });

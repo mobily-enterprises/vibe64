@@ -59,7 +59,7 @@ function recordedEnvironment({ recordingDirectory, targetKind = "web", sourceRoo
   return {
     ...base,
     ...prepared.environment,
-    ...mergePrependEnvironment(prepared.prependEnvironment, base),
+    ...mergePrependEnvironment(prepared.prependEnvironment, base, path.delimiter, php.unsetEnvironment(base)),
     VIBE64_USAGE_RECORDING_DIR: recordingDirectory,
     VIBE64_USAGE_SOURCE_ROOT: sourceRoot,
     VIBE64_USAGE_TARGET_KIND: targetKind
@@ -332,26 +332,30 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
     };
     const prepared = php.prepare({ targetKind: "web" });
     const ours = prepared.prependEnvironment.PHP_INI_SCAN_DIR;
+    // As the recording service merges it for a launch with this environment.
+    const recordedWith = (environment) => cleanEnvironment(mergePrependEnvironment(
+      prepared.prependEnvironment, environment, path.delimiter, php.unsetEnvironment(environment)));
     const baseline = modules(cleanEnvironment());
-    const recorded = modules(cleanEnvironment(mergePrependEnvironment(prepared.prependEnvironment, process.env)));
+    const recorded = modules(recordedWith(process.env));
     assert.ok(recorded.includes("vibe64_usage"));
     for (const name of baseline) {
       assert.ok(recorded.includes(name), `${name} still loads`);
     }
-    // A person's own value keeps its meaning: an extra directory with or without PHP's default.
+    // A person's own value keeps its meaning: an extra directory with or without PHP's compiled-in one, loading
+    // everything that value loads without recording.
     const extra = path.join(SCRATCH, "extra-ini");
     fs.mkdirSync(extra, { recursive: true });
     fs.writeFileSync(path.join(extra, "memory.ini"), "memory_limit=123M\n");
     const probe = "echo ini_get('memory_limit'), ' ', extension_loaded('vibe64_usage') ? 'loaded' : 'missing';";
     for (const existing of [extra, `:${extra}`]) {
-      const env = cleanEnvironment(mergePrependEnvironment(prepared.prependEnvironment, { PHP_INI_SCAN_DIR: existing }));
+      const env = recordedWith({ ...process.env, PHP_INI_SCAN_DIR: existing });
       assert.equal(runPhp(["-r", probe], { env }).stdout, "123M loaded");
+      const unrecorded = modules(cleanEnvironment({ PHP_INI_SCAN_DIR: existing }));
+      assert.ok(unrecorded.every((name) => modules(env).includes(name)), `${existing}: ${unrecorded.join(",")}`);
     }
     if (process.env.PHP_INI_SCAN_DIR) {
       return;
     }
-    // The rest relies on PHP's compiled-in scan directory, which a set PHP_INI_SCAN_DIR replaces.
-    assert.ok(baseline.every((name) => modules(cleanEnvironment(mergePrependEnvironment(prepared.prependEnvironment, { PHP_INI_SCAN_DIR: `:${extra}` }))).includes(name)));
     if (/Additional \.ini files parsed:\s+\S+\.ini/u.test(runPhp(["--ini"], { env: cleanEnvironment() }).stdout)) {
       // Without the trailing separator PHP would scan only our directory.
       const alone = modules(cleanEnvironment({ PHP_INI_SCAN_DIR: ours.slice(0, -1) }));

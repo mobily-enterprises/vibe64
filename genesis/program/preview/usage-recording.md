@@ -88,7 +88,12 @@ against, read by streaming the City.
 Node.js loads a preload that instruments project files as they load, Python
 loads a `sitecustomize` recorder through `PYTHONPATH`, and PHP loads a small
 observer module, built per PHP version, through `PHP_INI_SCAN_DIR`; each
-tracer's variables are prepended to the target's own. Tracers count project
+tracer's variables are prepended to the target's own. With no
+`PHP_INI_SCAN_DIR` of the target's, the PHP tracer's `unsetEnvironment` follows
+its folder with the one the launch's PHP scans by itself, which `php --ini`
+names (read once per binary), so a wrapper's folder such as Nix's
+`php.withExtensions` keeps loading; this is the one tracer step that is not
+pure. Tracers count project
 function entries per request, run or background scope and write them to files.
 A request the application served directly is labelled with its method and path
 by the proxy's rule: no query, and each long id or token segment written as
