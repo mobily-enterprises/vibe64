@@ -1703,8 +1703,10 @@ Genesis's request for that item's scope: the plan's changes are the changes sinc
 the commit where the plan's work started (the commit recorded when the previous
 plan finished, or when a plan became current with none recorded, otherwise
 where the session left its canonical history). Each pass fixes what it finds
-within its scope, each fix proven by a test that failed first, puts what is
-outside on the plan's Leftovers list, and ends Done, ticking its item, or Needs
+within its scope, each fix proven by a test that failed first, also fixes what is
+outside it when the session can, puts only what needs the person or what the
+session can't reach on the plan's Leftovers list (never a failing or flaky test,
+which the plan command refuses there), and ends Done, ticking its item, or Needs
 you, with numbered questions; the person's reply goes straight back to that
 pass on Senior. Stop pauses the plan at its pass. A pass the Genesis serving the
 project can't run, or a plan's changes without a known start commit, holds the

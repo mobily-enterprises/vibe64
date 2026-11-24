@@ -130,11 +130,17 @@ function assistantWorkflowEnding(request, autoSave) {
   return [assistantContinuationInstruction(request), assistantSaveInstruction(autoSave)].filter(Boolean).map(line => `\n${line}`).join("");
 }
 
+// What a plan may leave undone: only what this session can't do. Every implementing role and every step reads it.
+const PLAN_LEFTOVERS_RULE = "What this session can fix is fixed before the plan completes, whether or not it is in this step's scope: development data and files you created, small defects you found (a barely visible focus ring), a step that fails (a compose that fails while Preview runs). A failing or flaky test is a defect to fix until it passes every run, never a Leftover. The plan's one Leftovers list in Progress holds only what needs the person (a choice, a real device, an account, a click) or what this session can't reach (another repository, a setting only the owner can change), each with its reason; a choice becomes a numbered question with a recommended answer. Never offer to make a plan for what is left.";
+
 // What the person reads once a plan's last step is Done: one message for the whole plan.
-const PLAN_CLOSING_MESSAGE = "one line per step (Senior review and each pass) saying what it fixed, from Progress; the choices made for the person; and the Leftovers from Progress, followed by the one question “Make a plan for these?” (no question when there are none).";
+const PLAN_CLOSING_MESSAGE = "one line per step (Senior review and each pass) saying what it fixed, from Progress; the choices made for the person; and the Leftovers from Progress, each with its reason. It asks no question about them: a choice among them is a numbered question with a recommended answer, and the step ends Needs you instead.";
+
+// The plan's last step finishes what the earlier ones left that this session can fix.
+const PLAN_FINISHING_STEP = "Before it ends Done, fix whatever Progress still holds that this session can fix: the plan's last step is its finishing step, and leaves Leftovers holding only what needs the person or what this session can't reach.";
 
 // How every step of a plan ends, Senior review and each pass alike.
-const PLAN_STEP_ENDINGS = "Never end with partial, for later, not run here or worth knowing: when you run out of room, report continue and carry on in your next turn; a check that can't run here is made to run or becomes a question (for example: these browser tests run only in CI; accept CI as their proof?); a broken setup is a blocker question. An answer becomes a rule written into Plan or Progress, never a footnote. What is outside the scope, or can't be done here (another repository, a setting only the owner can change), goes on the plan's one Leftovers list in Progress: not fixed and not mixed in. When Progress records that the person said to pick your recommendation, pick it for every question, record each choice in Progress with the time, and never wait.";
+const PLAN_STEP_ENDINGS = "Never end with partial, for later, not run here or worth knowing: when you run out of room, report continue and carry on in your next turn; a check that can't run here is made to run or becomes a question (for example: these browser tests run only in CI; accept CI as their proof?); a broken setup is a blocker question. An answer becomes a rule written into Plan or Progress, never a footnote. " + PLAN_LEFTOVERS_RULE + " When Progress records that the person said to pick your recommendation, pick it for every question, record each choice in Progress with the time, and never wait.";
 
 /**
  * Senior's review of a plan Auto's Junior implemented: it verifies every item,
@@ -147,7 +153,7 @@ const ASSISTANT_PLAN_COMPLETION_MESSAGE = [
   "Verify EVERY checklist item outside the plan's Passes section against the code as it is now, not only the open ones: marks and earlier records do not establish completion. Check each against my request, accepted steering and the evidence, inspect the implementation, fix what you find within the plan's scope, each fix proven by a test that failed first, and run relevant checks. Leave unrelated plans unchanged.",
   "Run the plan's final checks once, now: the whole-project checks the plan or project states, such as one whole run of the test suite. No implementation turn ran them. Read their result, record it in Progress, and fix what they find within the plan's scope.",
   "Full-tick (- [x]) each item the proof covers and move unsupported or regressed ones back to - [~] or - [ ].",
-  "End one of two ways. Done: every item outside Passes is - [x]. When the plan has Passes items, leave it active and report complete with the returned revisions: Vibe64 then runs each pass in its own turn and completes the plan after the last. Without Passes items, complete the plan with the plan helper and report complete with the returned revisions; your final reply is then the plan's one closing message: " + PLAN_CLOSING_MESSAGE + " Needs you: numbered questions, each with a recommended answer, in your final reply and in Progress; report wait. For substantial necessary rework, update the Technical details and Progress and report handoff.",
+  "End one of two ways. Done: every item outside Passes is - [x]. When the plan has Passes items, leave it active and report complete with the returned revisions: Vibe64 then runs each pass in its own turn and completes the plan after the last. Without Passes items, this review is the plan's last step. " + PLAN_FINISHING_STEP + " Then complete the plan with the plan helper and report complete with the returned revisions; your final reply is then the plan's one closing message: " + PLAN_CLOSING_MESSAGE + " Needs you: numbered questions, each with a recommended answer, in your final reply and in Progress; report wait. For substantial necessary rework, update the Technical details and Progress and report handoff.",
   PLAN_STEP_ENDINGS,
   "Each item whose proof can't run in this session (a real phone, a suite only CI runs) ends as Needs you: a numbered question with a recommended answer, in your final reply and in Progress. A question Junior's last reply asked the person is yours now: settle it from Plan and Progress, or ask it as a Needs you question. Whether to run the passes or save is never one: Vibe64 runs the passes and saves.",
   "This turn reviews the plan only: run no pass. Do not ask for permission merely to verify or complete verified work."
@@ -170,7 +176,7 @@ function assistantPassInstructions(pass, { last = false, person = false } = {}) 
     PLAN_STEP_ENDINGS,
     ...(person ? ["The person's message comes before this pass's request below. When it answers this pass's questions, record each answer as a rule in Progress and finish the pass. When it asks for something else, do that as an ordinary request first, then finish the pass or report wait with its questions still open."] : []),
     last
-      ? `This is the plan's last pass. When it is Done, your final reply is the plan's one closing message: ${PLAN_CLOSING_MESSAGE}`
+      ? `This is the plan's last pass. ${PLAN_FINISHING_STEP} When it is Done, your final reply is the plan's one closing message: ${PLAN_CLOSING_MESSAGE}`
       : "Keep your final reply short: what this pass fixed and proved. Progress holds the details."
   ].join(" ");
 }
@@ -188,6 +194,7 @@ export {
   ASSISTANT_PLAN_COMPLETION_MESSAGE,
   ASSISTANT_SENIOR_VERIFICATION_MESSAGE,
   AUTO_SAVE_SETTING,
+  PLAN_LEFTOVERS_RULE,
   afterPlanChoiceProblem,
   assistantAutoSaveNotice,
   assistantPassInstructions,

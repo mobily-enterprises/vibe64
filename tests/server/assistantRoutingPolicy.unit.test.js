@@ -1099,12 +1099,12 @@ test("Senior's review of a plan verifies every item and leaves a plan with passe
   assert.match(framing, /Done: everything within the scope is fixed and proven; full-tick \(- \[x\]\) this item, then report complete\. Needs you: numbered questions/);
   for (const text of [framing, ASSISTANT_PLAN_COMPLETION_MESSAGE]) {
     assert.match(text, /Never end with partial, for later, not run here or worth knowing/);
-    assert.match(text, /goes on the plan's one Leftovers list in Progress/);
+    assert.match(text, /The plan's one Leftovers list in Progress holds only what needs the person/);
     assert.match(text, /When Progress records that the person said to pick your recommendation, pick it for every question, record each choice in Progress with the time/);
   }
   // Only the last pass writes the plan's one closing message; a reply that comes first is the person's.
-  assert.doesNotMatch(framing, /Make a plan for these\?/);
-  assert.match(assistantPassInstructions(pass, { last: true }), /This is the plan's last pass\. When it is Done, your final reply is the plan's one closing message: one line per step .*“Make a plan for these\?”/);
+  assert.doesNotMatch(framing, /the plan's one closing message/);
+  assert.match(assistantPassInstructions(pass, { last: true }), /This is the plan's last pass\. Before it ends Done, .* When it is Done, your final reply is the plan's one closing message: one line per step .*the Leftovers from Progress, each with its reason\. It asks no question about them/);
   assert.doesNotMatch(framing, /The person's message comes before/);
   assert.match(assistantPassInstructions(pass, { person: true }), /The person's message comes before this pass's request below\. When it answers this pass's questions, record each answer as a rule in Progress/);
 });

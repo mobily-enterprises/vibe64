@@ -138,8 +138,14 @@ A pass fixes what it finds within its scope, each fix proven by a test that
 failed first: the pass decides what it looks for, not what it may fix. Review
 writes the failing test and then fixes the code; Deslop keeps its cleanups
 behaviour-neutral but fixes a real defect as a separate fix with its own test.
-What is outside the scope, or can't be done here, goes on the plan's one
-**Leftovers** list in Progress instead.
+What is outside the scope is fixed too when the session can fix it: data and
+files the AI created, small defects it found, a step that fails. A failing or
+flaky test is a defect to fix until it passes every run, never a leftover. The
+plan's one **Leftovers** list in Progress holds only what needs you (a choice, a
+real device, an account, a click) or what the session can't reach, each with its
+reason; a choice is asked as a numbered question with a recommended answer.
+Vibe64 refuses a Progress whose Leftovers name a failing or flaky test, and
+refuses to complete a plan while they do, so the AI fixes the test instead.
 
 Senior's review and every pass end one of two ways:
 
@@ -159,10 +165,12 @@ the recommended answer and records the choice instead of waiting.
 **Stop** pauses the plan at that pass. **Continue** in the list, or **Resume**
 in the chat, runs it again from the plan.
 
-After the last pass, Vibe64 completes and archives the plan, and the last
-pass's reply is the plan's one closing message: a line per step saying what it
-fixed, the choices made for you, and the Leftovers with **Make a plan for
-these?** Then, with **Automatically save changes** on, **Save** runs.
+The last pass (or Senior's review, for a plan without passes) is the plan's
+finishing step: first it fixes whatever Progress still holds that the session
+can fix. After it, Vibe64 completes and archives the plan, and its reply is the
+plan's one closing message: a line per step saying what it fixed, the choices
+made for you, and the Leftovers, each with its reason. It never offers to make a
+plan for them. Then, with **Automatically save changes** on, **Save** runs.
 
 ### What the chat shows while a plan's passes run
 

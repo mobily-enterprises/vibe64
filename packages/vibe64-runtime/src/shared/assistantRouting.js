@@ -405,7 +405,7 @@ function assistantModePrompt(mode, message, options = {}) {
       "Preserve existing behavior, unrelated work and staged changes.",
       "Use the user's selected commits or scope; otherwise clean up only the current task's changes.",
       "Do not implement features, create an implementation plan, or delegate cleanup to another model.",
-      "Fix a real defect you find within the scope as a separate fix with its own test that failed first; put what is outside the scope on the plan's Leftovers list in Progress when a plan runs this pass, and report it otherwise.",
+      "Fix a real defect you find within the scope as a separate fix with its own test that failed first; when a plan runs this pass, also fix what is outside the scope when this session can, and put only what needs the person or what this session can't reach on the plan's Leftovers list in Progress; report it otherwise.",
       "Run focused checks, then report what became simpler and what was verified.",
       "Do not commit, push or deploy."
     ].join(" "),
@@ -414,12 +414,12 @@ function assistantModePrompt(mode, message, options = {}) {
       "You may edit code to bring those screens in line with the project's UI guidance; earlier Auto planning restrictions do not apply.",
       "Preserve each screen's behavior, unrelated work and staged changes.",
       "Do not implement features, create an implementation plan, or delegate the pass to another model.",
-      "Fix a real defect you find on those screens as a separate fix with its own test that failed first; put what is outside the scope on the plan's Leftovers list in Progress when a plan runs this pass, and report it otherwise.",
+      "Fix a real defect you find on those screens as a separate fix with its own test that failed first; when a plan runs this pass, also fix what is outside the scope when this session can, and put only what needs the person or what this session can't reach on the plan's Leftovers list in Progress; report it otherwise.",
       "Check the screens you changed in the managed browser, run focused checks, then report what changed and what was verified.",
       "Do not commit, push or deploy."
     ].join(" "),
     // Any other pass Genesis offers: its composed prompt says what the pass does.
-    pass: "Perform the pass this request names directly, following the project's guidance for it. You may edit code for it; earlier Auto planning restrictions do not apply. Preserve unrelated work and staged changes. Do not implement features the pass does not call for, create an implementation plan, or delegate the pass to another model. Fix what you find within the pass's scope, each fix proven by a test that failed first; put what is outside the scope on the plan's Leftovers list in Progress when a plan runs this pass, and report it otherwise. Run focused checks, and check the screens you changed in the managed browser, then report what changed and what was verified. Do not commit, push or deploy.",
+    pass: "Perform the pass this request names directly, following the project's guidance for it. You may edit code for it; earlier Auto planning restrictions do not apply. Preserve unrelated work and staged changes. Do not implement features the pass does not call for, create an implementation plan, or delegate the pass to another model. Fix what you find within the pass's scope, each fix proven by a test that failed first; when a plan runs this pass, also fix what is outside the scope when this session can, and put only what needs the person or what this session can't reach on the plan's Leftovers list in Progress; report it otherwise. Run focused checks, and check the screens you changed in the managed browser, then report what changed and what was verified. Do not commit, push or deploy.",
     review: [
       "Review the preceding coding work against the original request and accepted steering.",
       "Inspect actual files and relevant surrounding code. You may directly fix in-scope defects.",

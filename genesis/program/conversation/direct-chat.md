@@ -2188,7 +2188,15 @@ does each write's answer. The agent's plan command passes `agent: true`,
 so its write and progress-write, which replace a whole document, are refused
 (vibe64_work_plan_read_through_required) without the current pair's readThrough:
 a Progress rebuilt from the first page alone cannot cut the tail it never read.
-Vibe64's own writes build from the whole pair and need none.
+Vibe64's own writes build from the whole pair and need none. The same option
+makes `planLeftovers.js` refuse (vibe64_work_plan_leftover_fixable) a
+progress-write whose Leftovers list (a Leftovers heading's section, or a
+Leftovers: line and its list; fenced code is not read) has an item naming a
+test that fails or flakes, and an agent's complete while the current Progress
+has one: the guidance's `PLAN_LEFTOVERS_RULE` (`assistantFinishing.js`, read by
+every role's plan guidance and every step's endings) says such a test is a
+defect to fix, and the last step (`PLAN_FINISHING_STEP`) fixes what the session
+can before the closing message, which offers no plan for what is left.
 Legacy current.md and archive/<planRevision>.md remain readable unchanged. Mutation
 requires the stopped-writer 20261008-plan-progress upgrade, which reuses the original
 Runtime session/archive/prepared-renewal inventory and Core verified backup publisher.

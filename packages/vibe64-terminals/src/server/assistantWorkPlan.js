@@ -4,6 +4,8 @@ import { parseWorkPlanLines, workPlanScope, workPlanStep } from "../shared/assis
 import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
+import { PLAN_LEFTOVERS_RULE } from "@local/vibe64-runtime/shared/assistantFinishing";
+import { fixableLeftoversRefusal } from "./planLeftovers.js";
 import { PLAN_LIMIT, planError, planFileError, planFileProblem, readPlanFile, withPlanFileProblems } from "./assistantWorkPlanFiles.js";
 
 // Process-wide: whole pair reads and publication/cleanup of a plan file run
@@ -493,7 +495,7 @@ function refuseUnreadInput(input) {
  * found nothing to change (checked). With `sourceState`, the AI's change records the session's
  * source as it is now as the plan's mark (MARKING_OPERATIONS); a plan replaced or archived drops it.
  * With `agent` (the agent's plan command), write and progress-write need the readThrough a read's last page or the
- * last write returned: never text built from a first page alone.
+ * last write returned, and Progress's Leftovers may hold no failing or flaky test, written or at completion.
  * @param {object} context
  * @param {object} input
  * @param {string} role senior, review, junior, pass or user
@@ -548,6 +550,8 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
         "vibe64_work_plan_read_through_required"
       );
     }
+    const leftovers = agent && ["progress-write", "complete"].includes(operation) && fixableLeftoversRefusal(operation === "complete" ? current?.progressText : input.text);
+    if (leftovers) throw planError(leftovers, "vibe64_work_plan_leftover_fixable");
     if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_revision_missing");
     if (["write", "progress-write", "checked", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.", "vibe64_work_plan_missing");
     if (["write", "progress-write", "checked"].includes(operation) && current.status !== "active") {
@@ -662,7 +666,7 @@ function workPlanInstructions(role, { autoOutcome = false, auto = false } = {}) 
     "Human instructions take precedence. Keep agreed scope and completed evidence; do not invent additional requirements. Discussion alone never changes plan status.",
     "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan.",
     "A plan's steps are Implementation, Senior review, Passes and Completed. Its last section, ## Passes, lists the passes it runs after Senior's review, one checklist item each (- [ ] <pass title>: <scope>, such as - [ ] Security pass: the plan's changes). Vibe64 writes it from the chat's After a plan ticks when the plan is created and adds the passes the person starts; keep it last, and change it only when the person asks to change this plan's passes. Once every item outside Passes is - [x], Vibe64 runs each unticked Passes item in its own Senior turn, then completes and archives the exact Plan and Progress; do not archive it yourself. Never ask the person whether to run the plan's passes or Save, or whether to save before the passes: the passes are the plan's next step and Vibe64 runs them, then saves the work when the plan completes.",
-    "Progress holds the plan's one Leftovers list: what is outside the plan's scope or can't be done here, never fixed or mixed in. When the person says not to ask and to pick your recommendation, for this plan or this run, record that in Progress with the time: every later step reads it, picks the recommended answer and records the choice in Progress instead of waiting.",
+    `${PLAN_LEFTOVERS_RULE} When the person says not to ask and to pick your recommendation, for this plan or this run, record that in Progress with the time: every later step reads it, picks the recommended answer and records the choice in Progress instead of waiting.",
     "Only report a plan created or updated after the helper succeeds and its returned current plan confirms the requested checklist. If it fails, report the failure; a plan written only in chat is not a saved Vibe64 plan."
   ].join(" ");
   if (role === "junior") {
