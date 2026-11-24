@@ -440,7 +440,7 @@ making it twice. In order:
      the names were has no names, so after that release succeeds it keeps no
      hash and 6 replaces the settings once, dropping names no longer given: the
      one Deploy after an editor before 7f3529167 kept a record rolls each
-     service whose settings it brings twice (Mercbot's production Deploy of 24
+     service whose settings it brings twice (a project's production Deploy of 24
      Nov), and none after it does, its names kept; on 25 Nov no Production
      record from before it remained, so that roll is not needed for day 0. A
      service whose settings name one this Deploy still makes (a Reaches of a

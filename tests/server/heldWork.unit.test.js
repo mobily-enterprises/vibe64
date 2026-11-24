@@ -3,8 +3,8 @@ import test from "node:test";
 import { createHeldWork } from "@local/vibe64-core/server/heldWork";
 
 // Held work is what a request starts and answers before it ends, so a slow dependency (a workspace preparation, a
-// lock, a build) never keeps the request past a proxy's minute: Vibe64 Online's long routes and the editor's own use
-// it as the Main chat send does (heldMessages.js).
+// lock, a build) never keeps the request past a proxy's minute: a host's long routes and the editor's own use it as
+// the Main chat send does (heldMessages.js).
 
 function recordingLogger() {
   const logged = [];

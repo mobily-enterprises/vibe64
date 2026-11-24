@@ -6,7 +6,7 @@ import { createOutputTargetTerminalController } from "../../packages/vibe64-term
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
-// After a VPS restart a session's workspace preparation runs for minutes. A Preview start used to wait for it while
+// After a machine restart a session's workspace preparation runs for minutes. A Preview start used to wait for it while
 // holding the session's launch lock, so every other Preview request queued behind it: the outputs read, Open, the
 // identity switch, Stop and the session's close, each past the hosted edge's minute ("Request failed with status
 // 504."). They must answer at once, and a Stop or a close meanwhile must win over the waiting start.
