@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { createHeldWork } from "@local/vibe64-core/server/heldWork";
+import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
 import { refuseDuringRepositoryAiTask, sessionResult } from "./sessionResults.js";
@@ -102,6 +104,7 @@ function connectedUpdateFailure(result) {
  * current changes, the Save that publishes them, the Update that rebases them
  * onto the saved versions, and a pull request for them.
  * @param {object} dependencies
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {SessionWorkRecovery} dependencies.recovery
@@ -111,6 +114,7 @@ function connectedUpdateFailure(result) {
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
 function createSessionWork({
+  logger,
   project,
   publishSessionChanged,
   recovery,
@@ -125,6 +129,8 @@ function createSessionWork({
   const startingWork = Object.freeze({ save: new Map(), update: new Map() });
   // The Saves and Updates a button started, until each has ended.
   const startedWork = new Set();
+  // The pull request dialog's creations, by project, session and the dialog's request id (`startSessionPullRequest`).
+  const heldPullRequests = createHeldWork({ component: "vibe64.session_pull_request", logger });
 
   /**
    * The session's work, with each connected copy's in `connected`, after
@@ -225,6 +231,7 @@ function createSessionWork({
           title: input.title,
           body: input.body,
           draft: input.draft,
+          onRepositoryWriteAcquired: input.onRepositoryWriteAcquired,
           operationId: crypto.randomUUID(),
           runtime,
           session,
@@ -239,6 +246,32 @@ function createSessionWork({
         });
       }
     }, "The pull request could not be confirmed. Retry to check GitHub and continue.");
+  }
+
+  /**
+   * The pull request dialog's create: `createSessionPullRequest`, answered with its outcome when that comes within
+   * two seconds, and otherwise `{ ok: true, creating: true, requestId, waitingFor }` while it goes on. It saves and
+   * pushes the session's work and then asks GitHub, for minutes on a large or slow one, and a hosted workspace's edge
+   * ends a request after about a minute. The dialog repeats it with the same `requestId`, which joins the creation,
+   * or reads its outcome for fifteen minutes after it ended; it waits for the session's repository write
+   * (`session-write`), then creates (`creating`).
+   * @param {string} sessionId
+   * @param {object} input
+   */
+  async function startSessionPullRequest(sessionId, input) {
+    const { requestId, ...create } = input;
+    const key = [currentProjectScopeKey(), normalizeText(sessionId), normalizeText(requestId)].join("\0");
+    const ended = heldPullRequests.inspect(key);
+    if (ended?.settled) {
+      if (ended.error) throw ended.error;
+      return ended.result;
+    }
+    const answer = await heldPullRequests.run(key, ({ stage }) => {
+      stage("session-write");
+      return createSessionPullRequest(sessionId, { ...create, onRepositoryWriteAcquired: () => stage("creating") });
+    });
+    if (answer.settled) return answer.result;
+    return { ok: true, creating: true, requestId, waitingFor: answer.waitingFor };
   }
 
   /**
@@ -298,11 +331,11 @@ function createSessionWork({
   }
 
   /**
-   * Resolves once every Save and Update a button started has ended and recorded its outcome, as the server's shutdown
-   * once waited for them inside their requests.
+   * Resolves once every Save and Update a button started, and every pull request the dialog started, has ended and
+   * recorded its outcome, as the server's shutdown once waited for them inside their requests.
    */
   async function settleStartedWork() {
-    await Promise.allSettled([...startedWork]);
+    await Promise.allSettled([...startedWork, heldPullRequests.close()]);
   }
 
   async function saveSessionWork(sessionId, input) {
@@ -694,6 +727,7 @@ function createSessionWork({
     saveSessionWork,
     saveToCurrentDestination,
     settleStartedWork,
+    startSessionPullRequest,
     startSessionSave,
     startSessionUpdate,
     updateSessionWork

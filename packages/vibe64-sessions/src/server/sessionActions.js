@@ -34,6 +34,7 @@ import {
   sessionChangesInputValidator,
   sessionCreateInputValidator,
   sessionPullRequestInputValidator,
+  sessionPullRequestStartInputValidator,
   sessionIdInputValidator,
   sessionInspectInputValidator,
   sessionListInputValidator,
@@ -61,6 +62,7 @@ const ACTION_LIST_ARCHIVED_SESSIONS = "vibe64.sessions.archived.list";
 const ACTION_LIST_ASSISTANT_CAPABILITIES = "vibe64.assistants.capabilities.list";
 const ACTION_UPDATE_ASSISTANT_MODEL_ACCESS = "vibe64.assistants.model-access.update";
 const ACTION_CREATE_PULL_REQUEST = "vibe64.sessions.pull-request.create";
+const ACTION_START_SESSION_PULL_REQUEST = "vibe64.sessions.pull-request.start";
 const ACTION_CREATE_SESSION = "vibe64.sessions.create";
 const ACTION_PIN_SESSION = "vibe64.sessions.pin";
 const ACTION_RENAME_SESSION = "vibe64.sessions.rename";
@@ -343,6 +345,14 @@ function createSessionActions({ sessions }) {
       extensions: { assistant: sessionPullRequestTool(), vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.createSessionPullRequest(input.sessionId, input, context)
     }),
+    // The pull request dialog's: the same creation, answered as creating while it goes on; the dialog repeats it.
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_START_SESSION_PULL_REQUEST,
+      input: { ...sessionPullRequestStartInputValidator, mode: "create" },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: input => sessions.startSessionPullRequest(input.sessionId, input)
+    }),
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_SAVE_SESSION_WORK,
@@ -539,6 +549,7 @@ export {
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CREATE_SESSION,
   ACTION_CREATE_PULL_REQUEST,
+  ACTION_START_SESSION_PULL_REQUEST,
   ACTION_CONFIRM_SESSION_RENEWAL,
   ACTION_INSPECT_SESSION,
   ACTION_INSPECT_SESSION_RENEWAL,

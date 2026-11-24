@@ -298,13 +298,19 @@ const sessionHistoryReviewSchema = createSchema({
   changedPaths: { type: "array", items: { type: "string", noTrim: true }, required: false }
 });
 
-const sessionPullRequestInputValidator = actionInput({
+const sessionPullRequestFields = {
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
   sessionId: sessionIdField,
   title: { type: "string", required: true, minLength: 1, maxLength: 256 },
   body: { type: "string", required: false, maxLength: 65536, noTrim: true },
   draft: { type: "boolean", required: false },
   ...optionalOrigin
+};
+const sessionPullRequestInputValidator = actionInput(sessionPullRequestFields);
+// The dialog's create names its request, so its repeat after a held or lost answer joins it.
+const sessionPullRequestStartInputValidator = actionInput({
+  ...sessionPullRequestFields,
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true }
 });
 
 const sessionCreateInputValidator = actionInput({
@@ -575,6 +581,7 @@ export {
   sessionChangesInputValidator,
   sessionCreateInputValidator,
   sessionPullRequestInputValidator,
+  sessionPullRequestStartInputValidator,
   sessionIdInputValidator,
   sessionInspectInputValidator,
   sessionRenewalConfirmationActionInputValidator,
