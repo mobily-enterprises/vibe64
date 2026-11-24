@@ -119,6 +119,7 @@ function createService({
   });
   const authority = createMainConversationAuthority({ localhostCheckBypassed });
   const messages = createSessionMessages({
+    logger,
     mainBrowserAuthority: authority.mainBrowserAuthority,
     project,
     publishProjectChanged,
@@ -144,7 +145,7 @@ function createService({
     resumeSessionRenewals: renewal.resumeSessionRenewals
   });
 
-  const browserConversations = createMainBrowserConversations({ actions, terminals });
+  const browserConversations = createMainBrowserConversations({ actions, inspectHeldMessage: messages.inspectHeldMessage, terminals });
 
   /**
    * Automatic save: once finished work's last turn ends, Main chat's autoSave
@@ -219,8 +220,10 @@ function createService({
 
     approveMainChatApproval: messages.approveMainChatApproval,
     approveMainChatMessage: messages.approveMainChatMessage,
+    closeHeldMessages: messages.closeHeldMessages,
     declineMainChatApproval: messages.declineMainChatApproval,
     editMainChatApproval: messages.editMainChatApproval,
+    inspectHeldMessage: messages.inspectHeldMessage,
     interruptAgentTurn: messages.interruptAgentTurn,
     readMainChatApprovals: messages.readMainChatApprovals,
     resumeIntegrationContinuation: messages.resumeIntegrationContinuation,
