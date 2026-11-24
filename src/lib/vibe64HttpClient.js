@@ -7,9 +7,13 @@ import { resolveStudioRequestUrl } from "./studioUrls.js";
 // through an editor restart: a workspace's editor restarts for each release, and for a while nothing answers (the
 // hosted edge says 502 or 503, or the connection is refused) until the next server does.
 //
-// - A read (GET, HEAD) that finds the editor unreachable (no answer, or 502, 503 or 504) is sent again quietly, after
-//   RETRY_DELAYS_MS, for up to RECONNECT_WINDOW_MS from its start (or its own timeoutMs, when shorter). Reading
-//   twice changes nothing.
+// - A read (GET, HEAD) that finds the editor unreachable (no answer, or a 502, 503 or 504 the editor did not give
+//   itself) is sent again quietly, after RETRY_DELAYS_MS, for up to RECONNECT_WINDOW_MS from its start (or its own
+//   timeoutMs, when shorter). Reading twice changes nothing.
+// - A 502, 503 or 504 in the editor's own JSON, unmarked, is the route's answer, not the editor being away (a
+//   provider it relies on failed or is away, say): the request fails at once in the route's words, with no retry, no
+//   health watch and no query retry, so its page offers Retry. The edge and any proxy before the editor answer in
+//   HTML or text, and the stopping editor marks its own 503.
 // - A write is sent again only when the editor cannot have done it:
 //   - while the page already knows the editor is unreachable, a write waits and is not sent. It goes out once the
 //     editor answers (a GET of HEALTH_PATH watches for that), or fails after RECONNECT_WINDOW_MS saying it was not
@@ -18,10 +22,10 @@ import { resolveStudioRequestUrl } from "./studioUrls.js";
 //     handler ran (STOPPING_HEADER, which the server sends to a request that arrives while it stops), or the hosted
 //     edge's own answer while no editor runs (NO_BACKEND_HEADER, which mobilynet's edge adds to every 503 it answers
 //     itself and strips from every backend response, so no app can send it). A 502 or 504 never proves that.
-//   Any other failure of a write (no answer, a 502 or 504, or a 503 without either mark) may come after the editor
-//   did it: it is never sent again. Its error keeps the transport's status and code, so a caller that follows its
-//   own lost answers (a Main chat send, a Preview start, Create pull request) still does, and it says in words that
-//   Vibe64 cannot tell whether it was done.
+//   Any other failure of a write (no answer, or the edge's 502 or 504, or its 503 without either mark) may come
+//   after the editor did it: it is never sent again. Its error keeps the transport's status and code, so a caller
+//   that follows its own lost answers (a Main chat send, a Preview start, Create pull request) still does, and it
+//   says in words that Vibe64 cannot tell whether it was done.
 // A failure the page reports in the end says so in words, never as a status code, and is marked as retried, so a
 // query does not repeat the whole wait.
 
@@ -103,9 +107,10 @@ function createVibe64HttpClient({
     const attempt = config[ATTEMPT];
     const response = await fetchImpl(url, config);
     if (attempt) {
+      const marked = response.headers.get(STOPPING_HEADER) === "1" || response.headers.get(NO_BACKEND_HEADER) === "1";
       attempt.answered = true;
-      attempt.notRun = Number(response.status) === 503 &&
-        (response.headers.get(STOPPING_HEADER) === "1" || response.headers.get(NO_BACKEND_HEADER) === "1");
+      attempt.notRun = marked && Number(response.status) === 503;
+      attempt.editorAnswered = !marked && /json/iu.test(response.headers.get("content-type") || "");
     }
     return response;
   }
@@ -193,18 +198,20 @@ function createVibe64HttpClient({
       if (write && reconnect.unreachable() && !await editorAnswersBy(deadline, signal)) {
         throw markTransientRetriesSpent(Object.assign(new Error(WRITE_NOT_DONE), { status: 0, code: null }));
       }
-      const attempt = { answered: false, notRun: false };
+      const attempt = { answered: false, editorAnswered: false, notRun: false };
       try {
         const value = await send({ ...requestOptions, [ATTEMPT]: attempt });
         reconnect.answered();
         return value;
       } catch (error) {
         if (stoppedByCaller(error, signal)) throw error;
-        // An answer the client could not read (a decoding failure) is the editor's, not a lost connection.
-        const unreachable = isTransientQueryError(error) && (Number(error?.status) > 0 || !attempt.answered);
+        // The editor's own 5xx is the route's answer; an answer the client could not read (a decoding failure) is
+        // the editor's too, not a lost connection.
+        const unreachable = isTransientQueryError(error) &&
+          (Number(error?.status) > 0 ? !attempt.editorAnswered : !attempt.answered);
         if (!unreachable) {
           if (attempt.answered) reconnect.answered();
-          throw error;
+          throw attempt.editorAnswered ? markTransientRetriesSpent(error) : error;
         }
         reconnect.failed();
         watchEditor();

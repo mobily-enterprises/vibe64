@@ -117,13 +117,17 @@ has no build to compare. See `docs/colleague-usage/vibe64-updates.md`.
 While the editor restarts, the page carries on. Its one HTTP client
 (`src/lib/vibe64HttpClient.js`, configured in `src/main.js`) sends a read that
 finds no editor (no answer, or a 502, 503 or 504 from the edge) again with
-backoff for up to a minute. It sends a write again only when the editor cannot
-have done it. A write made while the page already knows the editor is
-unreachable waits unsent until the editor answers. A write that got a 503 no
-handler ran for is sent again: the stopping server's refusal before any handler
-ran (`x-vibe64-stopping: 1`), or mobilynet's edge answering itself while no
-editor runs (`x-mobilynet-no-backend: 1`, which the edge strips from every
-backend response). Any other failed write (no answer, a 502 or 504, or an
+backoff for up to a minute. A 502, 503 or 504 in the editor's own JSON, without
+a mark, is the route's answer (a provider it relies on failed or is away): it
+fails at once in the route's words, with no retry and no health watch, so the
+page offers Retry. The edge and any proxy before the editor answer in HTML or
+text. It sends a write again only when the editor cannot have done it. A write
+made while the page already knows the editor is unreachable waits unsent until
+the editor answers. A write that got a 503 no handler ran for is sent again:
+the stopping server's refusal before any handler ran (`x-vibe64-stopping: 1`),
+or mobilynet's edge answering itself while no editor runs
+(`x-mobilynet-no-backend: 1`, which the edge strips from every backend
+response). Any other failed write (no answer, or the edge's 502 or 504 or
 unmarked 503) may come after the editor did the work, so it is never sent
 again: its error keeps the transport's status and code for the callers
 that follow their own lost answers (`vibe64HeldMessage.js`, the Preview start,

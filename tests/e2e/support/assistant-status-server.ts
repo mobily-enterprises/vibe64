@@ -498,7 +498,8 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
         return;
       }
       let result: unknown;
-      if (route === "/auth/state") result = { ok: true, authenticated: true, setupRequired: false, user: { ...owner, id: String(owner.uid) } };
+      if (route === "/health") result = { ok: true, app: "vibe64" };
+      else if (route === "/auth/state") result = { ok: true, authenticated: true, setupRequired: false, user: { ...owner, id: String(owner.uid) } };
       else if (route === "/session") result = { ok: true, csrfToken: "status-e2e", authenticated: true };
       else if (route === "/bootstrap") result = { ...bootstrapPayload,
         session: { ...bootstrapPayload.session, authenticated: true, userId: String(owner.uid) },

@@ -11,6 +11,9 @@ import {
 } from "./http";
 
 async function mockAuthenticatedApp(page) {
+  // The editor is up, as its server answers: the page's client asks this while it waits for an editor that did
+  // not answer. A spec that wants the editor away routes it down itself.
+  await routeApiEndpoint(page, "/health", (route) => fulfillJson(route, { ok: true, app: "vibe64" }));
   await page.route("**/api/auth/state", async (route) => {
     await fulfillJson(route, {
       authenticated: true,
