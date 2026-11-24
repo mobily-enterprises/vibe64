@@ -76,13 +76,17 @@ new Function("require", "module", "exports", elementCode)(name => {
 }, elementModule, elementModule.exports);
 // Use the moved launcher with this renderer's Vue instance. SFC imports are
 // presentation stubs; the actual hold/cancel implementation remains exercised.
-const launcherSource = new URL("./voiceLauncher.js", import.meta.resolve("@jskit-ai/assistant-voice/client"));
-const { code: launcherCode } = await transform(await readFile(launcherSource, "utf8"), { format: "cjs" });
-const launcherModule = { exports: {} };
-new Function("require", "module", "exports", launcherCode)(name => {
-  assert.equal(name, "vue");
-  return vue;
-}, launcherModule, launcherModule.exports);
+async function loadVoiceClient(file, imports) {
+  const source = new URL(file, import.meta.resolve("@jskit-ai/assistant-voice/client"));
+  const { code } = await transform(await readFile(source, "utf8"), { format: "cjs" });
+  const loaded = { exports: {} };
+  new Function("require", "module", "exports", code)(name => {
+    assert.ok(Object.hasOwn(imports, name), name);
+    return imports[name];
+  }, loaded, loaded.exports);
+  return loaded;
+}
+const launcherModule = await loadVoiceClient("./voiceLauncher.js", { vue, "./browser.js": (await loadVoiceClient("./browser.js", {})).exports });
 
 test("Colleague recovers connection status and reports failed commands without clearing the draft", async (t) => {
   let offline = true;
@@ -1139,10 +1143,15 @@ test("avatar tap stays a tap; holding emits one recording gesture and suppresses
   view.state.endAvatarPress(press);
   view.state.cancelAvatarPress();
   assert.deepEqual(view.events, [["voice-hold-start"], ["voice-hold-end"]]);
-  let prevented = false;
-  view.state.avatarClick({ detail: 1, preventDefault() { prevented = true; }, stopImmediatePropagation() {} });
-  assert.equal(prevented, true);
-  view.state.avatarClick({ detail: 0, preventDefault() { assert.fail("Keyboard activation remains available."); } });
+  // A click as the browser dispatches it: the page's capture listeners first, then the launcher's own handler.
+  const click = detail => {
+    const event = Object.assign(new Event("click", { cancelable: true }), { detail });
+    globalThis.window.dispatchEvent(event);
+    if (!event.defaultPrevented) view.state.avatarClick(event);
+    return event;
+  };
+  assert.equal(click(1).defaultPrevented, true);
+  assert.equal(click(0).defaultPrevented, false, "Keyboard activation remains available.");
 });
 
 test("cancelled avatar holds stop once and do not complete a recording", async (t) => {
