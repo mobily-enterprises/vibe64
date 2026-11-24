@@ -5659,6 +5659,83 @@ test("automatic save after a completed plan runs ordinary Save once and reports 
   assert.equal(saves.length, 2);
 });
 
+// Live, 12 Nov: a connected copy's main moved under the session, and automatic save stopped at "jskit-ai has newer
+// saved work. Update this session before saving its work." with the plan finished and nothing in the way.
+test("automatic save runs the ordinary Update when Save needs it, then saves, and stops only when that Update does", async () => {
+  const destination = { mode: "managed_git", repository: "test-project", branch: "main" };
+  const session = { agentRuns: [], sessionId: "session-1", status: "active", metadata: { assistant_routing: JSON.stringify({ mode: "senior", ...defaultSteps }) } };
+  const tasks = new Map();
+  const runtime = {
+    async getSession() { return session; },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    async listSessionSummaries() { return [session]; },
+    store: {
+      async listSessionConversations() { return []; },
+      async readBackgroundTask(_sessionId, taskId) { return tasks.get(taskId) || null; },
+      async writeBackgroundTaskEvent(_sessionId, taskId, input) {
+        const task = { ...(input.reset ? {} : tasks.get(taskId)), ...input.patch, id: taskId };
+        tasks.set(taskId, task);
+        return task;
+      },
+      async writeMetadataValue(_sessionId, name, value) { session.metadata[name] = value; }
+    }
+  };
+  let behind = true;
+  let conflict = null;
+  const calls = [];
+  let planCompleted;
+  createService({
+    project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
+      async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
+    },
+    async publishSessionChanged() {},
+    setupRunner: { async start() { return { state: { status: "ready" }, completion: Promise.resolve() }; } },
+    terminals: {
+      setPlanCompleted(handler) { planCompleted = handler; },
+      async inspectSessionWork() { return { unsaved: true, destination, canonicalCommit: "main-2" }; },
+      async saveSessionWork(_sessionId, input) {
+        calls.push("save");
+        await input.onRepositoryWriteAcquired();
+        if (behind) {
+          throw Object.assign(new Error("jskit-ai has newer saved work. Update this session before saving its work."),
+            { code: "vibe64_session_save_update_required", details: { connectedRepository: "jskit-ai", updateRequired: true } });
+        }
+        return { reconciled: true, saveCommit: "saved-1", status: "saved" };
+      },
+      async updateSessionWork(_sessionId, input) {
+        calls.push("update");
+        await input.onRepositoryWriteAcquired();
+        if (conflict) throw conflict;
+        behind = false;
+        return { canonicalCommit: "main-2", connected: [{ name: "jskit-ai", status: "updated", line: "[Connected] jskit-ai updated." }],
+          reconciled: true, status: "updated", updatedPathCount: 0, updatedPaths: [] };
+      }
+    }
+  });
+  const owner = { role: "owner", username: "owner" };
+  assert.equal(await planCompleted("session-1", { submittedBy: owner }), "Updated this session onto the newer saved work, then saved automatically.");
+  assert.deepEqual(calls, ["save", "update", "save"], "the ordinary Update, then the ordinary Save");
+  assert.equal(tasks.get("update-session").status, "ready", "the Update is the session's own, recorded in its task");
+
+  // A real conflict stops it, saying so in words, with the one button that leads on.
+  behind = true; calls.length = 0;
+  conflict = Object.assign(new Error("2 files conflict in jskit-ai."), { code: "vibe64_connected_copy_update_failed", details: {
+    connectedRepository: "jskit-ai", conflictPaths: ["packages/a.js", "packages/b.js"],
+    conflictRecovery: { connectedRepository: "jskit-ai", conflictPaths: ["packages/a.js", "packages/b.js"], reviewId: "review-1" } } });
+  assert.equal(await planCompleted("session-1", { submittedBy: owner }),
+    "Automatic save didn't run: this session needed an Update first, and it conflicts with the newer saved work in jskit-ai: " +
+    "packages/a.js, packages/b.js. Nothing was saved. Choose Fix it with AI on the Update notice: it repairs that and runs Update. Then choose Save.");
+  assert.deepEqual(calls, ["save", "update"], "nothing is saved past a conflict");
+  // Any other Update stop is said in its own words, with the same button.
+  calls.length = 0;
+  conflict = Object.assign(new Error("Files changed while Update ran."), { code: "vibe64_session_update_worktree_changed" });
+  assert.match(await planCompleted("session-1", { submittedBy: owner }),
+    /^Automatic save didn't run: this session needed an Update first, and Update stopped: Files changed while Update ran\. Nothing was saved\. Choose Fix it with AI on the Update notice/u);
+  assert.deepEqual(calls, ["save", "update"]);
+});
+
 test("the session's AI saves with the Save automatic save runs, to the destination it has now, and no note steers its turn", async () => {
   let unsaved = true;
   const saves = [];
