@@ -90,7 +90,10 @@ or the person.
 One preparation runs at a time in a session, whichever starts it. A Preview
 start in another tab, or the end of an assistant turn, waits for the running
 preparation instead of starting another; a session that is already prepared
-starts its Preview without waiting for anything else.
+starts its Preview without waiting for anything else. While a Preview start
+waits for preparation, Preview's status, **Open**, the identity switch and
+**Stop** still answer at once; a **Stop** then means Preview does not start
+when preparation ends, and **Start preview** runs it again.
 
 A Main chat message sent while the workspace is being prepared (after a
 restart, for example) is kept and sent by itself once preparation ends: it

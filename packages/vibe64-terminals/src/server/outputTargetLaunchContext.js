@@ -83,30 +83,37 @@ async function readLaunchContext(project, sessionId) {
 }
 
 /**
- * Reads what a launch starts from: the session after its workspace
- * preparation has completed, with the project environment prepared.
+ * Reads what a launch starts from: the session once its workspace is
+ * prepared, with the project environment prepared. A preparation still
+ * running is not awaited here: the launch gets `{ preparing }`, its
+ * completion, and waits for it outside the session's launch lock, then
+ * reads again with `prepared`, which asks for no preparation.
  * @param {ProjectService} project
  * @param {string} sessionId
  * @param {object} options
  * @param {(sessionId: string, context: object) => Promise<object>} options.ensureWorkspacePrepared
  * @param {boolean} options.rerunFailedSetup
+ * @param {boolean} [options.prepared] the launch already waited for the preparation it was given
+ * @returns {Promise<{ context: object } | { preparing: Promise<unknown> }>}
  */
-async function readPreparedLaunchContext(project, sessionId, { ensureWorkspacePrepared, rerunFailedSetup }) {
+async function readPreparedLaunchContext(project, sessionId, { ensureWorkspacePrepared, rerunFailedSetup, prepared = false }) {
   const runtime = await project.createRuntime();
   const session = await runtime.getSession(sessionId);
   assertSourceInspectionHealthy(session.sourceInspection);
-  const setup = await ensureWorkspacePrepared(sessionId, {
-    rerunFailedSetup,
-    runtime,
-    session
-  });
-  if (setup?.ok === false) {
-    throw Object.assign(new Error(setup.error || "Workspace preparation could not start."), setup);
+  if (!prepared) {
+    const setup = await ensureWorkspacePrepared(sessionId, {
+      rerunFailedSetup,
+      runtime,
+      session
+    });
+    if (setup?.ok === false) {
+      throw Object.assign(new Error(setup.error || "Workspace preparation could not start."), setup);
+    }
+    if (setup?.completion) {
+      return { preparing: setup.completion };
+    }
   }
-  if (setup?.completion) {
-    await setup.completion;
-  }
-  return launchContextFor(project, runtime, await runtime.getSession(sessionId), true);
+  return { context: launchContextFor(project, runtime, await runtime.getSession(sessionId), true) };
 }
 
 async function listOutputTargets(context, options = {}) {
