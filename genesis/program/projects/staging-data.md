@@ -43,10 +43,14 @@ The section's own entries come first, each at most once:
 - `- Mode: <phrase>` (always), exactly one of `own copy, empty`,
   `own copy, full`, `own copy, sampled`, `shared with production` and
   `shared with production, structure frozen`.
-- `` - Source: dump written by command with `runtime` in `workdir`: `command` ... ``
+- `- Source: production backup` says the host takes production's dump itself,
+  from the backups of the database it runs production with, written exactly so:
+  any other words are refused, naming both forms. Or
+  `` - Source: dump written by command with `runtime` in `workdir`: `command` ... ``
   is the Integration setup command shape, read by the same helpers. Its
   arguments pass `{dump}` exactly once, as an argument of its own, and no other
-  `{name}` placeholder. Required for a full or sampled copy, refused otherwise.
+  `{name}` placeholder. One Source, of either form, is required for a full or
+  sampled copy, and refused otherwise.
 - `` - Unlisted tables: all up to `n` rows `` (1 to 10000000). Required for a
   sampled copy, refused otherwise.
 
@@ -79,8 +83,8 @@ The inspection returns `contract`, `status` (`ready`, `unconfigured` or
 `blocked`), `stackHash`, `recipeHash`, `source`, `components` and
 `diagnostics`, with the recipe: `database` (`""` unless ready), `engine` (the
 named resource's kind, `mysql` or `postgresql`, or `""`), `mode` (`empty`,
-`full`, `sampled`, `shared` or `frozen`), `dumpSource` (`{ argv, workdir,
-runtimeRequirements }` or `null`), `unlistedTables` (`{ maxRows }` or `null`),
+`full`, `sampled`, `shared` or `frozen`), `dumpSource` (`{ productionBackup:
+true }`, `{ argv, workdir, runtimeRequirements }` or `null`), `unlistedTables` (`{ maxRows }` or `null`),
 `tables` (`{ table, rule: "all" | "none" }` or `{ table, rule: "recent", by,
 days, rows }`, a missing number `null`), `links` (`{ from: { table, column },
 to: { table, column } }`), `keepTogether` (`{ parent, child, column }`) and

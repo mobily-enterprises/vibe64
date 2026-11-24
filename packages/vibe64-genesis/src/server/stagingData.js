@@ -1,6 +1,7 @@
 // The `## Staging data` Stack section: what Staging's database holds. Staging has a database of its own (empty, or
-// built from a dump of production's that the application's own command writes, whole or sampled by a recipe), or it
-// uses production's database itself. Without the section Staging has its own empty database.
+// built from a dump of production's, whole or sampled by a recipe, that the application's own command writes or the
+// host takes from the backups of the database it runs production with), or it uses production's database itself.
+// Without the section Staging has its own empty database.
 import {
   STACK_RESOURCE_ID,
   assertMatchingStackInspections,
@@ -29,7 +30,7 @@ const STAGING_DATA_MODES = Object.freeze({
   "shared with production, structure frozen": "frozen"
 });
 const MODE_PHRASES = Object.freeze(Object.fromEntries(Object.entries(STAGING_DATA_MODES).map(([phrase, mode]) => [mode, phrase])));
-// What each mode needs beyond Database and Mode, and refuses otherwise: the command that writes production's dump, the
+// What each mode needs beyond Database and Mode, and refuses otherwise: where production's dump comes from (Source), the
 // size an unlisted table may have, the sampling parts (### Tables, ### Links, ### Keep together) and ### Contacts.
 const MODE_NEEDS = Object.freeze({
   empty: Object.freeze({ source: false, unlisted: false, sampling: false, contacts: false }),
@@ -67,12 +68,17 @@ const NOTHING = "- Nothing.";
 
 const MODE_FORMS = Object.freeze(Object.keys(STAGING_DATA_MODES).map((phrase) => `- Mode: ${phrase}`));
 const SOURCE_FORM = "- Source: dump written by command with `runtime` in `workdir`: `command` `argument`... `{dump}`";
+// The host takes production's dump itself, from the backups of the database it runs production with: no command of the
+// application's, and nothing of production's in Staging's settings.
+const PRODUCTION_BACKUP = "production backup";
+const BACKUP_SOURCE_FORM = `- Source: ${PRODUCTION_BACKUP}`;
+const SOURCE_FORMS = Object.freeze([BACKUP_SOURCE_FORM, SOURCE_FORM]);
 const UNLISTED_FORM = "- Unlisted tables: all up to `n` rows";
 const STAGING_DATA_ENTRY_FORMS = Object.freeze({
   section: Object.freeze([
     "- Database: `resource`",
     ...MODE_FORMS,
-    SOURCE_FORM,
+    ...SOURCE_FORMS,
     UNLISTED_FORM
   ]),
   tables: Object.freeze([
@@ -133,8 +139,12 @@ function checkDumpArgument(read, argv, line) {
 }
 
 function readSource(read, value, line) {
+  if (value === PRODUCTION_BACKUP) {
+    read.model.dumpSource = { productionBackup: true };
+    return;
+  }
   const entry = value.match(SOURCE_VALUE);
-  if (!entry) read.fail(`Staging data Source must use: ${SOURCE_FORM}`, line);
+  if (!entry) read.fail(`Staging data Source must use one of: ${SOURCE_FORMS.join("; ")}.`, line);
   const argv = processArguments(entry[3], CODE, read.location, "Staging data Source command", line);
   checkDumpArgument(read, argv, line);
   read.model.dumpSource = {
@@ -296,7 +306,9 @@ function readHeading(read, source, line) {
 // at its own line.
 function checkSourceAndUnlisted(read, phrase, needs, reason) {
   const { at, fail } = read;
-  if (needs.source && !at.source) fail(`Mode ${phrase} builds Staging's own database from a dump of production's: add ${SOURCE_FORM}`, at.mode);
+  if (needs.source && !at.source) {
+    fail(`Mode ${phrase} builds Staging's own database from a dump of production's: add ${SOURCE_FORMS.join(" or ")}`, at.mode);
+  }
   if (!needs.source && at.source) fail(`Mode ${phrase} has no Source: ${reason}.`, at.source);
   if (needs.unlisted && !at.unlisted) {
     fail(`Mode ${phrase} says how many rows a table it doesn't list may have: add ${UNLISTED_FORM}`, at.mode);

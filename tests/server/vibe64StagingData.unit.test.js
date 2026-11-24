@@ -21,6 +21,8 @@ import { runAgentSpecCli } from "../../server/lib/agentSpecCli.js";
 // The `## Staging data` section: what Staging's database holds, and for a sampled own copy the recipe a host builds
 // it by, from a dump of production's that the application's own command writes.
 const SOURCE = "- Source: dump written by command with `nodejs` in `.`: `node` `scripts/production-dump.js` `{dump}`";
+// The host takes production's dump from the backups of the database it runs production with.
+const BACKUP = "- Source: production backup";
 const SAMPLED = Object.freeze([
   "- Database: `database`",
   "- Mode: own copy, sampled",
@@ -171,7 +173,7 @@ test("a mode, its Source and its Unlisted tables are refused where the mode does
   parseRefused(["- Database: `database`", "- Mode: own copy, empty", SOURCE], 3, /Mode own copy, empty has no Source: Staging's own database starts empty\./u);
   parseRefused(changed({ 3: [SOURCE, "- Unlisted tables: all up to `5` rows"] }, FULL), 4, /Mode own copy, full has no Unlisted tables: a whole copy keeps every row/u);
   // Missing entries are named at the Mode line.
-  parseRefused(changed({ [AT.source]: null }), AT.mode, /Mode own copy, sampled builds Staging's own database from a dump of production's: add - Source: dump written by command with `runtime` in `workdir`: `command` `argument`\.\.\. `\{dump\}`/u);
+  parseRefused(changed({ [AT.source]: null }), AT.mode, /Mode own copy, sampled builds Staging's own database from a dump of production's: add - Source: production backup or - Source: dump written by command with `runtime` in `workdir`: `command` `argument`\.\.\. `\{dump\}`/u);
   parseRefused(changed({ 3: null }, FULL), 2, /Mode own copy, full builds Staging's own database from a dump/u);
   parseRefused(changed({ [AT.unlisted]: null }), AT.mode, /Mode own copy, sampled says how many rows a table it doesn't list may have: add - Unlisted tables: all up to `n` rows/u);
   parseRefused(["- Mode: own copy, empty"], 1, /needs `- Database: `resource``/u);
@@ -190,10 +192,38 @@ test("a Source passes `{dump}` once, as an argument of its own, and runs a safe 
   source("`node` `dump.js` `{dump}` `--name={host}`")(/Source has the placeholder `\{host\}`/u);
   source("`/usr/bin/node` `dump.js` `{dump}`")(/Staging data Source command must begin with a safe executable/u);
   source("node dump.js {dump}")(/Staging data Source command must contain separate non-empty backticked values/u);
-  parseRefused(changed({ [AT.source]: "- Source: `node` `dump.js` `{dump}`" }), AT.source, /^Staging data Source must use: - Source: dump written by command with `runtime` in `workdir`: /u);
+  parseRefused(changed({ [AT.source]: "- Source: `node` `dump.js` `{dump}`" }), AT.source, /^Staging data Source must use one of: - Source: production backup; - Source: dump written by command with `runtime` in `workdir`: /u);
   parseRefused(changed({ [AT.source]: "- Source: dump written by command with `nodejs`: `node` `dump.js` `{dump}`" }), AT.source, /Staging data Source must use/u);
   parseRefused(changed({ [AT.source]: SOURCE.replace("in `.`", "in `../elsewhere`") }), AT.source, /Staging data Source workdir must be a canonical project-relative path/u);
   parseRefused(changed({ [AT.source]: SOURCE.replace("`nodejs`", "`Node JS`") }), AT.source, /Staging data Source runtimes must use lowercase technology ids/u);
+});
+
+test("a full or sampled copy may take production's dump from the backups of the database the host runs production with, written exactly", () => {
+  const base = { dumpSource: null, unlistedTables: null, tables: [], links: [], keepTogether: [], contacts: [] };
+  assert.deepEqual(STAGING_DATA_ENTRY_FORMS.section.filter((form) => form.startsWith("- Source: ")), [
+    BACKUP,
+    "- Source: dump written by command with `runtime` in `workdir`: `command` `argument`... `{dump}`"
+  ]);
+  assert.deepEqual(parseVibe64StagingDataLines(changed({ 3: BACKUP }, FULL)), { ...base, database: "database", mode: "full", dumpSource: { productionBackup: true } });
+  assert.deepEqual(parseVibe64StagingDataLines(changed({ [AT.source]: BACKUP })), { ...SAMPLED_MODEL, dumpSource: { productionBackup: true } });
+  // Anywhere among the section's own entries, as a command Source may be.
+  assert.deepEqual(parseVibe64StagingDataLines([BACKUP, ...changed({ 3: null }, FULL)]).dumpSource, { productionBackup: true });
+  // Only a copy has a Source of either form.
+  for (const phrase of ["own copy, empty", "shared with production", "shared with production, structure frozen"]) {
+    parseRefused(["- Database: `database`", `- Mode: ${phrase}`, BACKUP], 3, new RegExp(`^Mode ${phrase} has no Source: `, "u"));
+  }
+  // One Source: the backup and a command are not both taken.
+  parseRefused(changed({ 3: [SOURCE, BACKUP] }, FULL), 4, /^Staging data has a second Source entry; the first is on line 3\./u);
+  // Exactly the two words: anything more, less or other is refused, naming both forms.
+  for (const wrong of ["production backup now", "production backups", "production backup.", "Production backup", "`production backup`",
+    "production  backup", "the production backup", "production backup of `database`", "backup"]) {
+    parseRefused(changed({ 3: `- Source: ${wrong}` }, FULL), 3,
+      /^Staging data Source must use one of: - Source: production backup; - Source: dump written by command with `runtime` in `workdir`: `command` `argument`\.\.\. `\{dump\}`\. /u);
+  }
+  // The inspection carries it, as a recipe of its own.
+  const ready = inspect(changed({ 3: BACKUP }, FULL), [{ resource: { id: "database", kind: "postgresql" } }]);
+  assert.deepEqual([ready.status, ready.engine, ready.dumpSource], ["ready", "postgresql", { productionBackup: true }]);
+  assert.notEqual(ready.recipeHash, inspect(FULL, [{ resource: { id: "database", kind: "postgresql" } }]).recipeHash);
 });
 
 test("table rules, numbers and names are exact, and each table is named once", () => {
@@ -376,6 +406,7 @@ test("the recipe hash is the recipe's: stable across layout and location, and ch
     changed({ [AT.mode]: "- Mode: own copy, full", [AT.unlisted]: null, [AT.tables]: null, 7: null, 8: null, 9: null, 10: null, 11: null, 12: null, [AT.links]: null, 16: null, [AT.keepTogether]: null, 20: null }),
     changed({ [AT.source]: SOURCE.replace("`{dump}`", "`--gzip` `{dump}`") }),
     changed({ [AT.source]: SOURCE.replace("in `.`", "in `tools`") }),
+    changed({ [AT.source]: BACKUP }),
     changed({ [AT.unlisted]: "- Unlisted tables: all up to `10001` rows" }),
     changed({ [AT.tables + 2]: "- `countries`: none" }),
     changed({ [AT.tables + 3]: "- `jobs`: recent by `created_at`, last `181` days" }),

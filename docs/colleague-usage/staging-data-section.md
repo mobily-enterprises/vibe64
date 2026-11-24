@@ -62,10 +62,29 @@ a SQLite database, Redis or a files bucket is refused.
 A host never copies production's data into Staging over a live connection, and
 Staging never connects to production's database in an own copy.
 
-## The dump command
+## Where production's dump comes from
 
-A full or sampled copy is built from a dump of production's database that the
-app's own command writes. Name it in a `- Source:` line:
+A full or sampled copy is built from a dump of production's database. A
+`- Source:` line says where the dump comes from, in one of two ways.
+
+### Production's backups
+
+When the host runs production's database itself, it can take the dump from
+that database's backups:
+
+```markdown
+- Source: production backup
+```
+
+Write it exactly so. The app needs no dump command, and Staging's settings
+need nothing of production's. A host that doesn't run production's database,
+or can't take its dump, refuses to build the copy and says what to change.
+Your host's guide says when it can.
+
+### The dump command
+
+Otherwise the app's own command writes the dump. Name it in a `- Source:`
+line:
 
 ```markdown
 - Source: dump written by command with `nodejs` in `.`: `node` `scripts/production-dump.js` `{dump}`
@@ -94,7 +113,8 @@ app's own command writes. Name it in a `- Source:` line:
   available where it runs: name them in the Deployment's Packages, as for any
   program a Deployment step runs.
 
-An empty copy and the shared modes have no Source; the section refuses one.
+A copy has one Source, of either kind. An empty copy and the shared modes have
+no Source; the section refuses one.
 
 ## A sampled copy's recipe
 
@@ -227,7 +247,10 @@ it, or fix that line yourself. The most common ones:
 - **needs a Mode** or **Unknown Staging data Mode**: write one of the five
   phrases exactly.
 - **builds Staging's own database from a dump of production's: add - Source:
-  ...**: a full or sampled copy needs its dump command.
+  ...**: a full or sampled copy needs a Source: `production backup` or its
+  dump command.
+- **Source must use one of**: the Source line is neither form. Write
+  `- Source: production backup` exactly, or the dump command's form.
 - **must pass `{dump}`**, **passes `{dump}` inside** or **has the placeholder**:
   pass `{dump}` once, as an argument of its own.
 - **has no Source**, **has no Unlisted tables** or **has no `### Tables`**: the
