@@ -2471,7 +2471,12 @@ Continue (retry) reads the next pass from the plan again. After the last pass,
 routing completes the plan (`finishPlan`), archives it, records the base and,
 while `autoSave` is on, writes the save notice and calls the Sessions-owned
 completion handler after its lock, which runs the ordinary Save once, connected
-copies included; routing writes its short result note to chat.
+copies included; routing writes its short result note to chat. When that Save
+answers `vibe64_session_save_update_required` (newer saved work under the
+session or a connected copy), the handler (`saveAfterCompletedPlan`) runs the
+ordinary `updateSessionWork`, task and publications included, then Save again;
+it stops only when that Update fails, its note naming the conflict's repository
+and files (or the Update's own message) and the Update notice's Fix it with AI.
 
 In plan-running chats (Main chat with a chat mode, not a lesson, Fix it or
 generated work), a pass the person asks for joins the plan: `planPassRequest`

@@ -144,9 +144,15 @@ agent saves once the other chat has finished.
 Save adds a notice as it starts, **Save started automatically (Chat settings:
 Automatically save changes)**, then its result: **Saved automatically.**,
 **Automatic save: nothing new to save.**, or **Automatic save didn't run:**
-followed by Save's own reason (for example an Update is needed, a conflict, a
-required pull request or an unavailable repository). Automatic save never runs
-**Update** for you and never runs while the agent is working. A stage the agent
+followed by Save's own reason (for example a conflict, a required pull request
+or an unavailable repository). When Save needs newer saved work first, in the
+session or a connected repository, automatic save runs the ordinary **Update
+this session (rebase)** itself and then saves, ending with **Updated this
+session onto the newer saved work, then saved automatically.** It stops only
+when that Update does, for example on a conflict: the notice names the
+repository and files, saves nothing, and says to choose **Fix it with AI** on
+the Update notice, which repairs it and runs Update, then **Save**. Automatic
+save never runs while the agent is working. A stage the agent
 saves itself adds no automatic-save notice: the session shows **Saving work**
 while it runs, as for any Save, and the agent's reply says what it saved. In a session with
 connected repositories it saves their copies too, as **Save** does. The notices

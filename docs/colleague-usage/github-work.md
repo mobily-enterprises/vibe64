@@ -51,6 +51,11 @@ piece of work's last turn ends: for a plan, once the last pass in its Passes
 section is done (see [Passes](passes.md)).
 Its progress, result and recovery are the ordinary Save's; when it cannot save,
 chat shows **Automatic save didn't run:** with the reason, and nothing changes.
+When Save needs newer saved work first, automatic save runs the ordinary
+**Update this session (rebase)** itself, then Save, and stops only when that
+Update does, such as on a conflict, naming it and **Fix it with AI** on the
+Update notice (see [Choose what happens once work is
+finished](chat-settings.md#what-the-chat-shows)).
 While it is on, the main chat's AI also runs this same Save itself at each
 finished and checked stage of longer work; see [The session's AI saves its
 finished stages](#the-sessions-ai-saves-its-finished-stages) and [Choose what

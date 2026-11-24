@@ -16,6 +16,26 @@ import { createSessionWorkRecovery } from "./sessionWorkRecovery.js";
 import { createSessionWorkspaceSetup } from "./sessionWorkspaceSetup.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
+const LISTED_CONFLICTS = 5;
+
+/**
+ * Why automatic save stopped at the Update it ran first, in words, with the one button that leads on: the Update
+ * notice's Fix it with AI, which repairs a conflict, or any other Update problem, and then runs Update itself.
+ * @param {{ error?: string, details?: { conflictPaths?: string[], conflictRecovery?: object | null, connectedRepository?: string } }} update
+ */
+function automaticUpdateStopped(update) {
+  const details = update.details || {};
+  const recovery = details.conflictRecovery || null;
+  const repository = normalizeText(details.connectedRepository || recovery?.connectedRepository);
+  const files = recovery?.conflictPaths || details.conflictPaths || [];
+  const listed = files.slice(0, LISTED_CONFLICTS).join(", ") + (files.length > LISTED_CONFLICTS ? ` and ${files.length - LISTED_CONFLICTS} more` : "");
+  const stopped = recovery
+    ? `it conflicts with the newer saved work${repository ? ` in ${repository}` : ""}${listed ? `: ${listed}` : ""}.`
+    : `Update stopped: ${(normalizeText(update.error) || "it did not finish").replace(/[.\s]+$/u, "")}.`;
+  return `Automatic save didn't run: this session needed an Update first, and ${stopped} Nothing was saved. ` +
+    "Choose Fix it with AI on the Update notice: it repairs that and runs Update. Then choose Save.";
+}
+
 /** @typedef {import("./types.js").SessionPresenceService} SessionPresenceService */
 /** @typedef {import("@local/vibe64-project/server/types").PublishProjectChanged} PublishProjectChanged */
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
@@ -148,7 +168,9 @@ function createService({
 
   /**
    * Automatic save: once finished work's last turn ends, Main chat's autoSave
-   * preference runs the ordinary Save, in any chat mode. Returns the short chat note.
+   * preference runs the ordinary Save, in any chat mode. When Save needs the
+   * newer saved work first, it runs the ordinary Update, then Save again; it
+   * stops only when that Update does. Returns the short chat note.
    * @param {string} sessionId
    * @param {{ submittedBy?: object | null }} details
    */
@@ -157,8 +179,15 @@ function createService({
     const session = await runtime.getSessionWithoutSource(sessionId);
     const preferences = assistantRoutingFromMetadata(session.metadata);
     if (!preferences?.autoSave) return "";
-    const saved = await work.saveToCurrentDestination(sessionId, { vibe64User: details.submittedBy });
-    if (saved?.ok !== false) return "Saved automatically.";
+    const input = { vibe64User: details.submittedBy };
+    let saved = await work.saveToCurrentDestination(sessionId, input);
+    const updateFirst = saved?.ok === false && saved.code === "vibe64_session_save_update_required";
+    if (updateFirst) {
+      const updated = await work.updateSessionWork(sessionId, input);
+      if (updated?.ok === false) return automaticUpdateStopped(updated);
+      saved = await work.saveToCurrentDestination(sessionId, input);
+    }
+    if (saved?.ok !== false) return updateFirst ? "Updated this session onto the newer saved work, then saved automatically." : "Saved automatically.";
     return saved.code === "vibe64_session_save_no_changes"
       ? "Automatic save: nothing new to save."
       : `Automatic save didn't run: ${normalizeText(saved.error) || "Save was refused."}`;
