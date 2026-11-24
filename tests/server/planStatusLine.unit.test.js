@@ -33,7 +33,11 @@ test("the chat's status line says where the plan is, or that it needs the person
   const waiting = (fields) => ({ status: "waiting", stage: "implementation", ...fields });
   assert.equal(workPlanStatusLine(implementing), "Plan: implementing item 2 of 3, Replies join their thread");
   assert.equal(workPlanStatusLine(implementing, { request: working }), "Plan: implementing item 2 of 3, Replies join their thread");
-  assert.equal(workPlanStatusLine({ step: "review" }, { request: { status: "complete", stage: "review" } }), "Plan: Senior review");
+  assert.equal(workPlanStatusLine({ step: "review" }, { request: { status: "working", stage: "review" } }), "Plan: Senior review");
+  // Every item built and nothing running its review (a Junior chat's plan, say): it waits for the person to ask Senior.
+  for (const request of [{ status: "complete", stage: "review" }, { status: "complete", stage: "implementation", mode: "junior" }, null]) {
+    assert.equal(workPlanStatusLine({ step: "review" }, { request }), "Plan: ready for Senior review, ask Senior to start it", JSON.stringify(request));
+  }
   assert.equal(workPlanStatusLine(workPlanStep(plan(["- [x] One thread per contact"], passes))), "Plan: pass Security (2 of 3)");
   assert.equal(workPlanStatusLine({ step: "pass", item: 1, items: 1, title: "Visual identity" }), "Plan: pass Visual identity (1 of 1)");
   // Questions the chat shows, or a request waiting for the answer, need the person, whatever else waits.

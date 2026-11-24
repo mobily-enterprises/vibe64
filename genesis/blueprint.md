@@ -753,7 +753,8 @@ the plan and its Progress automatically move together to History. A plan without
 passes is completed by Senior's review. Chat links to that session's plan
 history. While a plan is open, one status line above the message box says where
 it is, read from the plan itself: implementing item 2 of 6 and its title, Senior
-review, a pass and its place among the plan's passes, needs you with the number
+review (or ready for it, asking the person to ask Senior, when nothing runs it),
+a pass and its place among the plan's passes, needs you with the number
 of questions, paused for Continue, ready for Implement plan, or completed. A
 plan behind its work never looks current: the plan says when the AI last brought
 it up to date and how many of the session's files changed since ("Updated 47 min
