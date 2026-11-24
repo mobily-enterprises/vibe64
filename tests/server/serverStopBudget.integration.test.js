@@ -147,7 +147,8 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
   assert.ok(stopMs < STOP_BUDGET_MS, `the editor stopped ${stopMs} ms after SIGTERM, not within ${STOP_BUDGET_MS} ms: ${report}`);
   assert.deepEqual([code, signal], [0, null], `a stop within its budget is a clean exit: ${report}`);
   assert.ok(refusedAfterMs < 300, `new connections are refused at once (${refusedAfterMs} ms): ${report}`);
-  // A poll start that reached a process just before SIGTERM writes its line a little after; none starts after it.
+  // Each poll's line carries the time its process began: a busy host can take a while to write it, but none may begin
+  // once the stop has (SIGTERM's delivery to the server takes a moment of the slack).
   const ranAfterStop = events.filter(({ event, at }) => event === "poll-ran" && at > stopAt + 250);
   assert.deepEqual(ranAfterStop, [], `no command starts once the stop has begun: ${report}`);
   assert.ok(events.some(({ event, detail }) => event === "poll-refused" && detail === "vibe64_server_stopping"),

@@ -145,6 +145,13 @@ async function runLocalVibe64Command(request, options = {}) {
   });
 }
 
+function stoppingResult(request) {
+  return commandErrorResult("Vibe64 is stopping, so this command did not start.", VIBE64_SERVER_STOPPING_CODE, {
+    execution: request.execution,
+    retryable: true
+  });
+}
+
 async function runVibe64Command(input = {}) {
   let request = null;
   try {
@@ -153,12 +160,7 @@ async function runVibe64Command(input = {}) {
       return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", { execution: request.execution });
     }
     // Once the server's stop has begun nothing new starts: a command that waits for the next server is started by it.
-    if (serverStopBegun()) {
-      return commandErrorResult("Vibe64 is stopping, so this command did not start.", VIBE64_SERVER_STOPPING_CODE, {
-        execution: request.execution,
-        retryable: true
-      });
-    }
+    if (serverStopBegun()) return stoppingResult(request);
     const actor = await resolveVibe64CommandActor(request);
     const baseEnv = request.inheritProcessEnv
       ? {
@@ -231,6 +233,8 @@ async function runVibe64Command(input = {}) {
         ...localContext
       }
     );
+    // Resolving a command's actor and Env takes a while on a busy host: a stop that began meanwhile still holds.
+    if (serverStopBegun()) return stoppingResult(request);
     if (provider) {
       return await provider.runCommand(request, {
         actor,
