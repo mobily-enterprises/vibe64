@@ -76,7 +76,9 @@ test("a turn Vibe64 resumes after a restart runs Claude's application tools as t
     await h.routeAsSenior();
     const sent = await h.sendAsPerson({ messageId: "long-request", message: "Keep working on the report, using APP-TOOLS" });
     assert.notEqual(sent.ok, false, JSON.stringify(sent));
-    await h.waitFor(() => h.turnActive(), "Claude works on the turn");
+    // A send can answer before its delivery ends (it is then held): the restart comes once Claude works on the
+    // delivered turn. A restart during the delivery is assistantRoutingTurnResume.unit.test.js's.
+    await h.waitFor(async () => await h.turnActive() && (await routing(h))?.delivery === "accepted", "Claude works on the delivered turn");
     await h.restart();
     const recovery = await h.service.recoverInterruptedTurns({ retryDelaysMs: [] });
     assert.equal(recovery.ok, true, JSON.stringify({ recovery, warnings: h.warnings }));
