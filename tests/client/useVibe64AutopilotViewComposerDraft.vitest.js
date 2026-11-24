@@ -2467,6 +2467,30 @@ describe("useVibe64AutopilotView direct chat", () => {
     await expect(updating).resolves.toEqual({ ok: true, status: "updated" });
   });
 
+  it("shows a Save that found nothing to save as a note, never a failure to fix, whether it started or was refused", async () => {
+    const message = "Nothing to save: this session has no unsaved work.";
+    const recorded = { code: "vibe64_session_save_no_changes", status: "ready",
+      events: [{ kind: "save-started", status: "running" }, { kind: "save-no-changes", message, status: "ready" }] };
+    const saveSessionWork = vi.fn(async () => ({ ...recorded, ok: true, operation: recorded }));
+    const { props, view } = await createViewWithProps({ saveSessionWork,
+      workState: { unsaved: true, updateAvailable: false, updateStatusPending: false } });
+    view.requestSaveWork();
+    await view.confirmSaveWork();
+    expect(view.saveWorkNote.value).toBe(message);
+    expect([view.saveWorkError.value, view.saveWorkFailure.value, view.saveWorkCanResolveWithAi.value]).toEqual(["", null, false]);
+
+    // Refused before it started: the same note, from the refusal's own words.
+    saveSessionWork.mockRejectedValueOnce(Object.assign(new Error("This session has no work to save."), { code: "vibe64_session_save_no_changes" }));
+    view.requestSaveWork();
+    await view.confirmSaveWork();
+    expect(view.saveWorkNote.value).toBe("This session has no work to save.");
+    expect([view.saveWorkError.value, view.saveWorkFailure.value, view.saveWorkCanResolveWithAi.value]).toEqual(["", null, false]);
+
+    props.session = { ...props.session, sessionId: "different-session" };
+    await nextTick();
+    expect(view.saveWorkNote.value).toBe("");
+  });
+
   it("treats a Save authority race as an ordinary update requirement", async () => {
     const view = await createView({
       saveSessionWork: vi.fn(async () => ({

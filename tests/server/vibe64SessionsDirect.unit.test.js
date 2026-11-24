@@ -85,6 +85,7 @@ import {
 } from "./vibe64TestHelpers.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { sessionWorkProblem } from "../../packages/vibe64-terminals/src/shared/sessionWorkProblem.js";
 
 function agentWriteLockHarness() {
   const active = new Set();
@@ -1564,6 +1565,53 @@ test("Save authority races become a ready update requirement rather than an AI f
   assert.equal(Object.hasOwn(backgroundTask, "error"), false);
   assert.equal(backgroundTask.events.at(-1).kind, "save-update-required");
   assert.equal(publications.at(-1).reason, "session-save-update-required");
+});
+
+test("a started Save that finds nothing to save records a note, not a failure the session needs help with", async () => {
+  let backgroundTask = { id: "save-work", status: "ready" };
+  const publications = [];
+  const runtime = {
+    async getSession() {
+      return { sessionId: "session-1", status: "active" };
+    },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    store: {
+      async listSessionConversations() { return []; },
+      async readBackgroundTask() { return null; },
+      async writeBackgroundTaskEvent(_sessionId, taskId, input) {
+        backgroundTask = { ...backgroundTask, ...input.patch, events: [...(backgroundTask.events || []), input.event], id: taskId };
+        return backgroundTask;
+      }
+    }
+  };
+  const service = createService({
+    project: {
+      async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
+    },
+    async publishSessionChanged(_sessionId, change) { publications.push(change); },
+    terminals: {
+      async requireAssistantAccess() { return { ok: true }; },
+      async saveSessionWork(_sessionId, input) {
+        await input.onRepositoryWriteAcquired();
+        const error = new Error("This session has no work to save.");
+        error.code = "vibe64_session_save_no_changes";
+        throw error;
+      }
+    }
+  });
+
+  const result = await service.saveSessionWork("session-1", {});
+  // Its callers (the session's AI, automatic save) still learn there was nothing to save.
+  assert.deepEqual([result.ok, result.code], [false, "vibe64_session_save_no_changes"]);
+  assert.equal(backgroundTask.status, "ready", "nothing to save is not a failed Save");
+  assert.equal(backgroundTask.code, "vibe64_session_save_no_changes");
+  assert.equal(Object.hasOwn(backgroundTask, "error"), false);
+  assert.equal(backgroundTask.events.at(-1).kind, "save-no-changes");
+  assert.equal(backgroundTask.events.at(-1).status, "ready");
+  assert.match(backgroundTask.events.at(-1).message, /^Nothing to save: this session has no unsaved work\./);
+  assert.equal(sessionWorkProblem({ operation: backgroundTask }), null, "the session's tab does not say its repository needs help");
+  assert.equal(publications.at(-1).reason, "session-save-completed");
 });
 
 test("native Save persists bounded progress and advances the session base only after reconciliation", async () => {
