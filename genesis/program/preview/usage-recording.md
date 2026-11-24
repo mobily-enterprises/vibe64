@@ -97,8 +97,9 @@ calls with the environment it resolved for the launch, and each PTY terminal's,
 so the PHP tracer's `unsetEnvironment` finds `php` on the PATH the target runs
 with (its runtime pack's first), never one the project's Env names. It runs
 nothing: it reads the folder from the wrapper itself, a regular file of at most
-1 MiB, in the two forms Nix's wrapper makers write, `setenv("PHP_INI_SCAN_DIR",
-"<folder>", 0)` and `${PHP_INI_SCAN_DIR-'<folder>'}`, and passes on only an
+1 MiB, in exactly the two forms Nix's wrapper makers write,
+`setenv("PHP_INI_SCAN_DIR", "<folder>", 0)` and the whole line
+`export PHP_INI_SCAN_DIR=${PHP_INI_SCAN_DIR-'<folder>'}`, and passes on only an
 absolute folder that exists. Any other PHP gets nothing after the trailing
 separator, so it keeps its compiled-in folder. Tracers count project
 function entries per request, run or background scope and write them to files.

@@ -284,7 +284,14 @@ test("the scan folder a Nix PHP wrapper declares is read from the wrapper, which
   assert.doesNotMatch(shell(declared), /\/nix\/store\//u);
   assert.equal(folderOf(shell(declared)), declared);
   assert.equal(fs.existsSync(ran), false, "the server ran the php on PATH");
-  assert.equal(folderOf(`${runs}PHP_INI_SCAN_DIR=\${PHP_INI_SCAN_DIR:-${declared}}\n`), declared);
+  // Only the line makeShellWrapper writes counts: the same line with `:-`, or with its folder unquoted, which no
+  // makeWrapper has written, gives nothing.
+  const quoted = `'${declared}'`;
+  for (const variant of [`:-${quoted}`, `-${declared}`, `:-${declared}`]) {
+    const near = shell(declared).replace(`-${quoted}`, () => variant);
+    assert.notEqual(near, shell(declared));
+    assert.equal(folderOf(near), "", variant);
+  }
   // makeBinaryWrapper's program, whose strings hold its setenv call (16 KB on a Nix host), reached through a link as a
   // host's /usr/local/bin/php reaches its runtime pack.
   const binary = Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1]), Buffer.alloc(16 * 1024),
