@@ -190,6 +190,47 @@ describe("Architecture client resources", () => {
     scope.stop();
   });
 
+  // The server answers a long scan as refreshing within two seconds; an answer lost on the way (a dropped connection,
+  // or the hosted edge's 502 or 504) says nothing about the scan the status follows.
+  it.each([0, 502, 504])("shows no failure for a refresh whose answer was lost with status %s while its scan ran and finished", async (code) => {
+    const scope = effectScope();
+    let graph;
+    inApp(() => scope.run(() => { graph = useVibe64SystemGraph({ sessionId: "session-1" }); }));
+    const refresh = endpointMocks.resources[2];
+    const status = endpointMocks.resources[4];
+    refresh.mutation.reset.mockImplementation(() => { refresh.saveError.value = ""; });
+    refresh.save.mockImplementation(async () => {
+      const lost = Object.assign(new Error(`Request failed with status ${code}.`), { status: code });
+      refresh.saveError.value = lost.message;
+      throw lost;
+    });
+    status.reload.mockImplementation(async () => {
+      status.data.value = { refresh: { id: "scan-2", status: "running", startedAt: Date.now(), message: "Scanning source…" } };
+    });
+    await expect(graph.refresh()).resolves.toBeNull();
+    expect(graph.refreshing.value).toBe(true);
+    expect(graph.error.value).toBe("");
+    status.data.value = { refresh: { id: "scan-2", status: "complete", startedAt: Date.now(), message: "Analysis complete." } };
+    await nextTick();
+    expect(graph.refreshing.value).toBe(false);
+    expect(graph.error.value).toBe("");
+    scope.stop();
+  });
+
+  it("keeps a lost answer's failure, in words, when no scan started", async () => {
+    const scope = effectScope();
+    let graph;
+    inApp(() => scope.run(() => { graph = useVibe64SystemGraph({ sessionId: "session-1" }); }));
+    const refresh = endpointMocks.resources[2];
+    refresh.save.mockImplementation(async () => {
+      refresh.saveError.value = "Architecture analysis could not be refreshed.";
+      throw Object.assign(new Error("Request failed with status 504."), { status: 504 });
+    });
+    await expect(graph.refresh()).resolves.toBeNull();
+    expect(graph.error.value).toBe("Architecture analysis could not be refreshed.");
+    scope.stop();
+  });
+
   it("reads status and Architecture, then refreshes synchronously", async () => {
     const scope = effectScope();
     let graph;

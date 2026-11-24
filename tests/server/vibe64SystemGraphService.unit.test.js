@@ -4,6 +4,7 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "n
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
   GENESIS_MACHINE_CITY_PATH,
@@ -648,6 +649,40 @@ test('Architecture projects hash-matched source size and declared entry files wi
   });
 });
 
+
+// A configured inspector can scan for minutes, longer than the hosted edge lets a request wait.
+test('a scan that outlasts two seconds answers that it is refreshing and goes on to its outcome in the status', async () => {
+  await withTempRoot(async root => {
+    await writeCities(root);
+    const release = Promise.withResolvers();
+    const service = createService({ logger: console,
+      project: projectServiceFor(root),
+      inspectorReader: async () => ({ status: 'unconfigured', inspectors: [] }),
+      publishSessionChanged: async () => null,
+      refresher: async () => {
+        await release.promise;
+        return { machine: machineCityFixture(), program: programCityFixture() };
+      }
+    });
+    const answer = await Promise.race([
+      service.refresh({ sessionId: 'session-1' }),
+      delay(3_000, 'still waiting', { ref: false })
+    ]);
+    assert.notEqual(answer, 'still waiting', 'The refresh waited for its scan');
+    assert.equal(answer.ok, true, JSON.stringify(answer));
+    assert.equal(answer.refreshing, true);
+    assert.equal(answer.refresh.status, 'running');
+    assert.equal((await service.refresh({ sessionId: 'session-1' })).alreadyRunning, true);
+    release.resolve();
+    let status = 'running';
+    for (let attempt = 0; attempt < 200 && status === 'running'; attempt++) {
+      await delay(10);
+      status = (await service.readRefreshStatus({ sessionId: 'session-1' })).refresh.status;
+    }
+    assert.equal(status, 'complete');
+    assert.equal((await readGenesisCity(root, 'machine')).exists, true);
+  });
+});
 
 test('scan status and notifications survive readers leaving, duplicate admission and a failed next scan', async () => {
   await withTempRoot(async root => {
