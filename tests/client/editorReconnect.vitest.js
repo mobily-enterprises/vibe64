@@ -205,6 +205,34 @@ describe("the page through an editor restart", () => {
     expect(outcome.error.message).toMatch(/can't tell whether/iu);
   });
 
+  it("keeps a write that waits for the editor within its own time limit, and never sends it after that", async () => {
+    const { client, editor, runtime } = await openPage();
+
+    editor.set("refused");
+    void client.request("/api/sessions/status").catch(() => null);
+    await vi.advanceTimersByTimeAsync(500);
+    let settled = false;
+    const write = pageAction(runtime, () => client.request("/api/presence", {
+      method: "POST",
+      body: { typing: true },
+      timeoutMs: 5_000
+    })).finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(settled).toBe(true);
+    editor.set("up");
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    const outcome = await write;
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error.message).toMatch(/wasn't done/iu);
+    expect(outcome.error.message).not.toMatch(STATUS_TEXT);
+    expect(editor.writes()).toEqual([]);
+  });
+
   it("gives a read up after about a minute, in words, and leaves no further retries to its query", async () => {
     const { client, editor, runtime } = await openPage();
 
