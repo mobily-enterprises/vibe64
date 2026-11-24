@@ -32,12 +32,13 @@ function isDirectory(folder) {
 // Nix's wrappers are small (its binary wrapper about 16 KB, its shell wrapper under 1 KB); PHP itself is megabytes and
 // is never read.
 const WRAPPER_MAX_BYTES = 1024 * 1024;
-// The folder a Nix wrapper (php.withExtensions) gives PHP_INI_SCAN_DIR only while it is unset, as its two wrapper
-// makers write it: makeBinaryWrapper's setenv("PHP_INI_SCAN_DIR", "<folder>", 0), and makeWrapper's
-// PHP_INI_SCAN_DIR=${PHP_INI_SCAN_DIR-'<folder>'}.
+// The folder a Nix wrapper (php.withExtensions) gives PHP_INI_SCAN_DIR only while it is unset, exactly as its two
+// wrapper makers write --set-default: makeBinaryWrapper's setenv("PHP_INI_SCAN_DIR", "<folder>", 0), and
+// makeShellWrapper's whole line export PHP_INI_SCAN_DIR=${PHP_INI_SCAN_DIR-'<folder>'}, single-quoted by bash's @Q
+// as every makeWrapper since --set-default (2017) writes it.
 const WRAPPER_SCAN_FOLDER = Object.freeze([
   /setenv\("PHP_INI_SCAN_DIR", "([^"\0\n]+)", 0\)/u,
-  /PHP_INI_SCAN_DIR=\$\{PHP_INI_SCAN_DIR:?-'?([^'}\0\n]+)'?\}/u
+  /^export PHP_INI_SCAN_DIR=\$\{PHP_INI_SCAN_DIR-'([^'\0\n]+)'\}$/mu
 ]);
 
 function phpOnPath(searchPath = "") {
