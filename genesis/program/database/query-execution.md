@@ -96,6 +96,17 @@ canonical chat receipt or live subscription. It is not copied into Main history.
 Session hydration clears history but retains the draft; hiding the panel does not
 cancel an admitted question. Modifier-Enter submits, while ordinary Enter adds a
 line. The same command exception remains visible without automatic resend.
+The page's question (`POST .../assistant`, `startAssistantQuestion`) carries a
+`requestId` it makes for each question and is a held request
+(`@local/vibe64-core/server/heldRequests`, keyed by session and person): it
+answers with the answer when that comes within two seconds, and otherwise
+`{ ok: true, answering: true, requestId, waitingFor }` (`session`, `assistant`,
+`session-write`, then `answering`), as the hosted edge ends a request after
+about a minute. The bounded task's command (`useVibe64DatabaseTools.js`) repeats
+it with `repeat: true` through `followHeldRequest`, also after an answer that
+never came back; a repeat joins the question or reads its answer and never asks
+again, and one this editor does not hold answers
+`vibe64_database_assistant_not_followed`. It shows one failure in words.
 
 Database Copilot begins with bounded database identity and object counts, plus
 the exact selected table attached to each user question. The current selection

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { createHeldRequests } from "@local/vibe64-core/server/heldRequests";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
@@ -20,6 +22,13 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("./types.js").SessionDatabase} SessionDatabase */
 /** @typedef {import("./types.js").SessionQueries} SessionQueries */
+
+// A question the page asked and this editor no longer holds (it restarted, or the first request never arrived): its
+// repeat asks nothing.
+const QUESTION_NOT_FOLLOWED = Object.freeze({
+  code: "vibe64_database_assistant_not_followed",
+  error: "Vibe64 restarted or lost this question while the copilot answered it. Ask it again."
+});
 
 /**
  * The database copilot's questions: one at a time per person and session, each
@@ -209,7 +218,13 @@ function createDatabaseAssistantTasks({
     return { ok: true };
   }
 
-  function askAssistant(input) {
+  /**
+   * One question, to its answer. `stage` names what it does: `session` (its database), `assistant` (the copilot's
+   * model), `session-write` (the session's turn for this person), then `answering`.
+   * @param {object} input
+   * @param {{ stage?: (name: string) => void }} [controls]
+   */
+  function askAssistant(input, { stage = doNothing } = {}) {
     const task = {
       sessionId: toText(input.sessionId),
       projectScope: currentProjectScopeKey(),
@@ -221,12 +236,16 @@ function createDatabaseAssistantTasks({
           other.projectScope === task.projectScope && other.actor === task.actor)) {
         throw databaseError("Wait for your current database question to finish.", "vibe64_database_assistant_busy");
       }
+      stage("session");
       const context = await sessionDatabase.sessionContext(input);
       task.controller.signal.throwIfAborted();
+      stage("assistant");
       const decision = await assistantDecision(context);
       if (!decision.available) throw databaseError(decision.message, decision.reasonCode);
       const runtime = await project.createRuntimeWithoutSource();
+      stage("session-write");
       const admitted = await runtime.store.runSessionExclusive(context.sessionId, `database-assistant-${task.actor}`, async () => {
+        stage("answering");
         const schema = await sessionDatabase.currentSchema(context);
         const artifact = `database/assistant-tasks/${task.actor}.json`;
         await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User, sessionStorage(runtime));
@@ -333,13 +352,30 @@ function createDatabaseAssistantTasks({
     return task.promise;
   }
 
+  const heldQuestions = createHeldRequests({
+    component: "vibe64.database_assistant",
+    heldAs: "answering",
+    logger,
+    notFollowed: QUESTION_NOT_FOLLOWED
+  });
+
   /**
-   * Aborts every running question; the result settles once they all have.
+   * The page's question (`POST .../assistant`), named by its `requestId`: an AI turn and its queries can outlast the
+   * hosted edge's minute, so it answers within two seconds, as answering while it goes on (`heldRequests`).
+   * @param {{ sessionId: string, requestId: string, repeat?: boolean, vibe64User?: object }} input
    */
-  function abortAll() {
+  function startAssistantQuestion(input) {
+    return heldQuestions.run([toText(input.sessionId), actorKey(input.vibe64User)], input,
+      (question, { stage }) => askAssistant(question, { stage }));
+  }
+
+  /**
+   * Aborts every running question; the result settles once they all have, held ones included.
+   */
+  async function abortAll() {
     const tasks = [...activeAssistants];
     for (const task of tasks) task.controller.abort();
-    return Promise.allSettled(tasks.map((task) => task.promise));
+    await Promise.allSettled([...tasks.map((task) => task.promise), heldQuestions.close()]);
   }
 
   return Object.freeze({
@@ -347,7 +383,8 @@ function createDatabaseAssistantTasks({
     closeAssistantsForSession,
     closeRenewalAssistantsForSession,
     askAssistant,
-    abortAll
+    abortAll,
+    startAssistantQuestion
   });
 }
 
