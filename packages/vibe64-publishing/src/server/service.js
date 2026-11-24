@@ -185,7 +185,7 @@ function createPublishingService({
     baseEnvironment: env,
     now
   });
-  const lanShare = createLanShare();
+  const lanShare = createLanShare({ logger });
   const repository = createProjectRepository({ readProject: () => project.readCurrentProject() });
   const writer = createSessionReleaseWriter({ project, sourceEditor });
   const projects = new Map();

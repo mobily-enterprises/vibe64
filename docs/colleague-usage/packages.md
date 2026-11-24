@@ -188,8 +188,10 @@ Package registries Vibe64 releases to:
   code your phone scans on the same Wi-Fi. Opened on an Android phone itself,
   it offers **Download** directly, with **Show a QR code for another phone**. This computer shares only that one
   APK, at an unguessable address, for 10 minutes or until you close the
-  dialog. **Download APK** saves it here instead; History offers both for
-  earlier releases.
+  dialog. If the APK is removed from this computer while it is shared, the
+  phone is told that it is no longer there instead of downloading it; release
+  again to share it. **Download APK** saves it here instead; History offers
+  both for earlier releases.
 - Phones that installed this APK must uninstall it before installing the same
   app from Google Play later (a different signing line). Since 30 September
   2026, phones in Brazil, Indonesia, Singapore and Thailand install apps only
