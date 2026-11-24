@@ -30,8 +30,12 @@ function within(promise, ms, message) {
   ]).finally(() => clearTimeout(timer));
 }
 
-/** A controller over one in-memory session whose workspace preparation runs until the test ends it. */
-function preparingWorld(t) {
+/**
+ * A controller over one in-memory session whose workspace preparation runs until the test ends it, or, `inLock`,
+ * whose start holds the launch lock in a slow step (the preparation check waiting for the assistant's write, a
+ * project database's cold start) until the test ends it.
+ */
+function preparingWorld(t, { inLock = false } = {}) {
   const sessionId = `launch-queue-${crypto.randomUUID()}`;
   const metadata = {};
   const preparation = Promise.withResolvers();
@@ -48,6 +52,10 @@ function preparingWorld(t) {
     async ensureWorkspacePrepared() {
       state.preparations += 1;
       preparing.resolve();
+      if (inLock) {
+        await preparation.promise;
+        return { completion: null };
+      }
       return { completion: preparation.promise };
     },
     project: {
@@ -177,5 +185,38 @@ test("a Preview start the page names answers within two seconds while the worksp
     const late = await start();
     assert.equal(late.code, "vibe64_preview_stopped");
     assert.equal(world.state.preparations, 1);
+    assert.equal(world.state.launched, 0);
+  });
+
+
+// The start's other steps run inside the launch lock: the preparation check (which may wait for the assistant's
+// write), the project's services (a database's cold start after a reboot), the resource admission and the spawn.
+// Stop, the outputs read and Open must not queue behind them either.
+test("while a Preview start holds the launch lock in a slow step, Stop, the outputs read and Open answer at once, and the start then stops unstarted",
+  async (t) => {
+    const world = preparingWorld(t, { inLock: true });
+    const starting = world.controller.startTerminal(world.sessionId, { outputTargetId: "app" });
+    await world.preparing;
+    const stopped = await within(world.controller.stopTerminal(world.sessionId, ""), ANSWER_MS,
+      "Stop waited behind a Preview start's slow step");
+    assert.equal(stopped.ok, true, JSON.stringify(stopped));
+    world.state.frozen = {
+      ok: false,
+      code: "vibe64_session_renewal_quiesced",
+      error: "Session renewal has frozen preview access."
+    };
+    for (const [name, read] of [
+      ["the outputs read", () => world.controller.launchStatus(world.sessionId)],
+      ["Open", () => world.controller.openOutputTarget(world.sessionId)]
+    ]) {
+      const answer = await within(read(), ANSWER_MS, `${name} waited behind a Preview start's slow step`);
+      assert.equal(answer.ok, false, `${name}: ${JSON.stringify(answer)}`);
+      assert.match(`${answer.code} ${answer.error}`, /renewal/u, name);
+    }
+    world.state.frozen = null;
+    world.finishPreparation();
+    const started = await starting;
+    assert.equal(started.ok, false, JSON.stringify(started));
+    assert.equal(started.code, "vibe64_preview_stopped");
     assert.equal(world.state.launched, 0);
   });
