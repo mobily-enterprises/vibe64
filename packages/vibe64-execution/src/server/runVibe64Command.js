@@ -46,6 +46,7 @@ import {
   vibe64ManagedExecutionRequired
 } from "./managedExecution.js";
 import { usageRecordingNodeOptions } from "./usageRecordingPreload.js";
+import { serverStopBegun, VIBE64_SERVER_STOPPING_CODE } from "./serverStop.js";
 
 /**
  * Staging environments and staging accounts exist only on a managed host,
@@ -150,6 +151,13 @@ async function runVibe64Command(input = {}) {
     request = normalizeVibe64CommandRequest(input);
     if (request.signal?.aborted) {
       return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", { execution: request.execution });
+    }
+    // Once the server's stop has begun nothing new starts: a command that waits for the next server is started by it.
+    if (serverStopBegun()) {
+      return commandErrorResult("Vibe64 is stopping, so this command did not start.", VIBE64_SERVER_STOPPING_CODE, {
+        execution: request.execution,
+        retryable: true
+      });
     }
     const actor = await resolveVibe64CommandActor(request);
     const baseEnv = request.inheritProcessEnv

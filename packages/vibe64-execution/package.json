@@ -11,6 +11,7 @@
     "./server/connectedGradleEnv": "./src/server/env/connectedGradleEnv.js",
     "./server/editorPrivateState": "./src/host/editorPrivateState.js",
     "./server/hostSettings": "./src/host/hostSettings.js",
+    "./server/serverStop": "./src/server/serverStop.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
     "./server/types": "./src/server/types.js"
   },
@@ -46,6 +47,10 @@
           {
             "subpath": "./server/hostSettings",
             "summary": "Where the privileged helper keeps the accounts, service units and sudo rules it makes, and the command its later runs start it with, as the host's helper settings name them."
+          },
+          {
+            "subpath": "./server/serverStop",
+            "summary": "The editor server's stop as its process sees it: one moment, as the stop signal handler begins, after which the command gateway starts nothing and work on its own schedule begins its own stop."
           },
           {
             "subpath": "./server/terminalSessions",
