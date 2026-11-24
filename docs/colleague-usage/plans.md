@@ -195,7 +195,8 @@ from the plan itself each time it changes:
 | The line says | When |
 |---|---|
 | **Plan: implementing item 2 of 6, Replies join their thread** | Item 2 is the first one not built yet |
-| **Plan: Senior review** | Every item is built, not every one proven yet |
+| **Plan: Senior review** | Every item is built, not every one proven yet, and Senior is reviewing it |
+| **Plan: ready for Senior review, ask Senior to start it** | Every item is built and nothing is reviewing it, as after a Junior chat: choose Senior or Auto and ask for the plan's review |
 | **Plan: pass Security (3 of 6)** | The plan is at its third pass of six |
 | **Plan: needs you (2 questions)** | The chat waits for your answers |
 | **Plan: paused, Continue to resume** | Stopped, or waiting for **Continue** |

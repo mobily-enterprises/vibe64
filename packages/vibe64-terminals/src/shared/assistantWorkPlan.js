@@ -193,7 +193,8 @@ function workPlanStepLine(step, { questions, request }) {
     return "Plan: ready, Implement plan to start";
   }
   if (waiting) return "Plan: paused, Continue to resume";
-  if (step.step === "review") return "Plan: Senior review";
+  // Senior's review runs in Auto and a Senior chat; anywhere else nothing runs it until the person asks Senior.
+  if (step.step === "review") return request?.status === "working" ? "Plan: Senior review" : "Plan: ready for Senior review, ask Senior to start it";
   if (step.step === "pass") return `Plan: pass ${step.title.replace(/ pass$/u, "")} (${step.item} of ${step.items})`;
   return `Plan: implementing item ${step.item} of ${step.items}, ${step.title}`;
 }

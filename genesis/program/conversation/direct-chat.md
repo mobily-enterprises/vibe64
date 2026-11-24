@@ -2503,7 +2503,10 @@ While a plan is open, the chat shows one status line above the composer
 (`workPlanStep`: implementing the first item not built, Senior review, the next
 pass and its place among the plan's passes, or completed), unless the chat's
 routing request waits for the person's answer or shows questions (needs you,
-with their number), waits for Implement plan, or is otherwise paused. The plan
+with their number), waits for Implement plan, or is otherwise paused. Senior
+review reads as such only while a request is working; with nothing running it
+(a Junior chat's built plan, say) the line says it is ready for Senior review and
+asks the person to ask Senior. The plan
 viewer exposes that step from its summary read, which reloads on every plan
 change. While files changed since the plan's last update the line ends with
 that count ("· 12 files changed since the plan's last update"), never with the
