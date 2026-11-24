@@ -269,19 +269,23 @@ test("native paginated conversations accept their first message and survive reco
     provider.ensureAvailable = async () => ({ runtime: {
       endpoint: `unix://${socketPath}`, runtimeDir: root, socketPath, transport: "unix"
     } });
+    const metadata = {
+      agent_identity_provider: "opencode", agent_identity_conversation_id: "ses_other",
+      agent_transport_id: "opencode_server", codex_conversation_id: threadId,
+      codex_conversation_workdir: workdir, codex_changeover_pause_goal: "yes"
+    };
     try {
       const resumed = await ensureCodexAppServerThreadForSession({
         agentSettings: { model: "gpt-5.6-luna", thinking: "low" },
         provider, workdir, observeThread() {},
+        // The bridge reads the session's stored metadata (its recorded runtime folder, the thread it still names) as
+        // the session store has it, since 7ac4b0d7b.
         runtime: { store: {
           async mutateSession(_id, operation) { return operation(); },
+          async readMetadata() { return metadata; },
           async writeMetadataValue(_id, name, value) { writes.push({ name, value }); }
         } },
-        session: { sessionId: "native-changeover", metadata: {
-          agent_identity_provider: "opencode", agent_identity_conversation_id: "ses_other",
-          agent_transport_id: "opencode_server", codex_conversation_id: threadId,
-          codex_conversation_workdir: workdir, codex_changeover_pause_goal: "yes"
-        } }
+        session: { sessionId: "native-changeover", metadata }
       });
       assert.equal(resumed.threadId, threadId);
       assert.equal(requestCount, before, "resuming for changeover must not send an acknowledgement or restart a goal");
