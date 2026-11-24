@@ -17,6 +17,7 @@ import {
   GENERATED_SECRETS_PREFIX,
   HOST_OWNED_ENVIRONMENT,
   INSTANCES_PREFIX,
+  MACHINE_SETUP_PREFIX,
   PACKAGES_PREFIX,
   RESTORE_PATHS_PREFIX,
   SANDBOX_ALLOWS_PREFIX,
@@ -30,6 +31,7 @@ import {
   generatedSecrets,
   instancesMax,
   invalid,
+  machineSetup,
   packages,
   sandboxAllowances,
   setupCode
@@ -51,6 +53,8 @@ import {
 
 // v2: a Deployment may describe several services under `### Service` headings and say how development provides a
 // resource under `### Resource`; a Deployment without them is one public service, `web`, exactly as v1 read it.
+// An optional line added within v2 (Kept between builds, Machine setup) keeps v2: a Deployment without it reads and
+// hashes as before, and a reader without it refuses the line as an unknown entry rather than skipping it.
 const VIBE64_APPLICATION_DEPLOYMENT_CONTRACT = "vibe64.application-deployment.v2";
 // What a host recorded with a release made before services: such a release reads exactly as a v2 Deployment without
 // `### Service` headings.
@@ -71,6 +75,7 @@ function emptyDeployment() {
     readiness: null,
     steps: [],
     buildCache: [],
+    machineSetup: "",
     services: [],
     deploymentResources: {}
   };
@@ -196,6 +201,12 @@ function parseDeployment(lines, deploymentPath) {
       if (seen.has("build-cache")) invalid(deploymentPath, "Duplicate Deployment Kept between builds.", line);
       seen.add("build-cache");
       result.buildCache = buildCache(source, deploymentPath, line);
+      continue;
+    }
+    if (source.startsWith(MACHINE_SETUP_PREFIX)) {
+      if (seen.has("machine-setup")) invalid(deploymentPath, "Duplicate Deployment Machine setup.", line);
+      seen.add("machine-setup");
+      result.machineSetup = machineSetup(source, deploymentPath, line);
       continue;
     }
     if (source.startsWith(INSTANCES_PREFIX)) {
@@ -329,14 +340,16 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
     instances: parsed.instances,
     readiness: parsed.readiness,
     steps: parsed.steps,
-    buildCache: parsed.buildCache
+    buildCache: parsed.buildCache,
+    machineSetup: parsed.machineSetup
   };
-  // A Deployment without services, resource lines or Kept between builds hashes as v1 did, so its recipe keeps its
-  // identity; each joins the hash when the Stack says it.
-  const { buildCache: kept, ...v1Recipe } = recipe;
+  // A Deployment without services, resource lines, Kept between builds or Machine setup hashes as v1 did, so its recipe
+  // keeps its identity; each joins the hash when the Stack says it.
+  const { buildCache: kept, machineSetup: setup, ...v1Recipe } = recipe;
   const hashed = {
     ...v1Recipe,
     ...(kept.length > 0 ? { buildCache: kept } : {}),
+    ...(setup ? { machineSetup: setup } : {}),
     ...(withServices ? { services: parsed.services } : {}),
     ...(Object.keys(parsed.deploymentResources).length > 0 ? { deploymentResources: parsed.deploymentResources } : {})
   };

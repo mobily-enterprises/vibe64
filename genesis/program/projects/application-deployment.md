@@ -19,8 +19,8 @@ named `Deployment`, validates it under the Vibe64-owned
 declared resources. The source is strict Markdown; its normalized result
 contains exact argument arrays, working directory, runtime requirements,
 release-recreation paths, generated secret names, the setup code name, sandbox
-allowances, system packages, the folders kept between builds, how many
-instances a host may run, and success condition.
+allowances, system packages, the folders kept between builds, the machine
+setup script, how many instances a host may run, and success condition.
 Invalid, absent, and competing
 declarations remain explicit states.
 
@@ -76,6 +76,25 @@ deploy engine declares it as the build's cache
 whole Deployment's, as the build is: under a `### Service` heading it is
 refused with the fix.
 
+`- Machine setup:` names, in one backtick pair, a committed script of the
+project by its path from the project's root: 1 to 16 plain names (letters,
+digits and `. _ @ + -`, none starting with `-`, never `.` or `..`) separated by
+`/`, at most 1024 characters, such as `deploy/machine-setup.sh`. A host that
+builds the application's machine runs it there once, as root, before Prepare,
+and keeps what it writes to `/opt`, `/usr` and `/etc` read-only for every
+machine built with the same script, packages and base (mobilynet's setup
+layer). It is for what Packages can't give, such as a pinned tool fetched by
+URL, and is self-contained: no Env, secret or `APP_ENV`, and no other file of
+the project. The result is `machineSetup`, `""` without the entry, and it joins
+the recipe's hash only when the Stack says it, as Kept between builds does.
+The entry is the whole Deployment's: under a `### Service` heading it is
+refused with the fix. An optional line within v2: a reader without it refuses
+it as an unknown entry rather than skipping it. Production runs it for each
+service ([deploy engine](../deploy/deploy-engine.md), The package and The
+image). A workspace's own staging service runs the app on a machine it does not
+build and runs nothing of the app's as root, so it refuses a Deployment with
+the entry before anything starts. Development never runs it.
+
 `- Instances: up to` names, in backticks, how many identical copies of the
 application a host may run at once behind one address, from 1 to 100; the
 result is `instances: { max }`, 1 without the entry. An application declares
@@ -91,8 +110,8 @@ runs, as identical instances from the one build, under a heading
 `### Service \`id\`: summary` (1 to 8; an id is a lowercase letter then up to
 15 lowercase letters, digits and hyphens). The entries above the first heading
 are shared by every service: Workdir, Runtimes, Recreate on restore, Generated
-secrets, Setup code, Packages, Kept between builds and the Prepare, Build and
-Migrate steps (one build serves them all). Under its heading each service says
+secrets, Setup code, Packages, Kept between builds, Machine setup and the
+Prepare, Build and Migrate steps (one build serves them all). Under its heading each service says
 its Exposure (`public` or `internal`, exactly one public), its Serve step, Ready when and
 Instances (`min` to `max`), and may say Needs at least (the smallest machine in
 whole vCPUs and GiB), Production (the count Production starts with), Reached

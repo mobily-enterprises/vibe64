@@ -167,6 +167,30 @@ does, its cache restored and saved by the runner's tar commands, and counts a
 local server's downloads: the same pins download nothing the second time, a
 changed pin once, and without the line every build downloads.
 
+A Deployment's `- Machine setup:` script is each declaration's `build.setup`.
+The saved commit's file is checked as mobilynet checks a release's setup script,
+from the packed archive itself (`machineSetupOf`): there, a regular file (not a
+link or a folder), 1 byte to 64 KiB of UTF-8 text without NUL. `packArchive`
+then adds it again at the archive's root, byte for byte, as
+`vibe64-machine-setup.sh` (`MACHINE_SETUP_FILE`), the plain root name
+`build.setup` takes. A refusal comes before anything is sent, naming the script
+and the fix (`vibe64_production_machine_setup_invalid`; a commit with its own
+`vibe64-machine-setup.sh` is `vibe64_production_machine_setup_taken`). mobilynet
+runs the script once per setup layer, as root in the build VM before the build's
+command, with the service's packages on `PATH`, the internet and nothing else.
+What it writes to `/opt`, `/usr` and `/etc` becomes a read-only layer under
+every machine of that service's release. A layer is the project's, base's,
+packages' and script's, so each service (whose packages may differ) builds its
+layer once and reuses it while those stay the same; a pin change in the script's
+text builds a new one. So pinned tools leave the build's output: on 25 Nov
+Mercbot Online's output was 2,452 MiB, 1,647 MiB of it tool downloads fetched,
+stored and copied onto the server at every Deploy. mobilynet refuses a
+declaration whose `build.setup` names no such root file (`422`,
+`declaration.build.setup`), so a script is never left out silently; its stand-in
+checks it the same way. `deployMachineSetup.unit.test.js` packs a commit,
+uploads each service's release to the stand-in and refuses each kind of script
+no host could run.
+
 The build script runs Prepare then Build. For the python runtime each
 declaration also requires `gcc-unwrapped^lib` and `zlib`, its build block takes
 `patchelf`, and the build's last step (`PYTHON_LIBRARY_LINES`) adds those
@@ -249,7 +273,12 @@ settings. `imageUpload()` adds `vibe64-app/Containerfile` to the archive: Nix's
 image, the packages from one nixpkgs commit the editor names (never a branch),
 the release, the shared build, then the serve script as a user of its own.
 Each image build starts empty, so the Deployment's `- Kept between builds:`
-keeps nothing there.
+keeps nothing there. A Deployment's `- Machine setup:` script, which the
+archive carries at its root, is copied in and run as root after the packages and
+before the release (`bash -e` unless its first line names its interpreter, as
+on mobilynet), so the image's layer of what it installed is reused while the
+script and the packages stay the same. Nix's image has no `apt-get`, so a script
+that needs it fails the image's build there.
 
 ## The Plan
 
@@ -1106,6 +1135,7 @@ request's signature (or the gateway's token), for the engine's tests.
 - `needsOfStack()` — the needs from the inspected Stack.
 - `servicePackages()` — one mobilynet declaration per service and the scripts.
 - `imagePackages()`, `imageUpload()` — the image per service, for container providers.
+- `packArchive()` — the saved commit packed once with Vibe64's scripts, and the machine setup script at its root.
 - `planOf()` — the Plan with verbs, drift, the quote, the quotas and its hash.
 - `deploy()` — a whole Deploy, step by step, under the lease, stopped where `deployStopOf()` allows when asked.
 - `takeOffline()`, `deleteResource()` — Take Production offline and Delete (`offline.js`).

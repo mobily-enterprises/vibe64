@@ -109,7 +109,7 @@ test("a Deployment without services is one public service, web, and otherwise re
   assert.deepEqual(parsed.deploymentResources, {});
   const v1Fields = ["version", "artifact", "workdir", "runtimeRequirements", "generatedSecrets", "setupCode", "sandboxAllowances",
     "packages", "instances", "readiness", "steps"];
-  assert.deepEqual(Object.keys(parsed), [...v1Fields, "buildCache", "services", "deploymentResources"]);
+  assert.deepEqual(Object.keys(parsed), [...v1Fields, "buildCache", "machineSetup", "services", "deploymentResources"]);
   const inspection = inspect(PLAIN, []);
   // The recipe's identity is v1's: the same fields, hashed the same way.
   assert.equal(inspection.recipeHash, stackOperationHash(Object.fromEntries(v1Fields.map((field) => [field, parsed[field]]))));
