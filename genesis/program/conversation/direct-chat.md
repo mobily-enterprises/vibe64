@@ -4755,7 +4755,7 @@ action and `ensureAgentSession` service through the same HTTP route builder.
 ## Assistant preparation answers within two seconds
 
 The page's `POST /sessions/:sessionId/agent-session` (`agent-session.prepare`)
-runs `prepareAgentSession` in `serviceAssistant.js`: `ensureAgentSession` as
+runs `prepareAgentSession` (`heldAgentSessionPreparation.js`): `ensureAgentSession` as
 held work (`createHeldWork`, component `vibe64.agent_session_prepare`, keyed by
 project, session and user). It answers with the preparation's result within two
 seconds, and otherwise `{ ok: true, preparing: true, sessionId, waitingFor }`,

@@ -24,10 +24,8 @@ import { vibe64HostContextEnvironment } from "@local/vibe64-genesis/server";
 import {
   assertProjectEffectAdmission,
   captureProjectRequestContext,
-  currentProjectRequestContext,
-  currentProjectScopeKey
+  currentProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
-import { createHeldWork } from "@local/vibe64-core/server/heldWork";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { VIBE64_ASSISTANT_ENGINE_IDS, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
@@ -570,28 +568,6 @@ function createServiceAssistant({
     }
   }
 
-  // The page prepares a session's assistant when it opens it. A cold one (its provider starting, or setup holding the
-  // session) can outlast the hosted edge's minute, so the page's request answers within two seconds, as preparing
-  // while it goes on; a repeat joins it, and one after it ended prepares again, which an assistant already prepared
-  // answers at once.
-  const heldPreparations = createHeldWork({ component: "vibe64.agent_session_prepare", logger });
-
-  /**
-   * The page's `POST .../agent-session`: `ensureAgentSession`, held while it goes on.
-   * @param {string} sessionId
-   * @param {object} [options]
-   */
-  async function prepareAgentSession(sessionId, options = {}) {
-    const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || "";
-    const key = [currentProjectScopeKey(), sessionId, username].join("\0");
-    const answer = await heldPreparations.run(key, ({ stage }) => {
-      stage("preparing");
-      return ensureAgentSession(sessionId, options);
-    });
-    if (answer.settled) return answer.result;
-    return { ok: true, preparing: true, sessionId, waitingFor: answer.waitingFor };
-  }
-
   async function openBrowserConversation(sessionId, options = {}) {
     if (!options.browserAuthority || options.browserAuthority.sessionId !== sessionId) {
       throw new AppError(403, "Main browser conversations require current project access.", {
@@ -710,7 +686,6 @@ function createServiceAssistant({
     listAssistantCapabilities,
     openBrowserConversation,
     openTemporaryBrowserConversation,
-    prepareAgentSession,
     readAgentPlanUsage,
     requireAssistantAccess,
     requireAssistantSelectionAccess,
