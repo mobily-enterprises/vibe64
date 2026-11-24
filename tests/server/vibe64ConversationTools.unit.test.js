@@ -21,6 +21,8 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
         private: "private-native-binding" } }; },
     async readSessionWorkPlan() { return { ok: true, available: true, text: "  Full page 🙂\n", status: "ready", revision: "a".repeat(64),
       built: 2, checked: 1, total: 3, history: [{ id: "b".repeat(64), title: "Earlier", status: "completed", built: 4, checked: 4, total: 4 }],
+      current: { title: "Now", status: "active", revision: "a".repeat(64), progressRevision: "", step: { step: "implementation", item: 3, items: 3, title: "Third" },
+        updatedAt: "2026-11-24T11:13:00.000Z", updatedHow: "updated", changedSince: { files: 12, more: false }, path: "/private/updated.json" },
       offset: 0, nextOffset: 14, totalCharacters: 16020, hasMore: true, path: "/private/plan.md", token: "secret" }; },
     async readTemporaryConversation(...args) { calls.push(args); return native; },
     async listTemporaryConversations() { return { ok: true, conversations: Array(60).fill(native) }; },
@@ -197,6 +199,9 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   // Colleague reads how many requirements are built (half-ticked or proven) and proven, for the plan and its history.
   assert.deepEqual([plan.result.built, plan.result.checked, plan.result.total], [2, 1, 3]);
   assert.deepEqual([plan.result.history[0].built, plan.result.history[0].checked, plan.result.history[0].total], [4, 4, 4]);
+  // And how current the plan is: when the AI last brought it up to date, and the files changed since.
+  assert.deepEqual([plan.result.current.updatedAt, plan.result.current.updatedHow, plan.result.current.changedSince],
+    ["2026-11-24T11:13:00.000Z", "updated", { files: 12, more: false }]);
   assert.equal(JSON.stringify(plan).includes("private"), false);
   assert.equal(JSON.stringify(plan).includes("secret"), false);
   assert.equal((await execute("vibe64.terminals.work-plan.read", { sessionId: "session-1", limit: 16001 })).ok, false);

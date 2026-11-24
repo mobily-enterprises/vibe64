@@ -162,6 +162,28 @@ function createAssistantRoutingRecords({
     delete state.attemptedMessageId;
   }
 
+  /**
+   * The plan check's turn, the request's next: Vibe64's note asking the AI to bring the plan up to date with the turn
+   * that just ended (state.planCheck names it), in the same stage. The chat shows it as Vibe64's note.
+   * @param {object} context
+   * @param {object} state
+   * @param {{ message: string, displayMessage: string }} note
+   */
+  async function preparePlanCheck(context, state, note) {
+    const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
+    state.planCheck = { turnId: state.turnId };
+    state.followup = {
+      messageId: randomUUID(),
+      planRevision: plan?.revision || null,
+      messages: await recentVisibleMessages(context.runtime.store, context.session.sessionId, 5),
+      displayMessage: note.displayMessage,
+      message: note.message,
+      planCheck: true
+    };
+    state.delivery = "pending";
+    delete state.attemptedMessageId;
+  }
+
   return Object.freeze({
     mark,
     keyFor,
@@ -174,7 +196,8 @@ function createAssistantRoutingRecords({
     cleanupHelper,
     releaseHelper,
     readRoutingSettings,
-    prepareFollowup
+    prepareFollowup,
+    preparePlanCheck
   });
 }
 

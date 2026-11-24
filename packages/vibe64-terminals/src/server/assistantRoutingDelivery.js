@@ -26,6 +26,8 @@ import {
   savesAutomatically
 } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { PLAN_CHECK_LABEL, planCheckStart, rememberPlanCheckStart } from "./assistantPlanCheck.js";
+import { MAIN_CHAT_NOTE_TURN_METADATA_KEY } from "./mainChatNote.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
@@ -69,9 +71,12 @@ function createAssistantRoutingDelivery({
     const taskPurpose = assistantTaskPurpose(pass?.id || state.task);
     let role = state.stage === "review" && modelRole === "senior" ? "review" : modelRole;
     if (pass) role = taskPurpose;
+    // Vibe64's plan check after a turn that changed the source but not the plan: a note, not a workflow step.
+    const planCheck = followup && state.followup?.planCheck === true;
     let followupLabel = state.stage === "planning" ? "Continue planning" : "Continue implementation";
     if (state.stage === "review") followupLabel = `${assistantModeLabel(modelRole)} review`;
     if (pass) followupLabel = pass.title;
+    if (planCheck) followupLabel = PLAN_CHECK_LABEL;
     const selection = state.assignments[modelRole];
     const input = activeMessage(state);
     const messageId = input.messageId || state.messageId;
@@ -117,7 +122,8 @@ function createAssistantRoutingDelivery({
             ...(!followup ? state.input.turnMetadata : {}),
             assistantSelection: selection,
             assistantRouting: attribution(state, followup),
-            ...(followup ? { actorId: "app", actorDisplayName: followupLabel } : {})
+            ...(followup ? { actorId: "app", actorDisplayName: followupLabel } : {}),
+            ...(planCheck ? { [MAIN_CHAT_NOTE_TURN_METADATA_KEY]: true } : {})
           }
         });
         state.status = "working";
@@ -179,17 +185,17 @@ function createAssistantRoutingDelivery({
     }
     const includePlanInstructions = !taskPurpose && (state.mode === "auto" || ["senior", "junior"].includes(state.mode));
     // Auto's planning, implementation and review turns report a workflow outcome; its conversation turns do not.
-    const autoOutcome = !pass && state.mode === "auto" && (state.workflow || state.stage === "planning");
+    const autoOutcome = !pass && !planCheck && state.mode === "auto" && (state.workflow || state.stage === "planning");
     // A typed UI pass message names its scope as the request its Genesis task
     // receives, as a commit range in the message is Deslop's. A run sent by
     // name, as Run in Passes sends Genesis's own request, goes verbatim.
-    let request = !pass && state.task === "ui-pass" && !state.input.genesisTask ? uiPassRequest(input.message) : input.message;
+    let request = !pass && !planCheck && state.task === "ui-pass" && !state.input.genesisTask ? uiPassRequest(input.message) : input.message;
     // A plan's pass sends Genesis's request for its Passes item as the message's last paragraph, where
     // Genesis recognises it: after the person's reply when the pass was waiting for one.
     const person = Boolean(pass) && !followup && state.passReply === true;
     if (pass) request = person ? `${input.message}\n\n${pass.request}` : pass.request;
     // Passes the person asked for that can't start yet: Senior says so, and runs nothing.
-    if (state.planPassNote && !pass) request = `[Vibe64: ${state.planPassNote} Tell the person so in a sentence or two; run no pass and change nothing.]\n\n${request}`;
+    if (state.planPassNote && !pass && !planCheck) request = `[Vibe64: ${state.planPassNote} Tell the person so in a sentence or two; run no pass and change nothing.]\n\n${request}`;
     let passInstructions = "";
     if (pass) {
       const plan = await readWorkPlan(context);
@@ -197,8 +203,11 @@ function createAssistantRoutingDelivery({
       passInstructions = assistantPassInstructions(pass, { last: others.every((item) => item.checked), person }) +
         (state.planPassNote && !followup ? ` ${state.planPassNote}` : "");
     }
+    let intent = taskPurpose || (state.stage === "review" ? "review" : state.mode === "auto" || state.planPassNote ? state.reason : "");
+    // The plan check only manages the plan: planning's instructions, its note the request.
+    if (planCheck) intent = "planning";
     let message = assistantModePrompt(role, request, {
-      intent: taskPurpose || (state.stage === "review" ? "review" : state.mode === "auto" || state.planPassNote ? state.reason : ""),
+      intent,
       // Auto's Junior leaves browser checks to Senior's check of the plan it implemented.
       browserReview: assistantPlanCompletionFollows(state),
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
@@ -210,11 +219,17 @@ function createAssistantRoutingDelivery({
     // check of a plan Junior implemented is not a pass: it renders no task of its own.
     let genesisTask = taskPurpose ? pass?.id || state.task : "";
     if (!genesisTask && state.stage === "review" && !(followup && state.mode === "auto" && state.planInvolved)) genesisTask = "review";
+    // The plan check renders no task and reports no outcome: the request settles as the turn before it would have.
+    if (planCheck) genesisTask = "";
     // A plan's pass gets its outcome instructions before its request, which stays the last paragraph.
-    if (!pass && (state.workflow || autoOutcome)) {
+    if (!pass && !planCheck && (state.workflow || autoOutcome)) {
       message += "\n\n" + assistantWorkflowInstructions(state, { autoSave: savesAutomatically(context.session.metadata) });
     }
+    // What a turn that may tick an active plan starts from, read while its selection is prepared: its plan check
+    // compares the plan and the source with it when the turn ends. Main chat only.
+    const planCheckStarting = routingState.allowAuto ? planCheckStart(context, state).catch(() => null) : null;
     await prepareSelection(sessionId, selection, context);
+    const planCheckFrom = await planCheckStarting;
     state.deliverySelection = selection;
     // Save the delivery selection before the session selection changes. The
     // sending status adds no recovery meaning before dispatch, so one save
@@ -240,7 +255,9 @@ function createAssistantRoutingDelivery({
       turnMetadata: {
         ...(!followup ? state.input.turnMetadata : {}),
         assistantRouting: attribution(state, followup),
-        ...(followup ? { actor: "app", actorLabel: followupLabel } : {})
+        ...(followup ? { actor: "app", actorLabel: followupLabel } : {}),
+        // The chat shows the plan check as Vibe64's note, never as the person's words.
+        ...(planCheck ? { [MAIN_CHAT_NOTE_TURN_METADATA_KEY]: true } : {})
       },
       onPromptSending: async ({ threadId }) => {
         if (!followup) await onPromptSending({ threadId, assistantSelection: selection });
@@ -277,6 +294,7 @@ function createAssistantRoutingDelivery({
     state.delivery = "accepted";
     state.serverRunId = serverRun.id;
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
+    rememberPlanCheckStart(routingState, records.keyFor(sessionId, context), messageId, planCheckFrom);
     if (state.workflow === true || state.mode === "auto" && state.stage === "planning") {
       routingState.liveFollowupRequests.set(records.keyFor(sessionId, context), state.messageId);
     }

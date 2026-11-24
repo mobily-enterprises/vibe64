@@ -133,15 +133,56 @@ function workPlanStep(plan) {
   return { step: "pass", item: pass + 1, items: passes.length, title: passes[pass].title };
 }
 
+/** "just now", "47 min ago", "3 h ago", "2 days ago". */
+function timeAgo(milliseconds) {
+  const minutes = Math.floor(Math.max(0, milliseconds) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? "day" : "days"} ago`;
+}
+
+/**
+ * How current an active plan is, from its summary's facts: when the AI last updated its marks or Progress, or checked
+ * it (otherwise when it was last saved), and how many of the session's files changed since. `behind` is true when
+ * files changed since. Null for a plan that is not active or has no update time.
+ * @param {{ status?: string, updatedAt?: string, updatedHow?: string,
+ *   changedSince?: { files: number, more?: boolean } | null } | null | undefined} current
+ * @param {number} [now]
+ * @returns {{ text: string, updated: string, changed: string, behind: boolean } | null}
+ */
+function workPlanFreshness(current, now = Date.now()) {
+  const at = Date.parse(current?.updatedAt || "");
+  if (current?.status !== "active" || !Number.isFinite(at)) return null;
+  const updated = `${current.updatedHow === "checked" ? "Checked" : "Updated"} ${timeAgo(now - at)}`;
+  const since = current.changedSince;
+  const files = since ? Math.max(Number(since.files) || 0, since.more ? 1 : 0) : 0;
+  let changed = "";
+  if (since && files) changed = `${files}${since.more ? "+" : ""} ${files === 1 && !since.more ? "file" : "files"} changed since`;
+  else if (since) changed = "no files changed since";
+  return { text: [updated, changed].filter(Boolean).join(" · "), updated, changed, behind: files > 0 };
+}
+
 /**
  * The chat's one line saying where an open plan is: its step, unless the chat's
  * request is waiting: for the person's answer (or questions the chat shows), for
- * Implement plan before a planned plan starts, or paused for Continue.
+ * Implement plan before a planned plan starts, or paused for Continue. A plan
+ * behind its work says so: how many files changed since its last update.
  * @param {ReturnType<typeof workPlanStep>} step
  * @param {{ questions?: number, request?: { status?: string, stage?: string | null, awaitingAnswer?: boolean,
- *   resumeImplementation?: boolean } | null }} [state] questions: the questions the chat offers answers for
+ *   resumeImplementation?: boolean } | null, freshness?: ReturnType<typeof workPlanFreshness> }} [state]
+ *   questions: the questions the chat offers answers for; freshness: the plan's
  */
-function workPlanStatusLine(step, { questions = 0, request = null } = {}) {
+function workPlanStatusLine(step, { questions = 0, request = null, freshness = null } = {}) {
+  const line = workPlanStepLine(step, { questions, request });
+  if (!line || step.step === "completed" || !freshness?.behind) return line;
+  // No minutes here: the line is a live status, read out again whenever it changes.
+  return `${line} · ${freshness.changed.replace(/ since$/u, " since the plan's last update")}`;
+}
+
+function workPlanStepLine(step, { questions, request }) {
   if (!step) return "";
   if (step.step === "completed") return "Plan: completed";
   const waiting = request?.status === "waiting";
@@ -160,6 +201,7 @@ function workPlanStatusLine(step, { questions = 0, request = null } = {}) {
 export {
   parseWorkPlanLines,
   workPlanAtPasses,
+  workPlanFreshness,
   workPlanStatusLine,
   workPlanStep,
   workPlanPassItems,

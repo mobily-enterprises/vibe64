@@ -137,10 +137,13 @@ test("a plan summary read names the current plan, its step and history without t
   const sessionId = "plan-summary";
   const { service } = await archivedPlanFixture(t, sessionId);
   const current = await service.readSessionWorkPlan(sessionId);
-  assert.deepEqual(await service.readSessionWorkPlan(sessionId, { summary: true }), {
+  const summary = await service.readSessionWorkPlan(sessionId, { summary: true });
+  // With no record of the AI bringing it up to date (a plan from before that record), it was last updated when saved.
+  assert.ok(Number.isFinite(Date.parse(summary.current.updatedAt)), summary.current.updatedAt);
+  assert.deepEqual(summary, {
     ok: true, sessionId, available: true, history: [],
     current: { title: "Keep the tally", status: "completed", revision: current.revision, progressRevision: current.progressRevision,
-      step: { step: "completed" } }
+      step: { step: "completed" }, updatedAt: summary.current.updatedAt, updatedHow: "saved" }
   });
   const archived = await service.archiveSessionWorkPlan(sessionId, { expectedRevision: current.revision });
   assert.deepEqual(await service.readSessionWorkPlan(sessionId, { summary: true }),

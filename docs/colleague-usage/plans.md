@@ -47,7 +47,10 @@ ask Senior to change it, or start a pass from the Passes list to add one.
 2. Select **Current plan**. The selected tab has a coloured underline.
 3. Read the **Active** or **Completed** status and the plan's progress, such as
    **6 built · 2 proven of 9 requirements**: built counts every item that is
-   built or proven, proven only the proven ones. Select
+   built or proven, proven only the proven ones. An active plan also says when
+   the AI last brought it up to date and how many of the session's files
+   changed since, such as **Updated 47 min ago · 12 files changed since** (see
+   [How current the plan is](#how-current-the-plan-is)). Select
    **Plan** for the stable summary, checklist and implementation instructions or **Progress** for work, evidence and
    blockers. Both tabs belong to the same current or archived artifact.
 4. Select **Technical details** below the summary and checklist to expand the
@@ -89,6 +92,49 @@ a plan while any item is not done yet or only built, and the refusal names each
 such item and its mark, so Senior proves it or leaves the plan active with the gap in
 Progress. A finished turn or a fully ticked checklist alone does not complete a
 plan. Updates appear while the viewer is open.
+
+The AI ticks each item the moment it is built and its own checks pass, not at
+the end of its turn. When work on one item also builds others (a foundation
+item, say, that the later items use), it walks the whole checklist and
+half-ticks each item that is built, notes in Progress what is only partly built,
+and never holds every tick until the first item is finished. Senior writes a
+foundation that other items build on as its own item, or says so in the item, so
+the marks can move as the work goes.
+
+### The plan check after a turn
+
+When a turn of Senior, Junior or Senior's review changed the session's files
+(edited, added, deleted or committed) while a plan is active, but the plan's
+marks and Progress did not change, Vibe64 sends that AI one short note in the
+same chat before the turn counts as finished. The chat shows it as Vibe64's
+note, not as your message, for example **4 files of the session's source
+changed in this turn, but the plan's checklist marks and Progress did not.
+Vibe64 asked the AI to bring the plan up to date.** The note names the changed
+files and asks the AI to walk the checklist item by item, not only the item it
+was on, and either update the marks and Progress or record that it checked the
+plan and nothing needs a new mark. Vibe64 never decides which item a change
+built: that is the AI's to judge. The AI then stops, and the work goes on as it
+would have (Senior's review next, say).
+
+The check runs once per turn: its own turn never gets another, and if the AI
+ignores it, the turn ends normally and the plan shows it is behind. There is no
+check for a plan's pass, an AI task, an answer to a question, a Custom chat, a
+goal, a temporary chat, a turn you stopped, a turn that failed, or a turn that
+ends asking you a question. After the editor restarts, the turn that was
+running when it stopped gets no check.
+
+### How current the plan is
+
+An active plan says when the AI last brought it up to date (it ticked items,
+wrote Progress or the plan, or checked the plan and found nothing to change)
+and how many of the session's files, including its connected repositories,
+changed since: **Updated 47 min ago · 12 files changed since**, or **Checked
+just now · no files changed since**. These are facts, not a judgement of what
+is done: the count covers files Git sees (edited, added, deleted or committed,
+whoever changed them), not files Git ignores such as build output. A plan from
+before this record shows only when it was last saved. A
+count shown with **+**, such as **1000+ files changed since**, is at least that
+many.
 
 ## A plan's steps
 
@@ -139,8 +185,11 @@ from the plan itself each time it changes:
 | **Plan: ready, Implement plan to start** | Senior made the plan; it waits for your go-ahead |
 | **Plan: completed** | The plan is completed and not yet archived |
 
-The line updates as items are ticked. A plan with no checklist items shows no
-line.
+The line updates as items are ticked. While files changed since the AI last
+brought the plan up to date, the line ends with that count, such as **Plan:
+implementing item 1 of 10, Store threads · 12 files changed since the plan's
+last update**: a plan behind its work never looks current. A plan with no
+checklist items shows no line.
 
 ## Automatic completion and archival
 
@@ -227,7 +276,9 @@ error includes **Retry**. Do not treat a partially loaded plan as the whole reco
 
 Colleague can explain these steps and, when its plan-reading action is available
 for the session, offer to read the plan or summarize the recorded work and blockers from both documents, including
-how many requirements are built and how many proven. It can
+how many requirements are built and how many proven, and how current the plan
+is: when the AI last brought it up to date and how many files changed since,
+reported as those facts, never as a guess at what is done. It can
 read an archive by its history identity without starting a coding turn. It must
 finish all pages of both documents before claiming to have reviewed the complete artifact.
 You can also ask **“Show me this session's plan”**, or name another accessible

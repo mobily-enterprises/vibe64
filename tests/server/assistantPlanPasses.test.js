@@ -40,6 +40,14 @@ async function writePlan(f, text, role = "review", options = {}) {
   return manageWorkPlan(f.context, { operation: "write", text, expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" },
     role, options);
 }
+/**
+ * The turn that committed the plan's work brings its plan up to date: the plan already shows the item built, so its AI
+ * records that it checked the plan. Without it, Vibe64's plan check would follow the turn.
+ */
+async function planChecked(f, role = "junior") {
+  const plan = await readWorkPlan(f.context);
+  return manageWorkPlan(f.context, { operation: "checked", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, role);
+}
 /** Senior's review full-ticks the plan's own item. */
 const tickItems = async (f, role = "review") => writePlan(f, (await readWorkPlan(f.context)).text.replace("- [~] Required-name", "- [x] Required-name"), role);
 /** The running pass ticks its own Passes item, the only Plan change it may make. */
@@ -61,7 +69,10 @@ async function implementAndReview(f, passes) {
   await publishPlanFixture(f.context, planWith(passes));
   await f.service.send("session-1", request, f.context);
   assert.equal(f.sends[0].selection.modelId, f.assignments.junior.modelId);
-  await f.source?.commit("Required-name validation");
+  if (f.source) {
+    await f.source.commit("Required-name validation");
+    await planChecked(f);
+  }
   await finish(f, "handoff");
   assert.equal(f.state().stage, "review");
   await tickItems(f);
@@ -78,6 +89,7 @@ test("Senior's review leaves a plan with passes active; each Passes item runs in
   await publishPlanFixture(f.context, planWith(passes));
   await f.service.send("session-1", request, f.context);
   await f.source.commit("Required-name validation");
+  await planChecked(f);
   await finish(f, "handoff");
   // Senior's review is not a pass; it verifies every item and runs none.
   assert.equal(f.sends[1].selection.modelId, f.assignments.senior.modelId);
@@ -345,6 +357,7 @@ test("no pass runs without a plan, with a plan without passes, or with a plan al
     if (plan) await publishPlanFixture(f.context, plan);
     await f.service.send("session-1", request, f.context);
     await f.source.commit();
+    if ((await readWorkPlan(f.context))?.status === "active") await planChecked(f, "senior");
     await finish(f, "handoff", { involved: false });
     assert.equal(f.state().status, "complete", `${name} in ${mode}`);
     assert.equal(f.sends.length, 1, `${name} in ${mode}: the work ends after its own turn`);

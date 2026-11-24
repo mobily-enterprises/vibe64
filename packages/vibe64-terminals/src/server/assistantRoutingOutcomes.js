@@ -15,6 +15,7 @@ import {
 import { read, failure, activeMessage, assistantPlanHandsOff, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
 import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
 import { createAssistantRoutingInterruptions } from "./assistantRoutingInterruptions.js";
+import { createAssistantPlanCheck } from "./assistantPlanCheck.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -93,6 +94,7 @@ function createAssistantRoutingOutcomes({
     serverRun,
     logger
   });
+  const planCheck = createAssistantPlanCheck({ routingState, records, delivery });
 
   /**
    * The active agent declares an outcome; this does not dispatch while its turn runs.
@@ -403,6 +405,7 @@ function createAssistantRoutingOutcomes({
       if (state.turnId !== (run.providerTurnId || run.turnId)) return;
       const live = routingState.liveFollowupRequests.get(key) === state.messageId;
       routingState.liveFollowupRequests.delete(key);
+      const planCheckFrom = planCheck.takeStart(key, activeMessage(state).messageId || state.messageId);
       // A plan change only Senior may make, refused in this turn, makes the request Senior's planning turn, unless
       // the person stopped it or the turn did not complete.
       if (state.planHandoff) {
@@ -414,6 +417,9 @@ function createAssistantRoutingOutcomes({
       }
       const interruption = await interruptionOf(state, run);
       if (interruption && await afterInterruption(sessionId, context, state, interruption, routingOptions)) return;
+      // The plan check's own turn ended: the request settles as the turn before it would have. Any other turn that
+      // changed the source but not the plan gets the check first.
+      if (await planCheck.afterTurn(context, state, run, recovered && !live ? null : planCheckFrom)) return;
       if (!state.workflow && state.stage !== "planning") {
         // An answer in which Senior reviewed or completed the plan (asked to, say) moves it on too.
         const current = run.state === "completed" && !state.stopped && state.afterPlan ? await readablePlan(context) : null;
