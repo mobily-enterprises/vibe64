@@ -1001,10 +1001,11 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       tracing = false;
       // A freeze is read in CPU time, not by the clock, and against the small diagram's: from each diagram's routes
       // request until they are drawn, the longest task on the main thread, in both the one applying the worker's
-      // routes. A loaded host slows both alike, so their ratio is the cost of the dense diagram's own work. On usone,
-      // at loads of 8 to 11, alone or sharing 2 CPUs with four busy loops, the small diagram's took 24-35 ms and the
-      // dense one's 261-299 ms, 8.7-11.5 times as long; computing the routes on the main thread again, which holds the
-      // typing above, took the dense one's to 979-1,640 ms, 29-56 times. The bound sits 1.6 times from both.
+      // routes. A loaded host slows both alike, so their ratio is the cost of the dense diagram's own work. On the
+      // desktop and usone, at loads of 3 to 11, alone or sharing 2 CPUs with four busy loops, the small diagram's took
+      // 20-35 ms and the dense one's 234-299 ms, 8.7-12.2 times as long; computing the routes on the main thread again,
+      // which holds the typing above, took the dense one's to 887-1,640 ms, 27-56 times. The bound sits 1.5 times from
+      // both.
       const [smallTask, longestTask] = longestMainThreadTasks(trace.traceEvents, "erd-routes-requested", "erd-drawn");
       expect(longestTask / smallTask, `the dense diagram's longest task, ${longestTask} ms, over the small one's, ${smallTask} ms`).toBeLessThan(18);
       // The cost itself, independent of load: every DOM node drawing the cards and connections. Ports
@@ -1053,8 +1054,8 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
 // The CPU time, in ms, of the longest task the page's main thread ran in each window from a `from` performance mark to
 // the next `to` mark, from a Chrome trace: each window's first mark names its thread, which a navigation may change,
 // and the "toplevel" category records each task it runs as a ThreadControllerImpl::RunTask event whose tdur is the
-// thread time it took. A task Chrome records without it, its tracing's own WillClearIncrementalState of a few
-// microseconds, counts its wall time, which is never less, and is noted on the test. Every window holds at least the
+// thread time it took. A task Chrome records without it, one lasting a microsecond or two such as its tracing's
+// WillClearIncrementalState or a DOM timer, counts its wall time, which is never less, and is noted on the test. Every window holds at least the
 // task that set its first mark, so a window without tasks means the trace no longer records them, and fails rather
 // than measuring nothing.
 function longestMainThreadTasks(events: any[], from: string, to: string) {
