@@ -208,15 +208,21 @@ function useAccountAuthSessions(
     void accounts.reloadLocalStatus().catch(() => {});
   }
 
+  // Cancels a sign-in. One the editor no longer knows (it restarted meanwhile) is over already, as a cancel makes it.
+  async function cancelOrForgotten(sessionId) {
+    try {
+      await accounts.cancelAuthSession(sessionId);
+    } catch (error) {
+      if (error?.code !== "unknown_auth_session") throw error;
+    }
+  }
+
   async function cancelSession(session = {}) {
     if (!session.id) {
       return;
     }
     try {
-      await accounts.cancelAuthSession(session.id).catch((error) => {
-        // The editor no longer knows this sign-in (it restarted meanwhile): it is over already, as a cancel makes it.
-        if (error?.code !== "unknown_auth_session") throw error;
-      });
+      await cancelOrForgotten(session.id);
       forgetSession(session);
       await refreshStatus();
       stopPollingIfIdle();
