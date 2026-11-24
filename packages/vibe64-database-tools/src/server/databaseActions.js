@@ -141,7 +141,7 @@ function createDatabaseActions({ databaseTools }) {
       id: ACTION_DATABASE_ASSISTANT_ASK,
       input: databaseAssistantInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => databaseTools.askAssistant(input)
+      execute: (input) => databaseTools.startAssistantQuestion(input)
     })
   ]);
 }

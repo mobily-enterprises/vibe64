@@ -2,17 +2,23 @@ import {
   computed,
   hasInjectionContext,
   inject,
+  reactive,
+  ref,
   unref
 } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { VIBE64_DATABASE_LAYOUT_CHANGED_EVENT } from "../../shared/events.js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { followHeldRequest } from "/src/lib/vibe64HeldRequest.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 
 const DATABASE_API_SUFFIX = "/vibe64/database";
+const ASSISTANT_FAILED = "The database copilot could not answer.";
+const ASSISTANT_LOST_CONTACT = "Vibe64 could not be reached for the copilot's answer. Ask the question again.";
 const DATABASE_SURFACE = "app";
 
 function encodeSegment(value = "") {
@@ -158,10 +164,32 @@ function useVibe64DatabaseTools({
     placement: "snippet.delete",
     success: "SQL snippet deleted."
   });
-  const assistantCommand = databaseCommand({
-    fallback: "The database copilot could not answer.",
-    placement: "assistant.ask",
-    suppressSuccessMessage: true
+  // A question runs an AI turn and its queries, which can outlast the hosted edge's minute: the server answers within
+  // two seconds, as answering while it goes on, and this repeats the same question (`requestId`, `repeat: true`)
+  // until its answer, also after an answer that never came back. It is the bounded task's command: `run` and
+  // `isRunning`, with one failure shown.
+  const assistantResource = useEndpointResource({
+    enabled: false,
+    path: sessionPath,
+    queryKey: computed(() => ["vibe64", "database", normalizedProjectSlug.value, normalizedSessionId.value, "assistant"])
+  });
+  const assistantFeedback = useUiFeedback({ source: "vibe64.database.assistant.ask" });
+  const asking = ref(false);
+  const assistantCommand = reactive({
+    isRunning: computed(() => asking.value),
+    async run({ path, payload }) {
+      asking.value = true;
+      const question = { ...payload, requestId: globalThis.crypto.randomUUID() };
+      try {
+        return await followHeldRequest(repeat => assistantResource.save(repeat ? { ...question, repeat } : question,
+          { method: "POST", path }), { heldAs: "answering", lostContact: ASSISTANT_LOST_CONTACT, notWorded: ASSISTANT_FAILED });
+      } catch (error) {
+        assistantFeedback.error(error, ASSISTANT_FAILED);
+        throw error;
+      } finally {
+        asking.value = false;
+      }
+    }
   });
 
   async function reload() {

@@ -88,7 +88,8 @@ you submit it. Collapsing Copilot keeps an in-progress question running; reopen
 the panel to see its answer. Copilot history lasts for the mounted database
 workspace and clears when another session loads. That reset keeps an unsent
 draft, so check its wording and selected table before sending. A failed question
-is not resent automatically.
+is not resent automatically. A long answer keeps going through a dropped
+connection, and the question is never asked twice.
 
 Colleague can explain these views, inspect authorized status, refresh schema
 metadata, open a specific view or exact table, and request cancellation of the

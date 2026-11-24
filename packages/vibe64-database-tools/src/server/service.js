@@ -453,6 +453,7 @@ function createService({
     saveSnippet,
     deleteSnippet,
     askAssistant: assistantTasks.askAssistant,
+    startAssistantQuestion: assistantTasks.startAssistantQuestion,
     closeAssistantsForSession: assistantTasks.closeAssistantsForSession,
     closeRenewalAssistantsForSession: assistantTasks.closeRenewalAssistantsForSession,
     close

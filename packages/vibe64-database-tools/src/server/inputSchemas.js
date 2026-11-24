@@ -133,7 +133,10 @@ const databaseAssistantInputValidator = validator({
     },
     required: true,
     type: "array"
-  }
+  },
+  // The page names each question, so its repeat after a held or lost answer joins it and never asks again.
+  requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: true },
+  repeat: { type: "boolean", required: false }
 });
 
 export {
