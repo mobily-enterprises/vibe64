@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -251,9 +252,36 @@ test("the scan folder a Nix PHP wrapper declares is read from the wrapper, which
     return php.unsetEnvironment({ PATH: bin }).PHP_INI_SCAN_DIR;
   };
   const runs = `#!/bin/sh\necho "$0" >> '${ran}'\n`;
-  // Nix makeWrapper's shell wrapper, as it writes --set-default, printing what php --ini would.
-  const shell = (folder) => `${runs}export PHP_INI_SCAN_DIR=\${PHP_INI_SCAN_DIR-'${folder}'}\n` +
-    "echo \"Scan for additional .ini files in: $PHP_INI_SCAN_DIR\"\n";
+  const marker = path.join(root, "php-unwrapped");
+  fs.writeFileSync(marker, runs, { mode: 0o755 });
+  // nixpkgs' makeShellWrapper output, verbatim (271 bytes): $out/bin/php of
+  //   nix --extra-experimental-features 'nix-command flakes' build --impure --no-link --print-out-paths --expr '
+  //     let pkgs = (builtins.getFlake "https://releases.nixos.org/nixpkgs/nixpkgs-26.11pre1126808.619c39f6eac5/nixexprs.tar.zst").legacyPackages.${builtins.currentSystem}; in
+  //     pkgs.runCommand "php-shell-wrapper" { nativeBuildInputs = [ pkgs.makeShellWrapper ]; } '"''"'
+  //       mkdir -p $out/lib $out/libexec $out/bin
+  //       printf "#!/bin/sh\nexit 0\n" > $out/libexec/php
+  //       chmod +x $out/libexec/php
+  //       makeShellWrapper $out/libexec/php $out/bin/php --set-default PHP_INI_SCAN_DIR $out/lib
+  //     '"''"
+  // on nixpkgs 619c39f6eac5d1ed6b8f073a9414baf7034b2356 (nixpkgs-unstable 26.11pre1126808), whose PHP wraps itself with
+  // the same --set-default (wrapProgram $out/bin/php --set-default PHP_INI_SCAN_DIR $out/lib) through makeBinaryWrapper.
+  const SHELL_WRAPPER = [
+    "#! /nix/store/hasnvc0j36gg6qrdsfcx7yivx3c2bpqr-bash-5.3p20/bin/bash -e",
+    "export PHP_INI_SCAN_DIR=${PHP_INI_SCAN_DIR-'/nix/store/a55chvcy0bnr0rnq7ys2vr8frwr4b6sf-php-shell-wrapper/lib'}",
+    "exec \"/nix/store/a55chvcy0bnr0rnq7ys2vr8frwr4b6sf-php-shell-wrapper/libexec/php\"  \"$@\" ",
+    ""
+  ].join("\n");
+  assert.equal(createHash("sha256").update(SHELL_WRAPPER).digest("hex"),
+    "590e59a5b8e84258b2ea9df33757ee1b402f39eef7e3542ddcbc1542690fb3a2", "the generated wrapper, byte for byte");
+  // Its three store paths are substituted, and nothing else:
+  const shell = (folder) => SHELL_WRAPPER
+    // SUBSTITUTED 1: the declared $out/lib, with the folder under test;
+    .replace("'/nix/store/a55chvcy0bnr0rnq7ys2vr8frwr4b6sf-php-shell-wrapper/lib'", () => `'${folder}'`)
+    // SUBSTITUTED 2: the exec'd $out/libexec/php, with the marker writer;
+    .replace("\"/nix/store/a55chvcy0bnr0rnq7ys2vr8frwr4b6sf-php-shell-wrapper/libexec/php\"", () => `"${marker}"`)
+    // SUBSTITUTED 3: the store's bash, with /bin/sh, so a server that ran the wrapper would leave the marker on any host.
+    .replace("/nix/store/hasnvc0j36gg6qrdsfcx7yivx3c2bpqr-bash-5.3p20/bin/bash", () => "/bin/sh");
+  assert.doesNotMatch(shell(declared), /\/nix\/store\//u);
   assert.equal(folderOf(shell(declared)), declared);
   assert.equal(fs.existsSync(ran), false, "the server ran the php on PATH");
   assert.equal(folderOf(`${runs}PHP_INI_SCAN_DIR=\${PHP_INI_SCAN_DIR:-${declared}}\n`), declared);
