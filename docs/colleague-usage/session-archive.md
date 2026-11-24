@@ -5,6 +5,8 @@ This continues [Create and switch sessions](sessions.md).
 Select the session, choose **Archive session**, and confirm **Archive session**
 in the dialog. This stops its assistant and terminals, preserves the session and
 removes its active workspace. Desktop and mobile use the same confirmation.
+Archiving goes on in the background, for minutes in a large session; a dropped
+connection never archives twice, and Vibe64 says once whether it worked.
 Archiving does not Save, and it empties the session's
 [temporary folder](sessions.md#the-sessions-temporary-folder). Work the project does not have yet, such as an added
 starter, stays only in the session archive, and archived sessions cannot restore

@@ -1,13 +1,14 @@
-import { computed, ref, unref } from "vue";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
-import {
-  VIBE64_SESSIONS_API_SUFFIX,
-  VIBE64_SURFACE_ID,
-  vibe64SessionPath
-} from "@/lib/vibe64SessionRequestConfig.js";
+import { computed, reactive, ref, unref } from "vue";
+import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
+import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
+import { followHeldRequest } from "@/lib/vibe64HeldRequest.js";
+
+const ARCHIVE_FAILED = "Vibe64 session could not be archived.";
+const ARCHIVE_LOST_CONTACT =
+  "Vibe64 could not be reached to follow this archive. Check the session list, and archive the session again if it is still there.";
 
 /**
  * The selected session's archive confirmation and its archive request.
@@ -36,33 +37,28 @@ function useVibe64SessionDialogs({
   const archivingSessionId = ref("");
   const resolvedSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || ""));
 
-  const archiveCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildRawPayload: () => vibe64RealtimeOriginPayload(),
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      path: vibe64SessionPath(resolvedSessionsApiPath.value, context?.sessionId, "/archive")
-    }),
-    fallbackRunError: "Vibe64 session could not be archived.",
-    messages: {
-      error: "Vibe64 session could not be archived.",
-      success: "Vibe64 session archived."
-    },
-    onRunSuccess: async (response) => {
-      if (response?.ok !== true) {
-        throw new Error(
-          response?.errors?.[0]?.message ||
-          response?.error ||
-          "Vibe64 session could not be archived."
-        );
-      }
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.archive",
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
+  // The request names its archive (`requestId`), and the server answers within two seconds, as archiving while the
+  // session's work stops and its source goes; the page repeats it (`repeat: true`) until its outcome, shown once.
+  const archiveResource = useEndpointResource({
+    path: resolvedSessionsApiPath,
+    queryKey: computed(() => ["vibe64.sessions.archive", resolvedSessionsApiPath.value]),
+    enabled: false
   });
+  const feedback = useUiFeedback({ source: "vibe64.sessions.archive" });
+  // Archive's running state, read as `archive.command.isRunning` by the archive dialog and the session toolbar.
+  const archiveCommand = reactive({ isRunning: computed(() => Boolean(archivingSessionId.value)) });
+
+  /** Sends the page's archive of the session until its outcome (`followHeldRequest`). */
+  async function archiveFollowed(sessionId) {
+    const request = vibe64RealtimeOriginPayload({ requestId: globalThis.crypto.randomUUID() });
+    const path = vibe64SessionPath(resolvedSessionsApiPath.value, sessionId, "/archive");
+    const response = await followHeldRequest(repeat => archiveResource.save(repeat ? { ...request, repeat } : request,
+      { method: "POST", path }), { heldAs: "archiving", lostContact: ARCHIVE_LOST_CONTACT, notWorded: ARCHIVE_FAILED });
+    if (response?.ok !== true) {
+      throw new Error(response?.errors?.[0]?.message || response?.error || ARCHIVE_FAILED);
+    }
+    return response;
+  }
 
   function clearArchiveDialog() {
     archiveDialogOpen.value = false;
@@ -104,12 +100,14 @@ function useVibe64SessionDialogs({
     const archiveScope = beginArchive(sessionId);
     let succeeded = false;
     try {
-      const response = await archiveCommand.run({ sessionId });
-      succeeded = response?.ok === true;
+      const response = await archiveFollowed(sessionId);
+      succeeded = true;
+      feedback.success("Vibe64 session archived.");
       return response;
-    } catch {
-      // useCommand reports the failure through shared action feedback. Keep it
-      // out of the newly selected session's runtime and restore the gray tab.
+    } catch (error) {
+      // The failure goes to shared action feedback, out of the newly selected session's runtime, and the gray tab is
+      // restored.
+      feedback.error(error, ARCHIVE_FAILED);
       return false;
     } finally {
       finishArchive(sessionId, succeeded, archiveScope);

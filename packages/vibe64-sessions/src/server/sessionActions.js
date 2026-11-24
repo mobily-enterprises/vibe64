@@ -34,6 +34,7 @@ import {
   sessionChangesInputValidator,
   sessionCreateInputValidator,
   sessionCreateStartInputValidator,
+  sessionArchiveStartInputValidator,
   sessionPullRequestInputValidator,
   sessionPullRequestStartInputValidator,
   sessionIdInputValidator,
@@ -89,6 +90,7 @@ const ACTION_READ_SESSION_CONVERSATION_LOG = "vibe64.sessions.conversation-log.r
 const ACTION_READ_CONVERSATION_CONTEXT = "vibe64.sessions.conversation.context.read";
 const ACTION_RETRY_WORKSPACE_SETUP = "vibe64.sessions.workspace-setup.retry";
 const ACTION_ARCHIVE_SESSION = "vibe64.sessions.archive";
+const ACTION_START_SESSION_ARCHIVE = "vibe64.sessions.archive.start";
 const ACTION_SEND_AGENT_MESSAGE = "vibe64.sessions.agent-message.send";
 const ACTION_INSPECT_ASSISTANT_ACCESS = "vibe64.sessions.assistant-access.inspect";
 const ACTION_READ_MAIN_CHAT_APPROVALS = "vibe64.sessions.main-chat-approvals.read";
@@ -436,6 +438,14 @@ function createSessionActions({ sessions }) {
       },
       execute: (input) => sessions.archiveSession(input.sessionId, input)
     }),
+    // The page's archive: the same archive, answered as archiving while it goes on; the page repeats it.
+    Object.freeze({
+      ...VIBE64_COMMAND,
+      id: ACTION_START_SESSION_ARCHIVE,
+      input: { ...sessionArchiveStartInputValidator, mode: "create" },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
+      execute: (input) => sessions.startSessionArchive(input.sessionId, input)
+    }),
     Object.freeze({
       ...VIBE64_COMMAND,
       id: ACTION_SEND_AGENT_MESSAGE,
@@ -556,6 +566,7 @@ export {
   ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF,
   ACTION_INSPECT_REPOSITORY_VERSION_FILES,
   ACTION_ARCHIVE_SESSION,
+  ACTION_START_SESSION_ARCHIVE,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CREATE_SESSION,
   ACTION_START_SESSION_CREATION,

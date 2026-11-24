@@ -2,6 +2,8 @@ import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { createHeldRequests } from "./heldRequests.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -20,6 +22,14 @@ const SESSION_ARCHIVE_PREPARATION_TOKEN = "vibe64.sessions.archive-preparation";
 
 /** @type {SessionArchivePreparation} */
 async function prepareNothingForArchive() {}
+
+// An archive the page started and this editor no longer holds (it restarted, or the first request never arrived):
+// its repeat archives nothing. Startup resumes an archive whose progress it recorded.
+const ARCHIVE_NOT_FOLLOWED = Object.freeze({
+  code: "vibe64_session_archive_not_followed",
+  error: "Vibe64 restarted or lost this archive while it ran. Check the session list, and archive the session again " +
+    "if it is still there."
+});
 
 /** @param {unknown} prepare */
 function assertArchivePreparation(prepare) {
@@ -51,9 +61,13 @@ function readSessionArchiveOperation(metadata) {
 /**
  * Archive: stop the session's work, release its resources, then remove its
  * source, recording each durable phase so startup resumes an interrupted one.
- * A host may add idempotent preparation between those phases.
+ * A host may add idempotent preparation between those phases. `archiveSession`
+ * is the assistant tool's and startup's; `startSessionArchive` is the page's,
+ * held while it goes on (`heldRequests.js`), and `close`, at shutdown,
+ * resolves once every held archive has ended.
  * @param {object} dependencies
  * @param {SessionArchivePreparation} dependencies.archivePreparation
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
@@ -61,6 +75,7 @@ function readSessionArchiveOperation(metadata) {
  */
 function createSessionArchive({
   archivePreparation,
+  logger,
   project,
   terminals,
   setupRunner,
@@ -110,7 +125,14 @@ function createSessionArchive({
     }
   }
 
-  async function archiveSession(sessionId, input) {
+  /**
+   * `stage` names what the archive does: `session-write` (waiting for the session's assistant write), `stopping`
+   * (its work), `preparing` (the host's preparation), `resources`, then `source`.
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {{ stage?: (name: string) => void }} [controls]
+   */
+  async function archiveSession(sessionId, input, { stage = doNothing } = {}) {
     return sessionResult(async () => {
       if (setupRunner.isRunning(sessionId)) {
         throw vibe64Error("Wait for workspace preparation to finish before archiving this session.", "vibe64_workspace_setup_running");
@@ -120,6 +142,7 @@ function createSessionArchive({
       let closesFinished = false;
       const cancelledRouting = new Map();
       while (true) {
+        stage("session-write");
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           if (setupRunner.isRunning(sessionId)) {
             throw vibe64Error("Wait for workspace preparation to finish before archiving this session.", "vibe64_workspace_setup_running");
@@ -201,15 +224,19 @@ function createSessionArchive({
               payload: { clientRefresh: { includeList: true } },
               session: closingSession
             });
+            stage("stopping");
             if (operation.phase === "stopping") await stopSessionWork(runtime, currentSession);
+            stage("preparing");
             await runArchivePreparation(runtime, sessionId, operation.phase);
             if (operation.phase === "stopping") {
               await advanceArchivePhase("resources");
             }
             if (operation.phase === "resources") {
+              stage("resources");
               if (!sourceCreationFailed) await releaseSessionResources(sessionId);
               await advanceArchivePhase("source");
             }
+            stage("source");
             return await runtime.archiveSession(sessionId);
           } catch (error) {
             operation.status = "failed";
@@ -300,10 +327,29 @@ function createSessionArchive({
     return { failures };
   }
 
+  const heldArchives = createHeldRequests({
+    component: "vibe64.session_archive",
+    heldAs: "archiving",
+    logger,
+    notFollowed: ARCHIVE_NOT_FOLLOWED
+  });
+
+  /**
+   * The page's archive (`POST .../archive`), named by its `requestId`: stopping the session's work, the host's
+   * preparation and removing its source can outlast the hosted edge's minute.
+   * @param {string} sessionId
+   * @param {{ requestId: string, repeat?: boolean }} input
+   */
+  function startSessionArchive(sessionId, input) {
+    return heldArchives.run([sessionId], input, (archive, { stage }) => archiveSession(sessionId, archive, { stage }));
+  }
+
   return Object.freeze({
     archiveSession,
+    close: heldArchives.close,
     prepareArchive: archivePreparation,
-    resumeSessionArchives
+    resumeSessionArchives,
+    startSessionArchive
   });
 }
 
