@@ -110,7 +110,7 @@
       <template v-if="saveWorkError && (saveWorkCanResolveWithAi || saveWorkCanCreatePullRequest)" #error-actions>
         <v-btn
           v-if="updateConflictRecovery && !aiTaskOpen" variant="tonal"
-          :disabled="updateWorkDisabled || sourceOperationsSuspended"
+          :disabled="reviewResolvedHeld"
           @click="reviewResolvedUpdate"
         >
           Review resolved conflicts
@@ -125,10 +125,16 @@
         />
         <v-btn
           v-if="saveWorkCanCreatePullRequest" color="primary" variant="flat"
-          :disabled="saveWorkDisabled || sourceOperationsSuspended" @click="createPullRequestOpen = true"
+          :disabled="pullRequestHeld" @click="createPullRequestOpen = true"
         >
           Create draft PR
         </v-btn>
+        <p
+          v-if="saveWorkNoticeWhy" class="studio-autopilot__save-work-why text-body-small text-medium-emphasis"
+          role="status" data-vibe64-save-work-why
+        >
+          {{ saveWorkNoticeWhy }}
+        </p>
       </template>
     </Vibe64TemporaryActionTerminal>
 
@@ -206,6 +212,7 @@ import GitStandInIdentityNotice from "@/components/studio/repository/GitStandInI
 import WorkspaceSetupToolRows from "@/components/studio/vibe64-session/WorkspaceSetupToolRows.vue";
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
 import { writeClipboardText } from "@/lib/clipboard.js";
+import { saveWorkNoticeHeldReason } from "@/lib/vibe64SaveWorkButton.js";
 
 // Session activity above the chat: connection recovery, the recovery
 // snapshot warning, Save and Update output and workspace preparation.
@@ -225,7 +232,7 @@ const {
   saveWorkActivityIsUpdate, saveWorkActivityKey, saveWorkActivityLabel, saveWorkCanResolveWithAi,
   saveWorkConnectedResults, saveWorkDisabled, saveWorkNote, saveWorkError, saveWorkFailure, saveWorkOperationActive,
   saveWorkOutput, saveWorkRequiresUpdate, saveWorkRetryable, saveWorkSending, saveWorkStage,
-  saveWorkStandInIdentity, saveWorkStatus,
+  saveWorkStandInIdentity, saveWorkStatus, saveWorkTitle,
   sessionId, sessionPullRequest, sourceOperationsSuspended, testApproval,
   updateConflictRecovery, updateWorkDisabled, workspaceSetupActivityKey,
   workspaceSetupCurrentLabel, workspaceSetupDismissed, workspaceSetupError,
@@ -246,6 +253,15 @@ const LocalDatabaseServer = defineAsyncComponent(() => (
 ));
 const saveWorkCanCreatePullRequest = computed(() => githubProject.value && !sessionPullRequest.value?.number &&
   saveWorkFailure.value?.code === "vibe64_pull_request_required");
+// The notice's buttons wait while Save and Update cannot act or a session renewal runs, and say why beside them.
+const reviewResolvedHeld = computed(() => Boolean(updateWorkDisabled.value || sourceOperationsSuspended.value));
+const pullRequestHeld = computed(() => Boolean(saveWorkDisabled.value || sourceOperationsSuspended.value));
+const saveWorkNoticeWhy = computed(() => saveWorkNoticeHeldReason({
+  held: Boolean((updateConflictRecovery.value && !aiTaskOpen.value && reviewResolvedHeld.value) ||
+    (saveWorkCanCreatePullRequest.value && pullRequestHeld.value)),
+  renewing: Boolean(sourceOperationsSuspended.value),
+  saveWorkTitle: saveWorkTitle.value
+}));
 
 function copyActivityOutput(output = "") {
   return writeClipboardText(output);
@@ -253,6 +269,12 @@ function copyActivityOutput(output = "") {
 </script>
 
 <style scoped>
+.studio-autopilot__save-work-why {
+  flex-basis: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: end;
+}
 .studio-autopilot__checkpoint-notice summary {
   cursor: pointer;
 }

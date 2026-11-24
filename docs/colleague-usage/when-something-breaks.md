@@ -19,7 +19,8 @@ which reads the same answers.
 - **A dimmed Save.** Save or Update cannot act right now. Tap or click it and
   the reason shows beside it, for example *Fix Update is still running. Wait for
   it to finish first.* or *Waiting for the assistant to reconnect before saving
-  or updating*.
+  or updating*. The notice's **Review resolved conflicts** and **Create draft
+  PR** wait for the same reasons and show theirs beside them.
 - **The session's AI** reads the same state with `vibe64-helper session status
   --json`, under `repository`.
 
