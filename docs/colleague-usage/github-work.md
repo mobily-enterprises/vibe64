@@ -42,21 +42,18 @@ Repository checks immediately. After an AI turn, a Save or edited files, the
 session's saved-work status follows within a few seconds. These steps apply on
 desktop and mobile.
 
-Vibe64 reuses your GitHub login for a few minutes across repository operations.
-If you reconnect GitHub and the previous login was revoked, the next operation can
-fail once with a GitHub authentication error; retry it and it uses the new login.
+Vibe64 reuses your GitHub login for a few minutes: after you reconnect GitHub,
+the next operation can fail once with an authentication error; retry it.
 
 In every main-chat mode, **Automatically save changes** (on by default under
 **Chat settings** in the chat mode menu) runs this same Save once a finished
-piece of work's last turn ends: for a plan, once the last pass in its Passes
-section is done (see [Passes](passes.md)).
+piece of work's last turn ends: for a plan, after the last pass in its Passes
+section (see [Passes](passes.md)).
 Its progress, result and recovery are the ordinary Save's; when it cannot save,
 chat shows **Automatic save didn't run:** with the reason, and nothing changes.
-When Save needs newer saved work first, automatic save runs the ordinary
-**Update this session (rebase)** itself, then Save, and stops only when that
-Update does, such as on a conflict, naming it and **Fix it with AI** on the
-Update notice (see [Choose what happens once work is
-finished](chat-settings.md#what-the-chat-shows)).
+When Save needs newer saved work first, it runs **Update this session
+(rebase)**, then Save; if that Update stops, chat says why and names **Fix it
+with AI** on the Update notice.
 While it is on, the main chat's AI also runs this same Save itself at each
 finished and checked stage of longer work; see [The session's AI saves its
 finished stages](#the-sessions-ai-saves-its-finished-stages) and [Choose what
