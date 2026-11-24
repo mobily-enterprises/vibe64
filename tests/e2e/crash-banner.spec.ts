@@ -41,12 +41,15 @@ function crashTestServer(root: string, port: number) {
     async start() {
       child = spawn(process.execPath, [CRASH_SERVER], {
         cwd: APP_ROOT,
-        env: { ...process.env, HOST: "127.0.0.1", PORT: String(port), VIBE64_CRASH_TEST_ROOT: root },
-        stdio: ["ignore", "ignore", "ignore"]
+        // APP_ENV=test, as JSKIT's browser-test launcher gives its own servers: JSKIT starts no server without one.
+        env: { ...process.env, APP_ENV: "test", HOST: "127.0.0.1", PORT: String(port), VIBE64_CRASH_TEST_ROOT: root },
+        stdio: ["ignore", "ignore", "pipe"]
       });
+      let stderr = "";
+      child.stderr?.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-4000); });
       exited = once(child, "exit");
       await expect.poll(async () => {
-        if (child?.exitCode !== null) throw new Error("The crash test server exited at its start.");
+        if (child?.exitCode !== null) throw new Error(`The crash test server exited at its start:\n${stderr}`);
         return fetch(`${origin}/api/health`).then((response) => response.ok, () => false);
       }, { timeout: 60_000, intervals: [100] }).toBe(true);
     },

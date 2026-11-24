@@ -128,9 +128,10 @@ test("remaining Vibe64 features use named capabilities and register direct route
       !["vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.save", "vibe64.source-editor.integrations.setup"].includes(action.id),
       "Only integration product controls are exposed; source tools belong to coding sessions.");
   }
-  // 60 project routes (Health's tool check, the 12 project-shared Files routes and Usage's 5 included). Learning v2: a
-  // practice project uses these ordinary project routes, so none is mirrored under /api/learning/:learningAttemptId.
-  assert.equal(routes.length, 60);
+  // 63 project routes (Health's tool check and its 3 crash routes, the 12 project-shared Files routes and Usage's 5
+  // included). Learning v2: a practice project uses these ordinary project routes, so none is mirrored under
+  // /api/learning/:learningAttemptId.
+  assert.equal(routes.length, 63);
   assert.equal(routes.filter((route) => String(route.path || route.url || "").startsWith("/api/learning/")).length, 0);
   for (const [method, suffix] of [
     ["GET", "/source-editor/download"],

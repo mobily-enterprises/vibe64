@@ -228,7 +228,7 @@ function startCrashWatch({ systemRoot, version, logger, processRef = process, he
       removeRunningMarkerSync({ systemRoot, marker });
     } catch (writeError) {
       markerKept = true;
-      process.stderr.write(`Vibe64 could not record its crash: ${writeError?.stack || writeError}\n`);
+      process.stderr.write(`Vibe64 could not record its crash: ${writeError.stack}\n`);
     }
     try {
       logOperationalEvent(logger, "error", {

@@ -21,9 +21,10 @@
       >
         <div class="vibe64-crash-banner__body">
           <p class="vibe64-crash-banner__text">
+            <!-- The space before each sentence is part of its text: the template drops one written before a tag. -->
             <strong>{{ headline }}</strong>
-            <span v-if="turnsText"> {{ turnsText }}</span>
-            <span v-if="actionError" class="vibe64-crash-banner__error"> {{ actionError }}</span>
+            <span v-if="turnsText">{{ ` ${turnsText}` }}</span>
+            <span v-if="actionError" class="vibe64-crash-banner__error">{{ ` ${actionError}` }}</span>
           </p>
           <div class="vibe64-crash-banner__actions">
             <v-btn :to="VIBE64_CRASHES_PATH" size="small" variant="outlined">See crashes</v-btn>
