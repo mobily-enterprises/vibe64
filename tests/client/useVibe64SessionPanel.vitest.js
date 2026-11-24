@@ -257,6 +257,22 @@ describe("useVibe64SessionPanel", () => {
       .toBe("save");
   });
 
+  it("shows a session whose repository an AI task is fixing as being fixed, not as needing help", async () => {
+    const { repositoryWorkStateDescription, repositoryWorkStateIcon, repositoryWorkStateLabel } =
+      await import("../../src/lib/vibe64SessionRepositoryWorkState.js");
+    const conflict = { code: "vibe64_session_update_conflict", conflictRecovery: { reviewId: "review-1" }, error: "1 file needs review.", status: "failed" };
+    const repositoryAiTask = { message: "Fix Update is still running. Wait for it to finish first.", title: "Fix Update" };
+    const fixing = sessionRepositoryWorkState({ repositoryAiTask, unsaved: true, updateAvailable: true, updateOperation: conflict });
+    expect(fixing).toEqual({ checkedAt: "", repositoryAiTask, state: "fixing", updateAvailable: true });
+    const item = { repositoryWorkState: fixing };
+    expect(repositoryWorkStateLabel(item)).toBe("Being fixed with AI");
+    expect(repositoryWorkStateDescription(item)).toBe("Being fixed with AI: Fix Update is still running. Wait for it to finish first.");
+    expect(repositoryWorkStateIcon(item)).toBe("$pending");
+    // The task's own Update shows as updating; once the task ends, the stored failure shows again.
+    expect(sessionRepositoryWorkState({ repositoryAiTask, updateOperation: { status: "running" } }).state).toBe("updating");
+    expect(sessionRepositoryWorkState({ unsaved: true, updateOperation: conflict }).state).toBe("needs_help");
+  });
+
   it("keeps ten uninspected session chips in a bounded honest checking state", () => {
     const sessions = Array.from({ length: 10 }, (_, index) => ({
       sessionId: `session-${index + 1}`,

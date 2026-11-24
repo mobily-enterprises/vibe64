@@ -3209,6 +3209,20 @@ describe("useVibe64AutopilotView direct chat", () => {
     }
   });
 
+  it("holds Save and Update while an AI task fixes the repository, saying which task and why", async () => {
+    const repositoryAiTask = { message: "Fix Update is still running. Wait for it to finish first.", title: "Fix Update" };
+    const view = await createView({
+      sessionToolbar: {
+        sessions: [{ repositoryWorkState: { checkedAt: "2026-08-21T03:00:00.000Z", repositoryAiTask, state: "fixing", updateAvailable: true },
+          sessionId: "session-1" }]
+      },
+      workState: { checkedAt: "2026-08-21T02:59:00.000Z", repositoryAiTask, unsaved: true, updateAvailable: true, updateStatusPending: false }
+    });
+    expect(view.saveWorkDisabled.value).toBe(true);
+    expect(view.updateWorkDisabled.value).toBe(true);
+    expect(view.saveWorkTitle.value).toBe(repositoryAiTask.message);
+  });
+
   it("keeps failed Save work retryable when repository inspection is still healthy", async () => {
     const view = await createView({
       sessionToolbar: {
