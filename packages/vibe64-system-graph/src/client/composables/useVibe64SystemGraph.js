@@ -30,6 +30,12 @@ function cityAvailable(status = {}, kind = "") {
   return status.cities?.[kind]?.available === true;
 }
 
+/** A request whose answer never came back: no status, or a proxy's 5xx without the server's own code. */
+function answerLost(error) {
+  const status = Number(error?.status);
+  return !error?.code && (status === 0 || status >= 500);
+}
+
 /**
  * Architecture's reads for one session: the index status, the architecture snapshot, and a project re-scan with
  * its progress, cancellation and failure output. A hidden reader keeps its data and reads nothing; a scan another
@@ -148,9 +154,12 @@ function useVibe64SystemGraph({
     }
   }, { immediate: true });
 
+  // The server answers a scan that outlasts two seconds as refreshing ({ refreshing: true, refresh }), and the
+  // refresh status follows the rest of it.
   async function refresh() {
     if (refreshing.value) return null;
     localRefreshOutput.value = "";
+    const scanBefore = scan.value?.id;
     try {
       const result = await refreshResource.save({}, { method: "POST", options: { timeoutMs: 10 * 60 * 1000 } });
       await reload();
@@ -158,6 +167,12 @@ function useVibe64SystemGraph({
     } catch (error) {
       localRefreshOutput.value = String(error?.details?.commandOutput || "");
       await refreshStatusResource.reload();
+      // An answer lost on the way (a dropped connection, or the hosted edge's 502 or 504) says nothing about the scan:
+      // when the status shows the one this request started, the status tells its outcome.
+      if (answerLost(error) && scan.value?.id && scan.value.id !== scanBefore) {
+        refreshResource.mutation.reset();
+        return null;
+      }
       // The retained view already presents this resource error. Do not also
       // throw it into the shell's blocking application-error dialog.
       if (!refreshResource.saveError.value) throw error;
