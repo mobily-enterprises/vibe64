@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
+import { createHeldWork } from "@local/vibe64-core/server/heldWork";
+import { currentProjectScopeKey, currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -78,6 +79,7 @@ function createSessionMessages({
     deliver: sendAgentMessage
   });
   const heldMessages = createHeldMessages({ logger, records: createHeldMessageRecords(project) });
+  const heldContinuations = createHeldWork({ component: "vibe64.integration_continuation_resume", logger });
 
   /**
    * Delivers a message to the session's assistant once the project is open and its workspace prepared.
@@ -215,9 +217,28 @@ function createSessionMessages({
     }, "Vibe64 could not interrupt the assistant.");
   }
 
+  /**
+   * Continue in chat after an integration setup (`POST .../integration-setup/resume`) waits for the session's
+   * workspace setup and then sends the continuation, which can outlast the hosted edge's minute: it answers with its
+   * outcome within two seconds, or `{ ok: true, resuming: true, sessionId, turnId, waitingFor }` while it goes on. A
+   * repeat for the same request joins it, or runs it again once it has ended, which only reads a continuation
+   * already sent (its message id is the saved request's).
+   * @param {string} sessionId
+   * @param {{ turnId: string, requestId: string }} input
+   */
   async function resumeIntegrationContinuation(sessionId, input) {
+    const key = [currentProjectScopeKey(), normalizeText(sessionId), normalizeText(input.turnId), normalizeText(input.requestId)]
+      .join("\0");
+    const answer = await heldContinuations.run(key, ({ stage }) => continueAfterIntegrationSetup(sessionId, input, stage));
+    if (answer.settled) return answer.result;
+    return { ok: true, resuming: true, sessionId, turnId: input.turnId, waitingFor: answer.waitingFor };
+  }
+
+  async function continueAfterIntegrationSetup(sessionId, input, stage) {
     return sessionResult(async () => {
+      stage("workspace-setup");
       await setupRunner.wait(sessionId);
+      stage("continuing");
       const runtime = await project.createRuntimeWithoutSource();
       const result = await terminals.resumeIntegrationContinuation(sessionId, {
         turnId: input.turnId,
@@ -275,9 +296,12 @@ function createSessionMessages({
     return heldMessages.inspectRecorded(normalizeText(sessionId), normalizeText(messageId));
   }
 
-  /** At shutdown: held messages still waiting are refused, unsent, and this resolves once every one has ended. */
-  function closeHeldMessages() {
-    return heldMessages.close();
+  /**
+   * At shutdown: held messages still waiting are refused, unsent, and this resolves once every one, and every held
+   * integration continuation, has ended.
+   */
+  async function closeHeldMessages() {
+    await Promise.all([heldMessages.close(), heldContinuations.close()]);
   }
 
   /**

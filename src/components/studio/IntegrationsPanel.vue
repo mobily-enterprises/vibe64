@@ -49,7 +49,7 @@ const integrationContext = computed(() => ({
     turnId: route.query.integrationTurn, requestId: route.query.integrationRequest
   }
 }));
-const { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, stagingReleaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard } =
+const { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, stagingReleaseId, connection, connectionError, continuing, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard } =
   useVibe64Integrations(integrationContext, selectedId);
 const projectSlug = useVibe64ProjectSlug();
 // Staging Env lives on the page a host adds at /dashboard/deploy, named here as its Dashboard link names it.
@@ -183,7 +183,7 @@ async function copySetupValue(value, label = "Callback URL") {
     setupCopyMessage.value = "Could not copy. Select the value in its field and copy it manually.";
   }
 }
-const disabled = computed(() => registrationCommand.isRunning || discoveryCommand.isRunning || command.isRunning || setupCommand.isRunning || (!staging.value && props.dashboardContext.sourceOperationsSuspended === true) || (staging.value && props.dashboardContext.owner !== true) || changedElsewhere.value);
+const disabled = computed(() => registrationCommand.isRunning || discoveryCommand.isRunning || command.isRunning || setupCommand.isRunning || continuing.value || (!staging.value && props.dashboardContext.sourceOperationsSuspended === true) || (staging.value && props.dashboardContext.owner !== true) || changedElsewhere.value);
 const loadError = computed(() => resource.loadError.value || (resource.data.value?.ok === false ? resource.data.value.error : ""));
 /** @type {import("@/lib/vibe64AssistantHost.js").ShellSlot<typeof displayedIntegrations>} */
 const colleagueIntegrations = inject(VIBE64_COLLEAGUE_INTEGRATIONS_KEY);

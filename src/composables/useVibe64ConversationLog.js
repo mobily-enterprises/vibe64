@@ -16,6 +16,7 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import { resumeIntegrationContinuation } from "@/lib/vibe64IntegrationContinuation.js";
 import {
   normalizeConversationTurn as normalizeSharedConversationTurn
 } from "@jskit-ai/assistant-core/shared/conversation";
@@ -208,17 +209,17 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
         }
         integrationConnections.value = { ...integrationConnections.value, [selection.requestId]: connection };
         if (connection.integrationSetup?.outcome === "completed" && connection.integrationSetup.continuation?.status !== "accepted") {
-          const resumed = await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, "/integration-setup/resume"), {
-            method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
-          });
+          const resumed = await resumeIntegrationContinuation(httpClient, { ...selection, sessionsApiPath: sessionsApiPath.value });
           if (resumed?.ok !== true) throw new Error(resumed?.error || "Assistant continuation is not yet confirmed.");
         }
         if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) await reloadConversationLog();
         return true;
       }
-      const result = await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, `/integration-setup/${action}`), {
-        method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
-      });
+      const result = action === "resume"
+        ? await resumeIntegrationContinuation(httpClient, { ...selection, sessionsApiPath: sessionsApiPath.value })
+        : await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, `/integration-setup/${action}`), {
+          method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
+        });
       if (result?.ok !== true) throw new Error(result?.error || "Could not update integration setup.");
       if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) {
         await reloadConversationLog();
