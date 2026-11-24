@@ -14,7 +14,7 @@ import {
 } from "./launchPreviewAuth.js";
 import { outputTargetFromMetadata, previewStopState } from "./outputTargetMetadata.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
-import { outputStatusResponseFromPreviewStatus } from "./launchPreviewStatus.js";
+import { latestLaunchTerminal, outputStatusResponseFromPreviewStatus } from "./launchPreviewStatus.js";
 import { readLatestPreviewDiagnostic } from "./launchPreviewDiagnostics.js";
 import { readLaunchContext, listOutputTargets } from "./outputTargetLaunchContext.js";
 
@@ -37,10 +37,33 @@ function createOutputTargetLaunchStatus({
   runCommand
 }) {
   /**
-   * The launch status of the session's outputs; launchStatus reads it under
-   * the start lock and the session's admission.
+   * What the outputs read says of the Preview while a start holds the launch lock: the latest run, if any, as
+   * starting, read without the lock or any readiness repair, so the read never waits for the start's slow steps.
    */
-  async function readLaunchStatus(sessionId, options) {
+  function startingPreviewStatus(sessionId, context) {
+    const terminal = latestLaunchTerminal(sessionId) || null;
+    return {
+      activeTerminal: terminal,
+      lastOutputTarget: outputTargetFromMetadata(context.session?.metadata || {}),
+      openTarget: null,
+      preview: {
+        canRestart: false,
+        canShowLog: Boolean(terminal?.id),
+        canStart: false,
+        message: "Preparing preview.",
+        reason: "launch_starting",
+        state: "starting",
+        terminalId: String(terminal?.id || "")
+      }
+    };
+  }
+
+  /**
+   * The launch status of the session's outputs; launchStatus reads it under
+   * the start lock and the session's admission, or, while a start holds that
+   * lock (`starting`), under the admission alone.
+   */
+  async function readLaunchStatus(sessionId, options, starting = false) {
     const context = await readLaunchContext(project, sessionId);
     const unavailable = launchCoordination.launchAdmissionFailure(sessionId, context.session);
     if (unavailable) {
@@ -48,7 +71,9 @@ function createOutputTargetLaunchStatus({
     }
     const outputTargets = await listOutputTargets(context);
     const [previewStatus, outputRuns] = await Promise.all([
-      launchCoordination.resolvePreviewStatus(sessionId, context, outputTargets, options),
+      starting
+        ? startingPreviewStatus(sessionId, context)
+        : launchCoordination.resolvePreviewStatus(sessionId, context, outputTargets, options),
       listOutputResults(context.session)
     ]);
     const response = outputStatusResponseFromPreviewStatus({
@@ -81,6 +106,11 @@ function createOutputTargetLaunchStatus({
   }
 
   async function launchStatus(sessionId, options = {}) {
+    if (launchCoordination.launchStartBusy(sessionId)) {
+      return vibe64Result(async () => launchCoordination.withLaunchAdmission(sessionId, () => (
+        readLaunchStatus(sessionId, options, true)
+      )));
+    }
     return vibe64Result(async () => launchCoordination.withLaunchStartLock(sessionId, () => (
       launchCoordination.withLaunchAdmission(sessionId, () => readLaunchStatus(sessionId, options))
     )));

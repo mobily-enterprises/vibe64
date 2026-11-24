@@ -101,8 +101,21 @@ function createOutputTargetTerminalSessions({
   }
 
   async function stopTerminal(sessionId, terminalSessionId) {
-    // A start waiting for the workspace preparation, outside the lock, starts nothing once Preview is stopped.
-    if (!state.previewTestRuns.has(sessionId)) launchCoordination.interruptLaunches(sessionId, "stopped");
+    if (state.previewTestRuns.has(sessionId)) return stopTerminalInLock(sessionId, terminalSessionId);
+    // A start waiting for the workspace preparation, or holding the lock, starts nothing once Preview is stopped.
+    launchCoordination.interruptLaunches(sessionId, "stopped");
+    if (!launchCoordination.launchStartBusy(sessionId)) return stopTerminalInLock(sessionId, terminalSessionId);
+    // A start holds the launch lock in a slow step and ends at its next one: Stop records the choice and answers at
+    // once, and stops whatever runs once the start lets the lock go.
+    return vibe64Result(async () => {
+      const runtime = await project.createRuntime();
+      await writePreviewStopState(runtime.store, sessionId, { stopped: true });
+      void stopTerminalInLock(sessionId, "");
+      return { ok: true, running: false, status: "stopping", stopping: true };
+    });
+  }
+
+  function stopTerminalInLock(sessionId, terminalSessionId) {
     return vibe64Result(async () => launchCoordination.withLaunchStartLock(sessionId, async () => {
       if (state.previewTestRuns.has(sessionId)) {
         return {

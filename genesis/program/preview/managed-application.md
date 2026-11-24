@@ -537,6 +537,16 @@ takes the queue again and reruns its checks without asking for another
 preparation. A Stop or the session's close while it waited
 (`interruptLaunches`) ends it unstarted (`vibe64_preview_stopped`,
 `vibe64_session_closing`).
+A start's other steps still run inside the queue (the preparation check, which
+can wait for the assistant's write, the project's services, the resource
+admission and the spawn), so while a start is queued for or holds it
+(`withStartLock`, `launchStartBusy`) the outputs read, Open and the identity
+switch answer from what is known without the queue: the latest run, if any,
+as starting ("Preparing preview."), with no readiness repair. Stop then records
+the stopped choice and answers `{ ok: true, stopping: true }` at once; the
+start ends unstarted at its next step (`throwIfLaunchInterrupted`, after the
+preparation check, after the services and before the spawn), and Stop's
+cleanup runs once the start lets the queue go.
 A start the page names (`startId`, `src/lib/vibe64LaunchStart.js`) runs as
 held work (`@local/vibe64-core/server/heldWork`, in `outputTargetTerminal.js`):
 it answers with its run when that comes within two seconds, and otherwise
