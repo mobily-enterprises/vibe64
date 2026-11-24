@@ -204,7 +204,8 @@ describe("Architecture client resources", () => {
       refresh.saveError.value = lost.message;
       throw lost;
     });
-    status.reload.mockImplementation(async () => {
+    // The status read after the lost answer finds the scan that request started; later reads find what is current.
+    status.reload.mockImplementationOnce(async () => {
       status.data.value = { refresh: { id: "scan-2", status: "running", startedAt: Date.now(), message: "Scanning source…" } };
     });
     await expect(graph.refresh()).resolves.toBeNull();
