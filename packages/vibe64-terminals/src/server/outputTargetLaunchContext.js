@@ -113,7 +113,7 @@ async function readPreparedLaunchContext(project, sessionId, { ensureWorkspacePr
       return { preparing: setup.completion };
     }
   }
-  return { context: launchContextFor(project, runtime, await runtime.getSession(sessionId), true) };
+  return { context: await launchContextFor(project, runtime, await runtime.getSession(sessionId), true) };
 }
 
 async function listOutputTargets(context, options = {}) {
