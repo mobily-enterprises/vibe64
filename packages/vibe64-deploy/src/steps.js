@@ -24,7 +24,9 @@
 //      only what the Stack names (a Production Env entry is no part of it), so a provider must take a name the
 //      release doesn't declare, as mobilynet does (decided 19 Nov). A setting a service requires that the Production
 //      Env has no value for fails the Deploy before any change, naming it. A service whose settings name one this
-//      Deploy still makes (a Reaches of a new service) is handed its release without them, and given them in 6.
+//      Deploy still makes (a Reaches of a new service) is handed its release without them, and given them in 6. A
+//      service to make that reaches one not made yet is made after it, whatever their order; of services that reach
+//      each other, none made yet, the first is made without the addresses of those not made, and given them in 6.
 //      Then, each service in turn: its release is uploaded, then its service made (internal: no routes; public: routed
 //      at the domain and its other names, with a connection to each service it reaches; without any while another
 //      service the record holds has one: address.js), with the count the plan chose for a service it makes, or handed the release, which rolls to the count the service runs (a provider's refresh rolls to the count the service has as
@@ -143,15 +145,21 @@ function labelledAs(observed, record, kind, name) {
     && thing.labels?.[LABEL.item] === `${kind}.${name}`);
 }
 
+/** A service the given one reaches that the provider doesn't run yet (none made, or gone). */
+const unmadeReach = (service, record, byId) => service.reaches.find((reach) => !byId.get(record.items[`service.${reach.service}`]?.id));
+
 /**
  * The values a service is given, with each of its Reaches settings the reached service's private address: its own
- * (`internalUrl`) where the provider reports one, else `http://<internalName>:<port>`.
+ * (`internalUrl`) where the provider reports one, else `http://<internalName>:<port>`. Null while a reached service
+ * has no address yet; `{ unmade: "leave out" }` leaves out the settings of those not made yet instead.
  * @param {any} service the need's service @param {any} context the run's context @param {Map<string, any>} byId
+ * @param {{ unmade?: "wait" | "leave out" }} [options]
  */
-function valuesOf(service, { record, release }, byId) {
+function valuesOf(service, { record, release }, byId, { unmade = "wait" } = {}) {
   const reached = {};
   for (const reach of service.reaches) {
     const thing = byId.get(record.items[`service.${reach.service}`]?.id);
+    if (!thing && unmade === "leave out") continue;
     const address = thing?.internalUrl ?? (thing?.internalName ? `http://${thing.internalName}:${release.port}` : null);
     if (!address) return null;
     reached[reach.setting] = address;
@@ -180,9 +188,12 @@ function broughtOf(values, item) {
   };
 }
 
-/** The connections a service opens: one to each service it reaches, on the port services listen on, in Stack order. */
+/**
+ * The connections a service opens: one to each service it reaches, on the port services listen on, in Stack order; none
+ * yet to one not made (6 opens it once it is).
+ */
 function connectionsOf(service, record, port) {
-  return service.reaches.map((reach) => ({ to: record.items[`service.${reach.service}`]?.id ?? null, port }));
+  return service.reaches.map((reach) => ({ to: record.items[`service.${reach.service}`]?.id ?? null, port })).filter((one) => one.to);
 }
 
 /** A read of the provider that may answer later: no answer, a 5xx, its rate limit, a thing busy. @param {any} error */
@@ -317,6 +328,13 @@ function nextStep({ plan, needs, record, observed, release }) {
     const ready = readyOf(service, parts);
     if (ready) return ready;
   }
+  // A service to make that reaches one not made yet is made after it; services that reach each other, none made yet,
+  // are made below.
+  let reachesUnmade = null;
+  const createOf = (service, values) => {
+    const held = service.exposure === "public" ? [release.domain, ...aliases].map((name) => domainHolder(record, thingOf, name)).find(Boolean) : null;
+    return { kind: "createService", service: service.id, values, ...(held ? { withoutDomain: held.name } : {}), ...migrateTask(service.id) };
+  };
   for (const service of servicesInOrder(needs)) {
     const parts = partsOf(service);
     const { item, state, thing } = parts;
@@ -336,10 +354,13 @@ function nextStep({ plan, needs, record, observed, release }) {
       const name = release.declarations[service.id].name;
       const leaving = observed.find((one) => one.name === name);
       if (leaving) return { kind: "wait", words: `Waiting for the old ${service.id} to go` };
+      if (unmadeReach(service, record, byId)) {
+        reachesUnmade ??= service;
+        continue;
+      }
       const values = valuesOf(service, { record, release }, byId);
       if (!values) return { kind: "wait", words: `Waiting for the services ${service.id} reaches` };
-      const held = service.exposure === "public" ? [release.domain, ...aliases].map((name) => domainHolder(record, thingOf, name)).find(Boolean) : null;
-      return { kind: "createService", service: service.id, values, ...(held ? { withoutDomain: held.name } : {}), ...migrateTask(service.id) };
+      return createOf(service, values);
     }
     // A service runs one refresh at a time, the rest queued behind it, and shows the one under way, else the next: this
     // Deploy's has ended once none is. A resource it is still not linked to (a new service, one that runs no release,
@@ -354,6 +375,13 @@ function nextStep({ plan, needs, record, observed, release }) {
       if (thing.refresh) return { kind: "wait", words: late && (!ours || ours === "queued") ? `Waiting for ${service.id} to start building` : `Updating ${service.id}` };
       return { kind: "checkRefresh", service: service.id, id: thing.id, refreshId: state.refreshId };
     }
+  }
+
+  // Services that reach each other, none made yet: the first is made without the addresses of those not made, which
+  // 6 gives it once they are.
+  if (reachesUnmade) {
+    const values = valuesOf(reachesUnmade, { record, release }, byId, { unmade: "leave out" });
+    return values ? createOf(reachesUnmade, values) : { kind: "wait", words: `Waiting for the services ${reachesUnmade.id} reaches` };
   }
 
   // 5. A resource the Stack no longer names: unlinked from the services that stay, kept with its data.
