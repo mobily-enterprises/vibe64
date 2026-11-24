@@ -34,6 +34,7 @@ export {
   runVibe64Command
 } from "./runVibe64Command.js";
 export {
+  endCaptures,
   runCaptureCommand
 } from "./engines/capture.js";
 export {

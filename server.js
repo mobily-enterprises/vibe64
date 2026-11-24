@@ -28,6 +28,8 @@ import {
 import {
   closeTerminalSessionsForNamespacePrefix
 } from "@local/vibe64-execution/server/terminalSessions";
+import { beginServerStop, resetServerStop } from "@local/vibe64-execution/server/serverStop";
+import { endCaptures } from "@local/vibe64-execution/server";
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
@@ -47,6 +49,7 @@ import {
   registerBrowserLifecycleWebSocketRoute
 } from "./server/lib/browserLifecycle.js";
 import { handleUpgradeSocketErrors } from "./server/lib/upgradeSocketErrors.js";
+import { registerStopGate, stopAcceptingConnections } from "./server/lib/stopGate.js";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
@@ -96,14 +99,31 @@ import {
 /** @typedef {ReturnType<typeof import("@jskit-ai/kernel/shared/capabilities").createCapabilityRuntime>} CapabilityRuntime */
 
 const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_SHUTDOWN_TIMEOUT_MS = 8000;
+// A stop's budget. On release 10's move of mercmobily (24 Nov 2026) the old editor took 3.33 s to stop, starting helper
+// calls after SIGTERM, while the edge in front of it answered 502 and 503; the page now rides out the restart, and the
+// editor is gone in under a second. Requests in flight, and the commands that were running when the stop began, get
+// STOP_DRAIN_MS; then those connections close and those commands end. The stop's own work (each provider's shutdown)
+// has until DEFAULT_SHUTDOWN_TIMEOUT_MS, when whatever still runs is ended and the process exits.
+const STOP_DRAIN_MS = 600;
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 850;
+// How long an ended command's process group has after SIGTERM before SIGKILL, and after SIGKILL.
+const STOP_COMMAND_GRACE_MS = 75;
 
 function resolveShutdownTimeoutMs(value = DEFAULT_SHUTDOWN_TIMEOUT_MS) {
   const timeoutMs = Math.floor(Number(value));
-  if (!Number.isFinite(timeoutMs) || timeoutMs < 1000) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 100) {
     return DEFAULT_SHUTDOWN_TIMEOUT_MS;
   }
   return timeoutMs;
+}
+
+/** Ends the commands this process started that are still running (those started before `startedBefore`). */
+function endRunningCommands(startedBefore = Infinity) {
+  return endCaptures({
+    startedBefore,
+    termTimeoutMs: STOP_COMMAND_GRACE_MS,
+    killTimeoutMs: STOP_COMMAND_GRACE_MS
+  });
 }
 
 /** @param {import("node:http").Server} server */
@@ -121,16 +141,25 @@ function forceCloseServerConnections(server) {
 }
 
 /**
- * The SIGINT and SIGTERM handler: it stops the runtime terminals and the
- * capability runtime together, then closes Fastify, and exits within the
- * shutdown deadline.
+ * The SIGINT and SIGTERM handler. The stop begins before anything else (`beginStop`): nothing new starts from then
+ * on, the next server will read this stop as planned, and every AI engine closes its fence. The listener stops taking
+ * connections, and the runtime terminals and the capability runtime stop together, then Fastify closes. Requests in
+ * flight, and the commands that were running when the stop began, have `drainMs`: then those connections close and
+ * those commands end, which ends the work still waiting on them. Every command this process started that still runs
+ * is ended before it exits, and it exits within the shutdown deadline. The stop is logged at warn, which a hosted
+ * editor's default level keeps, with how long it took and each provider's shutdown.
  * @param {object} dependencies
  * @param {import("fastify").FastifyInstance} dependencies.app
  * @param {CapabilityRuntime} dependencies.capabilityRuntime
  * @param {(signal: string) => unknown} dependencies.beforeClose Runs with the runtime terminals and the capability runtime.
+ * @param {(signal: string, options: { logger: unknown }) => unknown} [dependencies.beginStop]
  * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
  * @param {() => unknown} [dependencies.closeRuntimeTerminals]
+ * @param {number} [dependencies.drainMs]
+ * @param {(startedBefore: number) => Promise<{ ended?: number }>} [dependencies.endCommands] Ends the commands still
+ *   running that started before the given time.
  * @param {(code: number) => void} [dependencies.exitProcess]
+ * @param {() => number} [dependencies.now]
  * @param {(error: Error) => unknown} [dependencies.onStopFailed] Records a stop that failed or overran, before the exit.
  * @param {typeof setTimeout} [dependencies.setTimeoutFn]
  * @param {number} [dependencies.shutdownTimeoutMs]
@@ -139,9 +168,13 @@ function createSignalShutdownHandler({
   app,
   capabilityRuntime,
   beforeClose,
+  beginStop = beginServerStop,
   clearTimeoutFn = clearTimeout,
   closeRuntimeTerminals = () => closeTerminalSessionsForNamespacePrefix(""),
+  drainMs = STOP_DRAIN_MS,
+  endCommands = endRunningCommands,
   exitProcess = process.exit.bind(process),
+  now = Date.now,
   onStopFailed = () => {},
   setTimeoutFn = setTimeout,
   shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS
@@ -163,19 +196,24 @@ function createSignalShutdownHandler({
       return;
     }
     closing = true;
-    logOperationalEvent(app.log, "info", {
+    const startedAt = now();
+    beginStop(signal, { logger: app.log });
+    stopAcceptingConnections(app.server);
+    logOperationalEvent(app.log, "warn", {
       component: "server-lifecycle",
       event: "vibe64.server.stopping",
       signal
     }, "Stopping vibe64 server.");
 
     // Every stop event says how long it took, which operations were still
-    // running and how long each capability provider's shutdown took.
-    const startedAt = Date.now();
+    // running, how long each capability provider's shutdown took and how many
+    // running commands the stop ended.
     const pendingOperations = new Set();
+    let commandsEnded = 0;
     function progressFields() {
       return {
-        durationMs: Date.now() - startedAt,
+        commandsEnded,
+        durationMs: now() - startedAt,
         providerShutdowns: capabilityRuntime.diagnostics().providerShutdowns
       };
     }
@@ -183,7 +221,24 @@ function createSignalShutdownHandler({
       pendingOperations.add(name);
       return Promise.resolve().then(run).finally(() => pendingOperations.delete(name));
     }
+    // Each command's SIGTERM goes out before this returns, so an exit straight after still sends it.
+    function endCommandsStartedBefore(time) {
+      let ending;
+      try {
+        ending = Promise.resolve(endCommands(time));
+      } catch {
+        return Promise.resolve();
+      }
+      return ending.then((result) => {
+        commandsEnded += Number(result?.ended) || 0;
+      }, () => {});
+    }
 
+    const drain = setTimeoutFn(() => {
+      forceCloseServerConnections(app.server);
+      void endCommandsStartedBefore(startedAt);
+    }, Math.min(drainMs, timeoutMs));
+    drain.unref?.();
     const timeout = setTimeoutFn(() => {
       logOperationalEvent(app.log, "error", {
         component: "server-lifecycle",
@@ -198,9 +253,11 @@ function createSignalShutdownHandler({
         { code: "vibe64_shutdown_timeout" }
       ));
       forceCloseServerConnections(app.server);
+      // Each command still running gets its SIGTERM before the exit, which does not wait for it.
+      void endCommandsStartedBefore(Infinity);
       exitOnce(1);
     }, timeoutMs);
-    timeout.unref();
+    timeout.unref?.();
 
     try {
       const preCloseOperations = [
@@ -235,11 +292,14 @@ function createSignalShutdownHandler({
         error.operation = operations[index].name;
         return [error];
       });
+      clearTimeoutFn(drain);
+      // Nothing this process started outlives it.
+      await endCommandsStartedBefore(Infinity);
       if (failures.length > 0) {
         throw new AggregateError(failures, `${failures.length} shutdown operation(s) failed.`);
       }
       clearTimeoutFn(timeout);
-      logOperationalEvent(app.log, "info", {
+      logOperationalEvent(app.log, "warn", {
         component: "server-lifecycle",
         event: "vibe64.server.stopped",
         signal,
@@ -247,6 +307,7 @@ function createSignalShutdownHandler({
       }, "Stopped vibe64 server.");
       exitOnce(0);
     } catch (error) {
+      clearTimeoutFn(drain);
       clearTimeoutFn(timeout);
       logOperationalEvent(app.log, "error", {
         component: "server-lifecycle",
@@ -319,6 +380,8 @@ function targetRootForRuntimeProfile(options = {}, runtimeProfile = {}) {
 }
 
 async function createServer(options = {}) {
+  // This process's server starts unstopped, even after an earlier one in the same process stopped.
+  resetServerStop();
   const runtimeEnv = resolveRuntimeEnv();
   const loggerOptions = createVibe64FastifyLoggerOptions({
     env: runtimeEnv,
@@ -345,6 +408,9 @@ async function createServer(options = {}) {
     trustProxy: resolveTrustedProxies(runtimeEnv),
     // Conversation selectors carry project, session and saved chat identities.
     routerOptions: { maxParamLength: 1024 },
+    // The stop gate answers every request that arrives once the stop has begun (server/lib/stopGate.js), with what
+    // tells the page it may send it again.
+    return503OnClosing: false,
     ajv: {
       customOptions: {
         allowUnionTypes: true
@@ -354,6 +420,8 @@ async function createServer(options = {}) {
   // Before any upgrade handler (WebSocket routes, realtime, a host's own), so no upgrade's connection is ever left
   // without an error listener.
   handleUpgradeSocketErrors(app.server, { logger: app.log });
+  // Before any other hook, plugin or route, so a request that arrives while the server stops runs nothing.
+  registerStopGate(app);
   // Before any plugin or route, so every answer, the release bundle's included, refuses other sites' frames.
   registerEditorFraming(app, { env: runtimeEnv });
   for (const warning of loggerOptions.warnings) {

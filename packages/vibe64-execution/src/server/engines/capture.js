@@ -10,6 +10,26 @@ import {
 
 // Retain failed drains so the execution owner can retry the same stop.
 const capturedExecutions = new Map();
+// Every capture still running, with when it started: the server's stop ends them (endCaptures), so no command the
+// editor started outlives it. Each leads its own process group, which nothing else ends when the server exits.
+const liveCaptures = new Set();
+
+/**
+ * Ends the captures still running that started before `startedBefore` (epoch ms; all by default): SIGTERM to each
+ * one's process group before this returns, then SIGKILL to a group still there after `termTimeoutMs`. Each one's
+ * caller gets its command's end as usual, killed by that signal. Never throws.
+ * @param {{ startedBefore?: number, termTimeoutMs?: number, killTimeoutMs?: number }} [options]
+ * @returns {Promise<{ ended: number, scopeEmpty: boolean }>} `ended` counts the captures no earlier call was ending
+ */
+async function endCaptures({ startedBefore = Infinity, termTimeoutMs = 100, killTimeoutMs = 100 } = {}) {
+  const ending = [...liveCaptures].filter((capture) => capture.startedAt < startedBefore);
+  const ended = ending.filter((capture) => !capture.ending).length;
+  const drained = await Promise.all(ending.map((capture) => {
+    capture.ending = true;
+    return drainProcessGroup(capture.processGroupId, { termTimeoutMs, killTimeoutMs }).catch(() => false);
+  }));
+  return { ended, scopeEmpty: drained.every(Boolean) };
+}
 
 async function stopCaptureExecution(executionId) {
   const stop = capturedExecutions.get(executionId);
@@ -62,6 +82,11 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
       timeout
     });
     processGroupId = Number(subprocess.pid);
+    if (process.platform !== "win32" && Number.isSafeInteger(processGroupId) && processGroupId > 0) {
+      const live = { ending: false, processGroupId, startedAt: Date.now() };
+      liveCaptures.add(live);
+      void subprocess.completion.then(() => liveCaptures.delete(live));
+    }
     let stopping;
     stop = () => {
       if (!stopping) {
@@ -150,6 +175,7 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
 }
 
 export {
+  endCaptures,
   runCaptureCommand,
   stopCaptureExecution
 };

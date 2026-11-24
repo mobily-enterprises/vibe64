@@ -12,6 +12,7 @@ import {
 } from "./events.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localhostCheckBypass";
+import { onServerStopBegins } from "@local/vibe64-execution/server/serverStop";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { configureVibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
@@ -37,6 +38,10 @@ import { startProjectRuntimeDormancyCleanupSchedule } from "./projectRuntimeDorm
 
 // Each terminals service's idle-project sweep, started in setup and stopped at shutdown.
 const cleanupSchedules = new WeakMap();
+// Each terminals service's subscription to the server's stop, which begins its shutdown the moment the stop signal
+// arrives: the planned-stop record the next server reads, and every AI engine's closing fence, come first, before the
+// capability runtime's reverse order reaches any provider's shutdown.
+const stopSubscriptions = new WeakMap();
 
 const Vibe64TerminalsFeature = defineFeature({
   id: "vibe64.terminals",
@@ -105,6 +110,9 @@ const Vibe64TerminalsFeature = defineFeature({
       projectContext,
       terminals
     });
+    stopSubscriptions.set(terminals, onServerStopBegins(() => {
+      terminals.beginShutdown();
+    }));
     // The idle-project sweep's timer runs from setup, so shutdown stops it even when boot never ran.
     cleanupSchedules.set(terminals, startProjectRuntimeDormancyCleanupSchedule({
       logger,
@@ -150,6 +158,8 @@ const Vibe64TerminalsFeature = defineFeature({
    * @param {{ outputs: { terminals: TerminalsService } }} context
    */
   async shutdown(_dependencies, { outputs }) {
+    stopSubscriptions.get(outputs.terminals)?.();
+    stopSubscriptions.delete(outputs.terminals);
     cleanupSchedules.get(outputs.terminals).stop();
     cleanupSchedules.delete(outputs.terminals);
     await outputs.terminals.close();

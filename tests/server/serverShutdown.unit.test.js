@@ -20,7 +20,7 @@ import { __testables as browserLifecycleTestables } from "../../server/lib/brows
 
 const { BROWSER_LIFECYCLE_WEBSOCKET_PATH } = browserLifecycleTestables;
 
-test("signal shutdown exits cleanly after Fastify closes", async () => {
+test("signal shutdown begins the stop first and exits cleanly after Fastify closes", async () => {
   const events = [];
   let timeoutCleared = false;
   const handler = createSignalShutdownHandler({
@@ -29,6 +29,9 @@ test("signal shutdown exits cleanly after Fastify closes", async () => {
         events.push("close");
       },
       log: testLogger(events)
+    },
+    beginStop(signal) {
+      events.push(`begin-stop:${signal}`);
     },
     capabilityRuntime: idleCapabilityRuntime(),
     clearTimeoutFn() {
@@ -57,12 +60,14 @@ test("signal shutdown exits cleanly after Fastify closes", async () => {
 
   assert.equal(timeoutCleared, true);
   assert.deepEqual(events, [
-    "info:Stopping vibe64 server.",
+    "begin-stop:SIGTERM",
+    "warn:Stopping vibe64 server.",
+    "unref",
     "unref",
     "before:SIGTERM",
     "close-terminals",
     "close",
-    "info:Stopped vibe64 server.",
+    "warn:Stopped vibe64 server.",
     "exit:0"
   ]);
 });
@@ -111,7 +116,8 @@ test("signal shutdown forces exit when Fastify close stalls", async () => {
   timeoutCallback();
 
   assert.deepEqual(events, [
-    "info:Stopping vibe64 server.",
+    "warn:Stopping vibe64 server.",
+    "unref",
     "unref",
     "close-terminals",
     "close",
@@ -154,14 +160,14 @@ test("signal shutdown begins Fastify feature shutdown without waiting for termin
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(events, [
-    "info:Stopping vibe64 server.",
+    "warn:Stopping vibe64 server.",
     "close-terminals",
     "close"
   ]);
   releaseTerminalClose();
   await closing;
   assert.deepEqual(events.slice(-2), [
-    "info:Stopped vibe64 server.",
+    "warn:Stopped vibe64 server.",
     "exit:0"
   ]);
 });
@@ -207,7 +213,7 @@ test("signal shutdown settles capability runtime before Fastify while terminal c
   const closing = handler("SIGTERM");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(events, [
-    "info:Stopping vibe64 server.",
+    "warn:Stopping vibe64 server.",
     "runtime-terminals",
     "capability-runtime"
   ]);
@@ -218,9 +224,62 @@ test("signal shutdown settles capability runtime before Fastify while terminal c
   releaseTerminalClose();
   await closing;
   assert.deepEqual(events.slice(-2), [
-    "info:Stopped vibe64 server.",
+    "warn:Stopped vibe64 server.",
     "exit:0"
   ]);
+});
+
+test("the drain ends the commands that ran before the stop began, and the stop ends every command left before it exits", async () => {
+  const ended = [];
+  const timers = [];
+  const logged = [];
+  const exits = [];
+  let releaseClose;
+  const closeHeld = new Promise((resolve) => {
+    releaseClose = resolve;
+  });
+  const handler = createSignalShutdownHandler({
+    app: {
+      close: () => closeHeld,
+      log: fieldLogger(logged),
+      server: idleHttpServer()
+    },
+    beginStop() {},
+    capabilityRuntime: idleCapabilityRuntime(),
+    beforeClose() {},
+    clearTimeoutFn() {},
+    closeRuntimeTerminals() {},
+    drainMs: 600,
+    async endCommands(startedBefore) {
+      ended.push(startedBefore);
+      return { ended: 1 };
+    },
+    exitProcess(code) {
+      exits.push(code);
+    },
+    now: () => 5000,
+    setTimeoutFn(callback, ms) {
+      timers.push({ callback, ms });
+      return { unref() {} };
+    },
+    shutdownTimeoutMs: 850
+  });
+
+  const closing = handler("SIGTERM");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(timers.map(({ ms }) => ms), [600, 850], "the drain, then the deadline");
+  timers[0].callback();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(ended, [5000], "the drain ends what was running when the stop began");
+  assert.deepEqual(exits, [], "the stop's own work goes on");
+  releaseClose();
+  await closing;
+  assert.deepEqual(ended, [5000, Infinity], "nothing the process started outlives it");
+  assert.deepEqual(exits, [0]);
+  const stopped = logged.find(({ fields }) => fields.event === "vibe64.server.stopped");
+  assert.equal(stopped.level, "warn", "a hosted editor's default level keeps the stop's record");
+  assert.equal(stopped.fields.commandsEnded, 2);
+  assert.equal(stopped.fields.durationMs, 0);
 });
 
 test("signal shutdown closes a real upgraded Socket.IO connection through capability shutdown", async () => {
@@ -491,7 +550,7 @@ test("signal shutdown reaches Fastify feature shutdown when pre-close cleanup fa
   await handler("SIGTERM");
 
   assert.deepEqual(events, [
-    "info:Stopping vibe64 server.",
+    "warn:Stopping vibe64 server.",
     "before-close",
     "close-terminals",
     "close",
@@ -532,7 +591,7 @@ test("signal shutdown reaches Fastify close when capability shutdown fails", asy
   await handler("SIGTERM");
 
   assert.deepEqual(events, [
-    "info:Stopping vibe64 server.",
+    "warn:Stopping vibe64 server.",
     "close-terminals",
     "capability-runtime",
     "close",
@@ -704,6 +763,9 @@ function testLogger(events) {
     },
     info(_fields, message) {
       events.push(`info:${message}`);
+    },
+    warn(_fields, message) {
+      events.push(`warn:${message}`);
     }
   };
 }
