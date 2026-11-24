@@ -1,27 +1,17 @@
-import { setTimeout as delay } from "node:timers/promises";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { createHeldWork, HELD_ANSWER_MS, HELD_OUTCOME_MS } from "@local/vibe64-core/server/heldWork";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
-
-// A person's send answers with its delivery's own result when that comes within this long, and otherwise with the
-// message held while its delivery goes on. A proxy in front of a hosted editor ends a request after about a minute:
-// on 24 Nov 2026 a message sent while the workspace was being prepared after a restart waited inside its request for
-// that preparation and showed "Request failed with status 504.", although it was delivered once preparation ended.
-const SEND_ANSWER_MS = 2_000;
-// How long a held message's outcome stays readable after its delivery ends, for the page following it.
-const HELD_OUTCOME_MS = 15 * 60_000;
-// A send that took this long, from its arrival to its delivery's end, is logged as a warning.
-const SLOW_SEND_MS = 1_000;
 
 /**
  * A held message's delivery check: still on its way (with what it waits for), or the outcome its request would have
  * answered with. A delivery that threw names its refusal; one the server proved never reached the assistant is
  * not-sent, any other is unknown.
  * @param {string} messageId
- * @param {{ settled: boolean, stage: string, outcome: { result?: any, error?: any } | null }} entry
+ * @param {{ settled: boolean, waitingFor: string, result?: any, error?: any }} operation the held work's operation
  */
-function heldReceipt(messageId, entry) {
-  if (!entry.settled) return { status: "pending", messageId, waitingFor: entry.stage };
-  const { result, error } = entry.outcome;
+function heldReceipt(messageId, operation) {
+  if (!operation.settled) return { status: "pending", messageId, waitingFor: operation.waitingFor };
+  const { result, error } = operation;
   if (!error) {
     if (result?.ok === false) {
       return {
@@ -43,11 +33,13 @@ function heldReceipt(messageId, entry) {
 }
 
 /**
- * A person's Main chat sends that answer before their delivery ends. Each message delivers once: a send of the same
- * message while its delivery runs (a Retry, a reload's Retry) joins that delivery and never starts a second. A send
- * whose delivery settles within `answerMs` answers with its result, as before; a later one answers that the message
- * is held, with what it waits for, and its delivery check reports the outcome once it ends. Each send's timing, from
- * its arrival, is logged once it ends.
+ * A person's Main chat sends that answer before their delivery ends (within two seconds, before a hosted edge's minute
+ * shows as "Request failed with status 504."), as held work (@local/vibe64-core/server/heldWork)
+ * keyed by session and message. Each message delivers once: a send of the same message while its delivery runs (a
+ * Retry, a reload's Retry) joins that delivery and never starts a second. A send whose delivery settles within
+ * `answerMs` answers with its result, as before; a later one answers that the message is held, with what it waits
+ * for, and its delivery check reports the outcome once it ends. Each send's timing, from its arrival, is logged once
+ * it ends.
  * A message held past its answer is also in the session's records (`records`, heldMessageRecords.js) until its
  * delivery ends, and stays there when it ended unsent, so a restarted editor still answers its delivery check.
  * @param {object} dependencies
@@ -56,14 +48,21 @@ function heldReceipt(messageId, entry) {
  * @param {number} [dependencies.answerMs]
  * @param {number} [dependencies.outcomeMs]
  */
-function createHeldMessages({ records, logger = silentLogger, answerMs = SEND_ANSWER_MS, outcomeMs = HELD_OUTCOME_MS }) {
-  const entries = new Map();
-  const closing = new AbortController();
+function createHeldMessages({ records, logger = silentLogger, answerMs = HELD_ANSWER_MS, outcomeMs = HELD_OUTCOME_MS }) {
   const key = (sessionId, messageId) => `${sessionId}\0${messageId}`;
+  const identity = (operation) => {
+    const [sessionId, messageId] = operation.key.split("\0");
+    return { sessionId, messageId };
+  };
+  // Each operation's record writes, in order.
+  const recordings = new WeakMap();
 
-  /** One entry's record writes, in order; a failed write is logged, never the send's failure. */
-  function record(entry, sessionId, messageId, write) {
-    entry.recording = entry.recording.then(write).catch((error) => {
+  /** One operation's record writes, in order; a failed write is logged, never the send's failure. */
+  function record(operation, write) {
+    const { sessionId, messageId } = identity(operation);
+    const state = recordings.get(operation) || { recording: Promise.resolve(), settleRecorded: false };
+    recordings.set(operation, state);
+    state.recording = state.recording.then(() => write(sessionId, messageId)).catch((error) => {
       try {
         logOperationalEvent(logger, "warn", {
           component: "vibe64.agent_message",
@@ -76,69 +75,42 @@ function createHeldMessages({ records, logger = silentLogger, answerMs = SEND_AN
         // Diagnostic only.
       }
     });
-    return entry.recording;
+    return state.recording;
   }
 
-  function recordSettled(entry, sessionId, messageId) {
-    if (entry.settleRecorded) return entry.recording;
-    entry.settleRecorded = true;
-    return record(entry, sessionId, messageId, () => records.settle(sessionId, messageId, heldReceipt(messageId, entry)));
+  function recordSettled(operation) {
+    const state = recordings.get(operation);
+    if (!state || state.settleRecorded) return state?.recording;
+    state.settleRecorded = true;
+    return record(operation, (sessionId, messageId) => records.settle(sessionId, messageId, heldReceipt(messageId, operation)));
   }
 
-  function logTiming(sessionId, messageId, entry) {
-    const elapsedMs = Date.now() - entry.receivedAt;
-    const held = entry.heldAnswer;
-    logOperationalEvent(logger, elapsedMs >= SLOW_SEND_MS || held ? "warn" : "info", {
-      component: "vibe64.agent_message",
-      event: "vibe64.agent_message.send_timing",
-      sessionId,
-      messageId,
-      receivedAt: new Date(entry.receivedAt).toISOString(),
-      elapsedMs,
-      held,
-      stages: entry.stages,
-      outcome: heldReceipt(messageId, entry).status
-    }, "Assistant message send timing, from its arrival.");
-  }
-
-  function start(sessionId, messageId, deliver) {
-    const id = key(sessionId, messageId);
-    const entry = {
-      receivedAt: Date.now(),
-      stage: "received",
-      stages: { received: 0 },
-      settled: false,
-      outcome: null,
-      heldAnswer: false,
-      recording: Promise.resolve(),
-      settleRecorded: false
-    };
-    const stage = (name) => {
-      entry.stage = name;
-      entry.stages[name] = Date.now() - entry.receivedAt;
-    };
-    entry.done = Promise.resolve()
-      .then(() => deliver({ stage, signal: closing.signal }))
-      .then(result => ({ result }), error => ({ error }))
-      .then(async (outcome) => {
-        entry.settled = true;
-        entry.outcome = outcome;
-        entry.stages.finished = Date.now() - entry.receivedAt;
-        if (entry.heldAnswer) await recordSettled(entry, sessionId, messageId);
-        try {
-          logTiming(sessionId, messageId, entry);
-        } catch {
-          // Timing is diagnostic only.
-        }
-        const forget = setTimeout(() => {
-          if (entries.get(id) === entry) entries.delete(id);
-        }, outcomeMs);
-        forget.unref();
-        return outcome;
-      });
-    entries.set(id, entry);
-    return entry;
-  }
+  const work = createHeldWork({
+    component: "vibe64.agent_message",
+    events: {
+      timing: "vibe64.agent_message.send_timing",
+      held: "vibe64.agent_message.held"
+    },
+    logger,
+    answerMs,
+    outcomeMs,
+    fields(operation) {
+      const { sessionId, messageId } = identity(operation);
+      return {
+        sessionId,
+        messageId,
+        ...(operation.settled ? { outcome: heldReceipt(messageId, operation).status } : {})
+      };
+    },
+    // Recorded before the held answer goes out, so a restart after it still knows the message waited.
+    async held(operation) {
+      await record(operation, (sessionId, messageId) => records.hold(sessionId, messageId));
+      if (operation.settled) await recordSettled(operation);
+    },
+    async settled(operation) {
+      if (operation.heldAnswer) await recordSettled(operation);
+    }
+  });
 
   /**
    * Delivers one message, or joins its delivery already running. A delivery that has ended is started again, as a
@@ -148,37 +120,9 @@ function createHeldMessages({ records, logger = silentLogger, answerMs = SEND_AN
    * @param {(controls: { stage: (name: string) => void, signal: AbortSignal }) => Promise<object>} deliver
    */
   async function send(sessionId, messageId, deliver) {
-    const existing = entries.get(key(sessionId, messageId));
-    const entry = existing && !existing.settled ? existing : start(sessionId, messageId, deliver);
-    const answered = new AbortController();
-    const outcome = await Promise.race([
-      entry.done,
-      delay(answerMs, null, { ref: false, signal: answered.signal }).catch(() => null)
-    ]).finally(() => answered.abort());
-    if (outcome) {
-      if (outcome.error) throw outcome.error;
-      return outcome.result;
-    }
-    if (!entry.heldAnswer) {
-      entry.heldAnswer = true;
-      // Recorded before the answer goes out, so a restart after it still knows the message waited.
-      await record(entry, sessionId, messageId, () => records.hold(sessionId, messageId));
-      if (entry.settled) await recordSettled(entry, sessionId, messageId);
-      entry.stages.answered = Date.now() - entry.receivedAt;
-      try {
-        logOperationalEvent(logger, "warn", {
-          component: "vibe64.agent_message",
-          event: "vibe64.agent_message.held",
-          sessionId,
-          messageId,
-          waitingFor: entry.stage,
-          elapsedMs: entry.stages.answered
-        }, "Assistant message answered as held; its delivery goes on.");
-      } catch {
-        // Timing is diagnostic only.
-      }
-    }
-    return { ok: true, delivered: false, status: "queued", messageId, sessionId, waitingFor: entry.stage };
+    const answer = await work.run(key(sessionId, messageId), deliver);
+    if (answer.settled) return answer.result;
+    return { ok: true, delivered: false, status: "queued", messageId, sessionId, waitingFor: answer.waitingFor };
   }
 
   /**
@@ -187,8 +131,8 @@ function createHeldMessages({ records, logger = silentLogger, answerMs = SEND_AN
    * @param {string} messageId
    */
   function inspect(sessionId, messageId) {
-    const entry = entries.get(key(sessionId, messageId));
-    return entry ? heldReceipt(messageId, entry) : null;
+    const operation = work.inspect(key(sessionId, messageId));
+    return operation ? heldReceipt(messageId, operation) : null;
   }
 
   /**
@@ -211,9 +155,8 @@ function createHeldMessages({ records, logger = silentLogger, answerMs = SEND_AN
    * At shutdown: a held message that has not reached its assistant stops waiting (its delivery refuses it, unsent),
    * and this resolves once every held delivery has ended.
    */
-  async function close() {
-    closing.abort();
-    await Promise.allSettled([...entries.values()].map(entry => entry.done));
+  function close() {
+    return work.close();
   }
 
   return Object.freeze({
@@ -224,4 +167,4 @@ function createHeldMessages({ records, logger = silentLogger, answerMs = SEND_AN
   });
 }
 
-export { createHeldMessages, SEND_ANSWER_MS };
+export { createHeldMessages };

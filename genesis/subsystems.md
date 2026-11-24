@@ -1039,6 +1039,8 @@ Owns the learning space (`learningSpace.js` with the Project context): practice 
 
 Owns the editor server's crash records (`crashRecords.js`, Node only, read by hosts' own reports too) and the crash watch that writes them (`crashWatch.js`): one private JSON file per abnormal end under `<systemRoot>/crashes/records/`, the newest 100 kept and the removed ones counted, running markers whose process died without a trace recorded at the next start, and who acknowledged each and when.
 
+Owns held work (`heldWork.js`, `@local/vibe64-core/server/heldWork`): work a request starts and answers before it ends, so a slow dependency never keeps a request past a hosted edge's minute. One work runs per key and later runs join it; a run answers with the work's result when it ends within two seconds, and otherwise held, with an operation id and the stage it waits on, readable with its outcome for 15 minutes after it ends; each work's timing from arrival is logged. The Main chat send (`heldMessages.js`) is built on it; Vibe64 Online's long routes use it. The caller owns the key, what the page reads and any record that must outlive a restart.
+
 Owns the session timeline (`sessionTimeline.js`) and its reader, `vibe64 timeline` (`sessionTimelineCli.js`): one bounded, private JSON-lines file per session under `<projectRuntimeRoot>/timeline/`, holding event metadata only. Each package records its own events through it (Sessions the browser connections, Terminals the turns, conversations, engine processes and server stop, AI tasks their windows, and the route wrapper here the failed session requests); none reads it back.
 
 ### Source

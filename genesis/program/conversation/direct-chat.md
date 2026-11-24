@@ -59,7 +59,8 @@ Observer results are not awaited and errors cannot fail native delivery.
 
 A person's Main chat send answers before its delivery ends when that delivery
 waits: `sessions.sendMainChatMessage` runs each message id's delivery once in
-`heldMessages.js` (`createHeldMessages`), and a send whose delivery has not
+`heldMessages.js` (`createHeldMessages`, built on core's held work,
+`@local/vibe64-core/server/heldWork`), and a send whose delivery has not
 settled within two seconds answers `{ ok: true, delivered: false, status:
 "queued", waitingFor }`, naming the stage it waits on (`project-open`,
 `workspace-preparation` or `assistant`). A second send of the same id while it
