@@ -47,6 +47,17 @@ async function fixture(t, options = {}) {
   };
 }
 
+// The Zen connection once its model check has ended. The check runs in the background and writes the store's file at
+// each model, which a busy host makes slow (more than a second at a whole run's load), so the wait lasts until the
+// check ends, and the test's timeout catches one that never does.
+async function zenConnectionAfterCheck(store) {
+  for (;;) {
+    const connection = (await store.listConnections()).find(({ id }) => id === "opencode");
+    if (!["starting", "running", "cancelling"].includes(connection.modelAccess.check?.status)) return connection;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 test("Vibe64 includes no AI: OpenCode Zen is connected only by a saved key", async (t) => {
   const { store, verificationCalls } = await fixture(t);
   assert.deepEqual(await store.listConnections(), []);
@@ -156,7 +167,7 @@ test("a real Zen key starts with the recommended Zen model, never Big Pickle, an
   ]);
 });
 
-test("Zen checks models sequentially in the background and enables only confirmed models", async (t) => {
+test("Zen checks models sequentially in the background and enables only confirmed models", { timeout: 30_000 }, async (t) => {
   const verificationCalls = [];
   const { store } = await fixture(t, {
     async readModelIds() {
@@ -187,12 +198,7 @@ test("Zen checks models sequentially in the background and enables only confirme
   const started = await store.updateModelAccess("opencode", { operation: "check-available" });
   assert.equal(started.modelAccess.check.status, "starting");
 
-  let connection;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    connection = (await store.listConnections()).find(({ id }) => id === "opencode");
-    if (connection.modelAccess.check?.status === "complete") break;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
+  const connection = await zenConnectionAfterCheck(store);
 
   assert.equal(connection.modelAccess.mode, "verified");
   assert.equal(connection.modelAccess.check.status, "complete");
@@ -214,7 +220,7 @@ test("Zen checks models sequentially in the background and enables only confirme
   assert.equal((await store.assistantAccess("opencode", { modelId: "rejected-model" })).available, false);
 });
 
-test("a running Zen model check reports restart interruption and can cancel before the next model", async (t) => {
+test("a running Zen model check reports restart interruption and can cancel before the next model", { timeout: 30_000 }, async (t) => {
   let releaseFirstModel;
   const firstModelStarted = new Promise((resolve) => {
     releaseFirstModel = resolve;
@@ -266,12 +272,7 @@ test("a running Zen model check reports restart interruption and can cancel befo
   assert.equal(cancelling.modelAccess.check.status, "cancelling");
   continueFirstModel();
 
-  let connection;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    connection = (await store.listConnections()).find(({ id }) => id === "opencode");
-    if (connection.modelAccess.check?.status === "cancelled") break;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
+  const connection = await zenConnectionAfterCheck(store);
   assert.equal(connection.modelAccess.check.status, "cancelled");
   assert.equal(connection.modelAccess.check.checked, 0);
   assert.deepEqual(verificationCalls, ["claude-haiku-4-5", "first-model"]);
