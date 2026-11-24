@@ -10,6 +10,7 @@ import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { activeUsageRecording, stopActiveUsageRecording } from "@local/vibe64-usage-recording/server/activeRecordings";
 import { mergePrependEnvironment } from "@local/vibe64-usage-recording/server/tracers";
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
+import { PHP_USAGE_INI_NAME, phpUsageScanDirectory } from "../../packages/vibe64-usage-recording/runtime/php/module.js";
 import python from "../../packages/vibe64-usage-recording/src/server/tracers/python.js";
 import { admitUsageRecording } from "../../packages/vibe64-usage-recording/src/server/admission.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
@@ -131,6 +132,41 @@ test("a prepended variable joins the value the recorded process would inherit", 
   assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "/project" } }).environment.PYTHONPATH,
     `${ours}${path.delimiter}/project`);
   assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "" } }).environment.PYTHONPATH, ours);
+});
+
+test("a PHP launch keeps the scan folder its PHP reads by itself, read once per binary", async (t) => {
+  const bin = await mkdtemp(path.join(os.tmpdir(), "vibe64-usage-php-bin-"));
+  const saved = process.env.VIBE64_USAGE_PHP_MODULE_CACHE;
+  process.env.VIBE64_USAGE_PHP_MODULE_CACHE = path.join(bin, "cache");
+  t.after(async () => {
+    if (saved === undefined) delete process.env.VIBE64_USAGE_PHP_MODULE_CACHE;
+    else process.env.VIBE64_USAGE_PHP_MODULE_CACHE = saved;
+    await rm(bin, { force: true, recursive: true });
+  });
+  const ours = phpUsageScanDirectory();
+  await mkdir(ours, { recursive: true });
+  await writeFile(path.join(ours, PHP_USAGE_INI_NAME), "extension=/nowhere/vibe64_usage.so\n");
+  // A PHP like Nix's php.withExtensions: a wrapper that names its own scan folder only while PHP_INI_SCAN_DIR is unset,
+  // quoted as PHP 8.5 prints it; and an older PHP's, unquoted.
+  const runs = path.join(bin, "runs");
+  await writeFile(path.join(bin, "php"),
+    `#!/bin/sh\necho "$*" >> '${runs}'\necho "Scan for additional .ini files in: \\"\${PHP_INI_SCAN_DIR-/store/php-with-extensions/lib}\\""\n`,
+    { mode: 0o755 });
+  const older = path.join(bin, "older");
+  await mkdir(older);
+  await writeFile(path.join(older, "php"), "#!/bin/sh\necho 'Scan for additional .ini files in: /etc/php/8.3/cli/conf.d'\n", { mode: 0o755 });
+  const phpRun = { id: "php-run", label: "PHP run", web: false, available: true, disabledReason: "", runtimes: ["php"], parameters: [] };
+  const { call } = await recorder(t, { targets: [...TARGETS, phpRun] });
+  await call("start", { targetId: "output:php-run" });
+  const scanned = (environment) => launchOf({ outputTargetId: "php-run", environment: { PATH: bin, ...environment } }).environment.PHP_INI_SCAN_DIR;
+  assert.equal(scanned({}), `${ours}${path.delimiter}/store/php-with-extensions/lib`);
+  assert.equal(scanned({}), `${ours}${path.delimiter}/store/php-with-extensions/lib`);
+  // A value the launch sets is all PHP reads without recording, and stays as it is.
+  assert.equal(scanned({ PHP_INI_SCAN_DIR: "/project/php.d" }), `${ours}${path.delimiter}/project/php.d`);
+  assert.equal(await readFile(runs, "utf8"), "--ini\n");
+  assert.equal(scanned({ PATH: older }), `${ours}${path.delimiter}/etc/php/8.3/cli/conf.d`);
+  // No php on the launch's PATH: the trailing separator keeps PHP's compiled-in folder.
+  assert.equal(scanned({ PATH: path.join(bin, "none") }), `${ours}${path.delimiter}`);
 });
 
 test("a recording appends its logs to no file but its own, and a refused append stops no other line", async (t) => {
