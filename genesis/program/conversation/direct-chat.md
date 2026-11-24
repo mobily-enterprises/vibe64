@@ -965,7 +965,15 @@ shutdown begins, reaches every provider's `beginShutdown` operation and JSKIT's
 A turn that then ends on its own, while the host's other work stops, therefore
 starts no checkpoint the host would refuse. Claude and OpenCode leave it to the
 next server as a turn the shutdown stopped: Claude's saved record keeps the
-active turn, and the next server's recovery interrupts it with its checkpoint.
+active turn, and an OpenCode temporary chat's record keeps its run's shutdown
+mark ([openCodeScopedPreparation.js](../../../packages/vibe64-terminals/src/server/openCodeScopedPreparation.js)).
+The next server decides how the turn ended from the provider's own history,
+which JSKIT reads once the turn's process is gone: a turn whose answer had
+arrived is completed, with its completed checkpoint, and is neither resumed nor
+given a red entry; any other is interrupted with its checkpoint and resumed as
+an interrupted turn. A temporary chat's read hands its outcome to the mark's
+`ended`, which makes that checkpoint once
+([sessionTurnCheckpoint.js](../../../packages/vibe64-terminals/src/server/sessionTurnCheckpoint.js)).
 A Git snapshot therefore never holds up shutdown, and a restart is never
 reported as the turn's failure.
 The development example also awaits backend shutdown inside Vite's native

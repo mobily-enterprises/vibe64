@@ -225,12 +225,21 @@ test("a turn an earlier server still runs is left to it until that server has ex
   assert.equal(h.f.sends.length, 2);
 });
 
-test("a temporary chat's turn is resumed the same way; a Main chat goal's turn is left to goal recovery", async t => {
+test("a temporary chat's turn is resumed the same way unless its read says it completed; a Main chat goal's turn is left to goal recovery", async t => {
   const h = await runningTurn(t, { allowAuto: false });
   h.f.context.routingConversationId = "chat-1";
   await (await h.next()).routing.reconcile("session-1", h.f.context);
   assert.equal(h.f.sends.length, 2, "a temporary chat continues its own interrupted turn");
   assert.equal(h.entries()[0].outcome, "resumed");
+
+  // A turn the earlier server's shutdown left whose answer had arrived: the chat's read (JSKIT's, from OpenCode's
+  // history) reports it completed, so it is finished, never resumed.
+  const answered = await runningTurn(t, { allowAuto: false });
+  answered.f.context.routingConversationId = "chat-1";
+  answered.f.agent.sessionState = async () => ({ turn: { id: answered.f.state().turnId, status: "completed", active: false } });
+  await (await answered.next()).routing.reconcile("session-1", answered.f.context);
+  assert.equal(answered.f.sends.length, 1, "a completed turn is not resumed");
+  assert.deepEqual(answered.entries(), [], "and gets no red entry");
 
   const goal = await runningTurn(t);
   goal.f.agent.readGoal = async () => ({ status: "available", goal: { status: "active", objective: "All checks pass" } });
