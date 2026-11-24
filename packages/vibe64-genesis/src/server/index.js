@@ -593,7 +593,7 @@ async function inspectVibe64ResourceEstimates(options = {}) {
 /**
  * @param {object} request
  * @param {object} [request.action] the prompt task: its genesisTask, id and label
- * @param {RuntimeEnv} request.environment the environment Genesis runs in
+ * @param {RuntimeEnv} [request.environment] the Env the session's commands receive (resource inputs are checked against it)
  * @param {object} [request.input] the request text and its options; automaticGenesisTask
  *   marks a task Vibe64 chose itself, which never falls back to the Blueprint's task
  * @param {(error: Error) => void} [request.onGenesisUnavailable] reports why the request goes as written

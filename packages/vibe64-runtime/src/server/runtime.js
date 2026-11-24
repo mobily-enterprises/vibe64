@@ -82,6 +82,9 @@ class Vibe64SessionRuntime {
    * @param {RuntimeEnv | (() => RuntimeEnv | Promise<RuntimeEnv>)} options.promptEnvironment the environment prompts
    *   render with, or a function that reads it once
    * @param {typeof renderGenesisPrompt} [options.promptRenderer]
+   * @param {((session: object) => RuntimeEnv | Promise<RuntimeEnv>) | null} [options.sessionEnvironment] the Env a
+   *   session's commands receive, which its prompts check the Stack's resource inputs against; without it Genesis
+   *   reports them unknown
    * @param {boolean} [options.sourceInspectionAvailable]
    * @param {object | null} [options.sourceInspectionError]
    * @param {Vibe64SessionStore} [options.store]
@@ -97,6 +100,7 @@ class Vibe64SessionRuntime {
     projectSessionSourceRoot = "",
     promptEnvironment,
     promptRenderer = renderGenesisPrompt,
+    sessionEnvironment = null,
     sourceInspectionAvailable = true,
     sourceInspectionError = null,
     store = undefined
@@ -114,6 +118,7 @@ class Vibe64SessionRuntime {
     this.projectSessionSourceRoot = toText(projectSessionSourceRoot);
     this.promptEnvironment = promptEnvironment;
     this.promptRenderer = promptRenderer;
+    this.sessionEnvironment = sessionEnvironment;
     this.sourceInspectionAvailable = sourceInspectionAvailable;
     this.sourceInspectionError = sourceInspectionError;
     this.projectContextRoot = projectContextRoot;
@@ -207,6 +212,11 @@ class Vibe64SessionRuntime {
       this.promptEnvironment = Promise.resolve().then(this.promptEnvironment);
     }
     return this.promptEnvironment;
+  }
+
+  /** The Env a session's commands receive, or undefined when this runtime cannot tell. */
+  async resolveSessionEnvironment(session) {
+    return this.sessionEnvironment ? this.sessionEnvironment(session) : undefined;
   }
 
   async getSession(sessionId, retiredOptions) {
@@ -373,7 +383,8 @@ class Vibe64SessionRuntime {
         id: genesisTask,
         label: toText(request) || genesisTask
       },
-      environment: await this.resolvePromptEnvironment(),
+      // Checked against what the session's commands get, never the project-level Env without the session's resources.
+      environment: await this.resolveSessionEnvironment(session),
       input: {
         ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
         ...(toText(request) ? { request: toText(request) } : {})
