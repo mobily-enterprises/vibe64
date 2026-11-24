@@ -6,7 +6,7 @@ import {
 } from "@local/vibe64-core/shared";
 import {
   VIBE64_ACCOUNTS_CHANGED_EVENT
-} from "@local/vibe64-accounts/client";
+} from "@local/vibe64-accounts/shared/accountEvents";
 import { useAgentTerminalAttachments } from "@/composables/useAgentTerminalAttachments.js";
 import {
   requestVibe64AccountConnectionsDialog

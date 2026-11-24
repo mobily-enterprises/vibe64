@@ -3,7 +3,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 
-import { VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
   VIBE64_ASSISTANTS_API_SUFFIX,

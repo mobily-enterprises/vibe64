@@ -2,7 +2,7 @@ import { computed, inject, markRaw, onBeforeUnmount, ref, shallowRef, toValue, w
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { useAssistantConversationFactory } from "@jskit-ai/assistant-runtime/client";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 import { normalizeVibe64AgentSettings } from "@local/vibe64-runtime/shared";
 import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";

@@ -10,7 +10,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { VIBE64_DATABASE_LAYOUT_CHANGED_EVENT } from "../../shared/events.js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
-import { VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 
 const DATABASE_API_SUFFIX = "/vibe64/database";
 const DATABASE_SURFACE = "app";

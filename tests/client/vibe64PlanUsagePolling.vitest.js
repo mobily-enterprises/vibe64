@@ -20,8 +20,6 @@ const page = vi.hoisted(() => {
 });
 
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ({ value: "fixture" }) }));
-// The chip needs only the accounts event name, not the accounts screens.
-vi.mock("@local/vibe64-accounts/client", () => ({ VIBE64_ACCOUNTS_CHANGED_EVENT: "vibe64.accounts.changed" }));
 vi.mock("@jskit-ai/assistant-core/client/conversation", () => ({ AssistantGoalControl: { render: () => null } }));
 const blank = vi.hoisted(() => ({ render: () => null }));
 vi.mock("vuetify/components/VMenu", () => ({ VMenu: blank }));

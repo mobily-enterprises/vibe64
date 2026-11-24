@@ -1,10 +1,10 @@
 import { computed, inject, onScopeDispose, proxyRefs, toValue } from "vue";
-import { useVibe64Voice } from "@local/vibe64-voice/client";
+import { useVibe64Voice } from "@local/vibe64-voice/client/voiceHost";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { mainConversationId, mainConversationTarget } from "@local/vibe64-sessions/shared/conversation";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 import { useVibe64MountedSessionData } from "./useVibe64MountedSessionData.js";
 import { useVibe64ConversationLog } from "./useVibe64ConversationLog.js";
 import { useVibe64AssistantAccess } from "./useVibe64AssistantAccess.js";

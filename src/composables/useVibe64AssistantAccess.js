@@ -1,6 +1,6 @@
 import { computed, hasInjectionContext, inject, unref } from "vue";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/shared/accountEvents";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 
 /** @returns {import("@/lib/vibe64AssistantHost.js").AssistantViewerSource} */
