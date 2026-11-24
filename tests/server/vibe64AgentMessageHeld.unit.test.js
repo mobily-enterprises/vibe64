@@ -131,7 +131,7 @@ async function listen(service, { apiBase, apiRouteBase, projectContext, slug }) 
   };
 }
 
-test("a message sent while the workspace is prepared answers at once, held, and is delivered once when it ends", async () => {
+test("a message sent while the workspace is prepared answers at once, held, and is delivered once when it ends", async (t) => {
   await withRouteProject(async (project) => {
     const world = messageWorld();
     const server = await listen(world.service, project);
@@ -140,8 +140,10 @@ test("a message sent while the workspace is prepared answers at once, held, and 
       const sentAt = Date.now();
       const first = await within(server.send(message), ANSWER_WAIT_MS,
         "the send did not answer while the workspace was being prepared");
+      const answeredMs = Date.now() - sentAt;
+      t.diagnostic(`the send arrived while preparing and answered ${first.status} after ${answeredMs} ms`);
       assert.ok(first.status < 300, JSON.stringify(first.body));
-      assert.ok(Date.now() - sentAt < ANSWER_WAIT_MS);
+      assert.ok(answeredMs < ANSWER_WAIT_MS);
       assert.equal(first.body.ok, true);
       assert.equal(first.body.status, "queued");
       assert.equal(first.body.waitingFor, "workspace-preparation");
@@ -156,8 +158,10 @@ test("a message sent while the workspace is prepared answers at once, held, and 
       assert.equal(again.body.status, "queued");
       assert.equal(world.delivered.length, 0);
 
+      const preparedAt = Date.now();
       world.finishPreparation();
       await eventually(() => world.delivered.length === 1, "the held message was not delivered after the preparation");
+      t.diagnostic(`the held message reached the assistant ${Date.now() - preparedAt} ms after the preparation ended`);
       assert.equal(world.delivered[0].input.messageId, message.messageId);
       assert.equal(world.delivered[0].input.message, message.message);
       assert.equal(world.delivered[0].options.browserAuthority.sessionId, SESSION_ID);
