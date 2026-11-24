@@ -15,6 +15,7 @@ import {
 import { outputTargetTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 import { previewLogPath } from "../../packages/vibe64-terminals/src/server/previewDiagnosticFiles.js";
 import { workspaceSetupState, writeWorkspaceSetupState } from "../../packages/vibe64-runtime/src/server/workspaceSetupState.js";
+import { registerActiveUsageRecording } from "@local/vibe64-usage-recording/server/activeRecordings";
 
 process.env.VIBE64_RUNTIME_NAMESPACE = "preview-preparation-test";
 const execFileAsync = promisify(execFile);
@@ -336,4 +337,39 @@ test("a failed setup run leaves the running Preview as it is", { timeout: 15_000
   assert.deepEqual(runningPreviewIds(f.sessionId), [started.id]);
   assert.deepEqual(await startedPreviewIds(f), [started.id]);
   assert.equal(await installedFor(started), "install 1");
+});
+
+test("a recorded Preview's launch hands the gateway its recorder's completion, which the Preview's environment carries", {
+  timeout: 15_000
+}, async (t) => {
+  const f = await fixture(t);
+  await f.prepare();
+  // A Preview that also answers with what its recorder completed.
+  await writeFile(path.join(f.sourceRoot, "preview.cjs"), `
+require("node:http").createServer((request, response) => {
+  response.setHeader("content-type", "text/html");
+  const recorded = process.env.RECORDED_COMPLETION || "none";
+  response.end(request.url === "/recorded" ? recorded : "<h1>Preview works: " + process.env.PREVIEW_VALUE + "</h1>");
+}).listen(Number(process.argv[3]), process.argv[2]);
+`);
+  // A recording of the session's Preview: its recorder's variables, and their completion from the environment the
+  // execution gateway resolves for each terminal of the launch.
+  const unregister = registerActiveUsageRecording("global", f.sessionId, {
+    recordingId: "rec_abcdefghijklmnopqrst",
+    web: true,
+    launch: ({ web }) => (web ? {
+      environment: { RECORDED_LAUNCH: "yes" },
+      usageRecordingEnvironment: (resolved) => ({
+        RECORDED_COMPLETION: resolved.RECORDED_LAUNCH === "yes" && resolved.PATH ? "completed" : "incomplete"
+      }),
+      usageRecordingPreload: "",
+      exited() {}
+    } : null),
+    proxyRequest: () => null,
+    stop: async () => {}
+  });
+  t.after(unregister);
+  const started = await f.terminals.startOutputTargetTerminal(f.sessionId, { outputTargetId: "app" });
+  await assertServes(started);
+  assert.equal(await (await fetch(new URL("/recorded", started.metadata.targetUrl))).text(), "completed");
 });

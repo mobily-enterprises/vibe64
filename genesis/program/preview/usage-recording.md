@@ -89,11 +89,18 @@ Node.js loads a preload that instruments project files as they load, Python
 loads a `sitecustomize` recorder through `PYTHONPATH`, and PHP loads a small
 observer module, built per PHP version, through `PHP_INI_SCAN_DIR`; each
 tracer's variables are prepended to the target's own. With no
-`PHP_INI_SCAN_DIR` of the target's, the PHP tracer's `unsetEnvironment` follows
-its folder with the one the launch's PHP scans by itself, which `php --ini`
-names (read once per binary), so a wrapper's folder such as Nix's
-`php.withExtensions` keeps loading; this is the one tracer step that is not
-pure. Tracers count project
+`PHP_INI_SCAN_DIR` of the target's, PHP's folder is followed by the one the
+launch's PHP gives itself while the variable is unset: a Nix
+`php.withExtensions` wrapper's, so its extensions keep loading. The launch
+hands the execution gateway `usageRecordingEnvironment`, which the gateway
+calls with the environment it resolved for the launch, and each PTY terminal's,
+so the PHP tracer's `unsetEnvironment` finds `php` on the PATH the target runs
+with (its runtime pack's first), never one the project's Env names. It runs
+nothing: it reads the folder from the wrapper itself, a regular file of at most
+1 MiB, in the two forms Nix's wrapper makers write, `setenv("PHP_INI_SCAN_DIR",
+"<folder>", 0)` and `${PHP_INI_SCAN_DIR-'<folder>'}`, and passes on only an
+absolute folder that exists. Any other PHP gets nothing after the trailing
+separator, so it keeps its compiled-in folder. Tracers count project
 function entries per request, run or background scope and write them to files.
 A request the application served directly is labelled with its method and path
 by the proxy's rule: no query, and each long id or token segment written as

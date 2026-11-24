@@ -95,6 +95,30 @@ async function directorySize(directory) {
 }
 
 /**
+ * A launch's recorder. A launched target inherits this server's environment
+ * beneath the launch's own variables, so a prepended value joins the one the
+ * process would otherwise see (a PHP_INI_SCAN_DIR the server was started with,
+ * a person's own PYTHONPATH). With none, what it stands for depends on the
+ * program the launch runs: usageRecordingEnvironment, which the execution
+ * gateway calls with the environment it resolved for the launch, follows it
+ * with the tracer's unsetEnvironment of that environment, whose PATH is the
+ * launch's own and never one the launch's variables name.
+ */
+function recorderEnvironment({ directory, environment = {}, sourceRoot, target, tracers }) {
+  const result = usageRecordingEnvironment({ recordingDirectory: directory, sourceRoot, targetKind: target.kind });
+  const inherited = { ...process.env, ...environment };
+  let usageRecordingPreload = "";
+  for (const { prepared } of tracers) {
+    Object.assign(result, prepared.environment || {}, mergePrependEnvironment(prepared.prependEnvironment, inherited));
+    usageRecordingPreload = prepared.realPreload || usageRecordingPreload;
+  }
+  const completed = (resolved = {}) => Object.assign({}, ...tracers.map(({ tracer, prepared }) => {
+    return mergePrependEnvironment(prepared.prependEnvironment, inherited, path.delimiter, tracer.unsetEnvironment(resolved));
+  }));
+  return { environment: result, usageRecordingEnvironment: completed, usageRecordingPreload };
+}
+
+/**
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
@@ -297,23 +321,6 @@ function createService({
       queued.push({ name, row });
       return entry.writes;
     };
-    /**
-     * A launched target inherits this server's environment beneath the
-     * launch's own variables, so a prepended value joins the one the process
-     * would otherwise see (a PHP_INI_SCAN_DIR the server was started with, a
-     * person's own PYTHONPATH), or with none the tracer's unsetEnvironment.
-     */
-    const recorderEnvironment = (environment = {}) => {
-      const result = usageRecordingEnvironment({ recordingDirectory: directory, sourceRoot: context.sourceRoot, targetKind: target.kind });
-      const inherited = { ...process.env, ...environment };
-      let usageRecordingPreload = "";
-      for (const { tracer, prepared } of tracers) {
-        const merged = mergePrependEnvironment(prepared.prependEnvironment, inherited, path.delimiter, tracer.unsetEnvironment(inherited));
-        Object.assign(result, prepared.environment || {}, merged);
-        usageRecordingPreload = prepared.realPreload || usageRecordingPreload;
-      }
-      return { environment: result, usageRecordingPreload };
-    };
     entry.active = {
       recordingId: record.id,
       web: target.kind === "web",
@@ -321,7 +328,7 @@ function createService({
         const recorded = target.kind === "web" ? web === true : !web && outputTargetId === target.outputTargetId;
         if (!recorded || entry.stopRequested) return null;
         return {
-          ...recorderEnvironment(environment),
+          ...recorderEnvironment({ directory, environment, sourceRoot: context.sourceRoot, target, tracers }),
           exited() {
             if (target.kind === "terminal") void stopEntry(entry, "target-exited");
           }

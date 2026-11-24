@@ -228,6 +228,11 @@ behind this one (public Vibe64's `dev:example`). A value a caller set itself,
 and the command's own env, always stay. A standalone editor's environment is its
 person's own shell and is kept, but for the names above that are the editor's
 own.
+A usage recording's Preview or Output launch may also name
+`usageRecordingEnvironment`, a function of the environment the gateway resolved
+for it: `runVibe64Command` adds what it returns to that environment and to each
+PTY terminal's re-resolved one, so the recorder's variables follow from the PATH
+the target runs with. What it returns may name only what a caller's env may.
 A command whose folder is in a tree holding the gradle adapter's init script, in
 `.development/gradle-home/init.d`, gets that session's own Gradle user home as
 `GRADLE_USER_HOME` and the shared read-only dependency cache as

@@ -18,8 +18,6 @@ const OTHER_SOFTWARE_LOCATIONS = new Set([
   "/opt/hostedtoolcache",
   // Database and Ruby packages' own install and data folders.
   "/usr/lib/postgresql", "/var/lib/postgres", "/var/lib/pgsql", "/var/lib/mysql", "/opt/mariadb", "/var/lib/gems",
-  // PHP's own configuration folder on Debian and Ubuntu, whose conf.d is the scan folder such a PHP reports.
-  "/etc/php",
   // The machine the deploy engine deploys an application to at mobilynet, never the person's computer: where mobilynet
   // leaves each app's settings for its start step (root, tmpfs), and the folder that step copies them to for the
   // service's login, as mobilynet's catalogue apps keep a /run folder of their own (packages/vibe64-deploy's

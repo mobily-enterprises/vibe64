@@ -377,6 +377,17 @@ function normalizeVibe64CommandRequest(input = {}) {
       "vibe64_command_usage_recording_preload_invalid"
     );
   }
+  // A usage recording launch completes its recorder's variables from the environment the gateway resolves for it (the
+  // PATH its target runs with): a function of that environment, called by Vibe64 for each environment it resolves.
+  const usageRecordingEnvironment = request.usageRecordingEnvironment ?? null;
+  // readable-check: allow method-probe - input validation: the completion is a function of the resolved environment
+  if (usageRecordingEnvironment !== null && (typeof usageRecordingEnvironment !== "function" ||
+      !["preview", "output"].includes(purpose) || request.actor === "app")) {
+    throw commandRequestError(
+      "A usage recording environment belongs only to a Preview or Output target launch.",
+      "vibe64_command_usage_recording_environment_invalid"
+    );
+  }
   const stagingAccount = request.stagingAccount ?? "";
   if (typeof stagingAccount !== "string" || (stagingAccount &&
       (!STAGING_ACCOUNT_PATTERN.test(stagingAccount) || request.actor !== "app" || mode !== "capture"))) {
@@ -460,6 +471,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     timeout: Number.isSafeInteger(Number(request.timeout)) && Number(request.timeout) > 0
       ? Number(request.timeout)
       : 15_000,
+    usageRecordingEnvironment,
     usageRecordingPreload,
     userKey: normalizeText(request.userKey)
   };

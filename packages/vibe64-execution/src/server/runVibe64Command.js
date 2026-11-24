@@ -5,6 +5,7 @@ import {
   resolveCommandEnv,
   resolveCommandEnvAsync
 } from "./env/resolveCommandEnv.js";
+import { rejectCallerEnvPolicy } from "./env/callerEnv.js";
 import {
   GIT_AUTHOR_EMAIL_ENV,
   GIT_AUTHOR_NAME_ENV,
@@ -45,6 +46,7 @@ import {
   vibe64ManagedExecutionProvider,
   vibe64ManagedExecutionRequired
 } from "./managedExecution.js";
+import { envRecord } from "./normalize.js";
 import { usageRecordingNodeOptions } from "./usageRecordingPreload.js";
 import { serverStopBegun, VIBE64_SERVER_STOPPING_CODE } from "./serverStop.js";
 
@@ -145,6 +147,18 @@ async function runLocalVibe64Command(request, options = {}) {
   });
 }
 
+/**
+ * A usage recording launch's environment as resolved here, with what its recorder adds from it: the values its
+ * prepended variables stand for while the launch sets none, found from the PATH the launch runs with. The completion
+ * may name only what a caller's env may.
+ */
+function withUsageRecordingEnvironment(request, env) {
+  if (!request.usageRecordingEnvironment) return env;
+  const completion = envRecord(request.usageRecordingEnvironment({ ...env }));
+  rejectCallerEnvPolicy(completion);
+  return { ...env, ...completion };
+}
+
 function stoppingResult(request) {
   return commandErrorResult("Vibe64 is stopping, so this command did not start.", VIBE64_SERVER_STOPPING_CODE, {
     execution: request.execution,
@@ -182,12 +196,12 @@ async function runVibe64Command(input = {}) {
     const localPath = !managedHost && processMatchesActor(actor)
       ? [baseEnv.PATH, process.env.PATH].filter(Boolean).join(":")
       : "";
-    const env = executionEnv(await resolveCommandEnvAsync({
+    const env = executionEnv(withUsageRecordingEnvironment(request, await resolveCommandEnvAsync({
       actor,
       baseEnv,
       localPath,
       request: request.stagingEnvironmentFile ? { ...request, project: {}, session: {} } : request
-    }));
+    })));
     // A PTY env factory is called synchronously per terminal; it carries the
     // Git identity this command already resolved.
     const resolvedGitIdentityEnv = Object.fromEntries([
@@ -209,7 +223,7 @@ async function runVibe64Command(input = {}) {
       ? request.args(commandInput)
       : request.args;
     const resolveEnv = (commandInput = {}) => executionEnv(request.envFactory
-      ? resolveCommandEnv({
+      ? withUsageRecordingEnvironment(request, resolveCommandEnv({
         actor,
         baseEnv,
         localPath,
@@ -219,7 +233,7 @@ async function runVibe64Command(input = {}) {
           env: request.envFactory(commandInput),
           envFactory: null
         }
-      })
+      }))
       : env);
 
     const local = (localRequest = request, localContext = {}) => runLocalVibe64Command(

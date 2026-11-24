@@ -9,7 +9,9 @@ import {
   usageRecordingNodeOptions as helperNodeOptions
 } from "../../packages/vibe64-execution/src/host/commandEnvironment.js";
 import { DAEMON_USERNAME_PREFIX } from "../../packages/vibe64-execution/src/host/hostAccounts.js";
+import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/src/server/request.js";
+import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 import { usageRecordingNodeOptions as localNodeOptions } from "../../packages/vibe64-execution/src/server/usageRecordingPreload.js";
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
 
@@ -101,5 +103,54 @@ test("only a Preview or Output launch may name a recorder preload", () => {
   ]) {
     assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...invalid }),
       { code: "vibe64_command_usage_recording_preload_invalid" }, JSON.stringify(invalid));
+  }
+});
+
+test("a usage recording completion sees the environment the gateway resolves, for the launch and each terminal", async (t) => {
+  let observed = null;
+  const release = installVibe64ManagedExecutionProvider({
+    async runCommand(request, context) {
+      observed = { env: context.env, terminal: context.resolveEnv({ id: "terminal-1" }) };
+      return { execution: request.execution, ok: true };
+    },
+    async stopExecution() {
+      return { ok: true, scopeEmpty: true };
+    }
+  });
+  t.after(release);
+  const launch = (completion) => runVibe64Command({
+    command: "php",
+    env: () => ({ OWN: "launch" }),
+    mode: "pty",
+    purpose: "output",
+    runtimes: [],
+    usageRecordingEnvironment: completion
+  });
+  const result = await launch((resolved) => ({ RECORDED_OWN: resolved.OWN || "none", RECORDED_PATH: resolved.PATH }));
+  assert.equal(result.ok, true, result.error);
+  // The launch's PATH as the gateway resolved it, which the command runs with, and each terminal's own env too.
+  assert.ok(observed.env.PATH);
+  assert.equal(observed.env.RECORDED_PATH, observed.env.PATH);
+  assert.equal(observed.terminal.RECORDED_PATH, observed.terminal.PATH);
+  assert.equal(observed.terminal.OWN, "launch");
+  assert.equal(observed.terminal.RECORDED_OWN, "launch");
+  // It adds only what a caller's env may.
+  const refused = await launch(() => ({ PATH: "/recorder/bin" }));
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, "vibe64_command_env_policy_reserved");
+  // Only a Preview or Output launch may name one, as a function.
+  const request = { command: "php", cwd: "/", usageRecordingEnvironment: () => ({}) };
+  for (const purpose of ["preview", "output"]) {
+    assert.equal(typeof normalizeVibe64CommandRequest({ ...request, purpose }).usageRecordingEnvironment, "function");
+  }
+  assert.equal(normalizeVibe64CommandRequest({ command: "php", cwd: "/" }).usageRecordingEnvironment, null);
+  for (const invalid of [
+    { purpose: "terminal" },
+    { purpose: "assistant" },
+    { purpose: "output", actor: "app" },
+    { purpose: "output", usageRecordingEnvironment: { PHP_INI_SCAN_DIR: "/x" } }
+  ]) {
+    assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...invalid }),
+      { code: "vibe64_command_usage_recording_environment_invalid" }, JSON.stringify(invalid));
   }
 });

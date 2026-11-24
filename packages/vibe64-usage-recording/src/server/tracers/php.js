@@ -1,5 +1,4 @@
-import { spawnSync } from "node:child_process";
-import { accessSync, constants, statSync } from "node:fs";
+import { accessSync, closeSync, constants, fstatSync, openSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { runtimePackBinPaths } from "@local/vibe64-execution/server";
@@ -22,8 +21,24 @@ function hostPhpWithoutDevelopmentFiles() {
   return folders.length > 0 && !folders.some((folder) => isFile(path.join(folder, "php-config")));
 }
 
-// The scan folder each PHP binary reads while PHP_INI_SCAN_DIR is unset, by the binary's path.
-const ownScanFolders = new Map();
+function isDirectory(folder) {
+  try {
+    return statSync(folder).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+// Nix's wrappers are small (its binary wrapper about 16 KB, its shell wrapper under 1 KB); PHP itself is megabytes and
+// is never read.
+const WRAPPER_MAX_BYTES = 1024 * 1024;
+// The folder a Nix wrapper (php.withExtensions) gives PHP_INI_SCAN_DIR only while it is unset, as its two wrapper
+// makers write it: makeBinaryWrapper's setenv("PHP_INI_SCAN_DIR", "<folder>", 0), and makeWrapper's
+// PHP_INI_SCAN_DIR=${PHP_INI_SCAN_DIR-'<folder>'}.
+const WRAPPER_SCAN_FOLDER = Object.freeze([
+  /setenv\("PHP_INI_SCAN_DIR", "([^"\0\n]+)", 0\)/u,
+  /PHP_INI_SCAN_DIR=\$\{PHP_INI_SCAN_DIR:?-'?([^'}\0\n]+)'?\}/u
+]);
 
 function phpOnPath(searchPath = "") {
   for (const directory of String(searchPath).split(path.delimiter)) {
@@ -39,27 +54,46 @@ function phpOnPath(searchPath = "") {
 }
 
 /**
+ * The scan folder a PHP wrapper declares, read from the wrapper, which never runs: only a regular file of at most
+ * WRAPPER_MAX_BYTES is read, opened without blocking so a FIFO or device named php holds nothing up, and only an
+ * absolute folder that exists, in one of the two forms, is answered. "" for anything else; nothing read goes further.
+ */
+function wrapperScanFolder(binary) {
+  if (!isFile(binary)) return "";
+  let descriptor = -1;
+  try {
+    descriptor = openSync(binary, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));
+    const stats = fstatSync(descriptor);
+    if (!stats.isFile() || stats.size === 0 || stats.size > WRAPPER_MAX_BYTES) return "";
+    const bytes = Buffer.alloc(stats.size);
+    let length = 0;
+    while (length < bytes.length) {
+      const read = readSync(descriptor, bytes, length, bytes.length - length, length);
+      if (read === 0) break;
+      length += read;
+    }
+    const text = bytes.toString("utf8", 0, length);
+    const folder = WRAPPER_SCAN_FOLDER.map((pattern) => pattern.exec(text)?.[1]).find(Boolean) || "";
+    return path.isAbsolute(folder) && !folder.includes(path.delimiter) && isDirectory(folder) ? folder : "";
+  } catch {
+    return "";
+  } finally {
+    if (descriptor >= 0) closeSync(descriptor);
+  }
+}
+
+/**
  * What PHP_INI_SCAN_DIR stands for in a launch that sets none: the folder the
- * first php on the launch's PATH scans by itself, as `php --ini` names it with
- * the variable unset. That is PHP's compiled-in folder, or the one a wrapper
- * sets only while the variable is unset (Nix's php.withExtensions), which an
- * empty segment would not reach. Read once per binary; "" when php is not on
- * PATH or names none, so the trailing separator keeps the compiled-in folder.
+ * first php on the environment's PATH gives itself while the variable is unset,
+ * which an empty segment would not reach. That is the folder a Nix
+ * php.withExtensions wrapper declares, read from the wrapper without running
+ * anything; for any other PHP "", so the trailing separator keeps its
+ * compiled-in folder. The recording service passes the launch's own resolved
+ * environment, so this is the php the launch runs.
  */
 function unsetEnvironment(environment = {}) {
   const binary = phpOnPath(environment.PATH);
-  if (binary && !ownScanFolders.has(binary)) {
-    const unset = { ...environment };
-    delete unset.PHP_INI_SCAN_DIR;
-    const answer = spawnSync(binary, ["--ini"], { encoding: "utf8", env: unset, timeout: 10_000 });
-    if (answer.status === 0) {
-      const named = /^Scan for additional \.ini files in:[ \t]*(.*)$/mu.exec(answer.stdout)?.[1].trim() || "";
-      // PHP 8.5 quotes the folder.
-      const folder = /^"(.*)"$/u.exec(named)?.[1] ?? named;
-      ownScanFolders.set(binary, folder === "(none)" ? "" : folder);
-    }
-  }
-  return { PHP_INI_SCAN_DIR: ownScanFolders.get(binary) || "" };
+  return { PHP_INI_SCAN_DIR: binary ? wrapperScanFolder(binary) : "" };
 }
 
 /**

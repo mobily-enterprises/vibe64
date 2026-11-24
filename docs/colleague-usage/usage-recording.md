@@ -156,10 +156,12 @@ already running finishes, and its calls are kept.
 
 **PHP from a package manager that sets its own scan directory.** Some PHP
 builds (for example Nix's `php.withExtensions`) load their extensions only
-while `PHP_INI_SCAN_DIR` is unset. Recording keeps them loaded by itself: it
-asks the PHP your project starts for the directory it scans
-(`php --ini`, "Scan for additional .ini files in") once, and adds the module
-in front of it. A `PHP_INI_SCAN_DIR` you set yourself is kept as it is.
+while `PHP_INI_SCAN_DIR` is unset. Recording keeps Nix's loaded by itself: it
+reads the directory that PHP sets for itself, without starting it, and adds the
+module in front of it. A `PHP_INI_SCAN_DIR` you set yourself is kept as it is.
+If another PHP of this kind loses its extensions while recorded, set
+`PHP_INI_SCAN_DIR` in the project's Development Env to the directory
+`php --ini` shows as "Scan for additional .ini files in".
 
 ## The recording indicator
 
