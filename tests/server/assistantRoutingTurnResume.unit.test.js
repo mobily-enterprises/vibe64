@@ -17,16 +17,30 @@ const NOTE = /\n\n\[Vibe64 note: your previous turn was interrupted\. [^\n]*\]\n
 
 /**
  * A chat whose first turn is running under one server run, in its own system root; `next()` is the server after it.
+ * With `stopWhileSending`, that server's orderly stop begins while the message is being sent: its prompt is out and
+ * its receipt not yet back.
  * @param {import("node:test").TestContext} t
  * @param {object} [options] the routing fixture's options
+ * @param {{ stopWhileSending?: boolean }} [how]
  */
-async function runningTurn(t, options = {}) {
+async function runningTurn(t, options = {}, { stopWhileSending = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-turn-resume-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const first = createServerRun({ systemRoot: root });
   await first.started;
   const f = await fixture(t, { mode: "senior" }, { serverRun: first, ...options });
-  await f.service.send("session-1", request, f.context);
+  if (stopWhileSending) {
+    const dispatch = f.holdDispatch();
+    const sending = f.service.send("session-1", request, f.context);
+    await dispatch.started;
+    await first.recordPlannedStop("server-shutdown");
+    const closed = f.service.close();
+    dispatch.release();
+    await Promise.all([sending, closed]);
+    assert.notEqual(f.state().stopped, true, "the server's stop is not the person's Stop");
+  } else {
+    await f.service.send("session-1", request, f.context);
+  }
   assert.equal(f.state().status, "working");
   assert.equal(f.state().serverRunId, first.id);
   return {
@@ -109,6 +123,19 @@ test("an orderly restart and an update are named as such", async t => {
   await (await updated.next()).routing.reconcile("session-1", updated.f.context);
   assert.match(updated.notices()[0].text, /^Vibe64 was updated at \d\d:\d\d UTC, which stopped this turn\.\nResumed after Vibe64 was updated at/u);
   assert.match(updated.f.sends[1].input.message, /Vibe64 was updated at/u);
+});
+
+// A server's stop that catches a message while it is being sent leaves its request as the sending leaves it: the turn
+// it started is resumed by the next server, as after a crash, never stopped as the person's Stop would stop it.
+test("a turn whose message an orderly stop catches while it is sent is resumed once by the next server", async t => {
+  const h = await runningTurn(t, {}, { stopWhileSending: true });
+  assert.equal(h.f.state().delivery, "accepted");
+  await (await h.next()).routing.reconcile("session-1", h.f.context);
+  assert.equal(h.f.sends.length, 2, "the turn is resumed with exactly one message");
+  assert.match(h.f.sends[1].input.message, NOTE);
+  const [entry] = h.entries();
+  assert.deepEqual({ cause: entry?.cause, outcome: entry?.outcome }, { cause: "restart", outcome: "resumed" });
+  assert.match(h.notices()[0].text, /^Vibe64 restarted at \d\d:\d\d UTC \(it was stopped and started again\)\.\nResumed after/u);
 });
 
 test("a turn the person stopped is never resumed; a Stop the crash overtook says so", async t => {

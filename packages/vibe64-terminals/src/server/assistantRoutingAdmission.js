@@ -561,6 +561,10 @@ function createAssistantRoutingAdmission({
       }
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.", "vibe64_assistant_routing_unavailable");
       task.close = async () => {
+        // The server's stop is not the person's Stop. A message already in its delivery may have reached the AI, so
+        // its request stays as the delivery leaves it, and the next server's recovery resumes its turn, or says why
+        // not, as after a crash. A message still being routed is stopped, unsent.
+        if (task.delivering) return task.finished.promise;
         await cancellation.cancel(sessionId, options, { waitForCleanup: true });
         const persisted = await read(context.runtime.store, sessionId);
         if (persisted?.messageId === state.messageId && persisted.helper) {
@@ -623,6 +627,7 @@ function createAssistantRoutingAdmission({
         records.mark(state.messageId, "delivery-lock-acquired");
         const persisted = await read(current.runtime.store, sessionId);
         if (task.cancelled || persisted?.stopped) throw failure("Routing cancelled.", "vibe64_assistant_routing_task_cancelled");
+        task.delivering = true;
         return delivery.deliver(sessionId, current, state);
       });
     } catch (error) {

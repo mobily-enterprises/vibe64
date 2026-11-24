@@ -26,8 +26,9 @@ sent twice.
 
 ## When a turn is interrupted
 
-When Vibe64 crashes, restarts, is updated or moved while the AI is working, or
-the AI's engine stops or its connection is lost, the chat's history says so in
+When Vibe64 crashes, restarts, is updated or moved while the AI is working
+(even while your message is still being sent to it), or the AI's engine stops
+or its connection is lost, the chat's history says so in
 red where the turn stopped: what happened and when (on your own clock), then
 whether Vibe64 resumed the turn or why not. The entry stays after a reload and
 every member of the session sees it. A crash names its cause, for example

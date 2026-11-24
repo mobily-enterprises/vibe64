@@ -970,6 +970,10 @@ a host feature that needs AI stopped before its own cleanup and Terminals' close
 all share its single result and failure. They reject new Send requests, cancel pending
 classification through its existing Stop owner, and await helper cleanup and the
 saved cancellation. A cleanup failure remains an explicit shutdown failure.
+A message already in its delivery is not cancelled: shutdown waits for that
+delivery to end and leaves its request as the delivery leaves it, the state a
+crash leaves, so the next server's turn recovery resumes it (`task.delivering`
+in `assistantRoutingAdmission.js`).
 Already admitted native turns keep their existing interruption/reconnect handling;
 shutdown does not start a review. An OpenCode turn the shutdown stops is marked
 `stoppedByShutdown` and its checkpoint is left to the next server: Main chat's
