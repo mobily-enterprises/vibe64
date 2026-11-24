@@ -334,21 +334,24 @@ test("the installed plan command uses the admitted role, emits live changes and 
   assert.equal(first.status, "active");
   request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "junior" };
   await assert.rejects(command("complete", { role: "senior", expectedRevision: first.revision }), /Only Senior/);
-  const ticked = await command("progress-write", { text: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision });
+  // A whole-document write carries the readThrough of what it was built from: here each answer, which fits one page.
+  const ticked = await command("progress-write", { text: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision,
+    readThrough: first.readThrough });
   assert.equal(ticked.checked, 0);
   assert.equal(ticked.progressText, checkedText);
-  const proven = await command("write", { text: provenText, expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision });
+  const proven = await command("write", { text: provenText, expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision,
+    readThrough: ticked.readThrough });
   assert.equal(proven.checked, 2);
   // Through the installed helper too, a text under a name the command does not read is refused, never accepted empty;
   // the control fields the helper adds are not the agent's.
   await assert.rejects(command("progress-write", { progressText: "# Progress\nKept nowhere.\n", expectedRevision: proven.revision,
-    expectedProgressRevision: proven.progressRevision }), /plan progress-write does not read progressText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision\./u);
+    expectedProgressRevision: proven.progressRevision }), /plan progress-write does not read progressText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision, readThrough\./u);
   assert.equal((await command("read")).progressText, checkedText);
   // A Junior chat's own review (one upgraded in flight) records Progress but leaves the plan active for Senior.
   request = { schemaVersion: 7, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
   await assert.rejects(command("complete", { expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision }), /Only Senior/);
   const reviewed = await command("progress-write", { text: `${checkedText}Review found no gaps.\n`,
-    expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision });
+    expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision, readThrough: proven.readThrough });
   assert.equal((await command("read")).status, "active");
   // In Auto, Senior's check of the plan completes it.
   request = { schemaVersion: 7, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "auto", resolvedMode: "junior" };
@@ -368,7 +371,8 @@ test("the installed plan command uses the admitted role, emits live changes and 
   assert.equal(metadata.get("after_plan_base"), laterHead, "a plan reopened with no base recorded records one");
   request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "junior" };
   const expectedProgress = "# Progress\n" + "native helper evidence 🙂\n".repeat(1200);
-  await command("progress-write", { text: expectedProgress, expectedRevision: reopened.revision, expectedProgressRevision: reopened.progressRevision });
+  await command("progress-write", { text: expectedProgress, expectedRevision: reopened.revision, expectedProgressRevision: reopened.progressRevision,
+    readThrough: reopened.readThrough });
   let page = await command("read"); const readRevision = page.revision; const progressRevision = page.progressRevision;
   let allPlan = page.text; let allProgress = page.progressText;
   while (page.hasMore) {
@@ -377,6 +381,13 @@ test("the installed plan command uses the admitted role, emits live changes and 
   }
   assert.equal(allPlan, reopened.text);
   assert.equal(allProgress, expectedProgress, "The actual helper supplies companion beyond the first page before work/review");
+  // A Progress rewritten from the first page alone would cut the tail: the installed helper refuses it, naming the fix.
+  const firstPage = await command("read");
+  await assert.rejects(command("progress-write", { text: `${firstPage.progressText}Security found nothing.\n`, expectedRevision: readRevision,
+    expectedProgressRevision: progressRevision }), /plan progress-write replaces the whole Progress, so it needs readThrough/u);
+  await command("progress-write", { text: `${allProgress}Security found nothing.\n`, expectedRevision: readRevision,
+    expectedProgressRevision: progressRevision, readThrough: page.readThrough });
+  assert.equal((await readWorkPlan(f.context)).progressText, `${expectedProgress}Security found nothing.\n`, "read through, nothing is cut");
 
 });
 
@@ -462,12 +473,12 @@ test("a plan write whose text is missing, empty or under a name the operation do
   const before = await readWorkPlan(f.context);
   // A read returns Progress as progressText: a write naming it so used to be accepted and keep an empty Progress.
   for (const [operation, extra, refusal] of [
-    ["progress-write", { progressText: "# Progress\nAccess is restricted.\n" }, /^plan progress-write does not read progressText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision\.$/u],
+    ["progress-write", { progressText: "# Progress\nAccess is restricted.\n" }, /^plan progress-write does not read progressText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision, readThrough\.$/u],
     ["progress-write", {}, /^plan progress-write takes the whole new Progress as text, a string that is not empty: nothing changed\. A read returns the current Progress as progressText\.$/u],
     ["progress-write", { text: null }, /takes the whole new Progress as text/u],
     ["progress-write", { text: ["# Progress"] }, /takes the whole new Progress as text/u],
     ["progress-write", { text: " \n" }, /takes the whole new Progress as text/u],
-    ["write", { planText: provenText }, /^plan write does not read planText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision\.$/u],
+    ["write", { planText: provenText }, /^plan write does not read planText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision, readThrough\.$/u],
     ["write", { text: "" }, /^plan write takes the whole new Plan as text, a string that is not empty: nothing changed\.$/u],
     ["checked", { messageId: "request-1" }, /^plan checked does not read messageId: nothing changed\. It takes expectedRevision, expectedProgressRevision\.$/u]
   ]) {

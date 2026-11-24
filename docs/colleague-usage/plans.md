@@ -22,7 +22,9 @@ Senior confirms creation or updates after the plan helper has saved the result.
 Both direct Senior and Junior receive the plan format and command instructions.
 Both roles must read the full Plan, including its technical details, and Progress
 before implementing or reviewing. Collapsing details in the viewer does not hide
-them from the agent. Junior updates Progress and the marks of existing checklist
+them from the agent. The agent reads a long plan in pages, and Vibe64 refuses
+its rewrite of the whole Plan or Progress unless it read both to the last page,
+so a long Progress is never cut to the part one page returned. Junior updates Progress and the marks of existing checklist
 items as the work goes: a half tick once an item is built, a full tick once the
 plan's final checks prove it (see [Checklist marks](#checklist-marks)); Senior
 owns agreed Plan scope changes. Creating,

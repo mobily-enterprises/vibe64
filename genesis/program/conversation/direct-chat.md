@@ -2181,6 +2181,14 @@ the read's planFileProblems and warning, which the History view shows, while
 the current plan and every other archive keep working. Cleanup then removes
 nothing, since that archive may still reference documents, and it keeps and
 names a stray or unreadable file among the documents instead of failing.
+
+A read pages Plan then Progress as one character stream; only the page that ends
+it (hasMore false) carries readThrough, a digest of the pair's identity, and so
+does each write's answer. The agent's plan command passes `agent: true`,
+so its write and progress-write, which replace a whole document, are refused
+(vibe64_work_plan_read_through_required) without the current pair's readThrough:
+a Progress rebuilt from the first page alone cannot cut the tail it never read.
+Vibe64's own writes build from the whole pair and need none.
 Legacy current.md and archive/<planRevision>.md remain readable unchanged. Mutation
 requires the stopped-writer 20261008-plan-progress upgrade, which reuses the original
 Runtime session/archive/prepared-renewal inventory and Core verified backup publisher.
