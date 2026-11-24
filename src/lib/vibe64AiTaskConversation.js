@@ -3,6 +3,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { chatTurnsWithRouting } from "@/lib/vibe64ChatDelivery.js";
 import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
+import { turnInterruptionPresentation } from "@/lib/vibe64ConversationPresentation.js";
 import { thinkingMessagesPresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
 
 /**
@@ -90,6 +91,7 @@ function presentedMessages(message, turn) {
 function aiTaskTranscript(adapter, { routingRequest, working, scrollKey, actions }) {
   const presented = (adapter.conversation.turns || []).map(turn => ({ ...turn,
     ...conversationAttribution(turn.metadata?.assistantSelection, turn.metadata?.assistantRouting),
+    ...turnInterruptionPresentation(turn),
     assistant: turn.assistant && presentedMessages(turn.assistant, turn)[0],
     thinking: turn.thinking?.flatMap(message => presentedMessages(message, turn)),
     commentary: turn.commentary?.flatMap(message => presentedMessages(message, turn)),

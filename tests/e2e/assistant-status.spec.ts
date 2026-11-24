@@ -870,3 +870,41 @@ test("reasoning dots animate only for the confirmed phase", async ({ page }, inf
   server.publishTurn();
   await expect(dots).toHaveCount(0);
 });
+
+test.describe("a turn interruption", () => {
+  // A viewer in Perth reads the server's 04:18 UTC on their own clock.
+  test.use({ timezoneId: "Australia/Perth", locale: "en-GB" });
+
+  test("shows in red in the chat's history on the viewer's clock, and stays there after reload", async ({ page }, info) => {
+    server.state.session.agentSession.turn.active = false;
+    const interruption = (turnId: string, at: string, entry: Record<string, unknown>, text: string) => ({ turnId,
+      system: { role: "system", at, messageId: `vibe64-turn-interrupted:${turnId}:${entry.outcome}`, text },
+      metadata: { vibe64TurnInterruption: entry } });
+    server.state.conversationLog = [
+      { turnId: "asked", user: { role: "user", at: "2026-11-24T04:10:00.000Z", text: "Fix the failing check." } },
+      interruption("crashed", "2026-11-24T04:18:30.000Z",
+        { cause: "crash", at: "2026-11-24T04:18:05.000Z", outcome: "resumed", crashMessage: "read ECONNRESET" },
+        "Vibe64 crashed at 04:18 UTC: read ECONNRESET.\nResumed after Vibe64 restarted at 04:18 UTC."),
+      interruption("restarted", "2026-11-24T04:21:00.000Z", { cause: "restart", at: "2026-11-24T04:20:40.000Z", outcome: "loop" },
+        "Vibe64 restarted at 04:20 UTC (it was stopped and started again).\nNot resumed: stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.")
+    ];
+    await openChat(page);
+    const entries = page.locator(".vibe64-turn-interruption");
+    const expectEntries = async () => {
+      await expect(entries).toHaveCount(2);
+      await expect(entries.nth(0)).toHaveText(/^\s*Vibe64 crashed at 12:18: read ECONNRESET\.\s*Resumed after Vibe64 restarted at 12:18\.\s*$/u);
+      await expect(entries.nth(1)).toHaveText(new RegExp("^\\s*Vibe64 restarted at 12:20 \\(it was stopped and started again\\)\\.\\s*" +
+        "Not resumed: stopped: Vibe64 restarted twice while it ran\\. Choose Continue to try again\\.\\s*$", "u"));
+      for (const index of [0, 1]) {
+        // The theme's error colour, as a note in the history rather than an alert that interrupts a screen reader.
+        await expect(entries.nth(index)).toHaveClass(/\btext-error\b/u);
+        await expect(entries.nth(index)).toHaveAttribute("role", "note");
+      }
+    };
+    await expectEntries();
+    await page.screenshot({ path: info.outputPath("turn-interruptions.png") });
+    await page.reload();
+    await expect(composer(page)).toBeVisible();
+    await expectEntries();
+  });
+});

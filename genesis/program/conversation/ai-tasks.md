@@ -198,7 +198,12 @@ Save, a sign-in, a merge build, an inspection and an overview read have no real
 stop (`check.unstoppable`), so a task cancelled during one waits for the run to
 end, and says so.
 
-A turn lost to a restart stops at `needs_you(interrupted)` with Continue. A check
+A turn lost to a restart (`turn_lost`) continues once in the same chat: the runner sends the AI Vibe64's note of what
+interrupted it with Continue's words, records `resumedAt`, and writes the chat's red interruption entry through
+Terminals (`writeTurnInterruptionNotice`, its cause from `previousServerEnd`). Lost again within the 10-minute loop
+window of that resume, it stops at `needs_you(interrupted)` with Continue and "Stopped: Vibe64 restarted twice while
+it ran."
+([aiTaskRunner.js](../../../packages/vibe64-ai-tasks/src/server/aiTaskRunner.js)). A check
 interrupted by a restart runs again with the same request identity, so the
 existing Update operation is recovered rather than repeated. Connecting,
 disconnecting or switching an AI account never stops or waits on a running turn;

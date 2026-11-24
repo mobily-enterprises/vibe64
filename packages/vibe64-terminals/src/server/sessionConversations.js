@@ -1,3 +1,5 @@
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { NO_SERVER_RUN, interruptionNotice } from "./turnInterruptions.js";
 import { createTemporaryConversationRecords } from "./temporaryConversationRecords.js";
 import { createTemporaryConversationTurns } from "./temporaryConversationTurns.js";
 import { createTemporaryConversationLifecycle } from "./temporaryConversationLifecycle.js";
@@ -33,6 +35,8 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
  * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {PrepareAgentSkills} dependencies.prepareAgentSkills
  * @param {string} dependencies.systemRoot
+ * @param {import("./types.js").ServerRun} [dependencies.serverRun] This editor process's run, against which a
+ *   temporary chat's turn an earlier run sent is told apart.
  * @param {PrepareAssistantSelection} dependencies.prepareSelection
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {PublishNativeConversation} dependencies.publishConversation
@@ -51,6 +55,7 @@ function createSessionConversations({
   readSessionContext,
   prepareAgentSkills,
   systemRoot,
+  serverRun,
   prepareSelection,
   publishSessionChanged,
   publishConversation,
@@ -71,6 +76,7 @@ function createSessionConversations({
     readSessionContext,
     prepareAgentSkills,
     systemRoot,
+    serverRun,
     prepareSelection,
     publishSessionChanged,
     temporarySaveDelayMs,
@@ -103,8 +109,44 @@ function createSessionConversations({
     conversationTurns
   });
 
+  const run = serverRun ?? NO_SERVER_RUN;
+
+  /**
+   * A temporary chat's red interruption entry (an AI task's, whose runner decides its resume), written once (its
+   * message id) and shown to its open views; a crash's turn is counted into its record.
+   * @param {string} sessionId
+   * @param {{ conversationId: string, interruption: object, outcome: string }} input
+   */
+  async function writeTurnInterruptionNotice(sessionId, { conversationId, interruption, outcome }) {
+    const { runtime } = await readSessionContext(sessionId);
+    const notice = interruptionNotice(interruption, outcome);
+    const turn = await runtime.store.writeConversationSystemMessage({ sessionId, conversationId }, notice);
+    if (!turn) return;
+    await publishSessionChanged(sessionId, {
+      reason: "assistant-routing-changed",
+      payload: { conversationId, conversationLogPatch: { type: "upsert-turn", turn } }
+    });
+    if (interruption.crashId) await run.countCrashTurn(interruption.crashId, outcome === "resumed");
+    logOperationalEvent(logger, "warn", {
+      component: "vibe64.turn_resume",
+      event: `vibe64.turn_resume.${outcome === "resumed" ? "resumed" : "stopped_by_loop_rule"}`,
+      sessionId,
+      conversationId,
+      aiTask: true,
+      cause: interruption.cause,
+      interruptedAt: interruption.at
+    }, `An interrupted AI task: ${outcome}.`);
+  }
+
+  /** How the server before this one ended, for an AI task it left working (vibe64-ai-tasks' runner). */
+  function previousServerEnd() {
+    return run.previousEnd();
+  }
+
   return Object.freeze({
     close: chatTurns.close,
+    previousServerEnd,
+    writeTurnInterruptionNotice,
     temporaryConversationDataSchema: chatInteraction.temporaryConversationDataSchema,
     temporaryConversationSelectionSchema: chatInteraction.temporaryConversationSelectionSchema,
     conversationBinding: chatInteraction.conversationBinding,
@@ -112,6 +154,7 @@ function createSessionConversations({
     createTemporaryConversation: chatLifecycle.createTemporaryConversation,
     listTemporaryConversations: chatLifecycle.listTemporaryConversations,
     readTemporaryConversation: chatLifecycle.readTemporaryConversation,
+    reconcileTemporaryConversation: chatLifecycle.reconcileTemporaryConversation,
     updateTemporaryConversation: chatInteraction.updateTemporaryConversation,
     startTemporaryConversationTurn: chatInteraction.startTemporaryConversationTurn,
     cancelTemporaryConversationMessage: chatInteraction.cancelTemporaryConversationMessage,

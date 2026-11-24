@@ -87,7 +87,9 @@ async function fixture(t, preferences = { mode: "auto" }, {
   onPlanCompleted,
   source: withSource = false,
   // false: a temporary chat, where Auto and plans are unavailable
-  allowAuto = true
+  allowAuto = true,
+  // The editor process's run (turnInterruptions.js); none by default, as routing has none without a system root.
+  serverRun
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-lifecycle-"));
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -219,7 +221,7 @@ async function fixture(t, preferences = { mode: "auto" }, {
   // Genesis's pass list for the session's source; a test may change it, count its reads or make them fail.
   const genesis = { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
   const passReads = { count: 0, failure: null };
-  const routingOptions = { systemRoot: root, allowAuto, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
+  const routingOptions = { systemRoot: root, allowAuto, serverRun, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
     writesWhileAssistantWorks: writes,
     listPasses: async () => {
       passReads.count += 1;
@@ -258,7 +260,9 @@ async function fixture(t, preferences = { mode: "auto" }, {
       void exclusive("session-1", {}, () => whileAssistantWorks ? writes.hold("session-1", hold) : hold());
       return { started: started.promise, release: () => held.resolve() };
     },
-    restart: () => createAssistantRouting(routingOptions),
+    // A new routing, as the next server makes; `overrides` replace its options (its server run, say).
+    restart: (overrides = {}) => createAssistantRouting({ ...routingOptions, ...overrides }),
+    root,
     lockWait: (ms) => { lockWaitMs = ms; },
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
     rejectAdmission: result => { rejectedAdmission = result; },

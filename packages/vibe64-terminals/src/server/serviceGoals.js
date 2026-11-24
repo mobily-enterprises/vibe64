@@ -27,6 +27,8 @@ import { GOAL_RECOVERY_RETRY_DELAYS_MS, createServiceGoalRecovery } from "./serv
 import { createServiceGoalLimitReset } from "./serviceGoalLimitReset.js";
 import { createServiceGoalChatContinuation } from "./serviceGoalChatContinuation.js";
 import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
+import { NO_SERVER_RUN } from "./turnInterruptions.js";
+import { createServiceGoalInterruptions } from "./serviceGoalInterruptions.js";
 
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
@@ -123,6 +125,7 @@ async function changeGoalIntent(sessionId, context, change) {
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
  * @param {ReadRoutingConfiguration} dependencies.readRoutingConfiguration
  * @param {SessionAgentManager} dependencies.sessionAgent
+ * @param {import("./types.js").ServerRun} [dependencies.serverRun] This process's run, which each goal it admits names
  */
 function createServiceGoals({
   state,
@@ -135,10 +138,16 @@ function createServiceGoals({
   project,
   publishAgentSessionChanged,
   readRoutingConfiguration,
-  sessionAgent
+  sessionAgent,
+  serverRun = NO_SERVER_RUN
 }) {
-  const goalRuntimeId = randomUUID();
+  // The goals this server admitted name its run, so the next run can tell how this one ended.
+  const goalRuntimeId = serverRun.id || randomUUID();
   const goalAdmissions = new Map();
+  // A goal an earlier server left running: its red entry, and its continuation once (serviceGoalInterruptions.js).
+  const goalInterruptions = createServiceGoalInterruptions({
+    serverRun, publishAgentSessionChanged, updateAgentGoal, writeAgentGoal
+  });
 
   /**
    * Cancel answers without waiting for the goal settings lock: it stops a goal admission at once,
@@ -227,8 +236,11 @@ function createServiceGoals({
   async function recoverSessionGoal(sessionId) {
     let context = await assistantContext.assistantSessionOptions(sessionId);
     let intent = readGoalIntent(context.session);
-    if (!intent?.active || intent.daemonId === goalRuntimeId || sessionIsClosing(context.session) ||
-        context.session.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) return { sessionId, skipped: true };
+    if (!intent?.active) return { sessionId, skipped: true, reason: "no-active-goal" };
+    if (intent.daemonId === goalRuntimeId) return { sessionId, skipped: true, reason: "continued-by-this-server" };
+    if (sessionIsClosing(context.session)) return { sessionId, skipped: true, reason: "session-closing" };
+    if (context.session.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) return { sessionId, skipped: true, reason: "session-renewing" };
+    await goalInterruptions.requirePreviousServerStopped(intent);
     requireCompletedNativeConversationReplacement(context.session);
     requireCompletedConversationRewind(context.session);
     if (!Object.hasOwn(intent, "connectionIdentity")) {
@@ -307,16 +319,7 @@ function createServiceGoals({
     }
     const observed = await readCanonicalAgentGoal(sessionId, { vibe64User: actor });
     if (!observed.goal || goalStatusIsComplete(observed.goal.status)) return { sessionId, completed: true };
-    const result = await writeAgentGoal(sessionId, {
-      action: "resume",
-      vibe64User: actor,
-      expectedSegmentId: observed.target.segmentId,
-      expectedGoalId: observed.goal.id,
-      messageId: `goal-restart-${randomUUID()}`
-    }, { canonical: true, restartIntentId: intent.id });
-    if (result?.code === "vibe64_goal_main_ai_changed") return { sessionId, cancelled: true };
-    if (result?.ok === false) throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
-    return { sessionId, resumed: true };
+    return goalInterruptions.continueInterruptedGoal(sessionId, context, { intent, native, observed, actor });
   }
 
   // A goal waiting at its AI account's usage limit continues by itself once the limit has reset.
@@ -434,7 +437,8 @@ function createServiceGoals({
    * no longer active, but continues on the current AI connection as Resume goal does.
    */
   async function writeAgentGoal(sessionId, input, options) {
-    const { canonical, restartIntentId = null, continuesIntentId = restartIntentId } = options;
+    // interruption: the interruptions a restart's continuation carries into its new intent (recoverSessionGoal).
+    const { canonical, restartIntentId = null, continuesIntentId = restartIntentId, interruption = null } = options;
     if (input.action === "resume" && await cancelGoalIfMainAiChanged(sessionId, input.vibe64User || null)) {
       return { ok: false, code: "vibe64_goal_main_ai_changed", error: MAIN_AI_CHANGED_GOAL_NOTICE };
     }
@@ -481,6 +485,8 @@ function createServiceGoals({
               active: true,
               daemonId: goalRuntimeId,
               restartOf: restartIntentId,
+              // A goal Vibe64 continued after an interruption keeps it, and when, for the crash-loop rule.
+              ...(restartIntentId && interruption ? { interruptions: interruption } : {}),
               actor: actor ? { username: actor.username, role: actor.role } : null,
               pending: canonical ? {
                 action: input.action,

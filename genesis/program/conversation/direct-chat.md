@@ -932,7 +932,8 @@ A Codex turn follows the same contract through JSKIT's run owner, which hands
 each running turn over before any Codex process stops. Main chat's saved run
 stays active with the turn's mark, and the next server's recovery ends it
 interrupted with the restart notice ("Codex was interrupted by a Vibe64
-restart…") and its interrupted checkpoint. A temporary chat's turn goes to the
+restart…") and its interrupted checkpoint, and routing resumes it once
+([interrupted turn resumption](#interrupted-turn-resumption)). A temporary chat's turn goes to the
 owner's `deferCheckpoint`, which writes the same `stoppedByShutdown` record on
 the chat whose native thread it is; the chat's next read passes it back and
 makes that checkpoint once
@@ -1396,6 +1397,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantRoutingDelivery.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingCancellation.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingInterruptions.js`
 - `packages/vibe64-terminals/src/server/assistantPlanHandoff.js`
 - `packages/vibe64-terminals/src/server/afterPlanBase.js`
 - `packages/vibe64-terminals/src/server/afterPlanPassesUpgrade.js`
@@ -1544,6 +1546,14 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/serviceMainConversationHost.js`
 - `packages/vibe64-terminals/src/server/serviceGoals.js`
 - `packages/vibe64-terminals/src/server/serviceGoalRecovery.js`
+- `packages/vibe64-terminals/src/server/serviceGoalInterruptions.js`
+- `packages/vibe64-terminals/src/server/serviceTurnRecovery.js`
+- `packages/vibe64-terminals/src/server/turnInterruptions.js`
+- `packages/vibe64-terminals/src/shared/turnInterruptionText.js`
+- `src/components/studio/vibe64-session/Vibe64TurnInterruption.vue`
+- `tests/server/turnInterruptions.unit.test.js`
+- `tests/server/assistantRoutingTurnResume.unit.test.js`
+- `tests/server/turnResumeAfterKill.integration.test.js`
 - `packages/vibe64-terminals/src/server/serviceGoalLimitReset.js`
 - `packages/vibe64-terminals/src/server/serviceGoalChatContinuation.js`
 - `tests/server/claudeGoalRestart.unit.test.js`
@@ -4925,6 +4935,65 @@ project/session browser preference record. The previous single saved dismissal
 remains respected; new dismissals do not replace it or one another. Writes merge
 other stored entries, and a new operation ID remains visible. This is presentation
 state only; operation history and server recovery are unchanged.
+
+## Interrupted turn resumption
+
+Every editor process has a run record, `<systemRoot>/server-runs/<id>.json`
+(`createServerRun` in
+[turnInterruptions.js](../../../packages/vibe64-terminals/src/server/turnInterruptions.js)):
+its pid and that process's start time, when it started, its version, and the
+planned stop shutdown records before anything stops
+([serviceShutdown.js](../../../packages/vibe64-terminals/src/server/serviceShutdown.js)).
+The last 20 are kept, never the run before this one. Each routed delivery saves
+its run's id on its request (`serverRunId`); a goal intent's `daemonId` is its
+run's id. A later run reads how an earlier one ended: a planned stop of the same
+version is a restart, of another version an update, and none a crash, described
+by the crash record core's crash watch wrote from that run's start
+(`crashForInterruptedTurn`) or, without one, as an unexpected stop. A run whose
+process still runs (the same pid and start time, a brief overlap at restart) is
+still its turns' owner: recovery and reconciliation leave them, and recovery
+tries again later.
+
+After every feature has booted, `recoverInterruptedTurns`
+([serviceTurnRecovery.js](../../../packages/vibe64-terminals/src/server/serviceTurnRecovery.js))
+reconciles each open project's Main chat and temporary chat whose request was
+at work, as its sender, without waiting for anyone to open it, and retries after
+30 s, 2 min and 10 min while one could not be checked. Reconciliation ends the
+old turn; routing's outcomes
+([assistantRoutingOutcomes.js](../../../packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js))
+then decide through its interruptions
+([assistantRoutingInterruptions.js](../../../packages/vibe64-terminals/src/server/assistantRoutingInterruptions.js)), once per interruption (its request's message and turn), from what
+ended it: an earlier run's end, or a turn of this run that failed
+(`turnEnding`: the engine stopping, a lost connection, an overloaded service, a
+sign-in, a usage limit, any other error). The AI is told nothing when the turn
+completed, was cancelled or was a plain Stop. A crash, restart, update or
+engine stop resumes at once; a lost connection or overloaded service after
+`TURN_RESUME_BACKOFF_MS` (30 s, Continue resumes sooner); a sign-in, usage limit
+or other error is never resumed. The resume is a follow-up (`followup.resume`)
+in the same conversation and engine session whose message leads with
+`resumeNoteForAi`. The request keeps its last five interruptions
+(`interruptions`): one within `TURN_RESUME_LOOP_WINDOW_MS` (10 min) of the last
+resume stops the request, waiting with "Stopped: Vibe64 restarted twice while it
+ran. Choose Continue to try again." A person's Stop, a cancelled request, a goal
+turn (its goal recovery decides) and an AI task's turn (its runner decides) are
+never resumed here. A send left unsent is resent once, and one that may have
+reached the AI is inspected and never resent.
+
+Each decision writes one system message in the chat's history, its id
+`vibe64-turn-interrupted:<interruption>:<outcome>` so a second writer adds
+nothing, its text in UTC and its turn's metadata `vibe64TurnInterruption`
+({cause, at, outcome, crash message, detail}); the chat draws it in the theme's
+error colour from that metadata with the viewer's own clock
+([Vibe64TurnInterruption.vue](../../../src/components/studio/vibe64-session/Vibe64TurnInterruption.vue),
+[turnInterruptionText.js](../../../packages/vibe64-terminals/src/shared/turnInterruptionText.js)).
+A crash's record counts the turns it interrupted that were resumed
+(`recordVibe64CrashResumedTurns`). Goal recovery
+([serviceGoals.js](../../../packages/vibe64-terminals/src/server/serviceGoals.js),
+[serviceGoalInterruptions.js](../../../packages/vibe64-terminals/src/server/serviceGoalInterruptions.js))
+applies the same rule to a goal's intents: it writes the entry and continues the
+goal, carrying the interruptions into the new intent, or pauses it within the
+window. Both recoveries log, at warn so production keeps them, their start, each
+session's outcome and their totals.
 
 ## Recovery snapshot notice
 

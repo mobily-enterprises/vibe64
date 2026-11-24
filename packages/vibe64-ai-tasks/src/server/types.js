@@ -57,6 +57,8 @@
  * @property {string} report
  * @property {AiTaskPending | null} pending
  * @property {string} turnMessageId the message whose turn this task waits for
+ * @property {string} [resumedAt] when Vibe64 last continued the task's turn after an interruption, which the
+ *   crash-loop rule reads
  * @property {object | null} [cancelledBy]
  * @property {{ at: string, text: string }[]} log
  * @property {object | null} endedBy
@@ -85,6 +87,8 @@
  * @property {string} [step] the step a running check is on, in its owner's words
  * @property {string} [since] when that step started; empty: now, or when the same step was first reported
  * @property {string} [output] what that step has printed so far, as its owner may show it
+ * @property {boolean} [resume] for a lost turn: whether the AI continues it (the loop rule allows it)
+ * @property {string} [note] for a lost turn the AI continues: Vibe64's note leading its message
  */
 
 /**

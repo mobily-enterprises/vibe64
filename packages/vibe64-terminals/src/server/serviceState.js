@@ -56,6 +56,10 @@ function createServiceState({ readClaudeAccountStatus }) {
       goalRecovery: undefined,
       goalRecoveryRetry: undefined,
       goalRecoveryTimer: undefined,
+      // The restart recovery of the turns the previous server left working, and its retry (serviceTurnRecovery.js).
+      turnRecovery: undefined,
+      turnRecoveryRetry: undefined,
+      turnRecoveryTimer: undefined,
       // The goals waiting to continue once their usage limit resets; shutdown cancels their timers.
       goalLimitReset: /** @type {{ close(): void } | undefined} */ (undefined)
     }),

@@ -658,6 +658,8 @@ function createAssistantRoutingAdmission({
 
   async function close() {
     closing = true;
+    for (const timer of routingState.resumeTimers.values()) clearTimeout(timer);
+    routingState.resumeTimers.clear();
     const tasks = [...routingState.running.values()];
     for (const task of tasks) task.cancelled = true;
     const results = await Promise.allSettled(tasks.map((task) => task.close()));

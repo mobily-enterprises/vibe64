@@ -26,6 +26,7 @@ import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conve
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { LIMIT_RESET_MARGIN_MS } from "../../packages/vibe64-terminals/src/server/serviceGoalLimitReset.js";
+import { TURN_RESUME_LOOP_WINDOW_MS } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
 import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
@@ -1578,6 +1579,15 @@ async function finishReasoning(receive, id) {
   await receive({ type: "result", subtype: "success", result: "Both are fine." });
 }
 // Counts Stops that reach the process: only explicit Stop, Cancel, Close or a server shutdown may send one.
+/**
+ * A goal intent as a restart long after its last resume reads it: each resume it carries is moved back past the
+ * crash-loop window, so the next restart resumes the goal again (claudeGoalRestart.unit.test.js covers the window).
+ */
+function longAfterLastResume(intent) {
+  const earlier = at => at ? new Date(Date.parse(at) - TURN_RESUME_LOOP_WINDOW_MS).toISOString() : at;
+  return { ...intent, interruptions: intent.interruptions?.map(entry => ({ ...entry, resumedAt: earlier(entry.resumedAt) })) };
+}
+
 function countInterrupts(native) {
   const interrupt = native.client.interrupt;
   const counted = { interrupts: 0 };
@@ -3201,7 +3211,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
         "a goal command that never arrived is not replaced with a new Resume by recovery");
       await service.close();
-      await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify(intentBeforeRestart));
+      // The restarts below come long after the one that just resumed the goal, as the crash-loop rule needs to resume it.
+      await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify(longAfterLastResume(intentBeforeRestart)));
       service = createService();
     }
     if (!busyGoal) {
@@ -3289,6 +3300,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(visible.status, "active");
     if (busyGoal) {
       await service.close();
+      // A restart long after the one that resumed the goal: restart recovery queues behind the preparation again.
+      const resumedIntent = JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent);
+      await store.writeMetadataValue("test", "assistant_goal_intent", JSON.stringify(longAfterLastResume(resumedIntent)));
       service = createService();
       const held = Promise.withResolvers();
       const release = Promise.withResolvers();

@@ -55,11 +55,19 @@ test("an Auto conversation turn cannot report an outcome: the report is refused 
   assert.equal(f.state().status, "complete"); assert.equal(f.notices.size, 0);
 });
 
-for (const result of ["failed", "interrupted"]) test(`an Auto conversation turn that ${result} waits, with no Status message`, async t => {
-  const f = await conversation(t);
-  await f.service.afterTurn("session-1", ended(f.state(), result), f.context);
-  assert.equal(f.state().status, "waiting"); assert.equal(f.notices.size, 0); assert.equal(f.sends.length, 1);
-});
+// A failure that ends the turn gets its red entry in the chat's history and is not sent again (turnInterruptions.js);
+// an interrupt with nothing to say is the person's Stop, which gets none.
+for (const [result, entries] of [["failed", [/^vibe64-turn-interrupted:.+:not-resumed$/u]], ["interrupted", []]]) {
+  test(`an Auto conversation turn that ${result} waits, with no Status message`, async t => {
+    const f = await conversation(t);
+    await f.service.afterTurn("session-1", ended(f.state(), result), f.context);
+    assert.equal(f.state().status, "waiting"); assert.equal(f.sends.length, 1);
+    const written = [...f.notices.keys()];
+    assert.equal(written.length, entries.length, JSON.stringify(written));
+    entries.forEach((entry, index) => assert.match(written[index], entry));
+    assert.equal(statusMessages(f).length, 0, "no Status message is written");
+  });
+}
 
 test("an Auto conversation turn leaves the next request's work to run as its own", async t => {
   const f = await conversation(t);

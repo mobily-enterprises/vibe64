@@ -6,7 +6,8 @@
         <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
       </template>
       <template #system-message="{ message }">
-        <Vibe64ConversationStatus :message="message" @check-delivery="resend" />
+        <Vibe64TurnInterruption v-if="message.turnInterruption" :entry="message.turnInterruption" />
+        <Vibe64ConversationStatus v-else :message="message" @check-delivery="resend" />
       </template>
       <template #hints>
         <div v-if="conversation.error.value || conversation.activityLabel.value" class="ai-task-chat__feedback">
@@ -138,6 +139,7 @@ import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
+import Vibe64TurnInterruption from "./Vibe64TurnInterruption.vue";
 import Vibe64SessionAssistantMenu from "./Vibe64SessionAssistantMenu.vue";
 
 const props = defineProps({

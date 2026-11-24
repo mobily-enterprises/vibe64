@@ -1,6 +1,7 @@
 /**
  * One routing's shared state: its settings, the requests it is preparing, their send timings,
- * the follow-ups it schedules live, and the cancelled messages whose cleanup has not settled.
+ * the follow-ups it schedules live, the cancelled messages whose cleanup has not settled, and the interrupted
+ * turns it resumes after a wait.
  * @param {object} settings
  * @param {string} settings.systemRoot
  * @param {boolean} settings.allowAuto
@@ -21,6 +22,9 @@ function createAssistantRoutingState({ systemRoot, allowAuto }) {
   // That cleanup runs after Cancel answers; routing's close waits for it, so it
   // writes nothing once the server has closed.
   const settling = new Set();
+  // Interrupted turns this process resumes after a short wait (a lost connection, an overloaded AI service), by
+  // request key; close clears them, and the next server's reconcile schedules any left.
+  const resumeTimers = new Map();
 
   return Object.freeze({
     systemRoot,
@@ -30,7 +34,8 @@ function createAssistantRoutingState({ systemRoot, allowAuto }) {
     liveFollowupRequests,
     cancelling,
     stopping,
-    settling
+    settling,
+    resumeTimers
   });
 }
 

@@ -2092,6 +2092,23 @@ test("plain session store deduplicates durable system messages by message id", a
   });
 });
 
+test("plain session store keeps a system message's data as its turn's metadata, which every read carries", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    await store.createSession({ runtimeKind: "genesis", sessionId: "conversation-system-data" });
+    const entry = { cause: "crash", at: "2026-11-24T04:18:05.000Z", outcome: "resumed", crashMessage: "read ECONNRESET" };
+    const written = await store.writeConversationSystemMessage("conversation-system-data", {
+      messageId: "vibe64-turn-interrupted:m:t:resumed",
+      text: "Vibe64 crashed at 04:18 UTC: read ECONNRESET.\nResumed after Vibe64 restarted at 04:18 UTC.",
+      data: { vibe64TurnInterruption: entry }
+    });
+    assert.deepEqual(written.metadata.vibe64TurnInterruption, entry);
+    const [turn] = await store.readConversationLog("conversation-system-data");
+    assert.deepEqual(turn.metadata.vibe64TurnInterruption, entry);
+    assert.equal(turn.system.data, undefined, "the message keeps only its words");
+  });
+});
+
 test("plain session store gives one durable user turn to one message id", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createStore(targetRoot);

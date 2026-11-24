@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -33,27 +33,50 @@ const PROJECT_SLUG = "claude-goal-restart";
 /**
  * One Main chat session served by the real terminals service, manager, Claude
  * owner, managed process transport and session store. Only Claude's inference
- * is synthetic: a /goal command keeps its turn working until the process stops,
- * as a goal Claude is still working on does; any other message completes.
+ * is synthetic: a /goal command, or a message asking Claude to keep working,
+ * keeps its turn working until the process stops, as a goal or a long turn
+ * Claude is still working on does; any other message completes.
+ * @param {{ after: (callback: () => unknown) => void }} t
+ * @param {{ root?: string }} [options] root: the folder of a harness another process set up, which this one serves
+ *   too (as a server later killed mid-turn); the harness that made it removes it.
  */
-async function goalHarness(t) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "v64-claude-goal-restart-"));
+async function goalHarness(t, { root: sharedRoot = "" } = {}) {
+  const root = sharedRoot || await mkdtemp(path.join(os.tmpdir(), "v64-claude-goal-restart-"));
+  const command = path.join(root, "claude.cjs");
+  const tracePath = path.join(root, "claude-trace.jsonl");
+  const trace = async () => {
+    try {
+      const text = await readFile(tracePath, "utf8");
+      return text.slice(0, text.lastIndexOf("\n") + 1).split("\n").filter(Boolean).map(JSON.parse);
+    } catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  };
   let service;
   t.after(async () => {
     try { await service?.close(); }
-    finally { await rm(root, { recursive: true, force: true }); }
+    finally {
+      // A synthetic Claude still running (one a killed server left, say) is stopped by its own pid, as its trace records it.
+      for (const { pid } of await trace().catch(() => [])) {
+        const cmdline = Number.isInteger(pid) ? await readFile(`/proc/${pid}/cmdline`, "utf8").catch(() => "") : "";
+        if (cmdline.split("\0").includes(command)) {
+          try { process.kill(pid, "SIGKILL"); } catch { /* It has exited since. */ }
+        }
+      }
+      if (!sharedRoot) await rm(root, { recursive: true, force: true });
+    }
   });
   const workdir = path.join(root, "sessions", "active", "test", "source");
-  await mkdir(workdir, { recursive: true });
-  const git = (...args) => execFileSync("git", args, { cwd: workdir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
-  git("init", "--initial-branch=main");
-  git("-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "Initial");
   const selection = { engineId: "claude", agentId: "claude", modelId: "sonnet", modelProviderId: "anthropic",
     variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
   const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
-  await store.createSession({ sessionId: "test", runtimeKind: "genesis", metadata: { source_kind: "session_clone",
-    source_path_authority: "managed_session_source", source_path: workdir, assistant_selection: JSON.stringify(selection),
-    label: "Goal restart" } });
+  if (!await stat(workdir).then(() => true, () => false)) {
+    await mkdir(workdir, { recursive: true });
+    const git = (...args) => execFileSync("git", args, { cwd: workdir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    git("init", "--initial-branch=main");
+    git("-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "Initial");
+    await store.createSession({ sessionId: "test", runtimeKind: "genesis", metadata: { source_kind: "session_clone",
+      source_path_authority: "managed_session_source", source_path: workdir, assistant_selection: JSON.stringify(selection),
+      label: "Goal restart" } });
+  }
   const runtime = { stateRoot: path.join(root, "runtime"), projectContextRoot: root, store,
     getSession: id => store.readSession(id), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     listSessions: async () => [await store.readSession("test")],
@@ -72,8 +95,6 @@ async function goalHarness(t) {
     runInProjectContext: async (_context, operation) => operation(),
     saveEnvUserValues: async () => ({ ok: true })
   };
-  const command = path.join(root, "claude.cjs");
-  const tracePath = path.join(root, "claude-trace.jsonl");
   // While this file exists, the next Claude that starts exits at once, as one can on a loaded server.
   const failStartPath = path.join(root, "fail-next-start");
   // While this file exists, the next goal command meets the AI account's limit it names: Claude's own
@@ -172,6 +193,10 @@ createInterface({ input: process.stdin }).on('line', line => {
   }
   record(frame);
   emit(frame);
+  if (text.includes('Keep working')) {
+    emit({ type: 'stream_event', event: { type: 'message_start', message: { id: frame.uuid + '-reply' } } });
+    return;
+  }
   emit({ type: 'result', subtype: 'success', result: 'Done' });
 });
 `, { mode: 0o700 });
@@ -209,12 +234,6 @@ createInterface({ input: process.stdin }).on('line', line => {
   const goalProject = (await actions.execute({ actionId: ACTION_READ_CONVERSATION_CONTEXT,
     input: { projectSlug: PROJECT_SLUG, sessionId: "test" }, context: { channel: "internal", surface: "app" } })).project;
   const options = { runtime, vibe64User: actor };
-  const trace = async () => {
-    try {
-      const text = await readFile(tracePath, "utf8");
-      return text.slice(0, text.lastIndexOf("\n") + 1).split("\n").filter(Boolean).map(JSON.parse);
-    } catch (error) { if (error.code === "ENOENT") return []; throw error; }
-  };
   // Each /goal command that starts or continues a goal (not the clear before a Resume).
   const goalCommands = async () => (await trace()).filter(row => row.frame?.type === "user" &&
     /^\/goal (?!clear$)/u.test(row.frame.message.content)).length;
@@ -229,8 +248,17 @@ createInterface({ input: process.stdin }).on('line', line => {
       await new Promise(resolve => setTimeout(resolve, 10));
     }
   }
+  /** Main chat routes what it sends as a Senior request, as the editor does for every new session. */
+  async function routeAsSenior() {
+    const routed = { ...defineVibe64AssistantSelection(selection), selectionSource: "explicit" };
+    await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({
+      owner: { senior: routed, junior: routed }, nonOwner: {} }, 0);
+    await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass", "deslop"] }));
+  }
   return {
     get service() { return service; },
+    root,
+    routeAsSenior,
     options, store, warnings, actor, goalCommands, intent, turnActive, waitFor, trace,
     failNextStart: () => writeFile(failStartPath, ""),
     inProject: operation => runWithProjectRequestContext({ ...goalProject, vibe64User: null }, operation),
@@ -267,10 +295,7 @@ createInterface({ input: process.stdin }).on('line', line => {
       assert.equal(sent.delivered, true, JSON.stringify(sent));
       await waitFor(async () => !await turnActive(), "the first message completes");
       // A routed Senior goal, as Main chat sets one.
-      const routed = { ...defineVibe64AssistantSelection(selection), selectionSource: "explicit" };
-      await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({
-        owner: { senior: routed, junior: routed }, nonOwner: {} }, 0);
-      await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "senior", afterPlan: ["review", "security-pass", "deslop"] }));
+      await routeAsSenior();
       const empty = await service.readCanonicalAgentGoal("test", options);
       assert.equal(empty.goal, null);
       // The finished turn's follow-up work can still hold the write briefly.

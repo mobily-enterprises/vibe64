@@ -858,7 +858,10 @@ test("crash in working, and the turn finished meanwhile: the restart recovers it
   assert.equal(f.native.turns.length, 1);
 }));
 
-test("crash in working, and the turn is lost: it stops at needs_you and does not carry on by itself", () => withFixture(async (f) => {
+// After the task's context and role instructions, the note leads the request itself.
+const NOTE = /\n\n\[Vibe64 note: your previous turn was interrupted\. [^\n]*\]\n\nContinue working on this task from where you stopped\.$/u;
+
+test("crash in working, and the turn is lost: the AI continues once with Vibe64's note; lost again at once, it stops at needs_you", () => withFixture(async (f) => {
   const running = f.boot();
   const { task } = await f.start(running.aiTasks);
   await f.quiet(running.aiTasks);
@@ -866,12 +869,30 @@ test("crash in working, and the turn is lost: it stops at needs_you and does not
   Object.assign(f.native, { status: "interrupted", text: "" });
   const restarted = f.boot();
   await f.quiet(restarted.aiTasks);
-  const saved = await f.task(task.id);
-  assert.equal(saved.reason, "interrupted");
-  assert.equal(f.native.turns.length, 1);
-  await restarted.aiTasks.continueTask(SESSION, { taskId: task.id });
+  let saved = await f.task(task.id);
+  assert.equal(saved.phase, "working");
+  assert.ok(saved.resumedAt);
+  assert.equal(f.native.turns.length, 2, "the AI continues once, by itself");
+  assert.match(f.native.turns[1].message, NOTE);
+  const entries = async () => (await f.store.readConversationLog({ sessionId: SESSION, conversationId: task.id }))
+    .filter(turn => turn.metadata?.vibe64TurnInterruption).map(turn => turn.metadata.vibe64TurnInterruption.outcome);
+  assert.deepEqual(await entries(), ["resumed"], "its chat says so in red, once");
   await f.quiet(restarted.aiTasks);
+  assert.equal(f.native.turns.length, 2, "nothing is sent twice");
+  // Lost again within the crash-loop window: the person chooses Continue.
+  restarted.aiTasks.closeRunner();
+  Object.assign(f.native, { status: "interrupted", text: "" });
+  const again = f.boot();
+  await f.quiet(again.aiTasks);
+  saved = await f.task(task.id);
+  assert.equal(saved.phase, "needs_you");
+  assert.equal(saved.reason, "interrupted");
+  assert.equal(saved.message, "Stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.");
   assert.equal(f.native.turns.length, 2);
+  assert.deepEqual(await entries(), ["resumed", "loop"]);
+  await again.aiTasks.continueTask(SESSION, { taskId: task.id });
+  await f.quiet(again.aiTasks);
+  assert.equal(f.native.turns.length, 3);
 }));
 
 /** Holds the next read of a task's turn until `hold.release`, and resolves `hold.reached` once it is held. */
@@ -885,7 +906,7 @@ const heldTurnRead = hold => terminals => ({ ...terminals,
     return terminals.readConversationTurn(...args);
   } });
 
-test("a restart during a read of the turn: the old server saves nothing, and the interrupted turn reads as interrupted", () => withFixture(async (f) => {
+test("a restart during a read of the turn: the old server saves nothing, and the next one reads the turn as lost and continues it once", () => withFixture(async (f) => {
   const hold = { armed: false, reached: Promise.withResolvers(), release: Promise.withResolvers() };
   const running = f.boot({ terminalsWrap: heldTurnRead(hold) });
   const { task } = await f.start(running.aiTasks);
@@ -902,11 +923,13 @@ test("a restart during a read of the turn: the old server saves nothing, and the
   const restarted = f.boot();
   await f.quiet(restarted.aiTasks);
   const saved = await f.task(task.id);
-  assert.equal(saved.phase, "needs_you");
-  assert.equal(saved.reason, "interrupted");
+  assert.equal(saved.phase, "working");
+  assert.ok(saved.resumedAt);
+  assert.equal(f.native.turns.length, 2);
+  assert.match(f.native.turns[1].message, NOTE);
 }));
 
-test("a restart whose first read of the turn finds the chat busy still reads the interrupted turn as interrupted", () => withFixture(async (f) => {
+test("a restart whose first read of the turn finds the chat busy still reads the interrupted turn as lost and continues it once", () => withFixture(async (f) => {
   const running = f.boot();
   const { task } = await f.start(running.aiTasks);
   await f.quiet(running.aiTasks);
@@ -924,10 +947,13 @@ test("a restart whose first read of the turn finds the chat busy still reads the
   try {
     await f.quiet(restarted.aiTasks);
     assert.equal((await f.task(task.id)).phase, "working", "a busy read decides nothing");
+    assert.equal(f.native.turns.length, 1);
     await f.quiet(restarted.aiTasks);
     const saved = await f.task(task.id);
-    assert.equal(saved.phase, "needs_you");
-    assert.equal(saved.reason, "interrupted");
+    assert.equal(saved.phase, "working");
+    assert.ok(saved.resumedAt);
+    assert.equal(f.native.turns.length, 2);
+    assert.match(f.native.turns[1].message, NOTE);
   } finally {
     restarted.aiTasks.closeRunner();
   }

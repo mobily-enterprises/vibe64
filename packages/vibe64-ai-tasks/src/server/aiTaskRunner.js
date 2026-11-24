@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { outsideSessionLocks } from "@local/vibe64-runtime/server/sessionStoreLocks";
-import { AI_TASK_PHASES } from "../shared/aiTaskPhases.js";
+import {
+  INTERRUPTION_CAUSE,
+  TURN_RESUME_LOOP_WINDOW_MS,
+  resumeNoteForAi
+} from "@local/vibe64-terminals/server/turnInterruptions";
+import { AI_TASK_PHASES, AI_TASK_REASONS } from "../shared/aiTaskPhases.js";
 import { advanceAiTask } from "./aiTaskMachine.js";
 
 /** @typedef {import("./types.js").AiTask} AiTask */
@@ -296,7 +301,34 @@ function createAiTaskRunner({
     seenTasks.add(conversationId);
     const event = turnEvent(task, turn, restarted);
     if (!event) return;
-    await applyFound(sessionId, conversationId, event);
+    if (event.type !== "turn_lost") {
+      await applyFound(sessionId, conversationId, event);
+      drive.again = true;
+      return;
+    }
+    // The previous server ended while the AI worked: the task continues once in the same chat, unless it was
+    // continued after an interruption less than the loop window ago, and its chat's history says so in red.
+    const ended = await terminals.previousServerEnd().catch(() => null);
+    const interruption = {
+      key: `task:${conversationId}:${task.turnMessageId}`,
+      cause: INTERRUPTION_CAUSE.RESTART,
+      at: new Date().toISOString(),
+      ...ended
+    };
+    const lastResume = Date.parse(task.resumedAt || "");
+    const resume = !(Number.isFinite(lastResume) && Date.now() - lastResume < TURN_RESUME_LOOP_WINDOW_MS);
+    const sendId = randomUUID();
+    const saved = (await applyFound(sessionId, conversationId, {
+      ...event, resume, ...(resume ? { id: sendId, note: resumeNoteForAi(interruption) } : {})
+    }))?.task;
+    // Only this event's own move is told: a task cancelled meanwhile just ends.
+    const told = resume
+      ? saved?.turnMessageId === sendId
+      : saved?.revision !== task.revision && saved?.reason === AI_TASK_REASONS.INTERRUPTED;
+    if (told) {
+      await terminals.writeTurnInterruptionNotice(sessionId, { conversationId, interruption, outcome: resume ? "resumed" : "loop" })
+        .catch(error => warn(sessionId, "interruption_notice_failed", error, "An AI task's interruption could not be written to its chat."));
+    }
     drive.again = true;
   }
 

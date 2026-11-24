@@ -9,6 +9,7 @@ import { createAssistantRoutingOutcomes } from "./assistantRoutingOutcomes.js";
 import { createAssistantRoutingGoals } from "./assistantRoutingGoals.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { NO_WRITES_WHILE_ASSISTANT_WORKS } from "./writesWhileAssistantWorks.js";
+import { NO_SERVER_RUN } from "./turnInterruptions.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -46,6 +47,8 @@ function followNoCompletedPlan() {
  * @param {(sessionId: string, details: object) => unknown} [dependencies.onPlanCompleted]
  * @param {typeof listGenesisPasses} [dependencies.listPasses] The passes Genesis offers for a
  *   project, which an explicit pass must be one of and a completed plan's passes are run from.
+ * @param {import("./types.js").ServerRun} [dependencies.serverRun] This editor process's run, which each delivered
+ *   request names, so a later run can tell a turn an earlier one left behind and how that run ended.
  */
 function createAssistantRouting({
   systemRoot,
@@ -62,7 +65,8 @@ function createAssistantRouting({
   writesWhileAssistantWorks = NO_WRITES_WHILE_ASSISTANT_WORKS,
   onTiming = doNothing,
   onPlanCompleted = followNoCompletedPlan,
-  listPasses = listGenesisPasses
+  listPasses = listGenesisPasses,
+  serverRun = NO_SERVER_RUN
 }) {
   const routingState = createAssistantRoutingState({ systemRoot, allowAuto });
   /**
@@ -95,6 +99,7 @@ function createAssistantRouting({
     routingState,
     records,
     decisions,
+    serverRun,
     agent,
     dispatch,
     prepareSelection,
@@ -142,7 +147,9 @@ function createAssistantRouting({
     exclusiveAfterWrites,
     publish,
     onPlanCompleted,
-    listPasses
+    listPasses,
+    serverRun,
+    logger
   });
   const goals = createAssistantRoutingGoals({
     records,

@@ -191,6 +191,16 @@ function createTemporaryConversationLifecycle({
     return { ...result, messages: messages.slice(start, end), earlierMessages: start > 0 };
   }
 
+  /**
+   * Settles what an earlier server left in a temporary chat's routing, as opening it would: restart recovery's way in
+   * (serviceTurnRecovery.js), which waits for the session's lock instead of deferring.
+   * @param {string} sessionId
+   * @param {{ conversationId: string }} input
+   */
+  async function reconcileTemporaryConversation(sessionId, { conversationId, ...options }) {
+    await routing.reconcile(sessionId, { ...options, conversationId });
+  }
+
   async function stopTemporaryConversation(sessionId, input, options = {}) {
     await routing.cancel(sessionId, { ...options, conversationId: input.conversationId });
     const stopped = await chatTurns.write(sessionId, options, async (ctx) => {
@@ -383,6 +393,7 @@ function createTemporaryConversationLifecycle({
     createTemporaryConversation,
     listTemporaryConversations,
     readTemporaryConversation,
+    reconcileTemporaryConversation,
     stopTemporaryConversation,
     readConversationTurn,
     deleteTemporaryConversation,

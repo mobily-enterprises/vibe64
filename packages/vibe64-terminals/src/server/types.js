@@ -63,6 +63,7 @@
 /** @typedef {ReturnType<typeof import("./assistantRoutingRecords.js").createAssistantRoutingRecords>} AssistantRoutingRecords */
 /** @typedef {ReturnType<typeof import("./assistantRoutingDecisions.js").createAssistantRoutingDecisions>} AssistantRoutingDecisions */
 /** @typedef {ReturnType<typeof import("./assistantRoutingDelivery.js").createAssistantRoutingDelivery>} AssistantRoutingDelivery */
+/** @typedef {ReturnType<typeof import("./assistantRoutingAdmission.js").createAssistantRoutingAdmission>} AssistantRoutingAdmission */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/claude-turn").createClaudeConversationOwner>} ClaudeConversationOwner */
 /** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
 /** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
@@ -108,6 +109,7 @@
 /** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
 /** @typedef {ReturnType<typeof import("./writesWhileAssistantWorks.js").createWritesWhileAssistantWorks>} WritesWhileAssistantWorks */
 /** @typedef {ServiceState["trackShutdownWork"]} TrackShutdownWork */
+/** @typedef {ReturnType<typeof import("./turnInterruptions.js").createServerRun>} ServerRun */
 /** @typedef {ReturnType<typeof import("./sessionNaming.js").createSessionNaming>} SessionNaming */
 /** @typedef {ReturnType<typeof import("./sessionPromptHints.js").createSessionPromptHintsService>} SessionPromptHintsService */
 /** @typedef {ReturnType<typeof import("./assistantRouting.js").createAssistantRouting>} AssistantRouting */

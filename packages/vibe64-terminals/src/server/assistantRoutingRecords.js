@@ -125,7 +125,7 @@ function createAssistantRoutingRecords({
    * Senior's planning turn after a plan handoff writes the plan from the request and the conversation;
    * every other stage continues the request's own work.
    */
-  async function prepareFollowup(context, state, stage) {
+  async function prepareFollowup(context, state, stage, { resumeNote = "" } = {}) {
     state.stage = stage;
     const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
     const pass = assistantPlanPass(state);
@@ -146,13 +146,17 @@ function createAssistantRoutingRecords({
     const previous = handoff
       ? `The previous turn (${assistantModeLabel(handoff.role)}) handed this request to Senior and wrote no plan.`
       : `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`;
+    const message = pass ? pass.request : [lead, `Original request: ${state.input.message}`,
+      `Accepted steering: ${JSON.stringify(state.steering || [])}`, previous].join("\n\n");
     state.followup = {
       messageId: randomUUID(),
       planRevision: plan?.revision || null,
       messages: await recentVisibleMessages(context.runtime.store, context.session.sessionId, 5),
-      displayMessage: pass ? pass.request : displayMessage,
-      message: pass ? pass.request : [lead, `Original request: ${state.input.message}`,
-        `Accepted steering: ${JSON.stringify(state.steering || [])}`, previous].join("\n\n")
+      // A turn resumed after an interruption leads with Vibe64's note of what interrupted it; a pass's own
+      // request stays the message's last paragraph.
+      displayMessage: pass ? pass.request : resumeNote ? "Continue after the interruption." : displayMessage,
+      message: resumeNote ? `${resumeNote}\n\n${message}` : message,
+      ...(resumeNote ? { resume: true } : {})
     };
     state.delivery = "pending";
     delete state.attemptedMessageId;

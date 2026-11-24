@@ -3,6 +3,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { chatTurnsWithRouting } from "@/lib/vibe64ChatDelivery.js";
 import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js";
+import { turnInterruptionPresentation } from "@/lib/vibe64ConversationPresentation.js";
 import { thinkingMessagesPresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
 
 // The task fields a temporary conversation saves as its presentation.
@@ -91,6 +92,7 @@ function temporaryAiTranscript(supplied, { routingRequest, working, scrollKey, a
     };
     return { ...turn,
       ...conversationAttribution(selection, turn.metadata?.assistantRouting),
+      ...turnInterruptionPresentation(turn),
       assistant: turn.assistant && present(turn.assistant)[0],
       thinking: turn.thinking?.flatMap(present),
       commentary: turn.commentary?.flatMap(present),

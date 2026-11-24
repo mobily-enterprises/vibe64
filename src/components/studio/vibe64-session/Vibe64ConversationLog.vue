@@ -46,6 +46,7 @@
     </template>
     <template #system-message="{ message }">
       <Vibe64ProjectMessage v-if="message.projectMessage" :details="message.projectMessage" :at="message.displayAt" />
+      <Vibe64TurnInterruption v-else-if="message.turnInterruption" :entry="message.turnInterruption" />
       <Vibe64ConversationStatus v-else :message="message" @check-delivery="emit('resend-turn', $event)" @link-click="adapter.actions.openLink" />
     </template>
     <template #user-message-actions="{ message, turn }">
@@ -160,6 +161,7 @@ import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { Vibe64PageLinkCards } from "@local/vibe64-pages/client";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
 import Vibe64ProjectMessage from "./Vibe64ProjectMessage.vue";
+import Vibe64TurnInterruption from "./Vibe64TurnInterruption.vue";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";

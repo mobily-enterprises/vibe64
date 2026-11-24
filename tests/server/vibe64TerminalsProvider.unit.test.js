@@ -421,7 +421,7 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
       await hooks.find(hook => hook.name === "onReady").callback();
       assert.equal(recovered, 0, "recovery does not block Fastify's readiness hook");
       await new Promise(resolve => setImmediate(resolve));
-      assert.equal(recovered, 1);
+      assert.equal(recovered, 2, "goal recovery and interrupted-turn recovery each list the open sessions once");
       const reasons = Array.from({ length: 6 }, (_, index) => `tab-${index}`);
       const results = await Promise.all(reasons.map((reason) => (
         outputs.terminals.openProjectRuntime({ reason })

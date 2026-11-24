@@ -14,6 +14,7 @@ import {
 } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { read, failure, activeMessage, assistantPlanHandsOff, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
 import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
+import { createAssistantRoutingInterruptions } from "./assistantRoutingInterruptions.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -21,7 +22,7 @@ import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffNotice } from "./assistant
 /** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
 /** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
 /** @typedef {import("./types.js").AssistantRoutingDelivery} AssistantRoutingDelivery */
-/** @typedef {ReturnType<typeof import("./assistantRoutingAdmission.js").createAssistantRoutingAdmission>} AssistantRoutingAdmission */
+/** @typedef {import("./types.js").AssistantRoutingAdmission} AssistantRoutingAdmission */
 
 const MAX_WORKFLOW_STEPS = 8;
 // The items a plan has built: a turn that builds one more starts a fresh allowance of steps.
@@ -62,6 +63,10 @@ function planFinishedDuringRequest(request, plan) {
  * @param {(sessionId: string, details: object) => unknown} dependencies.onPlanCompleted
  * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} dependencies.listPasses The passes
  *   Genesis offers for the session's source, read as each of a plan's passes starts.
+ * @param {import("./types.js").ServerRun} dependencies.serverRun This editor process's run, against which a turn an
+ *   earlier run sent is told apart, with how that run ended.
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger Where each interrupted turn's
+ *   outcome is recorded.
  */
 function createAssistantRoutingOutcomes({
   routingState,
@@ -74,8 +79,21 @@ function createAssistantRoutingOutcomes({
   exclusiveAfterWrites,
   publish,
   onPlanCompleted,
-  listPasses
+  listPasses,
+  serverRun,
+  logger
 }) {
+  // What follows a turn an interruption ended: its red entry, and its resume once (assistantRoutingInterruptions.js).
+  const { interruptionOf, afterInterruption, resumeUnsent, scheduleResume } = createAssistantRoutingInterruptions({
+    routingState,
+    records,
+    delivery,
+    admission,
+    exclusiveAfterWrites,
+    serverRun,
+    logger
+  });
+
   /**
    * The active agent declares an outcome; this does not dispatch while its turn runs.
    */
@@ -394,6 +412,8 @@ function createAssistantRoutingOutcomes({
         }
         delete state.planHandoff;
       }
+      const interruption = await interruptionOf(state, run);
+      if (interruption && await afterInterruption(sessionId, context, state, interruption, routingOptions)) return;
       if (!state.workflow && state.stage !== "planning") {
         // An answer in which Senior reviewed or completed the plan (asked to, say) moves it on too.
         const current = run.state === "completed" && !state.stopped && state.afterPlan ? await readablePlan(context) : null;
@@ -559,6 +579,8 @@ function createAssistantRoutingOutcomes({
     await exclusive(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);
       if (!state || routingState.running.has(records.keyFor(sessionId, context))) return;
+      // An earlier server still running (a brief overlap at restart) owns what it sent; recovery tries again later.
+      if (await serverRun.isRunning(state.serverRunId || "")) return;
       if (state.helper) {
         try {
           await records.cleanupHelper(context, state);
@@ -578,13 +600,25 @@ function createAssistantRoutingOutcomes({
         if (!state.stopped) delete state.error;
         await records.save(context, state);
       }
-      if (["routing", "sending"].includes(state.delivery)) {
+      // A request left preparing or sending ended with the run that sent it, or (in this run) with an error.
+      const leftSending = ["routing", "sending"].includes(state.delivery);
+      if (leftSending) {
         state.delivery = state.attemptedMessageId ? "uncertain" : state.followup ? "pending" : "failed";
         state.status = "waiting";
         state.error = state.attemptedMessageId
           ? "Delivery was interrupted. Check its original receipt before continuing."
           : "Preparation was interrupted. Resume when ready.";
         await records.save(context, state);
+      }
+      const savedToSend = state.status === "working" && state.delivery === "pending" && state.followup && !state.attemptedMessageId;
+      if ((leftSending || savedToSend) && !state.stopped && (state.serverRunId || "") !== serverRun.id &&
+          await resumeUnsent(sessionId, context, state)) {
+        return;
+      }
+      if (state.status === "waiting" && state.resumeAt && state.followup && !state.stopped) {
+        // A resume waiting out its backoff, which an earlier run (or this one) scheduled: it is resumed at its time.
+        scheduleResume(sessionId, state, options);
+        return;
       }
       if (state.status === "working" && state.delivery === "accepted") {
         const run = state.turnId && context.session.agentRuns?.find(row => (row.providerTurnId || row.turnId) === state.turnId);
@@ -600,6 +634,9 @@ function createAssistantRoutingOutcomes({
         if (!native || native.ok === false || turn?.active === true) return;
         if (state.turnId && turn?.id === state.turnId) {
           outcome = { active: false, state: turn.runState || turn.state || turn.status, providerTurnId: turn.id };
+        } else if (state.turnId && (state.serverRunId || "") !== serverRun.id) {
+          // A turn an earlier run sent that nothing runs now ended with that run, without reporting its end.
+          outcome = { active: false, state: "interrupted", providerTurnId: state.turnId };
         } else {
           state.status = "waiting";
           state.error = "The assistant stopped before this request finished. Send it again if it is unfinished.";

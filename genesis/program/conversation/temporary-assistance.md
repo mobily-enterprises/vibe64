@@ -525,7 +525,9 @@ Restored history starts as a baseline rather than announcing old replies.
 Reloading or removing the project view stops only its local readers. It sends no
 Stop or Delete request. Late responses cannot restart a retired reader. Server startup restores discovery; a recorded
 Close attempt finishes after its engine's next turn, as below. Work discovered without its original backend observer is stopped;
-restoration does not send or resume a turn. Active temporary work and Codex goals
+restoration does not send or resume a turn. The restart's turn recovery then reconciles each chat whose routed request
+was at work, and routing resumes its turn once, with its red entry, as in Main chat
+([interrupted turn resumption](direct-chat.md#interrupted-turn-resumption)); an AI task's chat is its runner's. Active temporary work and Codex goals
 also prevent dormant-project cleanup, just like main chat. Claude counts only a
 temporary turn its server is running; one saved as active before a restart ended
 with that server and does not keep the project open.

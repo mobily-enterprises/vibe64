@@ -5,7 +5,7 @@ import { conversationAttribution } from "@/lib/vibe64ConversationAttribution.js"
 import { thinkingMessagesPresentation } from "@/lib/vibe64ThinkingPresentation.js";
 
 // How the main chat shows one conversation turn: who answered and through which
-// mode, project, Learning and Vibe64's own notes as system rows, goal commands
+// mode, project, Learning and Vibe64's own notes (a turn interruption's among them) as system rows, goal commands
 // with their objective only, and integration requests parsed for their Configure card.
 
 function presentationMessage(message, turn) {
@@ -24,6 +24,17 @@ function presentationMessage(message, turn) {
   return integrationRequest ? { ...message, text: integrationRequest.text, integrationRequest } : message;
 }
 
+/**
+ * A turn interruption's red entry, from its turn's metadata (Vibe64TurnInterruption.vue draws it), as the system row
+ * every chat shows: what ended the turn and what Vibe64 did.
+ * @param {{ system?: object, metadata?: { vibe64TurnInterruption?: object } }} turn
+ */
+function turnInterruptionPresentation(turn) {
+  return turn.metadata?.vibe64TurnInterruption && turn.system
+    ? { system: { ...turn.system, turnInterruption: turn.metadata.vibe64TurnInterruption } }
+    : {};
+}
+
 function conversationTurnPresentation(turn) {
   const selection = turn.metadata?.assistantSelection;
   return {
@@ -35,6 +46,7 @@ function conversationTurnPresentation(turn) {
       user: null,
       system: { ...(turn.system || turn.user), role: "system", projectMessage: turn.metadata.projectMessage }
     } : {}),
+    ...turnInterruptionPresentation(turn),
     // A note Vibe64 steered into a working turn, after Save or Update changed the session, is Vibe64's own.
     ...(turn.metadata?.vibe64Note === true && turn.user ? { user: null, system: { ...turn.user, role: "system" } } : {}),
     // A Learning watch wake is application-origin: show its short status, not the teacher prompt.
@@ -50,5 +62,6 @@ function conversationTurnPresentation(turn) {
 }
 
 export {
-  conversationTurnPresentation
+  conversationTurnPresentation,
+  turnInterruptionPresentation
 };

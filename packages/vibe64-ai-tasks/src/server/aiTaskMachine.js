@@ -14,6 +14,8 @@ import {
 const LOG_LIMIT = 50;
 const CONTINUE_MESSAGE = "Continue working on this task from where you stopped.";
 const CONTINUE_DISPLAY = "Continue.";
+const RESUMED_DISPLAY = "Continue after the interruption.";
+const LOOP_MESSAGE = "Stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.";
 const LATE_FINISH_MESSAGE = "This finished before the cancel took effect.";
 const PERSON_FINISHED_MESSAGE = "You finished this task.";
 const ARCHIVED_MESSAGE = "The session was archived before this finished.";
@@ -229,10 +231,33 @@ function fromTurn(task, event) {
     case "turn_failed":
       return needsYou(task, REASONS.TURN_FAILED, event, event.message, "The AI ran into an error.");
     case "turn_lost":
-      return needsYou(task, REASONS.INTERRUPTED, event, "", "Vibe64 restarted while the AI was working.");
+      return lostTurn(task, event);
     default:
       return task;
   }
+}
+
+/**
+ * The turn a previous server left: the AI continues once, its message led by Vibe64's note of what interrupted it,
+ * unless the task was continued after an interruption only moments ago (the runner's loop rule, `event.resume`):
+ * then the person chooses Continue. A lost turn without a resume decision (an older runner) waits for the person.
+ */
+function lostTurn(task, event) {
+  if (event.resume === true && event.id) {
+    return moved(task, {
+      phase: PHASES.WORKING,
+      reason: "",
+      message: "",
+      waiting: false,
+      resumedAt: event.at,
+      turnMessageId: event.id,
+      pending: { effect: "send", id: event.id, message: [event.note, CONTINUE_MESSAGE].filter(Boolean).join("\n\n"), display: RESUMED_DISPLAY }
+    }, event, "Vibe64 restarted while the AI was working; the AI continues.");
+  }
+  if (event.resume === false) {
+    return needsYou(task, REASONS.INTERRUPTED, event, LOOP_MESSAGE, "Vibe64 restarted twice while the AI was working.");
+  }
+  return needsYou(task, REASONS.INTERRUPTED, event, "", "Vibe64 restarted while the AI was working.");
 }
 
 /** The events of `working` beyond those a starting turn shares. */

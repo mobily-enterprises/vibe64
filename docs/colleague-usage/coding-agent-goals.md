@@ -191,6 +191,13 @@ then the goal control shows the error ending in **Vibe64 tries again shortly.**;
 it disappears once the goal continues. A goal is never sent twice: an attempt
 that may have reached the AI is checked, not repeated. An error still shown after
 the last attempt stays visible on the goal control.
+Main chat's history says so in red: what stopped the goal and when, on your own
+clock (for example **Vibe64 crashed at 12:18: read ECONNRESET.**), then
+**Resumed after Vibe64 restarted at 12:18.** If the goal is interrupted again
+within 10 minutes of being continued, Vibe64 pauses it instead of continuing it
+in a loop, and the entry reads **Not resumed: stopped: Vibe64 restarted twice
+while it ran. Choose Resume goal to try again.** No later restart continues it
+until you choose **Resume goal**.
 **Pause goal**,
 **Cancel goal**, and **Stop** (until your next message) prevent that automatic
 continuation. A completed

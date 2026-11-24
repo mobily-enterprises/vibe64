@@ -17,4 +17,31 @@ function requestMainGoalControl(operation, input, context) {
   return context.mainGoalControl[operation](input);
 }
 
-export { requestMainGoalControl };
+/**
+ * Main chat pauses its own goal.
+ * @param {object} input
+ * @param {object} context
+ */
+function pauseMainGoal(input, context) {
+  return requestMainGoalControl("pause", input, context);
+}
+
+/**
+ * Main chat resumes its own goal, at the person's request.
+ * @param {object} input
+ * @param {object} context
+ */
+function resumeMainGoal(input, context) {
+  return requestMainGoalControl("resume", input, context);
+}
+
+/**
+ * Main chat blocks its own goal.
+ * @param {object} input
+ * @param {object} context
+ */
+function blockMainGoal(input, context) {
+  return requestMainGoalControl("block", input, context);
+}
+
+export { blockMainGoal, pauseMainGoal, requestMainGoalControl, resumeMainGoal };

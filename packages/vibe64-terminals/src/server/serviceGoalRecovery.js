@@ -6,6 +6,7 @@
 
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
+import { logRecoveryPass, logRecoveryResults } from "./serviceTurnRecovery.js";
 
 // After a restart the AI can still be busy or slow to start, so a pass that
 // could not continue every goal runs again after each of these delays. A goal
@@ -59,7 +60,7 @@ function createServiceGoalRecovery({
       for (const session of await sessionAccess.listOpenProjectRuntimeSessions()) {
         if (state.lifecycle.closing) break;
         try {
-          results.push(await recoverSessionGoal(session.sessionId));
+          results.push({ projectSlug, ...await recoverSessionGoal(session.sessionId) });
         } catch (error) {
           let actor = "";
           try {
@@ -84,7 +85,15 @@ function createServiceGoalRecovery({
     };
     const listed = await project.listProjects();
     if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
-    for (const projectRecord of openProjectRuntimeRecords(listed)) {
+    const openProjects = openProjectRuntimeRecords(listed);
+    logRecoveryPass(
+      logger,
+      "vibe64.agent_goal",
+      "recovery_started",
+      { retrying, openProjects: openProjects.map(record => record.slug) },
+      "Vibe64 is checking the open projects for goals the previous server was running."
+    );
+    for (const projectRecord of openProjects) {
       if (state.lifecycle.closing) break;
       try {
         await project.runInProjectContext(projectRecord.slug, () => recoverCurrentProject(projectRecord.slug));
@@ -92,6 +101,7 @@ function createServiceGoalRecovery({
         reportFailure(error, { projectSlug: projectRecord.slug });
       }
     }
+    logRecoveryResults(logger, "vibe64.agent_goal", results, result => result.reason === "no-active-goal");
     return { ok: results.every(result => result.ok !== false), results };
   }
 

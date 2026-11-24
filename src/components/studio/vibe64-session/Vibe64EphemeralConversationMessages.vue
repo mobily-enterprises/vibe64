@@ -4,7 +4,8 @@
       <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
     </template>
     <template #system-message="{ message }">
-      <Vibe64ConversationStatus :message="message" @check-delivery="emit('resend', $event)">
+      <Vibe64TurnInterruption v-if="message.turnInterruption" :entry="message.turnInterruption" />
+      <Vibe64ConversationStatus v-else :message="message" @check-delivery="emit('resend', $event)">
         <template v-if="$slots['message-text']" #default>
           <slot name="message-text" :message="message" />
         </template>
@@ -30,6 +31,7 @@ import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/co
 import { Vibe64PageLinkCards } from "@local/vibe64-pages/client";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
+import Vibe64TurnInterruption from "./Vibe64TurnInterruption.vue";
 import { temporaryAiTranscript } from "@/lib/vibe64TemporaryAiTasks.js";
 const props = defineProps({
   adapter: { type: Object, required: true },

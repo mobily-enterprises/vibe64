@@ -44,11 +44,13 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
  * @param {(sessionId: string, input: object, context: object) => Promise<object>} dependencies.dispatch
  * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
+ * @param {import("./types.js").ServerRun} dependencies.serverRun This editor process's run, which each delivery names
  */
 function createAssistantRoutingDelivery({
   routingState,
   records,
   decisions,
+  serverRun,
   agent,
   dispatch,
   prepareSelection,
@@ -120,6 +122,7 @@ function createAssistantRoutingDelivery({
         });
         state.status = "working";
         state.delivery = "accepted";
+        // The attempt's own run (saved with it) sent this turn, which may have been an earlier one.
         state.turnId = receipt.turnId || "";
         delete state.error;
         await records.save(context, state);
@@ -129,7 +132,8 @@ function createAssistantRoutingDelivery({
     // Explicit inspection may use only the original uncertain-receipt branch.
     // It cannot continue into selection, preparation or native dispatch.
     if (inspectionOnly) return null;
-    if (followup && !routingState.allowAuto) {
+    // A temporary chat has no automatic follow-ups, but continues a turn an interruption ended like Main chat does.
+    if (followup && !routingState.allowAuto && state.followup?.resume !== true) {
       throw failure("Automatic follow-ups run in Main chat only. Cancel this follow-up and send a new request.", "vibe64_assistant_routing_followup_main_chat_only");
     }
     if (state.stopped) throw failure("This request was stopped. Send a new request to continue.", "vibe64_assistant_routing_delivery_stopped");
@@ -242,6 +246,10 @@ function createAssistantRoutingDelivery({
         if (!followup) await onPromptSending({ threadId, assistantSelection: selection });
         state.threadId = threadId;
         state.attemptedMessageId = messageId;
+        // The run that sends a turn is the one whose end can interrupt it.
+        state.serverRunId = serverRun.id;
+        // A turn sent now is no longer waiting to be resumed later.
+        delete state.resumeAt;
         // Persist the attempt before dispatch, but keep a live send in progress.
         // Only a lost response or restart makes its delivery uncertain.
         await records.save(context, state);
@@ -267,6 +275,7 @@ function createAssistantRoutingDelivery({
     }
     state.status = "working";
     state.delivery = "accepted";
+    state.serverRunId = serverRun.id;
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
     if (state.workflow === true || state.mode === "auto" && state.stage === "planning") {
       routingState.liveFollowupRequests.set(records.keyFor(sessionId, context), state.messageId);

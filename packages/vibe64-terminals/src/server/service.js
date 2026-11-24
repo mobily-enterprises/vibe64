@@ -12,11 +12,13 @@ import { discardAssistantChangeoverMessage, requireCompletedConversationRewind, 
 import { createProviderUsage } from "./providerUsage.js";
 import { createSessionNaming } from "./sessionNaming.js";
 import { createTerminalControls } from "./terminalControls.js";
-import { requestMainGoalControl } from "./mainGoalControl.js";
+import { blockMainGoal, pauseMainGoal, resumeMainGoal } from "./mainGoalControl.js";
 import { createWorkspaceSetupRunner } from "./workspaceSetup.js";
 import { createSessionPromptHintsService } from "./sessionPromptHints.js";
 import { AGENT_WRITE_WAIT_MS, createServiceSessionAccess } from "./serviceSessionAccess.js";
 import { createServiceState } from "./serviceState.js";
+import { createServerRun } from "./turnInterruptions.js";
+import { createServiceTurnRecovery } from "./serviceTurnRecovery.js";
 import { createServiceWorkspacePreparation } from "./serviceWorkspacePreparation.js";
 import { createServiceAssistantContext } from "./serviceAssistantContext.js";
 import { createServiceAssistantPreparation } from "./serviceAssistantPreparation.js";
@@ -122,6 +124,8 @@ function createService({
   const state = createServiceState({ readClaudeAccountStatus });
   const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
   const codexProviderConnections = createCodexProviderConnectionStore({ systemRoot: codexProviderOptions.systemRoot });
+  // This process's run: each turn it sends names it, so the next run can tell the turns it left and how it ended.
+  const serverRun = createServerRun({ systemRoot: codexProviderOptions.systemRoot, logger });
   const providerUsage = createProviderUsage({
     resolveConnection: (selection) => selection.engineId === "opencode"
       ? state.assistantRuntime.resolveConnection(selection)
@@ -266,6 +270,7 @@ function createService({
   });
   assistantRouting = createAssistantRouting({
     systemRoot: codexProviderOptions.systemRoot,
+    serverRun,
     logger,
     agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {
@@ -334,6 +339,7 @@ function createService({
     logger,
     conversationRuntime: mainConversations,
     systemRoot: codexProviderOptions.systemRoot,
+    serverRun,
     prepareSelection: (sessionId, selection, context) => sessionAgent.prepareSelection(sessionId, selection, context),
     sessionAgent,
     attachments: sessionAttachments,
@@ -377,6 +383,7 @@ function createService({
   });
   goals = createServiceGoals({
     state,
+    serverRun,
     sessionAccess,
     assistantContext,
     assistantPreparation,
@@ -459,6 +466,7 @@ function createService({
   });
   const shutdown = createServiceShutdown({
     state,
+    serverRun,
     assistantRouting,
     mainConversations,
     outputTarget,
@@ -476,33 +484,6 @@ function createService({
     writeGlobalInput: (terminalSessionId, data, options) => terminals.writeGlobalCodexTerminal(terminalSessionId, data, options)
   });
 
-  /**
-   * Main chat pauses its own goal.
-   * @param {object} input
-   * @param {object} context
-   */
-  function pauseMainGoal(input, context) {
-    return requestMainGoalControl("pause", input, context);
-  }
-
-  /**
-   * Main chat resumes its own goal, at the person's request.
-   * @param {object} input
-   * @param {object} context
-   */
-  function resumeMainGoal(input, context) {
-    return requestMainGoalControl("resume", input, context);
-  }
-
-  /**
-   * Main chat blocks its own goal.
-   * @param {object} input
-   * @param {object} context
-   */
-  function blockMainGoal(input, context) {
-    return requestMainGoalControl("block", input, context);
-  }
-
   return Object.freeze({
     temporaryConversationDataSchema: sessionConversations.temporaryConversationDataSchema,
     temporaryConversationSelectionSchema: sessionConversations.temporaryConversationSelectionSchema,
@@ -511,6 +492,8 @@ function createService({
     createTemporaryConversation: sessionConversations.createTemporaryConversation,
     listTemporaryConversations: sessionConversations.listTemporaryConversations,
     readTemporaryConversation: sessionConversations.readTemporaryConversation,
+    previousServerEnd: sessionConversations.previousServerEnd,
+    writeTurnInterruptionNotice: sessionConversations.writeTurnInterruptionNotice,
     updateTemporaryConversation: sessionConversations.updateTemporaryConversation,
     cancelTemporaryConversationMessage: sessionConversations.cancelTemporaryConversationMessage,
     cancelTemporaryConversationRouting: sessionConversations.cancelTemporaryConversationRouting,
@@ -632,6 +615,16 @@ function createService({
     invalidateAgentRuntimes: shutdown.invalidateAgentRuntimes,
     continueGoalAfterAccountChange: goals.continueGoalAfterAccountChange,
     recoverActiveGoals: goals.recoverActiveGoals,
+    recoverInterruptedTurns: createServiceTurnRecovery({
+      state,
+      logger,
+      project,
+      sessionAccess,
+      assistantContext,
+      serverRun,
+      ensureAgentSession: assistant.ensureAgentSession,
+      reconcileTemporaryConversation: (sessionId, options) => sessionConversations.reconcileTemporaryConversation(sessionId, options)
+    }),
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,

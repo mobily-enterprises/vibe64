@@ -113,6 +113,15 @@ const Vibe64TerminalsFeature = defineFeature({
     fastify.addHook("onReady", async () => {
       // Every feature's boot hooks, including execution and sign-in configuration,
       // have completed before recovery can admit work.
+      // A turn the previous server left working is reconciled and resumed once (serviceTurnRecovery.js).
+      setImmediate(() => void terminals.recoverInterruptedTurns().catch(error => {
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64.turn_resume",
+          event: "vibe64.turn_resume.recovery_failed",
+          code: error.code,
+          error: error.message
+        }, "Interrupted turns could not be recovered after server restart.");
+      }));
       setImmediate(() => void terminals.recoverActiveGoals().catch(error => {
         logOperationalEvent(logger, "warn", {
           component: "vibe64.agent_goal",

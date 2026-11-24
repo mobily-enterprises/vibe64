@@ -24,6 +24,8 @@
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",
     "./shared/assistantWorkPlan": "./src/shared/assistantWorkPlan.js",
     "./shared/sessionWorkProblem": "./src/shared/sessionWorkProblem.js",
+    "./shared/turnInterruptionText": "./src/shared/turnInterruptionText.js",
+    "./server/turnInterruptions": "./src/server/turnInterruptions.js",
     "./server/retainedConversationHelper": "./src/server/retainedConversationHelper.js",
     "./server/practiceAgentGuidance": "./src/server/practiceAgentGuidance.js",
     "./server/assistantClaudeCommandUpgrade": "./src/server/assistantClaudeCommandUpgrade.js",

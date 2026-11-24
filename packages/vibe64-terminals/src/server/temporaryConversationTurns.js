@@ -109,6 +109,7 @@ async function prepareAiTaskMessage(sessionId, input, record, ctx, prepared) {
  * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {PrepareAgentSkills} dependencies.prepareAgentSkills
  * @param {string} dependencies.systemRoot
+ * @param {import("./types.js").ServerRun} [dependencies.serverRun]
  * @param {PrepareAssistantSelection} dependencies.prepareSelection
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {number} dependencies.temporarySaveDelayMs
@@ -124,6 +125,7 @@ function createTemporaryConversationTurns({
   readSessionContext,
   prepareAgentSkills,
   systemRoot,
+  serverRun,
   prepareSelection,
   publishSessionChanged,
   temporarySaveDelayMs,
@@ -298,6 +300,8 @@ function createTemporaryConversationTurns({
     const context = {
       ...selected,
       routingConversationId: conversationId,
+      // An AI task's chat is its task's to continue after an interruption (vibe64-ai-tasks), not routing's.
+      routingConversationTask: Boolean(record.task),
       conversationContext: ctx,
       recentChatContext: record.recentChatContext,
       runtime: { ...ctx.runtime, store: scopedStore },
@@ -315,6 +319,7 @@ function createTemporaryConversationTurns({
 
   const routing = createAssistantRouting({
     systemRoot,
+    serverRun,
     allowAuto: false,
     agent: routingAgent,
     logger,

@@ -791,6 +791,11 @@ shape Core validates): workspace preparation makes the missing ones, and Save,
 Update with its conflict review and recovery, update checks, work inspection,
 turn checkpoints and Save recovery cover them through the same native Git owner
 as the session's own repository.
+Owns the editor's server run records (`<systemRoot>/server-runs`), which tell
+the next run how this one ended, and the restart recovery that resumes each
+interrupted Main chat, temporary chat and goal turn once and writes its red
+history entry; AI Tasks resumes its own tasks' turns through the same rule and
+entry. Core's crash records describe a crash and count the turns it resumed.
 
 ### Source
 - Directory `packages/vibe64-terminals`

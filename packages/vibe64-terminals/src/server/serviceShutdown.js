@@ -1,4 +1,5 @@
 import { flushSessionTimeline, recordSessionTimelineEventForActiveSessions } from "@local/vibe64-core/server/sessionTimeline";
+import { NO_SERVER_RUN } from "./turnInterruptions.js";
 
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
@@ -19,6 +20,8 @@ function normalizeAgentProviderId(value = "") {
  * and the server's close after the work in flight.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
+ * @param {import("./types.js").ServerRun} [dependencies.serverRun] This process's run, whose planned stop the next run
+ *   reads to tell the turns this stop interrupts from a crash's
  * @param {AssistantRouting} dependencies.assistantRouting
  * @param {ConversationRuntime} dependencies.mainConversations
  * @param {OutputTargetTerminalController} dependencies.outputTarget
@@ -29,6 +32,7 @@ function normalizeAgentProviderId(value = "") {
  */
 function createServiceShutdown({
   state,
+  serverRun = NO_SERVER_RUN,
   assistantRouting,
   mainConversations,
   outputTarget,
@@ -39,6 +43,7 @@ function createServiceShutdown({
 }) {
   let shutdownStop = null;
   let shutdownBegun = null;
+  let plannedStop = null;
 
   /**
    * The server's shutdown begins before anything stops: each AI engine sets its closing fence and
@@ -51,6 +56,8 @@ function createServiceShutdown({
     if (!shutdownBegun) {
       // Every session this server wrote a timeline line for says why its turns stop here.
       recordSessionTimelineEventForActiveSessions({ kind: "server", event: "stopping", reason: "server-shutdown" });
+      // The next run reads the turns this stop interrupts as a planned stop (or an update), not a crash.
+      plannedStop = serverRun.recordPlannedStop("server-shutdown");
     }
     shutdownBegun ||= sessionAgent.beginShutdown();
     return shutdownBegun;
@@ -73,7 +80,9 @@ function createServiceShutdown({
       Promise.resolve().then(() => outputTarget.close())
     ]);
     clearTimeout(state.lifecycle.goalRecoveryTimer);
-    await Promise.allSettled([state.lifecycle.goalRecovery, state.lifecycle.goalRecoveryRetry]);
+    clearTimeout(state.lifecycle.turnRecoveryTimer);
+    await Promise.allSettled([state.lifecycle.goalRecovery, state.lifecycle.goalRecoveryRetry,
+      state.lifecycle.turnRecovery, state.lifecycle.turnRecoveryRetry]);
     const failures = [];
     const agentResult = agentClose.status === "fulfilled"
       ? agentClose.value
@@ -94,8 +103,8 @@ function createServiceShutdown({
     } catch (error) {
       failures.push(error);
     }
-    // What the stop recorded reaches the session timelines before the server exits.
-    await flushSessionTimeline();
+    // What the stop recorded reaches the session timelines, and its planned stop this run's record, before it exits.
+    await Promise.all([flushSessionTimeline(), plannedStop]);
     if (failures.length > 0) {
       throw new AggregateError(failures, "Vibe64 terminal shutdown did not complete successfully.");
     }

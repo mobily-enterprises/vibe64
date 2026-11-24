@@ -462,11 +462,16 @@ function createSessionConversationStore({
         const integrationSetup = await readIntegrationSetupDecision(sessionPaths, id, turn.assistant);
         return integrationSetup ? { ...turn, integrationSetup } : turn;
       },
-      async appendMessage(id, message) {
+      async appendMessage(id, { data, ...message }) {
         const saved = await transaction.readTurn(id);
-        let metadata = message.turnMetadata ? normalizeConversationTurnMetadata({
+        // A system message's structured data (a turn interruption's red entry, say) is its own turn's metadata, which
+        // every read and the chat keep; a message keeps only its words.
+        const systemData = message.role === "system" && isPlainObject(data) ? data : null;
+        if (data !== undefined && !systemData) message.data = data;
+        let metadata = message.turnMetadata || systemData ? normalizeConversationTurnMetadata({
           ...saved?.metadata,
-          ...message.turnMetadata
+          ...message.turnMetadata,
+          ...systemData
         }) : saved?.metadata;
         if (!saved && !metadata?.assistantSelection && newTurnMetadata) {
           metadata = normalizeConversationTurnMetadata({
