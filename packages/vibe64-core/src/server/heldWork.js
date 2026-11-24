@@ -91,13 +91,27 @@ function createHeldWork({
       operationId: entry.operationId,
       key,
       receivedAt: entry.receivedAt,
-      get settled() { return entry.settled; },
-      get waitingFor() { return entry.stage; },
-      get stages() { return { ...entry.stages }; },
-      get heldAnswer() { return entry.heldAnswer; },
-      get elapsedMs() { return Date.now() - entry.receivedAt; },
-      get result() { return entry.outcome?.result; },
-      get error() { return entry.outcome?.error; }
+      get settled() {
+        return entry.settled;
+      },
+      get waitingFor() {
+        return entry.stage;
+      },
+      get stages() {
+        return { ...entry.stages };
+      },
+      get heldAnswer() {
+        return entry.heldAnswer;
+      },
+      get elapsedMs() {
+        return Date.now() - entry.receivedAt;
+      },
+      get result() {
+        return entry.outcome?.result;
+      },
+      get error() {
+        return entry.outcome?.error;
+      }
     });
     const stage = (name) => {
       entry.stage = name;
