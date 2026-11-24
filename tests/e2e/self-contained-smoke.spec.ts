@@ -54,17 +54,17 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
 });
 
 test("an editor that does not answer shows Updating…, and after about a minute JSKIT's shell recovery with Retry", async ({ page }) => {
-  // The editor is away and stays away: neither the project read nor the page's health check gets an answer.
-  let editorAway = true;
+  // The project read and the page's health check get no answer, and keep getting none.
+  let unanswered = true;
   await mockReadyStudioShell(page, {
     failGet(apiPathname) {
-      return editorAway && (apiPathname === "/api/vibe64/projects" || apiPathname === "/api/health");
+      return unanswered && (apiPathname === "/api/vibe64/projects" || apiPathname === "/api/health");
     }
   });
 
   await page.clock.install();
   await page.goto(DEVELOPMENT_PATH);
-  const awaySince = await page.evaluate(() => Date.now());
+  const failingSince = await page.evaluate(() => Date.now());
 
   const banners = page.locator(".shell-error-host__banner");
   const updating = banners.filter({ hasText: "Updating…" });
@@ -78,15 +78,15 @@ test("an editor that does not answer shows Updating…, and after about a minute
   }).toPass({ intervals: [100], timeout: 15_000 });
   await expect(recoveryBanner).toHaveCount(0);
 
-  // After about a minute the client stops waiting, and JSKIT's shell offers recovery while Updating… stays.
+  // After about a minute the client stops waiting, and JSKIT's shell offers recovery. (The page's other reads still
+  // get answers, so Updating… clears whenever one does.)
   await expect(async () => {
     await page.clock.runFor(3_000);
     await expect(recoveryBanner).toBeVisible({ timeout: 250 });
   }).toPass({ intervals: [100], timeout: 40_000 });
-  expect(await page.evaluate(() => Date.now()) - awaySince).toBeGreaterThanOrEqual(55_000);
-  await expect(updating).toBeVisible();
+  expect(await page.evaluate(() => Date.now()) - failingSince).toBeGreaterThanOrEqual(55_000);
 
-  editorAway = false;
+  unanswered = false;
   await recoveryBanner.getByRole("button", { name: "Retry" }).click();
 
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible({
