@@ -512,6 +512,7 @@ function createOutputTargetLaunchStart({
               purpose: webOutput ? "preview" : "output",
               runtimes: webOutput ? previewRuntimesForSpec(spec) : normalizedRuntimeRequirements(spec.runtimes),
               ...(usageLaunch?.usageRecordingPreload ? { usageRecordingPreload: usageLaunch.usageRecordingPreload } : {}),
+              ...(usageLaunch ? { usageRecordingEnvironment: usageLaunch.usageRecordingEnvironment } : {}),
               session: context.session || {},
               terminal: {
                 commandPreview: spec.commandPreview,

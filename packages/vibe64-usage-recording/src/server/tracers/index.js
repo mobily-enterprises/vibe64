@@ -13,10 +13,13 @@ import python from "./python.js";
 // - environment values are set as given;
 // - prependEnvironment values are prepended to any existing value
 //   (PYTHONPATH, PHP_INI_SCAN_DIR) by mergePrependEnvironment();
-// - unsetEnvironment(launch environment) answers the value a prepended
-//   variable stands for while the launch sets none, which the merge then
-//   keeps ({} for none). Purity gives way here: PHP's runs `php --ini` once
-//   per binary, since a wrapper's scan folder (Nix) is not PHP's empty segment.
+// - unsetEnvironment(environment) answers the value a prepended variable
+//   stands for while the launch sets none, which the merge then keeps ({} for
+//   none). The recording service hands it the environment the execution
+//   gateway resolved for the launch (usageRecordingEnvironment), so its PATH
+//   names the programs the launch runs. It runs nothing: PHP's reads the scan
+//   folder a Nix wrapper declares from the wrapper, since that folder is not
+//   PHP's empty segment.
 // - nodePreload is an absolute path handed to the exec helper's
 //   usageRecordingPreload launch field, never an environment variable.
 // The three variables from usageRecordingEnvironment() are added by the

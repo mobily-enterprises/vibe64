@@ -234,6 +234,61 @@ test("prepare loads the built module through PHP_INI_SCAN_DIR and keeps PHP's ow
   }
 });
 
+// The php a PATH names is the project's to choose, so the server only reads it: each php here marks a file if run.
+test("the scan folder a Nix PHP wrapper declares is read from the wrapper, which never runs, and nothing else", () => {
+  const root = fs.mkdtempSync(path.join(SCRATCH, "wrappers-"));
+  const ran = path.join(root, "ran");
+  const declared = path.join(root, "php-with-extensions", "lib");
+  fs.mkdirSync(declared, { recursive: true });
+  let count = 0;
+  // unsetEnvironment for a PATH whose only php has this content, or links to a file with it.
+  const folderOf = (content, { link = false } = {}) => {
+    const bin = path.join(root, `bin-${++count}`);
+    fs.mkdirSync(bin);
+    const file = link ? path.join(root, `target-${count}`) : path.join(bin, "php");
+    fs.writeFileSync(file, content, { mode: 0o755 });
+    if (link) fs.symlinkSync(file, path.join(bin, "php"));
+    return php.unsetEnvironment({ PATH: bin }).PHP_INI_SCAN_DIR;
+  };
+  const runs = `#!/bin/sh\necho "$0" >> '${ran}'\n`;
+  // Nix makeWrapper's shell wrapper, as it writes --set-default, printing what php --ini would.
+  const shell = (folder) => `${runs}export PHP_INI_SCAN_DIR=\${PHP_INI_SCAN_DIR-'${folder}'}\n` +
+    "echo \"Scan for additional .ini files in: $PHP_INI_SCAN_DIR\"\n";
+  assert.equal(folderOf(shell(declared)), declared);
+  assert.equal(fs.existsSync(ran), false, "the server ran the php on PATH");
+  assert.equal(folderOf(`${runs}PHP_INI_SCAN_DIR=\${PHP_INI_SCAN_DIR:-${declared}}\n`), declared);
+  // makeBinaryWrapper's program, whose strings hold its setenv call (16 KB on a Nix host), reached through a link as a
+  // host's /usr/local/bin/php reaches its runtime pack.
+  const binary = Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1]), Buffer.alloc(16 * 1024),
+    Buffer.from(`PHP_INI_SCAN_DIR\0${declared}\0setenv("PHP_INI_SCAN_DIR", "${declared}", 0)\0`)]);
+  assert.equal(folderOf(binary, { link: true }), declared);
+  // Only an absolute folder that exists is passed on.
+  for (const folder of [path.join(root, "missing"), "relative/lib", `${declared}${path.delimiter}${declared}`]) {
+    assert.equal(folderOf(shell(folder)), "", folder);
+  }
+  // A file the server can read that names a folder in neither wrapper's form, behind a link, gives nothing.
+  const decoy = [
+    runs,
+    `PHP_INI_SCAN_DIR=${declared}`,
+    `export PHP_INI_SCAN_DIR="${declared}"`,
+    `setenv("PHP_INI_SCAN_DIR", "${declared}", 1)`,
+    `--set 'PHP_INI_SCAN_DIR' '${declared}'`,
+    `echo "Scan for additional .ini files in: ${declared}"`
+  ].join("\n");
+  assert.equal(folderOf(decoy, { link: true }), "");
+  // Nothing over 1 MiB is read: a wrapper is never that big, and PHP itself always is.
+  const sized = (bytes) => `${shell(declared)}${"#".repeat(bytes - Buffer.byteLength(shell(declared)) - 1)}\n`;
+  assert.equal(folderOf(sized(1024 * 1024)), declared);
+  assert.equal(folderOf(sized(1024 * 1024 + 1)), "");
+  // Nor anything but a regular file: a FIFO, which a plain read would wait on forever.
+  const fifo = path.join(root, "fifo-bin");
+  fs.mkdirSync(fifo);
+  if (spawnSync("mkfifo", ["-m", "755", path.join(fifo, "php")]).status === 0) {
+    assert.deepEqual(php.unsetEnvironment({ PATH: fifo }), { PHP_INI_SCAN_DIR: "" });
+  }
+  assert.equal(fs.existsSync(ran), false, "the server ran the php on PATH");
+});
+
 // The module's label rule needs nothing from PHP, so this compiles it alone.
 test("the PHP module labels a local request's path with its opaque segments redacted", { skip: onPath("cc") ? false : "cc is not on PATH" }, () => {
   const harness = path.join(SCRATCH, "recorded-path.c");

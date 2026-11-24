@@ -9,8 +9,10 @@
  * @property {string} recordingId
  * @property {boolean} web True when the recorded target is the session's Preview.
  * @property {(launch: { outputTargetId?: string, web?: boolean, environment?: object })
- *   => ({ environment: object, usageRecordingPreload: string, exited: () => void } | null)} launch
- *   The recorder for a launch; null when the launch is not the recorded target.
+ *   => ({ environment: object, usageRecordingEnvironment: (resolved: object) => object, usageRecordingPreload: string,
+ *   exited: () => void } | null)} launch
+ *   The recorder for a launch; null when the launch is not the recorded target. The execution gateway completes the
+ *   recorder's variables with usageRecordingEnvironment of the environment it resolved for the launch.
  * @property {(request: { method?: string, path?: string, interaction?: string, fetchDest?: string })
  *   => ({ requestId: string, interaction: string | null, finish: (response: { status?: number | null }) => void } | null)} proxyRequest
  *   The request's number and log; null when the request is not logged.
