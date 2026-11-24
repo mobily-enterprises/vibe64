@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, stat, symlink, unlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat, symlink, unlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import process from "node:process";
 import test from "node:test";
 import { promisify } from "node:util";
 import { parseStatus, planChangesSinceMark, readSourceState, sourceChangesSince } from "../../packages/vibe64-terminals/src/server/planSourceChanges.js";
@@ -159,6 +160,15 @@ test("the plan's update record: each AI change and plan checked record when and 
   await symlink(path.join(f.root, "elsewhere.json"), markFile);
   await assert.rejects(readWorkPlanMark(f.context), { code: "vibe64_work_plan_mark_invalid" });
   assert.equal((await readWorkPlanPage(f.context)).current.updatedHow, "");
+  // And so is a record Vibe64 is not allowed to read (another account's, or one whose permissions changed).
+  if (process.getuid?.() !== 0) {
+    await unlink(markFile);
+    await writeFile(markFile, JSON.stringify(mark) + "\n");
+    await chmod(markFile, 0o000);
+    page = await readWorkPlanPage(f.context);
+    assert.deepEqual([page.current.updatedAt, page.current.updatedHow], ["", ""]);
+    await chmod(markFile, 0o600);
+  }
   await unlink(markFile);
   // The AI's next change writes a new record.
   await manageWorkPlan(f.context, { operation: "checked", ...await revisions() }, "junior", { sourceState });
