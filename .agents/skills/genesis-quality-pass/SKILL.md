@@ -12,25 +12,26 @@ implementation finished.
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
 
-1. Read the repository-root `package.json`. Treat Genesis as project-pinned only
-   when that manifest's `name` is `genesis-compiler`, or its `dependencies`,
-   `devDependencies`, or `optionalDependencies` contain the exact
-   `genesis-compiler` key.
-2. For a project-pinned repository, invoke every Genesis CLI operation with
-   `npm exec --no -- genesis <arguments>`. This runs without fetching another
-   package. If the declared package is not installed, report that the project's
-   dependencies are not prepared; do not fall back to another Genesis version.
-3. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
+1. Read the repository-root `package.json`. Only when that
+   manifest's `name` is `genesis-compiler` is the repository Genesis's own
+   source. There, invoke every Genesis CLI operation with
+   `npm exec --no -- genesis <arguments>`, which runs the repository's own
+   Genesis without fetching another package. If it is not installed, report
+   that the repository's dependencies are not prepared; do not fall back to
+   another Genesis version.
+2. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
    shell's equivalent `PATH` lookup). When it resolves an executable, invoke
-   `genesis <arguments>` directly.
-4. When neither source is available, stop and report that Genesis is
-   unavailable. Never install or update Genesis merely to satisfy a workflow
-   instruction.
+   `genesis <arguments>` directly; inside Vibe64 that is the platform's Genesis.
+   A `genesis-compiler` that the project's `package.json` declares does not
+   serve the project: it belongs to the project's own scripts, so never run it
+   through `npm exec`, `npx` or `node_modules/.bin`.
+3. When neither source is available, stop and report that Genesis is
+   unavailable. Never install or update Genesis, or add it to the project's
+   dependencies, merely to satisfy a workflow instruction.
 
-Successful invocation resolution is routine. Do not narrate whether Genesis is
-project-pinned or on `PATH`, and never describe direct `PATH` use as a fallback.
-Mention how the invocation was selected only when resolution fails or the user
-explicitly asks.
+Successful invocation resolution is routine. Do not narrate which Genesis was
+selected, and never describe direct `PATH` use as a fallback. Mention how the
+invocation was selected only when resolution fails or the user explicitly asks.
 
 Follow the configured Collaboration approach for user-facing updates, including
 its technical depth and response length. Report concrete progress,
@@ -114,7 +115,7 @@ whole scope with them and fixes what it finds:
   missing optional values, zero, one and many items, large numbers, dates near
   midnight and in another time zone, duplicates, a double click or double
   submit, refresh or back in the middle of an action, two tabs, an expired
-  session, a slow or dropped connection. Fix what breaks, or report it.
+  session, a slow or dropped connection. Fix what breaks.
 - **Every refusal explained.** When the software refuses (invalid input, a
   missing permission, a limit, a conflict, missing setup), the person sees what
   was refused, why, and what they can do about it, in words they understand.
@@ -154,11 +155,13 @@ interface (a browser, a terminal, a device), not reading its code:
 
 - The pass changes behavior only to handle a state or an edge case and to
   explain a refusal. It adds no feature and changes no permission, product rule
-  or stored data; a larger gap is a follow-up finding, left unchanged.
+  or stored data: a fix that needs one is a question for the person. A larger
+  gap within the scope is fixed like any other.
 - The selected Stack's quality pass guidance names where states, errors and
   refusals live in its technology; follow it.
 - **Fix at the owner.** When the framework itself blocks a result, report the
-  exact framework change instead of working around it in the app.
+  exact framework change under "Outside this scope" instead of working around
+  it in the app.
 - You may edit source, styles, messages and tests in scope; every existing
   behavior assertion stays. Do not edit `.genesis/`, Git metadata, dependency
   directories, generated build output, retained migration history, or external
@@ -169,7 +172,7 @@ commit. Never amend or rewrite selected commits. Summarize the resolved scope,
 the states listed for each screen or flow with what was missing and what
 changed, the edge cases tried and their results, the refusals reworded, the
 accessibility checks, the screenshots and tests actually taken and run (with
-their paths), files changed, and follow-up findings left unchanged.
+their paths), files changed, and what lies outside this scope.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done quality-pass` operation records it in `genesis/passes.json`,

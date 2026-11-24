@@ -12,25 +12,26 @@ merely because implementation finished.
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
 
-1. Read the repository-root `package.json`. Treat Genesis as project-pinned only
-   when that manifest's `name` is `genesis-compiler`, or its `dependencies`,
-   `devDependencies`, or `optionalDependencies` contain the exact
-   `genesis-compiler` key.
-2. For a project-pinned repository, invoke every Genesis CLI operation with
-   `npm exec --no -- genesis <arguments>`. This runs without fetching another
-   package. If the declared package is not installed, report that the project's
-   dependencies are not prepared; do not fall back to another Genesis version.
-3. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
+1. Read the repository-root `package.json`. Only when that
+   manifest's `name` is `genesis-compiler` is the repository Genesis's own
+   source. There, invoke every Genesis CLI operation with
+   `npm exec --no -- genesis <arguments>`, which runs the repository's own
+   Genesis without fetching another package. If it is not installed, report
+   that the repository's dependencies are not prepared; do not fall back to
+   another Genesis version.
+2. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
    shell's equivalent `PATH` lookup). When it resolves an executable, invoke
-   `genesis <arguments>` directly.
-4. When neither source is available, stop and report that Genesis is
-   unavailable. Never install or update Genesis merely to satisfy a workflow
-   instruction.
+   `genesis <arguments>` directly; inside Vibe64 that is the platform's Genesis.
+   A `genesis-compiler` that the project's `package.json` declares does not
+   serve the project: it belongs to the project's own scripts, so never run it
+   through `npm exec`, `npx` or `node_modules/.bin`.
+3. When neither source is available, stop and report that Genesis is
+   unavailable. Never install or update Genesis, or add it to the project's
+   dependencies, merely to satisfy a workflow instruction.
 
-Successful invocation resolution is routine. Do not narrate whether Genesis is
-project-pinned or on `PATH`, and never describe direct `PATH` use as a fallback.
-Mention how the invocation was selected only when resolution fails or the user
-explicitly asks.
+Successful invocation resolution is routine. Do not narrate which Genesis was
+selected, and never describe direct `PATH` use as a fallback. Mention how the
+invocation was selected only when resolution fails or the user explicitly asks.
 
 Follow the configured Collaboration approach for user-facing updates, including
 its technical depth and response length. Report concrete progress,
@@ -146,16 +147,16 @@ hides per-row work, and these counts are the figures the report compares.
 
 - The pass changes how data is read, written, constrained and indexed, never
   what it means: no product rule change, no dropped column or row, and no data
-  rewritten without the person's agreement. A missing feature is a follow-up
-  finding, left unchanged.
+  rewritten without the person's agreement. A fix that needs a missing feature
+  is a question for the person.
 - Tests and measurements use test databases the run creates and drops; never a
   development or production database or its configuration.
 - The selected Stack's data pass guidance names its owner layer, its query
   counter, its migration mechanics and what differs between databases; follow
   it.
 - **Fix at the owner.** When the framework or a library blocks a correct
-  query, report the exact change it needs instead of working around it in the
-  app.
+  query, report the exact change it needs under "Outside this scope" instead of
+  working around it in the app.
 - Do not edit `.genesis/`, Git metadata, dependency directories, generated
   build output, retained migration history (add new migrations instead), or
   external resources.
@@ -165,8 +166,8 @@ commit. Never amend or rewrite selected commits. Summarize the resolved scope,
 the data map, each path's counts before and after at both sizes, the
 constraints added with the test that trips each, the migrations with their
 lock and time notes, the indexes with the query each serves and the plan that
-uses it, the tests added, files changed, checks actually run, and follow-up
-findings left unchanged.
+uses it, the tests added, files changed, checks actually run, and what lies
+outside this scope.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done data-pass` operation records it in `genesis/passes.json`,

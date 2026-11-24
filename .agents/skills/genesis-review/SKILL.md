@@ -1,6 +1,6 @@
 ---
 name: genesis-review
-description: Review the work against what the software should do through an explicitly requested review over the whole app, the changes since its last completed run, a named section or the current work, judging the tests (each changed behavior has one that would fail without it; none weakened or skipped), the gaps between intent, code and explanation, and costs that grow with the data, writing only tests and reporting everything else. Use when asked for a review, a review pass, or to check the tests and the work against the Blueprint.
+description: Review the work against what the software should do through an explicitly requested review over the whole app, the changes since its last completed run, a named section or the current work, judging the tests (each changed behavior has one that would fail without it; none weakened or skipped), the gaps between intent, code and explanation, and costs that grow with the data, fixing each defect after writing the test that fails without the fix. Use when asked for a review, a review pass, or to check the tests and the work against the Blueprint.
 ---
 
 # Genesis review
@@ -12,25 +12,26 @@ never run it merely because implementation finished.
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
 
-1. Read the repository-root `package.json`. Treat Genesis as project-pinned only
-   when that manifest's `name` is `genesis-compiler`, or its `dependencies`,
-   `devDependencies`, or `optionalDependencies` contain the exact
-   `genesis-compiler` key.
-2. For a project-pinned repository, invoke every Genesis CLI operation with
-   `npm exec --no -- genesis <arguments>`. This runs without fetching another
-   package. If the declared package is not installed, report that the project's
-   dependencies are not prepared; do not fall back to another Genesis version.
-3. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
+1. Read the repository-root `package.json`. Only when that
+   manifest's `name` is `genesis-compiler` is the repository Genesis's own
+   source. There, invoke every Genesis CLI operation with
+   `npm exec --no -- genesis <arguments>`, which runs the repository's own
+   Genesis without fetching another package. If it is not installed, report
+   that the repository's dependencies are not prepared; do not fall back to
+   another Genesis version.
+2. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
    shell's equivalent `PATH` lookup). When it resolves an executable, invoke
-   `genesis <arguments>` directly.
-4. When neither source is available, stop and report that Genesis is
-   unavailable. Never install or update Genesis merely to satisfy a workflow
-   instruction.
+   `genesis <arguments>` directly; inside Vibe64 that is the platform's Genesis.
+   A `genesis-compiler` that the project's `package.json` declares does not
+   serve the project: it belongs to the project's own scripts, so never run it
+   through `npm exec`, `npx` or `node_modules/.bin`.
+3. When neither source is available, stop and report that Genesis is
+   unavailable. Never install or update Genesis, or add it to the project's
+   dependencies, merely to satisfy a workflow instruction.
 
-Successful invocation resolution is routine. Do not narrate whether Genesis is
-project-pinned or on `PATH`, and never describe direct `PATH` use as a fallback.
-Mention how the invocation was selected only when resolution fails or the user
-explicitly asks.
+Successful invocation resolution is routine. Do not narrate which Genesis was
+selected, and never describe direct `PATH` use as a fallback. Mention how the
+invocation was selected only when resolution fails or the user explicitly asks.
 
 Follow the configured Collaboration approach for user-facing updates, including
 its technical depth and response length. Report concrete progress,
@@ -80,10 +81,9 @@ If the scope is ambiguous, ask which section or changes.
 
 ## Boundaries
 
-- The prompt says what a review judges. It edits only tests: it adds or updates
-  the tests changed behavior lacks and changes no product code, Blueprint,
-  Program, Stack or other file. Every other finding is reported with the
-  smallest sensible correction, left unchanged.
+- The prompt says what a review judges. It fixes what it finds within the
+  scope: for each defect it writes the test that fails because of it, sees it
+  fail, then fixes the code.
 - Run the tests relevant to the scope; report what actually ran and what was not
   verified, and never report an unrun check as passing.
 
@@ -105,8 +105,7 @@ evidence, chunks, commits and report work for every pass. This pass adds to the
 checklist:
 
 - every behavior the source exposes (operation, screen, command or job), each
-  with the test that would fail without it, or the missing test written or
-  reported;
+  with the test that would fail without it, or the missing test written;
 - every test file: whether it runs in the whole suite, what it proves, what it
   costs, and any test weakened, skipped or loosened;
 - every list, batch and write path, with its query or call counts at a few rows
@@ -116,5 +115,4 @@ checklist:
   at all, a table with more than one owner, and work over a whole population
   done inside a request.
 
-Review's limits hold in a deep run: it writes only tests, and every other
-finding is reported and left unchanged.
+In a deep run too, each defect gets its failing test first, then its fix.

@@ -12,25 +12,26 @@ implementation finished, unless the host's automatic UI pass asked for it.
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
 
-1. Read the repository-root `package.json`. Treat Genesis as project-pinned only
-   when that manifest's `name` is `genesis-compiler`, or its `dependencies`,
-   `devDependencies`, or `optionalDependencies` contain the exact
-   `genesis-compiler` key.
-2. For a project-pinned repository, invoke every Genesis CLI operation with
-   `npm exec --no -- genesis <arguments>`. This runs without fetching another
-   package. If the declared package is not installed, report that the project's
-   dependencies are not prepared; do not fall back to another Genesis version.
-3. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
+1. Read the repository-root `package.json`. Only when that
+   manifest's `name` is `genesis-compiler` is the repository Genesis's own
+   source. There, invoke every Genesis CLI operation with
+   `npm exec --no -- genesis <arguments>`, which runs the repository's own
+   Genesis without fetching another package. If it is not installed, report
+   that the repository's dependencies are not prepared; do not fall back to
+   another Genesis version.
+2. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
    shell's equivalent `PATH` lookup). When it resolves an executable, invoke
-   `genesis <arguments>` directly.
-4. When neither source is available, stop and report that Genesis is
-   unavailable. Never install or update Genesis merely to satisfy a workflow
-   instruction.
+   `genesis <arguments>` directly; inside Vibe64 that is the platform's Genesis.
+   A `genesis-compiler` that the project's `package.json` declares does not
+   serve the project: it belongs to the project's own scripts, so never run it
+   through `npm exec`, `npx` or `node_modules/.bin`.
+3. When neither source is available, stop and report that Genesis is
+   unavailable. Never install or update Genesis, or add it to the project's
+   dependencies, merely to satisfy a workflow instruction.
 
-Successful invocation resolution is routine. Do not narrate whether Genesis is
-project-pinned or on `PATH`, and never describe direct `PATH` use as a fallback.
-Mention how the invocation was selected only when resolution fails or the user
-explicitly asks.
+Successful invocation resolution is routine. Do not narrate which Genesis was
+selected, and never describe direct `PATH` use as a fallback. Mention how the
+invocation was selected only when resolution fails or the user explicitly asks.
 
 Follow the configured Collaboration approach for user-facing updates, including
 its technical depth and response length. Report concrete progress,
@@ -101,12 +102,13 @@ do not invent a new one.
 - **Behavior stays as it is.** Change how the UI looks and is laid out, never
   what it does: no feature, field, action, permission, validation, data or
   copy change beyond what the design rules require. A defect, missing behavior,
-  contract mismatch or test gap you notice is a follow-up finding, left
-  unchanged. Rules the Stack guidance marks as must-fix (such as navigation
-  rules) are fixed at every scope, never only reported.
+  contract mismatch or test gap you notice within the scope is fixed as a
+  separate fix with its own test, reported as a fix. Rules the Stack guidance
+  marks as must-fix (such as navigation rules) are fixed at every scope, never
+  only reported.
 - **Fix at the owner.** When the framework itself blocks an exact result,
-  report the exact framework change instead of compensating with app CSS,
-  `!important`, or a copied framework file.
+  report the exact framework change under "Outside this scope" instead of
+  compensating with app CSS, `!important`, or a copied framework file.
 - **Prove it.** Run the conformance checks the Stack guidance names on the
   scope until they pass. Take screenshots of every affected screen at 390, 768
   and 1280 pixels wide, in light and dark, through the host's managed browser
@@ -114,6 +116,18 @@ do not invent a new one.
   after for a section or the whole app. Look at every screenshot. Keep them out
   of the repository's tracked files and delete temporary test files. Close
   every browser you start. Run the focused tests of the affected screens.
+- **Count what renders.** When you count or report what is left (spinners,
+  borders, colours), count what the screen draws, not the props or attributes
+  that might draw it, because the same prop can draw different things: a
+  `loading` on a field may draw that control's own thin progress line, the
+  built-in loading signal that should stay when possible, while on a button it
+  may draw an ad-hoc spinner. Check what a component renders before reporting
+  it.
+- **Quote the rule.** Before saying a choice was kept or made because the
+  project's rules require it, quote the rule and say where it lives; a rule you
+  cannot quote is no reason. When two rules seem to conflict, quote both and
+  ask the person which holds, recommending one, instead of quietly choosing
+  one.
 - **Edits.** You may edit UI source, styles and tests whose markup changed;
   every behavior assertion stays. Do not edit `.genesis/`, Git metadata,
   dependency directories, generated build output, retained migration history,
@@ -123,8 +137,8 @@ do not invent a new one.
 Leave the pass as ordinary uncommitted work for review and a later normal
 commit. Never amend or rewrite the selected commits. Summarize the resolved
 scope and any commit identities, what changed, files changed, the checks and
-screenshots actually taken (with their paths), and follow-up findings left
-unchanged.
+screenshots actually taken (with their paths), and what lies outside this
+scope.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done ui-pass` operation records it in `genesis/passes.json`,

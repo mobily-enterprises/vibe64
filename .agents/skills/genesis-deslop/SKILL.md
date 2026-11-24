@@ -11,25 +11,26 @@ explicit: never run it merely because implementation finished.
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
 
-1. Read the repository-root `package.json`. Treat Genesis as project-pinned only
-   when that manifest's `name` is `genesis-compiler`, or its `dependencies`,
-   `devDependencies`, or `optionalDependencies` contain the exact
-   `genesis-compiler` key.
-2. For a project-pinned repository, invoke every Genesis CLI operation with
-   `npm exec --no -- genesis <arguments>`. This runs without fetching another
-   package. If the declared package is not installed, report that the project's
-   dependencies are not prepared; do not fall back to another Genesis version.
-3. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
+1. Read the repository-root `package.json`. Only when that
+   manifest's `name` is `genesis-compiler` is the repository Genesis's own
+   source. There, invoke every Genesis CLI operation with
+   `npm exec --no -- genesis <arguments>`, which runs the repository's own
+   Genesis without fetching another package. If it is not installed, report
+   that the repository's dependencies are not prepared; do not fall back to
+   another Genesis version.
+2. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
    shell's equivalent `PATH` lookup). When it resolves an executable, invoke
-   `genesis <arguments>` directly.
-4. When neither source is available, stop and report that Genesis is
-   unavailable. Never install or update Genesis merely to satisfy a workflow
-   instruction.
+   `genesis <arguments>` directly; inside Vibe64 that is the platform's Genesis.
+   A `genesis-compiler` that the project's `package.json` declares does not
+   serve the project: it belongs to the project's own scripts, so never run it
+   through `npm exec`, `npx` or `node_modules/.bin`.
+3. When neither source is available, stop and report that Genesis is
+   unavailable. Never install or update Genesis, or add it to the project's
+   dependencies, merely to satisfy a workflow instruction.
 
-Successful invocation resolution is routine. Do not narrate whether Genesis is
-project-pinned or on `PATH`, and never describe direct `PATH` use as a fallback.
-Mention how the invocation was selected only when resolution fails or the user
-explicitly asks.
+Successful invocation resolution is routine. Do not narrate which Genesis was
+selected, and never describe direct `PATH` use as a fallback. Mention how the
+invocation was selected only when resolution fails or the user explicitly asks.
 
 Follow the configured Collaboration approach for user-facing updates, including
 its technical depth and response length. Report concrete progress,
@@ -136,16 +137,16 @@ keep behavior" section of
 `.agents/skills/genesis-project/references/sanity-checks.md` describe. After
 cleanup, walk the list again: every item must still hold and still have a test,
 and a test the cleanup changed must assert no less than before. A behavior no
-test covers is a follow-up finding, never permission to drop it.
+test covers is a test gap, fixed as below, never permission to drop it.
 
 Cleanup is not a second implementation pass. The selected changes limit where
 cleanup may occur; sharing a file does not bring unrelated edits into scope or
-authorize different behavior in that file. Deslop may reorganize behavior
+authorize different behavior in that file. A cleanup may reorganize behavior
 already present; it may not complete, correct, or extend
-behavior. If review reveals a defect, missing behavior, contract mismatch, or
-test gap, report it as a follow-up finding and leave it unchanged, even when it
-is inside a changed path or appears related to the preceding implementation. Do
-not implement the finding or alter tests to accommodate it during Deslop.
+behavior. A real defect found within the scope (wrong or missing behavior, a
+contract mismatch, a test gap) is fixed as a separate fix, not a cleanup: its
+own test, seen to fail first, then the fix, kept apart from the cleanups and
+reported as a fix. Never alter a test to accommodate a cleanup.
 
 Apply every technology-specific Deslop instruction supplied by the selected
 Stack and load applicable official technology skills for framework and language
@@ -167,7 +168,8 @@ commit. Never amend or rewrite the selected commits. Run focused checks when
 useful. Final declared checks remain available through the Genesis `verify`
 operation. Summarize the resolved scope and any selected commit identities,
 what became simpler, the behaviors checked before and after, files changed,
-checks actually run, and follow-up findings left unchanged.
+checks actually run, each defect fixed apart from the cleanups with its test,
+and what lies outside this scope.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done deslop` operation records it in `genesis/passes.json`,
@@ -190,5 +192,5 @@ checklist:
   including one job written in different words, and a pattern one subsystem
   follows that another ignores.
 
-Deslop's limits hold in a deep run: behaviour stays as it is, and a defect
-found stays a follow-up finding, left unchanged.
+Deslop's limits hold in a deep run: cleanups keep behaviour as it is, and a
+defect found is fixed in its own commit, with its own test, reported as a fix.

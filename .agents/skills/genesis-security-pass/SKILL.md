@@ -12,25 +12,26 @@ implementation finished.
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
 
-1. Read the repository-root `package.json`. Treat Genesis as project-pinned only
-   when that manifest's `name` is `genesis-compiler`, or its `dependencies`,
-   `devDependencies`, or `optionalDependencies` contain the exact
-   `genesis-compiler` key.
-2. For a project-pinned repository, invoke every Genesis CLI operation with
-   `npm exec --no -- genesis <arguments>`. This runs without fetching another
-   package. If the declared package is not installed, report that the project's
-   dependencies are not prepared; do not fall back to another Genesis version.
-3. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
+1. Read the repository-root `package.json`. Only when that
+   manifest's `name` is `genesis-compiler` is the repository Genesis's own
+   source. There, invoke every Genesis CLI operation with
+   `npm exec --no -- genesis <arguments>`, which runs the repository's own
+   Genesis without fetching another package. If it is not installed, report
+   that the repository's dependencies are not prepared; do not fall back to
+   another Genesis version.
+2. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
    shell's equivalent `PATH` lookup). When it resolves an executable, invoke
-   `genesis <arguments>` directly.
-4. When neither source is available, stop and report that Genesis is
-   unavailable. Never install or update Genesis merely to satisfy a workflow
-   instruction.
+   `genesis <arguments>` directly; inside Vibe64 that is the platform's Genesis.
+   A `genesis-compiler` that the project's `package.json` declares does not
+   serve the project: it belongs to the project's own scripts, so never run it
+   through `npm exec`, `npx` or `node_modules/.bin`.
+3. When neither source is available, stop and report that Genesis is
+   unavailable. Never install or update Genesis, or add it to the project's
+   dependencies, merely to satisfy a workflow instruction.
 
-Successful invocation resolution is routine. Do not narrate whether Genesis is
-project-pinned or on `PATH`, and never describe direct `PATH` use as a fallback.
-Mention how the invocation was selected only when resolution fails or the user
-explicitly asks.
+Successful invocation resolution is routine. Do not narrate which Genesis was
+selected, and never describe direct `PATH` use as a fallback. Mention how the
+invocation was selected only when resolution fails or the user explicitly asks.
 
 Follow the configured Collaboration approach for user-facing updates, including
 its technical depth and response length. Report concrete progress,
@@ -255,11 +256,12 @@ never enforced is a finding.
   databases and test accounts it creates. Never probe a production deployment,
   a real person's account or another party's service, and never send real
   email, messages or payments.
-- **Report what it can't fix.** A secret to replace, a product decision, a
-  hosting setting, a vulnerable dependency with no fix: each is reported with
-  what it needs and who must act. When the framework itself blocks a fix,
-  report the exact framework change instead of working around it in the app
-  (**fix at the owner**).
+- **Report what it can't fix.** A product decision is a question for the
+  person, with a recommended answer. A secret to replace at its issuer, a
+  hosting setting and a vulnerable dependency with no fix go under "Outside
+  this scope", each with what it needs and who must act. When the framework
+  itself blocks a fix, report the exact framework change there instead of
+  working around it in the app (**fix at the owner**).
 - The selected Stack's security pass guidance names where its technology
   decides access, scopes rows, limits requests, keeps sessions and secrets and
   switches to production; follow it.
@@ -273,8 +275,8 @@ commit. Never amend or rewrite selected commits. Summarize the resolved scope,
 the map of ways in, each finding with the input that broke it and the refusal
 seen after the fix, the test guarding each fix and its failing run without the
 fix, the protections tried that already held, the areas that do not apply and
-why, the dependency audit, files changed, checks actually run, and everything
-left unfixed with what it needs and who must act.
+why, the dependency audit, files changed, checks actually run, and what lies
+outside this scope, with what it needs and who must act.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done security-pass` operation records it in `genesis/passes.json`,

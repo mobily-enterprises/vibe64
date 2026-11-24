@@ -12,25 +12,26 @@ speed pass is explicit: never run it merely because implementation finished.
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
 
-1. Read the repository-root `package.json`. Treat Genesis as project-pinned only
-   when that manifest's `name` is `genesis-compiler`, or its `dependencies`,
-   `devDependencies`, or `optionalDependencies` contain the exact
-   `genesis-compiler` key.
-2. For a project-pinned repository, invoke every Genesis CLI operation with
-   `npm exec --no -- genesis <arguments>`. This runs without fetching another
-   package. If the declared package is not installed, report that the project's
-   dependencies are not prepared; do not fall back to another Genesis version.
-3. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
+1. Read the repository-root `package.json`. Only when that
+   manifest's `name` is `genesis-compiler` is the repository Genesis's own
+   source. There, invoke every Genesis CLI operation with
+   `npm exec --no -- genesis <arguments>`, which runs the repository's own
+   Genesis without fetching another package. If it is not installed, report
+   that the repository's dependencies are not prepared; do not fall back to
+   another Genesis version.
+2. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
    shell's equivalent `PATH` lookup). When it resolves an executable, invoke
-   `genesis <arguments>` directly.
-4. When neither source is available, stop and report that Genesis is
-   unavailable. Never install or update Genesis merely to satisfy a workflow
-   instruction.
+   `genesis <arguments>` directly; inside Vibe64 that is the platform's Genesis.
+   A `genesis-compiler` that the project's `package.json` declares does not
+   serve the project: it belongs to the project's own scripts, so never run it
+   through `npm exec`, `npx` or `node_modules/.bin`.
+3. When neither source is available, stop and report that Genesis is
+   unavailable. Never install or update Genesis, or add it to the project's
+   dependencies, merely to satisfy a workflow instruction.
 
-Successful invocation resolution is routine. Do not narrate whether Genesis is
-project-pinned or on `PATH`, and never describe direct `PATH` use as a fallback.
-Mention how the invocation was selected only when resolution fails or the user
-explicitly asks.
+Successful invocation resolution is routine. Do not narrate which Genesis was
+selected, and never describe direct `PATH` use as a fallback. Mention how the
+invocation was selected only when resolution fails or the user explicitly asks.
 
 Follow the configured Collaboration approach for user-facing updates, including
 its technical depth and response length. Report concrete progress,
@@ -264,8 +265,8 @@ When the time is in the database, the data pass owns the cure: query counts
 that grow with the rows read, reads narrowed in code instead of in the query,
 and indexes for the filters the software really runs belong to the data pass
 skill (`.agents/skills/genesis-data-pass/SKILL.md`). Apply its method to that
-path, with its counts at a few rows and at a realistic size, or report the
-path as a data pass finding when it lies beyond the scope. This pass does not
+path, with its counts at a few rows and at a realistic size, or list the path
+under "Outside this scope" when it lies beyond the scope. This pass does not
 restate those rules; it measures the whole wait, end to end, and reports it
 before and after.
 
@@ -308,10 +309,11 @@ For each wait:
 - Share the machine fairly: stay within its test budget, never fill a shared
   machine with repeated full runs, and wait for long runs without polling.
 - **Fix at the owner.** When the framework, the test runner or a library causes
-  the slowness, report the exact change it needs instead of working around it
-  in the app.
-- **Report what it can't fix.** A slow outside service, a hosting limit or a
-  product decision is reported with its numbers, what it needs and who must
+  the slowness, report the exact change it needs under "Outside this scope"
+  instead of working around it in the app.
+- **Report what it can't fix.** A product decision is a question for the
+  person, with a recommended answer; a slow outside service or a hosting limit
+  goes under "Outside this scope" with its numbers, what it needs and who must
   act.
 - The selected Stack's speed pass guidance names its test runner and the
   machine's test budget, how its build splits client code, its request
@@ -326,9 +328,9 @@ commit. Never amend or rewrite selected commits. Summarize the resolved scope,
 each wait with how it was measured and its numbers before and after, each
 cause found and its fix, the whole suite's wall time before and after with its
 phases and slowest files, the tests guarding each fix and their failing run
-without it, the paths handed to the data pass, the areas that do not apply and
-why, files changed, checks actually run, and everything left unfixed with what
-it needs and who must act.
+without it, the paths fixed with the data pass's method, the areas that do not
+apply and why, files changed, checks actually run, and what lies outside this
+scope, with what it needs and who must act.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done speed-pass` operation records it in `genesis/passes.json`,

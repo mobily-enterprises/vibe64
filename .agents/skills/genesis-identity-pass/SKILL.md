@@ -12,25 +12,26 @@ merely because implementation finished.
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
 
-1. Read the repository-root `package.json`. Treat Genesis as project-pinned only
-   when that manifest's `name` is `genesis-compiler`, or its `dependencies`,
-   `devDependencies`, or `optionalDependencies` contain the exact
-   `genesis-compiler` key.
-2. For a project-pinned repository, invoke every Genesis CLI operation with
-   `npm exec --no -- genesis <arguments>`. This runs without fetching another
-   package. If the declared package is not installed, report that the project's
-   dependencies are not prepared; do not fall back to another Genesis version.
-3. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
+1. Read the repository-root `package.json`. Only when that
+   manifest's `name` is `genesis-compiler` is the repository Genesis's own
+   source. There, invoke every Genesis CLI operation with
+   `npm exec --no -- genesis <arguments>`, which runs the repository's own
+   Genesis without fetching another package. If it is not installed, report
+   that the repository's dependencies are not prepared; do not fall back to
+   another Genesis version.
+2. Otherwise, do not try `npm exec`. Run `command -v genesis` (or the current
    shell's equivalent `PATH` lookup). When it resolves an executable, invoke
-   `genesis <arguments>` directly.
-4. When neither source is available, stop and report that Genesis is
-   unavailable. Never install or update Genesis merely to satisfy a workflow
-   instruction.
+   `genesis <arguments>` directly; inside Vibe64 that is the platform's Genesis.
+   A `genesis-compiler` that the project's `package.json` declares does not
+   serve the project: it belongs to the project's own scripts, so never run it
+   through `npm exec`, `npx` or `node_modules/.bin`.
+3. When neither source is available, stop and report that Genesis is
+   unavailable. Never install or update Genesis, or add it to the project's
+   dependencies, merely to satisfy a workflow instruction.
 
-Successful invocation resolution is routine. Do not narrate whether Genesis is
-project-pinned or on `PATH`, and never describe direct `PATH` use as a fallback.
-Mention how the invocation was selected only when resolution fails or the user
-explicitly asks.
+Successful invocation resolution is routine. Do not narrate which Genesis was
+selected, and never describe direct `PATH` use as a fallback. Mention how the
+invocation was selected only when resolution fails or the user explicitly asks.
 
 Follow the configured Collaboration approach for user-facing updates, including
 its technical depth and response length. Report concrete progress,
@@ -81,7 +82,8 @@ section; follow it with "Deep run" below.
 
 A narrower scope in an app with no identity yet still needs the foundation
 (the seed, the colour module and the logo, steps 1 and 2 below): build it, and
-report that the rest of the app does not have the identity yet.
+list the rest of the app, which does not have the identity yet, under "Outside
+this scope".
 
 ## Study the software first
 
@@ -227,11 +229,13 @@ data.
   change what the software does: no feature, field, action, permission,
   validation or data change. New words go through the project's translation
   mechanism where it has one. A defect, missing behavior or test gap you notice
-  is a follow-up finding, left unchanged.
+  within the scope is fixed as a separate fix with its own test, reported as a
+  fix.
 - The selected Stack's identity pass guidance says where each piece lives;
   the identity never breaks a design rule the Stack marks as must-fix.
 - **Fix at the owner.** When the framework itself blocks a result, report the
-  exact framework change instead of overriding it in the app's styles.
+  exact framework change under "Outside this scope" instead of overriding it in
+  the app's styles.
 - You may add the art components, the colour module, the logo and icon files,
   the loading screen and their styles, place the art in screens, and update
   tests whose markup changed; every behavior assertion stays. Do not edit
@@ -262,7 +266,7 @@ Leave the pass as ordinary uncommitted work for review and a later normal
 commit. Never amend or rewrite selected commits. Summarize the resolved scope,
 the look spec (style option, seed, content kinds and their motifs), what
 changed, files changed, the checks, contrast figures and screenshots actually
-taken (with their paths), and follow-up findings left unchanged.
+taken (with their paths), and what lies outside this scope.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done identity-pass` operation records it in `genesis/passes.json`,
