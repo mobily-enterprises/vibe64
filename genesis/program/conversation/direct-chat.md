@@ -2811,8 +2811,9 @@ account admission, native questions/goals, identity checks, delivery inspection 
 helper cleanup remain authoritative. Delivery has routing/pending/sending/uncertain/
 accepted/failed states; workflow stage is never encoded into delivery. Saved receipts
 win over interrupted transport errors. Retry only inspects the same receipt.
-Restart never auto-sends a recovered follow-up whose scheduling it interrupted; a step left owed (Owed automatic
-steps, below) is decided again at recovery. Continue planning, Continue
+A restart never re-sends a message that may have gone out (uncertain delivery keeps Check delivery); a next step
+it left unsent, owed or with its scheduling cut off, is decided at recovery (Owed automatic steps, below). Continue
+planning, Continue
 implementation and Continue review name the retained stage and use the existing
 retry/Stop actions; uncertain delivery keeps Check delivery. Explanations remain
 persisted Status messages. Existing and projected outcome messages render collapsed under Workflow details,
@@ -4934,6 +4935,19 @@ fits any active plan whose every item outside Passes is built; other steps need 
 request. A step that goes ahead records the conversation and plan as they are now (`refreshFollowup`) and is
 delivered through the same checks, so anything newer still refuses it, which leaves it owed again.
 
+A next step the server's recovery prepares for a turn an earlier server sent and never saw end (`recovered` and not
+`live` in `afterTurn`, `continueWithSeniorPlan` and `continuePlanPasses`: a restart cut off its scheduling) was never
+sent, so `continueRecovered` makes it owed and decides it at once with `continueOwed`, its anchor the ended turn's last
+user message (its own message, then the steers in its accepted steering that follow it; `turnLastUserMessageId`), so
+anything the conversation gained after that turn counts as having come since. A temporary chat's waits for Continue.
+
+Another session's message admitted while the request owes its step (`passesOwedStep` in
+[assistantRoutingAdmission.js](../../../packages/vibe64-terminals/src/server/assistantRoutingAdmission.js): the turn
+that came first ended, and the step's decision waits for the lock the message holds) is not the person's word, so it
+never replaces the step: it is dispatched as written, as its own turn on the session's Main AI selection, without
+Router, as it would have joined that turn a moment earlier, and the step is decided again when it ends. A message of
+the person's own still replaces it.
+
 The person's Continue of a waiting follow-up also records the conversation as it is now before delivering: their
 Continue is newer than anything the chat holds; it still refuses a plan the step no longer fits, letting an
 implementation go on from the active plan as it now is. Stop and Cancel end an owed step; a new request the person
@@ -5345,7 +5359,7 @@ tries again later.
 After every feature has booted, `recoverInterruptedTurns`
 ([serviceTurnRecovery.js](../../../packages/vibe64-terminals/src/server/serviceTurnRecovery.js))
 reconciles each open project's Main chat and temporary chat whose request was
-at work, as its sender, without waiting for anyone to open it, and retries after
+at work (or owed a step another turn came before), as its sender, without waiting for anyone to open it, and retries after
 30 s, 2 min and 10 min while one could not be checked. Reconciliation ends the
 old turn; routing's outcomes
 ([assistantRoutingOutcomes.js](../../../packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js))

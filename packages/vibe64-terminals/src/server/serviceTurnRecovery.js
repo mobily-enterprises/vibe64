@@ -10,6 +10,7 @@ import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
+import { owesStep } from "./assistantRoutingRequests.js";
 
 // After a restart the AI can still be busy or slow to start, so a pass that could not check every session runs again
 // after each of these delays, as goal recovery does.
@@ -51,13 +52,15 @@ function logRecoveryResults(logger, component, results, nothingToDo) {
 
 /**
  * Whether a chat's request was at work when an earlier server ended: being sent, or its turn running (and the
- * person had not stopped it), or waiting out the short wait before Vibe64 resumes it.
+ * person had not stopped it), or waiting out the short wait before Vibe64 resumes it, or owing a step another turn
+ * came before (assistantRoutingOwedSteps.js).
  * @param {Record<string, string> | undefined} metadata the chat's routing metadata
  */
 function requestWasWorking(metadata) {
   const request = assistantRoutingRequestForDisplay(metadata || {});
   if (!request || request.stopped === true) return false;
-  if (request.status === "waiting") return Boolean(request.resumeAt && request.followup);
+  // A resume waiting out its backoff, or a step owed to a turn that came first, whose end the next server decides.
+  if (request.status === "waiting") return Boolean(request.resumeAt && request.followup) || owesStep(request);
   return request.status === "working" && ["accepted", "pending", "sending", "routing", "uncertain"].includes(request.delivery);
 }
 

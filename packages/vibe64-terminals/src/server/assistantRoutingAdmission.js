@@ -14,6 +14,7 @@ import {
   STATE_KEY,
   failure,
   followupFitsPlan,
+  passesOwedStep,
   read,
   readCancelled,
   usesWorkPlan
@@ -21,6 +22,12 @@ import {
 import { answerWholeChecks, declineWholeChecks } from "./assistantWholeChecks.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+
+/** Continue's refusal of a step whose plan changed so that it no longer fits. */
+const retainedPlanChanged = () => failure(
+  "The retained plan changed. Inspect it and send a fresh request.",
+  "vibe64_assistant_routing_retained_plan_changed"
+);
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
@@ -300,17 +307,12 @@ function createAssistantRoutingAdmission({
             const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
             // Continue resumes an implementation from the plan as it now is; another stage needs the plan it left.
             if (usesWorkPlan(state) && plan?.revision !== (state.followup?.planRevision || state.workPlan?.revision) &&
-                !(state.stage === "implementation" && plan?.status === "active")) {
-              throw failure("The retained plan changed. Inspect it and send a fresh request.", "vibe64_assistant_routing_retained_plan_changed");
-            }
+                !(state.stage === "implementation" && plan?.status === "active")) throw retainedPlanChanged();
             await records.prepareFollowup(context, state, state.stage);
           } else if (state.followup) {
-            // The person's Continue is newer than anything the conversation holds: the prepared step goes on from the
-            // conversation as it is now, while the plan still fits it.
+            // The person's Continue is newer than the conversation: the step goes on from it as it is, if the plan fits.
             const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
-            if (!followupFitsPlan(state, plan, { continued: true })) {
-              throw failure("The retained plan changed. Inspect it and send a fresh request.", "vibe64_assistant_routing_retained_plan_changed");
-            }
+            if (!followupFitsPlan(state, plan, { continued: true })) throw retainedPlanChanged();
             await records.refreshFollowup(context, state, plan);
           }
           state.stopped = false;
@@ -397,6 +399,11 @@ function createAssistantRoutingAdmission({
           "That turn has finished. Send this as a new request.",
           completed ? "conversation_steer_turn_finished" : "conversation_not_steerable"
         ), { delivery: "not-sent" });
+      }
+      // Another session's message never replaces an owed step: it runs as its own turn, and the step is decided after.
+      if (passesOwedStep(state, input)) {
+        direct = true;
+        return;
       }
       if (routingState.running.has(key)) {
         throw failure("This conversation is preparing a request. Cancel it or wait before sending another.", "vibe64_assistant_routing_request_preparing");

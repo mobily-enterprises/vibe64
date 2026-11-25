@@ -179,6 +179,42 @@ async function userTurnsSince(store, sessionId, messageId) {
 }
 
 /**
+ * The latest user message of the request's turn sent as `messageId`: that message, or the last of its steers that
+ * follow it with no other message between; "" when it is beyond the lookback, so what came after is not known.
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {object} state the saved routing request, with its accepted steering
+ * @param {string} messageId the turn's own message
+ */
+async function turnLastUserMessageId(store, sessionId, state, messageId) {
+  const steered = new Set((state.steering || []).map((entry) => entry.messageId));
+  const turns = (await store.readConversationTail(sessionId, { userLimit: PERSON_LOOKBACK_MESSAGES + steered.size }))
+    .filter((turn) => turn.user);
+  let last = turns.findIndex((turn) => turn.user.messageId === messageId);
+  if (last < 0) return "";
+  while (steered.has(turns[last + 1]?.user.messageId)) last += 1;
+  return turns[last].user.messageId;
+}
+
+/**
+ * Whether the saved request still owes its step to a turn or message that came before it
+ * (assistantRoutingOwedSteps.js): waiting with the step unsent (never attempted, so never sent twice), not stopped or
+ * cancelled. A Continue the turn still running refused leaves it owed too.
+ * @param {object | null} state the saved routing request
+ */
+const owesStep = (state) => Boolean(state?.followup?.owed) && state.status === "waiting" && state.delivery === "pending" &&
+  !state.attemptedMessageId && !state.stopped && !state.cancelled;
+
+/**
+ * Whether `input` is another session's message while the request owes its step: not the person's word, it never
+ * replaces that step, and runs as its own turn as written (assistantRoutingAdmission.js).
+ * @param {object | null} state the saved routing request
+ * @param {{ messageId: string, turnMetadata?: object }} input the message being admitted
+ */
+const passesOwedStep = (state, input) => state?.messageId !== input.messageId && owesStep(state) &&
+  input.turnMetadata?.projectMessage?.direction === "received";
+
+/**
  * Whether the request's prepared step still fits the plan, when it involves one: Senior's review fits any active plan
  * whose every item outside Passes is built, or the plan it was decided on (completed too); any other step needs that
  * plan active and unchanged, except that the person's Continue goes on with an implementation from the active plan as
@@ -223,11 +259,14 @@ export {
   failure,
   followupConversation,
   followupFitsPlan,
+  owesStep,
+  passesOwedStep,
   personTurn,
   prepareCopiedAssistantRouting,
   read,
   readCancelled,
   recentVisibleMessages,
+  turnLastUserMessageId,
   savesAutomatically,
   userTurnsSince,
   usesWorkPlan,

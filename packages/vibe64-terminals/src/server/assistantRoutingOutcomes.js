@@ -87,9 +87,8 @@ function createAssistantRoutingOutcomes({
   logger
 }) {
   // An automatic step another turn or message came before: owed, then decided again (assistantRoutingOwedSteps.js).
-  const { exclusiveAtTurnEnd, oweRefusedStep, settleRefusedStep, owesStep, continueOwed } = createAssistantRoutingOwedSteps({
-    routingState, records, delivery, admission, agent, exclusiveAfterWrites
-  });
+  const owed = createAssistantRoutingOwedSteps({ routingState, records, delivery, admission, agent, exclusiveAfterWrites });
+  const { exclusiveAtTurnEnd, oweRefusedStep, settleRefusedStep, owesStep, continueOwed, continueRecovered } = owed;
   // What follows a turn an interruption ended: its red entry, and its resume once (assistantRoutingInterruptions.js).
   const { interruptionOf, afterInterruption, resumeUnsent, scheduleResume } = createAssistantRoutingInterruptions({
     routingState,
@@ -229,7 +228,7 @@ function createAssistantRoutingOutcomes({
    * the conversation, and then follows planning's own outcomes. Handed over while implementing, the implementation
    * goes on once Senior saves the change.
    */
-  async function continueWithSeniorPlan(context, state, { recovered, live }) {
+  async function continueWithSeniorPlan(context, state, { recovered, live, ended }) {
     Object.assign(state, { resolvedMode: "senior", reason: "planning", workflow: false, review: false, planInvolved: false });
     if (state.planHandoff.implementing) state.resumeImplementation = true;
     state.steps = (state.steps || 0) + 1;
@@ -241,12 +240,7 @@ function createAssistantRoutingOutcomes({
     state.status = "working";
     await records.save(context, state);
     await records.writeNotice(context, state, notice);
-    if (recovered && !live) {
-      state.status = "waiting";
-      state.error = "Scheduling was disconnected. Resume the retained stage when ready.";
-      await records.save(context, state);
-      return;
-    }
+    if (recovered && !live) return continueRecovered(context, state, ended);
     try {
       await delivery.deliver(context.session.sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
     } catch (error) {
@@ -300,7 +294,7 @@ function createAssistantRoutingOutcomes({
    * is completed.
    * @returns {Promise<{ context: object, state: object } | null>} the finished work to save, if any
    */
-  async function continuePlanPasses(context, state, { recovered, live }) {
+  async function continuePlanPasses(context, state, { recovered, live, ended }) {
     const plan = await readablePlan(context);
     const atPasses = workPlanAtPasses(plan);
     const next = atPasses ? await nextPlanPass(context, plan, listPasses) : null;
@@ -327,13 +321,11 @@ function createAssistantRoutingOutcomes({
     await records.prepareFollowup(context, state, "pass");
     state.status = "working";
     await records.save(context, state);
+    await records.writeNotice(context, state, planPassNotice(state.pass, state.followup.messageId));
     if (recovered && !live) {
-      state.status = "waiting";
-      state.error = "Scheduling was disconnected. Resume the retained stage when ready.";
-      await records.save(context, state);
+      await continueRecovered(context, state, ended);
       return null;
     }
-    await records.writeNotice(context, state, planPassNotice(state.pass, state.followup.messageId));
     try {
       await delivery.deliver(context.session.sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
     } catch (error) {
@@ -409,12 +401,14 @@ function createAssistantRoutingOutcomes({
       if (state.turnId !== (run.providerTurnId || run.turnId)) return;
       const live = routingState.liveFollowupRequests.get(key) === state.messageId;
       routingState.liveFollowupRequests.delete(key);
-      const planCheckFrom = planCheck.takeStart(key, activeMessage(state).messageId || state.messageId);
+      // The message the ended turn was sent as.
+      const ended = activeMessage(state).messageId || state.messageId;
+      const planCheckFrom = planCheck.takeStart(key, ended);
       // A plan change only Senior may make, refused in this turn, makes the request Senior's planning turn, unless
       // the person stopped it or the turn did not complete.
       if (state.planHandoff) {
         if (state.planHandoff.turnId === state.turnId && !state.stopped && run.state === "completed") {
-          await continueWithSeniorPlan(context, state, { recovered, live });
+          await continueWithSeniorPlan(context, state, { recovered, live, ended });
           return;
         }
         delete state.planHandoff;
@@ -428,7 +422,7 @@ function createAssistantRoutingOutcomes({
         // An answer in which Senior reviewed or completed the plan (asked to, say) moves it on too.
         const current = run.state === "completed" && !state.stopped && state.afterPlan ? await readablePlan(context) : null;
         if (planFinishedDuringRequest(state, current)) {
-          completed = await continuePlanPasses(context, state, { recovered, live });
+          completed = await continuePlanPasses(context, state, { recovered, live, ended });
           return;
         }
         state.status = run.state === "completed" ? "complete" : "waiting";
@@ -450,7 +444,7 @@ function createAssistantRoutingOutcomes({
         return;
       }
       const outcome = state.outcome;
-      const schedule = { recovered, live };
+      const schedule = { recovered, live, ended };
       // A direct chat's implementation turn that ends without reporting is an
       // ordinary reply: nothing is saved, unless Senior reviewed or completed a
       // plan in it, which moves the plan on like a reported completion.
@@ -557,12 +551,8 @@ function createAssistantRoutingOutcomes({
       state.status = "working";
       await records.save(context, state);
       await records.writeNotice(context, state, assistantRoutingOutcomeNotice(state));
-      if (recovered && !live) {
-        state.status = "waiting";
-        state.error = "Scheduling was disconnected. Resume the retained stage when ready.";
-        await records.save(context, state);
-        return;
-      }
+      // A restart cut off this turn's scheduling: the next server's recovery decides the step as an owed one.
+      if (recovered && !live) return continueRecovered(context, state, ended);
       try {
         await delivery.deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
       } catch (error) {
