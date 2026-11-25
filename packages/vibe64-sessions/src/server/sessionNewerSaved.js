@@ -20,13 +20,18 @@ const SESSION_LABEL_METADATA = "label";
  */
 function recordSessionSave(project, runtime, session, result) {
   const savedAt = new Date().toISOString();
-  const saver = { savedAt, sessionId: normalizeText(session?.sessionId), sessionName: normalizeText(session?.metadata?.[SESSION_LABEL_METADATA]) };
+  const saver = {
+    savedAt,
+    sessionId: normalizeText(session?.sessionId),
+    sessionName: normalizeText(session?.metadata?.[SESSION_LABEL_METADATA])
+  };
   return recordSavedVersions({
     projectRuntimeRoot: runtime?.stateRoot,
     runExclusive: operation => project.runProjectSourceExclusive(operation, { operation: `record-saved-versions:${saver.sessionId}` }),
     saves: [
       ...(result.saveCommit ? [{ ...saver, commit: result.saveCommit, repository: "" }] : []),
-      ...(result.connected || []).filter(copy => copy.saveCommit).map(copy => ({ ...saver, commit: copy.saveCommit, repository: copy.name }))
+      ...(result.connected || []).filter(copy => copy.saveCommit)
+        .map(copy => ({ ...saver, commit: copy.saveCommit, repository: copy.name }))
     ]
   });
 }
