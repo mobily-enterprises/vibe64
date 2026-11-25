@@ -29,6 +29,7 @@ import {
   managedExecutionControllerLeaseName
 } from "../../packages/vibe64-execution/src/host/managedExecution.js";
 import { drainProcessGroup } from "../../packages/vibe64-execution/src/server/engines/detached.js";
+import { liveProcessGroupMembers } from "../fixtures/processGroupMembers.js";
 
 const { normalizeExecutionDescriptor } = requestTestables;
 
@@ -660,6 +661,27 @@ test("a managed runner's stop counts its group's exited members as ended too", {
   assert.equal(stop.late, undefined, `the runner was still waiting after ${stop.ms} ms`);
   assert.ok(stop.ms < 1_000, `the runner waited ${stop.ms} ms for members that had exited`);
   assert.doesNotThrow(() => process.kill(-groupId, 0), "the exited members are still unreaped");
+});
+
+test("a stopped group whose members have exited, though unreaped, has none left running; a running group names each member", {
+  skip: process.platform !== "linux", timeout: 20_000
+}, async (t) => {
+  const stopped = await unreapedGroup(t);
+  process.kill(-stopped, "SIGTERM");
+  let left = liveProcessGroupMembers(stopped);
+  for (const deadline = Date.now() + 10_000; left.length > 0 && Date.now() < deadline; left = liveProcessGroupMembers(stopped)) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.deepEqual(left, [], "both members have exited");
+  assert.doesNotThrow(() => process.kill(-stopped, 0), "the exited members are still unreaped");
+  const running = await unreapedGroup(t);
+  const members = liveProcessGroupMembers(running);
+  assert.deepEqual(members.map(({ command, state }) => ({ command, state })), [
+    { command: "python3", state: "S" },
+    { command: "python3", state: "S" }
+  ]);
+  assert.ok(members.every(({ pid, parent }) => pid > 1 && parent > 1), JSON.stringify(members));
+  assert.ok(members.some(({ pid }) => pid === running), "the leader is a member");
 });
 
 test("standalone finite execution drains descendants before reporting completion", async (t) => {
