@@ -563,7 +563,9 @@ test("standalone detached execution stops and drains its exact process group", a
 // A member that has exited stays in its process group until its parent reaps it, and an orphan's parent is init,
 // which a busy host can take seconds to get to. Here the parent lives on and never reaps, so the group keeps its
 // members, both exited once the stop signals them, for as long as the test needs: a stop must count them as ended.
-// It reads them with the thread pool held, which a pooled read of every process's file waits for.
+// It reads them with the thread pool held, which a pooled read of every process's file waits for. The parent puts each
+// child in the group itself, as the child does, before it reports the group: on a busy host a child forked last can
+// run only after the test has signalled the group, and one that joined it then would never be signalled.
 const UNREAPED_GROUP = `
 import os, sys, time
 leader = os.fork()
@@ -580,6 +582,7 @@ if member == 0:
     os.setpgid(0, leader)
     time.sleep(60)
     os._exit(0)
+os.setpgid(member, leader)
 sys.stdout.write(f"{leader}\\n")
 sys.stdout.flush()
 time.sleep(60)
