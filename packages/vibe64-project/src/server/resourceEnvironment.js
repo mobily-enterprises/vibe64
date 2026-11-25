@@ -481,6 +481,8 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
   const secretKeys = new Set();
   const sources = {};
   const managedDatabases = [];
+  // Declared resources the host has not created yet; it creates them when the session's commands first need them.
+  const pendingResources = [];
   for (const [identity, declaration] of declarations) {
     // The person's own Env supplies a bucket; the host has nothing to add.
     if (resourceKindIsPersonSupplied(declaration.resource?.kind)) {
@@ -490,6 +492,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
     const values = entries.get(identity);
     if (!values) {
       if (allowUnprepared && provided.prepared === false) {
+        pendingResources.push({ component: declaration.component, id: declaration.resource.id });
         continue;
       }
       throw codedError(
@@ -575,6 +578,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
     databaseToolEnvironment,
     ...(preparation ? { resourcePreparation: { ...preparation } } : {}),
     environment,
+    pendingResources,
     secretKeys,
     sources
   };

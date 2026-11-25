@@ -144,7 +144,7 @@ test("prepared execution reuses confirmed resources without source admission and
   });
 });
 
-test("a session's prompts are checked against the Env its commands receive, the session's managed database included", async () => {
+test("a session's prompts are checked against the Env its commands receive, the session's managed database included, or pending until created", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "prompt-environment";
     await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
@@ -153,16 +153,20 @@ test("a session's prompts are checked against the Env its commands receive, the 
     }] } };
     const values = { database: "session_db", host: "127.0.0.1", password: "pw-session", port: "3306", username: "session" };
     const reader = { ...values, password: "pw-reader", port: 3306, username: "reader" };
+    let created = false;
     const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
       databaseToolEnvironment: { contract: "vibe64.database-tool-environment.v1", kind: "mysql", read: reader,
         write: { ...values, port: 3306 } },
       resourceValues: [{ declaration: { component: "jskit-mysql", id: "database", kind: "mysql" }, values }] });
+    // The host's database service does not exist yet: nothing is created until the session's first command.
+    const provisioned = () => (created ? provided()
+      : { contract: "vibe64.resource-environment.v2", ok: true, prepared: false, resourceValues: [] });
     const service = project(targetRoot, {
       env: { EDITOR_ONLY: "editor" },
       inspectEnvironment: () => ({ components: [], environmentDefaults: [{ name: "DB_CLIENT", value: "mysql2" }],
         files: [], resources: [database], status: "ready" }),
       resourceEnvironmentProvider: { managedDevelopmentDatabase: true,
-        environmentForProvisionedResources: provided, environmentForResources: provided }
+        environmentForProvisionedResources: provisioned, environmentForResources() { created = true; return provided(); } }
     });
     const runtime = await service.createRuntimeWithoutSource();
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
@@ -172,10 +176,14 @@ test("a session's prompts are checked against the Env its commands receive, the 
     assert.equal((await runtime.resolvePromptEnvironment()).DB_HOST, undefined);
     // The session's prompts get what its commands get: its managed database, the Stack's defaults, and nothing of the
     // editor's own environment.
+    // Before the database exists, the prompt names it as created at the session's first command, not missing.
+    assert.deepEqual(await runtime.resolveSessionPromptEnvironment(session), {
+      environment: { DB_CLIENT: "mysql2" }, pendingResources: [{ component: "jskit-mysql", id: "database" }]
+    });
     const expected = { DB_CLIENT: "mysql2", DB_HOST: "127.0.0.1", DB_NAME: "session_db", DB_PASSWORD: "pw-session",
       DB_PORT: "3306", DB_USER: "session" };
-    assert.deepEqual(await runtime.resolveSessionEnvironment(session), expected);
     assert.deepEqual(await service.projectExecutionEnvironment({ sessionId }), expected);
+    assert.deepEqual(await runtime.resolveSessionPromptEnvironment(session), { environment: expected, pendingResources: [] });
   });
 });
 

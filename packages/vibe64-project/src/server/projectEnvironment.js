@@ -256,6 +256,7 @@ function createProjectEnvironment({
       platformEnvironment,
       platformEnvironmentSecrets: contribution.secretKeys,
       platformEnvironmentSources: contribution.sources,
+      pendingResources: contribution.pendingResources ?? [],
       projectEnvironment,
       resources: declaration.resources,
       resourcesPrepared: !developmentDatabase || provided.prepared === true,
@@ -451,12 +452,14 @@ function createProjectEnvironment({
   }
 
   /**
-   * The Env a session's commands receive, its managed resources included: the values the project gives the
-   * session's processes (as `vibe64-helper env status` counts them), never the editor's own process environment.
+   * What a session's prompts check the Stack's resource inputs against: the Env the session's commands receive, its
+   * managed resources included (as `vibe64-helper env status` counts them), never the editor's own process
+   * environment; and the managed resources not created yet, which the session's first command creates.
    * @param {{ session?: object, sessionId: string }} input
    */
-  async function sessionCommandEnvironment(input) {
-    return (await resolvedProjectEnvironment(input, await userEnvRecords())).projectEnvironment;
+  async function sessionPromptEnvironment(input) {
+    const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
+    return { environment: resolved.projectEnvironment, pendingResources: resolved.pendingResources ?? [] };
   }
 
   return Object.freeze({
@@ -467,7 +470,7 @@ function createProjectEnvironment({
     downloadEnvState,
     saveEnvState,
     promptEnvironment,
-    sessionCommandEnvironment
+    sessionPromptEnvironment
   });
 }
 

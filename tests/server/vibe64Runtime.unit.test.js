@@ -33,6 +33,7 @@ test("reading session state resolves no Env, and a prompt is checked against the
     const sessionReads = [];
     const environment = { PLATFORM_VALUE: "platform" };
     const sessionEnvironment = { DB_HOST: "session-database", DB_NAME: "session" };
+    const pendingResources = [{ component: "jskit-redis", id: "cache" }];
     let rendered;
     const options = {
       inspectSourceByDefault: false,
@@ -42,16 +43,16 @@ test("reading session state resolves no Env, and a prompt is checked against the
         environmentReads += 1;
         return environment;
       },
-      promptRenderer: async ({ environment: resolved }) => {
-        rendered = resolved;
+      promptRenderer: async ({ environment: resolved, pendingResources: created }) => {
+        rendered = { environment: resolved, pendingResources: created };
         return { prompt: "Composed" };
       }
     };
     const runtime = new Vibe64SessionRuntime({
       ...options,
-      sessionEnvironment: async (session) => {
+      sessionPromptEnvironment: async (session) => {
         sessionReads.push(session.sessionId);
-        return sessionEnvironment;
+        return { environment: sessionEnvironment, pendingResources };
       }
     });
     await runtime.store.createSession({
@@ -65,13 +66,15 @@ test("reading session state resolves no Env, and a prompt is checked against the
     assert.equal(environmentReads, 0);
     assert.deepEqual(sessionReads, []);
     await runtime.renderPrompt("lazy-environment", { task: "deslop", request: "Review this commit." });
-    // The session's own Env, with its managed resources, never the project-level Env resolved without the session.
-    assert.equal(rendered, sessionEnvironment);
+    // The session's own Env, with its managed resources, never the project-level Env resolved without the session, and
+    // the managed resources its first command creates.
+    assert.equal(rendered.environment, sessionEnvironment);
+    assert.equal(rendered.pendingResources, pendingResources);
     assert.deepEqual(sessionReads, ["lazy-environment"]);
     assert.equal(environmentReads, 0);
     // A runtime that cannot tell a session's Env gives Genesis none, which then reports the inputs unknown.
     await new Vibe64SessionRuntime(options).renderPrompt("lazy-environment", { task: "deslop", request: "Review this commit." });
-    assert.equal(rendered, undefined);
+    assert.deepEqual(rendered, { environment: undefined, pendingResources: undefined });
     assert.equal(environmentReads, 0);
   });
 });
@@ -1015,8 +1018,8 @@ test("source-bearing Learning uses the original source creator, Genesis environm
         await mkdir(metadata.source_path, { recursive: true });
         for (const [name, value] of Object.entries(metadata)) await store.writeMetadataValue(session.sessionId, name, value);
       },
-      sessionEnvironment: async (session) => {
-        assert.equal(session.sessionId, "practice-learning"); environmentReads++; return environment;
+      sessionPromptEnvironment: async (session) => {
+        assert.equal(session.sessionId, "practice-learning"); environmentReads++; return { environment, pendingResources: [] };
       },
       promptRenderer: async ({ projectRoot, environment: actual, action, input }) => {
         assert.equal(projectRoot, sourcePath(root, "practice-learning")); assert.equal(actual, environment);

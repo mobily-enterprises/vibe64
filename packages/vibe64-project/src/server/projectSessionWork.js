@@ -50,9 +50,9 @@ function createProjectSessionWork({ environment, logger, selection }) {
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
       projectSessionSourceRoot: selection.selectedSessionSourceRoot(),
       promptEnvironment: () => runWithProjectRequestContext(requestContext, environment.promptEnvironment),
-      sessionEnvironment: (session) => runWithProjectRequestContext(
+      sessionPromptEnvironment: (session) => runWithProjectRequestContext(
         requestContext,
-        () => environment.sessionCommandEnvironment({ session, sessionId: session.sessionId })
+        () => environment.sessionPromptEnvironment({ session, sessionId: session.sessionId })
       ),
       store: selection.sessionStore()
     };
