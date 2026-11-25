@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { fixture, planCommands, publishPlanFixture, planDocument, reportOutcome } from "../fixtures/assistantRouting.js";
 import { manageWorkPlan, readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
-import { assistantWorkflowUpgradeChanges, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantWorkflowUpgradeChanges } from "@local/vibe64-runtime/shared/assistantWorkflowUpgrade";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 /** The plan History, read through the plan command's history operation. */

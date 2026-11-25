@@ -25,8 +25,8 @@ before implementing or reviewing. Collapsing details in the viewer does not hide
 them from the agent. The agent reads a long plan in pages, and Vibe64 refuses
 its rewrite of the whole Plan or Progress unless it read both to the last page,
 so a long Progress is never cut to the part one page returned. Junior updates Progress and the marks of existing checklist
-items as the work goes: a half tick once an item is built, a full tick once the
-plan's final checks prove it (see [Checklist marks](#checklist-marks)); Senior
+items as the work goes: a half tick once an item is built, a full tick once
+Senior's review proves it (see [Checklist marks](#checklist-marks)); Senior
 owns agreed Plan scope changes. Creating,
 reopening, archiving and completing a plan still require Senior. In **Auto**, a
 plan request is always Senior's: one that reached Junior is handed over without
@@ -82,15 +82,20 @@ There is no icon when the session has neither a current plan nor history.
 ### Checklist marks
 
 Each checklist item shows one of three boxes, so you can watch the plan fill in
-as items get built instead of waiting for the final checks:
+as items get built instead of waiting for the end:
 
 | Box | In the plan text | Meaning | When the AI sets it |
 |---|---|---|---|
 | Empty (**Not done yet**) | `- [ ]` | Not done yet | — |
 | A dash in a filled box, the indeterminate checkbox (**Built, not yet proven**) | `- [~]` | Built: implemented, and its own focused checks pass | As soon as that item is implemented |
-| Ticked (**Proven**) | `- [x]` | Proven by the plan's final checks | When the whole run, the review or the proof the plan states covers it |
+| Ticked (**Proven**) | `- [x]` | Proven by Senior's review | When Senior's review proves it: its reading of the changes and their focused tests, or the proof the plan states |
 
 A screen reader reads each box's label, shown in bold above.
+
+No item is the whole-project checks (such as one whole run of the test suite):
+no step of a plan runs them, and once the plan is finished Vibe64 asks you
+whether to run them (see [Run the whole-project checks after a
+plan](whole-project-checks.md)).
 
 Checklist wording stays stable while the marks update during development. The AI
 never leaves a built item empty, and a partly done item stays empty. Review moves
@@ -105,8 +110,9 @@ plan. Updates appear while the viewer is open.
 
 The AI ticks each item the moment it is built and its own checks pass, not at
 the end of its turn, and the last item too. It never asks you whether to run the
-plan's passes or save: the passes are the plan's next step, which Vibe64 runs
-after Senior's review, and Vibe64 saves the work when the plan completes. When work on one item also builds others (a foundation
+plan's passes, save or run the whole-project checks: the passes are the plan's
+next step, which Vibe64 runs after Senior's review, Vibe64 saves the work when
+the plan completes, and then asks you about the whole-project checks itself. When work on one item also builds others (a foundation
 item, say, that the later items use), it walks the whole checklist and
 half-ticks each item that is built, notes in Progress what is only partly built,
 and never holds every tick until the first item is finished. Senior writes a
@@ -129,8 +135,9 @@ built: that is the AI's to judge. The AI then stops, and the work goes on as it
 would have (Senior's review next, say).
 
 A turn that ended asking you a question gets the check too: the note tells the
-AI that Senior's review, the plan's passes and Save are never a question for
-you, and to ask any other question again, which then waits for your answer.
+AI that Senior's review, the plan's passes, Save and the whole-project checks
+are never a question for it to ask you, and to ask any other question again,
+which then waits for your answer.
 
 In Auto and in a Senior chat, the work goes on to Senior's review of the plan
 whenever every item is built, also when the turn ended asking you something,
@@ -173,8 +180,8 @@ asking in chat), it runs to the end on its own; only a question for you or
 - **Implementation**: the plan stays here until every item outside Passes is
   built (`- [~]`). Junior works the items in the plan's order; it does one
   earlier only when the plan says another depends on it, and records why in
-  Progress. It never starts the plan's final checks (the whole-project checks,
-  such as one whole run of the test suite): those belong to Senior's review.
+  Progress. It runs each item's own focused checks, never the whole-project
+  checks (such as one whole run of the test suite): no step of a plan runs them.
   Vibe64 refuses Junior's report that it has finished while an item is still
   not done, naming the item. When the plan changes during Implementation,
   because Junior hands an item to Senior to correct, you ask for a change, or
@@ -183,16 +190,21 @@ asking in chat), it runs to the end on its own; only a question for you or
   the plan.**, and once Senior has saved the change Vibe64 continues the
   implementation in a new turn without you asking. After **Stop**, a change you
   ask for waits for **Continue** like any other paused work.
-- **Senior review**: Senior runs the plan's final checks once, reads and records
-  their result in Progress, verifies every item outside Passes against the code
-  as it is now, fixes what it finds within the plan, each fix proven by a test
-  that failed first, and full-ticks each item the proof covers. It ends **Done**
-  or **Needs you** (numbered questions with a recommended answer each), or hands
-  substantial rework back to Junior.
+- **Senior review**: a review. Senior reads the plan's changes against Plan and
+  Progress, checks that they make sense and do what each item says, verifies
+  every item outside Passes against the code as it is now, runs the focused
+  tests for what changed, fixes what it finds within the plan, each fix proven
+  by a test that failed first, and full-ticks each item its review proves. It
+  runs no whole-project checks. It ends **Done** or **Needs you** (numbered
+  questions with a recommended answer each), or hands substantial rework back
+  to Junior.
 - **Passes**: each item in the plan's Passes section runs in its own Senior
-  turn, in order; see [A plan's passes](passes.md#a-plans-passes).
+  turn, in order; see [A plan's passes](passes.md#a-plans-passes). A pass runs
+  no whole-project checks either.
 - **Completed**: once every item and every pass is ticked and no question is
-  open, Vibe64 completes the plan and archives it.
+  open, Vibe64 completes the plan and archives it, and saves it when
+  **Automatically save changes** is on. Then it asks you once whether to run
+  the whole-project checks; see [The whole-project checks](whole-project-checks.md).
 
 **Continue** resumes a paused plan from the plan as it now is, including after
 items changed while it was paused.

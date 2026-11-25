@@ -5,7 +5,8 @@
  * ticks (or added by the person from Passes, or by typing). Once every item is
  * ticked and no question is open the plan is completed and archived, and
  * Automatically save changes runs. A turn ending never starts a pass of its
- * own, and neither does Save.
+ * own, and neither does Save. No step of a plan runs the whole-project checks
+ * (assistantWholeChecks.js).
  */
 
 // The order the after-plan passes run in, Genesis's Master pass order: Review
@@ -143,19 +144,22 @@ const PLAN_FINISHING_STEP = "Before it ends Done, fix whatever Progress still ho
 const PLAN_STEP_ENDINGS = "Never end with partial, for later, not run here or worth knowing: when you run out of room, report continue and carry on in your next turn; a check that can't run here is made to run or becomes a question (for example: these browser tests run only in CI; accept CI as their proof?); a broken setup is a blocker question. An answer becomes a rule written into Plan or Progress, never a footnote. " + PLAN_LEFTOVERS_RULE + " When Progress records that the person said to pick your recommendation, pick it for every question, record each choice in Progress with the time, and never wait.";
 
 /**
- * Senior's review of a plan Auto's Junior implemented: it verifies every item,
- * then the plan moves on to its passes, or, with none, Senior completes it. It
- * is not a pass and runs none.
+ * Senior's review of a plan Auto's Junior implemented: it reads the plan's
+ * changes against the plan, Progress and the code, runs the focused tests for
+ * what changed, fixes what is wrong within the plan's scope and ticks what it
+ * proves; then the plan moves on to its passes, or, with none, Senior completes
+ * it. It is not a pass, runs none and runs no whole-project checks.
  */
 const ASSISTANT_PLAN_COMPLETION_MESSAGE = [
   "Senior review of the plan:",
   "Read every page of BOTH Plan and Progress, including the complete technical implementation plan, and follow the rules and choices recorded there.",
-  "Verify EVERY checklist item outside the plan's Passes section against the code as it is now, not only the open ones: marks and earlier records do not establish completion. Check each against my request, accepted steering and the evidence, inspect the implementation, fix what you find within the plan's scope, each fix proven by a test that failed first, and run relevant checks. Leave unrelated plans unchanged.",
-  "Run the plan's final checks once, now: the whole-project checks the plan or project states, such as one whole run of the test suite. No implementation turn ran them. Read their result, record it in Progress, and fix what they find within the plan's scope.",
-  "Full-tick (- [x]) each item the proof covers and move unsupported or regressed ones back to - [~] or - [ ].",
+  "Review the plan's changes against Plan and Progress: check that they make sense and do what each item says. Verify EVERY checklist item outside the plan's Passes section against the code as it is now, not only the open ones: marks and earlier records do not establish completion. Check each against my request, accepted steering and the evidence, inspect the implementation, fix what you find within the plan's scope, each fix proven by a test that failed first, and run the focused tests for what changed. Leave unrelated plans unchanged.",
+  "This review is a review: run no whole-project checks, such as one whole run of the test suite, which the plan's passes would leave behind as they change the code after it. Once the plan is finished and saved, Vibe64 asks the person whether to run them once, so never ask about them yourself." +
+    " An item that asks for them (\"the whole suite passes\", in a plan made before this rule) is not proven by focused tests, so never tick it on them: rewrite it with the plan helper, as a plan change within the agreed outcome, into what this review can prove (the focused tests for the plan's changes pass), record in Progress that Vibe64 offers the whole run to the person once the plan is finished, and report continue with the returned revisions: your next turn reviews the plan as it now stands and ticks what the evidence proves.",
+  "Full-tick (- [x]) each item your review proves and move unsupported or regressed ones back to - [~] or - [ ].",
   "End one of two ways. Done: every item outside Passes is - [x]. When the plan has Passes items, leave it active and report complete with the returned revisions: Vibe64 then runs each pass in its own turn and completes the plan after the last. Without Passes items, this review is the plan's last step. " + PLAN_FINISHING_STEP + " Then complete the plan with the plan helper and report complete with the returned revisions; your final reply is then the plan's one closing message: " + PLAN_CLOSING_MESSAGE + " Needs you: numbered questions, each with a recommended answer, in your final reply and in Progress; report wait. For substantial necessary rework, update the Technical details and Progress and report handoff.",
   PLAN_STEP_ENDINGS,
-  "Each item whose proof can't run in this session (a real phone, a suite only CI runs) ends as Needs you: a numbered question with a recommended answer, in your final reply and in Progress. A question Junior's last reply asked the person is yours now: settle it from Plan and Progress, or ask it as a Needs you question. Whether to run the passes or save is never one: Vibe64 runs the passes and saves.",
+  "Each item whose proof can't run in this session (a real phone, a suite only CI runs) ends as Needs you: a numbered question with a recommended answer, in your final reply and in Progress. A question Junior's last reply asked the person is yours now: settle it from Plan and Progress, or ask it as a Needs you question. Whether to run the passes, save or run the whole-project checks is never one: Vibe64 runs the passes, saves, and asks the person about the whole-project checks itself.",
   "This turn reviews the plan only: run no pass. Do not ask for permission merely to verify or complete verified work."
 ].join(" ");
 
@@ -171,6 +175,7 @@ function assistantPassInstructions(pass, { last = false, person = false } = {}) 
     `Plan pass: this turn runs ${pass.title}, the plan's Passes item “${pass.item}”, and only that pass; Vibe64 starts each other Passes item in its own turn.`,
     "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId and workflow.stage, and read every page of BOTH Plan and Progress before working.",
     "Fix what you find within this pass's scope, each fix proven by a test that failed first: the pass decides what you look for, not what you may fix. A review writes the failing test and then fixes the code; Deslop keeps its cleanups behaviour-neutral but fixes a real defect it finds as a separate fix with its own test.",
+    "Run no whole-project checks, such as one whole run of the test suite, even where this pass's guidance asks for one: run the focused tests for what you changed. Once the plan is finished and saved, Vibe64 asks the person whether to run them once.",
     "Record in Progress, under this pass's title, one line saying what it fixed and proved. In Plan change only this item's tick (vibe64-helper plan write with the paired revisions); the server refuses any other Plan change, and Vibe64 completes the plan after its last pass. write and progress-write replace the whole document: build them from every page you read and pass readThrough, which only the read's last page (hasMore false) and each write's answer return.",
     "End one of two ways, reported before your final response through vibe64-helper plan outcome with JSON on stdin: {messageId, turnId, stage, decision, explanation, progress, expectedRevision, expectedProgressRevision}, using the identity and revisions from your latest read. Done: everything within the scope is fixed and proven; full-tick (- [x]) this item, then report complete. Needs you: numbered questions, each with a recommended answer, in your final reply and in Progress; report wait.",
     PLAN_STEP_ENDINGS,

@@ -2,7 +2,7 @@ import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
-import { assistantWorkflowUpgradeChanges } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantWorkflowUpgradeChanges } from "@local/vibe64-runtime/shared/assistantWorkflowUpgrade";
 import { planProgressUpgradeChanges } from "./assistantWorkPlan.js";
 
 async function upgradePlanProgress(context) {

@@ -13,6 +13,7 @@ import {
   latestAssistantQuestionsAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { read, failure, activeMessage, assistantPlanHandsOff, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { askWholeChecks, writeWholeChecksQuestion } from "./assistantWholeChecks.js";
 import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
 import { createAssistantRoutingInterruptions } from "./assistantRoutingInterruptions.js";
 import { createAssistantPlanCheck } from "./assistantPlanCheck.js";
@@ -255,7 +256,7 @@ function createAssistantRoutingOutcomes({
    * now; Save itself runs after the lock.
    */
   function saveAfter(context, state) {
-    return savesAutomatically(context.session.metadata) ? { context, state } : null;
+    return savesAutomatically(context.session.metadata) ? { context, state, save: true } : null;
   }
 
   /**
@@ -344,7 +345,7 @@ function createAssistantRoutingOutcomes({
   /**
    * Every step of the plan is Done: Vibe64 completes it (Senior completed a plan without passes
    * already), archives it, moves the next passes' base to the session's HEAD, and saves the finished
-   * work when Automatically save changes is on.
+   * work when Automatically save changes is on, then asks the person whether to run the whole-project checks.
    */
   async function finishPlan(context, state, plan) {
     let current = plan;
@@ -366,8 +367,9 @@ function createAssistantRoutingOutcomes({
     if (current?.status === "completed" && !await archiveCompletedPlan(context, state, current)) return null;
     await rememberAfterPlanBase(context.runtime.store, context.session);
     state.status = "complete";
+    askWholeChecks(state, current);
     await records.save(context, state);
-    return saveAfter(context, state);
+    return { context, state, save: savesAutomatically(context.session.metadata), ask: true };
   }
 
   async function afterTurn(sessionId, payload, routingOptions, options = {}) {
@@ -569,17 +571,21 @@ function createAssistantRoutingOutcomes({
       }
     });
     // After the lock: finished work's automatic save runs last, once the turn
-    // has ended; its start notice and short result note join the chat.
+    // has ended; its start notice and short result note join the chat. A
+    // finished plan's question about the whole-project checks follows it.
     if (!completed) return;
     const { context, state } = completed;
-    await records.writeNotice(context, state, assistantAutoSaveNotice(state.turnId));
-    let note;
-    try {
-      note = await onPlanCompleted(sessionId, { submittedBy: state.submittedBy });
-    } catch (error) {
-      note = `Automatic save didn't run: ${error.message}`;
+    if (completed.save) {
+      await records.writeNotice(context, state, assistantAutoSaveNotice(state.turnId));
+      let note;
+      try {
+        note = await onPlanCompleted(sessionId, { submittedBy: state.submittedBy });
+      } catch (error) {
+        note = `Automatic save didn't run: ${error.message}`;
+      }
+      if (note) await records.writeNotice(context, state, { messageId: `assistant-plan-saved:${state.turnId}`, text: note });
     }
-    if (note) await records.writeNotice(context, state, { messageId: `assistant-plan-saved:${state.turnId}`, text: note });
+    if (completed.ask) await writeWholeChecksQuestion(records, context, state);
   }
 
   async function reconcile(sessionId, options) {

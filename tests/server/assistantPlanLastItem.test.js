@@ -43,7 +43,7 @@ function assertSeniorReview(f, sent, label) {
   assert.match(review.input.message, /Senior review of the plan:/u);
   assert.match(review.input.message, /Verify EVERY checklist item outside the plan's Passes section/u);
   assert.match(review.input.message, /Each item whose proof can't run in this session .* ends as Needs you: a numbered question with a recommended answer, in your final reply and in Progress/u);
-  assert.match(review.input.message, /Whether to run the passes or save is never one: Vibe64 runs the passes and saves/u);
+  assert.match(review.input.message, /Whether to run the passes, save or run the whole-project checks is never one: Vibe64 runs the passes, saves, and asks the person about the whole-project checks itself/u);
   assert.deepEqual([f.state().status, f.state().stage, Boolean(f.state().awaitingAnswer)], ["working", "review", false], label);
 }
 

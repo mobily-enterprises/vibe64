@@ -146,6 +146,9 @@ real device, an account, a click) or what the session can't reach, each with its
 reason; a choice is asked as a numbered question with a recommended answer.
 Vibe64 refuses a Progress whose Leftovers name a failing or flaky test, and
 refuses to complete a plan while they do, so the AI fixes the test instead.
+A plan's pass runs the focused tests for what it changed, never the
+whole-project checks (such as one whole run of the test suite), even where the
+pass's own guidance asks for one: no step of a plan runs them.
 
 Senior's review and every pass end one of two ways:
 
@@ -170,7 +173,10 @@ finishing step: first it fixes whatever Progress still holds that the session
 can fix. After it, Vibe64 completes and archives the plan, and its reply is the
 plan's one closing message: a line per step saying what it fixed, the choices
 made for you, and the Leftovers, each with its reason. It never offers to make a
-plan for them. Then, with **Automatically save changes** on, **Save** runs.
+plan for them. Then, with **Automatically save changes** on, **Save** runs, and
+Vibe64 asks you once whether to run the whole-project checks, with **Yes** and
+**No** above the message box; see [Run the whole-project checks after a
+plan](whole-project-checks.md).
 
 ### What the chat shows while a plan's passes run
 

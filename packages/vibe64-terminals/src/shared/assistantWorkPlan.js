@@ -3,8 +3,8 @@ const PASSES_HEADING = /^## Passes\s*$/iu;
 /**
  * Keep checklist recognition identical in stored progress and the plan viewer.
  * A checklist item carries one of three marks: `[ ]` not done yet, `[~]` built
- * (implemented, and its own focused checks pass) and `[x]` proven by the
- * plan's final checks. `built` is true for a built or proven item, `checked`
+ * (implemented, and its own focused checks pass) and `[x]` proven by
+ * Senior's review. `built` is true for a built or proven item, `checked`
  * only for a proven one. Every line of the plan's `## Passes` section, its
  * heading too, has `passes: true`: that section's items are the passes the plan
  * runs after Senior's review, one turn each.

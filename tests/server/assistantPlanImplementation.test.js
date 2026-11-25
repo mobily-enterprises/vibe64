@@ -130,13 +130,24 @@ test("the plan stays in Implementation until every item is built: Junior's hando
   assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan.");
 });
 
-test("Junior works the items in the plan's order and never starts the final checks; Senior's review runs them once", async (t) => {
+test("Junior works the items in the plan's order; no step of the plan runs the whole-project checks, and Senior's review is a review", async (t) => {
   const f = await fixture(t, { mode: "auto" }, { readyPlan: false });
   await implement(f);
   const message = f.sends[0].input.message;
   assert.match(message, /Implement a plan's items in the plan's order: do one earlier only when the plan says another item depends on it, and record why in Progress\./u);
-  assert.match(message, /The plan's final checks \(the whole-project checks, such as one whole run of the test suite\) are not an implementation item: Senior's review runs them once, after every item is built, so never start them in an implementation turn/u);
-  assert.match(ASSISTANT_PLAN_COMPLETION_MESSAGE, /Run the plan's final checks once, now: the whole-project checks the plan or project states, such as one whole run of the test suite\. No implementation turn ran them\. Read their result, record it in Progress/u);
+  assert.match(message, /No step of a plan runs the whole-project checks \(such as one whole run of the test suite\): not an implementation turn, not Senior's review and not a pass\. Once the plan is finished and saved, Vibe64 asks the person whether to run them once/u);
+  assert.doesNotMatch(message, /final checks/u);
+  // Senior's review, as its turn receives it, reads the changes and runs their focused tests, never the whole run.
+  await writePlan(f, (text) => text.replaceAll("- [ ]", "- [~]"), "junior");
+  await finish(f, "handoff");
+  const review = f.sends.at(-1).input.message;
+  assert.match(review, /Senior review of the plan: /u);
+  assert.match(review, /Review the plan's changes against Plan and Progress: check that they make sense and do what each item says\. Verify EVERY checklist item outside the plan's Passes section against the code as it is now/u);
+  assert.match(review, /run the focused tests for what changed/u);
+  assert.match(review, /This review is a review: run no whole-project checks, such as one whole run of the test suite/u);
+  assert.match(review, /Full-tick \(- \[x\]\) each item your review proves/u);
+  assert.doesNotMatch(review, /final checks|Run the plan's|whole run of the test suite\. No implementation turn/u);
+  assert.ok(review.includes(ASSISTANT_PLAN_COMPLETION_MESSAGE), "the review's own message");
 });
 
 test("a turn that builds another of the plan's items gets a fresh allowance of automatic steps", async (t) => {
