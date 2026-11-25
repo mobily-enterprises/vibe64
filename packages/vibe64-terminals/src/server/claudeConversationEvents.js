@@ -81,13 +81,16 @@ function createClaudeConversationEvents({
     }));
     const backgroundTasks = entry.nativeTurn?.read().backgroundTasks || 0;
     entry.shownBackgroundTasks = backgroundTasks;
+    // The page merges the run's fields; its events are the store's journal, which no page reads.
+    const { events, ...shownRun } = run;
+    void events;
     await publishSessionChanged(sessionId, {
       session: { sessionId, revision },
       reason: active ? "claude-stream-turn-active" : "claude-stream-turn-idle",
       payload: {
         ...(!active ? { conversationStream: runtime.store.clearConversationStream(sessionId) } : {}),
         agentRun: {
-          ...run,
+          ...shownRun,
           active,
           provider: ENGINE,
           providerInterface: TRANSPORT,

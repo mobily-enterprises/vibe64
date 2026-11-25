@@ -11,6 +11,7 @@ import {
 } from "@local/vibe64-core/server/core";
 import { runSourceCommand } from "./sourceCommand.js";
 import { fileIdentity } from "./sessionFiles.js";
+import { AGENT_RUN_HISTORY_SUFFIX } from "./agentRunHistory.js";
 import { resolveVibe64CurrentSessionAliasPath } from "./currentSessionAlias.js";
 import {
   ARTIFACT_PATH_SEGMENT_PATTERN,
@@ -427,6 +428,11 @@ function agentRunFilePath(sessionPaths, runId) {
   return path.join(sessionPaths.agentRunsRoot, `${assertSafeAgentRunId(runId)}.json`);
 }
 
+/** The run's earlier turns' events (agentRunHistory.js), which no session read opens. */
+function agentRunHistoryFilePath(sessionPaths, runId) {
+  return path.join(sessionPaths.agentRunsRoot, `${assertSafeAgentRunId(runId)}${AGENT_RUN_HISTORY_SUFFIX}`);
+}
+
 function backgroundTaskFilePath(sessionPaths, taskId) {
   return path.join(sessionPaths.backgroundTasksRoot, `${assertSafeBackgroundTaskId(taskId)}.json`);
 }
@@ -442,6 +448,7 @@ function conversationTurnRoot(sessionPaths, turnId) {
 export {
   ARCHIVE_EXECUTIONS,
   agentRunFilePath,
+  agentRunHistoryFilePath,
   archiveCommandError,
   artifactFilePath,
   assertSafeArtifactPath,

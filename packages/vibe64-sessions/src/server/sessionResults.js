@@ -11,9 +11,21 @@ function sessionResult(operation, fallbackMessage = "Vibe64 session request fail
   });
 }
 
+/** A run as pages and the assistant's tools receive it: its events are the store's journal, which none of them reads. */
+function publicAgentRun(run = {}) {
+  const { events, ...shown } = run;
+  void events;
+  return shown;
+}
+
+/**
+ * A session as pages and the assistant's tools receive it, without its runs' events, so a page's open or reload
+ * carries what it shows.
+ */
 function publicSession(session = {}, extra = {}) {
   return {
     ...session,
+    ...(Array.isArray(session.agentRuns) ? { agentRuns: session.agentRuns.map(publicAgentRun) } : {}),
     ...extra,
     ok: true
   };

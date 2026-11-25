@@ -27,10 +27,20 @@ const ACTIVE_AGENT_RUN_STATES = new Set([
 ]);
 const AGENT_RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 
+/**
+ * Whether a saved run or event state is active, without refusing one this release does not know (which is not).
+ * A state not written yet is starting, which is active.
+ * @param {unknown} state
+ */
+function runStateIsActive(state) {
+  return ACTIVE_AGENT_RUN_STATES.has(String(state ?? "").trim() || VIBE64_AGENT_RUN_STATE.STARTING);
+}
+
 export {
   ACTIVE_AGENT_RUN_STATES,
   AGENT_RUN_ID_PATTERN,
   AGENT_RUN_STATES,
+  runStateIsActive,
   TERMINAL_AGENT_RUN_STATES,
   VIBE64_AGENT_RUN_STATE
 };

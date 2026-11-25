@@ -32,8 +32,10 @@ import {
   VIBE64_SESSION_STATUS,
   vibe64AgentRunStateIsTerminal
 } from "./sessionRecordRules.js";
+import { retireAgentRunEvents } from "./agentRunHistory.js";
 import {
   agentRunFilePath,
+  agentRunHistoryFilePath,
   artifactFilePath,
   backgroundTaskFilePath,
   metadataFilePath,
@@ -395,11 +397,15 @@ function createSessionRecords({
         events: [],
         id: normalizedRunId
       };
-      const record = conversationAgentRunEvent(previous, normalizedRunId, { event, patch }, {
-        now: state.now,
-        normalizeState: normalizeVibe64AgentRunState,
-        isTerminal: vibe64AgentRunStateIsTerminal
-      });
+      // The run keeps its last two turns; a new turn moves the events before them to its history.
+      const record = await retireAgentRunEvents(
+        agentRunHistoryFilePath(sessionPaths, normalizedRunId),
+        conversationAgentRunEvent(previous, normalizedRunId, { event, patch }, {
+          now: state.now,
+          normalizeState: normalizeVibe64AgentRunState,
+          isTerminal: vibe64AgentRunStateIsTerminal
+        })
+      );
       await writeJsonFile(agentRunFilePath(sessionPaths, normalizedRunId), record);
       recordFiles.forgetAgentRunActivity(sessionPaths);
       return record;

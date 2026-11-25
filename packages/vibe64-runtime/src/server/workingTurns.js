@@ -14,29 +14,25 @@
 import { constants as fsConstants } from "node:fs";
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
-import { ACTIVE_AGENT_RUN_STATES, AGENT_RUN_ID_PATTERN, VIBE64_AGENT_RUN_STATE } from "./agentRunStates.js";
+import { AGENT_RUN_ID_PATTERN, runStateIsActive } from "./agentRunStates.js";
 
 const PROJECTS_DIR = "projects";
 const ACTIVE_SESSIONS_DIR = path.join("sessions", "active");
 const AGENT_RUNS_DIR = "agent-runs";
 /**
- * A run keeps every turn's events for its session's whole life, so a long session's grows. A run larger than this is
- * not read, and counts as working with its start unknown: a tool deciding whether a restart would interrupt a turn
- * must not take a run it could not read for ended.
+ * A run keeps its last two turns' events (agentRunHistory.js moves earlier ones to its history), so only a very long
+ * turn, or a run an earlier release grew before the 20261125-agent-run-history upgrade, comes near this. A run larger
+ * than this is not read, and counts as working with its start unknown: a tool deciding whether a restart would
+ * interrupt a turn must not take a run it could not read for ended.
  */
 const MAX_AGENT_RUN_BYTES = 4 * 1024 * 1024;
 const RUN_CACHE_LIMIT = 1024;
 /** Each run file's answer while its identity (device, inode, size, change times) is the same. */
 const runCache = new Map();
 
-/** @param {unknown} state */
-function runStateIsActive(state) {
-  return ACTIVE_AGENT_RUN_STATES.has(String(state ?? "").trim() || VIBE64_AGENT_RUN_STATE.STARTING);
-}
-
 /**
  * The turn a run record says is working, or null: it started at the first of the run's last events that are all in
- * an active state (a run keeps every turn's events, so its own `startedAt` is its first turn's), or at the run's start
+ * an active state (a run's own `startedAt` is its first turn's, which may be long gone), or at the run's start
  * when it has no events; null when nothing names the time.
  * @param {any} record
  * @returns {{ startedAt: string | null } | null}
