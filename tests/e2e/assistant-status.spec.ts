@@ -942,9 +942,10 @@ test.describe("a turn interruption", () => {
     const entries = page.locator(".vibe64-turn-interruption");
     const expectEntries = async () => {
       await expect(entries).toHaveCount(2);
-      await expect(entries.nth(0)).toHaveText(/^\s*Vibe64 crashed at 12:18: read ECONNRESET\.\s*Resumed after Vibe64 restarted at 12:18\.\s*$/u);
+      // Each entry ends with Report a problem, which reports it with this chat.
+      await expect(entries.nth(0)).toHaveText(/^\s*Vibe64 crashed at 12:18: read ECONNRESET\.\s*Resumed after Vibe64 restarted at 12:18\.\s*Report a problem\s*$/u);
       await expect(entries.nth(1)).toHaveText(new RegExp("^\\s*Vibe64 restarted at 12:20 \\(it was stopped and started again\\)\\.\\s*" +
-        "Not resumed: stopped: Vibe64 restarted twice while it ran\\. Choose Continue to try again\\.\\s*$", "u"));
+        "Not resumed: stopped: Vibe64 restarted twice while it ran\\. Choose Continue to try again\\.\\s*Report a problem\\s*$", "u"));
       for (const index of [0, 1]) {
         // The theme's error colour, as a note in the history rather than an alert that interrupts a screen reader.
         await expect(entries.nth(index)).toHaveClass(/\btext-error\b/u);
@@ -956,5 +957,23 @@ test.describe("a turn interruption", () => {
     await page.reload();
     await expect(composer(page)).toBeVisible();
     await expectEntries();
+
+    // Report a problem from an entry gathers this session's report with its chat ticked in.
+    const collected: Record<string, unknown>[] = [];
+    await page.route(/\/api\/app\/[^/]+\/vibe64\/problem-report$/u, async (route) => {
+      collected.push(route.request().postDataJSON());
+      await route.fulfill({ json: { ok: true, draftId: "interruption-draft", delivery: null, bundle: {
+        schema: "vibe64.problem-report.v1", createdAt: "2026-11-24T04:30:00.000Z", place: { page: "Env", route: "/env" },
+        reporter: { username: "local", role: "owner" }, client: { errors: [] }, server: { crashes: [] }, versions: {},
+        chat: { kind: "main", id: "", messages: [] }, masking: { rules: "v1", hidden: 0 } } } });
+    });
+    await entries.nth(0).getByRole("button", { name: "Report a problem", exact: true }).click();
+    const report = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Report a problem" }) });
+    await expect(report.getByRole("checkbox", { name: "Include the messages of the chat I was in" })).toBeChecked();
+    await expect(report.locator("li").filter({ hasText: "Chat messages:" })).toContainText("0 messages");
+    expect(collected).toHaveLength(1);
+    expect(collected[0]).toMatchObject({ sessionId: server.state.session.sessionId, chat: { kind: "main" }, includeChat: true });
+    await report.getByRole("button", { name: "Close Report a problem" }).click();
+    await expect(report).toBeHidden();
   });
 });
