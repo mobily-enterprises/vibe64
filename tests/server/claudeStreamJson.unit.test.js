@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import { rmSync } from "node:fs";
-import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile, mkdir, open } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { __testables as claudeCodeProcessTestables, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
@@ -2849,12 +2849,25 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(emptyGoalRead.target.segmentId, `claude:${state.thread.id}`,
       "the empty-goal read returns its selected identity without a second target lookup");
     // The fake Claude appends whole lines while this reads them, and a reader can
-    // see part of a long one: only lines that end in a newline are complete.
+    // see part of a long one: only lines that end in a newline are complete. The
+    // trace only grows, so each read parses just the lines added since the last
+    // one, not the whole file again (about 400 KB by the end of the test).
+    const traced = { rows: [], bytes: 0 };
     const trace = async () => {
+      let file;
+      try { file = await open(tracePath, "r"); }
+      catch (error) { if (error.code === "ENOENT") return []; throw error; }
       try {
-        const text = await readFile(tracePath, "utf8");
-        return text.slice(0, text.lastIndexOf("\n") + 1).split("\n").filter(Boolean).map(JSON.parse);
-      } catch (error) { if (error.code === "ENOENT") return []; throw error; }
+        const { size } = await file.stat();
+        if (size > traced.bytes) {
+          const added = Buffer.alloc(size - traced.bytes);
+          const { bytesRead } = await file.read(added, 0, added.length, traced.bytes);
+          const complete = added.subarray(0, bytesRead).lastIndexOf("\n") + 1;
+          traced.rows.push(...added.subarray(0, complete).toString("utf8").split("\n").filter(Boolean).map(JSON.parse));
+          traced.bytes += complete;
+        }
+      } finally { await file.close(); }
+      return [...traced.rows];
     };
     assert.equal((await trace()).some(row => row.args?.includes("--print")), false, "inspection does not start native inference");
     await assert.rejects(goalFacade.updateGoal({ action: "set", objective: "clear", messageId: "invalid-goal-condition",
@@ -3389,7 +3402,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
       while (!pauseCall || pauseCall.status === "running") {
         const log = await store.readConversationLog("test");
         pauseCall = log.flatMap(turn => turn.metadata.applicationTools || []).find(call => call.id.endsWith("self-pause-execute"));
-        assert.ok(Date.now() < pauseDeadline, JSON.stringify({ pauseCall, frames: (await trace()).slice(-4) }));
+        // The failure's evidence is read only when the wait has failed: read on every pass, it cost more than the poll.
+        if (Date.now() >= pauseDeadline) assert.fail(JSON.stringify({ pauseCall, frames: (await trace()).slice(-4) }));
         if (!pauseCall || pauseCall.status === "running") await new Promise(resolve => setTimeout(resolve, 10));
       }
       assert.equal(pauseCall.status, "complete");
@@ -3439,7 +3453,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
           const call = (await store.readConversationLog("test")).flatMap(turn => turn.metadata.applicationTools || [])
             .find(row => row.id.endsWith(id));
           if (call && call.status !== "running") return call;
-          assert.ok(Date.now() < deadline, JSON.stringify({ id, call, frames: (await trace()).slice(-4) }));
+          if (Date.now() >= deadline) assert.fail(JSON.stringify({ id, call, frames: (await trace()).slice(-4) }));
           await new Promise(resolve => setTimeout(resolve, 10));
         }
       };
@@ -3451,7 +3465,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(resumeCall.result.result.result.status, "resuming");
       const chatResumeDeadline = Date.now() + 5000;
       while ((await service.readAgentGoal("test", options)).goal.status !== "active") {
-        assert.ok(Date.now() < chatResumeDeadline, JSON.stringify({ deliveryDiagnostics: deliveryDiagnostics.slice(-3),
+        if (Date.now() >= chatResumeDeadline) assert.fail(JSON.stringify({ deliveryDiagnostics: deliveryDiagnostics.slice(-3),
           intent: (await store.readSession("test")).metadata.assistant_goal_intent, frames: (await trace()).slice(-3) }));
         await new Promise(resolve => setTimeout(resolve, 10));
       }
@@ -3486,7 +3500,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       while (!blockCall || blockCall.status === "running") {
         const log = await store.readConversationLog("test");
         blockCall = log.flatMap(turn => turn.metadata.applicationTools || []).find(call => call.id.endsWith("self-block-execute"));
-        assert.ok(Date.now() < blockDeadline, JSON.stringify({ blockCall, frames: (await trace()).slice(-4) }));
+        if (Date.now() >= blockDeadline) assert.fail(JSON.stringify({ blockCall, frames: (await trace()).slice(-4) }));
         if (!blockCall || blockCall.status === "running") await new Promise(resolve => setTimeout(resolve, 10));
       }
       assert.equal(blockCall.status, "complete");
@@ -3526,7 +3540,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       while (!goalToolCall || goalToolCall.status === "running") {
         goalToolCall = (await store.readConversationLog("test")).flatMap(turn => turn.metadata.applicationTools || [])
           .find(call => call.id.endsWith("self-block-goal-execute"));
-        assert.ok(Date.now() < goalToolDeadline, JSON.stringify({ goalToolCall, frames: (await trace()).slice(-5) }));
+        if (Date.now() >= goalToolDeadline) assert.fail(JSON.stringify({ goalToolCall, frames: (await trace()).slice(-5) }));
         if (!goalToolCall || goalToolCall.status === "running") await new Promise(resolve => setTimeout(resolve, 10));
       }
       assert.equal(goalToolCall.result.ok, true, JSON.stringify(goalToolCall));
