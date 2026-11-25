@@ -463,12 +463,20 @@ test("a v2 lesson passes start, resume, learning.read, completion, finish and de
   registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
     authorizeProject() { throw new Error("Learning actions must not require a selected project."); } });
   const run = (name, input = {}) => actions.execute({ actionId: `vibe64.training.${name}`, input, context: { channel: "api", surface: "app" } });
+  // Over the API a lesson's start and resume answer "preparing" after two seconds while the preparation goes on; the
+  // page repeats the same request, which joins it, until its outcome, and so does this test on a busy machine.
+  const prepared = async (name, input) => {
+    for (;;) {
+      const answer = await run(name, input);
+      if (answer.preparing !== true) return answer;
+    }
+  };
 
-  const started = await run("lesson.start", { ...f.pin.course, lessonCode: f.pin.lesson.code, requestId: "start-v2", expectedRevision: 0 });
+  const started = await prepared("lesson.start", { ...f.pin.course, lessonCode: f.pin.lesson.code, requestId: "start-v2", expectedRevision: 0 });
   assert.equal(started.ok, true);
   assert.equal(started.active.preparation.phase, "ready");
   const attemptId = started.active.attemptId;
-  const resumed = await run("lesson.resume", { attemptId });
+  const resumed = await prepared("lesson.resume", { attemptId });
   assert.equal(resumed.active.attemptId, attemptId);
   assert.equal(resumed.active.preparation.phase, "ready");
   assert.equal((await f.execute("step.answer", { attemptId, stepId: "which-side", selected: [1], requestId: "answer-v2" })).outcome, "passed");
