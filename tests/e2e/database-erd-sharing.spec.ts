@@ -649,8 +649,13 @@ test("@data-overview actual local database schema and authored grouping remain c
   } finally { await context.close(); await server.close(); }
 });
 
+// Hovering connections and zooming, the inputs a person makes most on a large diagram, each draw again only the cards
+// and connections they change: a hover emphasizes one relationship's connections and the tables they join, and a zoom
+// moves only the camera. Each input is read in the cards and connections Vue draws again, not timed, so a host's load
+// cannot move it: an input that replaces every table and connection, as a hover did before 9957a962d, draws all of them
+// again. They read a real schema, which VIBE64_OVERVIEW_SCHEMA and VIBE64_OVERVIEW_DEFINITION name, and skip without it.
 for (const view of ["Overview", "ERD"] as const) {
-  for (const interaction of ["crossing relationships", "zooming"]) test(`@erd-performance ${view} remains responsive while ${interaction} in the actual local schema`, async ({ browser, baseURL }, testInfo) => {
+  for (const interaction of ["crossing relationships", "zooming"]) test(`@erd-performance ${view} draws again only what ${interaction} changes in the actual local schema`, async ({ browser, baseURL }, testInfo) => {
     test.setTimeout(180_000);
     test.skip(!process.env.VIBE64_OVERVIEW_SCHEMA || !process.env.VIBE64_OVERVIEW_DEFINITION, "Provide the read-only local schema and overview fixtures.");
     const schema = JSON.parse(await readFile(process.env.VIBE64_OVERVIEW_SCHEMA!, "utf8"));
@@ -658,11 +663,25 @@ for (const view of ["Overview", "ERD"] as const) {
     const actor = [...definition.actors].sort((a, b) => b.tables.length - a.tables.length)[0];
     const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: definition });
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
-    let tracing = false;
     try {
       const page = await context.newPage();
       const errors: string[] = [];
       page.on("pageerror", error => errors.push(error.message));
+      // Every card and connection Vue draws, when it first draws it and each time again, through a mixin the app takes
+      // as it mounts, before the diagram's first card.
+      await page.addInitScript(() => {
+        const drawn: string[] = [];
+        (window as any).erdDrawn = drawn;
+        const kinds: Record<string, string> = { DatabaseErdNode: "card", DatabaseErdEdge: "connection" };
+        function record(this: any) { if (kinds[this.$.type.__name]) drawn.push(`${kinds[this.$.type.__name]} ${this.id}`); }
+        Object.defineProperty(Element.prototype, "__vue_app__", {
+          configurable: true,
+          set(app) {
+            Object.defineProperty(this, "__vue_app__", { configurable: true, writable: true, value: app });
+            app.mixin({ mounted: record, updated: record });
+          }
+        });
+      });
       await openDiagram(page, server.url, { view, waitForReady: false });
       if (view === "Overview") await page.getByRole("button", { name: `Explore ${actor.name}`, exact: true }).click();
       const diagram = page.locator(".database-erd");
@@ -676,7 +695,28 @@ for (const view of ["Overview", "ERD"] as const) {
       await expect(diagram.getByText("Arranging tables…", { exact: true })).toHaveCount(0, { timeout: 60_000 });
       await page.getByRole("button", { name: "Fit", exact: true }).click();
       await waitForDiagramViewport(page);
-      let points: { x: number, y: number }[] = [];
+      // The diagram drew each card and connection it shows, so the count below sees them.
+      const shown = await page.evaluate(() => ({
+        drawn: new Set((window as any).erdDrawn).size,
+        cards: document.querySelectorAll(".database-erd .vue-flow__node-table").length,
+        connections: document.querySelectorAll(".database-erd .vue-flow__edge").length
+      }));
+      expect(shown.drawn, "cards and connections the diagram drew").toBe(shown.cards + shown.connections);
+      // The cards and connections an input draws again, from just before it until two frames after it.
+      const inputs: number[] = [];
+      const drawnAgainByInput: string[][] = [];
+      const drawnAgainBy = async (input: () => Promise<void>) => {
+        inputs.push(await page.evaluate(() => { (window as any).erdDrawn.length = 0; return performance.now(); }));
+        await input();
+        drawnAgainByInput.push(await page.evaluate(() => new Promise<string[]>(resolve => requestAnimationFrame(() => requestAnimationFrame(() =>
+          resolve([...new Set<string>((window as any).erdDrawn)].sort()))))));
+        return drawnAgainByInput.at(-1)!;
+      };
+      // The cards a hover highlights and the connections it emphasizes, which show their cardinality.
+      const emphasized = () => page.evaluate(() => [
+        ...[...document.querySelectorAll(".database-erd .vue-flow__node:has(.database-erd-node--selected)")].map(node => `card ${node.getAttribute("data-id")}`),
+        ...[...document.querySelectorAll(".database-erd .vue-flow__edge:has(.vue-flow__edge-text)")].map(edge => `connection ${edge.getAttribute("data-id")}`)
+      ]);
       if (interaction === "crossing relationships") {
         // Up to 12 connections are crossed, each where the pointer reaches it rather than a card or another
         // connection: an actor drawing fewer is crossed at every one, and one drawing none fails.
@@ -697,30 +737,16 @@ for (const view of ["Overview", "ERD"] as const) {
         });
         expect(crossings.drawn, "connections the explored diagram draws").toBeGreaterThan(0);
         expect(crossings.points).toHaveLength(Math.min(12, crossings.drawn));
-        points = crossings.points;
-      }
-      const profiler = await context.newCDPSession(page);
-      await profiler.send("Profiler.enable");
-      await profiler.send("Profiler.start");
-      // Chrome's trace records every task the page's main thread runs with the CPU time it took. Each input is marked
-      // from just before it until two frames after it, when it has been drawn.
-      await browser.startTracing(page, { categories: ["-*", "toplevel", "blink.user_timing"] });
-      tracing = true;
-      const inputs: number[] = [];
-      const latencies: number[] = [];
-      const measure = async (input: () => Promise<void>) => {
-        const start = await page.evaluate(() => { performance.mark("erd-input"); return performance.now(); });
-        await input();
-        const end = await page.evaluate(() => new Promise<number>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
-          performance.mark("erd-input-drawn");
-          resolve(performance.now());
-        }))));
-        inputs.push(start);
-        latencies.push(end - start);
-      };
-      if (interaction === "crossing relationships") for (const point of points) {
-        await measure(() => page.mouse.move(point.x, point.y));
-        await expect(diagram.locator(".vue-flow__edge-text")).not.toHaveCount(0);
+        // A hover draws again what it emphasizes or releases, and nothing that is emphasized neither before nor after it.
+        for (const [index, point] of crossings.points.entries()) {
+          const before = await emphasized();
+          const drawnAgain = await drawnAgainBy(() => page.mouse.move(point.x, point.y));
+          await expect(diagram.locator(".vue-flow__edge-text")).not.toHaveCount(0);
+          const after = await emphasized();
+          const changed = [...before.filter(item => !after.includes(item)), ...after.filter(item => !before.includes(item))];
+          expect(drawnAgain, `cards and connections hover ${index + 1} emphasized or released`).toEqual(expect.arrayContaining(changed));
+          expect(drawnAgain.filter(item => !before.includes(item) && !after.includes(item)), `cards and connections hover ${index + 1} drew again without changing them`).toEqual([]);
+        }
       }
       if (interaction === "zooming") {
         const camera = diagram.locator(".vue-flow__transformationpane");
@@ -729,11 +755,12 @@ for (const view of ["Overview", "ERD"] as const) {
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
         const positions = await diagram.locator(".vue-flow__node-table").evaluateAll(nodes => nodes.map((node: HTMLElement) => node.style.transform));
         let previous = await camera.getAttribute("style");
-        // Real wheel input must change the diagram, not scroll the page. Sample both directions and include paint
-        // time, not just event dispatch. Each tick out is followed by one in, so a small actor that Fit already shows
-        // at the largest zoom still moves.
-        for (const delta of Array.from({ length: 36 }, (_, index) => index % 2 ? -70 : 70)) {
-          await measure(() => page.mouse.wheel(0, delta));
+        // Real wheel input must change the diagram, not scroll the page, and moves only the camera: no card or
+        // connection is drawn again. Each tick out is followed by one in, so a small actor that Fit already shows at
+        // the largest zoom still moves.
+        for (const [index, delta] of Array.from({ length: 36 }, (_, tick) => tick % 2 ? -70 : 70).entries()) {
+          const drawnAgain = await drawnAgainBy(() => page.mouse.wheel(0, delta));
+          expect(drawnAgain, `cards and connections zoom tick ${index + 1} drew again`).toEqual([]);
           const current = await camera.getAttribute("style");
           expect(current).not.toBe(previous);
           previous = current;
@@ -749,29 +776,11 @@ for (const view of ["Overview", "ERD"] as const) {
           expect(server.saves.length - savesBeforeZoom).toBeLessThanOrEqual(2 + pauses);
         } else expect(server.saves).toHaveLength(0);
       }
-      const trace = JSON.parse(String(await browser.stopTracing()));
-      tracing = false;
-      const { profile } = await profiler.send("Profiler.stop");
-      await writeFile(testInfo.outputPath(`${interaction}.cpuprofile`), JSON.stringify(profile));
-      await profiler.detach();
-      const longestTasks = longestMainThreadTasks(trace.traceEvents, "erd-input", "erd-input-drawn");
-      const timingPath = testInfo.outputPath(`${interaction}-frame-latencies.json`);
-      await writeFile(timingPath, JSON.stringify({ view, interaction, tables: schema.tables.length, latencies, longestTasks }));
-      await testInfo.attach(`${interaction}-frame-latencies`, { path: timingPath, contentType: "application/json" });
-      // A freeze is read in CPU time, not by the clock: for each input, the longest task the main thread ran from just
-      // before it until it was drawn. The wall-clock latencies, kept above, also count Playwright's round trips and
-      // trace snapshots, the frames and the host's load: on an idle desktop most of their 150-210 ms median is
-      // Playwright's. On mobilynet's schema (135 tables, 64 in its largest actor), at loads of 3 to 13, alone or sharing
-      // 2 CPUs with four busy loops, an input's longest task took a median of 19-45 ms of CPU and at most 114 ms; a
-      // hover that replaces every table and connection, as before 9957a962d, took a median of 146-361 ms, and a zoom
-      // gesture that does 73-156 ms.
-      expect(longestTasks).toHaveLength(latencies.length);
-      const median = [...longestTasks].sort((a, b) => a - b)[Math.floor(longestTasks.length / 2)];
-      expect(median).toBeLessThan(60);
-      expect(Math.max(...longestTasks)).toBeLessThan(250);
+      await testInfo.attach(`${interaction}-drawn-again`, {
+        body: JSON.stringify({ view, interaction, tables: schema.tables.length, shown, drawnAgainByInput }), contentType: "application/json"
+      });
       expect(errors).toEqual([]);
     } finally {
-      if (tracing) await browser.stopTracing();
       await context.close();
       await server.close();
     }
@@ -1043,30 +1052,6 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       await server.close();
     }
   });
-}
-
-// The CPU time, in ms, of the longest task the page's main thread ran in each window from a `from` performance mark to
-// the next `to` mark, from a Chrome trace: each window's first mark names its thread, which a navigation may change,
-// and the "toplevel" category records each task it runs as a ThreadControllerImpl::RunTask event whose tdur is the
-// thread time it took. A task Chrome records without it, one lasting a microsecond or two such as its tracing's
-// WillClearIncrementalState or a DOM timer, counts its wall time, which is never less, and is noted on the test. Every window holds at least the
-// task that set its first mark, so a window without tasks means the trace no longer records them, and fails rather
-// than measuring nothing.
-function longestMainThreadTasks(events: any[], from: string, to: string) {
-  const marks = events.filter(event => event.name === from || event.name === to).sort((a, b) => a.ts - b.ts);
-  expect(marks.length, `"${from}" and "${to}" marks in the trace`).toBeGreaterThan(0);
-  const tasks = events.filter(event => event.ph === "X" && event.name === "ThreadControllerImpl::RunTask");
-  const windows = marks.flatMap((start, index) => {
-    if (start.name !== from) return [];
-    const end = marks[index + 1];
-    expect(end?.name, `a "${to}" mark after each "${from}" mark`).toBe(to);
-    return [tasks.filter(task => task.pid === start.pid && task.tid === start.tid && task.ts + task.dur >= start.ts && task.ts < end.ts)];
-  });
-  expect(windows.map(window => window.length), "main-thread tasks traced in each window").not.toContain(0);
-  for (const task of windows.flat()) if (task.tdur === undefined) test.info().annotations.push({
-    type: "main-thread task without thread time", description: `${task.dur / 1000} ms of wall time counted instead`
-  });
-  return windows.map(window => Math.max(...window.map(task => (task.tdur ?? task.dur) / 1000)));
 }
 
 test("@erd-dense routing worker errors leave an actionable retry and recover", async ({ browser, baseURL }) => {
