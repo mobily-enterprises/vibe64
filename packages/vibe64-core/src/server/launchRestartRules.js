@@ -76,27 +76,8 @@ function launchRestartRulesMatcher(input = {}) {
   };
 }
 
-function launchRestartRulesMatcherSource() {
-  const matcherName = String(launchRestartRulesMatcher.name || "").trim();
-  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(matcherName)) {
-    throw new Error("Launch restart matcher cannot be serialized.");
-  }
-  return [
-    normalizeLaunchRestartPath,
-    normalizeLaunchRestartPattern,
-    normalizeLaunchRestartRules,
-    escapeLaunchRestartRegExpChar,
-    launchRestartGlobToRegExp,
-    launchRestartRulesMatcher
-  ].map((helper) => helper.toString()).join("\n\n") +
-    `\n\nconst vibe64LaunchRestartRulesMatcher = ${matcherName};`;
-}
-
-const __testables = Object.freeze({ launchRestartRulesMatcherSource });
-
 export {
   launchRestartRulesMatcher,
   normalizeLaunchRestartPath,
-  normalizeLaunchRestartRules,
-  __testables
+  normalizeLaunchRestartRules
 };

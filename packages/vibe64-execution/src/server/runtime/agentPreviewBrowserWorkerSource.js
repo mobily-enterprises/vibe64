@@ -1,6 +1,7 @@
 import { WORKER_COMMANDS_SOURCE } from "./agentPreviewBrowserWorkerCommands.js";
 import { WORKER_STATE_SOURCE } from "./agentPreviewBrowserWorkerState.js";
-import { computerPlaywrightModulePath } from "./computerPlaywright.js";
+import { embeddedFunctions } from "../../shared/embeddedFunctions.js";
+import { playwrightModuleOnPath } from "./computerPlaywright.js";
 
 function documentReadyForScreenshot(browserDocument = globalThis.document) {
   return Boolean(
@@ -226,14 +227,14 @@ if (!socketPath || !metadataPath || !controlSocketPath || !workerToken || !contr
   process.exit(64);
 }
 
-const computerPlaywrightModulePath = ${computerPlaywrightModulePath.toString()};
+${embeddedFunctions({ playwrightModuleOnPath })}
 function loadPlaywright() {
   if (playwrightModulePath) return createRequire(import.meta.url)(playwrightModulePath);
   try {
     return createRequire(path.join(playwrightProjectRoot, "package.json"))("playwright");
   } catch (error) {
     const computerModule = error?.code === "MODULE_NOT_FOUND"
-      ? computerPlaywrightModulePath(process.env.PATH, { existsSync, realpathSync }, path) : "";
+      ? playwrightModuleOnPath(process.env.PATH, { existsSync, realpathSync }, path) : "";
     if (!computerModule) throw error;
     return createRequire(import.meta.url)(computerModule);
   }
@@ -251,10 +252,7 @@ try {
 }
 const { chromium, request } = playwright;
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-const documentReadyForScreenshot = ${documentReadyForScreenshot.toString()};
-const pngVisualMetrics = ${pngVisualMetrics.toString()};
-const domTextFacts = ${domTextFacts.toString()};
-${WORKER_STATE_SOURCE}${WORKER_COMMANDS_SOURCE}`;
+${embeddedFunctions({ documentReadyForScreenshot, pngVisualMetrics, domTextFacts })}${WORKER_STATE_SOURCE}${WORKER_COMMANDS_SOURCE}`;
 }
 
 export {

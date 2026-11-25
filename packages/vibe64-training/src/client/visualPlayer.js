@@ -1,3 +1,5 @@
+import { embeddedFunctions } from "@local/vibe64-execution/shared/embeddedFunctions";
+
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_COMMAND_IDS = 64;
 const MAX_PENDING_REQUESTS = 64;
@@ -84,6 +86,8 @@ function validateResource(resource, view) {
 
 // This bootstrap only mounts verified authored bytes and transfers the original
 // controller's port. Transition, interruption and receipt semantics stay there.
+// The frame embeds it (embeddedFunctions), so it uses nothing but its arguments
+// and the browser's globals.
 async function bootstrap(payload, loadController) {
   let dispose;
   // readable-check: allow method-probe - input validation: the course author's controller module is untrusted and must export mountVisual
@@ -135,13 +139,13 @@ function frameDocument(payload) {
     "object-src 'none'", "base-uri 'none'", "form-action 'none'"
   ].join("; ");
   // Keep the import inside the isolated document's source. A bundler may add
-  // parent-module helpers to an import serialized through Function.toString().
+  // parent-module helpers to an import inside an embedded function.
   return [
     '<!doctype html><html><head><meta charset="utf-8">',
     `<meta http-equiv="Content-Security-Policy" content="${policy}">`,
     '<meta name="referrer" content="no-referrer">',
     '<style>html,body{margin:0;height:100%;overflow:hidden}svg{display:block;width:100%;height:100%}</style></head><body>',
-    `<script nonce="${nonce}">(${bootstrap.toString()})(${JSON.stringify(payload)}, url => import(url));</script>`,
+    `<script nonce="${nonce}">${embeddedFunctions({ bootstrap })}bootstrap(${JSON.stringify(payload)}, url => import(url));</script>`,
     "</body></html>"
   ].join("");
 }

@@ -1,6 +1,7 @@
 // The browser worker program's state: its browser, the process groups it
 // started and tracks, its metadata file and the browser's lifecycle. Text of
 // the program agentPreviewBrowserWorkerSource writes, not code run here.
+import { embeddedFunctions } from "../../shared/embeddedFunctions.js";
 import { linuxProcessStat, processEnded } from "./processEnded.js";
 
 const WORKER_STATE_SOURCE = `const state = Object.create(null);
@@ -163,9 +164,7 @@ function processGroupAlive(groupId) {
 // Whether a process has ended, and the /proc stat reading it takes: the one
 // rule every check of a process uses (processEnded.js beside it), as its text,
 // bound by name since a minified release renames the functions themselves.
-const linuxProcessStat = ${linuxProcessStat.toString()};
-const processEnded = ${processEnded.toString()};
-
+${embeddedFunctions({ linuxProcessStat, processEnded })}
 function normalizedBrowserProcessGroups(value = []) {
   const groups = new Map();
   for (const entry of Array.isArray(value) ? value : []) {
