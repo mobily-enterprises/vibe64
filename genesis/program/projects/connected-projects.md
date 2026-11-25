@@ -193,8 +193,8 @@ are installed with `npm install --no-save`, passing every earlier one again
 because npm prunes unsaved packages. Apply judges them as they will resolve
 after the swap: a dependency npm nested in a published copy, for that version's
 own pin, at a version the connected package does not accept goes aside with the
-copy (into its `originals/` folder's `node_modules`, where a restore puts the
-rest of the nested `node_modules` back beside it), so the connected package
+copy (into its `originals/` folder's `node_modules`, from where a restore puts
+it back into the copy's own nested `node_modules`), so the connected package
 resolves past it, unless a package nested beside it still needs that version;
 one that would still resolve wrongly refuses
 (`vibe64_connected_npm_dependency_incompatible`). A tracked copy is refused
