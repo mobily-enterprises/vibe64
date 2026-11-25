@@ -341,13 +341,29 @@ request, the database copilot's question): a request without one (a script,
 the helper, a page cached before the release) runs and waits for its outcome as
 before, is never joined, and a `repeat` without one starts nothing.
 
+A session keeps one agent run per engine transport (`agent-runs/<transport>.json`)
+for its whole life, and each run keeps the events of its last two turns: the
+working turn and the one just ended, whose result-processed event a late result
+of that turn still finds. A turn starts at an event in an active state after one
+in an ended state. When a new turn starts, the store appends the events of the
+turns before those two to the run's history, `agent-runs/<transport>.history.jsonl`
+(one event per line, oldest first, synced before the run is published), which
+no session read opens (`agentRunHistory.js`). The run's `eventHistoryBytes` says
+how much of the history it wrote, so an append whose run never reached the disk
+is cut off before the next one and each event is kept once. Opening or reloading
+a session therefore reads, parses and returns two turns of each run, at one
+stored turn as at a thousand, and a run event rewrites two turns, not the whole
+history; the pages' session (`publicSession`) and Claude's turn updates carry
+the runs' fields without their events, which no page reads. Evidence:
+`tests/server/agentRunHistory.unit.test.js`.
+
 Session listing projects saved agent-run activity and its session revision into
-`agentActivity`; unreadable activity remains unknown. Agent-run files are kept
-for a session's whole life, so the store remembers each session's answer by its
-`agent-runs` folder (`readAgentRunActivity`) and reads that session's runs again
-only after the store writes one of them or the folder itself changes; a refresh
-reads no run files. The session limit's renewal reservations come from session
-summaries (`listSessionsForRenewal`), which read no runs or background tasks.
+`agentActivity`; unreadable activity remains unknown. The store remembers each
+session's answer by its `agent-runs` folder (`readAgentRunActivity`) and reads
+that session's runs again only after the store writes one of them or the folder
+itself changes; a refresh reads no run files. The session limit's renewal
+reservations come from session summaries (`listSessionsForRenewal`), which read
+no runs or background tasks.
 A tool that tells a host's work from outside the editor reads the same
 answer with `readVibe64WorkingTurns({ systemRoot })` (`workingTurns.js`): each
 project's active sessions whose Main chat is working, with when the turn
