@@ -22,6 +22,7 @@ import {
   workspaceSetupRunKey
 } from "./workspaceSetupRules.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { refuseDuringPlannedRestart } from "@local/vibe64-core/server/plannedRestart";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
@@ -81,6 +82,9 @@ function createWorkspaceSetupStart({
       });
       return { completion: null, state };
     }
+    // A preparation (its installs, migrations and connected copies) waits out a planned restart's window; one already
+    // running goes on, and a prepared session never reaches here (serviceWorkspacePreparation.js).
+    refuseDuringPlannedRestart("workspace-preparation");
     const previous = workspaceSetupState(session.workspaceSetup);
     let stateBase = previous;
     let migrationStartedAt = "";

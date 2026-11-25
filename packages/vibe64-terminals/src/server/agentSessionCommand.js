@@ -78,6 +78,7 @@ import {
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
+import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
 import { sessionSourceState } from "./planSourceChanges.js";
 import { handPlanOver, refusedPlanChange } from "./assistantPlanHandoff.js";
 import { commandLineFailure } from "./commandFailure.js";
@@ -556,6 +557,8 @@ function createAgentSessionCommandService({
     const executions = sessionExecutions.get(toText(input.sessionId)) || new Set();
     executions.add(executionId);
     sessionExecutions.set(toText(input.sessionId), executions);
+    // A planned restart's record names the commands it stops.
+    const tracked = plannedRestart().trackCommand(toText(input.sessionId), command);
     try {
       const exitCodeText = await waitForCommandResult(resultPath, {
         signal: input.signal,
@@ -579,6 +582,8 @@ function createAgentSessionCommandService({
         reason: error?.code || "agent-session-command-failed"
       }).catch(() => null);
       throw error;
+    } finally {
+      tracked.end();
     }
   }
 

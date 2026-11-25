@@ -510,6 +510,7 @@ export {
   gatewayGitIdentityUserKey,
   githubAuthenticationRejected,
   gitCommandIsLocal,
+  gitOperation,
   GIT_READ_ONLY_OPERATIONS,
   logGitCommandResult,
   parseGitInvocation,
