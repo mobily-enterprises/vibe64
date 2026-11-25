@@ -125,22 +125,47 @@ function accepts(version, range) {
   return Boolean(version) && (!semver.validRange(range) || semver.satisfies(version, range, { includePrerelease: true }));
 }
 
+/** The manifests of the packages npm installed directly in a copy's own node_modules. */
+async function nestedManifests(copyDir) {
+  const nodeModules = path.join(copyDir, "node_modules");
+  const manifests = [];
+  for (const entry of await readdir(nodeModules, { withFileTypes: true }).catch(() => [])) {
+    if (entry.name.startsWith(".")) continue;
+    const names = entry.name.startsWith("@")
+      ? (await readdir(path.join(nodeModules, entry.name)).catch(() => [])).map(child => `${entry.name}/${child}`)
+      : [entry.name];
+    for (const name of names) {
+      const manifest = await readJsonFile(path.join(nodeModules, name, "package.json")).catch(() => null);
+      if (manifest) manifests.push(manifest);
+    }
+  }
+  return manifests;
+}
+
 /**
  * What each swap moves aside with the published copy: a dependency the connected package needs
  * that npm installed in the copy's own node_modules at a version the package does not accept. npm
  * nested it there for the published version's own pin, so it belongs to that copy, and the
- * connected package resolves past it. A connected package there is swapped instead, and a link has
- * no node_modules of its own. Copies installed inside what goes aside go with it.
+ * connected package resolves past it. It stays when a package nested beside it needs that version
+ * and would not get one it accepts past it (the check then refuses), a connected package there is
+ * swapped instead, and a link has no node_modules of its own. Copies installed inside what goes
+ * aside go with it.
  * @returns {Promise<{ copies: Array<object>, aside: Map<string, string[]>, gone: Set<string> }>}
  */
 async function swapPlan({ connectedVersions, copies, packages }) {
   const aside = new Map();
   for (const copy of copies.filter(candidate => !candidate.link)) {
     const names = [];
+    let beside = null;
     for (const [name, range] of registryDependencies(packages.find(entry => entry.name === copy.name).manifest)) {
       if (connectedVersions.has(name)) continue;
-      const nested = await readJsonFile(path.join(copy.dir, "node_modules", name, "package.json")).catch(() => null);
-      if (nested && !accepts(String(nested.version || ""), range)) names.push(name);
+      const nested = String((await readJsonFile(path.join(copy.dir, "node_modules", name, "package.json")).catch(() => null))?.version ?? "");
+      if (!nested || accepts(nested, range)) continue;
+      beside ??= await nestedManifests(copy.dir);
+      const past = (await resolveFromCopy(copy.tree, path.dirname(copy.dir), name))?.version;
+      const stillNeeded = beside.some(manifest => registryDependencies(manifest)
+        .some(([dependency, wanted]) => dependency === name && accepts(nested, wanted) && !accepts(past, wanted)));
+      if (!stillNeeded) names.push(name);
     }
     if (names.length) aside.set(copy.dir, names);
   }
