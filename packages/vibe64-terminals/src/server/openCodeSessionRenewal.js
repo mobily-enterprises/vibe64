@@ -106,7 +106,7 @@ function createOpenCodeSessionRenewalSeedReceipt({
       acknowledgedAt,
       freshThread: result.freshThread,
       handoverHash: approved.handoverHash,
-      ok: proof?.exited !== false,
+      ok: proof?.exited === true,
       operationId,
       processExitProof: proof,
       source: approved.source,
