@@ -60,7 +60,7 @@ test("a collected unit cannot overwrite the runner's exit and task-denial receip
   const exitObservedAt = "2026-10-14T00:06:05.000Z";
   const taskLimit = { source: "cgroup-pids-events", scope: "execution", count: 1 };
   const state = managedExecutionState(oomUnit, "execution", {}, {
-    query: () => ({ stdout: "LoadState=not-found\nActiveState=inactive\nResult=success\nExecMainCode=0\nExecMainStatus=0\nTasksMax=9999\n" }),
+    query: () => ({ status: 0, stdout: "LoadState=not-found\nActiveState=inactive\nResult=success\nExecMainCode=0\nExecMainStatus=0\nTasksMax=9999\n" }),
     readResult: () => ({ executionId: "execution", startedAt, exitObservedAt,
       result: "exit-code", execMainCode: "exited", execMainStatus: "23", taskLimit, tasksPeak: "128" })
   });
@@ -398,7 +398,7 @@ test("execution Stop bounds are whole milliseconds up to the helper's limit", ()
 
 test("an inspection reports that the runner stopped its child because the controller went away", () => {
   const state = (receipt) => managedExecutionState(oomUnit, "execution", {}, {
-    query: () => ({ stdout: "LoadState=loaded\nActiveState=failed\nResult=exit-code\nExecMainCode=1\nExecMainStatus=1\n" }),
+    query: () => ({ status: 0, stdout: "LoadState=loaded\nActiveState=failed\nResult=exit-code\nExecMainCode=1\nExecMainStatus=1\n" }),
     readResult: () => ({ executionId: "execution", execMainCode: "killed", execMainStatus: "SIGTERM", signal: "SIGTERM", ...receipt })
   });
   assert.equal(state({ controllerLeaseClosed: true }).controllerLeaseClosed, true);

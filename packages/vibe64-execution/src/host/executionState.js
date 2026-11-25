@@ -128,6 +128,10 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}, {
       values[line.slice(0, separator)] = line.slice(separator + 1);
     }
   }
+  // A systemctl that could not answer (no binary, no bus, a refused call)
+  // says nothing about the unit: its state and scope are unknown, never ended
+  // or empty. A unit systemd does not know is an answer (exit 0, not-found).
+  const answered = !stateResult.error && stateResult.status === 0 && Boolean(values.LoadState);
   // systemctl supplies defaults even for a collected transient unit. They
   // describe no execution and must not replace the runner's saved receipt.
   if (values.LoadState === "not-found") {
@@ -140,7 +144,7 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}, {
   const counters = managedWorkflowCounters(cgroupPath);
   // Delegated services can put every process in child groups. Only the
   // hierarchical populated counter proves the whole execution empty.
-  const scopeEmpty = cgroupPath && existsSync(cgroupPath) ? counters.scopeEmpty : true;
+  const scopeEmpty = !answered ? null : cgroupPath && existsSync(cgroupPath) ? counters.scopeEmpty : true;
   const recorded = executionId ? readResult(owner, executionId) : {};
   // Prefer the runner's child-exit observation to the later wrapper exit.
   // systemd still supplies evidence if OOM killed the runner before its receipt.
@@ -151,7 +155,7 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}, {
     ? new Date(exitTime).toISOString() : "";
   return {
     resourceCounters: recorded.resourceCounters || counters,
-    activeState: String(values.ActiveState || (recorded.executionId ? "inactive" : "unknown")),
+    activeState: answered ? String(values.ActiveState || (recorded.executionId ? "inactive" : "unknown")) : "unknown",
     controlGroup,
     cpuUsageNSec: maximumCounter(values.CPUUsageNSec, recorded.cpuUsageNSec),
     execMainCode: String(values.ExecMainCode || recorded.execMainCode || ""),
@@ -161,11 +165,13 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}, {
     ioReadBytes: maximumCounter(values.IOReadBytes, recorded.ioReadBytes),
     ioWriteBytes: maximumCounter(values.IOWriteBytes, recorded.ioWriteBytes),
     loadState: String(
-      values.LoadState && values.LoadState !== "not-found"
-        ? values.LoadState
-        : recorded.executionId
-          ? "recorded"
-          : "not-found"
+      !answered
+        ? "unknown"
+        : values.LoadState !== "not-found"
+          ? values.LoadState
+          : recorded.executionId
+            ? "recorded"
+            : "not-found"
     ),
     mainPid: String(values.MainPID || "0"),
     memoryCurrent: maximumCounter(values.MemoryCurrent, recorded.memoryCurrent),
@@ -382,7 +388,7 @@ function stopManagedExecution(unitName = "", executionId = "", owner = {}, {
   }
   return {
     executionId,
-    ok: state.scopeEmpty,
+    ok: state.scopeEmpty === true,
     scopeEmpty: state.scopeEmpty,
     stopped: initial.scopeEmpty === false,
     ...state
