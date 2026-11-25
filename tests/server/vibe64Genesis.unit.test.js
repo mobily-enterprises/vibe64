@@ -254,9 +254,9 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /set it up from the app framework's own pattern as part of the work instead of merely offering it/u);
   assert.match(session, /continue independent setup work/u);
   assert.match(session, /vibe64-helper --help/u);
-  // Nothing a command leaves running outlives it on a managed host, so the AI keeps long work in its tool's own
-  // background mode and never detaches it.
-  assert.match(session, /Never leave a process running past the command that started it \(`&` without `wait`, `nohup`, `setsid`, `disown`, `screen -dm`\): on a managed host it stops when that command ends\. Run long work, such as a whole test suite, in your tool's own background mode with a long time limit and read its output there; application servers run as Preview\./u);
+  // A server or a long run goes in the AI tool's own background mode or Preview, never detached: on a managed host
+  // whatever a command leaves running is stopped when that command ends.
+  assert.match(session, /Run a server or a long run, such as a whole test suite, in your tool's own background mode with a long time limit, reading its output there, or run the application's servers as Preview; never detach one with `&`, `nohup`, `setsid`, `disown` or `screen`\. On a managed host, whatever a command leaves running is stopped when that command ends\./u);
   assert.doesNotMatch(session, /vibe64-(?:preview|playwright|env|database|github)\b/u);
   // A repository's own instructions and scripts (npx playwright, a test:e2e script) never start Playwright in a
   // managed session: the same suite runs through vibe64-helper playwright, the helper's no-runtime advice aside.
