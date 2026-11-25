@@ -32,10 +32,12 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  agentControlFilePath,
   runVibe64Command,
   stopVibe64Execution,
   stopVibe64OwnedExecutions,
-  VIBE64_INTERACTIVE_RUNTIME_PACKS
+  VIBE64_INTERACTIVE_RUNTIME_PACKS,
+  writeAgentControlFile
 } from "@local/vibe64-execution/server";
 import {
   genesisParserEnvironment,
@@ -696,49 +698,41 @@ async function prepareAgentSessionCommand({
   const normalizedSessionId = toText(sessionId);
   const normalizedWrapperHostDir = toText(wrapperHostDir);
   if (!normalizedSessionId || !normalizedWrapperHostDir) {
-    return {
-      env: {},
-      ok: false
-    };
+    return { env: {}, ok: false };
   }
   assertSessionTempRootFits(); // a TMPDIR too long for its sessions' sockets stops the AI here, naming the fix
   await commandService.bindSession(normalizedSessionId, {
     wrapperHostDir: normalizedWrapperHostDir
   });
+  // The session control's file holds its control token, never the shell-execution token managed child commands lack.
+  const controlFilePath = agentControlFilePath(normalizedWrapperHostDir, "session");
   await Promise.all([
-    writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-plan"), planCommandSource(SESSION_RENAME_CONTROL_ENV)),
-    writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-session"), sessionRenameCommandSource()),
-    writeExecutableFileIfChanged(
-      wrapperHostPath(normalizedWrapperHostDir),
-      commandWrapperSource()
-    ),
-    writeExecutableFileIfChanged(
-      runnerHostPath(normalizedWrapperHostDir),
-      commandRunnerSource()
-    )
+    writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-plan"), planCommandSource(SESSION_RENAME_CONTROL_ENV, controlFilePath)),
+    writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-session"), sessionRenameCommandSource(controlFilePath)),
+    writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource()),
+    writeExecutableFileIfChanged(runnerHostPath(normalizedWrapperHostDir), commandRunnerSource())
   ]);
-  const server = await commandServers.ensure({
-    commandService,
+  const socketPath = commandSocketHostPath(normalizedWrapperHostDir);
+  const server = await commandServers.ensure({ commandService, sessionId: normalizedSessionId, socketPath });
+  const control = {
+    socketPath: server.socketPath,
     sessionId: normalizedSessionId,
-    socketPath: commandSocketHostPath(normalizedWrapperHostDir)
-  });
+    generationId: server.generationId,
+    token: server.controlToken
+  };
+  await writeAgentControlFile(controlFilePath, control);
   return {
     controlGenerationId: server.generationId,
     env: {
-      [SESSION_RENAME_CONTROL_ENV]: JSON.stringify({
-        socketPath: server.socketPath,
-        sessionId: normalizedSessionId,
-        generationId: server.generationId,
-        token: server.controlToken
-      }),
+      [SESSION_RENAME_CONTROL_ENV]: JSON.stringify(control),
       [VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV]: AGENT_SESSION_COMMAND_CONTRACT_VERSION,
       [VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV]: server.generationId,
       [VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV]: normalizedSessionId,
-      [VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV]: commandSocketHostPath(normalizedWrapperHostDir),
+      [VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV]: socketPath,
       [VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV]: server.token,
       [VIBE64_WRAPPER_ENV]: wrapperHostPath(normalizedWrapperHostDir)
     },
-    hostSocketPath: commandSocketHostPath(normalizedWrapperHostDir),
+    hostSocketPath: socketPath,
     hostWrapperPath: wrapperHostPath(normalizedWrapperHostDir),
     ok: true
   };

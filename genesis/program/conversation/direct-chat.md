@@ -3238,6 +3238,26 @@ Late replies recheck the same connection before recovery and before publication;
 the existing close operation retains ownership of Stop. A failed control check
 on a current connection still follows ordinary observation-loss recovery.
 
+A wrapper reads its control's socket, session, token and generation from the
+environment the agent received when that names all four, else from the
+session's control file, whose path the wrapper is written with
+(`agentControlIdentity.js`): `controls/<git|env|database|pages|preview|session>.json`
+in the session's helper directory, `0600` in a `0700` folder, rewritten whole
+each time the control is prepared. A program the agent starts may run its own
+children with secret-looking variables blanked (a project's tests often blank
+every `*_TOKEN`), removed or with nothing but PATH; those children are still the
+session's, and their `git`, `gh`, `vibe64-env` (and its staging `ssh`),
+`vibe64-database`, `vibe64-pages`, `vibe64-preview` (and `vibe64-playwright`),
+`vibe64-session` and `vibe64-plan` reach the same control. The file reaches no
+process that could not already read that environment: the session's commands
+run as the workspace's own account, which alone reads it, and only the session's
+helper directory on PATH names it. The control checks what the file names as it
+checks the environment, and an environment naming a whole but stale identity is
+still refused. The session control's file holds its control token, never the
+shell-execution token, so `vibe64-session-command` stays out of a managed
+child's reach. `agentControlChildEnvironment.unit.test.js` runs each command in
+such children.
+
 A timed-out or otherwise uncertain Unix control health probe fails retryably
 without replacing the existing listener or rotating its credentials. Proven dead
 socket errors still permit replacement. The shared control owner logs the failed
@@ -3742,11 +3762,11 @@ session state, not temporary files: an agent keeps their paths for its whole lif
 `codexAttachmentPaths.js` owns their root, `<system root>/attachments`, which the
 server names at startup. The terminals feature passes it in every caller's
 environment, startup preparation included, so every caller resolves the same
-root; an environment that names none uses the local state root. Helpers are rewritten idempotently whenever an
-assistant starts or reconnects. Only the listening sockets stay in temporary space.
+root; an environment that names none uses the local state root. Helpers and their control files are rewritten
+idempotently whenever an assistant starts or reconnects. Only the listening sockets stay in temporary space.
 A session's final close (its archive, in the stopping phase, or the discard of a
 renewal successor that never went live, just before its record is removed)
-removes its own `codex-git-command/<hash>/` directory and stops its Git control;
+removes its own `codex-git-command/<hash>/` directory, control files included, and stops its Git control;
 renewal, changeover and project runtime closes keep both, because the same
 session reconnects and rewrites them.
 An archived session, such as a renewed predecessor, prepares no assistant: its

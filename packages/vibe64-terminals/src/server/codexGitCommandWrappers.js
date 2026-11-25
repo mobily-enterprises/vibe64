@@ -2,7 +2,12 @@
 
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { normalizeText } from "@local/vibe64-execution/server";
+import {
+  agentControlEnvironmentIdentitySource,
+  agentControlFilePath,
+  normalizeText,
+  writeAgentControlFile
+} from "@local/vibe64-execution/server";
 import { codexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { CODEX_GIT_COMMAND_FORWARDED_ENV_NAMES } from "./codexGitCommandPlaces.js";
 import { CODEX_GIT_COMMAND_PROGRAM_ENV_NAMES } from "./codexGitCommandToken.js";
@@ -16,6 +21,7 @@ const CODEX_GIT_COMMAND_WRAPPER_NAMES = Object.freeze(["git", "gh", "vibe64-gith
 
 const CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS = 2000;
 
+const VIBE64_CODEX_GIT_COMMAND_ENV_PREFIX = "VIBE64_CODEX_GIT_COMMAND";
 const VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV = "VIBE64_CODEX_GIT_COMMAND_SESSION_ID";
 const VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV = "VIBE64_CODEX_GIT_COMMAND_SOCKET";
 const VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV = "VIBE64_CODEX_GIT_COMMAND_TOKEN";
@@ -71,8 +77,15 @@ function wrapperHostPath(options, command = "") {
   return path.join(commandHostDir(options), command);
 }
 
-function wrapperScriptSource() {
+/** @param {{ env: RuntimeEnv, sessionId?: string, stateRoot?: string }} options */
+function controlFileHostPath(options) {
+  return agentControlFilePath(commandHostDir(options), "git");
+}
+
+/** @param {string} controlFilePath */
+function wrapperScriptSource(controlFilePath) {
   return `#!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
@@ -152,10 +165,7 @@ if (!allowedCommands.has(command)) {
   fail("Codex git command wrapper was invoked with an unsupported command.");
 }
 
-const socketPath = process.env.${VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV} || "";
-const sessionId = process.env.${VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV} || "";
-const token = process.env.${VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV} || "";
-const generationId = process.env.${VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV} || "";
+${agentControlEnvironmentIdentitySource({ controlFilePath, envPrefix: VIBE64_CODEX_GIT_COMMAND_ENV_PREFIX })}const { generationId, sessionId, socketPath, token } = controlIdentity;
 const noStdinParentPid = Number.parseInt(
   process.env.VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID || "",
   10
@@ -243,11 +253,20 @@ async function writeWrappers(options) {
   await mkdir(dir, {
     recursive: true
   });
-  const source = wrapperScriptSource();
+  const source = wrapperScriptSource(controlFileHostPath(options));
   await Promise.all(CODEX_GIT_COMMAND_WRAPPER_NAMES.map(async (command) => {
     const filePath = wrapperHostPath(options, command);
     await writeExecutableFileIfChanged(filePath, source);
   }));
+}
+
+/**
+ * Writes the session's Git control file, which the wrappers read when their environment does not name the control.
+ * @param {{ env: RuntimeEnv, sessionId?: string, stateRoot?: string }} options
+ * @param {{ generationId: string, sessionId: string, socketPath: string, token: string }} server the live control
+ */
+function writeControlFile(options, { generationId, sessionId, socketPath, token }) {
+  return writeAgentControlFile(controlFileHostPath(options), { generationId, sessionId, socketPath, token });
 }
 
 /**
@@ -287,5 +306,6 @@ export {
   commandHostDir,
   commandSocketHostPath,
   VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
+  writeControlFile,
   writeWrappers
 };

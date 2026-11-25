@@ -145,6 +145,12 @@ export {
 export {
   agentEnvWrapperSource
 } from "./runtime/agentEnvWrapperSource.js";
+export {
+  agentControlEnvironmentIdentitySource,
+  agentControlFilePath,
+  agentControlIdentitySource,
+  writeAgentControlFile
+} from "./runtime/agentControlIdentity.js";
 export { createVibe64ConversationExecution } from "./conversationExecution.js";
 export {
   localToolInstall,

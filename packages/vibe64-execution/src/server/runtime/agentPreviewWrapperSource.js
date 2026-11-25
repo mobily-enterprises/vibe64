@@ -1,3 +1,5 @@
+import { agentControlEnvironmentIdentitySource } from "./agentControlIdentity.js";
+
 // The wrapper owns the preview CLI surface, so help works without the
 // control socket; the session command service reuses this text.
 const AGENT_PREVIEW_USAGE = [
@@ -48,14 +50,20 @@ const AGENT_PREVIEW_USAGE = [
   "A distinct secondary application explicitly requested by the user, such as a reference app, may run separately without replacing this preview."
 ].join("\n") + "\n";
 
+/**
+ * @param {{ browserSocketPath?: string, contractVersion?: string, controlFilePath?: string, managedNodePath?: string,
+ *   workerScriptPath?: string }} [options] controlFilePath: the session's Preview control file (agentControlIdentity.js)
+ */
 function agentPreviewWrapperSource({
   browserSocketPath = "",
   contractVersion = "1",
+  controlFilePath = "",
   managedNodePath = "",
   workerScriptPath = ""
 } = {}) {
   return `#!/usr/bin/env node
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
@@ -65,10 +73,12 @@ const contractVersion = ${JSON.stringify(String(contractVersion || "1"))};
 const managedNodePath = ${JSON.stringify(String(managedNodePath || ""))};
 const workerScriptPath = ${JSON.stringify(String(workerScriptPath || ""))};
 const browserSocketPath = ${JSON.stringify(String(browserSocketPath || ""))};
-const controlSocketPath = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SOCKET || "").trim();
-const controlToken = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_TOKEN || "").trim();
-const controlGeneration = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_GENERATION || "").trim();
-const sessionId = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID || "").trim();
+${agentControlEnvironmentIdentitySource({ controlFilePath, envPrefix: "VIBE64_AGENT_PREVIEW_COMMAND" })}const {
+  generationId: controlGeneration,
+  sessionId,
+  socketPath: controlSocketPath,
+  token: controlToken
+} = controlIdentity;
 const usage = ${JSON.stringify(AGENT_PREVIEW_USAGE)};
 const browserEvalUsage = "Usage: vibe64-helper preview browser eval < playwright-code.js\\nNavigate through Preview: await page.goto(new URL('/your-path', preview.url).href);\\npreview.url is the managed proxy; direct application ports bypass Preview identity.";
 const workerToken = crypto.createHash("sha256")

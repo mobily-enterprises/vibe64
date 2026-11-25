@@ -10,6 +10,7 @@ import {
   readSessionUiSyncStateForSession
 } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
+  agentControlFilePath,
   agentPlaywrightCommandSource,
   agentPreviewBrowserWorkerSource,
   agentPreviewWrapperSource,
@@ -18,7 +19,8 @@ import {
   runtimePackRoot,
   stopVibe64Execution,
   stopVibe64OwnedExecutions,
-  vibe64ManagedExecutionProvider
+  vibe64ManagedExecutionProvider,
+  writeAgentControlFile
 } from "@local/vibe64-execution/server";
 import {
   writeExecutableFileIfChanged
@@ -305,6 +307,7 @@ async function prepareAgentPreviewCommand({
     previewWrapperSource: agentPreviewWrapperSource({
       browserSocketPath,
       contractVersion: AGENT_PREVIEW_COMMAND_CONTRACT_VERSION,
+      controlFilePath: agentControlFilePath(normalizedWrapperHostDir, "preview"),
       managedNodePath,
       workerScriptPath
     }),
@@ -314,6 +317,13 @@ async function prepareAgentPreviewCommand({
     commandService,
     sessionId: normalizedSessionId,
     socketPath: controlSocketPath
+  });
+  await writeAgentControlFile(agentControlFilePath(normalizedWrapperHostDir, "preview"), {
+    contractVersion: AGENT_PREVIEW_COMMAND_CONTRACT_VERSION,
+    generationId: server.generationId,
+    sessionId: normalizedSessionId,
+    socketPath: controlSocketPath,
+    token: server.token
   });
   const token = browserWorkerToken({
     commandToken: server.token,
