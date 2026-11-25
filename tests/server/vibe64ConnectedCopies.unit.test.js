@@ -330,7 +330,10 @@ test("Save refuses before any push while a copy is behind its main, even a copy 
     assert.equal(error.code, "vibe64_session_save_update_required");
     assert.equal(error.details.connectedRepository, "tools");
     assert.equal(error.details.updateRequired, true);
-    assert.match(error.message, /^tools has newer saved work\. Update this session/u);
+    // How many newer saved versions the copy's main has, when and how many files, and the one fix: Update, then Save.
+    assert.match(error.message, /^In connected repository tools, main has 1 newer saved version \((just now|1 minute ago), 1 file\)\. Update this session to take it in \(your unsaved work stays\), then Save\.$/u);
+    assert.equal(error.details.newerSaved.repository, "tools");
+    assert.equal(error.details.newerSaved.incomingVersions[0].commit, toolsPeer);
     return true;
   });
   assert.deepEqual(events, []);
@@ -409,7 +412,8 @@ test("a copy's push refused because its main moved becomes Update first and stop
   await assert.rejects(save(f, { events }), (error) => {
     assert.equal(error.code, "vibe64_session_save_update_required");
     assert.equal(error.details.connectedRepository, "library");
-    assert.match(error.message, /^library has newer saved work\. Update this session/u);
+    // Main moved while the copy pushed: Vibe64 knows only that it has newer saved work.
+    assert.equal(error.message, "In connected repository library, main has newer saved work. Update this session to take it in (your unsaved work stays), then Save.");
     return true;
   });
   assert.equal(await pathExists(hook), false, "the push reached the repository");
@@ -592,7 +596,8 @@ test("Save refuses before any copy is pushed while the session's own repository,
     service.work.saveSessionWork(SESSION_ID, { destinationReview: service.destinationReview, operationId: "save-1" }),
     (error) => {
       assert.equal(error.code, "vibe64_session_save_update_required");
-      assert.match(error.message, /^The saved branch has changed\. Update this session/u);
+      assert.match(error.message, /^Main has 1 newer saved version \((just now|1 minute ago), 1 file\)\. Update this session to take it in \(your unsaved work stays\), then Save\.$/u);
+      assert.equal(error.details.newerSaved.incomingVersions[0].commit, ownPeer);
       return true;
     }
   );

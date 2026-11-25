@@ -275,6 +275,39 @@ describe("useVibe64RepositoryWorkspace", () => {
     expect(refreshSessionWork).toHaveBeenCalledWith();
   });
 
+  it("holds Save behind main with the plain message: how many newer saved versions, when, from whom and how many files, then Update and Save", async () => {
+    const savedAt = new Date().toISOString();
+    mocks.updateCheck = {
+      behind: 1,
+      branch: "main",
+      incomingFileCount: 2,
+      incomingVersions: [{ commit: "d".repeat(40), committedAt: savedAt, message: "Filter the list",
+        savedBy: { savedAt, sessionId: "2026-1125-0811-passes", sessionName: "Passes" }, shortCommit: "dddddddd" }],
+      relationship: "behind",
+      updateAvailable: true,
+      updateStrategy: "rebase"
+    };
+    mocks.changes = { changedPaths: ["src/inbox.js"], totalCount: 1, unsaved: true };
+    const { useVibe64RepositoryWorkspace } = await import(
+      "../../src/composables/useVibe64RepositoryWorkspace.js"
+    );
+    const workspace = useVibe64RepositoryWorkspace(ref({
+      requestSaveWork: vi.fn(async () => ({ ok: true })),
+      sessionId: "2026-1125-0802-inbox",
+      sessionsApiPath: "/api/app/sample/vibe64/sessions",
+      workState: { unsaved: true }
+    }), { view: ref("changes") });
+
+    await nextTick();
+    await flushPromises();
+
+    const clock = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(savedAt));
+    expect(workspace.saveWorkBlockedReason.value).toBe(
+      `Main has 1 newer saved version (${clock}, from the Passes session, 2 files). Update this session to take it in (your unsaved work stays), then Save.`
+    );
+    expect(workspace.saveWorkBlocked.value).toBe(true);
+  });
+
   it("offers Save from the session's answer: a pin to record with no changed file, but not a session with nothing", async () => {
     mocks.changes = { changedPaths: [], files: [], totalCount: 0, unsaved: false };
     const requestSaveWork = vi.fn(async () => ({ ok: true }));

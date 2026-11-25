@@ -327,6 +327,7 @@ test("session status gives the assistant the stored reason a repository needs he
   assert.deepEqual(updateFirst, {
     reason: "failed",
     behind: 1,
+    branch: "main",
     canonicalCommit: saved,
     incomingVersions: [{ shortCommit: "bbbbbbbb", message: incoming.message }],
     incomingVersionsTruncated: false,
