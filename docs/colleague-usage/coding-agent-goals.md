@@ -189,15 +189,27 @@ restart (for example the AI is still busy, slow to start or cannot be checked
 yet), Vibe64 tries again about 30 seconds, 2 minutes and 10 minutes later. Until
 then the goal control shows the error ending in **Vibe64 tries again shortly.**;
 it disappears once the goal continues. A goal is never sent twice: an attempt
-that may have reached the AI is checked, not repeated. An error still shown after
-the last attempt stays visible on the goal control.
-Main chat's history says so in red: what stopped the goal and when, on your own
-clock (for example **Vibe64 crashed at 12:18: read ECONNRESET.**), then
-**Resumed after Vibe64 restarted at 12:18.** If the goal is interrupted again
-within 10 minutes of being continued, Vibe64 pauses it instead of continuing it
-in a loop, and the entry reads **Not resumed: stopped: Vibe64 restarted twice
-while it ran. Choose Resume goal to try again.** No later restart continues it
-until you choose **Resume goal**.
+that may have reached the AI is checked, not repeated. When the last attempt
+fails too, Vibe64 stops trying: Main chat's history says why in red, for
+example **Not resumed: Sign in to Claude Code with your Claude account before
+continuing. Choose Resume goal to try again.**, the goal control keeps that
+error, and no later restart tries it again until you choose **Resume goal** or
+send your next message.
+If the AI account was changed or reconnected in **AI Accounts** while the goal
+ran, the goal continues on the account connected now, as **Resume goal** would.
+Main chat's history says each time on your own clock. An update or an orderly
+restart (a release, a rollback, a server restart) is one green line, for example
+**Vibe64 was updated at 7:54 PM; the goal carried on.** (adding **with the AI
+account connected now** when it changed), and never stops the goal however
+often it comes. A crash is told in red: what stopped the goal and when (for
+example **Vibe64 crashed at 12:18: read ECONNRESET.**), then **Resumed after
+Vibe64 restarted at 12:18.** The third unexpected end in a row (each within 10
+minutes of being continued) pauses it instead of continuing it in a loop, and
+the entry reads **Not resumed: stopped: Vibe64 stopped unexpectedly three times
+in a row while it ran. Choose Resume goal to try again.** A goal that Vibe64 is
+stopped and started again 10 times in a row, each within 10 minutes, is
+paused the same way. No later restart continues a paused goal until you choose
+**Resume goal**.
 **Pause goal**,
 **Cancel goal**, and **Stop** (until your next message) prevent that automatic
 continuation. A completed
@@ -226,8 +238,8 @@ next message also continues it). **Pause goal** (Claude) and **Cancel goal** wor
 while it waits. Existing goals are not guessed from their
 old paused status: choose **Resume goal** once to enroll the intended goal.
 
-If the account changed, cleanup cannot be verified, or an interrupted goal
-command has uncertain delivery, recovery stays stopped. Check the original
+If cleanup cannot be verified, or an interrupted goal command has uncertain
+delivery, recovery stays stopped. Check the original
 receipt and current account, then use **Resume goal** (a Claude goal that shows
 as active offers **Pause goal** instead: send a message to continue it, or choose
 **Pause goal** and then **Resume goal**); an uncertain command is

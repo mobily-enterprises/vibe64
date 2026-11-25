@@ -25,6 +25,8 @@ const GOAL_RECOVERY_RETRY_DELAYS_MS = Object.freeze([30_000, 2 * 60_000, 10 * 60
  * @param {(sessionId: string) => Promise<object>} dependencies.recoverSessionGoal Continues one session's goal, or says why not.
  * @param {(session: object) => any} dependencies.readGoalIntent
  * @param {(sessionId: string, context: object, change: (latest: any) => any) => Promise<unknown>} dependencies.changeGoalIntent
+ * @param {(sessionId: string, context: object, intent: object, error: string) => Promise<void>} dependencies.stopUnrecoverableGoal
+ *   Writes the red entry of a goal the last pass stopped.
  */
 function createServiceGoalRecovery({
   state,
@@ -34,11 +36,15 @@ function createServiceGoalRecovery({
   assistantContext,
   recoverSessionGoal,
   readGoalIntent,
-  changeGoalIntent
+  changeGoalIntent,
+  stopUnrecoverableGoal
 }) {
   /**
    * One pass over the open projects' goals. This is continuation of saved
    * intent, never history repair; a goal this server already continued is skipped.
+   * The last pass stops a goal it could not continue: its intent ends, so no
+   * later restart tries it again unseen, and its error and red entry say why and
+   * that Resume goal continues it. A goal the server before still runs is left to it.
    * @param {boolean} retrying Whether another pass follows a failure.
    */
   async function recoverGoalsPass(retrying) {
@@ -66,20 +72,34 @@ function createServiceGoalRecovery({
           try {
             actor = String(readGoalIntent(session)?.actor?.username || "");
           } catch { /* An unreadable intent names no one. */ }
+          const stops = !retrying && error.code !== "vibe64_goal_previous_server_running";
+          const reason = String(error.message || "Recovery could not be verified.").slice(0, 500);
+          let stopped = null;
           try {
             const context = await assistantContext.assistantSessionOptions(session.sessionId);
             const expected = readGoalIntent(session);
-            await changeGoalIntent(
-              session.sessionId,
-              context,
-              latest => latest?.active && (latest.id === expected?.id || latest.restartOf === expected?.id) ? {
+            await changeGoalIntent(session.sessionId, context, latest => {
+              if (!latest?.active || (latest.id !== expected?.id && latest.restartOf !== expected?.id)) return null;
+              stopped = stops ? latest : null;
+              return {
                 ...latest,
-                error: `Goal continuation after restart failed: ${String(error.message || "Recovery could not be verified.").slice(0, 500)}` +
-                  (retrying ? " Vibe64 tries again shortly." : "")
-              } : null
-            );
+                ...(stops ? { active: false } : {}),
+                error: `Goal continuation after restart failed: ${reason}` +
+                  (stops ? " Choose Resume goal to try again." : retrying ? " Vibe64 tries again shortly." : "")
+              };
+            });
+            if (stopped) await stopUnrecoverableGoal(session.sessionId, context, stopped, reason);
           } catch { /* The original recovery failure remains visible in the operational log. */ }
-          reportFailure(error, { projectSlug, sessionId: session.sessionId, ...(actor ? { actor } : {}) });
+          const target = { projectSlug, sessionId: session.sessionId, ...(actor ? { actor } : {}) };
+          reportFailure(error, { ...target, ...(stopped ? { stopped: true } : {}) });
+          if (stopped) {
+            logOperationalEvent(logger, "warn", {
+              ...target,
+              event: "vibe64.agent_goal.recovery_stopped",
+              component: "vibe64.agent_goal",
+              code: error.code
+            }, "A goal no attempt after the restart could continue was stopped; Resume goal continues it.");
+          }
         }
       }
     };

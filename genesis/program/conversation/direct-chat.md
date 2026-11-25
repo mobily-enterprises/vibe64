@@ -794,13 +794,23 @@ a browser session or treats serialized user metadata as signed-in authority.
 A goal that cannot continue after restart, including when its actor can no
 longer be resolved, records `vibe64.agent_goal.recovery_failed` with its project,
 session and the username that set the goal, besides the visible goal error.
+Recovery continues a goal on the AI connection its selection has now
+(`followConnection` in `writeAgentGoal`), as Resume goal and Main chat's messages
+do, and holds the rest of that recovery to it: an account changed or reconnected
+since the goal ran is told in its entry ("with the AI account connected now"),
+and one its actor cannot use fails the pass.
 Recovery is one pass over the open projects' sessions, repeated after 30 seconds,
 2 minutes and 10 minutes while a pass failed, since the AI can still be busy or
 slow to start after the restart; shutdown cancels the next pass. A repeated pass
 sends nothing twice: it skips intent this server already continued, and a
 continuation that may have been dispatched keeps that server's intent. The
 visible error says when another attempt follows, and the continuation's new
-intent clears it.
+intent clears it. The last pass stops a goal it could not continue, unless the
+server before still runs it: its intent ends with the error and "Choose Resume
+goal to try again.", Main chat's history gets its red `not-resumed` entry with that
+reason (`stopUnrecoverableGoal`), and `vibe64.agent_goal.recovery_stopped` is
+logged once, so no later restart retries it unseen; Resume goal or the person's
+next message continues it.
 Main OpenCode's common driver consumes the original shared runtime directly.
 Its native-state read selects the existing target/thread, reads the existing PTY
 snapshot, then projects the same native turn map. Vibe64 supplies current context,
@@ -5374,10 +5384,16 @@ engine stop resumes at once; a lost connection or overloaded service after
 `TURN_RESUME_BACKOFF_MS` (30 s, Continue resumes sooner); a sign-in, usage limit
 or other error is never resumed. The resume is a follow-up (`followup.resume`)
 in the same conversation and engine session whose message leads with
-`resumeNoteForAi`. The request keeps its last five interruptions
-(`interruptions`): one within `TURN_RESUME_LOOP_WINDOW_MS` (10 min) of the last
-resume stops the request, waiting with "Stopped: Vibe64 restarted twice while it
-ran. Choose Continue to try again." A person's Stop, a cancelled request, a goal
+`resumeNoteForAi`. The request keeps its last nine interruptions
+(`interruptions`) for the loop rule (`nextTurnInterruptions`). A planned stop (an
+update or an orderly restart, which the stopped run recorded) never counts. An
+unplanned end (a crash, a kill, an engine or a connection lost) stops the request
+the third time in a row (`TURN_RESUME_LOOP_LIMIT`), each within
+`TURN_RESUME_LOOP_WINDOW_MS` (10 min) of the resume before it, planned stops in
+between neither counting nor parting them; it waits with "Stopped: Vibe64 stopped
+unexpectedly three times in a row while it ran. Choose Continue to try again."
+The one backstop for planned stops: the tenth in a row
+(`TURN_RESUME_PLANNED_LOOP_LIMIT`), each within the window, stops it too. A person's Stop, a cancelled request, a goal
 turn (its goal recovery decides) and an AI task's turn (its runner decides) are
 never resumed here. A send left unsent is resent once, and one that may have
 reached the AI is inspected and never resent.
@@ -5385,8 +5401,10 @@ reached the AI is inspected and never resent.
 Each decision writes one system message in the chat's history, its id
 `vibe64-turn-interrupted:<interruption>:<outcome>` so a second writer adds
 nothing, its text in UTC and its turn's metadata `vibe64TurnInterruption`
-({cause, at, outcome, crash message, detail}); the chat draws it in the theme's
-error colour from that metadata with the viewer's own clock
+({cause, at, outcome, crash message, detail}); the chat draws it from that metadata
+with the viewer's own clock, in the theme's error colour, or, for a planned stop
+the work carried on through (`turnInterruptionCarriedOn`), as one line in its
+success colour such as "Vibe64 was updated at 7:54 PM; the goal carried on."
 ([Vibe64TurnInterruption.vue](../../../src/components/studio/vibe64-session/Vibe64TurnInterruption.vue),
 [turnInterruptionText.js](../../../packages/vibe64-terminals/src/shared/turnInterruptionText.js)).
 A crash's record counts the turns it interrupted that were resumed
@@ -5394,8 +5412,8 @@ A crash's record counts the turns it interrupted that were resumed
 ([serviceGoals.js](../../../packages/vibe64-terminals/src/server/serviceGoals.js),
 [serviceGoalInterruptions.js](../../../packages/vibe64-terminals/src/server/serviceGoalInterruptions.js))
 applies the same rule to a goal's intents: it writes the entry and continues the
-goal, carrying the interruptions into the new intent, or pauses it within the
-window. Both recoveries log, at warn so production keeps them, their start, each
+goal, carrying the interruptions into the new intent, or pauses it when the rule
+stops it. Both recoveries log, at warn so production keeps them, their start, each
 session's outcome and their totals.
 
 ## Recovery snapshot notice

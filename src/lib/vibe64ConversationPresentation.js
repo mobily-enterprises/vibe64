@@ -25,8 +25,9 @@ function presentationMessage(message, turn) {
 }
 
 /**
- * A turn interruption's red entry, from its turn's metadata (Vibe64TurnInterruption.vue draws it), as the system row
- * every chat shows: what ended the turn and what Vibe64 did.
+ * A turn interruption's entry, from its turn's metadata (Vibe64TurnInterruption.vue draws it, in red, or as one green
+ * line for a planned stop the work carried on through), as the system row every chat shows: what ended the turn and
+ * what Vibe64 did.
  * @param {{ system?: object, metadata?: { vibe64TurnInterruption?: object } }} turn
  */
 function turnInterruptionPresentation(turn) {

@@ -1,29 +1,37 @@
 <template>
   <v-alert
     class="vibe64-turn-interruption my-2"
-    type="error"
+    :type="carriedOn ? 'success' : 'error'"
     variant="tonal"
     density="compact"
     role="note"
     :data-outcome="entry.outcome"
   >
-    <p class="text-body-medium font-weight-medium">{{ lines[0] }}</p>
-    <p class="text-body-medium">{{ lines[1] }}</p>
+    <p
+      v-for="(line, index) in lines"
+      :key="index"
+      class="text-body-medium"
+      :class="{ 'font-weight-medium': index === 0 && lines.length > 1 }"
+    >
+      {{ line }}
+    </p>
   </v-alert>
 </template>
 
 <script setup>
 import { computed } from "vue";
-import { turnInterruptionLines } from "@local/vibe64-terminals/shared/turnInterruptionText";
+import { turnInterruptionCarriedOn, turnInterruptionLines } from "@local/vibe64-terminals/shared/turnInterruptionText";
 
-// A turn interruption's permanent red entry in a chat's history (turnInterruptions.js writes it): what ended the
-// turn, then whether Vibe64 resumed it or why not, with times on the viewer's own clock.
+// A turn interruption's permanent entry in a chat's history (turnInterruptions.js writes it), with times on the
+// viewer's own clock: in red, what ended the turn, then whether Vibe64 resumed it or why not; in green, one line for a
+// planned stop (a release, a restart) that the work carried on through, since nothing went wrong.
 const props = defineProps({ entry: { type: Object, required: true } });
 
 const localClock = at => {
   const date = new Date(at);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
+const carriedOn = computed(() => turnInterruptionCarriedOn(props.entry));
 const lines = computed(() => turnInterruptionLines(props.entry, localClock));
 </script>
 

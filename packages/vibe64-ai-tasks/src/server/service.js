@@ -32,7 +32,8 @@ function taskPerson(user) {
  */
 function presentAiTask({ conversationId, task }) {
   const {
-    input: _input, pending, problem, startedBy, cancelledBy: _cancelledBy, endedBy, turn: _turn, doneMessage: _doneMessage, ...shown
+    input: _input, pending, problem, startedBy, cancelledBy: _cancelledBy, endedBy, turn: _turn, doneMessage: _doneMessage,
+    interruptions: _interruptions, ...shown
   } = task;
   return {
     ...shown,

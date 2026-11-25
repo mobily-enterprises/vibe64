@@ -925,7 +925,7 @@ test.describe("a turn interruption", () => {
   // A viewer in Perth reads the server's 04:18 UTC on their own clock.
   test.use({ timezoneId: "Australia/Perth", locale: "en-GB" });
 
-  test("shows in red in the chat's history on the viewer's clock, and stays there after reload", async ({ page }, info) => {
+  test("an unexpected end shows in red in the chat's history on the viewer's clock, and stays there after reload", async ({ page }, info) => {
     server.state.session.agentSession.turn.active = false;
     const interruption = (turnId: string, at: string, entry: Record<string, unknown>, text: string) => ({ turnId,
       system: { role: "system", at, messageId: `vibe64-turn-interrupted:${turnId}:${entry.outcome}`, text },
@@ -935,16 +935,16 @@ test.describe("a turn interruption", () => {
       interruption("crashed", "2026-11-24T04:18:30.000Z",
         { cause: "crash", at: "2026-11-24T04:18:05.000Z", outcome: "resumed", crashMessage: "read ECONNRESET" },
         "Vibe64 crashed at 04:18 UTC: read ECONNRESET.\nResumed after Vibe64 restarted at 04:18 UTC."),
-      interruption("restarted", "2026-11-24T04:21:00.000Z", { cause: "restart", at: "2026-11-24T04:20:40.000Z", outcome: "loop" },
-        "Vibe64 restarted at 04:20 UTC (it was stopped and started again).\nNot resumed: stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.")
+      interruption("crashed-again", "2026-11-24T04:21:00.000Z", { cause: "crash", at: "2026-11-24T04:20:40.000Z", outcome: "loop" },
+        "Vibe64 restarted at 04:20 UTC (the server stopped unexpectedly).\nNot resumed: stopped: Vibe64 stopped unexpectedly three times in a row while it ran. Choose Continue to try again.")
     ];
     await openChat(page);
     const entries = page.locator(".vibe64-turn-interruption");
     const expectEntries = async () => {
       await expect(entries).toHaveCount(2);
       await expect(entries.nth(0)).toHaveText(/^\s*Vibe64 crashed at 12:18: read ECONNRESET\.\s*Resumed after Vibe64 restarted at 12:18\.\s*$/u);
-      await expect(entries.nth(1)).toHaveText(new RegExp("^\\s*Vibe64 restarted at 12:20 \\(it was stopped and started again\\)\\.\\s*" +
-        "Not resumed: stopped: Vibe64 restarted twice while it ran\\. Choose Continue to try again\\.\\s*$", "u"));
+      await expect(entries.nth(1)).toHaveText(new RegExp("^\\s*Vibe64 restarted at 12:20 \\(the server stopped unexpectedly\\)\\.\\s*" +
+        "Not resumed: stopped: Vibe64 stopped unexpectedly three times in a row while it ran\\. Choose Continue to try again\\.\\s*$", "u"));
       for (const index of [0, 1]) {
         // The theme's error colour, as a note in the history rather than an alert that interrupts a screen reader.
         await expect(entries.nth(index)).toHaveClass(/\btext-error\b/u);
@@ -956,5 +956,38 @@ test.describe("a turn interruption", () => {
     await page.reload();
     await expect(composer(page)).toBeVisible();
     await expectEntries();
+  });
+
+  test("a planned restart the work carried on through shows as one green informational line, not a red entry", async ({ page }, info) => {
+    server.state.session.agentSession.turn.active = false;
+    const carriedOn = (turnId: string, at: string, entry: Record<string, unknown>, text: string) => ({ turnId,
+      system: { role: "system", at, messageId: `vibe64-turn-interrupted:${turnId}:resumed`, text },
+      metadata: { vibe64TurnInterruption: { outcome: "resumed", ...entry } } });
+    server.state.conversationLog = [
+      { turnId: "asked", user: { role: "user", at: "2026-11-24T04:10:00.000Z", text: "Keep going until every check passes." } },
+      carriedOn("updated", "2026-11-24T04:18:30.000Z", { cause: "update", at: "2026-11-24T04:18:05.000Z", goal: true },
+        "Vibe64 was updated at 04:18 UTC; the goal carried on."),
+      carriedOn("restarted", "2026-11-24T04:21:00.000Z", { cause: "restart", at: "2026-11-24T04:20:40.000Z", goal: true, newConnection: true },
+        "Vibe64 was restarted at 04:20 UTC; the goal carried on with the AI account connected now.")
+    ];
+    await openChat(page);
+    const entries = page.locator(".vibe64-turn-interruption");
+    const expectLines = async () => {
+      await expect(entries).toHaveCount(2);
+      await expect(entries.nth(0)).toHaveText(/^\s*Vibe64 was updated at 12:18; the goal carried on\.\s*$/u);
+      await expect(entries.nth(1)).toHaveText(/^\s*Vibe64 was restarted at 12:20; the goal carried on with the AI account connected now\.\s*$/u);
+      for (const index of [0, 1]) {
+        // The theme's success colour, one line, as a note in the history: nothing went wrong.
+        await expect(entries.nth(index)).toHaveClass(/\btext-success\b/u);
+        await expect(entries.nth(index)).not.toHaveClass(/\btext-error\b/u);
+        await expect(entries.nth(index)).toHaveAttribute("role", "note");
+        await expect(entries.nth(index).locator("p")).toHaveCount(1);
+      }
+    };
+    await expectLines();
+    await page.screenshot({ path: info.outputPath("turn-carried-on.png") });
+    await page.reload();
+    await expect(composer(page)).toBeVisible();
+    await expectLines();
   });
 });

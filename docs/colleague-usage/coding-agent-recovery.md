@@ -26,37 +26,44 @@ sent twice.
 
 ## When a turn is interrupted
 
-When Vibe64 crashes, restarts, is updated or moved while the AI is working
-(even while your message is still being sent to it), or the AI's engine stops
-or its connection is lost, the chat's history says so in
-red where the turn stopped: what happened and when (on your own clock), then
-whether Vibe64 resumed the turn or why not. The entry stays after a reload and
-every member of the session sees it. A crash names its cause, for example
-**Vibe64 crashed at 12:18: read ECONNRESET.**
+When Vibe64 is updated, restarted in order (a release, a rollback, a server
+restart or a move) or crashes while the AI is working (even while your message
+is still being sent to it), or the AI's engine stops or its connection is lost,
+Vibe64 resumes the turn by itself in the same conversation with the same AI
+session, in Main chat, temporary chats and AI tasks, as the person who sent it.
+It does not wait for anyone to open the chat. Its message to the AI starts with
+a short Vibe64 note saying what interrupted it, and asks the AI to check the
+state of what it was doing (files, Git, commands it started) before repeating
+any step. The chat's history says so where the turn stopped, on your own clock;
+the entry stays after a reload and every member of the session sees it.
 
-Vibe64 then resumes the turn by itself, once, in the same conversation with the
-same AI session, in Main chat, temporary chats and AI tasks, as the person who
-sent it. It does not wait for anyone to open the chat. Its message to the AI
-starts with a short Vibe64 note saying what interrupted it, and asks the AI to
-check the state of what it was doing (files, Git, commands it started) before
-repeating any step. The second line reads **Resumed after Vibe64 restarted at
-12:18.** (or after the update, the engine stopping, the lost connection). After
+An update or an orderly restart is planned: nothing went wrong, so the entry is
+one green line, for example **Vibe64 was updated at 7:54 PM; this turn carried
+on.** (**the goal carried on** for a goal). Anything else is told in red: what
+happened and when, then whether Vibe64 resumed the turn or why not. A crash
+names its cause, for example **Vibe64 crashed at 12:18: read ECONNRESET.**, and
+the second line reads **Resumed after Vibe64 restarted at 12:18.** (or after the
+engine stopping, the lost connection). After
 a lost connection or an overloaded AI service it waits about 30 seconds first,
 and the chat says **Vibe64 resumes this turn shortly**: choose **Continue** to
 resume it now or **Cancel** to leave it. A message that may have reached the AI
 is never sent twice: when Vibe64 cannot confirm it arrived, the entry says so and
 **Retry** checks its receipt.
 
-If the same turn is interrupted again within 10 minutes of being resumed, Vibe64
-stops instead of resuming it in a loop: the entry reads **Not resumed: stopped:
-Vibe64 restarted twice while it ran.** and **Continue** tries again. A turn you
+Planned restarts never stop a turn, however close together. Unexpected ends
+do: when the same turn ends unexpectedly a third time in a row (each within 10
+minutes of being resumed), Vibe64 stops instead of resuming it in a loop: the
+entry reads **Not resumed: stopped: Vibe64 stopped unexpectedly three times in a
+row while it ran.** (or names the engine, the connection or the overloaded
+service) and **Continue** tries again. Only a turn that Vibe64 is stopped and
+started again 10 times in a row, each within 10 minutes, stops too. A turn you
 stopped, or one that had finished, is never resumed. When the AI account needs
 signing in again, the entry says so: sign in in **AI Accounts**, then choose
 **Continue**. At a usage limit, choose **Continue** or send a message once the
-limit resets. A goal resumes the same way, under the same 10-minute rule (see
+limit resets. A goal resumes the same way, under the same rule (see
 [Coding agent goals](coding-agent-goals.md)). In Main chat a Codex turn may also
 read **Codex was interrupted by a Vibe64 restart before it could finish**; the
-red entry after it says what Vibe64 did. While a resumed turn runs, Save and
+entry after it says what Vibe64 did. While a resumed turn runs, Save and
 Update wait for the AI as for any other turn; once a turn has stopped, nothing
 shows it as still working. Colleague can explain an entry and use **Continue**
 for you when you ask.
@@ -64,11 +71,13 @@ for you when you ask.
 For an operator investigation, each start of Vibe64 logs its recovery as
 warnings, which production keeps: `vibe64.turn_resume.recovery_started` and
 `vibe64.agent_goal.recovery_started` with the projects checked, one
-`recovery_outcome` line per turn or goal (resumed, stopped by the 10-minute
-rule, or skipped and why), `vibe64.turn_resume.resumed`,
+`recovery_outcome` line per turn or goal (resumed, stopped by the loop rule,
+stopped because no attempt could continue it, or skipped and why), `vibe64.turn_resume.resumed`,
 `vibe64.turn_resume.stopped_by_loop_rule` or `vibe64.turn_resume.skipped` for
 each Main and temporary chat turn, and `recovery_finished` with the totals. A
-crash's record counts the turns it interrupted that Vibe64 resumed.
+crash's record counts the turns it interrupted that Vibe64 resumed. A goal that
+no attempt after a restart could continue logs `vibe64.agent_goal.recovery_stopped`
+once.
 
 ## Other recovery
 A turn that finishes while Vibe64 is stopping keeps its reply, and its recovery
