@@ -9,6 +9,10 @@ on:
       - main
 permissions:
   contents: read
+# A newer push to the same branch, or a newer commit on the same pull request, cancels the run it supersedes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 env:
   npm_config_engine_strict: "true"
   npm_config_strict_allow_scripts: "true"
