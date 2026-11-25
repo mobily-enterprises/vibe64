@@ -220,7 +220,10 @@ that way stops at once. Work the coding tool keeps in its own background mode
 is unaffected. Nor can a command gain privileges there: it runs with no new
 privileges, so `sudo` and every other setuid program refuse inside it, and a
 system program the project needs is one the host's administrator adds, never
-one a command installs with `sudo`.
+one a command installs with `sudo`. For the same reason a FUSE mount (`sshfs`,
+`rclone mount`) in a session, Preview or job can't go through the setuid
+`fusermount3`: mount it, and run what uses it, inside a user namespace of its
+own (`unshare -rm`), and run an AppImage with `--appimage-extract-and-run`.
 
 The coding agent can read `vibe64-helper session status --json` for current
 resource readiness, environment names, declared Workspace setup commands and
