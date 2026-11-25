@@ -40,12 +40,14 @@ const sharedSource = "module.exports = { instance: Symbol('shared') };\n";
  * A published @proof/lib (1.0.0 at the top, 0.9.0 nested under @proof/other) installed in an app,
  * and a session copy of its repository: @proof/lib 1.1.0, an npm workspace, needing `extra`, which
  * the app lacks. `published` adds plain packages to the registry, as [name, version, dependencies?].
+ * `appsDependencies` makes the app an npm workspace root whose packages/apps declares them.
  */
 async function fixture(t, {
   libDependencies = { shared: "^1.0.0", extra: "^1.0.0" },
   publishedLibDependencies = { shared: "^1.0.0" },
   otherDependencies = { "@proof/lib": "0.9.0" },
   appDependencies = { "@proof/lib": "1.0.0", "@proof/other": "1.0.0", shared: "1.0.0" },
+  appsDependencies = null,
   published: plain = []
 } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-connected-npm-"));
@@ -72,7 +74,12 @@ async function fixture(t, {
   }
 
   const app = path.join(root, "session", "source");
-  await writePackage(app, { name: "app", version: "1.0.0", private: true, dependencies: appDependencies }, { ".gitignore": "node_modules/\n" });
+  await writePackage(app, {
+    name: "app", version: "1.0.0", private: true, dependencies: appDependencies, ...(appsDependencies ? { workspaces: ["packages/*"] } : {})
+  }, { ".gitignore": "node_modules/\n" });
+  if (appsDependencies) {
+    await writePackage(path.join(app, "packages", "apps"), { name: "apps", version: "1.0.0", private: true, dependencies: appsDependencies });
+  }
   await exec("npm", ["install"], { cwd: app, env: registry.env });
   await exec("git", ["init", "-q", "--initial-branch=main"], { cwd: app });
   await exec("git", ["add", "--all"], { cwd: app });
@@ -460,6 +467,45 @@ test("npm: what npm nests in the published copy for its own exact pin goes aside
   assert.equal(await installedVersion(top), "1.0.0");
   assert.deepEqual([await versionFromLib(f, "pinned"), await versionFromLib(f, "kept")], ["1.0.0", "1.0.0"]);
   assert.equal(await fromConsumer(), "1.0.0");
+});
+
+test("npm: the live shape, a published copy holding its own nested old pin beside the newer version at the top and an app workspace's own pin, takes the swap; the workspace keeps its pin", { timeout: 120_000 }, async t => {
+  // As a hosted session's tree: json-rest-api 3.3.3 at the top, the published
+  // @jskit-ai/resource-runtime 0.2.47 with its own nested 3.3.2, and packages/apps' own nested 3.3.2
+  // (apps pins it exactly). The adapter's install makes that shape, and a disconnection leaves it.
+  const f = await fixture(t, {
+    published: [["pinned", "1.0.0"], ["pinned", "1.1.0"]],
+    publishedLibDependencies: { shared: "^1.0.0", pinned: "1.0.0" },
+    libDependencies: { shared: "^1.0.0", pinned: "1.1.0" },
+    appDependencies: {},
+    appsDependencies: { "@proof/lib": "1.0.0", shared: "1.0.0", pinned: "1.0.0" }
+  });
+  const top = path.join(f.app, "node_modules", "@proof", "lib");
+  const fromApps = () => f.node(`console.log(require('node:module').createRequire(${JSON.stringify(path.join(f.app, "packages", "apps", "package.json"))})('pinned/package.json').version)`);
+  assert.equal(await installedVersion(path.join(f.app, "node_modules", "pinned")), "1.0.0");
+  const shape = async () => Promise.all([
+    installedVersion(path.join(f.app, "node_modules", "pinned")),
+    installedVersion(top),
+    installedVersion(path.join(top, "node_modules", "pinned")).catch(() => null),
+    installedVersion(path.join(f.app, "packages", "apps", "node_modules", "pinned")).catch(() => null)
+  ]);
+
+  const applied = await f.step("apply");
+  assert.equal(applied.ok, true, applied.error);
+  assert.match(applied.output, /installed pinned@1\.1\.0 .* without saving/u);
+  assert.deepEqual(await shape(), ["1.1.0", "1.1.0", null, "1.0.0"]);
+  assert.deepEqual([await versionFromLib(f, "pinned"), await fromApps()], ["1.1.0", "1.0.0"]);
+
+  // Disconnecting gives back the published copy with its nested pin: the live sessions' shape.
+  await restoreDisconnected({ repositories: [], sessionSourceRoot: f.app });
+  assert.deepEqual(await shape(), ["1.1.0", "1.0.0", "1.0.0", "1.0.0"]);
+  f.calls.length = 0;
+  const again = await f.step("apply");
+  assert.equal(again.ok, true, again.error);
+  assert.equal(f.calls.some(call => call[0] === "npm" && call[1] === "install"), false);
+  assert.deepEqual(await shape(), ["1.1.0", "1.1.0", null, "1.0.0"]);
+  assert.deepEqual([await versionFromLib(f, "pinned"), await fromApps()], ["1.1.0", "1.0.0"]);
+  assert.equal((await f.proof()).inEffect, true);
 });
 
 test("npm: when the connected package stops accepting a version nested in its copy, applying again moves it aside without an install", { timeout: 120_000 }, async t => {
