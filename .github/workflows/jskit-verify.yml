@@ -9,10 +9,11 @@ on:
       - main
 permissions:
   contents: read
-# A newer push to the same branch, or a newer commit on the same pull request, cancels the run it supersedes.
+# A newer commit on the same pull request cancels the run it supersedes. A run on main always finishes: the platform
+# release's CI gate reads the run of the exact public commit it ships, and counts a cancelled one as failed.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   npm_config_engine_strict: "true"
   npm_config_strict_allow_scripts: "true"
