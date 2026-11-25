@@ -333,12 +333,13 @@ async function keepCopiesOutOfGit({ connection, copies, runCommand, writeGitExcl
  * @property {(tree: string, paths: string[]) => Promise<void>} writeGitExcludes
  */
 
-async function connectedVersionsOf(npmConnections) {
-  const versions = new Map();
+/** Every typed npm connection's packages by name: what a swap puts in place of each published copy. */
+async function connectedPackagesOf(npmConnections) {
+  const connected = new Map();
   for (const other of npmConnections) {
-    for (const entry of await connectedNpmPackages(other).catch(() => [])) versions.set(entry.name, entry.version);
+    for (const entry of await connectedNpmPackages(other).catch(() => [])) connected.set(entry.name, entry);
   }
-  return versions;
+  return connected;
 }
 
 /** Why a connection nothing installs is unused: what a tree would have to install. */
@@ -356,15 +357,15 @@ async function applyNpm({ connection, npmConnections, trees, runCommand, writeGi
   const found = await copiesByPackage(packages, trees);
   if (!found.length) return { lines: [], unused: unusedReason(packages) };
   const lines = [];
-  const connectedVersions = await connectedVersionsOf(npmConnections);
+  const connected = await connectedPackagesOf(npmConnections);
   // Dependencies are judged as they resolve after the swap, which moves aside what it plans to.
-  let plan = await swapPlan({ connectedVersions, copies: found, packages });
-  const needs = await missingDependencies({ connectedVersions, packages, ...plan });
+  let plan = await swapPlan({ connected, copies: found, packages });
+  const needs = await missingDependencies({ connected, packages, ...plan });
   if (needs.length) {
     lines.push(...await installDependencies({ connection, needs, runCommand }));
     // npm put the lockfile's published copies back (nesting what their own pins need); find them again.
-    plan = await swapPlan({ connectedVersions, copies: await copiesByPackage(packages, trees), packages });
-    const still = await missingDependencies({ connectedVersions, packages, ...plan });
+    plan = await swapPlan({ connected, copies: await copiesByPackage(packages, trees), packages });
+    const still = await missingDependencies({ connected, packages, ...plan });
     if (still.length) {
       throw vibe64Error(
         `Connected ${connection.name}: ${dependencyText(still)}. npm installed it without saving, but the copy still cannot reach a compatible version; align the versions in the connected repository or the application.`,
@@ -456,7 +457,7 @@ async function proveNpm({ connection, npmConnections, trees }) {
       return { inEffect: false, reason: `Files were added to or removed from ${entry.name} in the connected copy and are not synced yet.` };
     }
   }
-  const needs = await missingDependencies({ connectedVersions: await connectedVersionsOf(npmConnections), copies, packages });
+  const needs = await missingDependencies({ connected: await connectedPackagesOf(npmConnections), copies, packages });
   if (needs.length) return { inEffect: false, reason: `${dependencyText(needs)}.` };
   const used = [...new Set(copies.map(copy => copy.name))];
   return { inEffect: true, reason: "", packages: used, copies: copies.length };

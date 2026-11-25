@@ -114,7 +114,8 @@ deployment, uses the published packages.
   `npm install --no-save`; an older version npm nested inside the published
   package for its own pin is put aside with that package. When no version
   satisfies it, or the swapped package would still load an incompatible one
-  (another package's own pin beside it, for example), preparation stops, names
+  (another package's own pin beside it, for example; a connected package
+  beside it counts as its connected version), preparation stops, names
   it and says to align the versions in the connected repository or the
   application. `package.json` and lockfiles stay unchanged. Vibe64 adds
   `node_modules` to the local Git exclude when the project does not ignore it,

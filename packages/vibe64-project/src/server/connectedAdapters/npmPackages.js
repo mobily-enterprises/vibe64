@@ -177,20 +177,23 @@ async function nestedManifests(copyDir) {
  * nested it there for the published version's own pin, so it belongs to that copy, and the
  * connected package resolves past it. It stays when a package nested beside it needs that version
  * and would not get one it accepts past it (the check then refuses), a connected package there is
- * swapped instead, and a link has no node_modules of its own. Copies installed inside what goes
- * aside go with it.
+ * swapped instead, and a link has no node_modules of its own. A package nested beside it that a
+ * connection swaps needs what its connected package needs (`connected`: every typed npm
+ * connection's packages by name), not the published pin the swap replaces. Copies installed
+ * inside what goes aside go with it.
  * @returns {Promise<{ copies: Array<object>, aside: Map<string, string[]>, gone: Set<string> }>}
  */
-async function swapPlan({ connectedVersions, copies, packages }) {
+async function swapPlan({ connected, copies, packages }) {
   const aside = new Map();
   for (const copy of copies.filter(candidate => !candidate.link)) {
     const names = [];
     let beside = null;
     for (const [name, range] of registryDependencies(packages.find(entry => entry.name === copy.name).manifest)) {
-      if (connectedVersions.has(name)) continue;
+      if (connected.has(name)) continue;
       const nested = String((await readJsonFile(path.join(copy.dir, "node_modules", name, "package.json")).catch(() => null))?.version ?? "");
       if (!nested || accepts(nested, range)) continue;
-      beside ??= await nestedManifests(copy.dir);
+      beside ??= (await nestedManifests(copy.dir))
+        .map(manifest => connected.get(manifest.name)?.manifest ?? manifest);
       const past = (await resolveFromCopy(copy.tree, path.dirname(copy.dir), name))?.version;
       const stillNeeded = beside.some(manifest => registryDependencies(manifest)
         .some(([dependency, wanted]) => dependency === name && accepts(nested, wanted) && !accepts(past, wanted)));
@@ -207,14 +210,15 @@ async function swapPlan({ connectedVersions, copies, packages }) {
  * The dependencies each package needs that a tree cannot give it where its copy is installed, once
  * what the plan moves aside has gone (the proof passes no plan: it judges the trees as they are).
  */
-async function missingDependencies({ connectedVersions, copies, packages, gone = new Set() }) {
+async function missingDependencies({ connected, copies, packages, gone = new Set() }) {
   const needs = [];
   for (const copy of copies) {
     const entry = packages.find(candidate => candidate.name === copy.name);
     for (const [name, range] of registryDependencies(entry.manifest)) {
       const resolved = await resolveFromCopy(copy.tree, copy.dir, name, gone);
       // A connected package is about to replace whatever is there: its own version counts.
-      const version = connectedVersions.get(name) && resolved ? connectedVersions.get(name) : resolved?.version;
+      const connectedVersion = connected.get(name)?.version;
+      const version = connectedVersion && resolved ? connectedVersion : resolved?.version;
       if (!accepts(version, range)) needs.push({ tree: copy.tree, from: copy.name, name, range, found: resolved?.version || "" });
     }
   }

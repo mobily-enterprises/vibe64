@@ -195,8 +195,9 @@ after the swap: a dependency npm nested in a published copy, for that version's
 own pin, at a version the connected package does not accept goes aside with the
 copy (into its `originals/` folder's `node_modules`, from where a restore puts
 it back into the copy's own nested `node_modules`), so the connected package
-resolves past it, unless a package nested beside it still needs that version;
-one that would still resolve wrongly refuses
+resolves past it, unless a package nested beside it still needs that version
+(one a connection swaps there needs what its connected package needs, not the
+published pin it replaces); one that would still resolve wrongly refuses
 (`vibe64_connected_npm_dependency_incompatible`). A tracked copy is refused
 (`vibe64_connected_npm_tracked`) and `node_modules` is excluded when the tree
 does not ignore it. The proof compares the copies with the record and the
