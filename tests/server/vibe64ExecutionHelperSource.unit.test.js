@@ -337,6 +337,55 @@ test("execution Stop of an ended unit only releases its receipt and failed recor
   assert.deepEqual(ended.released, [0]);
 });
 
+// A systemctl that could not answer (no bus, no binary, a refused call) says
+// nothing about the unit. Its empty output once read as an empty scope and a
+// collected unit, so Stop skipped its kill, released the receipt and reported
+// the execution stopped while it ran. A unit systemd does not know is a real
+// answer, and that one is empty.
+test("execution state and Stop never count a systemctl that could not answer as an ended, empty unit", () => {
+  const unanswered = [
+    { error: Object.assign(new Error("spawnSync systemctl ENOENT"), { code: "ENOENT" }), status: null, stdout: "" },
+    { status: 1, stdout: "", stderr: "Failed to connect to bus: No such file or directory" },
+    { status: 0, stdout: "" }
+  ];
+  const inspect = (answer) => managedExecutionState(oomUnit, "execution", {}, {
+    query: () => answer,
+    readResult: () => ({})
+  });
+  for (const answer of unanswered) {
+    const state = inspect(answer);
+    assert.equal(state.scopeEmpty, null, `an unanswered query is no empty scope: ${JSON.stringify(answer.stderr || answer.status)}`);
+    assert.equal(state.loadState, "unknown", "an unanswered query is no collected unit");
+    assert.equal(state.activeState, "unknown");
+  }
+  const collected = inspect({ status: 0, stdout: "LoadState=not-found\nActiveState=inactive\nControlGroup=\n" });
+  assert.deepEqual([collected.scopeEmpty, collected.loadState], [true, "not-found"], "a unit systemd does not know has ended");
+
+  let clock = 0;
+  const commands = [];
+  const released = [];
+  const result = stopManagedExecution(oomUnit, "execution", {}, {
+    termTimeoutMs: 3000,
+    run: (command, args) => {
+      commands.push(args.join(" "));
+      return { status: 1, stdout: "" };
+    },
+    readState: () => inspect({ status: 1, stdout: "", stderr: "Failed to connect to bus" }),
+    removeRuntime: () => released.push(clock),
+    now: () => clock,
+    wait: (milliseconds) => { clock += milliseconds; }
+  });
+  assert.equal(result.ok, false, "an unproven stop fails");
+  assert.notEqual(result.scopeEmpty, true);
+  assert.ok(clock >= 3000, `it kept asking until its deadline (${clock} ms)`);
+  assert.deepEqual(commands, [
+    `stop --no-block ${oomUnit}`,
+    `kill --kill-who=all --signal=SIGKILL ${oomUnit}`,
+    `stop ${oomUnit}`
+  ], "the kill still runs, and the failed record is kept");
+  assert.deepEqual(released, [], "the receipt stays until the scope is proven empty");
+});
+
 test("execution Stop bounds are whole milliseconds up to the helper's limit", () => {
   assert.equal(managedExecutionStopTimeoutMs(undefined), 15_000);
   assert.equal(managedExecutionStopTimeoutMs(3000), 3000);
