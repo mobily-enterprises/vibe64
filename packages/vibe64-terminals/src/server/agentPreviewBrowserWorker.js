@@ -80,9 +80,12 @@ async function browserWorkerRequest({
   );
 }
 
-async function registeredProcessGroupIsAlive(entry) {
+async function registeredProcessGroupIsAlive(entry, {
+  readStart = readProcessStart,
+  hasLiveMember = processGroupHasLiveMember
+} = {}) {
   const groupId = Number(entry?.groupId);
-  const leader = await readProcessStart(groupId);
+  const leader = await readStart(groupId);
   if (
     leader.status !== "exact" ||
     leader.groupId !== groupId ||
@@ -90,39 +93,45 @@ async function registeredProcessGroupIsAlive(entry) {
   ) {
     return false;
   }
-  return processGroupHasLiveMember(groupId);
+  return hasLiveMember(groupId);
 }
 
-async function drainRegisteredProcessGroup(entry = {}) {
-  if (!await registeredProcessGroupIsAlive(entry)) {
+async function drainRegisteredProcessGroup(entry = {}, {
+  readStart = readProcessStart,
+  hasLiveMember = processGroupHasLiveMember,
+  signal = (groupId, name) => process.kill(-groupId, name),
+  wait = delay
+} = {}) {
+  const isAlive = () => registeredProcessGroupIsAlive(entry, { readStart, hasLiveMember });
+  if (!await isAlive()) {
     return true;
   }
   try {
-    process.kill(-Number(entry.groupId), "SIGTERM");
+    signal(Number(entry.groupId), "SIGTERM");
     // The worker stops its browser between commands; a stopped process acts
     // on SIGTERM only once continued.
-    process.kill(-Number(entry.groupId), "SIGCONT");
+    signal(Number(entry.groupId), "SIGCONT");
   } catch (error) {
     if (error?.code !== "ESRCH") {
       throw error;
     }
   }
-  for (let attempt = 0; attempt < 60 && await registeredProcessGroupIsAlive(entry); attempt += 1) {
-    await delay(50);
+  for (let attempt = 0; attempt < 60 && await isAlive(); attempt += 1) {
+    await wait(50);
   }
-  if (await registeredProcessGroupIsAlive(entry)) {
+  if (await isAlive()) {
     try {
-      process.kill(-Number(entry.groupId), "SIGKILL");
+      signal(Number(entry.groupId), "SIGKILL");
     } catch (error) {
       if (error?.code !== "ESRCH") {
         throw error;
       }
     }
   }
-  for (let attempt = 0; attempt < 20 && await registeredProcessGroupIsAlive(entry); attempt += 1) {
-    await delay(50);
+  for (let attempt = 0; attempt < 20 && await isAlive(); attempt += 1) {
+    await wait(50);
   }
-  return !await registeredProcessGroupIsAlive(entry);
+  return !await isAlive();
 }
 
 async function registeredWorkerMetadata(descriptor = {}) {
@@ -742,6 +751,7 @@ async function streamPlaywrightRun({ commandService, input, response, sessionId 
 }
 
 export {
+  drainRegisteredProcessGroup,
   runRegisteredPlaywrightCommand,
   startRegisteredBrowserWorker,
   stopRegisteredBrowserWorker,
