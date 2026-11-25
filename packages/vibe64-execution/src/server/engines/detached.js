@@ -8,6 +8,7 @@ import {
   commandErrorResult,
   commandResult
 } from "../result.js";
+import { linuxProcessStat, processEnded } from "../../host/processEnded.js";
 import { processGroupHasLiveMember, readProcessStart } from "../runtime/processStart.js";
 
 const detachedExecutions = new Map();
@@ -184,11 +185,10 @@ async function processGroupMembers(processGroupId = null, limit = 10) {
   for (const entry of await readdir("/proc").catch(() => [])) {
     if (members.length >= limit) break;
     if (!/^\d+$/u.test(entry)) continue;
-    const stat = await readFile(`/proc/${entry}/stat`, "utf8").catch(() => "");
-    const commandEnd = stat.lastIndexOf(")");
-    const fields = commandEnd < 0 ? [] : stat.slice(commandEnd + 2).split(" ");
-    if (Number(fields[2]) !== normalized || fields[0] === "Z") continue;
-    members.push({ command: stat.slice(stat.indexOf("(") + 1, commandEnd), pid: Number(entry) });
+    const text = await readFile(`/proc/${entry}/stat`, "utf8").catch(() => "");
+    const stat = linuxProcessStat(text);
+    if (stat?.groupId !== normalized || processEnded(stat)) continue;
+    members.push({ command: text.slice(text.indexOf("(") + 1, text.lastIndexOf(")")), pid: Number(entry) });
   }
   return members;
 }
@@ -231,7 +231,7 @@ const PROCESS_TABLE = {
 async function onlyExitedMembers(processGroupId) {
   if (process.platform === "win32") return false;
   const leader = await readProcessStart(processGroupId, PROCESS_TABLE);
-  if (leader.status === "exact" && leader.groupId === Number(processGroupId) && leader.state !== "Z") return false;
+  if (leader.status === "exact" && leader.groupId === Number(processGroupId) && !processEnded(leader)) return false;
   return !await processGroupHasLiveMember(processGroupId, PROCESS_TABLE) &&
     !await processGroupHasLiveMember(processGroupId, PROCESS_TABLE);
 }

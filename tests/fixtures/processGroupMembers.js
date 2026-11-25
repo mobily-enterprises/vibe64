@@ -1,15 +1,18 @@
 import { readdirSync, readFileSync } from "node:fs";
 
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+
 // PF_EXITING in the flags of a /proc stat (include/linux/sched.h): the task has started to exit.
 const PF_EXITING = 0x4;
 
 /**
  * The members of a process group that have not exited, from Linux's process table: each one's pid, parent, state,
- * flags (hexadecimal), whether it is exiting (PF_EXITING) and command. A member that has exited stays in its group
- * until its parent reaps it (a test's own child on that process's next turn, an orphan once init gets to it) and holds
- * nothing, so it is left out, as a stop leaves it out (the server's processGroupHasLiveMember, JSKIT's process
- * identity scan). A process gone, or another user's, is not a member. Elsewhere than Linux the kernel's answer for the
- * group, which counts exited members too, decides.
+ * flags (hexadecimal), whether it is exiting (PF_EXITING) and command. A member that has exited (processEnded) stays in
+ * its group until its parent reaps it (a test's own child on that process's next turn, an orphan once init gets to it)
+ * and holds nothing, so it is left out, as a stop leaves it out (the server's processGroupHasLiveMember, JSKIT's process
+ * identity scan). A zombie leader whose process still has other threads has not exited: it is exiting only while each
+ * of those threads is. A process gone, or another user's, is not a member. Elsewhere than Linux the kernel's answer
+ * for the group, which counts exited members too, decides.
  * @param {number} groupId
  * @returns {{ pid: number, parent?: number, state?: string, exiting?: boolean, flags?: string, command?: string }[]}
  */
@@ -26,17 +29,17 @@ export function liveProcessGroupMembers(groupId) {
   const members = [];
   for (const name of readdirSync("/proc")) {
     if (!/^\d+$/u.test(name)) continue;
-    const stat = readStat(name);
-    const commandEnd = stat.lastIndexOf(")");
-    const [state, parent, group, , , , flags] = stat.slice(commandEnd + 2).split(" ");
-    if (!stat || Number(group) !== groupId || state === "Z") continue;
+    const text = readStat(name);
+    const stat = linuxProcessStat(text);
+    if (stat?.groupId !== groupId || processEnded(stat)) continue;
     members.push({
       pid: Number(name),
-      parent: Number(parent),
-      state,
-      exiting: (Number(flags) & PF_EXITING) !== 0,
-      flags: Number(flags).toString(16),
-      command: stat.slice(stat.indexOf("(") + 1, commandEnd)
+      parent: stat.parentId,
+      state: stat.state,
+      // A zombie (the state processEnded reads as ended on a last thread) that has not ended leads other threads.
+      exiting: processEnded({ state: stat.state }) ? otherThreadsExiting(name) : (stat.flags & PF_EXITING) !== 0,
+      flags: stat.flags.toString(16),
+      command: text.slice(text.indexOf("(") + 1, text.lastIndexOf(")"))
     });
   }
   return members;
@@ -47,8 +50,9 @@ export function liveProcessGroupMembers(groupId) {
  * its own code again: the kernel sets the flag as the member starts to exit, and releases its memory only after that,
  * so all that is left is the kernel's own exit work before it is a zombie (0.6 to 4.9 ms in 42 exits watched on a
  * loaded test host). A stop can let such a member go, so it is followed until it is a zombie or gone, for up to a
- * second, and named if it is not by then. Any other member (running, sleeping or waiting on a disk, without
- * PF_EXITING) is named at once.
+ * second, and named if it is not by then. So is a zombie leader whose other threads are all on their way out. Any
+ * other member (running, sleeping or waiting on a disk, without PF_EXITING, or a zombie leader with a thread that
+ * runs on) is named at once.
  * @param {number} groupId
  * @param {{ members?: (groupId: number) => ReturnType<typeof liveProcessGroupMembers>, exitingForMs?: number }} [options]
  */
@@ -69,6 +73,35 @@ export function describeProcessGroupMembers(members) {
     state && `state ${state}`,
     flags && `flags 0x${flags}${exiting ? " (exiting)" : ""}`
   ].filter(Boolean).join(" ")).join(", ");
+}
+
+/**
+ * Whether every thread of a process but its zombie leader is on its way out: ended, exiting (PF_EXITING) or with
+ * SIGKILL pending, as each is once the process exits as a whole and its leader can be a zombie a moment before the
+ * others. A thread that is none of these runs on after its leader's pthread_exit. A thread gone since the listing has
+ * ended.
+ * @param {string} pid
+ */
+function otherThreadsExiting(pid) {
+  let threads;
+  try {
+    threads = readdirSync(`/proc/${pid}/task`).filter((thread) => thread !== pid);
+  } catch {
+    return true;
+  }
+  return threads.every((thread) => {
+    let stat;
+    let status;
+    try {
+      stat = linuxProcessStat(readFileSync(`/proc/${pid}/task/${thread}/stat`, "utf8"));
+      status = readFileSync(`/proc/${pid}/task/${thread}/status`, "utf8");
+    } catch {
+      return true;
+    }
+    const killPending = [...status.matchAll(/^(?:SigPnd|ShdPnd):\s*([0-9a-f]+)$/gmu)]
+      .some(([, mask]) => (BigInt(`0x${mask}`) & (1n << 8n)) !== 0n);
+    return !stat || processEnded({ state: stat.state }) || (stat.flags & PF_EXITING) !== 0 || killPending;
+  });
 }
 
 function readStat(name) {

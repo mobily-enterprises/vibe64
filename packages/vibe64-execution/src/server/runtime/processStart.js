@@ -3,30 +3,19 @@ import { readFile, readdir } from "node:fs/promises";
 import process from "node:process";
 import { promisify } from "node:util";
 
+import { linuxProcessStat, processEnded } from "../../host/processEnded.js";
+
 const execFile = promisify(execFileCallback);
 
 /**
- * The fields after the command name in /proc/<pid>/stat: state, ppid, pgrp, ...
- * and the start time in clock ticks at index 19. Any state letter is accepted
- * (tracing stop is lower-case "t"); callers decide which states they trust.
+ * A process's group, start time in clock ticks, state letter and thread count from /proc/<pid>/stat
+ * (host/processEnded.js reads it), or null for text that is not a stat line.
  */
 function parseLinuxProcessStat(statText = "") {
-  const text = String(statText || "").trim();
-  const commandEnd = text.lastIndexOf(")");
-  if (commandEnd < 0) {
-    return null;
-  }
-  const fields = text.slice(commandEnd + 1).trim().split(/\s+/u);
-  const state = String(fields[0] || "");
-  const startTimeTicks = String(fields[19] || "");
-  if (!/^[A-Za-z]$/u.test(state) || !/^\d+$/u.test(startTimeTicks)) {
-    return null;
-  }
-  return {
-    groupId: Number(fields[2]),
-    startTimeTicks,
-    state
-  };
+  const stat = linuxProcessStat(statText);
+  return stat
+    ? { groupId: stat.groupId, startTimeTicks: stat.startTimeTicks, state: stat.state, threads: stat.threads }
+    : null;
 }
 
 /**
@@ -52,7 +41,9 @@ function psEnv() {
 
 /**
  * Reads a process's start identity: { status: "exact" | "absent" | "ambiguous",
- * groupId, state, startTimeTicks }. Linux reads /proc; macOS asks ps.
+ * groupId, state, startTimeTicks }, and on Linux the threads its process still has,
+ * which processEnded needs to tell a zombie leader from an ended process. Linux
+ * reads /proc; macOS asks ps.
  */
 async function readProcessStart(pid, {
   execFileFn = execFile,
@@ -119,8 +110,9 @@ async function readLinuxProcessStatText(name, readFileFn) {
 }
 
 /**
- * True when any non-zombie process still belongs to the process group. A process table that could not be read
- * proves nothing, so the kernel's answer for the group, which counts zombies, decides then.
+ * True when any process that has not ended (processEnded: a zombie leader whose process still runs other threads has
+ * not) still belongs to the process group. A process table that could not be read proves nothing, so the kernel's
+ * answer for the group, which counts zombies, decides then.
  */
 async function processGroupHasLiveMember(groupId, {
   execFileFn = execFile,
@@ -142,7 +134,7 @@ async function processGroupHasLiveMember(groupId, {
           continue;
         }
         const identity = parseLinuxProcessStat(await readLinuxProcessStatText(name, readFileFn));
-        if (identity?.groupId === normalizedGroupId && identity.state !== "Z") {
+        if (identity?.groupId === normalizedGroupId && !processEnded(identity)) {
           return true;
         }
       }
@@ -158,7 +150,7 @@ async function processGroupHasLiveMember(groupId, {
     });
     return String(stdout || "").split(/\r?\n/u).some((line) => {
       const [group, state = ""] = line.trim().split(/\s+/u);
-      return Number(group) === normalizedGroupId && !state.startsWith("Z");
+      return Number(group) === normalizedGroupId && !processEnded({ state: state.slice(0, 1) });
     });
   } catch {
     return processGroupExists(normalizedGroupId);

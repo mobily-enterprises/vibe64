@@ -100,6 +100,7 @@ import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefa
 import { configureVibe64SessionDebugLog } from "../../packages/vibe64-runtime/src/server/sessionDebugLog.js";
 import process from "node:process";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
 
 // The server configures the Studio project context before any feature reads it.
 configureStudioProjectContext({ env: process.env });
@@ -145,7 +146,7 @@ async function exactProcessIdentity(pid, runtimeToken, commandHash) {
 
 /**
  * Asserts that the exact process a shutdown proved stopped has exited, as soon as the shutdown resolves: its pid holds
- * no process, or one that started later, or the process is a zombie. A runtime this test spawned stays a zombie until
+ * no process, or one that started later, or the process has ended (processEnded). A runtime this test spawned stays a zombie until
  * Node reaps it, which neither the shutdown nor this check waits for: whether Node has reaped its own child yet is not
  * what the shutdown proves. A process still running fails at once, with its state.
  * @param {number} pid
@@ -159,9 +160,9 @@ async function assertExactProcessExited(pid, startTimeTicks) {
     if (error?.code === "ENOENT" || error?.code === "ESRCH") return;
     throw error;
   }
-  const fields = statText.slice(statText.lastIndexOf(")") + 1).trim().split(/\s+/u);
-  if (fields[19] !== startTimeTicks) return;
-  assert.ok(["Z", "X"].includes(fields[0]), `process ${pid} still runs (state ${fields[0]}) after the shutdown proved it stopped`);
+  const stat = linuxProcessStat(statText);
+  if (stat?.startTimeTicks !== startTimeTicks) return;
+  assert.ok(processEnded(stat), `process ${pid} still runs (state ${stat.state}, threads ${stat.threads}) after the shutdown proved it stopped`);
 }
 
 function createProvider(calls, subscribers, captures, providerOptions = {}) {

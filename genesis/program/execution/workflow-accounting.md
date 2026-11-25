@@ -170,7 +170,11 @@ orphan, has yet to reap it (`waitForProcessGroupEmpty` in `engines/detached.js`
 reads a group still there 100 ms on, then 200, 400, 800 ms after each read: its
 leader's /proc entry while the leader runs, and once it has exited every
 member's with `processGroupHasLiveMember`, without the thread pool, whose
-per-file round trips a loaded host stretched to 1.45 s for one read). A streamed
+per-file round trips a loaded host stretched to 1.45 s for one read). Whether
+a process has ended is one rule, `processEnded` in `host/processEnded.js`, that
+every check of a process or group uses: a zombie (Z) on its last thread has
+ended, but a zombie leader whose process still runs other threads (its main
+thread called `pthread_exit`) has not, as /proc's thread count shows. A streamed
 command's stdio bridge, its group's leader, ends its child's input at SIGTERM
 and ends only after reaping that child, so the child is never left for init to
 reap, and a SIGTERM that reached the bridge alone still ends a child that reads

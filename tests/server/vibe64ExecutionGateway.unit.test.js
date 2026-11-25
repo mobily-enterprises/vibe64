@@ -45,6 +45,7 @@ import { readEnvUserValues, saveEnvUserValues } from "../../packages/vibe64-core
 import { RUNTIME_CONFIG_SCOPES, runtimeConfigEnv } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
 
 // The gateway reads the person's Git identity with each command's own env and
 // drops the server's GIT_* variables, so a developer's ~/.gitconfig would win
@@ -208,7 +209,7 @@ test("capture cancellation drains the command and its child before returning", a
   assert.match(result.stdout, /test command started/u);
   // Linux may briefly retain a reparented zombie; it is no longer executable.
   const stat = await readFile(`/proc/${pid}/stat`, "utf8").catch(() => "");
-  assert.ok(!stat || stat.slice(stat.lastIndexOf(") ") + 2).startsWith("Z "), stat);
+  assert.ok(!stat || processEnded(linuxProcessStat(stat)), stat);
 });
 
 test("an already cancelled capture never starts the command", async (t) => {

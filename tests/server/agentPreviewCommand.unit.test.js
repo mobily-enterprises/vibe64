@@ -33,6 +33,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { endChildInput } from "./childInputTestHelpers.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
 
 const {
   AGENT_PREVIEW_COMMAND_NAME,
@@ -132,7 +133,7 @@ function processState(pid) {
 
 function processRunning(pid) {
   try {
-    if (readFileSync(`/proc/${pid}/stat`, "utf8").split(" ")[2] === "Z") {
+    if (processEnded(linuxProcessStat(readFileSync(`/proc/${pid}/stat`, "utf8")))) {
       return false;
     }
     process.kill(pid, 0);

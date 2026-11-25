@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { link, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 
+import { linuxProcessStat, processEnded } from "@local/vibe64-execution/server/processEnded";
+
 // upgrades/apply.lock names the process that holds it: its pid and, on Linux, the boot it runs in and its start time
 // (/proc), so a lock whose holder is provably gone is taken over instead of refusing every later apply. A power cut
 // during an apply leaves a lock from an earlier boot, and a start step killed at its time limit leaves one whose pid
@@ -18,12 +20,13 @@ async function readOptionalText(filePath) {
   }
 }
 
-/** A process's start time in clock ticks after boot, from /proc/<pid>/stat; null where there is no /proc. */
+/**
+ * A process's state, thread count and start time in clock ticks after boot, from /proc/<pid>/stat; null where there is
+ * no /proc or no such process.
+ */
 async function processStart(pid) {
-  const stat = await readOptionalText(`/proc/${pid}/stat`);
-  if (stat === null) return null;
-  const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-  return { state: fields[0], started: fields[19] };
+  const stat = linuxProcessStat(await readOptionalText(`/proc/${pid}/stat`));
+  return stat && { state: stat.state, started: stat.startTimeTicks, threads: stat.threads };
 }
 
 async function currentHolder() {
@@ -48,7 +51,7 @@ async function holderGone(holder) {
   if (holder.bootId && bootId) {
     if (holder.bootId !== bootId) return true;
     const running = await processStart(holder.pid);
-    return !running || running.state === "Z" || running.state === "X" || running.started !== holder.started;
+    return !running || processEnded(running) || running.started !== holder.started;
   }
   // Without boot ids only a pid that names no process proves its holder gone.
   try {

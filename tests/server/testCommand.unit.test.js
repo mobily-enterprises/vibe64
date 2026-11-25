@@ -12,6 +12,7 @@ import { runServerTests, serverTestOptions, serverTestRun } from "../../tooling/
 import { targetedTestArguments, withTestAppEnvironment } from "../../tooling/run-targeted-tests.mjs";
 import { loadTimeBudgets } from "../../tooling/test-time-budgets.mjs";
 import { BUDGET_VARIABLE, testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
 
 const runnerPath = fileURLToPath(new URL("../../tooling/run-targeted-tests.mjs", import.meta.url));
 
@@ -178,9 +179,9 @@ test("a server run past its deadline is stopped with every process it started", 
   const killedOnLinux = async () => {
     try {
       const stat = await readFile(`/proc/${childPid}/stat`, "utf8");
-      const [state, , , , , , flags] = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+      const parsed = linuxProcessStat(stat);
       const PF_EXITING = 0x4;
-      if (state === "Z" || (Number(flags) & PF_EXITING) !== 0) return true;
+      if (parsed && (processEnded(parsed) || (parsed.flags & PF_EXITING) !== 0)) return true;
       const pending = (await readFile(`/proc/${childPid}/status`, "utf8")).matchAll(/^(?:SigPnd|ShdPnd):\s*([0-9a-f]+)$/gmu);
       return [...pending].some(([, mask]) => (BigInt(`0x${mask}`) & (1n << 8n)) !== 0n);
     } catch {

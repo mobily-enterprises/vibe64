@@ -1,6 +1,8 @@
 // The browser worker program's state: its browser, the process groups it
 // started and tracks, its metadata file and the browser's lifecycle. Text of
 // the program agentPreviewBrowserWorkerSource writes, not code run here.
+import { linuxProcessStat, processEnded } from "../../host/processEnded.js";
+
 const WORKER_STATE_SOURCE = `const state = Object.create(null);
 let browser = null;
 let context = null;
@@ -97,11 +99,16 @@ function leaderIdentity(pid) {
   } catch (error) {
     return ["ENOENT", "ENOTDIR"].includes(error?.code) ? { status: "absent" } : { status: "ambiguous" };
   }
-  const closeIndex = stat.lastIndexOf(") ");
-  const fields = closeIndex < 0 ? [] : stat.slice(closeIndex + 2).trim().split(/\\s+/u);
-  const startTimeTicks = String(fields[19] || "");
-  return /^\\d+$/u.test(startTimeTicks)
-    ? { status: "exact", groupId: Number(fields[2]), parentId: Number(fields[1]), startTimeTicks, state: String(fields[0] || "") }
+  const parsed = linuxProcessStat(stat);
+  return parsed
+    ? {
+        status: "exact",
+        groupId: parsed.groupId,
+        parentId: parsed.parentId,
+        startTimeTicks: parsed.startTimeTicks,
+        state: parsed.state,
+        threads: parsed.threads
+      }
     : { status: "ambiguous" };
 }
 
@@ -142,7 +149,7 @@ function processGroupAlive(groupId) {
   }
   const processes = processTable();
   if (processes) {
-    return processes.some((entry) => entry.groupId === groupId && entry.state !== "Z");
+    return processes.some((entry) => entry.groupId === groupId && !processEnded(entry));
   }
   try {
     process.kill(-groupId, 0);
@@ -152,6 +159,12 @@ function processGroupAlive(groupId) {
     return error?.code === "EPERM";
   }
 }
+
+// Whether a process has ended, and the /proc stat reading it takes: the one
+// rule every check of a process uses (host/processEnded.js), as its text,
+// bound by name since a minified release renames the functions themselves.
+const linuxProcessStat = ${linuxProcessStat.toString()};
+const processEnded = ${processEnded.toString()};
 
 function normalizedBrowserProcessGroups(value = []) {
   const groups = new Map();
@@ -292,7 +305,7 @@ function trackedProcessGroupsIn(groups = [], wanted = () => false) {
       : leader &&
         leader.groupId === groupId &&
         leader.startTimeTicks === String(entry?.startTimeTicks || "") &&
-        processes.some((candidate) => candidate.groupId === groupId && candidate.state !== "Z")
+        processes.some((candidate) => candidate.groupId === groupId && !processEnded(candidate))
         ? "alive"
         : "gone");
   });

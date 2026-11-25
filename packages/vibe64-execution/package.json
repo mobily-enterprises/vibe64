@@ -11,6 +11,7 @@
     "./server/connectedGradleEnv": "./src/server/env/connectedGradleEnv.js",
     "./server/editorPrivateState": "./src/host/editorPrivateState.js",
     "./server/hostSettings": "./src/host/hostSettings.js",
+    "./server/processEnded": "./src/host/processEnded.js",
     "./server/serverStop": "./src/server/serverStop.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
     "./server/types": "./src/server/types.js"
@@ -47,6 +48,10 @@
           {
             "subpath": "./server/hostSettings",
             "summary": "Where the privileged helper keeps the accounts, service units and sudo rules it makes, and the command its later runs start it with, as the host's helper settings name them."
+          },
+          {
+            "subpath": "./server/processEnded",
+            "summary": "Whether a process the kernel still lists has ended, and the /proc stat reading it takes: a zombie leader whose process still runs other threads has not."
           },
           {
             "subpath": "./server/serverStop",

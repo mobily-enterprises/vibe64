@@ -57,6 +57,7 @@ import {
   managedWorkflowState
 } from "./managedWorkflows.js";
 import { editorPrivateStateLine } from "./editorPrivateState.js";
+import { linuxProcessStat, processEnded } from "./processEnded.js";
 import { accountUnitLines } from "./systemdUnits.js";
 
 const CONTROLLER_LEASE_NAME = "resource-controller.sock";
@@ -491,9 +492,8 @@ function managedExecutionGroupHasLiveMember(child) {
 }
 
 function runsInGroup(name, groupId) {
-  const stat = readProcessStat(name);
-  const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-  return Boolean(stat) && Number(fields[2]) === groupId && fields[0] !== "Z";
+  const stat = linuxProcessStat(readProcessStat(name));
+  return stat?.groupId === groupId && !processEnded(stat);
 }
 
 // Read without the thread pool, as the server's stop reads the table: see waitForProcessGroupEmpty (engines/detached.js).

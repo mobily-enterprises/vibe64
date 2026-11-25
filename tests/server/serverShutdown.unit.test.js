@@ -17,6 +17,7 @@ import {
   startTerminalSession
 } from "@local/vibe64-execution/server/terminalSessions";
 import { __testables as browserLifecycleTestables } from "../../server/lib/browserLifecycle.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
 
 const { BROWSER_LIFECYCLE_WEBSOCKET_PATH } = browserLifecycleTestables;
 
@@ -770,7 +771,7 @@ function testLogger(events) {
   };
 }
 
-// A killed process its parent has not reaped yet is a zombie (state Z): it has exited all the same.
+// A killed process its parent has not reaped yet is a zombie: it has ended all the same (processEnded).
 function processIsAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -785,7 +786,7 @@ function processIsAlive(pid) {
   }
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    return stat.slice(stat.lastIndexOf(")") + 1).trim()[0] !== "Z";
+    return !processEnded(linuxProcessStat(stat));
   } catch (error) {
     if (error?.code === "ENOENT") {
       return false;
