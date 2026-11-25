@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { fixture, planCommands, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
 import { readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { NO_SERVER_RUN } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
 
 // A live session's case, in Auto through the real routing service. Junior's turn built every item of the plan and
-// handed it to Senior's review. Before that review's delivery read the conversation, a message from another session
-// (delivered as the owner's message) had its own turn, an answer, which ran and ended. The review's delivery found the
-// conversation changed since its handoff was decided and refused it, and nothing ever started Senior's review: the
-// plan sat built and unreviewed, and later messages were only answered. Once the other turn has ended, the plan's next
-// step is decided again from the plan as it is, so Senior's review starts.
+// handed it to Senior's review. A message from another session (delivered as the owner's message) had its own answer
+// turn first: the review's delivery was refused because a turn was running, or because the conversation had changed
+// since the handoff was decided, and nothing ever started Senior's review. The person's Continue was refused too: it
+// sent the old handoff again. The plan sat built and unreviewed for an hour.
+// A refusal that means only that another turn or message came first leaves the review owed: it is decided again once
+// that turn ends, from the conversation and plan as they are then (or by the server's recovery, when it restarted
+// first). A message of the person's own still holds it for them, Stop still ends it, and a busy lock at the turn's
+// end never loses it.
 
 const PLAN = "Status: active\n# Contact threads\n\nGroup each contact's messages into one thread.\n\n" +
   "- [~] Store contact threads\n- [~] List a contact's threads\n- [~] Reply in a thread\n- [ ] Move old messages into threads\n\n" +
@@ -28,9 +32,13 @@ const personTurn = {
   messages: [{ role: "assistant", text: "Sure: the threads page is at /threads." }]
 };
 
-/** Implement plan in Auto; Junior's turn builds the last item, half-ticks it and hands the plan to Senior's review. */
-async function juniorBuildsEveryItem(t) {
-  const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
+/**
+ * Implement plan in Auto; Junior's turn builds the last item, half-ticks it and hands the plan to Senior's review.
+ * @param {import("node:test").TestContext} t
+ * @param {object} [options] the routing fixture's options
+ */
+async function juniorBuildsEveryItem(t, options = {}) {
+  const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true, ...options });
   await publishPlanFixture(f.context, PLAN);
   const request = { messageId: "implement-1", message: "Implement the plan.", submissionKind: "send", planRevision: (await readWorkPlan(f.context)).revision };
   await f.service.send("session-1", request, f.context);
@@ -102,4 +110,44 @@ test("the person's own message overtook the handoff: the automatic start waits f
   assert.deepEqual([f.sends.length, f.state().status, f.state().stage], [1, "waiting", "review"], "the person's message is theirs: nothing starts by itself");
   await f.service.send("session-1", { messageId: "implement-1", message: "Implement the plan.", reviewAction: "retry" }, f.context);
   assertSeniorReview(f, "Continue");
+});
+
+test("the person's Stop while Senior's review waits for another turn: nothing starts once that turn ends", async (t) => {
+  const f = await juniorBuildsEveryItem(t);
+  f.agent.sessionState = async () => ({ turn: { active: true, id: OTHER_TURN } });
+  await f.service.afterTurn("session-1", end(f.state().turnId), f.context);
+  await f.service.stop("session-1", f.context);
+  f.tail = [...f.tail, otherSessionTurn];
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  await f.service.afterTurn("session-1", end(OTHER_TURN), f.context);
+  assert.deepEqual([f.sends.length, f.state().stopped, f.state().status], [1, true, "waiting"], "Stop is the person's: nothing starts");
+});
+
+test("Junior's turn ends while another operation holds the session's lock past the usual wait: Senior's review still follows once it is free", async (t) => {
+  const f = await juniorBuildsEveryItem(t);
+  const hold = f.holdLock();
+  await hold.started;
+  f.lockWait(20);
+  // What the turn's end leaves: null once it has run, or the error it gave up with.
+  const ended = f.service.afterTurn("session-1", end(f.state().turnId), f.context).then(() => null, (error) => error);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(f.sends.length, 1, "nothing is sent while the lock is held");
+  } finally {
+    hold.release();
+  }
+  assert.equal(await ended, null, "the turn's end is not given up");
+  assertSeniorReview(f, "a lock held past the usual wait");
+});
+
+test("the server restarted before it saw the other turn end: its recovery starts Senior's review of the built plan, which opening the session in the same run never does", async (t) => {
+  const f = await juniorBuildsEveryItem(t, { serverRun: { ...NO_SERVER_RUN, id: "run-1" } });
+  f.agent.sessionState = async () => ({ turn: { active: true, id: OTHER_TURN } });
+  await f.service.afterTurn("session-1", end(f.state().turnId), f.context);
+  f.tail = [...f.tail, otherSessionTurn];
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  await f.service.reconcile("session-1", f.context);
+  assert.equal(f.sends.length, 1, "opening the session sends nothing");
+  await f.restart({ serverRun: { ...NO_SERVER_RUN, id: "run-2" } }).reconcile("session-1", f.context);
+  assertSeniorReview(f, "recovery after a restart");
 });
