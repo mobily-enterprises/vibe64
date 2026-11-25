@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -18,6 +18,14 @@ import {
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 import { sessionTempPath } from "@local/vibe64-core/server/sessionSourcePath";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+async function eventually(check, message) {
+  const deadline = Date.now() + 10_000;
+  while (!check()) {
+    assert.ok(Date.now() < deadline, message);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
 test("agent shell commands run as session-owned managed executions and drain on session close", async (t) => {
   for (const [name, value] of Object.entries({ GENESIS_PARSER_ROOT: "/release/genesis-parsers", GENESIS_PARSER_AUTO_INSTALL: "0" })) {
@@ -52,6 +60,9 @@ test("agent shell commands run as session-owned managed executions and drain on 
   let environmentStatus = "not-prepared";
   let commandExitCode = 0;
   const stopOwnedCalls = [];
+  const stopCalls = [];
+  // A command that is still running: its runner writes no result.
+  const RUNNING_COMMAND = "sleep 300";
   const descriptor = {
     metadata: {
       source_kind: "session_clone",
@@ -111,12 +122,19 @@ test("agent shell commands run as session-owned managed executions and drain on 
     },
     async runCommand(request) {
       runCalls.push(request);
+      if (Buffer.from(request.baseEnv.VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64, "base64").toString("utf8") === RUNNING_COMMAND) {
+        return { execution: { id: "execution-running" }, ok: true };
+      }
       await writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH, "started chrome\n");
       await writeFile(request.baseEnv.VIBE64_AGENT_SESSION_RUN_RESULT_PATH, `${commandExitCode}\n`);
       return {
         execution: { id: "execution-1" },
         ok: true
       };
+    },
+    async stopExecution(executionId, options) {
+      stopCalls.push([executionId, options]);
+      return { executionId, ok: true, stopped: true };
     },
     async stopOwnedExecutions(selector, options) {
       stopOwnedCalls.push([selector, options]);
@@ -278,6 +296,22 @@ test("agent shell commands run as session-owned managed executions and drain on 
     assert.equal(blocked.ok, false);
     assert.equal(blocked.code, "environment_unavailable");
     assert.equal(runCalls.length, beforeFailure, "Environment failure must block execution rather than reuse stale values.");
+
+    // A command still running when the AI's tool call ends (Stop, or the tool ending it) is stopped with everything it
+    // started: its wrapper's request closes, and the editor stops its execution.
+    environmentFailure = null;
+    const running = spawn(prepared.hostWrapperPath, [RUNNING_COMMAND], {
+      cwd: sourceRoot, env: { ...process.env, ...prepared.env }, stdio: "ignore"
+    });
+    const ended = new Promise((resolve) => running.once("exit", resolve));
+    t.after(() => running.kill("SIGKILL"));
+    const startedCalls = runCalls.length;
+    await eventually(() => runCalls.length > startedCalls, "the running command never started");
+    assert.deepEqual(stopCalls, [], "a command is not stopped while its caller waits for it");
+    running.kill("SIGKILL");
+    await ended;
+    await eventually(() => stopCalls.length > 0, "the command was not stopped when its caller went away");
+    assert.deepEqual(stopCalls, [["execution-running", { reason: "vibe64_agent_session_command_cancelled" }]]);
 
     const closed = await service.closeAllForSession(sessionId);
     assert.equal(closed.ok, true);
