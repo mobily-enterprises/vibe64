@@ -94,7 +94,8 @@ async function twoSessions(t) {
     await records.createSession({ metadata: {}, runtimeKind: "genesis", sessionId });
     const metadata = {
       assistant_routing: JSON.stringify({ mode: "auto", afterPlan: AFTER_PLAN, afterPlanDeep: [], autoSave: true }),
-      assistant_routing_request: JSON.stringify({ submittedBy: PERSON })
+      assistant_routing_request: JSON.stringify({ submittedBy: PERSON }),
+      label: sessionId === "alpha" ? "Passes" : "Inbox"
     };
     const created = await createSessionSource({
       env: process.env,
@@ -118,9 +119,11 @@ async function twoSessions(t) {
     writeBackgroundTaskEvent: records.writeBackgroundTaskEvent,
     writeMetadataValue: async (sessionId, name, value) => { sessions[sessionId].metadata[name] = value; }
   };
+  // The project's runtime state root, where Save records which session saved each version.
   const runtime = {
     getSessionWithoutSource: async sessionId => sessions[sessionId],
     listSessionSummaries: async () => Object.values(sessions),
+    stateRoot: path.join(root, "runtime"),
     store
   };
   const project = {
@@ -269,13 +272,19 @@ test("two sessions of a project with no GitHub coordinate through its main: each
     [status.json.repository.updateFirst.reason, status.json.repository.updateFirst.behind, status.json.repository.updateFirst.canonicalCommit],
     ["behind", 1, alphaCommit]
   );
+  // Alpha's Save recorded itself as the saver, so beta's status names alpha's session by its name.
+  assert.equal(status.json.repository.updateFirst.incomingVersions[0].savedBy, "Passes");
   assert.equal(status.json.tools.save, "vibe64-helper session save");
 
   // Beta's AI tries to save before updating: Save itself refuses, and the answer names the Update.
   beta.agentRuns = [{ active: true }];
   const early = await p.helpers.beta(["save", "--json"]);
   assert.deepEqual([early.code, early.json.status, early.json.code], [1, "update_first", "vibe64_session_save_update_required"]);
-  assert.match(early.json.next, /^Run vibe64-helper session update first/u);
+  // Through the real Save: how many newer versions, when, which session saved them and how many files, then the fix.
+  assert.match(early.json.message, new RegExp("^Not saved: Main has 1 newer saved version \\((just now|1 minute ago), " +
+    "from the Passes session, 1 file\\)\\. Update this session to take it in \\(your unsaved work stays\\), then Save\\.$", "u"));
+  assert.match(early.json.next, /^Run vibe64-helper session update, which keeps this session's unsaved work,/u);
+  assert.match(early.json.next, /never offer the person a merge/u);
   assert.equal(await p.canonical("main"), alphaCommit, "a refused Save publishes nothing");
 
   const updated = await p.helpers.beta(["update", "--json"]);
