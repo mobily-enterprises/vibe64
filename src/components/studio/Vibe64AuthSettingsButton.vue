@@ -41,6 +41,14 @@
           data-test="take-the-tour"
           @click="learning.openOrientation()"
         />
+        <v-list-item
+          v-if="problemReport.available"
+          prepend-icon="$bugReport"
+          subtitle="Tell us what went wrong here"
+          title="Report a problem"
+          data-vibe64-guide="report-a-problem"
+          @click="problemReport.open()"
+        />
       </v-list>
     </v-menu>
 
@@ -193,6 +201,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useDisplay, useTheme } from "vuetify";
 import { readAppearance, writeAppearance } from "@/lib/appearance.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { useProblemReport } from "@/composables/useProblemReport.js";
 import {
   accountRowsForStatus,
   ProviderAccountsSetup,
@@ -236,6 +245,7 @@ const dialogOpen = ref(false);
 const root = ref(null);
 // Take the tour starts the installed course's orientation lesson.
 const learning = useVibe64Learning();
+const problemReport = useProblemReport();
 const theme = useTheme();
 // Phones get the full screen, like the app's other dialogs, and equal tabs
 // with the icon above the label, so all three fit without scrolling.

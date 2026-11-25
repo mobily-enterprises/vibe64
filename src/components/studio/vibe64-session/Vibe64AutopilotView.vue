@@ -60,6 +60,7 @@ import { Vibe64UsageRecordingIndicator } from "@local/vibe64-usage-recording/cli
 import { useModelRouting } from "@local/vibe64-accounts/client";
 import { useVibe64StarredFiles } from "@/composables/useVibe64StarredFiles.js";
 import Vibe64AiTaskHost from "./Vibe64AiTaskHost.vue";
+import { useProblemReportPlace } from "@/composables/useProblemReport.js";
 import Vibe64AutopilotActivity from "./Vibe64AutopilotActivity.vue";
 import Vibe64AutopilotChat from "./Vibe64AutopilotChat.vue";
 import Vibe64AutopilotDialogs from "./Vibe64AutopilotDialogs.vue";
@@ -163,6 +164,8 @@ const {
   dashboardSessionContext, openSourceEditorFile, prefillComposer, projectSlug,
   selectSessionTool, sessionGithubActor, sessionGithubActorHeaderVisible, sessionId, sourceEditorOpenRequest
 } = autopilotView;
+// Report a problem from anywhere while this session is shown describes it, and can include its main chat.
+useProblemReportPlace(() => (props.active && sessionId.value ? { sessionId: sessionId.value, chat: { kind: "main" } } : null));
 function openUsage({ entryId = "", mode = "recording", recordingId = "" } = {}) {
   if (!selectSessionTool("system")) return;
   usageOpenRequest.value = {

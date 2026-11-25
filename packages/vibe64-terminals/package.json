@@ -42,13 +42,15 @@
     "./server/archivedClosingChatsUpgrade": "./src/server/archivedClosingChatsUpgrade.js",
     "./server/sessionWorkTasks": "./src/server/sessionWorkTasks.js",
     "./server/sessionRenewalHandover": "./src/server/sessionRenewalHandover.js",
+    "./server/problemReportHost": "./src/server/problemReport/problemReportHost.js",
     "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",
     "capabilities": {
       "provides": [
-        "vibe64.terminals"
+        "vibe64.terminals",
+        "vibe64.problem-reports"
       ],
       "requires": [
         "runtime.actions",
@@ -67,6 +69,10 @@
           {
             "entrypoint": "src/server/Vibe64TerminalsFeature.js",
             "export": "Vibe64TerminalsFeature"
+          },
+          {
+            "entrypoint": "src/server/problemReport/ProblemReportFeature.js",
+            "export": "ProblemReportFeature"
           }
         ]
       },
@@ -91,7 +97,8 @@
           }
         ],
         "capabilities": [
-          "vibe64.terminals"
+          "vibe64.terminals",
+          "vibe64.problem-reports"
         ]
       }
     }
