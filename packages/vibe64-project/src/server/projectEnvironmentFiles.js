@@ -102,7 +102,8 @@ function gitExcludePattern(relativePath = "") {
 async function managedGitExcludeProjection(sourceRoot = "", relativePaths = [], options = {}) {
   const {
     section = "environment",
-    atomicJson = false
+    atomicJson = false,
+    patterns: givenPatterns = []
   } = options;
   const beginMarker = `# BEGIN Vibe64 managed ${section} files`;
   const endMarker = `# END Vibe64 managed ${section} files`;
@@ -150,13 +151,13 @@ async function managedGitExcludeProjection(sourceRoot = "", relativePaths = [], 
   while (preserved.at(-1) === "") {
     preserved.pop();
   }
-  const patterns = [...new Set(relativePaths.flatMap((relativePath) => [
+  const patterns = [...new Set([...relativePaths.flatMap((relativePath) => [
     gitExcludePattern(relativePath),
     `${gitExcludePattern(relativePath)}.vibe64-backup-*`,
     ...(atomicJson
       ? [`${gitExcludePattern(path.posix.join(path.posix.dirname(relativePath), `.${path.posix.basename(relativePath)}`))}.*.tmp`]
       : [])
-  ]))].sort();
+  ]), ...givenPatterns])].sort();
   const expected = [
     ...preserved,
     ...(preserved.length > 0 ? [""] : []),
@@ -168,6 +169,10 @@ async function managedGitExcludeProjection(sourceRoot = "", relativePaths = [], 
   return { excludePath, existing, expected };
 }
 
+/**
+ * Writes the source's own `.git/info/exclude` block for `options.section`: each relative path, anchored and taken
+ * literally, and `options.patterns` as given, such as a name Git ignores in every folder.
+ */
 async function writeManagedGitExcludes(sourceRoot = "", relativePaths = [], options = {}) {
   const { excludePath, existing, expected } = await managedGitExcludeProjection(sourceRoot, relativePaths, options);
   if (existing === expected) {
