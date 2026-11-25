@@ -158,11 +158,11 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@jskit-ai/agent-docs": "0.1.352",
+    "@jskit-ai/agent-docs": "0.1.353",
     "@jskit-ai/auth-web": "0.2.58",
     "@jskit-ai/config-eslint": "0.1.252",
-    "@jskit-ai/jskit-catalog": "0.2.104",
-    "@jskit-ai/release": "0.1.14",
+    "@jskit-ai/jskit-catalog": "0.2.105",
+    "@jskit-ai/release": "0.1.15",
     "@playwright/test": "1.61.1",
     "@typescript-eslint/eslint-plugin": "8.72.2",
     "@typescript-eslint/parser": "8.72.2",
