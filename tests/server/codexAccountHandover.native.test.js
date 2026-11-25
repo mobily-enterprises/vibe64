@@ -13,6 +13,7 @@ import { createAccountsRuntime } from "../../packages/vibe64-accounts/src/server
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
+import { liveProcessGroupMembers } from "../fixtures/processGroupMembers.js";
 
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5_000 });
 
@@ -142,8 +143,10 @@ test("native account logout and credential restoration drain old processes and c
       return { ok: result.status === 0, output: `${result.stdout || ""}${result.stderr || ""}` };
     }
   });
+  // Nothing of a stopped process group runs on. Its leader may have exited and still wait for this process, its
+  // parent, to reap it on a later turn: a member that has exited holds nothing, as the stop counts it.
   function assertDrained(child) {
-    assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" }, `process group ${child.pid} survived`);
+    assert.deepEqual(liveProcessGroupMembers(child.pid), [], `process group ${child.pid} has members still running`);
   }
   t.after(async () => {
     await controller.invalidateAppServerRuntimes({ reason: "server-shutdown" });
