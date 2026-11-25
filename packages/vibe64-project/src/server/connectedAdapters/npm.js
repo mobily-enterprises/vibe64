@@ -275,25 +275,28 @@ async function restoreCopy(tree, record) {
     return false;
   }
   const nested = path.join(dir, "node_modules");
-  if (await existingEntry(nested)) await moveAbsentEntries(nested, path.join(backupDir, "node_modules"));
+  const aside = path.join(backupDir, "node_modules");
+  // What the swap moved aside goes back into the nested node_modules npm made, which goes back with it.
+  if ((await existingEntry(nested)) && (await existingEntry(aside))) {
+    await moveEntriesInto(aside, nested);
+    await rm(aside, { recursive: true, force: true });
+  }
+  if ((await existingEntry(nested)) && !(await existingEntry(aside))) await rename(nested, aside);
   await rm(dir, { recursive: true, force: true });
   await rename(backupDir, dir);
   return true;
 }
 
-/**
- * Gives the published copy back the nested node_modules the swap kept, beside the dependencies it
- * moved aside with that copy: each entry `to` lacks moves into it, inside a scope too.
- */
-async function moveAbsentEntries(from, to) {
-  if (!(await existingEntry(to))) {
-    await rename(from, to);
-    return;
-  }
+/** Moves each entry of `from` into `to` (inside a scope too), in place of an entry of the same name. */
+async function moveEntriesInto(from, to) {
   for (const entry of await readdir(from, { withFileTypes: true })) {
     const target = path.join(to, entry.name);
-    if (!(await existingEntry(target))) await rename(path.join(from, entry.name), target);
-    else if (entry.name.startsWith("@") && entry.isDirectory()) await moveAbsentEntries(path.join(from, entry.name), target);
+    if (entry.name.startsWith("@") && entry.isDirectory() && (await existingEntry(target))?.isDirectory()) {
+      await moveEntriesInto(path.join(from, entry.name), target);
+    } else {
+      await rm(target, { recursive: true, force: true });
+      await rename(path.join(from, entry.name), target);
+    }
   }
 }
 
