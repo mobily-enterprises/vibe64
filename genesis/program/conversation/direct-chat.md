@@ -1503,6 +1503,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlanFiles.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlanAgentWrites.js`
+- `packages/vibe64-terminals/src/server/assistantWorkPlanInstructions.js`
 - `packages/vibe64-terminals/src/server/planLeftovers.js`
 - `packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261008-plan-progress.js`
@@ -2550,8 +2551,23 @@ items, every other item proven; `vibe64_assistant_workflow_plan_incomplete`).
 The plan is the only list of passes: its last section, `## Passes`, one
 `- [ ] <title>: <scope>` item per pass (`parseWorkPlanLines` marks its lines),
 which a new plan gets from the chat's After a plan ticks (`withAfterPlanPasses`,
-each over the plan's changes) unless Senior wrote its own. When a turn ends
-with the plan at its Passes step or completed during the request
+each over the plan's changes) unless Senior wrote its own. `<title>` is the
+pass's exact title in Genesis's list (`listGenesisPasses`, the one reader;
+case aside), one name per pass, with no aliases or short names:
+`withAfterPlanPasses` takes each title from that list (the chat setting's name
+only while the list can't be read), and every plan guidance that may write
+Passes (any role but Junior) lists Genesis's exact titles, read when the turn
+is delivered (`workPlanInstructions` with `passTitles`), never a list of
+Vibe64's own. The plan command (`managePlan`, through `manageWorkPlan`'s
+`checkPassItems`, `planPassItemsCheck`) refuses a `new` or `write` whose added
+or changed Passes items name a pass Genesis doesn't have
+(`vibe64_work_plan_pass_unknown`), naming each item and every title Genesis
+offers, so the AI renames it in the same turn. It reads Genesis's list only for
+such a write; an item the current plan already holds word for word is not
+checked again, so a write that only ticks never fails on a pass Genesis has
+since dropped, and while the list can't be read the write goes ahead. The pass
+turn checks the item again when it reaches it, as Genesis can change. When a
+turn ends with the plan at its Passes step or completed during the request
 (`planFinishedDuringRequest`, Senior's role only, so Junior's ticks leave it for
 the review), through a reported complete or handoff, a direct chat's plain
 reply or an Auto answer in which Senior reviewed it, routing starts the plan's
@@ -2573,8 +2589,12 @@ or Vibe64's own plan writes) and when a plan finishes. A pass the Genesis servin
 the project can't run, or the plan's changes without a base, holds the request
 waiting at that pass with **<title> can't run: <reason> Change the plan's
 Passes, or put it right and choose Continue in Passes.** and a notice, skipping
-nothing; a whole-app run is never the fallback. The request holds only the pass
-it runs (`state.pass`: id, title, item and Genesis's request; `assistantPlanPass`),
+nothing; an item that names a pass Genesis doesn't have says what Genesis has
+and the fix instead (`resolvePlanPass`'s `fix`): **<title> can't run: the plan
+names “<title>”, a pass Genesis doesn't have. Genesis's passes are “Deslop”,
+“UI pass”, … and “Review”. Rename the plan's Passes item “<item>” to one of
+them, then choose Continue in Passes.**; a whole-app run is never the fallback.
+The request holds only the pass it runs (`state.pass`: id, title, item and Genesis's request; `assistantPlanPass`),
 never a list. Each pass is its own Senior turn (a Custom chat's on its own model)
 with `genesisTask` set to the pass id, announced by **<title> started: the plan's
 next pass (<item>)** (`planPassNotice`); `assistantPassInstructions` take the
@@ -2634,14 +2654,16 @@ In plan-running chats (Main chat with a chat mode, not a lesson, Fix it or
 generated work), a pass the person asks for joins the plan: `planPassRequest`
 reads the Passes list's fields (`passAction` continue, again or restart with
 `passId`; `passes` with `passRun`; or a pass's own `genesisTask` and `passRun`)
-or typed words (`passesInMessage`; never a steer's). Genesis's list is read only
-for a message that may ask for passes (`readPassRequest`: those fields, or words
-shaped like a typed request); typed words it can't check against an unreadable
-list go as an ordinary message, while the fields are refused. `applyPlanPasses`
-appends the items to the open plan's Passes, or writes a small plan of its own,
-titled after the request, with the notice **New plan for the passes you asked
-for: <title>.** Once the plan is at its Passes step the message runs its next
-pass; before Senior's review, Continue, Run again and Restart are refused
+or typed words (`passesInMessage`; never a steer's). Admission reads Genesis's
+list only for a message that may ask for passes (`readPassRequest`: those
+fields, or words shaped like a typed request); typed words it can't check
+against an unreadable list go as an ordinary message, while the fields are
+refused. Delivery reads it again for the exact titles in the plan guidance of a
+turn that may write Passes; a list it can't read leaves the titles out, and the
+turn goes. `applyPlanPasses` appends the items to the open plan's Passes, or
+writes a small plan of its own, titled after the request, with the notice **New
+plan for the passes you asked for: <title>.** Once the plan is at its Passes
+step the message runs its next pass; before Senior's review, Continue, Run again and Restart are refused
 (`vibe64_assistant_routing_plan_passes_not_yet`) and an added pass gets a Senior
 turn that says so and runs nothing (`planPassNote`). `planPassesView` gives the
 Passes list the open plan's passes and the state of each. Work without a plan, or

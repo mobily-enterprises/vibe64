@@ -313,7 +313,7 @@ function createAssistantRoutingOutcomes({
     if (next.problem) {
       state.pass = { title: next.title, item: next.item };
       state.status = "waiting";
-      state.error = `${next.title} can't run: ${next.problem} Change the plan's Passes, or put it right and choose Continue in Passes.`;
+      state.error = `${next.title} can't run: ${next.problem} ${next.fix || "Change the plan's Passes, or put it right and choose Continue in Passes."}`;
       await records.save(context, state);
       await records.writeNotice(context, state, { messageId: `assistant-plan-pass-blocked:${state.turnId}:${next.item}`, text: state.error });
       return null;

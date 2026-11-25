@@ -104,6 +104,7 @@ function createAssistantRouting({
     dispatch,
     prepareSelection,
     interrupt,
+    listPasses,
     logger
   });
   const cancellation = createAssistantRoutingCancellation({
