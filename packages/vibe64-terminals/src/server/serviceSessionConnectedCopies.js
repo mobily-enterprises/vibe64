@@ -10,17 +10,15 @@ import {
   normalizeGithubAccountMode,
   runVibe64Command
 } from "@local/vibe64-execution/server";
-import { GENESIS_DERIVED_ARTIFACT_PATHS } from "@local/vibe64-genesis/server";
 import {
   connectedCopyActorSession,
-  inspectConnectedCopies,
   prepareConnectedCopies,
   recoverConnectedCopyUpdate
 } from "./sessionConnectedCopies.js";
+import { inspectSessionWorkToSave } from "./sessionConnectedRelease.js";
 import { recordSessionGitCommandActor } from "./sessionGitCommandActor.js";
 import { githubSourceCommandOptions } from "./sessionSource.js";
 import { saveError } from "./sessionWorkCommands.js";
-import { inspectSessionWork } from "./sessionWorkSave.js";
 import { checkSessionUpdates } from "./sessionWorkUpdate.js";
 import { CONNECTED_PREPARATION_PERSON_REQUIRED } from "./workspaceSetupRules.js";
 
@@ -248,23 +246,15 @@ function recoverConnectedUpdate({ codexGitCommand, env, recovery, runtime, sessi
 
 /**
  * Whether an interrupted Save whose own recovery found nothing prepared was a Save of copies alone
- * that is complete: the session has copies, and neither its own repository nor any copy holds unsaved
- * work, so every copy that Save pushed is recorded.
+ * that is complete: the session has copies and no work to save, so every copy that Save pushed is
+ * saved and pinned.
  * @param {unknown} error the own recovery's error
- * @param {{ project: object, runtime: object, session: object }} input
+ * @param {{ project: ProjectService, projectRecord: object, runtime: object, session: object }} input
  */
-async function copiesOnlySaveRecovered(error, { project, runtime, session }) {
+async function copiesOnlySaveRecovered(error, { project, projectRecord, runtime, session }) {
   if (error?.code !== "vibe64_session_save_interrupted_retryable" || !sessionConnectedCopies(session).length) return false;
   const current = await runtime.getSessionWithoutSource(session.sessionId);
-  const own = await inspectSessionWork({ derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS, project, session: current });
-  if (own.unsaved === true) return false;
-  const copies = await inspectConnectedCopies({
-    copies: sessionConnectedCopies(current),
-    derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-    project,
-    session: current
-  });
-  return !copies.some(copy => copy.unsaved);
+  return !(await inspectSessionWorkToSave({ project, projectRecord, session: current })).unsaved;
 }
 
 export {

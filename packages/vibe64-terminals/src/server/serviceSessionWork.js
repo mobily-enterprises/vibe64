@@ -186,6 +186,8 @@ function createServiceSessionWork({
     });
     const connected = copies.length ? await saveConnectedCopies({
       beforePush: async (ready) => {
+        // Nothing to save is refused before anything pushes, with the answer the session's status gives.
+        if (!release.hasWork(ownUnsaved, ready)) throw saveError("This session has no work to save.", "vibe64_session_save_no_changes");
         if (!release.ownSaves(ownUnsaved, ready)) return;
         if (!ownUnsaved) await assertWorkflow();
         await refuseBehindSessionSave({
@@ -213,15 +215,11 @@ function createServiceSessionWork({
       session
     }) : [];
     // Copies pushed, the session's own source records them before its own commit.
-    const connectedLines = await release.record(ownUnsaved, connected);
+    const connectedLines = await release.record(connected);
     const recorded = connectedLines.length ? { connectedLines } : {};
     ownUnsaved = ownUnsaved || await ownWork();
-    if (!ownUnsaved) {
-      if (!connected.length) {
-        throw saveError("This session has no work to save.", "vibe64_session_save_no_changes");
-      }
-      return { connected, ...recorded, ok: true, operationId: input.operationId, reconciled: true, status: "saved" };
-    }
+    // A Save of copies alone: the release changed nothing in the session's own source.
+    if (!ownUnsaved) return { connected, ...recorded, ok: true, operationId: input.operationId, reconciled: true, status: "saved" };
     return release.finishing(connected, async () => {
       const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
         commandOptions: execution.commandOptions,
@@ -653,7 +651,7 @@ function createServiceSessionWork({
           session
         });
       } catch (error) {
-        if (!await copiesOnlySaveRecovered(error, { project: projectRecord, runtime, session })) throw error;
+        if (!await copiesOnlySaveRecovered(error, { project, projectRecord, runtime, session })) throw error;
         return { connected, ok: true, operationId: input.recovery?.operationId, reconciled: true, recovered: true, status: "saved" };
       }
       return connected.length ? { ...recovered, connected } : recovered;

@@ -64,8 +64,7 @@ function sessionNavLabel(session = {}) {
  * @property {string} [statusColor]
  * @property {string} [statusLabel]
  * @property {Record<string, any> | null} [workState]
- * @property {(observedWork?: Record<string, any> | null) => Promise<unknown>} [refreshSessionWork] Present while a
- *   session is open.
+ * @property {() => Promise<unknown>} [refreshSessionWork] Present while a session is open.
  * @property {(...args: any[]) => unknown} [requestSaveWork] Present while a session is open.
  * @property {(options?: object) => Promise<unknown>} [requestUpdateWork] Present while a session is open.
  * @property {() => unknown} [refreshConversation] Present while a session is open.

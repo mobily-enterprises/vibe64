@@ -121,8 +121,9 @@ function compositionsOf(connections) {
 }
 
 /**
- * What Save would pin: the composition connections (as owner/name) and whether the lock would
- * change, given each copy's saved commit (`commits` by owner/name).
+ * What Save would pin, given each copy's saved commit (`commits` by owner/name): the composition
+ * connections (as owner/name), whether the lock would change, and each pin it would record that the
+ * lock does not name yet (`pinsToRecord`, owner/name and commit).
  * @param {{ sourceRoot: string, connections: Array<object>, commits: Record<string, string> }} input
  */
 async function planCompositionPins({ sourceRoot, connections, commits }) {
@@ -131,7 +132,11 @@ async function planCompositionPins({ sourceRoot, connections, commits }) {
   const copies = Object.fromEntries(Object.entries(commits).map(([fullName, commit]) => [fullName, { commit }]));
   return {
     compositions: compositions.map(composition => composition.fullName),
-    changed: pinsDiffer(plannedPins({ compositions, previous, copies }), previous)
+    changed: pinsDiffer(plannedPins({ compositions, previous, copies }), previous),
+    pinsToRecord: compositions
+      .filter(({ fullName, repository }) => commits[fullName] &&
+        commits[fullName] !== previous.find(pin => pin.repository === repository)?.commit)
+      .map(({ fullName }) => ({ fullName, commit: commits[fullName] }))
   };
 }
 

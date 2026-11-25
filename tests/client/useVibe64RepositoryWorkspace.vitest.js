@@ -119,7 +119,8 @@ describe("useVibe64RepositoryWorkspace", () => {
       assistantFixAllowed: false,
       requestSaveWork,
       sessionId: "session-1",
-      sessionsApiPath: "/api/app/sample/vibe64/sessions"
+      sessionsApiPath: "/api/app/sample/vibe64/sessions",
+      workState: { unsaved: true }
     }), { view: ref("changes") });
 
     await nextTick();
@@ -251,14 +252,13 @@ describe("useVibe64RepositoryWorkspace", () => {
     }
   });
 
-  it("reuses the Current Changes snapshot as the selected session work state", async () => {
+  it("reads the session's work again from the server after the changes list, never from that list", async () => {
     mocks.changes = {
-      changedPaths: ["src/app.js"],
-      initialDiff: { diff: "+change", path: "src/app.js" },
+      changedPaths: [],
       sessionId: "session-1",
-      unsaved: true
+      unsaved: false
     };
-    const refreshSessionWork = vi.fn(async (work) => work);
+    const refreshSessionWork = vi.fn(async () => ({}));
     const { useVibe64RepositoryWorkspace } = await import(
       "../../src/composables/useVibe64RepositoryWorkspace.js"
     );
@@ -272,12 +272,35 @@ describe("useVibe64RepositoryWorkspace", () => {
     await flushPromises();
 
     expect(refreshSessionWork).toHaveBeenCalledTimes(1);
-    expect(refreshSessionWork).toHaveBeenCalledWith(expect.objectContaining({
-      changedPaths: ["src/app.js"],
+    expect(refreshSessionWork).toHaveBeenCalledWith();
+  });
+
+  it("offers Save from the session's answer: a pin to record with no changed file, but not a session with nothing", async () => {
+    mocks.changes = { changedPaths: [], files: [], totalCount: 0, unsaved: false };
+    const requestSaveWork = vi.fn(async () => ({ ok: true }));
+    const { useVibe64RepositoryWorkspace } = await import(
+      "../../src/composables/useVibe64RepositoryWorkspace.js"
+    );
+    const context = ref({
+      requestSaveWork,
       sessionId: "session-1",
-      unsaved: true
-    }));
-    expect(refreshSessionWork.mock.calls[0][0]).not.toHaveProperty("initialDiff");
+      sessionsApiPath: "/api/app/sample/vibe64/sessions",
+      workState: { pinsToRecord: [{ commit: "b".repeat(40), fullName: "example/mercbot" }], unsaved: true }
+    });
+    const workspace = useVibe64RepositoryWorkspace(context, { view: ref("changes") });
+
+    await nextTick();
+    await flushPromises();
+
+    expect(workspace.saveWorkBlockedReason.value).toBe("");
+    await expect(workspace.saveWork()).resolves.toEqual({ ok: true });
+    expect(requestSaveWork).toHaveBeenCalledOnce();
+
+    context.value = { ...context.value, workState: { pinsToRecord: [], unsaved: false } };
+    await nextTick();
+    expect(workspace.saveWorkBlockedReason.value).toBe("No work to save");
+    await expect(workspace.saveWork()).resolves.toBe(false);
+    expect(requestSaveWork).toHaveBeenCalledOnce();
   });
 
   it.each([

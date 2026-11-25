@@ -52,6 +52,7 @@
           <span>{{ props.workState?.changedPaths?.length || 0 }} changed {{ props.workState?.changedPaths?.length === 1 ? 'file' : 'files' }}</span>
           <v-btn variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
         </div>
+        <p v-if="saveWorkPins" class="text-body-small mb-2">{{ saveWorkPins }}.</p>
         <v-sheet v-if="saveWorkReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
           <div class="text-label-small on-surface-variant">{{ saveWorkReview.mode === 'github' ? 'GitHub' : saveWorkReview.mode === 'local_source' ? 'Local project' : 'Project version' }}</div>
           <Vibe64SessionSaveTarget v-if="saveWorkTarget" :target="saveWorkTarget" />
@@ -97,6 +98,7 @@ import { computed, inject } from "vue";
 import { VIBE64_AI_TASKS_KEY } from "@local/vibe64-ai-tasks/client";
 import Vibe64SessionSaveTarget from "./Vibe64SessionSaveTarget.vue";
 import { vibe64SessionSaveTarget } from "@/lib/vibe64SessionSaveTarget.js";
+import { sessionPinsToRecordLabel } from "@/lib/vibe64SessionRepositoryWorkState.js";
 
 // The session's confirmations: applying a resolved Update, a message that
 // does not fit the assistant's memory, and Save.
@@ -126,6 +128,8 @@ function confirmResolvedUpdate() {
 }
 // The reviewed destination, said as the session tab's info says it.
 const saveWorkTarget = computed(() => vibe64SessionSaveTarget(saveWorkReview.value, props.projectContext));
+// The pins Save records beside its changed files, such as a connected copy Update moved.
+const saveWorkPins = computed(() => sessionPinsToRecordLabel(props.workState));
 const saveWorkNeedsPullRequest = computed(() => githubProject.value &&
   props.workState?.publicationRequiresPullRequest === true && !sessionPullRequest.value?.number);
 const publicationLabel = computed(() => {
