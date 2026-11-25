@@ -911,7 +911,7 @@ test("restarts in order while the AI works: the task carries on through each, ho
   let running = f.boot({ serverRun: run });
   const { task } = await f.start(running.aiTasks);
   await f.quiet(running.aiTasks);
-  // A release, its rollback and a VPS restart, each a stop in order moments after the last.
+  // A release, its rollback and a machine restart, each a stop in order moments after the last.
   for (let restart = 1; restart <= 3; restart += 1) {
     running.aiTasks.closeRunner();
     await run.recordPlannedStop("server-shutdown");

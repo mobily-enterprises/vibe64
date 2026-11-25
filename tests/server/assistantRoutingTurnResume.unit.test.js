@@ -108,7 +108,7 @@ test("a turn carries on through planned restarts however close together, each to
   const h = await runningTurn(t);
   let run = h.first;
   for (let restart = 1; restart <= 3; restart += 1) {
-    // Each server stops in order, as a release, its rollback and a VPS restart stop it.
+    // Each server stops in order, as a release, its rollback and a machine restart stop it.
     await run.recordPlannedStop("server-shutdown");
     const next = await h.next();
     await next.routing.reconcile("session-1", h.f.context);

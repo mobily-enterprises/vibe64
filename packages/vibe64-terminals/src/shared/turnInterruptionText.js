@@ -24,7 +24,7 @@ const TURN_INTERRUPTION_CAUSES = Object.freeze({
   FAILED: "failed"
 });
 
-// A stop in order (a release, a rollback, a VPS restart): what ran carries on, and the loop rule never counts it.
+// A stop in order (a release, a rollback, a machine restart): what ran carries on, and the loop rule never counts it.
 const PLANNED_CAUSES = Object.freeze([TURN_INTERRUPTION_CAUSES.RESTART, TURN_INTERRUPTION_CAUSES.UPDATE]);
 
 /**
