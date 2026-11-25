@@ -3,6 +3,7 @@ import test from "node:test";
 import { fixture, planCommands, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
 import { readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { NO_SERVER_RUN } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
+import { requestWasWorking } from "../../packages/vibe64-terminals/src/server/serviceTurnRecovery.js";
 
 // A live session's case, in Auto through the real routing service. Junior's turn built every item of the plan and
 // handed it to Senior's review. A message from another session (delivered as the owner's message) had its own answer
@@ -12,7 +13,8 @@ import { NO_SERVER_RUN } from "../../packages/vibe64-terminals/src/server/turnIn
 // A refusal that means only that another turn or message came first leaves the review owed: it is decided again once
 // that turn ends, from the conversation and plan as they are then (or by the server's recovery, when it restarted
 // first). A message of the person's own still holds it for them, Stop still ends it, and a busy lock at the turn's
-// end never loses it.
+// end never loses it. Another session's message never replaces it, and a step a restart cut off is decided the same
+// way by the next server's recovery.
 
 const PLAN = "Status: active\n# Contact threads\n\nGroup each contact's messages into one thread.\n\n" +
   "- [~] Store contact threads\n- [~] List a contact's threads\n- [~] Reply in a thread\n- [ ] Move old messages into threads\n\n" +
@@ -25,6 +27,20 @@ const otherSessionTurn = {
   user: { messageId: "other-session-1", text: "Is the threads change saved yet?" },
   metadata: { projectMessage: { sourceProject: "shop", sourceSession: "release", messageId: "other-session-1", direction: "received" } },
   messages: [{ role: "assistant", text: "Not yet: Senior reviews the plan next, then it is saved." }]
+};
+// A second message from that session, as it is sent and as the chat records it with its answer.
+const SECOND_TURN = "turn-other-session-2";
+const secondProjectMessage = { sourceProject: "shop", sourceSession: "release", messageId: "other-session-2", direction: "received" };
+const secondSessionMessage = {
+  messageId: "other-session-2",
+  message: "From project shop (session release)\n\nIs Senior reviewing the threads plan yet?",
+  displayMessage: "Is Senior reviewing the threads plan yet?",
+  turnMetadata: { projectMessage: secondProjectMessage }
+};
+const secondSessionTurn = {
+  user: { messageId: "other-session-2", text: "Is Senior reviewing the threads plan yet?" },
+  metadata: { projectMessage: secondProjectMessage },
+  messages: [{ role: "assistant", text: "Senior's review starts once this answer ends." }]
 };
 // The person's own message, which reached the chat in another turn, and its answer.
 const personTurn = {
@@ -53,10 +69,15 @@ async function juniorBuildsEveryItem(t, options = {}) {
   return f;
 }
 
-/** Senior's review of the plan is the request's next turn: the plan is never left built with nothing running it. */
-function assertSeniorReview(f, label) {
+/**
+ * Senior's review of the plan is the request's next turn: the plan is never left built with nothing running it.
+ * @param {object} f the routing fixture
+ * @param {string} label
+ * @param {number} [sends] the turns sent in all, the review last
+ */
+function assertSeniorReview(f, label, sends = 2) {
   const review = f.sends.at(-1);
-  assert.equal(f.sends.length, 2, `${label}: Senior's review follows (request: ${JSON.stringify(f.state())})`);
+  assert.equal(f.sends.length, sends, `${label}: Senior's review follows (request: ${JSON.stringify(f.state())})`);
   assert.equal(review.selection.modelId, f.assignments.senior.modelId, `${label}: on Senior`);
   assert.match(review.input.message, /Senior review of the plan:/u, label);
   assert.deepEqual([f.state().status, f.state().stage, f.state().delivery], ["working", "review", "accepted"], label);
@@ -148,6 +169,62 @@ test("the server restarted before it saw the other turn end: its recovery starts
   f.agent.sessionState = async () => ({ turn: { active: false } });
   await f.service.reconcile("session-1", f.context);
   assert.equal(f.sends.length, 1, "opening the session sends nothing");
+  assert.equal(requestWasWorking(f.metadata), true, "the next server's startup recovery takes it up, with no page open");
   await f.restart({ serverRun: { ...NO_SERVER_RUN, id: "run-2" } }).reconcile("session-1", f.context);
   assertSeniorReview(f, "recovery after a restart");
+});
+
+test("another session's message routed after the other turn ended but before that end was decided: it runs as its own turn, never replacing the owed review, which starts once it ends", async (t) => {
+  const f = await juniorBuildsEveryItem(t);
+  f.agent.sessionState = async () => ({ turn: { active: true, id: OTHER_TURN } });
+  await f.service.afterTurn("session-1", end(f.state().turnId), f.context);
+  // The other turn ends; its end has not been decided when the session's second message is routed.
+  f.tail = [...f.tail, otherSessionTurn];
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  await f.service.send("session-1", secondSessionMessage, f.context);
+  assert.deepEqual([f.sends.length, f.sends.at(-1).input.messageId, f.state().messageId, f.state().status, f.state().stopped],
+    [2, "other-session-2", "implement-1", "waiting", undefined], "the message has its own turn; the review is still owed");
+  // The first turn's end is decided while the message's turn runs: the review stays owed.
+  f.agent.sessionState = async () => ({ turn: { active: true, id: SECOND_TURN } });
+  await f.service.afterTurn("session-1", end(OTHER_TURN), f.context);
+  assert.equal(f.sends.length, 2, "nothing starts while that turn runs");
+  f.tail = [...f.tail, secondSessionTurn];
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  await f.service.afterTurn("session-1", end(SECOND_TURN), f.context);
+  assertSeniorReview(f, "the second message's turn ended", 3);
+});
+
+/**
+ * Junior's turn ended while its server was down: the next server's recovery finds it ended, its handoff reported, and
+ * prepares Senior's review, which no earlier server sent.
+ * @param {import("node:test").TestContext} t
+ * @param {{ tail?: object[], steering?: object[] }} [after] what the chat holds after Junior's own message and its
+ *   answer; steering: the request's accepted steering of that turn
+ */
+async function recoveredHandoff(t, { tail = [], steering = [] } = {}) {
+  const f = await juniorBuildsEveryItem(t, { serverRun: { ...NO_SERVER_RUN, id: "run-1" } });
+  f.metadata.assistant_routing_request = JSON.stringify({ ...f.state(), steering });
+  f.tail = [...f.tail, ...tail];
+  f.context.session.agentRuns = [{ id: "codex_app_server", state: "completed", turnId: f.state().turnId }];
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  await f.restart({ serverRun: { ...NO_SERVER_RUN, id: "run-2" } }).reconcile("session-1", f.context);
+  return f;
+}
+
+test("Junior's turn ended across a restart, its handoff to Senior's review reported: the next server's recovery starts the review, steered turn too", async (t) => {
+  assertSeniorReview(await recoveredHandoff(t), "recovered handoff");
+  const steer = { messageId: "steer-1", text: "Keep the old inbox link too." };
+  const steered = await recoveredHandoff(t, {
+    steering: [steer],
+    tail: [{ user: steer, messages: [{ role: "assistant", text: "Kept it; every item is built." }] }]
+  });
+  assertSeniorReview(steered, "recovered handoff of a steered turn");
+});
+
+test("Junior's turn ended across a restart, and a message of the person's own came after it: the recovered review waits for their Continue", async (t) => {
+  const f = await recoveredHandoff(t, { tail: [personTurn] });
+  assert.deepEqual([f.sends.length, f.state().status, f.state().stage, f.state().delivery], [1, "waiting", "review", "pending"],
+    "the person's message is newer than the turn: nothing starts by itself");
+  await f.service.send("session-1", { messageId: "implement-1", message: "Implement the plan.", reviewAction: "retry" }, f.context);
+  assertSeniorReview(f, "Continue after recovery");
 });
