@@ -119,14 +119,15 @@ async function installedCopies(tree, names) {
  * @param {string} tree
  * @param {string} fromDir
  * @param {string} name
+ * @param {Set<string>} [gone] installed package folders a swap is about to move away, passed over
  */
-async function resolveFromCopy(tree, fromDir, name) {
+async function resolveFromCopy(tree, fromDir, name, gone = new Set()) {
   let dir = fromDir;
   for (;;) {
     if (path.basename(dir) !== "node_modules") {
       const candidate = path.join(dir, "node_modules", name);
       const manifestPath = path.join(candidate, "package.json");
-      if ((await existingEntry(manifestPath))) {
+      if (!gone.has(candidate) && (await existingEntry(manifestPath))) {
         const manifest = await readJsonFile(manifestPath).catch(() => null);
         if (manifest) return { dir: candidate, real: await realpath(candidate), version: String(manifest.version || "") };
       }
