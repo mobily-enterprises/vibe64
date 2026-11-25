@@ -116,12 +116,14 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/agentPreviewWorkerRegistry.js`
 - `packages/vibe64-terminals/src/server/agentPreviewBrowserTests.js`
 - `packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js`
+- `packages/vibe64-terminals/src/server/agentPreviewBrowserProcessGroups.js`
 - `packages/vibe64-terminals/src/server/agentPreviewStatusText.js`
 - `packages/vibe64-terminals/src/server/browserTestCleanup.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
 - `tests/server/agentPreviewCommand.unit.test.js`
+- `tests/server/agentPreviewBrowserProcessGroups.unit.test.js`
 - `tests/server/agentPreviewOpenCommand.unit.test.js`
 - `tests/server/previewPreparation.integration.test.js`
 - `tests/client/vibe64OutputControls.vitest.js`
