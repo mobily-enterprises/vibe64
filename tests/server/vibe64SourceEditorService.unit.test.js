@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
-import { lstat, mkdtemp, mkdir, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { watch } from "node:fs";
+import { chmod, lstat, mkdtemp, mkdir, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -940,10 +941,6 @@ test("source editor reads and saves files with hash conflict protection", async 
       (await readdir(path.join(fixture.sourceRoot, "src"))).filter((entry) => entry.startsWith(".vibe64-editor-")),
       []
     );
-    assert.equal(
-      (await readdir(fixture.sourceEditorTempRoot)).length,
-      0
-    );
 
     const conflictResponse = await fixture.service.saveFile({
       baseHash: readResponse.file.hash,
@@ -955,6 +952,44 @@ test("source editor reads and saves files with hash conflict protection", async 
     assert.equal(conflictResponse.statusCode, 409);
     assert.equal(conflictResponse.errors[0].code, "vibe64_source_editor_conflict");
   } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor creates and saves a file whole, so a reader never sees it empty or half-written", async () => {
+  const fixture = await createSourceEditorFixture();
+  const directory = path.join(fixture.sourceRoot, "src");
+  const scriptPath = path.join(directory, "app.js");
+  await chmod(scriptPath, 0o750);
+  const events = [];
+  let sentinelSeen;
+  const sentinel = new Promise((resolve) => { sentinelSeen = resolve; });
+  const watcher = watch(directory, (type, name) => {
+    events.push(`${type}:${name}`);
+    if (name === "sentinel") sentinelSeen();
+  });
+  const earlierReader = await open(scriptPath, "r");
+  try {
+    const read = await fixture.service.readFile({ path: "src/app.js", sessionId: "session-1" });
+    const created = await fixture.service.createFile({ path: "src/whole.json", sessionId: "session-1", text: "{\"whole\":true}\n" });
+    const saved = await fixture.service.saveFile({ baseHash: read.file.hash, path: "src/app.js", sessionId: "session-1", text: "console.log('two');\n" });
+    assert.equal(created.ok, true);
+    assert.equal(saved.ok, true);
+    await writeFile(path.join(directory, "sentinel"), "");
+    await sentinel;
+
+    // Each file appears once, already whole: no write ever lands on the path a reader opens.
+    assert.deepEqual(events.filter((event) => !event.includes(".vibe64-editor-") && !event.endsWith(":sentinel")), ["rename:whole.json", "rename:app.js"]);
+    assert.equal(await earlierReader.readFile("utf8"), "console.log('one');\n");
+    assert.equal(await readFile(scriptPath, "utf8"), "console.log('two');\n");
+    assert.equal((await lstat(scriptPath)).mode & 0o777, 0o750);
+    assert.deepEqual((await readdir(directory)).filter((entry) => entry.startsWith(".vibe64-editor-")), []);
+  } finally {
+    watcher.close();
+    await earlierReader.close();
     await rm(fixture.root, {
       force: true,
       recursive: true

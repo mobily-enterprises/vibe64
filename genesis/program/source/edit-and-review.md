@@ -731,7 +731,14 @@ Leaving the page or changing sessions warns before discarding unsaved edits.
 
 The source browser lists, searches, opens, edits, and saves allowed project
 files inside the selected session source. It rejects paths outside that source
-and reports concurrent changes rather than silently overwriting them. The
+and reports concurrent changes rather than silently overwriting them. Every
+create and save (the editor's, Integrations', the Data overview's and a
+release's) writes the whole text to a hidden `.vibe64-editor-*.tmp` file beside
+the file, then renames it over the file (keeping its permission bits) or, for a
+create, links it into place, which fails when a file already exists there. A
+reader therefore opens the old file or the new one, never an empty or
+half-written one, and the temporary file takes its folder's group and inherited
+permissions before it becomes the file. The
 source editor publishes successful creates and saves with project, session,
 path, hash, and originating-tab identity. In a visible editor, a foreign create
 refreshes the file tree, while a foreign save refreshes a clean matching file
