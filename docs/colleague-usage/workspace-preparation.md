@@ -288,7 +288,7 @@ instead: the database field (such as `DB_NAME`), or the declared test database
 (such as `TEST_DB_NAME`) in **Env**. A user made by an older command also keeps
 its grants that named its databases as they are: `SHOW GRANTS FOR 'shop'@'%';`
 lists them, and ``REVOKE ALL PRIVILEGES ON `shop_dev`.* FROM 'shop'@'%';``
-removes one whose `_` has no `\` before it. **Suggest a user and password**
+removes each one with a `_` in its name and no `\`. **Suggest a user and password**
 fills in a project user and a strong password first; the command shows the
 password as dots but copies the real one. The person runs these
 commands in their own terminal; Vibe64 never starts a database server or runs
