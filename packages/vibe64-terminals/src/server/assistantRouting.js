@@ -3,6 +3,7 @@ import { createAssistantRoutingState } from "./assistantRoutingState.js";
 import { createAssistantRoutingRecords } from "./assistantRoutingRecords.js";
 import { createAssistantRoutingDecisions } from "./assistantRoutingDecisions.js";
 import { createAssistantRoutingDelivery } from "./assistantRoutingDelivery.js";
+import { withRoutingTimeline } from "./assistantRoutingTimeline.js";
 import { createAssistantRoutingCancellation } from "./assistantRoutingCancellation.js";
 import { createAssistantRoutingAdmission } from "./assistantRoutingAdmission.js";
 import { createAssistantRoutingOutcomes } from "./assistantRoutingOutcomes.js";
@@ -95,7 +96,8 @@ function createAssistantRouting({
     agent,
     exclusive
   });
-  const delivery = createAssistantRoutingDelivery({
+  // Each delivery that fails is recorded on the session's timeline, as it was thrown.
+  const delivery = withRoutingTimeline(createAssistantRoutingDelivery({
     routingState,
     records,
     decisions,
@@ -106,7 +108,7 @@ function createAssistantRouting({
     interrupt,
     listPasses,
     logger
-  });
+  }));
   const cancellation = createAssistantRoutingCancellation({
     routingState,
     records,
