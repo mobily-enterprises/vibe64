@@ -241,14 +241,15 @@ test("finite captures keep systemd's routine unit lines out of the journal", asy
   assert.equal(args.match(/LogLevelMax/gu).length, 1);
 });
 
-// A person's sudo rules or setuid programs never lift a command run as them:
-// the runner starts with no new privileges, set by setpriv itself so that no
-// systemd drop-in can switch it off. The daemon's own executions are unchanged.
-test("a person's managed execution can never gain privileges above that person", async () => {
+// No execution ever gains privileges: a person's sudo rules or setuid programs never lift a command run as them, and
+// the daemon's own executions (an agent's commands, its assistant, Preview, a browser, a capture) can never use the
+// daemon's sudo rule, which names this helper, to start work outside their own unit. The runner starts with no new
+// privileges, set by setpriv itself so that no systemd drop-in can switch it off.
+test("no managed execution can ever gain privileges, the daemon's own included", async () => {
   const source = await helperSource();
   const args = source.slice(source.indexOf("const systemdArgs = ["), source.indexOf('const started = spawnSync("systemd-run"'));
-  assert.match(args, /\.\.\.\(targetUser\.username !== owner\.username \? \["\/usr\/bin\/setpriv", "--no-new-privs", "--"\] : \[\]\),\n {4}helperPath,\n {4}"run-managed",/u);
-  assert.equal(args.match(/no-new-privs/gu).length, 1);
+  assert.match(args, /\n {4}\.\.\.NO_NEW_PRIVILEGES_COMMAND,\n {4}helperPath,\n {4}"run-managed",/u);
+  assert.doesNotMatch(args, /no-new-privs|targetUser\.username !== owner\.username \?/u, "no execution starts without it");
   const target = source.slice(source.indexOf("function managedExecutionTargetUser("), source.indexOf("function managedExecutionId("));
   assert.match(target, /if \(targetUser\.username !== owner\.username\) \{\n {4}assertActablePerson\(owner, targetUser\);/u,
     "every other target must be a registered person without administrator power");
@@ -611,6 +612,17 @@ test("managed service Restart of a unit never installed runs nothing", () => {
   const host = managedServiceHost({ loadState: "not-found" });
   assert.deepEqual(restartManagedServiceUnit("db.service", host), { ok: true, restarted: [], state: "absent" });
   assert.deepEqual(host.commands, ["show db.service --property=LoadState --value"]);
+});
+
+// A managed service runs as the daemon from a start script in the workspace's own folders, which the daemon's
+// executions can change and whose process they can end into a restart, so it never gains privileges either.
+test("a managed service never gains privileges", () => {
+  const unit = managedServiceUnit({ owner: { home: "/home/daemon", username: "daemon" }, processModel: "forking",
+    pidFile: "/home/daemon/services/db/pid", servicePath: "/usr/bin", startScript: "/home/daemon/services/db/start",
+    unitName: "vibe64-acme-db.service", workingDirectory: "/home/daemon/services/db" });
+  assert.deepEqual(unit.split("\n").filter((line) => line.startsWith("ExecStart=")),
+    ["ExecStart=/usr/bin/setpriv --no-new-privs -- /home/daemon/services/db/start"]);
+  assert.ok(unit.split("\n").includes("PIDFile=/home/daemon/services/db/pid"), "setpriv execs the script, which forks as before");
 });
 
 test("managed service Restart reports systemd's refusal", () => {
