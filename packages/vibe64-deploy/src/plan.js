@@ -15,7 +15,6 @@
 // says they aren't checked. The hash leaves the quotas out: their use moves with the rest of the provider project, and
 // the Deploy counts them again as it starts.
 //
-//
 // Services built together (builds.js) run one app where the provider names apps as the engine does (mobilynet): an
 // App Service whose app, as the inventory reports it (`app`, fixed at its create), isn't its build's is `replaced`,
 // changing `app`, with a `note` saying how: a new App Service is made beside it and the old one keeps serving until the
