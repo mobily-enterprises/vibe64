@@ -279,9 +279,18 @@ the user its test database (the declared one, else `test_<database>` and
 many as the computer's test budget (`V64_TEST_CONCURRENCY`, else half its
 CPUs). A user created with an older command keeps running them one at a time
 ("jskit test: 1 test file(s) at a time"); running the command again with its
-current password adds the copies and keeps its databases and data. **Suggest a user and
-password** fills in a project user and a strong password first; the command
-shows the password as dots but copies the real one. The person runs these
+current password adds the copies and keeps its databases and data. Each grant
+names its database exactly, every `_`, `%` and `\` escaped: a grant reads them
+otherwise as wildcards, so one on `shop_dev` would also reach `shopxdev`. A
+name a grant can't hold escaped, more than 64 characters with each of those
+counting as two, gets no command; the panel says which value to shorten
+instead: the database field (such as `DB_NAME`), or the declared test database
+(such as `TEST_DB_NAME`) in **Env**. A user made by an older command also keeps
+its grants that named its databases as they are: `SHOW GRANTS FOR 'shop'@'%';`
+lists them, and ``REVOKE ALL PRIVILEGES ON `shop_dev`.* FROM 'shop'@'%';``
+removes one whose `_` has no `\` before it. **Suggest a user and password**
+fills in a project user and a strong password first; the command shows the
+password as dots but copies the real one. The person runs these
 commands in their own terminal; Vibe64 never starts a database server or runs
 them. While nothing answers, the panel leads with **Install or start** and
 folds the settings into one line, "Looking for it at host:port · database ·
