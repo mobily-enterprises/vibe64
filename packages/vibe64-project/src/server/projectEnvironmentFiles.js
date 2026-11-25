@@ -1,6 +1,6 @@
 import { lstat, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
+import { ATOMIC_WRITE_TEMPORARY_PATTERN, writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 function sharedFileModes() {
@@ -102,7 +102,6 @@ function gitExcludePattern(relativePath = "") {
 async function managedGitExcludeProjection(sourceRoot = "", relativePaths = [], options = {}) {
   const {
     section = "environment",
-    atomicJson = false,
     patterns: givenPatterns = []
   } = options;
   const beginMarker = `# BEGIN Vibe64 managed ${section} files`;
@@ -145,25 +144,23 @@ async function managedGitExcludeProjection(sourceRoot = "", relativePaths = [], 
     error.code = "vibe64_environment_git_exclude_invalid";
     throw error;
   }
-  const preserved = begin >= 0
-    ? [...lines.slice(0, begin), ...lines.slice(end + 1)]
-    : lines;
+  const patterns = [...new Set([...relativePaths.flatMap((relativePath) => [
+    gitExcludePattern(relativePath),
+    `${gitExcludePattern(relativePath)}.vibe64-backup-*`
+  ]), ...givenPatterns])].sort();
+  const block = [beginMarker, ...patterns, endMarker];
+  // A block already there is rewritten in place, so blocks written in turn never move each other.
+  if (begin >= 0) {
+    return { excludePath, existing, expected: [...lines.slice(0, begin), ...block, ...lines.slice(end + 1)].join("\n") };
+  }
+  const preserved = [...lines];
   while (preserved.at(-1) === "") {
     preserved.pop();
   }
-  const patterns = [...new Set([...relativePaths.flatMap((relativePath) => [
-    gitExcludePattern(relativePath),
-    `${gitExcludePattern(relativePath)}.vibe64-backup-*`,
-    ...(atomicJson
-      ? [`${gitExcludePattern(path.posix.join(path.posix.dirname(relativePath), `.${path.posix.basename(relativePath)}`))}.*.tmp`]
-      : [])
-  ]), ...givenPatterns])].sort();
   const expected = [
     ...preserved,
     ...(preserved.length > 0 ? [""] : []),
-    beginMarker,
-    ...patterns,
-    endMarker,
+    ...block,
     ""
   ].join("\n");
   return { excludePath, existing, expected };
@@ -180,6 +177,20 @@ async function writeManagedGitExcludes(sourceRoot = "", relativePaths = [], opti
   }
 
   await writeFileAtomic(excludePath, expected, sharedFileModes());
+}
+
+/**
+ * Writes a file inside a person's Git source (sourceRoot) through writeFileAtomic. Save commits what Git does not
+ * ignore, so the source's managed exclude block first keeps the writer's temporary files out of Git in every folder,
+ * and the write removes the stale ones a killed write left in its folder. A source without its own Git folder has
+ * nothing to commit them to.
+ */
+async function writeSourceFileAtomic(sourceRoot = "", filePath = "", text = "", options = {}) {
+  const gitFolder = path.isAbsolute(sourceRoot) ? await lstat(path.join(sourceRoot, ".git")).catch(() => null) : null;
+  if (gitFolder?.isDirectory()) {
+    await writeManagedGitExcludes(sourceRoot, [], { section: "atomic write temporary", patterns: [ATOMIC_WRITE_TEMPORARY_PATTERN] });
+  }
+  return writeFileAtomic(filePath, text, { ...options, removeStale: true });
 }
 
 async function writeGeneratedDotenv({
@@ -205,7 +216,7 @@ async function writeGeneratedDotenv({
     };
   }
   try {
-    await writeFileAtomic(filePath, expected, sharedFileModes());
+    await writeSourceFileAtomic(sourceRoot, filePath, expected, sharedFileModes());
   } catch (error) {
     if (preservedPath) {
       // Best-effort restore of the preserved file; the write's own error is the one thrown.
@@ -289,5 +300,6 @@ export {
   materializeProjectEnvironmentFiles,
   projectEnvironmentFilesAreCurrent,
   writeManagedGitExcludes,
+  writeSourceFileAtomic,
   __testables
 };

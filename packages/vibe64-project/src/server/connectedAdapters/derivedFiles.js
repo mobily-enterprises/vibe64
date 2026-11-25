@@ -5,9 +5,9 @@
 import { createHash } from "node:crypto";
 import { lstat, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
-import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { writeSourceFileAtomic } from "../projectEnvironmentFiles.js";
 
 function inside(tree, relative) {
   const target = path.resolve(tree, relative);
@@ -65,7 +65,7 @@ async function writeDerivedFiles({ connection, tree, files, runCommand, writeGit
       throw vibe64Error(`Connected ${connection.name}: ${relative} in ${tree} is not a plain file, so Vibe64 will not replace it.`, "vibe64_connected_derived_path");
     }
     if (await readDerivedFile(tree, relative) === files[relative]) continue;
-    await writeFileAtomic(target, files[relative], { directoryMode: modes.inheritingDirectory, fileMode: modes.file });
+    await writeSourceFileAtomic(tree, target, files[relative], { directoryMode: modes.inheritingDirectory, fileMode: modes.file });
     changed.push(relative);
   }
   await writeGitExcludes(tree, [...paths, ...excludes]);

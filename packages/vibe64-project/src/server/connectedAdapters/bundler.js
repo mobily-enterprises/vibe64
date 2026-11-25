@@ -13,11 +13,11 @@
 // its source publishes it (`bundle lock --update <gem>` against a Gemfile beside the tracked one).
 import { readdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
-import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { connectionError, notInEffect, notUsed } from "./adapterResults.js";
 import { readDerivedFile, refuseTracked, removeDerivedFiles, writeDerivedFiles } from "./derivedFiles.js";
 import { existingEntry } from "./npmPackages.js";
+import { writeSourceFileAtomic } from "../projectEnvironmentFiles.js";
 
 const GEMFILE = "Gemfile";
 const DERIVED_GEMFILE = "Gemfile.connected";
@@ -289,7 +289,7 @@ async function unselectDerivedGemfile(sessionSourceRoot) {
     await rm(configPath, { force: true });
     return true;
   }
-  await writeSourceFile(configPath, rest);
+  await writeSourceFile(sessionSourceRoot, configPath, rest);
   return true;
 }
 
@@ -352,9 +352,9 @@ function pinnedGemfile(gemfile, name, version) {
   return declaration.test(gemfile) ? gemfile.replace(declaration, `$1, "${version}"`) : null;
 }
 
-async function writeSourceFile(filePath, text) {
+async function writeSourceFile(sessionSourceRoot, filePath, text) {
   const modes = vibe64SharedModes();
-  await writeFileAtomic(filePath, text, { directoryMode: modes.inheritingDirectory, fileMode: modes.file });
+  await writeSourceFileAtomic(sessionSourceRoot, filePath, text, { directoryMode: modes.inheritingDirectory, fileMode: modes.file });
 }
 
 /**
@@ -365,8 +365,8 @@ async function writeSourceFile(filePath, text) {
 async function lockAt({ sessionSourceRoot, runCommand, gemfile, lockText, name, version }) {
   const bumpGemfile = path.join(sessionSourceRoot, BUMP_GEMFILE);
   try {
-    await writeSourceFile(bumpGemfile, gemfile);
-    if (lockText !== null) await writeSourceFile(`${bumpGemfile}.lock`, lockText);
+    await writeSourceFile(sessionSourceRoot, bumpGemfile, gemfile);
+    if (lockText !== null) await writeSourceFile(sessionSourceRoot, `${bumpGemfile}.lock`, lockText);
     const locked = await runCommand({
       command: "bundle",
       args: ["lock", "--update", name],
@@ -417,8 +417,8 @@ async function bumpBundler(context) {
         + `${result.failed.replace(/\.$/u, "")}.`);
       continue;
     }
-    await writeSourceFile(path.join(sessionSourceRoot, GEMFILE), pinned);
-    await writeSourceFile(path.join(sessionSourceRoot, "Gemfile.lock"), result.newLock);
+    await writeSourceFile(sessionSourceRoot, path.join(sessionSourceRoot, GEMFILE), pinned);
+    await writeSourceFile(sessionSourceRoot, path.join(sessionSourceRoot, "Gemfile.lock"), result.newLock);
     bumped.push({
       package: entry.package,
       from: entry.locked,

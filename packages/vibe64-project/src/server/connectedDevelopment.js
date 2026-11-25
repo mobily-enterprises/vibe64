@@ -5,7 +5,6 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {
@@ -16,7 +15,7 @@ import {
 } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { connectedAdapterSteps, restoreDisconnected } from "./connectedAdapters/index.js";
 import { githubRepositoryFullName, readConnectedProjects } from "./connectedProjects.js";
-import { assertProjectionPath, writeManagedGitExcludes } from "./projectEnvironmentFiles.js";
+import { assertProjectionPath, writeManagedGitExcludes, writeSourceFileAtomic } from "./projectEnvironmentFiles.js";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 function connectedDevelopmentHash(value) {
@@ -322,9 +321,9 @@ async function materializeConnectedDevelopmentInputs(input = {}) {
   const { sourceRoot, relativePath, filePath, existing, value, result } = await readConnectedDevelopmentInputs(input);
   const lines = await restoreDisconnected({ repositories: value.repositories, sessionSourceRoot: sourceRoot });
   if (!relativePath) return { ...result, lines };
-  await writeManagedGitExcludes(sourceRoot, [relativePath], { section: "connected source", atomicJson: true });
+  await writeManagedGitExcludes(sourceRoot, [relativePath], { section: "connected source" });
   if (!isDeepStrictEqual(existing, value)) {
-    await writeJsonFileAtomic(filePath, value, {
+    await writeSourceFileAtomic(sourceRoot, filePath, `${JSON.stringify(value, null, 2)}\n`, {
       directoryMode: vibe64SharedModes().inheritingDirectory,
       fileMode: vibe64SharedModes().file
     });

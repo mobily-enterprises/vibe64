@@ -80,6 +80,10 @@ test("project environment files are deterministic shared-workspace Stack project
     "/.env",
     "/.env.vibe64-backup-*",
     "# END Vibe64 managed environment files",
+    "",
+    "# BEGIN Vibe64 managed atomic write temporary files",
+    ".vibe64-write-*.tmp",
+    "# END Vibe64 managed atomic write temporary files",
     ""
   ].join("\n"));
   assert.equal((await lstat(path.join(sourceRoot, ".git", "info", "exclude"))).mode & 0o777, 0o600);

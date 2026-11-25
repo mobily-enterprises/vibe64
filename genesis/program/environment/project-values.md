@@ -88,7 +88,19 @@ an interrupted save leaves the previous values readable.
 Core's `atomicFile.js` is the one temporary-file-and-rename writer: saved
 values, the generated dotenv and Git exclude projections, Preview identities
 and archive bundle records all use it, so its temporary file never outlives a
-failed write. Its writes are durable when they return: the temporary file's
+failed write. Every temporary file it makes is named `.vibe64-write-<uuid>.tmp`
+beside its file; `exclusive: true` links it into place instead of renaming it,
+so the write creates the file or fails with `EEXIST` when one exists. Writes into
+a person's Git source (the editor's creates and saves, the generated dotenv, the
+connections file and lock, the connected Sources file and the connected-package
+files the adapters derive) go through the Project's `writeSourceFileAtomic`:
+it keeps `.vibe64-write-*.tmp` in the source's own managed `.git/info/exclude`
+block (`atomic write temporary`), so Save never commits one a killed write left,
+and passes `removeStale`, which removes that folder's temporary files not
+modified for a minute, longer than a live write holds its own. Only those
+writers pay that folder listing; records written into folders that grow with
+history never do. A managed exclude block already in the file is rewritten in
+place, so blocks written in turn never move each other. Its writes are durable when they return: the temporary file's
 data is synced to disk before the rename and its folder after it, so a power
 cut leaves the previous file or the new one, never an empty one. A writer whose
 record no one needs after a power cut, a session lock's owner, passes

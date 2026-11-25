@@ -102,8 +102,8 @@ declared Sources file: `{ "schema": "vibe64.connected-sources.v2", "sessionId",
 "repositories": [{ name, repository, relationship, type, script?, sourceRoot }] }`,
 where `type` is the effective package type and `sourceRoot` the copy's absolute
 path. The file belongs to that session. The existing projection-path checks,
-managed Git excludes and atomic JSON writer preserve tracked files, symlinks,
-unrelated content and other sessions' maps. The connected-source exclude block
+managed Git excludes and the source-tree atomic writer preserve tracked files,
+symlinks, unrelated content and other sessions' maps. The connected-source exclude block
 coexists with the Environment file block. Repeated preparation preserves an
 unchanged map; removing a connection removes its projected entry, and the copy
 goes only when Prepare finds it holds no work. The map grants no authority.
