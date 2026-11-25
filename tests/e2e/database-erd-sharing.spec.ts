@@ -651,9 +651,10 @@ test("@data-overview actual local database schema and authored grouping remain c
 
 // Hovering connections and zooming, the inputs a person makes most on a large diagram, each draw again only the cards
 // and connections they change: a hover emphasizes one relationship's connections and the tables they join, and a zoom
-// moves only the camera. Each input is read in the cards and connections Vue draws again, not timed, so a host's load
-// cannot move it: an input that replaces every table and connection, as a hover did before 9957a962d, draws all of them
-// again. They read a real schema, which VIBE64_OVERVIEW_SCHEMA and VIBE64_OVERVIEW_DEFINITION name, and skip without it.
+// moves only the camera. Each input is read in the cards and connections Vue draws again, which a host's load cannot
+// move: an input that replaces every table and connection, as a hover did before 9957a962d, draws all of them again. A
+// coarse bound on each input's longest main-thread task also catches script work that draws nothing. They read a real
+// schema, which VIBE64_OVERVIEW_SCHEMA and VIBE64_OVERVIEW_DEFINITION name, and skip without it.
 for (const view of ["Overview", "ERD"] as const) {
   for (const interaction of ["crossing relationships", "zooming"]) test(`@erd-performance ${view} draws again only what ${interaction} changes in the actual local schema`, async ({ browser, baseURL }, testInfo) => {
     test.setTimeout(180_000);
@@ -663,6 +664,7 @@ for (const view of ["Overview", "ERD"] as const) {
     const actor = [...definition.actors].sort((a, b) => b.tables.length - a.tables.length)[0];
     const server = await sharedDiagramServer(baseURL!, { schemaOverride: schema, overviewDefinition: definition });
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+    let tracing = false;
     try {
       const page = await context.newPage();
       const errors: string[] = [];
@@ -702,15 +704,29 @@ for (const view of ["Overview", "ERD"] as const) {
         connections: document.querySelectorAll(".database-erd .vue-flow__edge").length
       }));
       expect(shown.drawn, "cards and connections the diagram drew").toBe(shown.cards + shown.connections);
-      // The cards and connections an input draws again, from just before it until two frames after it.
+      const profiler = await context.newCDPSession(page);
+      await profiler.send("Profiler.enable");
+      await profiler.send("Profiler.start");
+      // Chrome's trace records every task the page's main thread runs with the CPU time it took. Each input is marked
+      // from just before it until two frames after it, when it has been drawn.
+      await browser.startTracing(page, { categories: ["-*", "toplevel", "blink.user_timing"] });
+      tracing = true;
+      // The cards and connections an input draws again, and its wall-clock latency, in that same window.
       const inputs: number[] = [];
+      const latencies: number[] = [];
       const drawnAgainByInput: string[][] = [];
       const drawnAgainBy = async (input: () => Promise<void>) => {
-        inputs.push(await page.evaluate(() => { (window as any).erdDrawn.length = 0; return performance.now(); }));
+        const start = await page.evaluate(() => { (window as any).erdDrawn.length = 0; performance.mark("erd-input"); return performance.now(); });
         await input();
-        drawnAgainByInput.push(await page.evaluate(() => new Promise<string[]>(resolve => requestAnimationFrame(() => requestAnimationFrame(() =>
-          resolve([...new Set<string>((window as any).erdDrawn)].sort()))))));
-        return drawnAgainByInput.at(-1)!;
+        const { end, drawnAgain } = await page.evaluate(() => new Promise<{ end: number, drawnAgain: string[] }>(resolve =>
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            performance.mark("erd-input-drawn");
+            resolve({ end: performance.now(), drawnAgain: [...new Set<string>((window as any).erdDrawn)].sort() });
+          }))));
+        inputs.push(start);
+        latencies.push(end - start);
+        drawnAgainByInput.push(drawnAgain);
+        return drawnAgain;
       };
       // The cards a hover highlights and the connections it emphasizes, which show their cardinality.
       const emphasized = () => page.evaluate(() => [
@@ -779,8 +795,26 @@ for (const view of ["Overview", "ERD"] as const) {
       await testInfo.attach(`${interaction}-drawn-again`, {
         body: JSON.stringify({ view, interaction, tables: schema.tables.length, shown, drawnAgainByInput }), contentType: "application/json"
       });
+      const trace = JSON.parse(String(await browser.stopTracing()));
+      tracing = false;
+      const { profile } = await profiler.send("Profiler.stop");
+      await writeFile(testInfo.outputPath(`${interaction}.cpuprofile`), JSON.stringify(profile));
+      await profiler.detach();
+      const longestTasks = longestMainThreadTasks(trace.traceEvents, "erd-input", "erd-input-drawn");
+      const timingPath = testInfo.outputPath(`${interaction}-frame-latencies.json`);
+      await writeFile(timingPath, JSON.stringify({ view, interaction, tables: schema.tables.length, latencies, longestTasks }));
+      await testInfo.attach(`${interaction}-frame-latencies`, { path: timingPath, contentType: "application/json" });
+      // A coarse backstop for script work that draws nothing again, read in CPU time, not by the clock: for each
+      // input, the longest task the main thread ran from just before it until it was drawn. The wall-clock latencies,
+      // kept above, also count Playwright's round trips and trace snapshots, the frames and the host's load. On a real
+      // schema of 135 tables, 64 in its largest actor, an input's longest task took at most 76 ms in its covering run
+      // and 114 ms on 2 CPUs shared with four busy loops, so 250 ms fails only a gross regression; what an input draws
+      // again, checked above, is the exact guard.
+      expect(longestTasks).toHaveLength(latencies.length);
+      expect(Math.max(...longestTasks)).toBeLessThan(250);
       expect(errors).toEqual([]);
     } finally {
+      if (tracing) await browser.stopTracing();
       await context.close();
       await server.close();
     }
@@ -1052,6 +1086,30 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       await server.close();
     }
   });
+}
+
+// The CPU time, in ms, of the longest task the page's main thread ran in each window from a `from` performance mark to
+// the next `to` mark, from a Chrome trace: each window's first mark names its thread, which a navigation may change,
+// and the "toplevel" category records each task it runs as a ThreadControllerImpl::RunTask event whose tdur is the
+// thread time it took. A task Chrome records without it, one lasting a microsecond or two such as its tracing's
+// WillClearIncrementalState or a DOM timer, counts its wall time, which is never less, and is noted on the test. Every window holds at least the
+// task that set its first mark, so a window without tasks means the trace no longer records them, and fails rather
+// than measuring nothing.
+function longestMainThreadTasks(events: any[], from: string, to: string) {
+  const marks = events.filter(event => event.name === from || event.name === to).sort((a, b) => a.ts - b.ts);
+  expect(marks.length, `"${from}" and "${to}" marks in the trace`).toBeGreaterThan(0);
+  const tasks = events.filter(event => event.ph === "X" && event.name === "ThreadControllerImpl::RunTask");
+  const windows = marks.flatMap((start, index) => {
+    if (start.name !== from) return [];
+    const end = marks[index + 1];
+    expect(end?.name, `a "${to}" mark after each "${from}" mark`).toBe(to);
+    return [tasks.filter(task => task.pid === start.pid && task.tid === start.tid && task.ts + task.dur >= start.ts && task.ts < end.ts)];
+  });
+  expect(windows.map(window => window.length), "main-thread tasks traced in each window").not.toContain(0);
+  for (const task of windows.flat()) if (task.tdur === undefined) test.info().annotations.push({
+    type: "main-thread task without thread time", description: `${task.dur / 1000} ms of wall time counted instead`
+  });
+  return windows.map(window => Math.max(...window.map(task => (task.tdur ?? task.dur) / 1000)));
 }
 
 test("@erd-dense routing worker errors leave an actionable retry and recover", async ({ browser, baseURL }) => {
