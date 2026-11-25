@@ -154,6 +154,7 @@ export {
   newerSavedFacts,
   newerSavedMessage,
   newerSavedSource,
+  nonnegativeInteger,
   normalizeSavedBy,
   savedAgoText
 };

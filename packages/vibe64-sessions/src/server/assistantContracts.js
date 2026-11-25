@@ -306,7 +306,8 @@ function sessionWorkTool(description) {
       const problem = sessionWorkProblem(result);
       if (problem) output.repositoryProblem = pickStrings(problem, problemStrings);
       // Main's newer saved versions, from the work answer, Save's refusal or an update check: the message to relay.
-      const newerSaved = result.newerSaved || result.details?.newerSaved || (result.updateAvailable === true ? newerSavedSource(result) : null);
+      const newerSaved = result.newerSaved || result.details?.newerSaved
+        || (result.updateAvailable === true ? newerSavedSource(result) : null);
       if (newerSaved) {
         const unsaved = result.code === "vibe64_session_save_update_required" ? true
           : typeof result.unsaved === "boolean" ? result.unsaved : null;

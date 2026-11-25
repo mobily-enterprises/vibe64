@@ -1,5 +1,5 @@
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
-import { normalizeSavedBy } from "./newerSavedVersions.js";
+import { nonnegativeInteger, normalizeSavedBy } from "./newerSavedVersions.js";
 
 // The session metadata entry holding its last saved-version check.
 const REPOSITORY_UPDATE_CHECK_METADATA = "repository_update_check";
@@ -10,11 +10,6 @@ const REPOSITORY_UPDATE_RELATIONSHIPS = new Set([
   "current",
   "diverged"
 ]);
-
-function nonnegativeInteger(value) {
-  const number = Number(value);
-  return Number.isSafeInteger(number) && number >= 0 ? number : 0;
-}
 
 function boundedText(value, maximum) {
   return normalizeText(value).slice(0, maximum);
