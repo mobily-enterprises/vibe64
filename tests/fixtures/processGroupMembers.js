@@ -39,3 +39,17 @@ function readStat(name) {
     throw error;
   }
 }
+
+/**
+ * What of a stopped process group still runs: [] once every member has exited. RED: read once.
+ * @param {number} groupId
+ * @param {{ members?: (groupId: number) => object[], exitingForMs?: number }} [options]
+ */
+export async function processGroupMembersLeftRunning(groupId, { members = liveProcessGroupMembers } = {}) {
+  return members(groupId);
+}
+
+/** Each member as a failure names it. RED: as JSON. */
+export function describeProcessGroupMembers(members) {
+  return JSON.stringify(members);
+}

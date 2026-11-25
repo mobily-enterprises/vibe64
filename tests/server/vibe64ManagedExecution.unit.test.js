@@ -29,7 +29,11 @@ import {
   managedExecutionControllerLeaseName
 } from "../../packages/vibe64-execution/src/host/managedExecution.js";
 import { drainProcessGroup } from "../../packages/vibe64-execution/src/server/engines/detached.js";
-import { liveProcessGroupMembers } from "../fixtures/processGroupMembers.js";
+import {
+  describeProcessGroupMembers,
+  liveProcessGroupMembers,
+  processGroupMembersLeftRunning
+} from "../fixtures/processGroupMembers.js";
 
 const { normalizeExecutionDescriptor } = requestTestables;
 
@@ -676,12 +680,36 @@ test("a stopped group whose members have exited, though unreaped, has none left 
   assert.doesNotThrow(() => process.kill(-stopped, 0), "the exited members are still unreaped");
   const running = await unreapedGroup(t);
   const members = liveProcessGroupMembers(running);
-  assert.deepEqual(members.map(({ command, state }) => ({ command, state })), [
-    { command: "python3", state: "S" },
-    { command: "python3", state: "S" }
+  assert.deepEqual(members.map(({ command, state, exiting }) => ({ command, state, exiting })), [
+    { command: "python3", state: "S", exiting: false },
+    { command: "python3", state: "S", exiting: false }
   ]);
   assert.ok(members.every(({ pid, parent }) => pid > 1 && parent > 1), JSON.stringify(members));
   assert.ok(members.some(({ pid }) => pid === running), "the leader is a member");
+});
+
+test("a stopped group's check follows an exiting member to its end and names any other member at once", async () => {
+  const exiting = { pid: 11, parent: 1, state: "R", exiting: true, flags: "400044", command: "node-MainThread" };
+  const sleeping = { pid: 12, parent: 11, state: "S", exiting: false, flags: "400040", command: "codex" };
+  let reads = 0;
+  const endsOnThirdRead = () => {
+    reads += 1;
+    return reads < 3 ? [exiting] : [];
+  };
+  assert.deepEqual(await processGroupMembersLeftRunning(10, { members: endsOnThirdRead }), [], "followed to its end");
+  assert.equal(reads, 3);
+  assert.deepEqual(await processGroupMembersLeftRunning(10, { members: () => [exiting], exitingForMs: 30 }), [exiting],
+    "named when it has not ended in time");
+  reads = 0;
+  const alongside = () => {
+    reads += 1;
+    return [exiting, sleeping];
+  };
+  assert.deepEqual(await processGroupMembersLeftRunning(10, { members: alongside }), [exiting, sleeping],
+    "a member not exiting is named at once");
+  assert.equal(reads, 1);
+  assert.equal(describeProcessGroupMembers([exiting, sleeping]),
+    "pid 11 node-MainThread state R flags 0x400044 (exiting), pid 12 codex state S flags 0x400040");
 });
 
 test("standalone finite execution drains descendants before reporting completion", async (t) => {
