@@ -184,9 +184,9 @@ test("commands: per computer, never for an administrator, quoted safely", () => 
 test("the MariaDB command grants each test database's numbered copies, so a JSKIT run takes several test files at once", () => {
   const command = databaseServerGuide({ kind: "mysql", family: "apt", database: "shop", username: "shop", password: "pw",
     testDatabase: "shop_test" }).create.command;
-  // The database and its test database as before, then the test database's copies shop_test_1 to shop_test_99: an
-  // escaped _ (a literal one in a GRANT) and one or two characters.
-  assert.match(command, /\nGRANT ALL PRIVILEGES ON `shop`\.\* TO 'shop'@'%';\nGRANT ALL PRIVILEGES ON `shop_test`\.\* TO 'shop'@'%';\n/u);
+  // The database and its test database, each named exactly (an escaped _ is a literal one in a GRANT), then the test
+  // database's copies shop_test_1 to shop_test_99: an escaped _ and one or two characters.
+  assert.match(command, /\nGRANT ALL PRIVILEGES ON `shop`\.\* TO 'shop'@'%';\nGRANT ALL PRIVILEGES ON `shop\\_test`\.\* TO 'shop'@'%';\n/u);
   assert.match(command, /\nGRANT ALL PRIVILEGES ON `shop\\_test\\__`\.\* TO 'shop'@'%';\nGRANT ALL PRIVILEGES ON `shop\\_test\\___`\.\* TO 'shop'@'%';\nSQL$/u);
   assert.equal(command.match(/GRANT/gu).length, 4);
   // Both usual names when none is declared.
@@ -199,4 +199,37 @@ test("the MariaDB command grants each test database's numbered copies, so a JSKI
   assert.deepEqual(copyGrantNames("a_".repeat(25)), []);
   assert.doesNotMatch(databaseServerGuide({ kind: "postgresql", family: "apt", database: "app", username: "app", password: "pw" })
     .create.command, /GRANT/u, "PostgreSQL's CREATEDB already covers the copies");
+});
+
+test("each MariaDB grant names one database exactly, and a name a grant can't hold escaped is refused with its fix", () => {
+  const guide = (input) => databaseServerGuide({ kind: "mysql", family: "apt", username: "shop", password: "pw", ...input });
+  // In a GRANT's database name _ and % are wildcards: `shop_dev` as it is would also grant shopxdev.
+  const command = guide({ database: "shop_dev", testDatabase: "shop_dev_test" }).create.command;
+  assert.deepEqual(command.match(/(?<=\nGRANT ALL PRIVILEGES ON )`[^`]*`(?=\.\* TO 'shop'@'%';\n)/gu),
+    ["`shop\\_dev`", "`shop\\_dev\\_test`", "`shop\\_dev\\_test\\__`", "`shop\\_dev\\_test\\___`"]);
+  assert.match(command, /CREATE DATABASE IF NOT EXISTS `shop_dev` CHARACTER SET utf8mb4;/u, "CREATE takes the name as it is");
+  assert.match(guide({ database: "50%\\x", testDatabase: "t" }).create.command, /\nGRANT ALL PRIVILEGES ON `50\\%\\\\x`\.\* TO /u);
+  assert.equal(guide({ database: "shop" }).refusal, "");
+
+  // A grant names at most 64 characters, each escaping \ counted: 21 underscores and 22 letters are 64.
+  const fits = `${"a_".repeat(21)}b`;
+  assert.match(guide({ database: fits, testDatabase: "t" }).create.command, /\nGRANT ALL PRIVILEGES ON `(a\\_){21}b`\.\* TO /u);
+  const database = guide({ database: `${fits}c`, testDatabase: "t", databaseVariable: "DB_NAME" });
+  assert.equal(database.create, null);
+  assert.match(database.refusal, new RegExp(`database “${fits}c”`, "u"));
+  assert.match(database.refusal, /needs 65/u);
+  assert.match(database.refusal, /Shorten DB_NAME/u);
+  // A declared test database names its own variable; a guessed one is named from the database, so that's the fix.
+  const declared = guide({ database: "shop", testDatabase: `${fits}c`, testDatabaseVariable: "TEST_DB_NAME" });
+  assert.equal(declared.create, null);
+  assert.match(declared.refusal, new RegExp(`test database “${fits}c”`, "u"));
+  assert.match(declared.refusal, /Shorten TEST_DB_NAME/u);
+  const guessed = guide({ database: "x".repeat(59), databaseVariable: "DB_NAME", testDatabaseVariable: "TEST_DB_NAME" });
+  assert.equal(guessed.create, null, "test_ and 59 letters are 64 characters, 65 escaped");
+  assert.match(guessed.refusal, new RegExp(`test database “test_${"x".repeat(59)}”`, "u"));
+  assert.match(guessed.refusal, /Shorten DB_NAME/u);
+  assert.notEqual(guide({ database: "x".repeat(58) }).create, null);
+  // Without the variables' names the fix still reads as a sentence; PostgreSQL grants nothing, so it refuses nothing.
+  assert.match(guide({ database: `${fits}c` }).refusal, /Shorten the database name/u);
+  assert.equal(databaseServerGuide({ kind: "postgresql", family: "apt", database: `${fits}c`, username: "a", password: "p" }).refusal, "");
 });
