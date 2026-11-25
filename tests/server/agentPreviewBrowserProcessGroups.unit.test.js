@@ -155,3 +155,24 @@ test("the browser worker drops a group once it is proven gone", async () => {
   assert.deepEqual(ends.worker.groups(), []);
   assert.deepEqual(ends.metadata.at(-1), []);
 });
+
+// A browser process whose main thread called pthread_exit while another thread runs shows its leader as a zombie
+// (/proc's Z, with num_threads 2). The worker once read that Z as an ended group: it sent no signal and dropped a
+// group still running.
+test("the browser worker signals and keeps a group whose zombie leader's process still runs", async () => {
+  const zombieLeader = { parentId: 1, startTimeTicks: GROUP.startTimeTicks, state: "Z", threads: 2 };
+  let killed = false;
+  const runs = workerGroups({
+    leader: (pid) => (killed ? { status: "absent" } : { status: "exact", groupId: pid, ...zombieLeader }),
+    table: () => (killed ? [] : [{ pid: GROUP.groupId, groupId: GROUP.groupId, ...zombieLeader }]),
+    kill: (pid, signal) => {
+      // It ignores SIGTERM.
+      if (signal === "SIGKILL") killed = true;
+      if (signal === 0 && killed) throw Object.assign(new Error("ESRCH"), { code: "ESRCH" });
+    }
+  });
+  await runs.worker.terminateBrowserProcessGroups();
+  assert.ok(runs.signals.includes("SIGTERM -4242"), "a running group is signalled");
+  assert.ok(runs.signals.includes("SIGKILL -4242"), "a group still running after SIGTERM is killed");
+  assert.deepEqual(runs.worker.groups(), [], "and dropped once it has gone");
+});

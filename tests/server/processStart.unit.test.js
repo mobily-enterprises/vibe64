@@ -23,7 +23,8 @@ test("Linux start identity comes from /proc stat, including command names with p
     status: "exact",
     groupId: 4242,
     startTimeTicks: "987654",
-    state: "S"
+    state: "S",
+    threads: 1
   });
   const missing = Object.assign(new Error("gone"), { code: "ENOENT" });
   assert.equal((await readProcessStart(4242, {
@@ -41,6 +42,26 @@ test("Linux start identity comes from /proc stat, including command names with p
   });
   assert.equal(traced.status, "exact");
   assert.equal(traced.state, "t");
+});
+
+// A process whose main thread called pthread_exit while another thread runs: Linux shows its leader as a zombie, with
+// num_threads (field 20) 2. Its group was once read as having no live member, and a stop called it gone while it ran.
+test("a zombie leader whose process still runs another thread is a live member of its group", async () => {
+  const zombieLeader = LINUX_STAT.replace(") S ", ") Z ").replace(" 20 0 1 0 ", " 20 0 2 0 ");
+  const table = (statText) => ({
+    platform: "linux",
+    readdirFn: async () => ["4242"],
+    readFileFn: async (file) => {
+      assert.equal(file, "/proc/4242/stat");
+      return statText;
+    }
+  });
+  assert.equal(await processGroupHasLiveMember(4242, table(zombieLeader)), true, "a zombie leader with another thread");
+  assert.equal(await processGroupHasLiveMember(4242, table(zombieLeader.replace(" 20 0 2 0 ", " 20 0 1 0 "))), false,
+    "a zombie on its last thread");
+  const observed = await readProcessStart(4242, table(zombieLeader));
+  assert.equal(observed.state, "Z");
+  assert.equal(observed.threads, 2, "the start identity carries the threads the process still has");
 });
 
 test("macOS start identity comes from ps lstart as epoch seconds", async () => {
