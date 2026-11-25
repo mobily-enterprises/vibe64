@@ -243,7 +243,8 @@ When a step fails because a program it runs isn't installed, the failed step
 says so in one sentence ("Vibe64 couldn't find bundle on this computer, so this
 step couldn't run.") and **This step needs a tool that isn't working** lists the
 missing runtime with its install command, **Check again** and **Other ways**.
-A long failure (a stack trace) shows as three lines; **Expand** shows all of it.
+A failure of several lines (a stack trace) shows as three lines; **Expand**
+shows all of it. A one-paragraph refusal shows whole: its end says what to do.
 The database server panel below waits until no tool is missing, so there is one
 thing to fix at a time.
 

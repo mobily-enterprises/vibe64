@@ -2,7 +2,10 @@
   <Vibe64TerminalSurface
     v-if="visible"
     class="vibe64-temporary-action-terminal"
-    :class="{ 'vibe64-temporary-action-terminal--error': Boolean(error) }"
+    :class="{
+      'vibe64-temporary-action-terminal--error': Boolean(error),
+      'vibe64-temporary-action-terminal--error-lines': errorLines
+    }"
     body-mode="log"
     close-label="Dismiss"
     collapsible
@@ -120,6 +123,8 @@ const emit = defineEmits(["copy", "dismiss", "retry"]);
 const detailsOpen = ref(false);
 const detailsViewed = ref(false);
 const canDismiss = computed(() => !props.active);
+// A failure of several lines (a stack trace, a command's output), as against one paragraph.
+const errorLines = computed(() => props.error.trim().includes("\n"));
 const forwardedSlots = [
   "actions-after",
   "output",
@@ -200,15 +205,19 @@ watch(() => props.active, (active, previousActive) => {
   grid-area: status;
 }
 
-/* A long failure (a stack trace) reads as three lines; Expand shows all of it. */
+/* A failure wraps: a refusal Vibe64 words for the person is one paragraph whose end says what to
+   do, so it reads whole. One of several lines (a stack trace) reads as three; Expand shows all of it. */
 .vibe64-temporary-action-terminal--error .vibe64-temporary-action-terminal__line {
-  -webkit-box-orient: vertical;
-  display: -webkit-box;
   flex-basis: 100%;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.vibe64-temporary-action-terminal--error-lines .vibe64-temporary-action-terminal__line {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
 .vibe64-temporary-action-terminal__title,
