@@ -72,23 +72,42 @@ function psIdentity(line) {
     : null;
 }
 
-function processIdentity(pid) {
+// A process's start identity, read as runtime/processStart.js reads it:
+// { status: "exact" | "absent" | "ambiguous", ... }. Only a process that is
+// not there is absent; a read or a ps that failed is ambiguous.
+function leaderIdentity(pid) {
   if (process.platform !== "linux") {
-    return psIdentity(psLines(["-o", "ppid=,pgid=,stat=,lstart=", "-p", String(pid)])[0]);
+    let output = "";
+    try {
+      output = execFileSync("ps", ["-o", "ppid=,pgid=,stat=,lstart=", "-p", String(pid)], {
+        encoding: "utf8",
+        env: { ...process.env, LC_ALL: "C" },
+        stdio: ["ignore", "pipe", "ignore"]
+      });
+    } catch (error) {
+      // ps exits 1 with no output when the process does not exist.
+      return error?.status === 1 && !String(error?.stdout || "").trim() ? { status: "absent" } : { status: "ambiguous" };
+    }
+    const identity = psIdentity(output.split(/\\r?\\n/u)[0]);
+    return identity ? { status: "exact", ...identity } : { status: "ambiguous" };
   }
+  let stat = "";
   try {
-    const stat = readFileSync("/proc/" + pid + "/stat", "utf8");
-    const closeIndex = stat.lastIndexOf(") ");
-    const fields = stat.slice(closeIndex + 2).trim().split(/\\s+/u);
-    return {
-      groupId: Number(fields[2]),
-      parentId: Number(fields[1]),
-      startTimeTicks: String(fields[19] || ""),
-      state: String(fields[0] || "")
-    };
-  } catch {
-    return null;
+    stat = readFileSync("/proc/" + pid + "/stat", "utf8");
+  } catch (error) {
+    return ["ENOENT", "ENOTDIR"].includes(error?.code) ? { status: "absent" } : { status: "ambiguous" };
   }
+  const closeIndex = stat.lastIndexOf(") ");
+  const fields = closeIndex < 0 ? [] : stat.slice(closeIndex + 2).trim().split(/\\s+/u);
+  const startTimeTicks = String(fields[19] || "");
+  return /^\\d+$/u.test(startTimeTicks)
+    ? { status: "exact", groupId: Number(fields[2]), parentId: Number(fields[1]), startTimeTicks, state: String(fields[0] || "") }
+    : { status: "ambiguous" };
+}
+
+function processIdentity(pid) {
+  const { status, ...identity } = leaderIdentity(pid);
+  return status === "exact" ? identity : null;
 }
 
 // Every visible process with its identity, or null when the table is unreadable.
@@ -128,8 +147,9 @@ function processGroupAlive(groupId) {
   try {
     process.kill(-groupId, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    // EPERM: the group is there, under another user.
+    return error?.code === "EPERM";
   }
 }
 
@@ -237,57 +257,71 @@ function descendantBrowserProcessGroups() {
   return normalizedBrowserProcessGroups([...groups.values()]);
 }
 
-function trackedProcessGroupAlive(entry = {}) {
+// "alive", "gone" or "unknown". A leader that has exited, or whose id another
+// process now holds, ends the group the worker tracked; a leader or process
+// table that could not be read proves nothing.
+function trackedProcessGroupState(entry = {}) {
   const groupId = Number(entry?.groupId);
-  const identity = processIdentity(groupId);
-  return Boolean(
-    identity &&
-    identity.groupId === groupId &&
-    identity.startTimeTicks === String(entry?.startTimeTicks || "") &&
-    processGroupAlive(groupId)
-  );
+  const leader = leaderIdentity(groupId);
+  if (leader.status === "ambiguous") {
+    return "unknown";
+  }
+  if (
+    leader.status !== "exact" ||
+    leader.groupId !== groupId ||
+    leader.startTimeTicks !== String(entry?.startTimeTicks || "")
+  ) {
+    return "gone";
+  }
+  return processGroupAlive(groupId) ? "alive" : "gone";
 }
 
-// The tracked groups still alive. Where ps supplies the table, one read
-// answers for every group.
-function liveTrackedProcessGroups(groups = []) {
+// The tracked groups in the states wanted. Where ps supplies the table, one
+// read answers for every group.
+function trackedProcessGroupsIn(groups = [], wanted = () => false) {
   if (process.platform === "linux") {
-    return groups.filter(trackedProcessGroupAlive);
+    return groups.filter((entry) => wanted(trackedProcessGroupState(entry)));
   }
-  const processes = processTable() || [];
-  const processesById = new Map(processes.map((entry) => [entry.pid, entry]));
+  const processes = processTable();
+  const processesById = new Map((processes || []).map((entry) => [entry.pid, entry]));
   return groups.filter((entry) => {
     const groupId = Number(entry?.groupId);
     const leader = processesById.get(groupId);
-    return Boolean(
-      leader &&
-      leader.groupId === groupId &&
-      leader.startTimeTicks === String(entry?.startTimeTicks || "") &&
-      processes.some((candidate) => candidate.groupId === groupId && candidate.state !== "Z")
-    );
+    return wanted(!processes
+      ? "unknown"
+      : leader &&
+        leader.groupId === groupId &&
+        leader.startTimeTicks === String(entry?.startTimeTicks || "") &&
+        processes.some((candidate) => candidate.groupId === groupId && candidate.state !== "Z")
+        ? "alive"
+        : "gone");
   });
 }
 
 async function terminateBrowserProcessGroups() {
-  const groups = liveTrackedProcessGroups(normalizedBrowserProcessGroups(browserProcessGroups));
-  for (const entry of groups) {
+  const groups = normalizedBrowserProcessGroups(browserProcessGroups);
+  const alive = (state) => state === "alive";
+  const notGone = (state) => state !== "gone";
+  for (const entry of trackedProcessGroupsIn(groups, alive)) {
     try {
       process.kill(-entry.groupId, "SIGTERM");
     } catch {
       // The browser process group already exited.
     }
   }
-  for (let attempt = 0; attempt < 20 && liveTrackedProcessGroups(groups).length; attempt += 1) {
+  for (let attempt = 0; attempt < 20 && trackedProcessGroupsIn(groups, notGone).length; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  for (const entry of liveTrackedProcessGroups(groups)) {
+  for (const entry of trackedProcessGroupsIn(groups, alive)) {
     try {
       process.kill(-entry.groupId, "SIGKILL");
     } catch {
       // The browser process group exited before the fallback signal.
     }
   }
-  browserProcessGroups = [];
+  // A group not proven gone stays recorded, so the server's Stop drains it
+  // or reports it; it is never dropped unkilled.
+  browserProcessGroups = trackedProcessGroupsIn(groups, notGone);
   await writeWorkerMetadata().catch(() => false);
 }
 
@@ -362,7 +396,7 @@ async function ensureBrowser(url = "", {
     await closeBrowser();
     try {
       browser = await chromium.launch({ headless: true });
-      browserProcessGroups = descendantBrowserProcessGroups();
+      browserProcessGroups = normalizedBrowserProcessGroups([...browserProcessGroups, ...descendantBrowserProcessGroups()]);
       await writeWorkerMetadata();
       context = await browser.newContext();
       page = await context.newPage();
