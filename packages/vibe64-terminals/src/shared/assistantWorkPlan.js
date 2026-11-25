@@ -168,7 +168,8 @@ function workPlanFreshness(current, now = Date.now()) {
 /**
  * The chat's one line saying where an open plan is: its step, unless the chat's
  * request is waiting: for the person's answer (or questions the chat shows), for
- * Implement plan before a planned plan starts, or paused. A waiting plan names
+ * another turn to end before its next step starts by itself, for Implement plan
+ * before a planned plan starts, or paused. A paused plan names
  * the workflow action the chat offers (`action`, the notice's own) by its exact
  * label: what to press when it can be pressed, when it becomes available while
  * other work holds it, or that it is starting; with no action, a message moves
@@ -176,7 +177,8 @@ function workPlanFreshness(current, now = Date.now()) {
  * update.
  * @param {ReturnType<typeof workPlanStep>} step
  * @param {{ questions?: number, request?: { status?: string, stage?: string | null, awaitingAnswer?: boolean,
- *   resumeImplementation?: boolean } | null, freshness?: ReturnType<typeof workPlanFreshness>,
+ *   resumeImplementation?: boolean, stopped?: boolean, followup?: { owed?: boolean } } | null,
+ *   freshness?: ReturnType<typeof workPlanFreshness>,
  *   action?: { kind: string, label: string, enabled: boolean, waits: string, progress: string } | null }} [state]
  *   questions: the questions the chat offers answers for; freshness: the plan's; action: the workflow action the
  *   chat's notice offers for the request (assistantRoutingNotice's), null when it offers none
@@ -194,6 +196,12 @@ function workPlanStepLine(step, { questions, request, action }) {
   const waiting = request?.status === "waiting";
   if (waiting && request.awaitingAnswer || questions > 0) {
     return `Plan: needs you${questions > 0 ? ` (${questions} ${questions === 1 ? "question" : "questions"})` : ""}`;
+  }
+  // A step another turn came before is owed: it starts by itself once that turn ends (assistantRoutingOwedSteps.js).
+  if (waiting && request.followup?.owed && !request.stopped) {
+    if (step.step === "review") return "Plan: Senior review starts when this answer ends";
+    if (step.step === "pass") return `Plan: pass ${step.title.replace(/ pass$/u, "")} (${step.item} of ${step.items}) starts when this answer ends`;
+    return `Plan: item ${step.item} of ${step.items}, ${step.title}, starts when this answer ends`;
   }
   if (waiting) {
     const ready = request.stage === "planning" && !request.resumeImplementation && step.step === "implementation" &&

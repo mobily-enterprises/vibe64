@@ -9,7 +9,15 @@ import {
   assistantGoalIsActive
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantExplicitTask, assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
-import { ASSISTANT_ROUTING_REQUEST_SCHEMA, failure, readCancelled, read, usesWorkPlan, STATE_KEY } from "./assistantRoutingRequests.js";
+import {
+  ASSISTANT_ROUTING_REQUEST_SCHEMA,
+  STATE_KEY,
+  failure,
+  followupFitsPlan,
+  read,
+  readCancelled,
+  usesWorkPlan
+} from "./assistantRoutingRequests.js";
 import { answerWholeChecks, declineWholeChecks } from "./assistantWholeChecks.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
@@ -296,6 +304,14 @@ function createAssistantRoutingAdmission({
               throw failure("The retained plan changed. Inspect it and send a fresh request.", "vibe64_assistant_routing_retained_plan_changed");
             }
             await records.prepareFollowup(context, state, state.stage);
+          } else if (state.followup) {
+            // The person's Continue is newer than anything the conversation holds: the prepared step goes on from the
+            // conversation as it is now, while the plan still fits it.
+            const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
+            if (!followupFitsPlan(state, plan, { continued: true })) {
+              throw failure("The retained plan changed. Inspect it and send a fresh request.", "vibe64_assistant_routing_retained_plan_changed");
+            }
+            await records.refreshFollowup(context, state, plan);
           }
           state.stopped = false;
           state.status = "working";

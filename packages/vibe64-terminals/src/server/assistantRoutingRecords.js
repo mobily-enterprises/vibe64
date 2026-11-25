@@ -14,7 +14,7 @@ import {
   ASSISTANT_PLAN_COMPLETION_MESSAGE,
   ASSISTANT_SENIOR_VERIFICATION_MESSAGE
 } from "@local/vibe64-runtime/shared/assistantFinishing";
-import { STATE_KEY, failure, usesWorkPlan, recentVisibleMessages } from "./assistantRoutingRequests.js";
+import { STATE_KEY, failure, usesWorkPlan, followupConversation } from "./assistantRoutingRequests.js";
 import { ASSISTANT_PLAN_CHANGE_MESSAGE, ASSISTANT_PLAN_HANDOFF_MESSAGE } from "./assistantPlanHandoff.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -158,7 +158,7 @@ function createAssistantRoutingRecords({
     state.followup = {
       messageId: randomUUID(),
       planRevision: plan?.revision || null,
-      messages: await recentVisibleMessages(context.runtime.store, context.session.sessionId, 5),
+      ...await followupConversation(context.runtime.store, context.session.sessionId),
       // A turn resumed after an interruption leads with Vibe64's note of what interrupted it; a pass's own
       // request stays the message's last paragraph.
       displayMessage: pass ? pass.request : resumeNote ? "Continue after the interruption." : displayMessage,
@@ -182,13 +182,26 @@ function createAssistantRoutingRecords({
     state.followup = {
       messageId: randomUUID(),
       planRevision: plan?.revision || null,
-      messages: await recentVisibleMessages(context.runtime.store, context.session.sessionId, 5),
+      ...await followupConversation(context.runtime.store, context.session.sessionId),
       displayMessage: note.displayMessage,
       message: note.message,
       planCheck: true
     };
     state.delivery = "pending";
     delete state.attemptedMessageId;
+  }
+
+  /**
+   * The request's prepared step, unsent, decided again from the conversation and plan as they are now: what its
+   * delivery compares with them. Its message, and so the step itself, stays as it was prepared.
+   * @param {object} context
+   * @param {object} state the saved routing request, with its prepared follow-up
+   * @param {{ revision: string } | null} plan the current plan, when the request involves one
+   */
+  async function refreshFollowup(context, state, plan) {
+    Object.assign(state.followup, await followupConversation(context.runtime.store, context.session.sessionId), {
+      planRevision: plan?.revision || null
+    });
   }
 
   return Object.freeze({
@@ -204,7 +217,8 @@ function createAssistantRoutingRecords({
     releaseHelper,
     readRoutingSettings,
     prepareFollowup,
-    preparePlanCheck
+    preparePlanCheck,
+    refreshFollowup
   });
 }
 

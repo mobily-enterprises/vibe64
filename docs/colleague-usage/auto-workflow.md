@@ -168,10 +168,31 @@ one ending without a confirmed outcome, leaves **Waiting** with a concrete reaso
 
 After a server restart, unfinished scheduling requires an explicit stage-specific **Continue** action;
 opening a session never sends another turn. **Retry** checks the original
-receipt of an uncertain message without sending a second copy. If the plan or
-conversation changed before an unsent handoff, stop it and send a fresh request.
+receipt of an uncertain message without sending a second copy.
+
+Another turn can come before an automatic step, such as Senior's review of a
+built plan: a message from another session gets its answer, or a turn is still
+running, or a question or approval is pending when the step is ready. The step
+is then not dropped. The notice says, for example, **Senior's review starts by
+itself once the current turn ends**, and the plan's line says **Plan: Senior
+review starts when this answer ends**. When that turn ends, Vibe64 decides the
+step again from the conversation and plan as they are then and starts it, with
+no page open. If the server restarted first, it does so as it starts up again.
+The step waits for you instead when:
+
+- a message of your own came after Vibe64 decided the step (**A message came
+  after Vibe64 decided this step, so it waits for you: Continue takes it**):
+  your message is newer than the decision, so only your **Continue** starts it;
+- the answer that came first asks something (**The last answer asks something,
+  so this step waits for you: Continue takes it**);
+- the plan changed so that the step no longer fits it: send a new request.
+
+Another session's messages and Vibe64's own notes are never your word on it.
+When the step waits for you, its stage-specific **Continue** action takes it from
+the conversation as it now is.
 An unsent handoff shows **Stop** beside its stage-specific **Continue** action. Stopping it preserves
-history and file changes, and lets you send a new request. A delivery check remains
+history and file changes, and lets you send a new request; nothing starts by
+itself after Stop. A delivery check remains
 necessary for an uncertain attempt; stopping does not prove it was never delivered.
 
 Recovery errors and controls stay above the composer; workflow explanations stay
@@ -260,7 +281,9 @@ lifecycle and explicitly mark a plan without passes Completed after verifying th
 
 If an automatic handoff failed before its message was sent, you can type a new
 request and use the ordinary **Send** button (or speak a new request). Sending
-replaces that failed, unsent handoff; it does not complete that work.
+replaces that failed, unsent handoff; it does not complete that work. So does a
+request you send while a step waits for another turn to end: your request
+replaces the step, and nothing starts the step afterwards.
 The previous coding history, plan and file changes remain. The stage-specific **Continue** action still
 continues the retained stage, and **Stop** cancels it without sending new work.
 A handoff with unconfirmed delivery still requires **Retry** first.

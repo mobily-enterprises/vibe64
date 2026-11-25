@@ -16,6 +16,7 @@ import { read, failure, activeMessage, assistantPlanHandsOff, savesAutomatically
 import { askWholeChecks, writeWholeChecksQuestion } from "./assistantWholeChecks.js";
 import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
 import { createAssistantRoutingInterruptions } from "./assistantRoutingInterruptions.js";
+import { createAssistantRoutingOwedSteps } from "./assistantRoutingOwedSteps.js";
 import { createAssistantPlanCheck } from "./assistantPlanCheck.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -85,6 +86,10 @@ function createAssistantRoutingOutcomes({
   serverRun,
   logger
 }) {
+  // An automatic step another turn or message came before: owed, then decided again (assistantRoutingOwedSteps.js).
+  const { exclusiveAtTurnEnd, oweRefusedStep, settleRefusedStep, owesStep, continueOwed } = createAssistantRoutingOwedSteps({
+    routingState, records, delivery, admission, agent, exclusiveAfterWrites
+  });
   // What follows a turn an interruption ended: its red entry, and its resume once (assistantRoutingInterruptions.js).
   const { interruptionOf, afterInterruption, resumeUnsent, scheduleResume } = createAssistantRoutingInterruptions({
     routingState,
@@ -92,6 +97,7 @@ function createAssistantRoutingOutcomes({
     delivery,
     admission,
     exclusiveAfterWrites,
+    oweRefusedStep,
     serverRun,
     logger
   });
@@ -244,10 +250,7 @@ function createAssistantRoutingOutcomes({
     try {
       await delivery.deliver(context.session.sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
     } catch (error) {
-      state.status = "waiting";
-      state.delivery = state.attemptedMessageId ? "uncertain" : "pending";
-      state.error = error.message;
-      await records.save(context, state);
+      await settleRefusedStep(context, state, error);
     }
   }
 
@@ -334,10 +337,7 @@ function createAssistantRoutingOutcomes({
     try {
       await delivery.deliver(context.session.sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
     } catch (error) {
-      state.status = "waiting";
-      state.delivery = state.attemptedMessageId ? "uncertain" : "pending";
-      state.error = error.message;
-      await records.save(context, state);
+      await settleRefusedStep(context, state, error);
     }
     return null;
   }
@@ -377,10 +377,12 @@ function createAssistantRoutingOutcomes({
     const run = payload?.payload?.agentRun;
     if (!run || run.active) return;
     let completed;
-    await exclusiveAfterWrites(sessionId, routingOptions, async context => {
+    await exclusiveAtTurnEnd(sessionId, routingOptions, async context => {
       const key = records.keyFor(sessionId, context);
       if (admission.isClosing() || routingState.running.has(key)) return;
       const state = await read(context.runtime.store, sessionId);
+      // A step another turn came before is decided again now that a turn has ended, whichever turn it was.
+      if (owesStep(state)) return continueOwed(context, state);
       // A stopped turn, a plan's pass too, is already paused: it waits for Continue.
       if (!state || state.status !== "working" || state.delivery !== "accepted") return;
       if (!routingState.allowAuto && state.mode === "auto") {
@@ -564,10 +566,7 @@ function createAssistantRoutingOutcomes({
       try {
         await delivery.deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
       } catch (error) {
-        state.status = "waiting";
-        state.delivery = state.attemptedMessageId ? "uncertain" : "pending";
-        state.error = error.message;
-        await records.save(context, state);
+        await settleRefusedStep(context, state, error);
       }
     });
     // After the lock: finished work's automatic save runs last, once the turn
@@ -634,6 +633,8 @@ function createAssistantRoutingOutcomes({
         scheduleResume(sessionId, state, options);
         return;
       }
+      // An owed step an earlier server left is decided at recovery; within one run only a turn's end decides it.
+      if (owesStep(state) && (state.serverRunId || "") !== serverRun.id) return continueOwed(context, state);
       if (state.status === "working" && state.delivery === "accepted") {
         const run = state.turnId && context.session.agentRuns?.find(row => (row.providerTurnId || row.turnId) === state.turnId);
         if (run && !["starting", "active", "finalizing"].includes(run.state)) {

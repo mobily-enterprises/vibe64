@@ -8,6 +8,7 @@ import {
   assistantWorkflowRole
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
+import { workPlanStep } from "../shared/assistantWorkPlan.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -121,21 +122,78 @@ function prepareCopiedAssistantRouting(metadata = {}) {
   if (goal?.status === "active") patch.assistant_routing_goal = JSON.stringify({ ...goal, status: "paused" });
   return patch;
 }
+// The visible messages an automatic step is decided on, which its delivery compares with the conversation then.
+const FOLLOWUP_SNAPSHOT_MESSAGES = 5;
+// How many of the latest user messages are read back for the person's own since an automatic step was decided.
+const PERSON_LOOKBACK_MESSAGES = 20;
+
+/** Whether the turn's user message is Vibe64's own (a note to the main chat is the app's) or a request's follow-up. */
+const automaticTurn = (turn) => turn.metadata?.actorId === "app" || Boolean(turn.metadata?.assistantRouting?.parentMessageId);
+
+function visibleMessages(turns, limit) {
+  return turns.flatMap((turn) => [
+    ...(turn.user ? [{ role: "user", text: turn.user.text, ...(automaticTurn(turn) ? { automatic: true } : {}) }] : []),
+    ...(turn.messages || []).filter(({ role }) => role === "assistant").map(({ text }) => ({ role: "assistant", text }))
+  ]).slice(-limit);
+}
+
 /**
  * @param {Vibe64SessionStore} store
  * @param {string} sessionId
  * @param {number} limit
  */
 async function recentVisibleMessages(store, sessionId, limit) {
-  const turns = await store.readConversationTail(sessionId, { userLimit: limit });
-  return turns.flatMap((turn) => [
-    ...(turn.user ? [{
-      role: "user",
-      text: turn.user.text,
-      ...(turn.metadata?.actorId === "app" || turn.metadata?.assistantRouting?.parentMessageId ? { automatic: true } : {})
-    }] : []),
-    ...(turn.messages || []).filter(({ role }) => role === "assistant").map(({ text }) => ({ role: "assistant", text }))
-  ]).slice(-limit);
+  return visibleMessages(await store.readConversationTail(sessionId, { userLimit: limit }), limit);
+}
+
+/**
+ * What an automatic step is decided on in the conversation: its latest visible messages, which its delivery compares
+ * with the conversation then, and its latest user message, after which any message is one the conversation gained
+ * since.
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ */
+async function followupConversation(store, sessionId) {
+  const turns = await store.readConversationTail(sessionId, { userLimit: FOLLOWUP_SNAPSHOT_MESSAGES });
+  return {
+    messages: visibleMessages(turns, FOLLOWUP_SNAPSHOT_MESSAGES),
+    lastUserMessageId: turns.findLast((turn) => turn.user?.messageId)?.user.messageId || ""
+  };
+}
+
+/** Whether the turn's user message is the person's own: neither Vibe64's nor a message from another session. */
+const personTurn = (turn) => Boolean(turn.user) && !automaticTurn(turn) && turn.metadata?.projectMessage?.direction !== "received";
+
+/**
+ * The turns with a user message the conversation gained after the user message `messageId`; null when that message
+ * can't be found (none recorded, or beyond the lookback), so what came since is not known.
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {string} messageId
+ */
+async function userTurnsSince(store, sessionId, messageId) {
+  if (!messageId) return null;
+  const turns = await store.readConversationTail(sessionId, { userLimit: PERSON_LOOKBACK_MESSAGES });
+  const since = turns.findIndex((turn) => turn.user?.messageId === messageId);
+  return since < 0 ? null : turns.slice(since + 1).filter((turn) => turn.user);
+}
+
+/**
+ * Whether the request's prepared step still fits the plan, when it involves one: Senior's review fits any active plan
+ * whose every item outside Passes is built, or the plan it was decided on (completed too); any other step needs that
+ * plan active and unchanged, except that the person's Continue goes on with an implementation from the active plan as
+ * it now is.
+ * @param {object} state the saved routing request, with its prepared follow-up
+ * @param {{ status: string, revision: string, text: string } | null} plan the current plan
+ * @param {{ continued?: boolean }} [options] continued: the person's Continue asks for the step
+ */
+function followupFitsPlan(state, plan, { continued = false } = {}) {
+  if (!usesWorkPlan(state)) return true;
+  const unchanged = Boolean(plan) && plan.revision === state.followup.planRevision;
+  if (state.stage === "review") {
+    return plan?.status === "active" && (unchanged || workPlanStep(plan)?.step === "review") || plan?.status === "completed" && unchanged;
+  }
+  return plan?.status === "active" && (unchanged || continued && state.stage === "implementation");
 }
 function withSelection(context, selection) {
   return {
@@ -163,11 +221,15 @@ export {
   assistantPlanRole,
   assistantRoutingRequestForMessage,
   failure,
+  followupConversation,
+  followupFitsPlan,
+  personTurn,
   prepareCopiedAssistantRouting,
   read,
   readCancelled,
   recentVisibleMessages,
   savesAutomatically,
+  userTurnsSince,
   usesWorkPlan,
   withSelection
 };
