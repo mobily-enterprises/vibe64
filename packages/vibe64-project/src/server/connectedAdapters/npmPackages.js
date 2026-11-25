@@ -1,8 +1,9 @@
 // What the npm adapter reads: the packages a connected repository declares, every installed copy
-// of them across the session's trees (nested duplicates included), and how Node would resolve a
-// dependency from where a copy is installed.
+// of them across the session's trees (nested duplicates included), how Node would resolve a
+// dependency from where a copy is installed, and so what a swap moves aside and leaves unmet.
 import { glob, lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import semver from "semver";
 import { pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u;
@@ -139,4 +140,85 @@ async function resolveFromCopy(tree, fromDir, name, gone = new Set()) {
   }
 }
 
-export { connectedNpmPackages, existingEntry, installedCopies, readJsonFile, resolveFromCopy };
+/** The registry dependencies a package needs: its dependencies and required peers, by range. */
+function registryDependencies(manifest) {
+  const required = { ...manifest.dependencies };
+  for (const [name, range] of Object.entries(manifest.peerDependencies || {})) {
+    if (manifest.peerDependenciesMeta?.[name]?.optional !== true) required[name] ??= range;
+  }
+  return Object.entries(required)
+    .filter(([, range]) => typeof range === "string" && !/^(?:file|link|workspace|git|github|https?):|\//u.test(range));
+}
+
+function accepts(version, range) {
+  return Boolean(version) && (!semver.validRange(range) || semver.satisfies(version, range, { includePrerelease: true }));
+}
+
+/** The manifests of the packages npm installed directly in a copy's own node_modules. */
+async function nestedManifests(copyDir) {
+  const nodeModules = path.join(copyDir, "node_modules");
+  const manifests = [];
+  for (const entry of await readdir(nodeModules, { withFileTypes: true }).catch(() => [])) {
+    if (entry.name.startsWith(".")) continue;
+    const names = entry.name.startsWith("@")
+      ? (await readdir(path.join(nodeModules, entry.name)).catch(() => [])).map(child => `${entry.name}/${child}`)
+      : [entry.name];
+    for (const name of names) {
+      const manifest = await readJsonFile(path.join(nodeModules, name, "package.json")).catch(() => null);
+      if (manifest) manifests.push(manifest);
+    }
+  }
+  return manifests;
+}
+
+/**
+ * What each swap moves aside with the published copy: a dependency the connected package needs
+ * that npm installed in the copy's own node_modules at a version the package does not accept. npm
+ * nested it there for the published version's own pin, so it belongs to that copy, and the
+ * connected package resolves past it. It stays when a package nested beside it needs that version
+ * and would not get one it accepts past it (the check then refuses), a connected package there is
+ * swapped instead, and a link has no node_modules of its own. Copies installed inside what goes
+ * aside go with it.
+ * @returns {Promise<{ copies: Array<object>, aside: Map<string, string[]>, gone: Set<string> }>}
+ */
+async function swapPlan({ connectedVersions, copies, packages }) {
+  const aside = new Map();
+  for (const copy of copies.filter(candidate => !candidate.link)) {
+    const names = [];
+    let beside = null;
+    for (const [name, range] of registryDependencies(packages.find(entry => entry.name === copy.name).manifest)) {
+      if (connectedVersions.has(name)) continue;
+      const nested = String((await readJsonFile(path.join(copy.dir, "node_modules", name, "package.json")).catch(() => null))?.version ?? "");
+      if (!nested || accepts(nested, range)) continue;
+      beside ??= await nestedManifests(copy.dir);
+      const past = (await resolveFromCopy(copy.tree, path.dirname(copy.dir), name))?.version;
+      const stillNeeded = beside.some(manifest => registryDependencies(manifest)
+        .some(([dependency, wanted]) => dependency === name && accepts(nested, wanted) && !accepts(past, wanted)));
+      if (!stillNeeded) names.push(name);
+    }
+    if (names.length) aside.set(copy.dir, names);
+  }
+  const gone = new Set([...aside].flatMap(([dir, names]) => names.map(name => path.join(dir, "node_modules", name))));
+  const kept = copies.filter(copy => ![...gone].some(dir => copy.dir.startsWith(`${dir}${path.sep}`)));
+  return { copies: kept, aside, gone };
+}
+
+/**
+ * The dependencies each package needs that a tree cannot give it where its copy is installed, once
+ * what the plan moves aside has gone (the proof passes no plan: it judges the trees as they are).
+ */
+async function missingDependencies({ connectedVersions, copies, packages, gone = new Set() }) {
+  const needs = [];
+  for (const copy of copies) {
+    const entry = packages.find(candidate => candidate.name === copy.name);
+    for (const [name, range] of registryDependencies(entry.manifest)) {
+      const resolved = await resolveFromCopy(copy.tree, copy.dir, name, gone);
+      // A connected package is about to replace whatever is there: its own version counts.
+      const version = connectedVersions.get(name) && resolved ? connectedVersions.get(name) : resolved?.version;
+      if (!accepts(version, range)) needs.push({ tree: copy.tree, from: copy.name, name, range, found: resolved?.version || "" });
+    }
+  }
+  return needs;
+}
+
+export { connectedNpmPackages, existingEntry, installedCopies, missingDependencies, readJsonFile, resolveFromCopy, swapPlan };
