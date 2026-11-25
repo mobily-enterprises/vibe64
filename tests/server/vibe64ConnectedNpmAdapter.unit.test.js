@@ -38,7 +38,7 @@ const sharedSource = "module.exports = { instance: Symbol('shared') };\n";
 /**
  * A published @proof/lib (1.0.0 at the top, 0.9.0 nested under @proof/other) installed in an app,
  * and a session copy of its repository: @proof/lib 1.1.0, an npm workspace, needing `extra`, which
- * the app lacks. `published` adds plain packages to the registry, as [name, version] pairs.
+ * the app lacks. `published` adds plain packages to the registry, as [name, version, dependencies?].
  */
 async function fixture(t, {
   libDependencies = { shared: "^1.0.0", extra: "^1.0.0" },
@@ -62,8 +62,9 @@ async function fixture(t, {
   await writePackage(path.join(published, "other"), {
     name: "@proof/other", version: "1.0.0", main: "index.js", dependencies: otherDependencies
   }, { "index.js": "module.exports = require('@proof/lib');\n" });
-  for (const [name, version] of plain) {
-    await writePackage(path.join(published, `${name}-${version}`), { name, version, main: "index.js" }, { "index.js": `module.exports = '${name} ${version}';\n` });
+  for (const [name, version, dependencies = {}] of plain) {
+    await writePackage(path.join(published, `${name}-${version}`), { name, version, main: "index.js", dependencies },
+      { "index.js": `module.exports = '${name} ${version}';\n` });
   }
   for (const dir of ["shared", "extra", "lib-0.9.0", "lib-1.0.0", "other", ...plain.map(([name, version]) => `${name}-${version}`)]) {
     await registry.publish(path.join(published, dir));
@@ -492,6 +493,26 @@ test("npm: a version another package's own pin keeps beside a copy still refuses
   assert.equal(await installedVersion(path.join(f.app, "node_modules", "@proof", "lib")), "1.0.0");
   assert.deepEqual(await f.tracked(), before);
   assert.equal((await f.proof()).inEffect, false);
+});
+
+test("npm: a version another package nested in the same published copy still needs stays there, and the swap refuses", { timeout: 120_000 }, async t => {
+  // `user` 1.0.0 is nested in the published copy beside the pinned 1.0.0 it needs: moving that aside
+  // would give it the app's 1.1.0, so it stays, and the connected package cannot reach 1.1.0.
+  const f = await fixture(t, {
+    published: [["pinned", "1.0.0"], ["pinned", "1.1.0"], ["user", "1.0.0", { pinned: "1.0.0" }], ["user", "2.0.0"]],
+    publishedLibDependencies: { shared: "^1.0.0", pinned: "1.0.0", user: "1.0.0" },
+    libDependencies: { shared: "^1.0.0", pinned: "1.1.0", user: "^1.0.0" },
+    appDependencies: { "@proof/lib": "1.0.0", shared: "1.0.0", pinned: "1.1.0", user: "2.0.0" }
+  });
+  const top = path.join(f.app, "node_modules", "@proof", "lib");
+  assert.deepEqual([await installedVersion(path.join(top, "node_modules", "user")), await installedVersion(path.join(top, "node_modules", "pinned"))],
+    ["1.0.0", "1.0.0"]);
+  const applied = await f.step("apply");
+  assert.equal(applied.ok, false);
+  assert.equal(applied.code, "vibe64_connected_npm_dependency_incompatible");
+  assert.match(applied.error, /@proof\/lib needs pinned@1\.1\.0, found 1\.0\.0\. npm installed it without saving, but the copy still cannot reach a compatible version; align the versions/u);
+  assert.equal(await installedVersion(top), "1.0.0");
+  assert.equal(await installedVersion(path.join(top, "node_modules", "pinned")), "1.0.0");
 });
 
 test("npm: a save after an install put the published copies back puts the connection in effect again, its dependencies included", { timeout: 120_000 }, async t => {
