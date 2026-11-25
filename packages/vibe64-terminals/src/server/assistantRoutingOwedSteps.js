@@ -4,7 +4,14 @@ import {
   latestAssistantQuestionsAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { readWorkPlan } from "./assistantWorkPlan.js";
-import { followupFitsPlan, personTurn, userTurnsSince, usesWorkPlan } from "./assistantRoutingRequests.js";
+import {
+  followupFitsPlan,
+  owesStep,
+  personTurn,
+  turnLastUserMessageId,
+  userTurnsSince,
+  usesWorkPlan
+} from "./assistantRoutingRequests.js";
 import { FOLLOWUP_OVERTAKEN_CODES } from "./assistantRoutingDelivery.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -82,13 +89,6 @@ function createAssistantRoutingOwedSteps({ routingState, records, delivery, admi
   }
 
   /**
-   * Whether the saved request still owes its step: waiting with it unsent (never attempted, so never sent twice), not
-   * stopped or cancelled. A Continue the turn still running refused leaves it owed too.
-   */
-  const owesStep = (state) => Boolean(state?.followup?.owed) && state.status === "waiting" && state.delivery === "pending" &&
-    !state.attemptedMessageId && !state.stopped && !state.cancelled;
-
-  /**
    * The owed step decided again once the turn that came first has ended, from the conversation and plan as they are
    * now: it goes ahead unless something else still holds the chat (a turn running, a question or approval pending, a
    * goal), which leaves it owed until a turn ends again. A message of the person's own since the step was decided
@@ -128,6 +128,29 @@ function createAssistantRoutingOwedSteps({ routingState, records, delivery, admi
   }
 
   /**
+   * The next step a server's recovery prepared for a turn an earlier server sent and never saw end (a restart cut off
+   * its scheduling). None of it was sent, so it is owed and decided as any owed step, with whatever the conversation
+   * gained after that turn (its own message and its steers) counting as having come since. A temporary chat's waits
+   * for Continue, as it has no automatic steps.
+   * @param {object} context
+   * @param {object} state the saved routing request, with the step prepared
+   * @param {string} ended the message the ended turn was sent as
+   */
+  async function continueRecovered(context, state, ended) {
+    state.status = "waiting";
+    if (!routingState.allowAuto) {
+      state.error = "Scheduling was disconnected. Resume the retained stage when ready.";
+      await records.save(context, state);
+      return;
+    }
+    state.followup.lastUserMessageId = await turnLastUserMessageId(context.runtime.store, context.session.sessionId, state, ended);
+    state.followup.owed = true;
+    state.error = owedStep(state);
+    await records.save(context, state);
+    await continueOwed(context, state);
+  }
+
+  /**
    * A refused automatic step: owed when another turn or message only came before it (oweRefusedStep); otherwise it
    * waits for the person, with its delivery uncertain when its message may have left.
    * @param {object} context
@@ -149,7 +172,8 @@ function createAssistantRoutingOwedSteps({ routingState, records, delivery, admi
     oweRefusedStep,
     settleRefusedStep,
     owesStep,
-    continueOwed
+    continueOwed,
+    continueRecovered
   });
 }
 

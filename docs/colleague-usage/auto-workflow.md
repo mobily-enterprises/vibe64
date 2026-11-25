@@ -166,9 +166,12 @@ A late successful result cannot undo Stop. Select the stage-specific **Continue*
 this starts a fresh turn at that stage. A failed or interrupted turn, or
 one ending without a confirmed outcome, leaves **Waiting** with a concrete reason.
 
-After a server restart, unfinished scheduling requires an explicit stage-specific **Continue** action;
-opening a session never sends another turn. **Retry** checks the original
-receipt of an uncertain message without sending a second copy.
+When a server restart cuts off the scheduling of the next step (the turn ended
+while the server was down), the restarted server decides that step as it starts
+up again, the same way as a step another turn came before (below): nothing of it
+was sent yet. Only a message that may already have reached the assistant waits:
+**Retry** checks its original receipt without sending a second copy. Within one
+server run, opening a session never sends another turn.
 
 Another turn can come before an automatic step, such as Senior's review of a
 built plan: a message from another session gets its answer, or a turn is still
@@ -188,6 +191,9 @@ The step waits for you instead when:
 - the plan changed so that the step no longer fits it: send a new request.
 
 Another session's messages and Vibe64's own notes are never your word on it.
+A message from another session that arrives just as the turn before the step
+ends gets its own answer first, and the step starts once that answer ends; it
+never replaces the step.
 When the step waits for you, its stage-specific **Continue** action takes it from
 the conversation as it now is.
 An unsent handoff shows **Stop** beside its stage-specific **Continue** action. Stopping it preserves

@@ -827,10 +827,12 @@ owed, never dropped: once that turn ends the server decides it again from the
 conversation and plan as they are then, with no page open, and a server that
 restarted first does so at its recovery. A message of the person's own since the
 step was decided, an answer that asks something, or a plan the step no longer
-fits waits for the person; another session's message never stands for them. Two turns without reported progress or eight automatic
+fits waits for the person; another session's message never stands for them, and
+never replaces an owed step: it is answered in its own turn first. Two turns without reported progress or eight automatic
 steps wait for inspection and Resume workflow. Stop suppresses late automatic
 work. Recovery never replays a sent message: Retry checks its original
-receipt, and interrupted scheduling after restart requires Resume workflow.
+receipt; a next step whose scheduling a restart cut off, nothing of it sent, is
+decided at the restarted server's recovery as an owed step is.
 A failed unsent handoff can be replaced by a new request without claiming its work
 completed. Continuation rechecks the original submitting user's access and
 captured connection. Completed work remains available when access is removed.
