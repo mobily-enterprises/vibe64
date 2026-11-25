@@ -157,6 +157,32 @@ test("Update takes the newer pin another session saved, with the copy on the com
   assert.equal(f.copies().find(copy => copy.name === "library").canonicalCommit, newer);
 });
 
+test("after Update moves a composition copy, a session with no other work has the pin to save, and Save records it", async (t) => {
+  // The project's main pins Library's first commit; Library's main then moves without this project pinning it.
+  const { f, library, save, service } = await setup(t, { ownFiles: async (repository) => ({ [LOCK]: lockText([await pin(repository, repository.base)]) }) });
+  const newer = await pushPeer(library, "other.txt", "saved by another project\n");
+  await service.work.updateSessionWork(SESSION_ID, { operationId: "update-1" });
+  // Update moved the copy and its record; the session's own source is clean and still pins the first commit.
+  assert.equal(f.copies().find(copy => copy.name === "library").canonicalCommit, newer);
+  assert.equal(await git(f.session.sourcePath, ["status", "--porcelain"]), "");
+  assert.equal(await readFile(path.join(f.session.sourcePath, LOCK), "utf8"), lockText([await pin(library, library.base)]));
+
+  const work = await service.inspection.inspectSessionWork(SESSION_ID);
+
+  assert.equal(work.unsaved, true, "the lock behind the copy is work to save, so Save is available");
+  assert.deepEqual(work.pinsToRecord, [{ fullName: "example/library", commit: newer }]);
+
+  const saved = await save();
+
+  assert.deepEqual(saved.connected || [], [], "the copy has nothing of its own to push");
+  assert.equal(await remoteMain(service.own), saved.saveCommit);
+  assert.equal(`${await git(service.own.bare, ["show", `${saved.saveCommit}:${LOCK}`])}\n`, lockText([await pin(library, newer)]));
+  assert.deepEqual(saved.connectedLines, [`[Connected] ${LOCK} pins example/library at ${newer.slice(0, 12)}.`]);
+  const after = await service.inspection.inspectSessionWork(SESSION_ID);
+  assert.deepEqual([after.unsaved, after.pinsToRecord], [false, []]);
+  await assert.rejects(save(), { code: "vibe64_session_save_no_changes" });
+});
+
 test("a lock an unfinished Save left changed never conflicts with Update: the session takes its main's pins", async (t) => {
   const { f, library, service } = await setup(t);
   const newer = await pushPeer(library, "other.txt", "other session\n");
