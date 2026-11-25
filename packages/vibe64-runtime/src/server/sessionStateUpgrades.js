@@ -286,7 +286,8 @@ function createSessionStateUpgrades({
    * Stage through the session/archive owner, which the offline publisher backs up. `finishArchive` runs before repacking.
    */
   async function prepareSessionStateUpgrade({
-    temporaryRoot, inspectSession, transformRenewal, transformArchiveRecord, preparedRenewalsOnly = false, finishArchive = null
+    temporaryRoot, inspectSession, transformRenewal, transformArchiveRecord, preparedRenewalsOnly = false, finishArchive = null,
+    archives = true
   }) {
     const relativeScratch = path.relative(state.normalizedStateRoot, temporaryRoot || state.normalizedStateRoot);
     if (!path.isAbsolute(temporaryRoot || "") || typeof inspectSession !== "function" ||
@@ -415,7 +416,7 @@ function createSessionStateUpgrades({
         }
       }
     }
-    await inspectArchives(preparedRenewalsOnly ? renewalArchivesRoot(rootPaths) : rootPaths.archivedSessionsRoot);
+    if (archives) await inspectArchives(preparedRenewalsOnly ? renewalArchivesRoot(rootPaths) : rootPaths.archivedSessionsRoot);
     return updates;
   }
 

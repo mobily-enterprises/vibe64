@@ -1,35 +1,8 @@
-import { lstat, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState";
-import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
+import { publishStateUpgradeFiles, stateUpgradeRunBackupRoots } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { createVibe64SessionStore } from "./sessionStore.js";
-
-/**
- * This run's backup folder and the earlier runs' ones: backupRoot the first
- * time, and after a run that stopped part way a new retry-N folder inside it,
- * so each run prepares from what the chats hold when it starts. A rollout's
- * rollback can start the previous release on a workspace whose apply stopped
- * part way: that release refuses the chats already converted (their
- * transcript.json is the moved note) but may write to the others and start new
- * ones, which the stopped run's manifest would refuse ("differs from both
- * upgrade copies") or leave unconverted after recording the upgrade. Earlier
- * backups are kept.
- * @param {string} backupRoot
- * @returns {Promise<{ current: string, earlier: string[] }>}
- */
-async function backupRoots(backupRoot) {
-  const earlier = [];
-  for (let attempt = 1; ; attempt += 1) {
-    const candidate = attempt === 1 ? backupRoot : path.join(backupRoot, `retry-${attempt}`);
-    try {
-      await lstat(candidate);
-    } catch (error) {
-      if (error.code === "ENOENT") return { current: candidate, earlier };
-      throw error;
-    }
-    earlier.push(candidate);
-  }
-}
 
 /**
  * 20261124-chat-transcript-log: every chat's transcript.json, in every
@@ -41,7 +14,11 @@ async function backupRoots(backupRoot) {
  * @param {{ systemRoot: string, apply: boolean, backupRoot: string, report: (level: string, message: string) => void }} context
  */
 async function upgradeChatTranscriptLogs(context) {
-  const { current: backupRoot, earlier } = await backupRoots(context.backupRoot);
+  // A rollout's rollback can start the previous release on a workspace whose apply stopped part way: that release
+  // refuses the chats already converted (their transcript.json is the moved note) but may write to the others and
+  // start new ones, which the stopped run's manifest would refuse ("differs from both upgrade copies") or leave
+  // unconverted after recording the upgrade. So each run prepares again from what the chats hold.
+  const { current: backupRoot, earlier } = await stateUpgradeRunBackupRoots(context.backupRoot);
   if (earlier.length) {
     context.report("info", `An earlier run stopped part way: converting what the chats hold now, backed up in ${path.basename(backupRoot)}; the earlier backup is kept.`);
   }

@@ -29,6 +29,7 @@ import { createSessionRenewalTransitions } from "./sessionRenewalTransitions.js"
 import { createSessionStateUpgrades } from "./sessionStateUpgrades.js";
 import { createSessionTemporaryConversationRemoval } from "./sessionTemporaryConversationRemoval.js";
 import { createSessionTranscriptLogUpgrade } from "./sessionTranscriptLogUpgrade.js";
+import { createSessionAgentRunHistoryUpgrade } from "./sessionAgentRunHistoryUpgrade.js";
 
 /**
  * A project runtime's session store. Each concern is built once, in
@@ -124,6 +125,9 @@ function createVibe64SessionStore(options = {}) {
     recordFiles,
     prepareSessionStateUpgrade: upgrades.prepareSessionStateUpgrade
   });
+  const agentRunHistoryUpgrade = createSessionAgentRunHistoryUpgrade({
+    prepareSessionStateUpgrade: upgrades.prepareSessionStateUpgrade
+  });
   const temporaryConversationRemoval = createSessionTemporaryConversationRemoval({
     storePaths,
     recordFiles,
@@ -141,6 +145,7 @@ function createVibe64SessionStore(options = {}) {
     commitRenewalSuccessor: renewalTransitions.commitRenewalSuccessor,
     publishSessionArchive: archivePublishing.publishSessionArchive,
     prepareRenewalSessionArchive: renewalArchives.prepareRenewalSessionArchive,
+    prepareAgentRunHistoryUpgrade: agentRunHistoryUpgrade.prepareAgentRunHistoryUpgrade,
     prepareAssistantRoutingStateUpgrade: upgrades.prepareAssistantRoutingStateUpgrade,
     prepareChatTranscriptLogUpgrade: transcriptLogUpgrade.prepareChatTranscriptLogUpgrade,
     prepareConversationStorageUpgrade: upgrades.prepareConversationStorageUpgrade,

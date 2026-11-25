@@ -2202,6 +2202,80 @@ session state, with Vibe64 and every session process stopped. Converting a
 busy test host. Focused evidence:
 `chatTranscriptLog.unit.test.js` and `stateUpgrades.unit.test.js`.
 
+## Agent run history (`20261125-agent-run-history`)
+
+A session keeps one agent run per engine transport,
+`agent-runs/<transport>.json`, for its whole life, and each run kept every
+event of every turn: Codex writes several a turn and one at each phase change,
+so a long session's run reached megabytes. Each open or reload of the session
+read, parsed and returned all of them, and each event rewrote them all. A run
+now keeps the events of its last two turns, the working turn and the one just
+ended (whose result-processed event a late result of that turn still finds).
+A turn starts at an event in an active state after one in an ended state, as
+`workingTurns.js` reads a working turn's start. When a new turn starts, the
+session store appends the events of the turns before those two to the run's
+history, `agent-runs/<transport>.history.jsonl`: one event per line, oldest
+first, synced before the run is published. No session read opens it. The
+run's `eventHistoryBytes` says how much of the history it wrote, so an append
+whose run never reached the disk is cut off before the next one: each event is
+in the run or its history, once. Runtime's `agentRunHistory.js` owns the format.
+The pages' session (`publicSession`) and Claude's turn updates carry the runs'
+fields without their events, which no page reads.
+
+This upgrade follows `20261124-chat-transcript-log`. The owner is Runtime's
+`agentRunHistoryUpgrade.js`, supplied by the candidate CLI; the script refuses
+to run without it. Through the stopped session store and Core's verified backup
+publisher, it splits each agent run of every project's active and closing
+sessions that holds more than two turns, as its next new turn would: the run
+keeps its last two turns, and the earlier ones' events go to its history, after
+any the history already holds. A run that was working when the editor stopped
+keeps its working turn whole and stays working; nothing but `events` and
+`eventHistoryBytes` changes in any run. Archives and prepared renewal archives
+are left unopened: an archive is read only by extracting it whole, and its runs
+are never written again. A run that is not JSON stops the upgrade before
+anything changes. The history is published before its run, so a stop between
+the two leaves every event in the run. Both sides are kept under
+`upgrades/backups/20261125-agent-run-history/` (`before/` holds the original run
+and any earlier history, `after/` the new ones) until backup retention removes a
+completed upgrade's backups.
+
+It also ends a false answer: the working-turns reader (`workingTurns.js`,
+which a tool outside the editor asks before restarting it) does not read a run
+over 4 MiB and counts it as working, start unknown, so a session whose run had
+grown that far always looked busy; split, the run is read and its ended turn
+reads as ended.
+
+Check is read-only and reports, per project, how many runs it would split and
+how many events it would move. A run that holds two turns or fewer, as every
+split run does, is left alone, so a rerun changes nothing. Nothing splits a run
+at read time: a run the upgrade has not split is read whole until its next new
+turn splits it.
+
+Putting the previous release back (a rollout's rollback, a live switch undone):
+
+- After the upgrade is recorded, that release does not start: its start's check
+  refuses the newer ledger.
+- After an apply that stopped part way, nothing is recorded and that release
+  starts. A split run has the same shape with fewer events, which it reads and
+  writes as any other (it keeps `eventHistoryBytes` and never moves events); a
+  run whose history was published without it still holds every event. No event
+  is lost either way: the ones a split run no longer holds are in its history.
+- The next apply prepares again from what the runs hold, in a backup folder of
+  its own (`retry-2/`, `retry-3/`, ... inside the upgrade's), rather than
+  resuming the stopped run's prepared files, which those writes would make
+  stale. A run whose history was published just before the stop is split again
+  from the run, its history cut back to what the run records, so no event is
+  written to the history twice.
+
+Run it as the OS user that owns the session state, with Vibe64 and every
+session process stopped; a run written while it prepares stops it before
+anything changes ("Application state changed during preparation"). On a
+4.1 MiB run (2,353 Codex turns, 23,530 events, pretty-printed as release 10
+wrote it) and three smaller runs beside it, check took 178 ms and apply 431 ms
+on a test host; the long run kept 20 events.
+Focused evidence: `agentRunHistory.unit.test.js`,
+`agentRunHistoryUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
+
 ## Auto plan handoff (no upgrade)
 
 The saved Auto request (`assistant_routing_request`, schema version 7) may hold
