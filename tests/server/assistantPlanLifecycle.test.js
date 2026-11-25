@@ -217,12 +217,15 @@ test("a plan's pass changes only its own Passes item's tick, and Junior only the
   assert.equal((await f.change("write", "junior", { text: text.replace("- [~] Book", "- [x] Book").replace("- [ ] Review", "- [x] Review") })).checked, 2);
 });
 
-test("plan guidance asks for a half tick once an item is built and a full tick once the plan's final proof covers it", () => {
+test("plan guidance asks for a half tick once an item is built and a full tick once Senior's review proves it, and no item for the whole-project checks", () => {
   for (const role of ["senior", "junior", "review"]) {
     const guidance = workPlanInstructions(role);
-    assert.match(guidance, /- \[ \] not done yet, - \[~\] built \(implemented, and its own focused checks pass\) and - \[x\] proven by the plan's final checks/);
+    assert.match(guidance, /- \[ \] not done yet, - \[~\] built \(implemented, and its own focused checks pass\) and - \[x\] proven by Senior's review/);
     assert.match(guidance, /Half-tick each item \(- \[~\]\) as soon as it is implemented and its own focused checks pass/);
-    assert.match(guidance, /full-tick it \(- \[x\]\) when the plan's final proof covers it/);
+    assert.match(guidance, /full-tick it \(- \[x\]\) once Senior's review proves it: its reading of the changes against the plan and the focused tests for what changed, or the proof the plan states/);
+    assert.match(guidance, /Never write the whole-project checks \(such as one whole run of the test suite\) as a checklist item or a step: no step of a plan runs them, and once the plan is finished Vibe64 asks the person whether to run them/);
+    assert.match(guidance, /or whether to run the whole-project checks: the passes are the plan's next step/);
+    assert.doesNotMatch(guidance, /final checks|final proof|the whole run, the review/);
     assert.match(guidance, /Never leave a built item empty/);
     assert.match(guidance, /moves back to - \[~\] or - \[ \]/);
     assert.doesNotMatch(guidance, /Leave partial or unverified items unchecked/);

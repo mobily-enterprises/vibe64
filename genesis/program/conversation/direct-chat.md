@@ -1521,6 +1521,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `tests/server/assistantPlanLifecycle.test.js`
 - `tests/server/assistantPlanPasses.test.js`
 - `tests/server/assistantPlanImplementation.test.js`
+- `tests/server/assistantPlanWholeChecks.test.js`
+- `packages/vibe64-terminals/src/server/assistantWholeChecks.js`
 - `tests/server/planStatusLine.unit.test.js`
 - `tests/server/afterPlanPassesUpgrade.unit.test.js`
 - `tests/server/passesInPlansUpgrade.unit.test.js`
@@ -1528,6 +1530,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingNotice.js`
+- `packages/vibe64-runtime/src/shared/assistantWholeChecks.js`
+- `packages/vibe64-runtime/src/shared/assistantWorkflowUpgrade.js`
 - `packages/vibe64-runtime/src/shared/assistantExplicitTask.js`
 - `packages/vibe64-runtime/src/shared/assistantFinishing.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingAssignments.js`
@@ -1961,7 +1965,9 @@ Stop and cleanup remain separate from admission of new inference. Source
 explanations and Database Copilot use their own resolved Explain & check destination too.
 
 The offline routing upgrade owners validate exact known schema 3/4 state before
-legacy conversion. Current schema 4 requests and Custom preferences retain their
+legacy conversion; the conversion of a schema 3/4 request to the schema 5
+workflow request has its own module, `assistantWorkflowUpgrade.js`, which live
+routing never reads. Current schema 4 requests and Custom preferences retain their
 captured configuration, native identity, actor and delivery receipts unchanged;
 unknown/corrupt records still fail preflight. The appended
 `20261006-routing-format-compatibility` boundary invokes the original V2,
@@ -2257,7 +2263,7 @@ through the existing bound session command socket. The server derives Senior,
 Junior or review authority from the admitted turn, never a caller's claimed role.
 Junior can write paired Progress and move existing checklist items among their
 three marks: `[ ]` not done yet, `[~]` built (implemented, and its own focused
-checks pass) and `[x]` proven by the plan's final checks. Junior Plan writes mask
+checks pass) and `[x]` proven by Senior's review. Junior Plan writes mask
 only that mark using the fence-aware parser (`workPlanScope`) and reject every
 other content change, including edits to fenced examples. Paired revision checks still
 apply. Senior owns agreed scope changes and lifecycle
@@ -2315,8 +2321,8 @@ remain fully visible. Plan/document/archive/session changes reset expansion;
 updating only Progress retains expansion of the same Plan.
 Progress shows actual work, evidence and blockers. Checklist marks update as the
 work goes: the guidance half-ticks an item (`[~]`) as soon as it is implemented
-and its own focused checks pass, full-ticks it (`[x]`) once the plan's final proof
-covers it, never leaves a built item empty, ticks each item the moment it is
+and its own focused checks pass, full-ticks it (`[x]`) once Senior's review
+proves it, never writes the whole-project checks as an item, never leaves a built item empty, ticks each item the moment it is
 built rather than at the end of the turn, walks the whole checklist when work on
 one item builds parts of others, and moves unsupported or regressed
 claims back to `[~]` or `[ ]`. Senior writes a foundation item that others
@@ -2500,9 +2506,9 @@ Auto refuses Junior's implementation handoff of an involved active plan while
 `workPlanStep` finds an item still `- [ ]`
 (`vibe64_assistant_workflow_plan_items_open`, naming it). Auto's implementation
 turns are told to work the items in the plan's order, doing one earlier only when
-the plan says another depends on it and recording why in Progress, and never to
-start the plan's final checks, which `ASSISTANT_PLAN_COMPLETION_MESSAGE` has
-Senior's review run once and record. An outcome whose plan has more items built
+the plan says another depends on it and recording why in Progress, and that no
+step of a plan runs the whole-project checks (`PLAN_NO_WHOLE_CHECKS`): each item
+runs its own focused checks. An outcome whose plan has more items built
 than the request's previous plan resets the request's step allowance, so a plan
 that keeps building items is not stopped after eight automatic steps; turns that
 build nothing still are. Continue for a waiting implementation follows the plan
@@ -2526,9 +2532,17 @@ records none. A handoff after implementation ends the work, unless Auto's Junior
 implemented an involved plan that is still active
 (`assistantPlanCompletionFollows`): then Senior reviews the plan in its own turn
 (`ASSISTANT_PLAN_COMPLETION_MESSAGE`), which renders no Genesis task and runs no
-pass, runs the plan's final checks once, verifies every item outside Passes and
-ends Done (every such item `- [x]`; it completes a plan without Passes items) or
-Needs you, or hands rework back to Junior. Senior's complete is refused unless the
+pass, reads the plan's changes against Plan and Progress, verifies every item
+outside Passes, runs the focused tests for what changed and no whole-project
+checks, and ends Done (every such item `- [x]`; it completes a plan without Passes items) or
+Needs you, or hands rework back to Junior. An item that names the whole run (a
+plan made before this rule) is never ticked on focused tests: the review
+rewrites it, as a plan change, into what it proves, records in Progress that the
+run is offered once the plan is finished, and reports continue, since the
+outcome check refuses a complete whose plan's scope differs from the one the
+request recorded; its next turn reviews and ticks the plan as it now stands. Each pass's
+instructions (`assistantPassInstructions`) also say to run no whole-project
+checks. Senior's complete is refused unless the
 plan is completed or at its Passes step (`workPlanAtPasses`: active, with Passes
 items, every other item proven; `vibe64_assistant_workflow_plan_incomplete`).
 The plan is the only list of passes: its last section, `## Passes`, one
@@ -2582,6 +2596,37 @@ session or a connected copy), the handler (`saveAfterCompletedPlan`) runs the
 ordinary `updateSessionWork`, task and publications included, then Save again;
 it stops only when that Update fails, its note naming the conflict's repository
 and files (or the Update's own message) and the Update notice's Fix it with AI.
+
+A finished plan then asks the person about the whole-project checks. The shared
+`assistantWholeChecks.js` holds the question's words, notes, turn instructions
+and predicates, and the server's `assistantWholeChecks.js` routing's side of it:
+`finishPlan` sets `state.wholeChecks` to `{ status: "asked", plan: <title> }` on
+the request that finished it (`askWholeChecks`), and after the lock, once the
+save notes are written, routing writes `assistantWholeChecksQuestionNotice` (**The plan is finished. Run the
+whole-project checks once now, on the finished plan's work?**). While `assistantAsksWholeChecks` holds (complete, asked, not
+stopped), `assistantRoutingNotice` gives the composer notice the label **Run the
+whole-project checks once now?** and the action kind `checks` (Yes), held while
+an answer runs; `Vibe64RoutingNotice` adds No. Yes sends
+`WHOLE_CHECKS_YES_MESSAGE` as a new message with `wholeChecks: "run"`:
+admission makes it a direct implementation-stage request on Senior (a Custom
+chat's own agent) with no Router, review, plan or after-plan record, and
+`wholeChecks.status` `run`; delivery gives it the `checks` intent
+(`ASSISTANT_WHOLE_CHECKS_INSTRUCTION`) and `assistantWholeChecksInstructions` in
+place of the workflow's, labels its follow-ups **Whole-project checks**, and
+`prepareFollowup` continues it as **Continue the whole-project checks.** without
+running them again. Its handoff ends the work and saves like any finished
+implementation; complete saves nothing. No is the Continue route's direct POST
+with `reviewAction: "skip-checks"` and the finished request's messageId: it sets
+`declined`, writes **Whole-project checks not run. Vibe64 won't ask again for
+this plan.** and starts no turn. Any other new message ends the question as
+`offered`, with `WHOLE_CHECKS_OFFERED_NOTE` before the person's words, so a
+typed yes runs them. Admission reads the No through `declineWholeChecks` and a new message through
+`answerWholeChecks`; a Yes or No once nothing is asked is refused
+(`vibe64_assistant_routing_whole_checks_not_asked`). The field is optional and
+written only by new requests; an older release reading it ignores it and sees an
+ordinary completed or implementation request, so it needs no state upgrade.
+The Colleague guide `docs/colleague-usage/whole-project-checks.md` explains the
+question and its answers to the person.
 
 In plan-running chats (Main chat with a chat mode, not a lesson, Fix it or
 generated work), a pass the person asks for joins the plan: `planPassRequest`

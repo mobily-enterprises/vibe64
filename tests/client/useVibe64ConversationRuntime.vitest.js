@@ -132,6 +132,25 @@ describe("retained project conversation ownership", () => {
     mocks.request.mockResolvedValueOnce({ ok: false, error: "The retained plan changed." });
     await expect(runtime.continueWorkflow(request)).rejects.toThrow("The retained plan changed.");
   });
+  it("sends the person's No to the whole-project checks through the same action, as no new message", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    const request = { messageId: "finished-plan", input: { message: "Execute the plan" } };
+    mocks.request.mockResolvedValueOnce({ ok: true, delivered: false, wholeChecks: "declined" });
+    expect(await runtime.continueWorkflow(request, "skip-checks")).toMatchObject({ wholeChecks: "declined" });
+    expect(mocks.request).toHaveBeenLastCalledWith("/api/app/one/vibe64/sessions/s1/agent-message", {
+      body: { messageId: request.messageId, message: request.input.message, reviewAction: "skip-checks" }, method: "POST"
+    });
+    expect(runtime.delivery.state.messages).toHaveLength(0);
+    // The Yes is a new message of its own, marked to run them: the server starts the one turn that does.
+    mocks.request.mockImplementationOnce(async (_url, { body }) => {
+      f.receipt(runtime.identity, { user: { messageId: body.messageId, text: body.text } });
+      return { ok: true };
+    });
+    expect(await runtime.send({ message: "Yes, run the whole-project checks once now.", wholeChecks: "run", submissionKind: "send" },
+      { messageId: "yes-1" })).toEqual({ ok: true });
+    expect(mocks.request.mock.lastCall[1].body).toMatchObject({ messageId: "yes-1", text: "Yes, run the whole-project checks once now.",
+      data: { wholeChecks: "run" } });
+  });
   it("refreshes a pinned foreign goal through the same binding on scoped product invalidations", async () => {
     let view = { status: "available", goal: { id: "pinned", objective: "Plain objective", status: "paused" },
       target: { segmentId: "foreign-goal", capabilities: { goals: true, goalBudgets: false,

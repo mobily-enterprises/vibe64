@@ -73,6 +73,7 @@
           :busy="chatHold"
           @retry="sendRoutingAction('continue')"
           @implement="sendRoutingAction('implement')"
+          @checks="(answer) => sendRoutingAction(answer === 'yes' ? 'run-checks' : 'skip-checks')"
           @view-plan="workPlanViewer?.showPlan('current')"
           @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
         />
@@ -264,6 +265,7 @@
 <script setup>
 import { assistantGoalIsActive, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRoutingNotice";
+import { WHOLE_CHECKS_YES_MESSAGE } from "@local/vibe64-runtime/shared/assistantWholeChecks";
 import { workPlanStatusLine } from "@local/vibe64-terminals/shared/assistantWorkPlan";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, nextTick, ref, useId, watch } from "vue";
@@ -396,10 +398,18 @@ async function sendRoutingAction(action) {
   routingActionSending.value = action;
   routingActionError.value = "";
   try {
-    const result = action === "implement"
-      ? await props.sendAgentMessage({ message: "Implement the saved plan. I authorize implementation within its agreed scope.",
-        planRevision: request.workPlan.revision, submissionKind: "send" })
-      : await props.conversationRuntime.continueWorkflow(request);
+    let result;
+    if (action === "implement") {
+      result = await props.sendAgentMessage({ message: "Implement the saved plan. I authorize implementation within its agreed scope.",
+        planRevision: request.workPlan.revision, submissionKind: "send" });
+    } else if (action === "run-checks") {
+      // The person's Yes to the whole-project checks once a plan is finished: their message starts the one turn that runs them.
+      result = await props.sendAgentMessage({ message: WHOLE_CHECKS_YES_MESSAGE, wholeChecks: "run", submissionKind: "send" });
+    } else {
+      // Continue, or the person's No to the whole-project checks, which runs nothing.
+      result = action === "skip-checks" ? await props.conversationRuntime.continueWorkflow(request, "skip-checks")
+        : await props.conversationRuntime.continueWorkflow(request);
+    }
     if (result === false || result?.ok === false) {
       throw new Error(result?.error || "The workflow action did not start. Check the conversation and try again.");
     }

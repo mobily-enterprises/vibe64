@@ -10,6 +10,7 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantExplicitTask, assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { ASSISTANT_ROUTING_REQUEST_SCHEMA, failure, readCancelled, read, usesWorkPlan, STATE_KEY } from "./assistantRoutingRequests.js";
+import { answerWholeChecks, declineWholeChecks } from "./assistantWholeChecks.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
@@ -62,6 +63,27 @@ const isStoppedRequest = request => request?.stopped === true && request.deliver
  */
 function isStoppedTurn(request, native) {
   return Boolean(native?.turn?.active) && isStoppedRequest(request) && (!native.turn.id || native.turn.id === request.turnId);
+}
+
+/**
+ * Stop ends the turn: the next message is a new request, which Router routes afresh. Sent while the stopped turn is
+ * still ending, it waits for that turn to end rather than join it, and is refused, unsent, if it outlasts the wait.
+ * @param {SessionAgentManager} agent
+ */
+async function afterStoppedTurn(agent, sessionId, context, state, native) {
+  const deadline = Date.now() + STOPPED_TURN_WAIT_MS;
+  let current = native;
+  while (isStoppedTurn(state, current)) {
+    if (Date.now() >= deadline) {
+      throw Object.assign(failure(
+        "The turn you stopped is still ending. Send your message again once it has stopped.",
+        "vibe64_assistant_routing_stopped_turn_ending"
+      ), { delivery: "not-sent" });
+    }
+    await new Promise(resolve => setTimeout(resolve, STOPPED_TURN_POLL_MS));
+    current = await agent.sessionState(sessionId, context);
+  }
+  return current;
 }
 
 /**
@@ -145,26 +167,6 @@ function createAssistantRoutingAdmission({
     return result;
   }
 
-  /**
-   * Stop ends the turn: the next message is a new request, which Router routes afresh. Sent while the stopped turn is
-   * still ending, it waits for that turn to end rather than join it, and is refused, unsent, if it outlasts the wait.
-   */
-  async function afterStoppedTurn(sessionId, context, state, native) {
-    const deadline = Date.now() + STOPPED_TURN_WAIT_MS;
-    let current = native;
-    while (isStoppedTurn(state, current)) {
-      if (Date.now() >= deadline) {
-        throw Object.assign(failure(
-          "The turn you stopped is still ending. Send your message again once it has stopped.",
-          "vibe64_assistant_routing_stopped_turn_ending"
-        ), { delivery: "not-sent" });
-      }
-      await new Promise(resolve => setTimeout(resolve, STOPPED_TURN_POLL_MS));
-      current = await agent.sessionState(sessionId, context);
-    }
-    return current;
-  }
-
   function logInterruptFailure(sessionId, error) {
     logOperationalEvent(logger, "warn", {
       component: "vibe64.assistant_routing",
@@ -210,8 +212,9 @@ function createAssistantRoutingAdmission({
     // A new message refused here, including while the lock is busy, has not
     // reached the AI. Saying so lets the chat show it as not sent, with Edit and
     // Cancel, instead of an unconfirmed receipt that no delivery check can settle.
-    // A retry of an existing request keeps that request's own delivery state.
-    let refusedBeforeAdmission = input.reviewAction !== "retry";
+    // A retry of an existing request keeps that request's own delivery state, and the person's No to the whole-project
+    // checks is no message at all.
+    let refusedBeforeAdmission = !input.reviewAction;
     if (input.submissionKind === "steer" && !explicitTask) {
       const steered = await writesWhileAssistantWorks.withoutLock(sessionId, () => steerWithoutLock(sessionId, input, options));
       if (steered) return steered;
@@ -244,7 +247,7 @@ function createAssistantRoutingAdmission({
       // joins the plan, and so do Continue, Run this pass again and Restart from the first pass.
       // Temporary chats, Fix it with AI and lessons run a pass the person starts as its own turn.
       const plansPasses = routingState.allowAuto && !context.runtime?.learningScope && !options.purpose &&
-        Boolean(preferences) && preferences.mode !== "fix" && input.reviewAction !== "retry";
+        Boolean(preferences) && preferences.mode !== "fix" && !input.reviewAction && !input.wholeChecks;
       // A steer joins the running turn as written, even when its words name a pass.
       const { listing: passListing, request: passRequest } = plansPasses
         ? await readPassRequest(input, context, listPasses, { typed: input.submissionKind !== "steer" }) : {};
@@ -255,6 +258,11 @@ function createAssistantRoutingAdmission({
           : { name: "The plan's passes", code: "pass" };
       } else {
         explicit = await explicitPass(input, explicitTask, context, listPasses);
+      }
+      // The person's No to the whole-project checks once a plan is finished: nothing runs, and the question ends.
+      if (input.reviewAction === "skip-checks") {
+        direct = await declineWholeChecks(records, context, sessionId, input);
+        return;
       }
       if (input.reviewAction === "retry") {
         if (routingState.running.has(key)) throw failure("Wait for request preparation to finish, or stop it.", "vibe64_assistant_routing_preparation_running");
@@ -314,6 +322,8 @@ function createAssistantRoutingAdmission({
       const store = context.runtime.store;
       state = await read(store, sessionId);
       if (state?.messageId === input.messageId) refusedBeforeAdmission = false;
+      // A finished plan's question about the whole-project checks: the Yes runs them, any other message ends it.
+      const wholeChecks = answerWholeChecks(state, input);
       // A plan's pass waiting for the person's answer: their next message goes straight back to it.
       const waitingPass = state?.messageId !== input.messageId && state?.stage === "pass" && state.status === "waiting" &&
         state.awaitingAnswer === true && !state.stopped && state.pass?.request ? state.pass : null;
@@ -348,7 +358,7 @@ function createAssistantRoutingAdmission({
       // Stop ends the turn: the next message is a new request, also when the composer sent it as a steer of the
       // stopped turn, which it never joins.
       const afterStop = isStoppedRequest(state) && (!native?.turn?.active || isStoppedTurn(state, native));
-      if (isStoppedTurn(state, native)) native = await afterStoppedTurn(sessionId, context, state, native);
+      if (isStoppedTurn(state, native)) native = await afterStoppedTurn(agent, sessionId, context, state, native);
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
@@ -486,12 +496,13 @@ function createAssistantRoutingAdmission({
           throw failure("The active plan changed. Read the current plan before sending your request.", "vibe64_assistant_routing_plan_changed");
         }
         let resolvedMode = mode;
-        if (explicitTask || planPass || planPassNote) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
+        if (explicitTask || planPass || planPassNote || wholeChecks.runs) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
-        const review = mode === "auto" && finishes && !planPass && !planPassNote;
+        const review = mode === "auto" && finishes && !planPass && !planPassNote && !wholeChecks.runs;
         // A Senior, Junior or Custom chat's request is its agent's work from the
-        // start; Auto's becomes a workflow when Router classifies it.
-        const direct = finishes && mode !== "auto" && !planPassNote;
+        // start; Auto's becomes a workflow when Router classifies it, and the Yes to
+        // the whole-project checks is Senior's implementation request at once.
+        const direct = (finishes && mode !== "auto" && !planPassNote) || wholeChecks.runs;
         state = {
           messageId: input.messageId,
           input: {
@@ -512,9 +523,12 @@ function createAssistantRoutingAdmission({
           ...(planPass ? { pass: planPass } : {}),
           ...(answering ? { passReply: true } : {}),
           ...(planPassNote ? { planPassNote } : {}),
-          reason: explicitTask || planPass ? "review" : planPassNote ? "conversation" : "",
-          afterPlan: finishes ? { planAtAdmission: plan ? { status: plan.status, revision: plan.revision } : null } : null,
-          workPlan: mode === "auto" || planPass ? plan : null,
+          reason: explicitTask || planPass ? "review" : planPassNote ? "conversation" : wholeChecks.runs ? "implementation" : "",
+          afterPlan: finishes && !wholeChecks.runs
+            ? { planAtAdmission: plan ? { status: plan.status, revision: plan.revision } : null }
+            : null,
+          workPlan: (mode === "auto" || planPass) && !wholeChecks.runs ? plan : null,
+          ...wholeChecks.fields,
           schemaVersion: ASSISTANT_ROUTING_REQUEST_SCHEMA,
           observedSelection: selection,
           configuration: pinnedGoal?.configuration || { revision: saved.revision, owner: saved.owner, nonOwner: saved.nonOwner },

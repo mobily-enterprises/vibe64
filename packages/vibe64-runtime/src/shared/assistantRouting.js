@@ -8,6 +8,7 @@ import {
   assistantWorkflowEnding,
   inAfterPlanOrder
 } from "./assistantFinishing.js";
+import { ASSISTANT_WHOLE_CHECKS_INSTRUCTION, PLAN_NO_WHOLE_CHECKS, WHOLE_CHECKS_LABEL, assistantRunsWholeChecks } from "./assistantWholeChecks.js";
 
 const ASSISTANT_MODES = Object.freeze([
   { id: "custom", label: "Custom", description: "Choose a model and thinking level for this chat." },
@@ -418,6 +419,8 @@ function assistantModePrompt(mode, message, options = {}) {
       "Check the screens you changed in the managed browser, run focused checks, then report what changed and what was verified.",
       "Do not commit, push or deploy."
     ].join(" "),
+    // The turn the person's Yes to the whole-project checks starts, once a plan is finished.
+    checks: ASSISTANT_WHOLE_CHECKS_INSTRUCTION,
     // Any other pass Genesis offers: its composed prompt says what the pass does.
     pass: "Perform the pass this request names directly, following the project's guidance for it. You may edit code for it; earlier Auto planning restrictions do not apply. Preserve unrelated work and staged changes. Do not implement features the pass does not call for, create an implementation plan, or delegate the pass to another model. Fix what you find within the pass's scope, each fix proven by a test that failed first; when a plan runs this pass, also fix what is outside the scope when this session can, and put only what needs the person or what this session can't reach on the plan's Leftovers list in Progress; report it otherwise. Run focused checks, and check the screens you changed in the managed browser, then report what changed and what was verified. Do not commit, push or deploy.",
     review: [
@@ -469,8 +472,8 @@ function assistantModePrompt(mode, message, options = {}) {
   if (!planInstructions && intent !== "conversation") {
     planInstructions = "This direct request is independent of the current Auto plan unless the user explicitly refers to it. Senior may use vibe64-helper plan to manage it; Junior may update Progress and existing checklist ticks after reading both documents, never change scope or mark the plan completed.";
   }
-  // Reviews and passes are Senior's own turns, and conversation and planning implement nothing.
-  const seniorTurns = ["review", "deslop", "ui_pass", "pass"];
+  // Reviews, passes and the whole-project checks are Senior's own turns, and conversation and planning implement nothing.
+  const seniorTurns = ["review", "deslop", "ui_pass", "pass", "checks"];
   if (![...seniorTurns, "conversation", "planning"].includes(intent) && !seniorTurns.includes(mode)) {
     instruction += " When the requested feature is implemented, its required runtime resources are prepared and Preview is responding, promptly tell the user: Ready to try—give it a spin. Verification is still running. Do not claim full completion before verification, and do not wait for the user to test before continuing your checks. If Preview is unavailable, report that instead of inviting the user to try it.";
     instruction += browserReview
@@ -529,7 +532,7 @@ function assistantWorkflowInstructions(state, { autoSave = false } = {}) {
     "For incomplete implementation use continue, not handoff. Browser and visual checks assigned to Senior are an expected handoff. During Senior's check, unfinished checks use continue; necessary implementation rework uses handoff; genuine blockers use wait. Do not ask the person to request the next authorised stage. Never start Deslop, a UI pass or another pass on your own: Vibe64 runs the plan's Passes items, and the passes the person asks for join the plan's Passes.",
     ...(state.stage === "implementation" ? [
       "Implement a plan's items in the plan's order: do one earlier only when the plan says another item depends on it, and record why in Progress. The plan stays in Implementation until every item outside its Passes is built: report handoff only then, and Vibe64 refuses it before. " +
-        "The plan's final checks (the whole-project checks, such as one whole run of the test suite) are not an implementation item: Senior's review runs them once, after every item is built, so never start them in an implementation turn; run each item's own focused checks instead."
+        PLAN_NO_WHOLE_CHECKS + " Run each item's own focused checks instead."
     ] : []),
     ...(state.stage === "planning" && state.resumeImplementation ? [
       "The plan is being implemented: once your change to it is saved, report handoff with the returned revisions, and Vibe64 continues the implementation in a new turn without the person asking. Report wait only for numbered questions the person must answer first, or when the request replaces the plan with a new one, which waits for the person's go-ahead."
@@ -587,7 +590,7 @@ function assistantRoutingStatusLabel(request) {
   const recipient = selection ? vibe64AssistantSelectionLabel(selection) : "";
   const pass = assistantPlanPass(request);
   // A direct chat's turn may only answer, so it is named by its agent until it finishes.
-  const stage = pass ? pass.title : (request.mode === "auto" || request.stage === "review") && {
+  const stage = pass ? pass.title : assistantRunsWholeChecks(request) ? WHOLE_CHECKS_LABEL : (request.mode === "auto" || request.stage === "review") && {
     planning: "Planning",
     implementation: "Implementing",
     review: "Reviewing"
@@ -605,97 +608,6 @@ function assistantRoutingStatusLabel(request) {
   if (request.delivery === "pending") return `${stage} ready to continue · ${recipient}`;
   if (request.delivery === "sending") return `${stage} · ${recipient} · awaiting receipt…`;
   return `${stage} · ${recipient}`;
-}
-
-/**
- * Offline conversion only. Existing requests never gain authority to replay or continue.
- */
-function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) {
-  function convert(raw) {
-    if (!raw) return raw;
-    let previous;
-    try {
-      previous = JSON.parse(raw);
-    } catch {
-      throw new Error("Saved routing request is unreadable. Inspect it before upgrading.");
-    }
-    if (!previous || typeof previous !== "object" || Array.isArray(previous)) throw new Error("Saved routing request must be an object.");
-    if (previous.schemaVersion === 5) {
-      if (!assistantWorkflowStateIsSupported(previous)) throw new Error("Saved workflow has an unsupported state.");
-      return raw;
-    }
-    const statuses = [
-      "routing",
-      "sending",
-      "uncertain",
-      "sent",
-      "failed",
-      "cancelled",
-      "done",
-      "review_pending",
-      "review_sending",
-      "review_uncertain",
-      "reviewing",
-      "planning_pending",
-      "planning_sending",
-      "planning_uncertain",
-      "planning",
-      "implementation_pending",
-      "implementation_sending",
-      "implementation_uncertain"
-    ];
-    if (![3, 4].includes(previous.schemaVersion) || !statuses.includes(previous.status) ||
-        !previous.messageId || !previous.input || !previous.assignments) {
-      throw new Error(
-        "Saved routing request is unsupported. Finish earlier routing upgrades first."
-      );
-    }
-    const { continuation, implementationMessage, reviewMessageId, autoExecution, reviewStatus, outcome, ...request } = previous;
-    let stage = null;
-    if (previous.status.startsWith("planning") || previous.reason === "planning" && !reviewMessageId) stage = "planning";
-    else if (previous.status.startsWith("review") ||
-      reviewMessageId && continuation !== "implementation" ||
-      previous.reason === "review") stage = "review";
-    else if (["plan_implementation", "explicit_implementation"].includes(previous.reason)) stage = "implementation";
-    const suffix = previous.status.split("_").at(-1);
-    let delivery = ["routing", "sending", "uncertain", "failed"].includes(suffix) ? suffix : suffix === "pending" ? "pending" : "accepted";
-    if (previous.status === "cancelled") delivery = previous.attemptedMessageId ? "uncertain" : "failed";
-    const workflow = previous.mode === "auto" && previous.task !== "deslop" && ["implementation", "review"].includes(stage);
-    const completedRequest = previous.status === "done" && !workflow;
-    const followup = continuation === "implementation" ? implementationMessage
-      : reviewMessageId && ["review", "planning"].includes(stage)
-        ? { messageId: reviewMessageId, message: previous.reviewMessage, planRevision: previous.workPlan?.revision || null } : null;
-    return JSON.stringify({
-      ...request,
-      schemaVersion: 5,
-      status: completedRequest ? "complete" : "waiting",
-      delivery,
-      stage,
-      workflow,
-      planInvolved: Boolean(previous.workPlan),
-      reason: previous.reason === "discussion"
-        ? "conversation"
-        : ["plan_implementation", "explicit_implementation"].includes(previous.reason)
-            ? "implementation"
-            : previous.reason === "deslop" ? "review" : previous.reason,
-      steps: autoExecution?.continuations || 0,
-      stalledTurns: autoExecution?.stalledTurns || 0,
-      steering: autoExecution?.steering || [],
-      ...(followup ? { followup } : {}),
-      stopped: previous.stopped === true || previous.status === "cancelled",
-      ...(!completedRequest
-        ? { error: previous.error || "Workflow retained after upgrade. Inspect the saved delivery and request a continuation when ready." }
-        : {})
-    });
-  }
-  const change = values => values.assistant_routing_request ? { assistant_routing_request: convert(values.assistant_routing_request) } : {};
-  return {
-    metadata: change(metadata),
-    conversations: conversations.map(record => ({
-      ...record,
-      routingMetadata: { ...(record.routingMetadata || {}), ...change(record.routingMetadata || {}) }
-    }))
-  };
 }
 
 const __testables = Object.freeze({ MAIN_CHAT_PURPOSES });
@@ -738,7 +650,6 @@ export {
   assistantRoutingRequestIsUnresolved,
   assistantRoutingStatusLabel,
   assistantRoutingOutcomeNotice,
-  assistantWorkflowUpgradeChanges,
   assistantWorkflowStateIsSupported,
   assistantWorkflowRole,
   assistantPlanPass,

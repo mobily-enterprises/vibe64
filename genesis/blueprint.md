@@ -744,16 +744,30 @@ the person approves it, it runs to the end; only a question for the person or
 Stop pauses it, and Continue resumes it from the plan as it now is. It stays in
 Implementation until every item outside Passes is built: the implementer works
 the items in the plan's order (one earlier only when the plan says another
-depends on it, recorded in Progress), never starts the plan's final checks, and
-Auto refuses Junior's handoff while an item is not done. A plan change saved
+depends on it, recorded in Progress), runs each item's focused checks and never
+the whole-project checks, and Auto refuses Junior's handoff while an item is not
+done. A plan change saved
 during Implementation, handed to Senior by the implementing turn or asked for
 by the person while the implementation waits for them, lets the implementation
-go on in a new turn without the person asking. Senior's review runs the final
-checks once, verifies every item outside Passes against the code as it is now,
+go on in a new turn without the person asking. Senior's review is a review: it
+reads the plan's changes against Plan and Progress, verifies every item outside
+Passes against the code as it is now, runs the focused tests for what changed,
 fixes what it finds within the plan and ends Done or Needs you. Each Passes item
 then runs in its own Senior turn; after the last, Vibe64 completes the plan, and
 the plan and its Progress automatically move together to History. A plan without
-passes is completed by Senior's review. Chat links to that session's plan
+passes is completed by Senior's review. No step of a plan runs the whole-project
+checks (such as one whole run of the test suite), since the passes would leave a
+run before them behind. Once the plan is finished (completed, archived and, with
+Automatically save changes on, saved), Vibe64 asks the person once, in the chat
+and with Yes and No above the composer, whether to run them now. Yes runs one
+Senior turn without Router that runs them once, records each check's result and
+fixes what they find as new work, saved like any finished work; No runs nothing.
+A message typed instead ends the question, and its turn is told what was asked,
+so a typed yes runs them. Vibe64 never asks twice for one plan and never runs
+them without the person's yes. An item that names the whole run, in a plan made
+before this rule, is never ticked on focused tests: Senior's review rewrites it
+into what the review proves and records in Progress that the run is offered once
+the plan is finished. Chat links to that session's plan
 history. While a plan is open, one status line above the message box says where
 it is, read from the plan itself: implementing item 2 of 6 and its title, Senior
 review (or ready for it, asking the person to ask Senior, when nothing runs it),
@@ -2062,7 +2076,7 @@ implementation permission. Waiting outcomes keep one explanation under Workflow 
 the composer shows only actions. Separate delivery and cleanup errors retain recovery details. Waiting controls name the actual stage: Continue
 planning, Continue implementation or Continue review. The visible plan contains readable checklists and evidence. Each
 item is not done yet, built (half-ticked once it is implemented and its own checks
-pass) or proven (ticked once the plan's final checks cover it), and the plan shows
+pass) or proven (ticked once Senior's review proves it), and the plan shows
 how many are built and how many proven. Junior marks work as it proceeds; Senior
 can move unsupported claims back and add missing acceptance checks within the
 agreed scope, and can complete the plan only once every item is proven. Saved edits appear live
@@ -2086,13 +2100,14 @@ request, and they run in a small plan of their own. It ends with the turn that f
 no review, Deslop or UI pass turn follows, and Save runs when Automatically save
 changes is on. When Auto's Junior implemented an involved plan, Senior reviews
 it in its own turn, by a fixed rule and without another Router call: it reads
-the whole plan and Progress, runs the plan's final checks once, verifies every
-item outside Passes, fixes what it finds within the plan and ends Done or Needs
+the whole plan and Progress, reads the plan's changes against them, verifies every
+item outside Passes, runs the focused tests for what changed, runs no whole-project
+checks, fixes what it finds within the plan and ends Done or Needs
 you, or saves substantial necessary rework for Junior and reviews again
 afterwards; that turn is not a pass and renders no pass. A Senior chat reviews
 its own plan; Junior and Custom chats never complete a plan and leave it active
 for Senior. A reviewed plan runs its Passes items, then the plan is completed and
-archived and Save runs last. Waiting for the
+archived and Save runs last; then Vibe64 asks about the whole-project checks. Waiting for the
 person, Stop, a request that changed no files, or a direct turn that ends without
 reporting saves nothing. The person's pause or cancellation takes precedence.
 Ordinary discussion and Stop never reopen, archive or complete a plan. Junior can

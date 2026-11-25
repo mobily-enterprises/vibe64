@@ -69,7 +69,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     // send/retry maps that payload to the declared product data schema.
     const body = agentTurnControlPayloadFromContext(authored);
     const data = Object.fromEntries(["agentSettings", "displayMessage", "displayAttachments", "genesisTask",
-      "passes", "passRun", "passAction", "passId", "planRevision", "reviewAction", "originId", "messageSource"].filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]));
+      "passes", "passRun", "passAction", "passId", "planRevision", "reviewAction", "wholeChecks", "originId", "messageSource"].filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]));
     return { ...authored, submissionKind, data, request: { text: String(authored.message || ""), data,
       ...(authored.attachmentIds?.length ? { attachmentIds: authored.attachmentIds } : {}),
       ...(submissionKind === "steer" ? { steer: true } : {}) } };
@@ -82,14 +82,18 @@ function createConversationApplication(conversation, { identity, viewer, summary
       return result;
     } finally { void mounted.refresh({ reason: "agent-message-accepted" }).catch(() => {}); }
   }
-  async function continueWorkflow(request) {
+  /**
+   * The saved request's workflow action that sends no new message: Continue ("retry"), or the person's No to the
+   * whole-project checks once a plan is finished ("skip-checks"), which runs nothing.
+   */
+  async function continueWorkflow(request, reviewAction = "retry") {
     if (!available.value) throw new Error("This conversation is no longer available.");
     const messageId = String(request?.messageId || "").trim();
     const message = String(request?.input?.message || "");
     if (!messageId || !message.trim()) throw new Error("Refresh the session before continuing this workflow.");
     try {
       const result = await getHttpWebClient().request(vibe64SessionPath(identity.sessionsApiPath, identity.sessionId, "/agent-message"), {
-        body: { messageId, message, reviewAction: "retry" }, method: "POST"
+        body: { messageId, message, reviewAction }, method: "POST"
       });
       if (result?.ok === false) throw vibe64ApiError(result, "Workflow could not continue.");
       return result;

@@ -16,6 +16,12 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantTaskPurpose, uiPassRequest } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { assistantPassInstructions, assistantPlanCompletionFollows } from "@local/vibe64-runtime/shared/assistantFinishing";
+import {
+  WHOLE_CHECKS_LABEL,
+  WHOLE_CHECKS_OFFERED_NOTE,
+  assistantRunsWholeChecks,
+  assistantWholeChecksInstructions
+} from "@local/vibe64-runtime/shared/assistantWholeChecks";
 import { workPlanPassItems } from "../shared/assistantWorkPlan.js";
 import {
   failure,
@@ -73,9 +79,12 @@ function createAssistantRoutingDelivery({
     if (pass) role = taskPurpose;
     // Vibe64's plan check after a turn that changed the source but not the plan: a note, not a workflow step.
     const planCheck = followup && state.followup?.planCheck === true;
+    // The person's Yes to the whole-project checks once a plan is finished: Senior runs them once, in its own turn.
+    const checks = !planCheck && assistantRunsWholeChecks(state);
     let followupLabel = state.stage === "planning" ? "Continue planning" : "Continue implementation";
     if (state.stage === "review") followupLabel = `${assistantModeLabel(modelRole)} review`;
     if (pass) followupLabel = pass.title;
+    if (checks) followupLabel = WHOLE_CHECKS_LABEL;
     if (planCheck) followupLabel = PLAN_CHECK_LABEL;
     const selection = state.assignments[modelRole];
     const input = activeMessage(state);
@@ -196,6 +205,8 @@ function createAssistantRoutingDelivery({
     if (pass) request = person ? `${input.message}\n\n${pass.request}` : pass.request;
     // Passes the person asked for that can't start yet: Senior says so, and runs nothing.
     if (state.planPassNote && !pass && !planCheck) request = `[Vibe64: ${state.planPassNote} Tell the person so in a sentence or two; run no pass and change nothing.]\n\n${request}`;
+    // A message the person typed while Vibe64 asked about the whole-project checks: its turn hears what was asked.
+    if (state.wholeChecks?.status === "offered" && !followup && !pass && !planCheck) request = `[Vibe64: ${WHOLE_CHECKS_OFFERED_NOTE}]\n\n${request}`;
     let passInstructions = "";
     if (pass) {
       const plan = await readWorkPlan(context);
@@ -206,6 +217,7 @@ function createAssistantRoutingDelivery({
     let intent = taskPurpose || (state.stage === "review" ? "review" : state.mode === "auto" || state.planPassNote ? state.reason : "");
     // The plan check only manages the plan: planning's instructions, its note the request.
     if (planCheck) intent = "planning";
+    if (checks) intent = "checks";
     let message = assistantModePrompt(role, request, {
       intent,
       // Auto's Junior leaves browser checks to Senior's check of the plan it implemented.
@@ -213,7 +225,8 @@ function createAssistantRoutingDelivery({
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
       planInstructions: pass ? passInstructions
-        : includePlanInstructions ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto" }) : ""
+        : checks ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata) })
+          : includePlanInstructions ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto" }) : ""
     });
     // A pass renders its own Genesis task, and a review Genesis's review task. Senior's
     // check of a plan Junior implemented is not a pass: it renders no task of its own.
@@ -221,8 +234,8 @@ function createAssistantRoutingDelivery({
     if (!genesisTask && state.stage === "review" && !(followup && (state.mode === "auto" || state.planReview) && state.planInvolved)) genesisTask = "review";
     // The plan check renders no task and reports no outcome: the request settles as the turn before it would have.
     if (planCheck) genesisTask = "";
-    // A plan's pass gets its outcome instructions before its request, which stays the last paragraph.
-    if (!pass && !planCheck && (state.workflow || autoOutcome)) {
+    // A plan's pass, and the whole-project checks, get their outcome instructions before their request.
+    if (!pass && !checks && !planCheck && (state.workflow || autoOutcome)) {
       message += "\n\n" + assistantWorkflowInstructions(state, { autoSave: savesAutomatically(context.session.metadata) });
     }
     // What a turn that may tick an active plan starts from, read while its selection is prepared: its plan check

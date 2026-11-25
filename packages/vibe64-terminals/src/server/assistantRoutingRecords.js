@@ -9,6 +9,7 @@ import {
   assistantRoutingGoalFromMetadata,
   assistantWorkflowMessageIds
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRunsWholeChecks } from "@local/vibe64-runtime/shared/assistantWholeChecks";
 import {
   ASSISTANT_PLAN_COMPLETION_MESSAGE,
   ASSISTANT_SENIOR_VERIFICATION_MESSAGE
@@ -141,6 +142,11 @@ function createAssistantRoutingRecords({
     // Senior changed the plan being implemented: the implementation goes on from the plan as it now is.
     if (stage === "implementation" && state.resumeImplementation) {
       lead = "Continue implementing the current plan: Senior has changed it, so read it again and work its remaining items in the plan's order. Preserve completed work and do not reduce scope.";
+    }
+    // The whole-project checks the person said Yes to go on from where the last turn stopped, never from the start.
+    if (stage === "implementation" && assistantRunsWholeChecks(state)) {
+      displayMessage = "Continue the whole-project checks.";
+      lead = "Continue the whole-project checks the person asked for from where the last turn stopped: they run once in this request, never again, and what they found is fixed as new work.";
     }
     if (handoff) lead = handoff.implementing ? ASSISTANT_PLAN_CHANGE_MESSAGE : ASSISTANT_PLAN_HANDOFF_MESSAGE;
     if (stage === "review") lead = checksPlan ? ASSISTANT_PLAN_COMPLETION_MESSAGE : ASSISTANT_SENIOR_VERIFICATION_MESSAGE;

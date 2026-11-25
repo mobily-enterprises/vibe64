@@ -131,6 +131,12 @@ test("Senior's review leaves a plan with passes active; each Passes item runs in
   assert.deepEqual(passNotices(f), passes.map((item) => `${item.slice(0, item.indexOf(":"))} started: the plan's next pass (${item})`));
   const notices = noticeTexts(f);
   assert.ok(notices.indexOf(SAVE_STARTED) < notices.indexOf("Saved automatically."));
+  // No pass ran the whole-project checks: once the plan is finished and saved, Vibe64 asks whether to run them.
+  assert.match(notices.at(-1), /^The plan is finished\. Run the whole-project checks once now, on the finished plan's work\?/u);
+  assert.deepEqual(f.state().wholeChecks, { status: "asked", plan: "Required-field validation" });
+  for (const send of f.sends.slice(2)) {
+    assert.match(send.input.message, /Run no whole-project checks, such as one whole run of the test suite, even where this pass's guidance asks for one: run the focused tests for what you changed\./u);
+  }
 });
 
 test("a pass that needs the person waits for their answer, which goes back to that pass on Senior without Router", async (t) => {

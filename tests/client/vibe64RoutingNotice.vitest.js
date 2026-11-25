@@ -184,3 +184,32 @@ it("offers no Continue while the workflow waits for the person's answer", async 
     workPlan: { status: "active", revision: "saved-plan" } }));
   expect(planning).toContain("Implement plan"); expect(planning).not.toContain("Continue planning");
 });
+
+it("asks once a plan is finished whether to run the whole-project checks, with Yes and No, and each answers it", async () => {
+  const asked = { messageId: "finished-plan", status: "complete", stage: "pass", workflow: true, delivery: "accepted",
+    resolvedMode: "senior", wholeChecks: { status: "asked", plan: "Required-field validation" } };
+  const html = await render(asked);
+  expect(html).toContain("Run the whole-project checks once now?");
+  expect(html).toMatch(/>\s*Yes\s*</u); expect(html).toMatch(/>\s*No\s*</u);
+  expect(html).not.toContain("Continue"); expect(html).not.toMatch(/>\s*Stop\s*</u);
+  // While an answer runs, both wait, and Yes says when it can be pressed.
+  const busy = await render(asked, null, { busy: "turn" });
+  expect(busy).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*?Yes/u); expect(busy).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*?No/u);
+  expect(busy).toContain("Available when this answer ends.");
+  expect(await render(asked, null, { pendingAction: "run-checks" })).toContain("Starting…");
+  // Yes answers it through the notice's one action; No is its own button.
+  const onChecks = vi.fn();
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const notice = ref();
+  app = renderer.createApp({ render: () => h({ ...RoutingNotice, render: () => null }, { request: asked, active: true, mode: "auto", onChecks, ref: notice }) });
+  app.provide(ssrContextKey, { modules: new Set() });
+  app.mount({});
+  expect(notice.value.$.setupState.asksChecks).toBe(true);
+  notice.value.$.setupState.pressAction();
+  expect(onChecks).toHaveBeenCalledOnce(); expect(onChecks).toHaveBeenLastCalledWith("yes");
+  // Once answered or ended by another message, and for a plan finished before this question existed, nothing shows.
+  for (const status of ["declined", "run", "offered"]) {
+    expect(await render({ ...asked, wholeChecks: { status, plan: "Required-field validation" } })).not.toContain("whole-project checks");
+  }
+  expect(await render({ ...asked, wholeChecks: undefined })).not.toContain("v-alert");
+});

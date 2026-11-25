@@ -113,9 +113,9 @@ function planCheckNote(changes) {
     message: [
       `Vibe64 plan check: ${fact.replace(" in this turn,", ` in this turn${named ? ` (${named})` : ""},`)}`,
       "Read the plan and Progress again and walk the checklist item by item, not only the item you were on: work on one item often builds parts of others.",
-      "Half-tick (- [~]) every item this turn's work built whose own checks pass, full-tick (- [x]) only what the plan's final proof covers, and leave an item that is only partly built - [ ]; record in Progress what is built, what is partly built and how you checked it.",
+      "Half-tick (- [~]) every item this turn's work built whose own checks pass, full-tick (- [x]) only what Senior's review proved, and leave an item that is only partly built - [ ]; record in Progress what is built, what is partly built and how you checked it.",
       "If nothing needs a new mark or Progress, run vibe64-helper plan checked with the paired revisions instead.",
-      "Senior's review, the plan's passes and Save are the plan's next steps, which Vibe64 runs: never a question for the person.",
+      "Senior's review, the plan's passes and Save are the plan's next steps, which Vibe64 runs, and Vibe64 asks the person about the whole-project checks once the plan is finished: never a question for you to ask.",
       "If this turn asked the person anything else, ask it again at the end of your reply, as you asked it.",
       "Then stop: start no other work in this turn."
     ].join(" ")

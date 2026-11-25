@@ -113,7 +113,10 @@ const sessionRenameActionInputValidator = actionInput(withSessionId(sessionRenam
 const agentMessageFields = {
   clientId: { type: "string", noTrim: false, minLength: 1, maxLength: 128, required: false },
   planRevision: { type: "string", maxLength: 64, required: false },
-  reviewAction: { type: "string", enum: ["retry"], required: false },
+  // retry: Continue the saved request; skip-checks: the person's No to the whole-project checks once a plan is finished.
+  reviewAction: { type: "string", enum: ["retry", "skip-checks"], required: false },
+  // run: the person's Yes to the whole-project checks once a plan is finished; this message runs them once.
+  wholeChecks: { type: "string", enum: ["run"], required: false },
   submissionKind: { type: "string", enum: ["send", "steer"], required: false },
   // lesson: a lesson beat's Do it for me sent it (stored on the message turn).
   messageSource: { type: "string", enum: ["lesson"], required: false },

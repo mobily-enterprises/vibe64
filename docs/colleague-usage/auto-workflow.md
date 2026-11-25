@@ -76,9 +76,11 @@ outcomes:
 
 Once you approve a plan, it runs to the end. Junior works its items in the
 plan's order, doing one earlier only when the plan says another depends on it,
-and recording why in Progress. It never starts the plan's final checks (the
-whole-project checks, such as one whole run of the test suite): Senior's review
-runs them once, after every item is built, and reads and records their result.
+and recording why in Progress. It runs each item's own focused checks, never
+the whole-project checks (such as one whole run of the test suite): no step of
+a plan runs them, Senior's review and the passes included. Once the plan is
+finished and saved, Vibe64 asks you once whether to run them (see [Run the
+whole-project checks after a plan](whole-project-checks.md)).
 When the plan changes during Implementation, because Junior hands an item to
 Senior to correct or you ask for a change while the implementation waits for
 you, the chat says **Senior is changing the plan. Implementation continues once
@@ -253,7 +255,7 @@ a plan completed.
 Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.
 Junior updates Progress and existing checklist marks as work goes: a half tick once an item is built, a full tick once
-the plan's final checks prove it (see [Checklist marks](plans.md#checklist-marks)). Only Senior can manage the plan’s
+Senior's review proves it (see [Checklist marks](plans.md#checklist-marks)). Only Senior can manage the plan’s
 lifecycle and explicitly mark a plan without passes Completed after verifying the evidence, and only once every item is proven; Vibe64 completes a plan with passes after its last pass.
 
 If an automatic handoff failed before its message was sent, you can type a new

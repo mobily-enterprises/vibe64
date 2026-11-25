@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { upgradeAssistantWorkflow } from "../../packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js";
-import { assistantWorkflowUpgradeChanges } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantWorkflowUpgradeChanges } from "@local/vibe64-runtime/shared/assistantWorkflowUpgrade";
 
 const legacy = { schemaVersion: 4, mode: "auto", resolvedMode: "junior", reason: "plan_implementation", status: "review_uncertain",
   messageId: "original", input: { message: "Execute the plan" }, assignments: { senior: {}, junior: {} },
