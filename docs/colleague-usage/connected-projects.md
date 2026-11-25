@@ -111,8 +111,12 @@ deployment, uses the published packages.
   The copy's own `node_modules` is not used, so the app and the connected
   package share one instance of each dependency. A dependency the connected
   copy needs that is missing or of an incompatible version is installed with
-  `npm install --no-save`; when no version satisfies it, preparation stops and
-  names it. `package.json` and lockfiles stay unchanged. Vibe64 adds
+  `npm install --no-save`; an older version npm nested inside the published
+  package for its own pin is put aside with that package. When no version
+  satisfies it, or the swapped package would still load an incompatible one
+  (another package's own pin beside it, for example), preparation stops, names
+  it and says to align the versions in the connected repository or the
+  application. `package.json` and lockfiles stay unchanged. Vibe64 adds
   `node_modules` to the local Git exclude when the project does not ignore it,
   and refuses a project that tracks `node_modules`. While the session runs, a
   saved file in the connected copy reaches every installed copy within about a

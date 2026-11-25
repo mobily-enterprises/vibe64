@@ -190,7 +190,13 @@ packlist of `npm pack --dry-run`, moving the published copy to
 `node_modules/.vibe64-connected/originals/` and recording each file's digest in
 `npm-swaps.json`. Missing or incompatible dependencies of the connected package
 are installed with `npm install --no-save`, passing every earlier one again
-because npm prunes unsaved packages. A tracked copy is refused
+because npm prunes unsaved packages. Apply judges them as they will resolve
+after the swap: a dependency npm nested in a published copy, for that version's
+own pin, at a version the connected package does not accept goes aside with the
+copy (into its `originals/` folder's `node_modules`, where a restore puts the
+rest of the nested `node_modules` back beside it), so the connected package
+resolves past it; one that would still resolve wrongly refuses
+(`vibe64_connected_npm_dependency_incompatible`). A tracked copy is refused
 (`vibe64_connected_npm_tracked`) and `node_modules` is excluded when the tree
 does not ignore it. The proof compares the copies with the record and the
 record with the connected source. `sync.js` watches the copied package folders

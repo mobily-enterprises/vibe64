@@ -2,7 +2,8 @@
 // of them in the session's trees. Each copy becomes exactly the files `npm pack` would publish from
 // the connected package, in place, so the package keeps resolving its own dependencies from the
 // tree it is installed in: one Vue, one knex. A link would resolve them from the checkout instead.
-// The published copy is kept aside and put back when the connection goes. package.json and
+// The published copy is kept aside, with any dependency npm nested in it for its own pins that the
+// connected package does not accept, and put back when the connection goes. package.json and
 // lockfiles are never written; npm installs a dependency the tree lacks without saving it.
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -110,24 +111,57 @@ async function copiesByPackage(packages, trees) {
   return copies;
 }
 
-/** The dependencies each package needs that a tree cannot give it where its copy is installed. */
-async function missingDependencies({ connectedVersions, copies, packages }) {
+/** The registry dependencies a package needs: its dependencies and required peers, by range. */
+function registryDependencies(manifest) {
+  const required = { ...manifest.dependencies };
+  for (const [name, range] of Object.entries(manifest.peerDependencies || {})) {
+    if (manifest.peerDependenciesMeta?.[name]?.optional !== true) required[name] ??= range;
+  }
+  return Object.entries(required)
+    .filter(([, range]) => typeof range === "string" && !/^(?:file|link|workspace|git|github|https?):|\//u.test(range));
+}
+
+function accepts(version, range) {
+  return Boolean(version) && (!semver.validRange(range) || semver.satisfies(version, range, { includePrerelease: true }));
+}
+
+/**
+ * What each swap moves aside with the published copy: a dependency the connected package needs
+ * that npm installed in the copy's own node_modules at a version the package does not accept. npm
+ * nested it there for the published version's own pin, so it belongs to that copy, and the
+ * connected package resolves past it. A connected package there is swapped instead, and a link has
+ * no node_modules of its own. Copies installed inside what goes aside go with it.
+ * @returns {Promise<{ copies: Array<object>, aside: Map<string, string[]>, gone: Set<string> }>}
+ */
+async function swapPlan({ connectedVersions, copies, packages }) {
+  const aside = new Map();
+  for (const copy of copies.filter(candidate => !candidate.link)) {
+    const names = [];
+    for (const [name, range] of registryDependencies(packages.find(entry => entry.name === copy.name).manifest)) {
+      if (connectedVersions.has(name)) continue;
+      const nested = await readJsonFile(path.join(copy.dir, "node_modules", name, "package.json")).catch(() => null);
+      if (nested && !accepts(String(nested.version || ""), range)) names.push(name);
+    }
+    if (names.length) aside.set(copy.dir, names);
+  }
+  const gone = new Set([...aside].flatMap(([dir, names]) => names.map(name => path.join(dir, "node_modules", name))));
+  const kept = copies.filter(copy => ![...gone].some(dir => copy.dir.startsWith(`${dir}${path.sep}`)));
+  return { copies: kept, aside, gone };
+}
+
+/**
+ * The dependencies each package needs that a tree cannot give it where its copy is installed, once
+ * what the plan moves aside has gone (the proof passes no plan: it judges the trees as they are).
+ */
+async function missingDependencies({ connectedVersions, copies, packages, gone = new Set() }) {
   const needs = [];
   for (const copy of copies) {
     const entry = packages.find(candidate => candidate.name === copy.name);
-    const manifest = entry.manifest;
-    const required = { ...manifest.dependencies };
-    for (const [name, range] of Object.entries(manifest.peerDependencies || {})) {
-      if (manifest.peerDependenciesMeta?.[name]?.optional !== true) required[name] ??= range;
-    }
-    for (const [name, range] of Object.entries(required)) {
-      if (typeof range !== "string" || /^(?:file|link|workspace|git|github|https?):|\//u.test(range)) continue;
-      const resolved = await resolveFromCopy(copy.tree, copy.dir, name);
+    for (const [name, range] of registryDependencies(entry.manifest)) {
+      const resolved = await resolveFromCopy(copy.tree, copy.dir, name, gone);
       // A connected package is about to replace whatever is there: its own version counts.
       const version = connectedVersions.get(name) && resolved ? connectedVersions.get(name) : resolved?.version;
-      const compatible = Boolean(version) && (!semver.validRange(range) ||
-        semver.satisfies(version, range, { includePrerelease: true }));
-      if (!compatible) needs.push({ tree: copy.tree, from: copy.name, name, range, found: resolved?.version || "" });
+      if (!accepts(version, range)) needs.push({ tree: copy.tree, from: copy.name, name, range, found: resolved?.version || "" });
     }
   }
   return needs;
@@ -180,11 +214,12 @@ async function publishFile(source, target) {
 
 /**
  * Makes one installed copy hold exactly `files` from `sourceDir`. The first swap moves the published
- * copy aside (its nested node_modules stays where npm installed it); a later one copies only what
- * changed. A copy that is no longer this swap (npm put a published copy back) is swapped afresh.
+ * copy aside (its nested node_modules stays where npm installed it, except the dependencies in
+ * `aside`, which go with it); a later one copies only what changed. A copy that is no longer this
+ * swap (npm put a published copy back) is swapped afresh.
  * Returns the copy's record: each file's state in the copy and in the source when it was copied.
  */
-async function swapCopy({ copy, files, sourceDir, record, tree }) {
+async function swapCopy({ copy, files, sourceDir, record, tree, aside = [] }) {
   const modes = vibe64SharedModes();
   const ours = Boolean(record) && !copy.link && Boolean(record.files?.["package.json"]) &&
     await unchanged(path.join(copy.dir, "package.json"), record.files["package.json"]);
@@ -240,6 +275,19 @@ async function swapCopy({ copy, files, sourceDir, record, tree }) {
       changed = true;
     }
   }
+  for (const name of backup ? aside : []) {
+    const nested = path.join(copy.dir, "node_modules", name);
+    if (!(await existingEntry(nested))) continue;
+    const kept = path.join(stateDirectory(tree), backup, "node_modules", name);
+    if (await existingEntry(kept)) {
+      // The published copy already keeps its own.
+      await rm(nested, { recursive: true, force: true });
+    } else {
+      await mkdir(path.dirname(kept), { recursive: true, mode: modes.inheritingDirectory });
+      await rename(nested, kept);
+    }
+    changed = true;
+  }
   return {
     changed,
     record: {
@@ -283,12 +331,26 @@ async function restoreCopy(tree, record) {
     return false;
   }
   const nested = path.join(dir, "node_modules");
-  if ((await existingEntry(nested)) && !(await existingEntry(path.join(backupDir, "node_modules")))) {
-    await rename(nested, path.join(backupDir, "node_modules"));
-  }
+  if (await existingEntry(nested)) await moveAbsentEntries(nested, path.join(backupDir, "node_modules"));
   await rm(dir, { recursive: true, force: true });
   await rename(backupDir, dir);
   return true;
+}
+
+/**
+ * Gives the published copy back the nested node_modules the swap kept, beside the dependencies it
+ * moved aside with that copy: each entry `to` lacks moves into it, inside a scope too.
+ */
+async function moveAbsentEntries(from, to) {
+  if (!(await existingEntry(to))) {
+    await rename(from, to);
+    return;
+  }
+  for (const entry of await readdir(from, { withFileTypes: true })) {
+    const target = path.join(to, entry.name);
+    if (!(await existingEntry(target))) await rename(path.join(from, entry.name), target);
+    else if (entry.name.startsWith("@") && entry.isDirectory()) await moveAbsentEntries(path.join(from, entry.name), target);
+  }
 }
 
 /** Refuses a tracked copy, and keeps an untracked one out of Git. */
@@ -344,15 +406,18 @@ function unusedReason(packages) {
  */
 async function applyNpm({ connection, npmConnections, trees, runCommand, writeGitExcludes }) {
   const packages = await connectedNpmPackages(connection);
-  let copies = await copiesByPackage(packages, trees);
-  if (!copies.length) return { lines: [], unused: unusedReason(packages) };
+  const found = await copiesByPackage(packages, trees);
+  if (!found.length) return { lines: [], unused: unusedReason(packages) };
   const lines = [];
-  const needs = await missingDependencies({ connectedVersions: await connectedVersionsOf(npmConnections), copies, packages });
+  const connectedVersions = await connectedVersionsOf(npmConnections);
+  // Dependencies are judged as they resolve after the swap, which moves aside what it plans to.
+  let plan = await swapPlan({ connectedVersions, copies: found, packages });
+  const needs = await missingDependencies({ connectedVersions, packages, ...plan });
   if (needs.length) {
     lines.push(...await installDependencies({ connection, needs, runCommand }));
-    // npm put the lockfile's published copies back; find them again.
-    copies = await copiesByPackage(packages, trees);
-    const still = await missingDependencies({ connectedVersions: await connectedVersionsOf(npmConnections), copies, packages });
+    // npm put the lockfile's published copies back (nesting what their own pins need); find them again.
+    plan = await swapPlan({ connectedVersions, copies: await copiesByPackage(packages, trees), packages });
+    const still = await missingDependencies({ connectedVersions, packages, ...plan });
     if (still.length) {
       throw vibe64Error(
         `Connected ${connection.name}: ${dependencyText(still)}. npm installed it without saving, but the copy still cannot reach a compatible version; align the versions in the connected repository or the application.`,
@@ -360,6 +425,7 @@ async function applyNpm({ connection, npmConnections, trees, runCommand, writeGi
       );
     }
   }
+  const { copies, aside } = plan;
   await keepCopiesOutOfGit({ connection, copies, runCommand, writeGitExcludes });
   const used = packages.filter(entry => copies.some(copy => copy.name === entry.name));
   const packlists = await npmPacklists(connection, used, runCommand);
@@ -371,7 +437,9 @@ async function applyNpm({ connection, npmConnections, trees, runCommand, writeGi
       const entry = packages.find(candidate => candidate.name === copy.name);
       const relative = path.relative(tree, copy.dir);
       const previous = state.copies.find(record => record.path === relative && record.repository === connection.repository);
-      const { changed, record } = await swapCopy({ copy, files: packlists.get(copy.name), sourceDir: entry.dir, record: previous, tree });
+      const { changed, record } = await swapCopy({
+        copy, files: packlists.get(copy.name), sourceDir: entry.dir, record: previous, tree, aside: aside.get(copy.dir)
+      });
       if (changed) treeChanged = true;
       records.push({ ...record, repository: connection.repository, version: entry.version });
     }
