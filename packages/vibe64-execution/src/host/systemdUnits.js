@@ -236,6 +236,15 @@ function serviceResourceUnitLines(owner = {}) {
   ];
 }
 
+// What a unit's command starts under so that nothing it runs ever gains privileges: no setuid program, sudo included,
+// lifts it above its own user. Every execution's runner, managed service and staging service starts under it, the
+// daemon's own included: the daemon's sudo rule names this helper, and its executions (an agent's commands, its
+// assistant, Preview, a browser, a capture) and the start scripts of its managed services are the daemon's to change,
+// so without it they could reach the helper and start work outside their own unit. setpriv sets it itself, because a
+// unit's NoNewPrivileges= can be switched off by a systemd drop-in (Incus containers ship one), and execs the command,
+// which stays the unit's MainPID.
+const NO_NEW_PRIVILEGES_COMMAND = Object.freeze(["/usr/bin/setpriv", "--no-new-privs", "--"]);
+
 // The line of a unit that names its runtime pack folder; a staging login reads it back from the unit.
 const RUNTIME_PACK_ROOT_UNIT_LINE = `Environment=${RUNTIME_PACK_ROOT_ENV}=`;
 
@@ -290,10 +299,8 @@ function stagingUnitFile({
     // Its own temporary folder in its area, beside its home: /tmp, its private one included, may be noexec, so tools
     // that start programs they unpack there would fail. runStagingUnit makes it afresh at every start.
     `Environment=TMPDIR=${systemdUnitSafeValue(path.join(user.stagingAccount.appRoot, "tmp"))}`,
-    // The service's own user loads its environment at every start; see
-    // runStagingUnit. setpriv holds even where a drop-in switches the
-    // unit's NoNewPrivileges= off.
-    `ExecStart=/usr/bin/setpriv --no-new-privs -- ${systemdUnitSafeValue(helperPath)} run-staging-unit "${systemdUnitSafeValue(environmentFile)}" "${systemdUnitSafeValue(startScript)}"`,
+    // The service's own user loads its environment at every start; see runStagingUnit.
+    `ExecStart=${NO_NEW_PRIVILEGES_COMMAND.join(" ")} ${systemdUnitSafeValue(helperPath)} run-staging-unit "${systemdUnitSafeValue(environmentFile)}" "${systemdUnitSafeValue(startScript)}"`,
     "Restart=always",
     "RestartSec=3",
     "KillSignal=SIGTERM",
@@ -329,7 +336,7 @@ function managedServiceUnit({
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
     ...serviceEnvironmentLines({ runtimePackRoot, servicePath }),
     `Environment=TMPDIR=${systemdUnitSafeValue(workspaceTempRoot(owner.username))}`,
-    `ExecStart=${systemdUnitSafeValue(startScript)}`,
+    `ExecStart=${NO_NEW_PRIVILEGES_COMMAND.join(" ")} ${systemdUnitSafeValue(startScript)}`,
     ...(normalizedProcessModel === "forking" ? [`PIDFile=${systemdUnitSafeValue(pidFile)}`] : []),
     "Restart=on-failure",
     "RestartSec=3",
@@ -349,6 +356,7 @@ function systemdUnitSafeValue(value = "") {
 
 export {
   accountUnitLines,
+  NO_NEW_PRIVILEGES_COMMAND,
   RUNTIME_PACK_ROOT_UNIT_LINE,
   STAGING_SANDBOX_ALLOWANCES,
   stagingSandboxLines,

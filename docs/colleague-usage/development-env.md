@@ -217,7 +217,10 @@ On a managed host, nothing a command leaves running outlives it: whatever it
 started in the background without waiting for it (`&`, `nohup`, `setsid`,
 `disown`, `screen -dm`) stops when the command ends, so a test suite detached
 that way stops at once. Work the coding tool keeps in its own background mode
-is unaffected.
+is unaffected. Nor can a command gain privileges there: it runs with no new
+privileges, so `sudo` and every other setuid program refuse inside it, and a
+system program the project needs is one the host's administrator adds, never
+one a command installs with `sudo`.
 
 The coding agent can read `vibe64-helper session status --json` for current
 resource readiness, environment names, declared Workspace setup commands and
