@@ -135,6 +135,13 @@ const BUILT_IN_PLACES = [
     open: null,
     steps: [ACCOUNT_MENU, pathStep("account-settings", "Account settings")]
   },
+  {
+    id: "report-a-problem",
+    label: "Report a problem",
+    scope: "studio",
+    open: null,
+    steps: [ACCOUNT_MENU, pathStep("report-a-problem", "Report a problem")]
+  },
   { id: "ai-setup", label: "AI setup", scope: "studio", open: null, steps: [ACCOUNT_MENU, pathStep("ai-setup", "AI setup")] }
 ];
 /**

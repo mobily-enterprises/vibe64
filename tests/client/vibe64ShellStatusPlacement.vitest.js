@@ -80,6 +80,12 @@ vi.mock("../../src/components/studio/Vibe64CrashBanner.vue", async () => {
   return { default: defineVueComponent({ name: "Vibe64CrashBannerTestDouble", setup: () => () => createElement("span", { "data-test": "crash-banner" }) }) };
 });
 
+// Report a problem's dialog, as a marker: tests/client/problemReport.vitest.js covers what opens it and what it sends.
+vi.mock("../../src/components/studio/Vibe64ProblemReportHost.vue", async () => {
+  const { defineComponent: defineVueComponent, h: createElement } = await import("vue");
+  return { default: defineVueComponent({ name: "Vibe64ProblemReportHostTestDouble", setup: () => () => createElement("span", { "data-test": "problem-report-host" }) }) };
+});
+
 import ShellLayout from "../../src/components/ShellLayout.vue";
 import StudioAppShellLayout from "../../src/components/StudioAppShellLayout.vue";
 
@@ -184,6 +190,12 @@ describe("Vibe64 custom shell status placement", () => {
     for (const html of [await renderCustomShell("workspace-actions"), await renderManagementShell("account-menu")]) {
       expect(html.match(/data-test="crash-banner"/gu)).toHaveLength(1);
       expect(html.indexOf('data-test="crash-banner"')).toBeLessThan(html.indexOf('data-test="shell-identity"'));
+    }
+  });
+
+  it("holds Report a problem's dialog once in the Studio shell and every management page", async () => {
+    for (const html of [await renderCustomShell("workspace-actions"), await renderManagementShell("account-menu")]) {
+      expect(html.match(/data-test="problem-report-host"/gu)).toHaveLength(1);
     }
   });
 });

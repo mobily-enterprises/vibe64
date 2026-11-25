@@ -65,6 +65,7 @@
     "./shared/crashText": "./src/shared/crashText.js",
     "./shared/elapsedText": "./src/shared/elapsedText.js",
     "./shared/pageNames": "./src/shared/pageNames.js",
+    "./shared/problemReport": "./src/shared/problemReport.js",
     "./shared/actionFields": "./src/shared/actionFields.js",
     "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",
     "./server/workspaceTeam": "./src/server/workspaceTeam.js",

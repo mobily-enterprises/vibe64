@@ -1,5 +1,6 @@
 <template>
   <Vibe64CrashBanner />
+  <Vibe64ProblemReportHost />
   <v-app-bar
     border
     class="shell-layout__app-bar bg-surface"
@@ -49,6 +50,8 @@ import { useShellAppBar } from "@jskit-ai/shell-web/client/composables/useShellA
 import Vibe64AiTaskTrayTarget from "./Vibe64AiTaskTrayTarget.vue";
 import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
 import Vibe64CrashBanner from "./studio/Vibe64CrashBanner.vue";
+import Vibe64ProblemReportHost from "./studio/Vibe64ProblemReportHost.vue";
+import { provideProblemReport } from "@/composables/useProblemReport.js";
 import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
 
 const SWIPE_MIN_DISTANCE_PX = 64;
@@ -63,6 +66,8 @@ const props = defineProps({
   fillViewport: Boolean
 });
 const emit = defineEmits(["update:chatCollapsed"]);
+// Report a problem, for everything on the page: the account menu and the session's views open it.
+provideProblemReport();
 let paneSwipe = null;
 
 // This bar is the shell's top app bar: its pages enter the navigation trail and a page's ShellPageActions show
