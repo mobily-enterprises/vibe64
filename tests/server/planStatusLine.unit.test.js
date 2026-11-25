@@ -56,6 +56,20 @@ test("the chat's status line says where the plan is, or that it needs the person
   assert.equal(workPlanStatusLine(null, { questions: 2 }), "");
 });
 
+test("a plan whose next step another turn came before says it starts by itself when that answer ends, not that it is paused", () => {
+  const owed = (stage, fields = {}) => ({ status: "waiting", stage, delivery: "pending", followup: { messageId: "followup", owed: true }, ...fields });
+  const continueAction = (label) => action(label, { enabled: false, waits: "available when this answer ends" });
+  assert.equal(workPlanStatusLine({ step: "review" }, { request: owed("review"), action: continueAction("Continue review") }),
+    "Plan: Senior review starts when this answer ends");
+  assert.equal(workPlanStatusLine(workPlanStep(plan(work, passes)), { request: owed("implementation"), action: continueAction("Continue implementation") }),
+    "Plan: item 2 of 3, Replies join their thread, starts when this answer ends");
+  assert.equal(workPlanStatusLine(workPlanStep(plan(["- [x] One thread per contact"], passes)), { request: owed("pass") }),
+    "Plan: pass Security (2 of 3) starts when this answer ends");
+  // Stopped, it is the person's: paused, named by its button.
+  assert.equal(workPlanStatusLine({ step: "review" }, { request: owed("review", { stopped: true }), action: action("Continue review") }),
+    "Plan: paused, Continue review to resume");
+});
+
 // The routing notice's action as assistantRoutingNotice gives it.
 function action(label, fields = {}) {
   const kind = { "Implement plan": "implement", "Check delivery": "check" }[label] || "continue";
