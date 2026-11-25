@@ -8,6 +8,7 @@ import { nameNewerSavedRefusal, recordSessionSave, workNewerSaved } from "./sess
 import { refuseDuringRepositoryAiTask, runningRepositoryAiTask, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { refuseDuringPlannedRestart } from "@local/vibe64-core/server/plannedRestart";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -292,6 +293,8 @@ function createSessionWork({
 
   async function saveSessionWork(sessionId, input) {
     return sessionResult(async () => {
+      // Refused before any record of it is written while a planned restart is near.
+      refuseDuringPlannedRestart("save");
       const vibe64User = trustedAssistantUser(input);
       const { onStarted = doNothing } = input;
       const runtime = await project.createRuntimeWithoutSource();
@@ -496,6 +499,7 @@ function createSessionWork({
    */
   async function updateSessionWork(sessionId, input) {
     return sessionResult(async () => {
+      refuseDuringPlannedRestart("update");
       const { onStarted = doNothing } = input;
       const runtime = await project.createRuntimeWithoutSource();
       await refuseDuringRepositoryAiTask(runtime, sessionId, input.aiTaskId);

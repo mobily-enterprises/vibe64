@@ -38,6 +38,7 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
+import { beginCrucialOperation } from "@local/vibe64-core/server/plannedRestart";
 
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
@@ -433,7 +434,13 @@ function createServiceSessionWork({
 
   async function saveSessionWork(sessionId, input = {}) {
     const admission = { operation: "save-session-work", whileAssistantWorks: true };
-    return runSessionRepositoryWrite(sessionId, input, admission, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
+    // Refused while a planned restart is near; otherwise its record names this Save while it runs.
+    const crucial = beginCrucialOperation("save", { sessionId });
+    try {
+      return await runSessionRepositoryWrite(sessionId, input, admission, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
+    } finally {
+      crucial.end();
+    }
   }
 
   async function runSessionSourceReadExclusive(sessionId, operation) {
@@ -542,6 +549,15 @@ function createServiceSessionWork({
    */
   async function updateSessionWork(sessionId, input = {}) {
     const { onRepositoryWriteAcquired = doNothing, signal = null } = input;
+    const crucial = beginCrucialOperation("update", { sessionId });
+    try {
+      return await updateSessionWorkAdmitted(sessionId, input, { onRepositoryWriteAcquired, signal });
+    } finally {
+      crucial.end();
+    }
+  }
+
+  async function updateSessionWorkAdmitted(sessionId, input, { onRepositoryWriteAcquired, signal }) {
     return runSessionRepositoryWrite(sessionId, {
       ...input,
       async onRepositoryWriteAcquired() {
