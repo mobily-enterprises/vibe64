@@ -136,10 +136,6 @@ function developmentUrlPattern() {
   return new RegExp(`${escapedPathPattern(DEVELOPMENT_PATH)}$`, "u");
 }
 
-function dashboardUrlPattern(routePath: string) {
-  return new RegExp(`${escapedPathPattern(DASHBOARD_PATH)}/${routePath}/?$`, "u");
-}
-
 type MockReadyStudioShellOptions = {
   failGet?: (apiPathname: string) => boolean;
   failInitialGetCounts?: Record<string, number>;
