@@ -10,6 +10,7 @@ import { createCapabilityRuntime, defineProvider } from "@jskit-ai/kernel/shared
 import { EventProvider } from "@jskit-ai/kernel/server/runtime";
 import { RealtimeProvider } from "@jskit-ai/realtime/server/RealtimeProvider";
 import { createService } from "../../packages/vibe64-database-tools/src/server/service.js";
+import { erdPolylinePath } from "../../packages/vibe64-database-tools/src/shared/erdRouting.js";
 import { createService as createSourceEditor } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { bookingOverview, dataOverviewSchema } from "../fixtures/dataOverviewSchema.js";
 import { createDatabaseLayoutChangedPublisher } from "../../packages/vibe64-database-tools/src/server/events.js";
@@ -951,11 +952,6 @@ for (const width of [390, 960, 1600]) {
 for (const saved of [false, true]) for (const next of ["All columns and Keys only", "Reset positions and a return from Data"]) {
   test(`@erd-dense 130 tables and 479 links remain usable with ${saved ? "saved" : "new"} positions, then ${next}`, async ({ browser, baseURL }) => {
     const schema = denseErdSchema();
-    // A small diagram of the same kind, its first ten tables and the links among them, is drawn first on the same page.
-    const smallTables = new Set(schema.tables.slice(0, 10).map(table => table.qualifiedName));
-    const smallSchema = { ...schema, tables: schema.tables.slice(0, 10),
-      relationships: schema.relationships.filter(link => smallTables.has(link.sourceTable) && smallTables.has(link.referencedTable)) };
-    const small = await sharedDiagramServer(baseURL!, { schemaOverride: smallSchema });
     const savedNodes = saved ? schema.tables.slice(0, 126).map((table, index) => ({
       table: table.qualifiedName, x: index % 10 * 420, y: Math.floor(index / 10) * 360
     })) : [];
@@ -963,30 +959,35 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       nodes: savedNodes, viewport: { x: 20, y: 20, zoom: 0.3 }
     } });
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
-    let tracing = false;
     try {
       const page = await context.newPage();
       const errors: string[] = [];
       page.on("pageerror", error => errors.push(error.message));
+      // The connections are routed in the diagram's layout worker, off the page's thread, which typing needs. The page
+      // reverses each routes answer before the diagram reads it: the diagram looks earlier routes up by id, so this
+      // changes nothing it computes, only the order it draws the connections in, and routes computed again on the
+      // page's thread come out in the schema's order instead. The last answer is kept to compare with the drawing.
       await page.addInitScript(() => {
         const NativeWorker = window.Worker;
         (window as any).erdRoutingRequests = 0;
         window.Worker = class extends NativeWorker {
+          constructor(...args: ConstructorParameters<typeof Worker>) {
+            super(...args);
+            // Added before the diagram's own listener, which then reads the reversed answer from the same event.
+            this.addEventListener("message", (event: MessageEvent) => {
+              if (!Array.isArray(event.data?.routes)) return;
+              const answer = { ...event.data, routes: [...event.data.routes].reverse() };
+              Object.defineProperty(event, "data", { value: answer });
+              (window as any).erdWorkerRoutes = answer.routes.map((route: any) => ({ id: route.id, points: route.points }));
+            });
+          }
           postMessage(message: any, ...args: any[]) {
-            if (message?.kind === "routes" && ++(window as any).erdRoutingRequests === 1) performance.mark("erd-routes-requested");
+            if (message?.kind === "routes") (window as any).erdRoutingRequests += 1;
             super.postMessage(message, ...args);
           }
         };
       });
-      // Chrome's trace records every task the page's main thread runs with the CPU time it took.
-      await browser.startTracing(page, { categories: ["-*", "toplevel", "blink.user_timing"] });
-      tracing = true;
       const reset = page.getByRole("button", { name: "Fit", exact: true });
-      await openDiagram(page, small.url, { waitForReady: false });
-      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__node")).toHaveCount(10, { timeout: 15_000 });
-      await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(smallSchema.relationships.length, { timeout: 15_000 });
-      await expect(reset).toBeEnabled({ timeout: 15_000 });
-      await page.evaluate(() => performance.mark("erd-drawn"));
       await openDiagram(page, server.url, { waitForReady: false });
       await expect.poll(() => page.evaluate(() => (window as any).erdRoutingRequests)).toBeGreaterThan(0);
       // Typing lands while the routed connections are drawn.
@@ -996,18 +997,6 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__node")).toHaveCount(130, { timeout: 15_000 });
       await expect(page.locator(".database-workspace__main > .database-erd .vue-flow__edge")).toHaveCount(479, { timeout: 15_000 });
       await expect(reset).toBeEnabled({ timeout: 15_000 });
-      await page.evaluate(() => performance.mark("erd-drawn"));
-      const trace = JSON.parse(String(await browser.stopTracing()));
-      tracing = false;
-      // A freeze is read in CPU time, not by the clock, and against the small diagram's: from each diagram's routes
-      // request until they are drawn, the longest task on the main thread, in both the one applying the worker's
-      // routes. A loaded host slows both alike, so their ratio is the cost of the dense diagram's own work. On the
-      // desktop and usone, at loads of 3 to 11, alone or sharing 2 CPUs with four busy loops, the small diagram's took
-      // 20-35 ms and the dense one's 234-299 ms, 8.7-12.2 times as long; computing the routes on the main thread again,
-      // which holds the typing above, took the dense one's to 887-1,640 ms, 27-56 times. The bound sits 1.5 times from
-      // both.
-      const [smallTask, longestTask] = longestMainThreadTasks(trace.traceEvents, "erd-routes-requested", "erd-drawn");
-      expect(longestTask / smallTask, `the dense diagram's longest task, ${longestTask} ms, over the small one's, ${smallTask} ms`).toBeLessThan(18);
       // The cost itself, independent of load: every DOM node drawing the cards and connections. Ports
       // are plain elements and connections draw their own paths; a component per port or per
       // connection adds about 1,900 or 1,400 nodes here and fails this ceiling.
@@ -1019,6 +1008,13 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       });
       expect(diagramNodes).toBeLessThan(19_000);
       await expect.poll(() => server.saves.length).toBe(1);
+      // Saved, the first draw is complete: every connection is the worker's last answer, in its order, along its route.
+      const { answer, drawn } = await page.evaluate(() => ({
+        answer: (window as any).erdWorkerRoutes as Array<{ id: string, points: Array<{ x: number, y: number }> }>,
+        drawn: [...document.querySelectorAll(".database-workspace__main > .database-erd .vue-flow__edge-path")]
+          .map(path => ({ id: path.id, d: path.getAttribute("d") }))
+      }));
+      expect(drawn, "the connections drawn against the worker's routes answer").toEqual(answer.map(route => ({ id: route.id, d: erdPolylinePath(route.points)[0] })));
       if (saved) {
         const persisted = new Map((server.saves[0].layout as any).nodes.map(node => [node.table, node]));
         for (const node of savedNodes) expect(persisted.get(node.table)).toMatchObject({ x: node.x, y: node.y });
@@ -1043,10 +1039,8 @@ for (const saved of [false, true]) for (const next of ["All columns and Keys onl
       }
       expect(errors).toEqual([]);
     } finally {
-      if (tracing) await browser.stopTracing();
       await context.close();
       await server.close();
-      await small.close();
     }
   });
 }
