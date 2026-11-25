@@ -17,7 +17,7 @@ import {
   startTerminalSession
 } from "@local/vibe64-execution/server/terminalSessions";
 import { __testables as browserLifecycleTestables } from "../../server/lib/browserLifecycle.js";
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 
 const { BROWSER_LIFECYCLE_WEBSOCKET_PATH } = browserLifecycleTestables;
 

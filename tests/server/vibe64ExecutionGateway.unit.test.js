@@ -45,7 +45,7 @@ import { readEnvUserValues, saveEnvUserValues } from "../../packages/vibe64-core
 import { RUNTIME_CONFIG_SCOPES, runtimeConfigEnv } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 
 // The gateway reads the person's Git identity with each command's own env and
 // drops the server's GIT_* variables, so a developer's ~/.gitconfig would win

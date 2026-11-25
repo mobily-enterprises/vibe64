@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 
 // A /proc/<pid>/stat line as Linux writes it; num_threads (field 20) is the 18th field after the command name.
 const stat = (state, threads) =>

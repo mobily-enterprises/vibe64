@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 
 // PF_EXITING in the flags of a /proc stat (include/linux/sched.h): the task has started to exit.
 const PF_EXITING = 0x4;

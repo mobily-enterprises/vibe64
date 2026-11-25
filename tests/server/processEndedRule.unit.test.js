@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// Whether a process has ended is decided in one place, processEnded (packages/vibe64-execution/src/host/processEnded.js):
+// Whether a process has ended is decided in one place, processEnded (packages/vibe64-execution/src/server/runtime/processEnded.js):
 // a zombie (Z) whose process still has other threads has not ended. Every check of a process or a group once compared
 // the state letter with Z on its own, and each read a main thread's pthread_exit as the end of a process still running.
 // This reads every source and test file and refuses a state compared with Z anywhere else, so a new check fails here.
@@ -20,7 +20,7 @@ const Z_STATE_CHECK = new RegExp([
   `\\[\\s*${Q}Z${Q}\\s*,`,
   `,\\s*${Q}Z${Q}\\s*\\]`
 ].join("|"), "gu");
-const RULE = "packages/vibe64-execution/src/host/processEnded.js";
+const RULE = "packages/vibe64-execution/src/server/runtime/processEnded.js";
 const ALLOWED = Object.freeze({
   [RULE]: "the rule itself",
   // Waits for the kernel to show the zombie leader it proves every check against, and for a plain zombie.

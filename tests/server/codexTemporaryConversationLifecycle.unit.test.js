@@ -100,7 +100,7 @@ import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefa
 import { configureVibe64SessionDebugLog } from "../../packages/vibe64-runtime/src/server/sessionDebugLog.js";
 import process from "node:process";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 
 // The server configures the Studio project context before any feature reads it.
 configureStudioProjectContext({ env: process.env });

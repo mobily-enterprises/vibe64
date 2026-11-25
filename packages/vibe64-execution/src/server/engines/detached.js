@@ -8,7 +8,7 @@ import {
   commandErrorResult,
   commandResult
 } from "../result.js";
-import { linuxProcessStat, processEnded } from "../../host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../runtime/processEnded.js";
 import { processGroupHasLiveMember, readProcessStart } from "../runtime/processStart.js";
 
 const detachedExecutions = new Map();

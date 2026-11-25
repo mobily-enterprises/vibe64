@@ -3,13 +3,13 @@ import { readFile, readdir } from "node:fs/promises";
 import process from "node:process";
 import { promisify } from "node:util";
 
-import { linuxProcessStat, processEnded } from "../../host/processEnded.js";
+import { linuxProcessStat, processEnded } from "./processEnded.js";
 
 const execFile = promisify(execFileCallback);
 
 /**
  * A process's group, start time in clock ticks, state letter and thread count from /proc/<pid>/stat
- * (host/processEnded.js reads it), or null for text that is not a stat line.
+ * (processEnded.js beside it reads it), or null for text that is not a stat line.
  */
 function parseLinuxProcessStat(statText = "") {
   const stat = linuxProcessStat(statText);

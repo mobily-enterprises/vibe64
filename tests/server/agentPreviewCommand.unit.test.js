@@ -33,7 +33,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { endChildInput } from "./childInputTestHelpers.js";
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 
 const {
   AGENT_PREVIEW_COMMAND_NAME,

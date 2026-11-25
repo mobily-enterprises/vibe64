@@ -12,7 +12,7 @@ import { runServerTests, serverTestOptions, serverTestRun } from "../../tooling/
 import { targetedTestArguments, withTestAppEnvironment } from "../../tooling/run-targeted-tests.mjs";
 import { loadTimeBudgets } from "../../tooling/test-time-budgets.mjs";
 import { BUDGET_VARIABLE, testConcurrency } from "@jskit-ai/jskit-catalog/test-budget";
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 
 const runnerPath = fileURLToPath(new URL("../../tooling/run-targeted-tests.mjs", import.meta.url));
 

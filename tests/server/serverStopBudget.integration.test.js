@@ -15,7 +15,7 @@ import {
   createServerRun,
   resumePolicy
 } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/host/processEnded.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 
 // A busy editor's stop, end to end, in a real server process (fixtures/stopBudgetServer.mjs): a request waiting on a
 // long command, a background job's long command and a poller starting a command every 50 ms. On release 10's stop of a

@@ -9,6 +9,8 @@
 // thread.
 //
 // The functions use nothing but their arguments: the preview browser's worker program embeds their text.
+// The rule sits in src/server, which the turn checkpoint's command may load
+// (tests/server/gitTurnCheckpoint.unit.test.js); the privileged helper's managedExecution.js imports it from there.
 
 /**
  * The fields after the command name in /proc/<pid>/stat, or null for text that is not one. Any state letter is

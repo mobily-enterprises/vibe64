@@ -57,7 +57,7 @@ import {
   managedWorkflowState
 } from "./managedWorkflows.js";
 import { editorPrivateStateLine } from "./editorPrivateState.js";
-import { linuxProcessStat, processEnded } from "./processEnded.js";
+import { linuxProcessStat, processEnded } from "../server/runtime/processEnded.js";
 import { accountUnitLines } from "./systemdUnits.js";
 
 const CONTROLLER_LEASE_NAME = "resource-controller.sock";

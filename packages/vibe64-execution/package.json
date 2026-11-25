@@ -11,7 +11,7 @@
     "./server/connectedGradleEnv": "./src/server/env/connectedGradleEnv.js",
     "./server/editorPrivateState": "./src/host/editorPrivateState.js",
     "./server/hostSettings": "./src/host/hostSettings.js",
-    "./server/processEnded": "./src/host/processEnded.js",
+    "./server/processEnded": "./src/server/runtime/processEnded.js",
     "./server/serverStop": "./src/server/serverStop.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
     "./server/types": "./src/server/types.js"
