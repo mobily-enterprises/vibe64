@@ -244,7 +244,7 @@ async function fixture(t, preferences = { mode: "auto" }, {
     } };
   const service = createAssistantRouting(routingOptions);
   return { service, context, metadata, agent, router, sends, events, notices, catalog, catalogs, connections, assignments, configuration,
-    interrupts, discards, receipts, genesis, passReads, source: sourceRepository,
+    interrupts, discards, receipts, genesis, passReads, listPasses: routingOptions.listPasses, source: sourceRepository,
     // Another operation (such as a sibling chat's slow startup) holds the agent-write lock until released.
     // The next native dispatch waits, inside the write lock, until released.
     holdDispatch() {
@@ -280,7 +280,9 @@ async function planCommands(f) {
     createSessionStore: async () => f.context.runtime.store,
     runInProjectContext: async (_slug, operation) => operation()
   }, reportWorkflowOutcome: (id, input) => f.service.recordOutcome(id, input, f.context),
-  handPlanToSenior: (id, input) => { handoffs.push(input); return f.service.handPlanToSenior(id, input, f.context); } });
+  handPlanToSenior: (id, input) => { handoffs.push(input); return f.service.handPlanToSenior(id, input, f.context); },
+  // The session's Genesis pass list, as the routing service reads it.
+  listPasses: f.listPasses });
   await commands.bindSession("session-1", { wrapperHostDir: f.context.runtime.stateRoot });
   async function plan(input) {
     const readNative = f.agent.sessionState;

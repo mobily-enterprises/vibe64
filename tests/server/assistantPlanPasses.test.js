@@ -26,6 +26,11 @@ const planHistory = async (f) => (await manageWorkPlan(f.context, { operation: "
 const noticeTexts = (f) => [...f.notices.values()].map((turn) => turn.system.text);
 const passNotices = (f) => noticeTexts(f).filter((text) => / started: the plan's next pass | can't run: /u.test(text));
 const since = (title, base, deep = false) => `${title}${deep ? " deeply" : ""}: the changes since base commit ${base}, judged against the whole app.`;
+// Genesis's passes as a refusal and the plan guidance list them: each exact title, quoted, in Genesis's order.
+const listedTitles = (passes = GENESIS_PASSES) => {
+  const titles = passes.map(({ title }) => `“${title}”`);
+  return `${titles.slice(0, -1).join(", ")} and ${titles.at(-1)}`;
+};
 // The request a turn sends: its message's last paragraph, after the role's instructions, where Genesis reads it.
 const requestOf = (send) => send.input.message.split("\n\n").at(-1);
 const SAVE_STARTED = "Save started automatically (Chat settings: Automatically save changes)";
@@ -219,6 +224,22 @@ test("a pass Genesis can't run holds the plan at that pass with the reason, skip
   assert.equal(f.sends.at(-1).input.genesisTask, "ux-pass");
 });
 
+test("a Passes item that names a pass Genesis doesn't have holds the plan at it, naming Genesis's passes and the fix, never blaming the project's Genesis; renamed, Continue runs it", async (t) => {
+  const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
+  // A plan written before the plan command checked its Passes, or before Genesis changed.
+  await implementAndReview(f, ["UX pass: whole app", "Deslop: whole app"]);
+  assert.equal(f.sends.length, 2, "Deslop does not run in its place");
+  const held = `UX pass can't run: the plan names “UX pass”, a pass Genesis doesn't have. Genesis's passes are ${listedTitles()}. ` +
+    "Rename the plan's Passes item “UX pass: whole app” to one of them, then choose Continue in Passes.";
+  assert.deepEqual([f.state().status, f.state().stage, f.state().error], ["waiting", "pass", held]);
+  assert.ok(noticeTexts(f).includes(held));
+  assert.doesNotMatch(held, /this project's Genesis/u);
+  await writePlan(f, (await readWorkPlan(f.context)).text.replace("- [ ] UX pass: whole app", "- [ ] User experience pass: whole app"), "senior");
+  await f.service.send("session-1", { messageId: "continue-1", message: "Continue the plan's passes.", passAction: "continue", submissionKind: "send" }, f.context);
+  assert.equal(f.sends.at(-1).input.genesisTask, "ux-pass");
+  assert.equal(f.state().pass.item, "User experience pass: whole app");
+});
+
 test("a pass over the plan's changes, in a session whose history shows no start for them, holds the plan with the reason", async (t) => {
   const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
   delete f.metadata.canonical_commit;
@@ -385,6 +406,59 @@ test("a new plan's Passes section starts with the chat's After a plan ticks; a p
   assert.equal((await plan({ operation: "new", text: own, archiveCurrent: true, ...await revisions() })).text, `Status: active\n${own}`);
 });
 
+test("the plan command refuses a Passes item that names a pass Genesis doesn't have, naming it and Genesis's exact titles, so the AI renames it in the same turn", async (t) => {
+  const f = await fixture(t, { mode: "auto", afterPlan: ["review", "security-pass"] }, { readyPlan: false, source: true });
+  f.router.respond = async () => ({ ok: true, text: JSON.stringify({ mode: "senior", reason: "planning" }) });
+  await f.service.send("session-1", { ...request, message: "Run the six passes" }, f.context);
+  const { plan, revisions } = await planCommands(f);
+  const asked = "# Contact threads\n\n- [ ] One thread per contact\n\n## Passes\n\n- [ ] Review: the plan's changes\n- [x] UI pass: the plan's changes\n" +
+    "- [ ] UX pass: the plan's changes\n";
+  await assert.rejects(plan({ operation: "new", text: asked }), {
+    code: "vibe64_work_plan_pass_unknown",
+    message: "The plan's Passes item “UX pass: the plan's changes” names a pass Genesis doesn't have: nothing changed. " +
+      `Genesis's passes are ${listedTitles()}. Rename the item to one of them exactly, keeping its scope (- [ ] <title>: <scope>), and write the plan again.`
+  });
+  assert.equal(await readWorkPlan(f.context), null, "nothing is written");
+  const made = await plan({ operation: "new", text: asked.replace("UX pass:", "User experience pass:") });
+  assert.deepEqual(workPlanPassItems(made.text).map(({ title }) => title), ["Review", "UI pass", "User experience pass"]);
+  // A write that adds or changes items is checked the same way, every wrong item named at once.
+  const added = made.text.replace("- [ ] Review: the plan's changes", "- [ ] Reviews: the plan's changes") + "- [ ] Sec pass: whole app\n";
+  await assert.rejects(plan({ operation: "write", text: added, ...await revisions() }), {
+    code: "vibe64_work_plan_pass_unknown",
+    message: /^The plan's Passes items “Reviews: the plan's changes” and “Sec pass: whole app” name passes Genesis doesn't have: nothing changed\. .* Rename each item /u
+  });
+  // An item the plan already holds is not refused when Genesis changes later: the pass turn says so when it reaches it.
+  f.genesis.passes = GENESIS_PASSES.filter(({ id }) => id !== "ux-pass");
+  const ticked = await plan({ operation: "write", text: made.text.replace("- [ ] One thread", "- [~] One thread"), ...await revisions() });
+  assert.match(ticked.text, /- \[~\] One thread per contact/u);
+  // Genesis's list is read only for a write that adds or changes a Passes item.
+  const reads = f.passReads.count;
+  await plan({ operation: "write", text: ticked.text.replace("- [~] One thread", "- [x] One thread"), ...await revisions() });
+  assert.equal(f.passReads.count, reads);
+});
+
+test("a new plan's After a plan passes and Senior's plan guidance take each pass's exact title from Genesis's list, never a list of Vibe64's own", async (t) => {
+  const f = await fixture(t, { mode: "auto", afterPlan: ["review", "security-pass", "ux-pass"] }, { readyPlan: false, source: true });
+  const renamed = GENESIS_PASSES.map((pass) => pass.id === "ux-pass" ? { ...pass, title: "Usability pass" } : pass);
+  f.genesis.passes = renamed;
+  f.router.respond = async () => ({ ok: true, text: JSON.stringify({ mode: "senior", reason: "planning" }) });
+  await f.service.send("session-1", { ...request, message: "Make the plan" }, f.context);
+  const guidance = f.sends[0].input.message;
+  assert.ok(guidance.includes(`one checklist item each (- [ ] <pass title>: <scope>, such as - [ ] ${renamed[0].title}: the plan's changes). ` +
+    `<pass title> is one of Genesis's passes, written exactly as Genesis titles it: ${listedTitles(renamed)}; never a short name or other words for one.`), guidance);
+  assert.ok(guidance.includes("plan new and write refuse an item that names a pass Genesis doesn't have, and list Genesis's passes: rename it and write again."));
+  assert.doesNotMatch(guidance, /User experience pass/u, "no title Genesis doesn't list");
+  const { plan } = await planCommands(f);
+  const made = await plan({ operation: "new", text: "# Contact threads\n\n- [ ] One thread per contact\n" });
+  assert.deepEqual(workPlanPassItems(made.text).map(({ text }) => text),
+    ["Review: the plan's changes", "Security pass: the plan's changes", "Usability pass: the plan's changes"]);
+  // Junior never changes Passes: its guidance names no titles and reads no list.
+  const junior = await fixture(t, { mode: "junior" }, { readyPlan: false });
+  await junior.service.send("session-1", { ...request, message: "Build the form." }, junior.context);
+  assert.equal(junior.passReads.count, 0);
+  assert.ok(junior.sends[0].input.message.includes("<pass title> being a pass's exact title in Genesis's list, never a short name or other words for one"));
+});
+
 test("a steer whose words name a pass joins the running turn as written", async (t) => {
   const f = await fixture(t, { mode: "senior" }, { source: true });
   const plan = (await readWorkPlan(f.context)).text;
@@ -395,16 +469,22 @@ test("a steer whose words name a pass joins the running turn as written", async 
   assert.equal((await readWorkPlan(f.context)).text, plan);
 });
 
-test("Genesis's pass list is read only for a message that may ask for passes; typed words it can't check are an ordinary message", async (t) => {
-  const plain = await fixture(t, { mode: "senior" }, { readyPlan: false });
+test("Genesis's pass list is read for a message only when it may ask for passes, and for Senior's plan guidance; typed words it can't check are an ordinary message", async (t) => {
+  const plain = await fixture(t, { mode: "junior" }, { readyPlan: false });
   plain.passReads.failure = new Error("Genesis could not read this project.");
   await plain.service.send("session-1", { ...request, message: "Build the form." }, plain.context);
   assert.deepEqual([plain.passReads.count, plain.sends.length, plain.state().stage === "pass"], [0, 1, false]);
   assert.ok(plain.sends[0].input.message.includes("Build the form."));
+  // Senior's plan guidance reads the list for the passes' exact titles; a list it can't read names none, and the turn goes.
+  const senior = await fixture(t, { mode: "senior" }, { readyPlan: false });
+  senior.passReads.failure = new Error("Genesis could not read this project.");
+  await senior.service.send("session-1", { ...request, message: "Build the form." }, senior.context);
+  assert.deepEqual([senior.passReads.count, senior.sends.length, senior.state().stage === "pass"], [1, 1, false]);
+  assert.ok(senior.sends[0].input.message.includes("<pass title> being a pass's exact title in Genesis's list"));
   const typed = await fixture(t, { mode: "senior" }, { readyPlan: false });
   typed.passReads.failure = new Error("Genesis could not read this project.");
   await typed.service.send("session-1", { ...request, message: "Run the tests" }, typed.context);
-  assert.deepEqual([typed.passReads.count, typed.sends.length, typed.state().stage === "pass"], [1, 1, false]);
+  assert.deepEqual([typed.passReads.count, typed.sends.length, typed.state().stage === "pass"], [2, 1, false]);
   assert.ok(typed.sends[0].input.message.includes("Run the tests"));
   const listed = await fixture(t, { mode: "senior" }, { readyPlan: false });
   listed.passReads.failure = new Error("Genesis could not read this project.");
