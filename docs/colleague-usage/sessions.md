@@ -214,7 +214,7 @@ temporary folder that holds every session's is refused too, with a message namin
 session's temporary folder for throwaway repositories. In the source, the Git and
 gh commands that reach GitHub with your sign-in, the AI's and Save's, run no
 program the AI or the repository picked
-(see [What the AI's Git does with your GitHub sign-in](github-work.md#what-the-ais-git-does-with-your-github-sign-in)).
+(see [What the AI's Git does with your GitHub sign-in](ai-save-and-update.md#what-the-ais-git-does-with-your-github-sign-in)).
 
 ## Chat availability
 

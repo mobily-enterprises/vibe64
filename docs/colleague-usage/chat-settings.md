@@ -135,7 +135,7 @@ session, it runs Update first. It runs the session's own **Save**, the one the S
 same checks, backups and [connected repositories](connected-repositories.md),
 saving the files as they are when it runs; it runs no pass, and a plan's passes
 still run as before. Then it tells the other sessions it is working with
-to update. [The session's AI saves its finished stages](github-work.md#the-sessions-ai-saves-its-finished-stages)
+to update. [The session's AI saves its finished stages](ai-save-and-update.md#the-sessions-ai-saves-its-finished-stages)
 describes what it does when Save cannot save.
 
 Only Main chat saves this way, during its own turn and only while the switch is

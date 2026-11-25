@@ -144,7 +144,7 @@ The session's regular check for newer saved work also watches each copy's main,
 so the session asks for an Update when any of them moves. The session's AI runs
 this same Update itself when the session is behind, before building on the old
 code, and repairs a copy's conflict the same way, or leaves it and tells you; see
-[The session's AI updates the session itself](github-work.md#the-sessions-ai-updates-the-session-itself).
+[The session's AI updates the session itself](ai-save-and-update.md#the-sessions-ai-updates-the-session-itself).
 
 ## Save saves the copies first
 
@@ -193,7 +193,7 @@ The Save result lists the connected repositories it saved, with their commits.
 When Main chat's AI saves a finished stage itself, with **Automatically save
 changes** on, it is this same Save, copies first; its answer names each copy's
 commit and files as `../connected/<name>/...`. See [The session's AI saves its
-finished stages](github-work.md#the-sessions-ai-saves-its-finished-stages).
+finished stages](ai-save-and-update.md#the-sessions-ai-saves-its-finished-stages).
 
 If a copy's push is refused because someone saved to that repository's main
 meanwhile, Save stops with the same **Update first** refusal. Copies saved

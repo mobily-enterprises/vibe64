@@ -236,8 +236,8 @@ The same status names the session's repository commands under `tools`:
 `vibe64-helper session update` runs this session's **Update this session
 (rebase)**, and `vibe64-helper session save` runs its **Save**, for Main chat's
 agent while **Automatically save changes** is on; elsewhere it refuses and says
-why. See [The session's AI updates the session itself](github-work.md#the-sessions-ai-updates-the-session-itself)
-and [The session's AI saves its finished stages](github-work.md#the-sessions-ai-saves-its-finished-stages).
+why. See [The session's AI updates the session itself](ai-save-and-update.md#the-sessions-ai-updates-the-session-itself)
+and [The session's AI saves its finished stages](ai-save-and-update.md#the-sessions-ai-saves-its-finished-stages).
 
 For a reference application that must remain warm between tests, ask the coding
 agent to declare a **per-session supporting service** in the project's Stack.
