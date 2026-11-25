@@ -92,7 +92,7 @@ new plan waits for your go-ahead. Only a question for you or **Stop** pauses
 the plan; **Continue implementation** resumes it from the plan as it now is,
 including items ticked or changed meanwhile. A turn that builds another item
 starts a fresh allowance of automatic steps. The line above the message box
-says where the plan is; see [The plan's status line](plans.md#the-plans-status-line).
+says where the plan is; see [The plan's status line](plan-steps.md#the-plans-status-line).
 
 After implementation, Auto adds Senior's review only in one case: Junior
 implemented an involved plan and that plan is still active. That review is not a

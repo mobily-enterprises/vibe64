@@ -10,7 +10,7 @@ The whole-project checks are the checks the project runs as a whole, such as one
 whole run of the test suite. They can take a long time, and the plan's passes
 would leave a run before them behind, so no step of a plan runs them: not
 Junior's implementation, not Senior's review (see [A plan's
-steps](plans.md#a-plans-steps)) and not a pass. Each step runs the focused tests
+steps](plan-steps.md#a-plans-steps)) and not a pass. Each step runs the focused tests
 for what it changed.
 
 ## The question
