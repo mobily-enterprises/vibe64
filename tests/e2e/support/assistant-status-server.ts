@@ -58,6 +58,8 @@ const noHeldMessage = () => null;
 configureStudioProjectContext({ env: process.env });
 
 type Handler = (response: ServerResponse, request: IncomingMessage) => void | Promise<void>;
+// An AI task call as the AI tasks service makes it; a scenario replaces the default answer with its own.
+type AiTaskCall = (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
 type GoalView = { status: string; goal: Record<string, unknown> | null;
   target: { segmentId: string | null; capabilities: Record<string, unknown> } };
 
@@ -157,11 +159,11 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     workspaceSetup: { status: "succeeded" } as Record<string, unknown>,
     // The main chat's turn, as the chat's working indicator reads it: idle unless a scenario says otherwise.
     mainTurn: { active: false } as Record<string, unknown>,
-    update: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
-    save: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
+    update: (async () => ({ ok: true })) as AiTaskCall,
+    save: (async () => ({ ok: true })) as AiTaskCall,
     inspect: async (): Promise<Record<string, unknown>> => ({ ok: true, unsaved: true, destination: { mode: "local" } }),
-    setup: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true, workspaceSetup: { status: "succeeded" } }),
-    signIn: async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ok: true }),
+    setup: (async () => ({ ok: true, workspaceSetup: { status: "succeeded" } })) as AiTaskCall,
+    signIn: (async () => ({ ok: true })) as AiTaskCall,
     onboarding: async (): Promise<Record<string, unknown>> => ({ ok: true, inspection: { state: "ready", diagnostics: [] } }),
     // The Data overview as the database service reads it back.
     overview: async (): Promise<Record<string, unknown>> => ({ ok: true, overview: { present: true, hash: "h1", error: "" },
@@ -709,15 +711,15 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
   const native = new Map();
   let nextNativeId = 0;
   const captured = { temporaryCreates: [] as Record<string, unknown>[], temporaryTurns: [] as Record<string, unknown>[],
-    temporaryDeletes: 0, startedTurns: 0, outcome: (_turn: number) => "continue",
+    temporaryDeletes: 0, startedTurns: 0, outcome: (() => "continue") as (turn: number) => string,
     // Stops and deletions that reached a native conversation, whatever asked for them.
     nativeStops: 0, nativeDeletes: 0,
     // Awaited before each native start; a throw is that start's failure.
-    beforeNativeTurn: async (_turn: number): Promise<void> => {},
+    beforeNativeTurn: (async () => {}) as (turn: number) => Promise<void>,
     // Awaited before a native stop, so a scenario can hold a Stop or Cancel in flight.
     beforeNativeStop: async (): Promise<void> => {},
     // Replaces the completed native result, for example { status: "inProgress" }.
-    nativeTurn: (_turn: number): Record<string, unknown> | null => null };
+    nativeTurn: (() => null) as (turn: number) => Record<string, unknown> | null };
   const sessionAgent = {
     async inspectAssistantPurposes() { return {}; },
     async assistantAccess() { return { canUse: true }; },

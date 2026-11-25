@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { assistantStatusServer } from "./support/assistant-status-server";
 import {
   endTurn, expectPhase, openFix, openStarted, quietWorld, saveTaskWorld, taskIdOf, taskWindow, workspaceSetupWorld
