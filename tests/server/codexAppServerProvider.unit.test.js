@@ -28,7 +28,7 @@ import {
   readCodexSelectedAccountAccess
 } from "@local/vibe64-runtime/server/codexAppServerAgent";
 import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
-import { liveProcessGroupMembers } from "../fixtures/processGroupMembers.js";
+import { describeProcessGroupMembers, processGroupMembersLeftRunning } from "../fixtures/processGroupMembers.js";
 import {
   codexAppServerMetadataIsLive,
   currentCodexAccountIdentitySignature,
@@ -1532,7 +1532,8 @@ test("codex app-server process and every descendant start with the managed works
       if (runtime?.pid) {
         assert.equal(stopped.stopped, true);
         assert.equal(stopped.runtimeDirRemoved, true);
-        assert.deepEqual(liveProcessGroupMembers(runtime.pid), [], `process group ${runtime.pid} has members still running`);
+        const left = await processGroupMembersLeftRunning(runtime.pid);
+        assert.deepEqual(left, [], `process group ${runtime.pid} has members still running: ${describeProcessGroupMembers(left)}`);
       }
     }
   });

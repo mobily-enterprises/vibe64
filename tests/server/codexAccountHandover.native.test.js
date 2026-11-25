@@ -13,7 +13,7 @@ import { createAccountsRuntime } from "../../packages/vibe64-accounts/src/server
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 import { createCodexAppServerAgentProvider } from "../fixtures/codexAppServerAgentProvider.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
-import { liveProcessGroupMembers } from "../fixtures/processGroupMembers.js";
+import { describeProcessGroupMembers, processGroupMembersLeftRunning } from "../fixtures/processGroupMembers.js";
 
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5_000 });
 
@@ -144,9 +144,11 @@ test("native account logout and credential restoration drain old processes and c
     }
   });
   // Nothing of a stopped process group runs on. Its leader may have exited and still wait for this process, its
-  // parent, to reap it on a later turn: a member that has exited holds nothing, as the stop counts it.
-  function assertDrained(child) {
-    assert.deepEqual(liveProcessGroupMembers(child.pid), [], `process group ${child.pid} has members still running`);
+  // parent, to reap it on a later turn: a member that has exited holds nothing, as the stop counts it. One still
+  // finishing its exit is followed to its end (processGroupMembersLeftRunning says why).
+  async function assertDrained(child) {
+    const left = await processGroupMembersLeftRunning(child.pid);
+    assert.deepEqual(left, [], `process group ${child.pid} has members still running: ${describeProcessGroupMembers(left)}`);
   }
   t.after(async () => {
     await controller.invalidateAppServerRuntimes({ reason: "server-shutdown" });
@@ -169,7 +171,7 @@ test("native account logout and credential restoration drain old processes and c
       assert.equal(loggedOut.ok, true, JSON.stringify(loggedOut));
       assert.equal(loggedOut.account.connected, false);
       await assert.rejects(readFile(credentialPath), { code: "ENOENT" });
-      children.forEach(assertDrained);
+      for (const child of children) await assertDrained(child);
     }
     if (credentials.has(key)) {
       await writeFile(credentialPath, credentials.get(key), { mode: 0o600 });
@@ -186,7 +188,7 @@ test("native account logout and credential restoration drain old processes and c
     const beforeCatalog = children.length;
     await Promise.all([controller.modelCatalog(), controller.modelCatalog()]);
     assert.equal(children.length, beforeCatalog + 1, "one catalog probe per login");
-    children.forEach(assertDrained);
+    for (const child of children) await assertDrained(child);
     const description = await controller.describeProvider(session.sessionId);
     assert.notEqual(description.accountIdentitySignature, previousSignature);
     previousSignature = description.accountIdentitySignature;
@@ -227,6 +229,6 @@ test("native account logout and credential restoration drain old processes and c
   }
   const stopped = await controller.invalidateAppServerRuntimes({ reason: "server-shutdown" });
   assert.equal(stopped.ok, true, JSON.stringify(stopped));
-  children.forEach(assertDrained);
+  for (const child of children) await assertDrained(child);
   t.diagnostic(`Three credential restorations, two logouts, ${children.length} native processes verified drained, one continued thread.`);
 });
