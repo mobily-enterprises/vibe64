@@ -17,6 +17,7 @@ import {
 } from "./sessionConnectedCopies.js";
 import { inspectSessionWorkToSave } from "./sessionConnectedRelease.js";
 import { recordSessionGitCommandActor } from "./sessionGitCommandActor.js";
+import { newerSavedFromCheck, newerSavedRefusal } from "./sessionNewerSaved.js";
 import { githubSourceCommandOptions } from "./sessionSource.js";
 import { saveError } from "./sessionWorkCommands.js";
 import { checkSessionUpdates } from "./sessionWorkUpdate.js";
@@ -201,10 +202,9 @@ function connectedCopyOperations({ codexGitCommand, env, runtime, session }, exe
 async function refuseBehindSessionSave(input) {
   const check = await checkSessionUpdates(input);
   if (check.updateAvailable !== true) return;
-  throw saveError(
-    "The saved branch has changed. Update this session before saving its work.",
-    "vibe64_session_save_update_required",
-    { canonicalCommit: check.canonicalCommit, reconciledCommit: check.baseCommit, updateRequired: true },
+  throw newerSavedRefusal(
+    newerSavedFromCheck(check),
+    { canonicalCommit: check.canonicalCommit, reconciledCommit: check.baseCommit },
     { messageCode: "vibe64_session_save_branch_changed" }
   );
 }

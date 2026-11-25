@@ -1,10 +1,11 @@
 // Whether Update owns a session's repairs. While its Update failed, is running
-// or is pending (its saved version moved on), Update is the one repair: a
+// or is pending (main has newer saved versions), Update is the one repair: a
 // setup or verification repair would redo work the saved version already has,
 // or collide with it on Update. The editor, session status, the onboarding
 // state and the repair prompts read it here, so each says the same thing.
 
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { newerSavedFacts, newerSavedMessage, newerSavedSource } from "./newerSavedVersions.js";
 import { normalizeRepositoryUpdateCheck, REPOSITORY_UPDATE_CHECK_METADATA } from "./repositoryUpdateStatus.js";
 
 // Background task ids of the session's Save and Update operations.
@@ -42,8 +43,17 @@ function sessionUpdateFirst({ updateCheck = null, updateOperation = null } = {})
   return {
     reason,
     behind: check?.behind || 0,
+    branch: check?.branch || "main",
     canonicalCommit: check?.canonicalCommit || normalizeText(operation?.conflictRecovery?.canonicalCommit),
-    incomingVersions: (check?.incomingVersions || []).map(({ shortCommit, message }) => ({ shortCommit, message })),
+    // Who saved each, only as Save recorded it, so the AI answers from it and never guesses from the commits.
+    incomingVersions: (check?.incomingVersions || []).map(({ shortCommit, message, savedBy }) => ({
+      shortCommit,
+      message,
+      ...(savedBy ? {
+        savedAt: savedBy.savedAt,
+        savedBy: savedBy.sessionName || `session ${savedBy.sessionId.replace(/^\d{4}-/u, "")}`
+      } : {})
+    })),
     incomingVersionsTruncated: check?.incomingVersionsTruncated === true,
     conflictPaths,
     error: reason === "failed" ? normalizeText(operation.error || operation.message).slice(0, 1000) : "",
@@ -51,7 +61,8 @@ function sessionUpdateFirst({ updateCheck = null, updateOperation = null } = {})
       ? "This session's Update needs repair first. Use Fix it with AI on the Update notice; setup is checked again once Update succeeds."
       : reason === "running"
         ? "This session is updating. Setup is checked again once Update finishes."
-        : "This session is behind its saved version. Update it first; setup is checked again against the updated session."
+        : `${newerSavedMessage(newerSavedFacts(newerSavedSource(check) || check), { unsaved: null })} ` +
+          "Setup is checked again against the updated session."
   };
 }
 
@@ -87,7 +98,7 @@ function sessionUpdateFirstRepairBrief(state, { updateRepair = false } = {}) {
     state.reason === "failed"
       ? `This session's Update failed${state.conflictPaths.length ? ` on: ${state.conflictPaths.join(", ")}` : ""}.${state.error ? ` ${state.error}` : ""}`
       : state.reason === "running" ? "This session's Update is running."
-        : `This session is ${state.behind || "some"} version${state.behind === 1 ? "" : "s"} behind its saved version${where}.`,
+        : `This session is ${state.behind || "some"} version${state.behind === 1 ? "" : "s"} behind ${state.branch}${where}.`,
     ...(versions.length ? [`Incoming saved versions${where}:`, ...versions, ...more] : []),
     "Before changing dependencies or porting code, check read-only whether the saved version already contains that change " +
       `(\`git log HEAD..${state.canonicalCommit ? state.canonicalCommit.slice(0, 12) : "<saved commit>"}\`, \`git show <saved commit>:<path>\`). ` +

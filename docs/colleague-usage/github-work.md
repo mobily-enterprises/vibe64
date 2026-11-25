@@ -20,8 +20,15 @@ select the tab's info button to read the same status under **Work**.
 Managed Vibe64 Git saves a version;
 GitHub workflows use your repository permissions and the project's direct-push or
 pull-request policy. **Update this session (rebase)** reconciles newer saved project
-work when offered; Save does not silently perform that update for you. A failed or
-uncertain push needs a state check before another request.
+work when offered; Save does not silently perform that update for you. While the
+project's main has newer saved versions, Save waits and every place that shows it
+(the Save button's hint, the Changes page, the session tab's status and Save's
+answer) says the same thing, for example *Main has 1 newer saved version (8:11 AM,
+from the Passes session, 2 files). Update this session to take it in (your unsaved
+work stays), then Save.* The session is named only when Vibe64's own Save recorded
+which session saved the version; otherwise the message gives the time and files
+alone. Update is how newer saved versions come in: there is nothing to merge by
+hand. A failed or uncertain push needs a state check before another request.
 
 Save and Update record the Git name and email
 you have at that moment, the ones **Account settings → GitHub** shows, for every
@@ -174,7 +181,7 @@ desktop and mobile.
 
 ## The session's AI updates the session itself
 
-When the session is behind its saved version, the session's AI runs Update
+When the project's main has newer saved versions than the session, the session's AI runs Update
 itself before building on the old code, at a point where it can deal with a
 conflict, so you don't need to choose **Update this session (rebase)** for it.
 Nothing updates on its own: the AI decides when. It is the same Update, for this

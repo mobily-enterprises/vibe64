@@ -124,8 +124,8 @@ many stages would stay unsaved until its end, and the project's other sessions
 could not build on its finished stages meanwhile. So while **Automatically save
 changes** is on, Main chat's agent saves as it goes: at each finished and
 checked stage of a plan, or once a piece of work is finished, never in the
-middle of an edit. When the session is behind its saved version, it runs Update
-first. It runs the session's own **Save**, the one the Save button runs, with the
+middle of an edit. When the project's main has newer saved versions than the
+session, it runs Update first. It runs the session's own **Save**, the one the Save button runs, with the
 same checks, backups and [connected repositories](connected-repositories.md),
 saving the files as they are when it runs; it runs no pass, and a plan's passes
 still run as before. Then it tells the other sessions it is working with

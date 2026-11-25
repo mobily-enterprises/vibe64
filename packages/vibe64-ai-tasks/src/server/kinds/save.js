@@ -16,10 +16,10 @@ const SAVE_SUCCEEDED_MESSAGE = "Session saved. Your work was pushed.";
 const SAVE_WAITING_MESSAGE = "Save waits for another change to this session to finish";
 const MAIN_CHAT_WAITING_MESSAGE = "Save waits for the main chat's AI to finish";
 const WAITING_CODES = Object.freeze(["vibe64_agent_write_mode_busy"]);
+const SAVE_UPDATE_REQUIRED = "vibe64_session_save_update_required";
 // Save refused for a reason only a person can settle. The AI is not asked again.
 const PERSON_MESSAGES = Object.freeze({
   vibe64_session_repository_review_changed: "Save needs your review of where it goes. Choose Save, review it, then Check now.",
-  vibe64_session_save_update_required: "Save needs Update first. Cancel this fix, then update the session.",
   vibe64_session_save_no_changes: "Save found nothing to save. Check the session's changes."
 });
 
@@ -59,7 +59,10 @@ function saveCheckResult(result) {
   const code = String(result.code || "");
   if (WAITING_CODES.includes(code)) return { waiting: true, message: SAVE_WAITING_MESSAGE };
   const error = String(result.error || "Save failed.");
-  const person = PERSON_MESSAGES[code];
+  // Main has newer saved versions: Save's own message names them and the fix, Update then Save, for the person.
+  const person = code === SAVE_UPDATE_REQUIRED
+    ? `${result.error || "Main has newer saved work. Update this session to take it in (your unsaved work stays), then Save."} Cancel this fix first.`
+    : PERSON_MESSAGES[code];
   return {
     passed: false,
     message: person || `Save still needs attention: ${error}`,

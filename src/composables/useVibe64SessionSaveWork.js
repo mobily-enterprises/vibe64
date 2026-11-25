@@ -1,6 +1,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { saveWorkReadyTitle } from "@/lib/vibe64SessionRepositoryWorkState.js";
+import { newerSavedAnswer, newerSavedText } from "@/lib/vibe64NewerSavedText.js";
 
 const SAVE_WORK_STAGE_LABELS = Object.freeze({ published: "pushed", publishing: "pushing" });
 
@@ -18,6 +19,7 @@ function eventTimeLabel(at = "", now = new Date()) {
 }
 
 const NOTHING_TO_SAVE_CODE = "vibe64_session_save_no_changes";
+const SAVE_UPDATE_REQUIRED_CODE = "vibe64_session_save_update_required";
 
 function repositoryFailureFromError(error) {
   return error && typeof error === "object"
@@ -154,9 +156,13 @@ function useVibe64SessionSaveWork(props, {
       return "Repository status is unavailable; check for updates before saving";
     }
     if (saveWorkRequiresUpdate.value) {
-      return saveWorkUnsaved.value
-        ? `${sessionUpdateLabel.value}, preserving its unsaved work. Save will be available when the update finishes.`
-        : `${sessionUpdateLabel.value} to load its latest saved changes.`;
+      // How many newer saved versions main has, when, from whom and how many files, then Update and Save.
+      return newerSavedText(saveWorkRepositoryState.value?.newerSaved, {
+        branch: saveWorkRepositoryState.value?.destination?.branch || saveWorkRepositoryState.value?.branch,
+        fallback: true,
+        selfSessionId: sessionId.value,
+        unsaved: saveWorkUnsaved.value
+      });
     }
     if (!saveWorkUnsaved.value) {
       return "No work to save";
@@ -447,13 +453,21 @@ function useVibe64SessionSaveWork(props, {
     return runRepositoryRequest("save", "Session work could not be saved.", () => props.saveSessionWork({
       destinationReview: saveWorkReview.value
     }).catch((error) => {
-      // Refused before it started: still nothing to save, not a failure.
-      if (repositoryFailureFromError(error)?.code !== NOTHING_TO_SAVE_CODE) throw error;
-      return { code: NOTHING_TO_SAVE_CODE, message: error.message, ok: false };
+      // Nothing to save, or Update first, is Save's answer, not a failure: a note.
+      const failure = repositoryFailureFromError(error);
+      if (![NOTHING_TO_SAVE_CODE, SAVE_UPDATE_REQUIRED_CODE].includes(failure?.code)) throw error;
+      return { code: failure.code, details: failure.details, error: error.message, message: error.message, ok: false };
     }), {
       onSuccess(result) {
         if (result?.code === NOTHING_TO_SAVE_CODE) {
           saveWorkNote.value = String(result.message || result.events?.at(-1)?.message || "");
+          return;
+        }
+        if (result?.code === SAVE_UPDATE_REQUIRED_CODE) {
+          // Main has newer saved versions: said in the person's own clock when Save sent its facts.
+          saveWorkNote.value = newerSavedAnswer(String(result.error || result.message || ""), result.details?.newerSaved, {
+            selfSessionId: sessionId.value
+          });
           return;
         }
         saveWorkConnectedResults.value = result?.connected || [];

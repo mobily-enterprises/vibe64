@@ -3,7 +3,8 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { createSessionPullRequests } from "./sessionPullRequests.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
-import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
+import { cachedRepositoryUpdateCheck, persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
+import { nameNewerSavedRefusal, recordSessionSave, workNewerSaved } from "./sessionNewerSaved.js";
 import { refuseDuringRepositoryAiTask, runningRepositoryAiTask, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -181,8 +182,11 @@ function createSessionWork({
       ]);
       const activeSaveOperationId = normalizeText(workOperations.operationId("save", sessionId));
       const activeUpdateOperationId = normalizeText(workOperations.operationId("update", sessionId));
+      // How many newer saved versions main has, when, from whom and how many files: what the page and the AI say.
+      const newerSaved = workNewerSaved(work, cachedRepositoryUpdateCheck(current));
       return {
         ...work,
+        ...(newerSaved ? { newerSaved } : {}),
         activeOperation: activeSaveOperationId
           ? { kind: "save", operationId: activeSaveOperationId }
           : activeUpdateOperationId
@@ -368,6 +372,8 @@ function createSessionWork({
             await runtime.store.writeMetadataValue(sessionId, "base_commit", result.saveCommit);
           }
         }
+        // Before the other sessions hear of it, so their checks name this session as the one that saved it.
+        await recordSessionSave(project, runtime, session, result);
         const changedDuringSave = result.unsavedPathCount || 0;
         // Save keeps the session on its own commit when one was made in it while Save ran.
         const savedMessage = result.cacheMaintenance?.retryable === true
@@ -421,10 +427,12 @@ function createSessionWork({
           ok: true
         };
       } catch (error) {
+        const updateRequired = error?.code === "vibe64_session_save_update_required";
+        // Main has newer saved versions: named for the sessions that saved them, as Save recorded them.
+        if (updateRequired) await nameNewerSavedRefusal(runtime, error);
         if (!operationStarted) {
           throw error;
         }
-        const updateRequired = error?.code === "vibe64_session_save_update_required";
         // Nothing to save is Save's answer, not a failure the session needs help with: a note, as Update first is.
         const nothingToSave = error?.code === "vibe64_session_save_no_changes";
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
@@ -438,7 +446,7 @@ function createSessionWork({
           patch: {
             code: normalizeText(error?.code),
             ...(updateRequired
-              ? { updateRequired: true }
+              ? { updateRequired: true, ...(error.details?.newerSaved ? { details: { newerSaved: error.details.newerSaved } } : {}) }
               : nothingToSave ? {} : { error: normalizeText(error?.message) || "Session Save failed." }),
             operationId,
             status: updateRequired || nothingToSave ? "ready" : "failed"

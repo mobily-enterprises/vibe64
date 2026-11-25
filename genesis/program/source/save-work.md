@@ -218,6 +218,34 @@ puts back a lock an unfinished Save left changed, so it never conflicts and the
 session takes its main's pins. Creating a pull request runs
 the same copy Save before pushing the session's own work to its branch.
 
+A session behind its main, its own repository or a copy, is told one message
+(`newerSavedMessage` in `@local/vibe64-core/shared`, from `newerSavedFacts`):
+how many newer saved versions, when the latest was saved, which session saved
+them, how many files they change, then the fix, Update and then Save (*Main has 1
+newer saved version (8:11 AM, from the Passes session, 2 files). Update this
+session to take it in (your unsaved work stays), then Save.*). The update check
+reports the branch and `incomingFileCount` with its incoming versions
+(`sessionNewerSaved.js` in Terminals); Save's refusal carries the same facts in
+`details.newerSaved`; the session's work answer carries its stored check's as
+`newerSaved` while that check read the same gap. The server says the time as
+how long ago, the page in the person's own clock (`src/lib/vibe64NewerSavedText.js`),
+for the Save button and its hover text, Save's answer, the Changes page and the
+session's tab; the AI's work tools give it as `newerSavedMessage`, and its Save
+command, prompt and tool descriptions name Update, never a merge. Each finished
+Save records the versions it made, its own and each copy's, with the saving
+session's id, name and time (`recordSessionSave` in Sessions'
+`sessionNewerSaved.js`) in Core's saved versions record
+(`<projectRuntimeRoot>/saved-versions.json`, `savedVersions.js`), under the
+project source lock and before other sessions hear of the Save; the check and
+the refusal name each version's session from it, by its current name. A version
+Save did not record, such as one saved outside Vibe64 or by Save recovery, and a
+record that cannot be read name nobody: the message keeps its time and file
+count, and Save and Update go on. The session is never guessed from commits.
+Sources: `tests/server/vibe64NewerSavedVersions.unit.test.js`,
+`tests/server/vibe64SavedVersionsLedger.unit.test.js`,
+`tests/server/vibe64SessionNewerSaved.unit.test.js` and
+`tests/client/vibe64NewerSavedText.vitest.js`.
+
 Genesis's derived artifacts belong to a copy only when the copy is itself a
 Genesis project, with a Blueprint (`copyDerivedArtifactPaths`). A plain
 repository's inspection, Save and Update treat every path as its own work and

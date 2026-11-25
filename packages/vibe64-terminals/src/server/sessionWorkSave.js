@@ -24,6 +24,7 @@ import {
   treeWithDerivedArtifactsFromCommit
 } from "./sessionWorkGit.js";
 import { readCanonical } from "./sessionWorkAuthority.js";
+import { newerSavedRefusal, readNewerSaved } from "./sessionNewerSaved.js";
 import {
   inspectSessionChangeDiff,
   inspectSessionChangeDiffDirect,
@@ -218,14 +219,9 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
     { commandOptions, project }
   );
   if (canonicalCommit !== context.baseCommit && !canonicalInSession) {
-    throw saveError(
-      "The saved branch has changed. Update this session before saving its work.",
-      "vibe64_session_save_update_required",
-      {
-        canonicalCommit,
-        reconciledCommit: context.baseCommit,
-        updateRequired: true
-      },
+    throw newerSavedRefusal(
+      await readNewerSaved(runCommand, context, sessionHead, canonicalCommit, { commandOptions, project }),
+      { canonicalCommit, reconciledCommit: context.baseCommit },
       { messageCode: "vibe64_session_save_branch_changed" }
     );
   }

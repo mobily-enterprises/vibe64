@@ -9,7 +9,7 @@ import {
   runVibe64Command,
   writeGitWorktreeTree
 } from "@local/vibe64-execution/server";
-import { GIT_HISTORY_RECORD_FORMAT, parseGitHistoryRecords } from "./gitRecords.js";
+import { incomingFileCount, incomingVersionsBetween } from "./sessionNewerSaved.js";
 import {
   assertBranch,
   changedPathStatusesBetween,
@@ -51,7 +51,6 @@ import {
   WORKTREE_WRITTEN_CODE
 } from "./sessionWorktreeSwitch.js";
 
-const INCOMING_VERSION_LIMIT = 5;
 const UPDATE_CANCELLED_CODE = "vibe64_session_update_cancelled";
 
 /**
@@ -61,28 +60,6 @@ const UPDATE_CANCELLED_CODE = "vibe64_session_update_cancelled";
  */
 function throwIfUpdateCancelled(signal) {
   if (signal?.aborted) throw saveError("Update was cancelled before it changed this session.", UPDATE_CANCELLED_CODE);
-}
-
-async function incomingVersionsBetween(
-  runCommand,
-  context,
-  fromCommit,
-  toCommit,
-  options = {}
-) {
-  const result = await git(runCommand, context, [
-    "log",
-    "--topo-order",
-    `--max-count=${INCOMING_VERSION_LIMIT + 1}`,
-    "-z",
-    `--format=${GIT_HISTORY_RECORD_FORMAT}`,
-    `${fromCommit}..${toCommit}`
-  ], options);
-  const records = parseGitHistoryRecords(String(result.stdout || result.output || ""));
-  return {
-    incomingVersions: records.slice(0, INCOMING_VERSION_LIMIT),
-    incomingVersionsTruncated: records.length > INCOMING_VERSION_LIMIT
-  };
 }
 
 function normalizedConflictRecovery(value = {}) {
@@ -223,16 +200,18 @@ async function checkSessionUpdatesDirect({
     commitTree(runCommand, context, canonicalCommit, { commandOptions, project })
   ]);
   const relationship = repositoryUpdateRelationship(ahead, behind);
-  const incoming = behind > 0
-    ? await incomingVersionsBetween(runCommand, context, sessionHead, canonicalCommit, {
-      commandOptions,
-      project
-    })
-    : { incomingVersions: [], incomingVersionsTruncated: false };
+  // The newer saved versions and how many files they change, for the message a session behind main is given.
+  const [incoming, fileCount] = behind > 0
+    ? await Promise.all([
+      incomingVersionsBetween(runCommand, context, sessionHead, canonicalCommit, { commandOptions, project }),
+      historyRewritten ? null : incomingFileCount(runCommand, context, sessionHead, canonicalCommit, { commandOptions, project })
+    ])
+    : [{ incomingVersions: [], incomingVersionsTruncated: false }, null];
   return {
     ahead,
     baseCommit: context.baseCommit,
     behind,
+    branch: canonical.canonicalBranch || context.branch,
     canonicalCommit,
     canonicalSource: {
       authority: context.mode,
@@ -243,6 +222,7 @@ async function checkSessionUpdatesDirect({
         : { repository: context.remoteUrl })
     },
     ...incoming,
+    ...(fileCount === null ? {} : { incomingFileCount: fileCount }),
     ok: true,
     operationId,
     reconciled: !historyRewritten && canonicalInSession,

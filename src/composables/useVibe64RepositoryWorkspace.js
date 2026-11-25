@@ -18,6 +18,7 @@ import {
   requestRepositoryJson
 } from "@/lib/vibe64RepositoryRequest.js";
 import { useVibe64RepositoryHistory } from "@/composables/useVibe64RepositoryHistory.js";
+import { newerSavedText } from "@/lib/vibe64NewerSavedText.js";
 
 /**
  * A session's repository workspace: its changes against the saved project, update checks and updates, Save, and the
@@ -383,11 +384,17 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     if (updates.error || !updates.payload || changes.error) {
       return "Repository status is unavailable; check for updates before saving";
     }
-    if (updates.payload.updateAvailable === true) {
-      return `${sessionUpdateLabel.value} before saving`;
-    }
     // Whether there is work to save is the session's answer, as the header's Save reads it.
     const work = context.value.workState;
+    if (updates.payload.updateAvailable === true) {
+      // How many newer saved versions main has, when, from whom and how many files, then Update and Save.
+      return newerSavedText(updates.payload, {
+        branch: (updates.payload || changes.payload)?.branch,
+        fallback: true,
+        selfSessionId: sessionId.value,
+        unsaved: typeof work?.unsaved === "boolean" ? work.unsaved : null
+      });
+    }
     if (work?.loading || work?.unsaved === null || work?.unsaved === undefined) {
       return "Checking whether this session has work to save";
     }

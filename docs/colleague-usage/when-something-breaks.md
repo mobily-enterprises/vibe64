@@ -29,8 +29,10 @@ which reads the same answers.
 - **Nothing to save** (a note) is not a failure. The work was already saved,
   by another tab or by the session's AI, or the change was undone. There is
   nothing to do.
-- **Save needs Update first**: the project has newer saved work. Choose
-  **Update**, then Save.
+- **Main has newer saved versions**, for example *Main has 1 newer saved
+  version (8:11 AM, from the Passes session, 2 files)*: choose **Update this
+  session (rebase)**, which keeps your unsaved work, then Save. There is
+  nothing to merge.
 - **A pull request is required**: choose **Create draft PR**, or **Fix it with AI**.
 - **History diverged**: choose **Fix it with AI**. Retrying alone cannot succeed.
 - **Anything else**, such as a rejected push or an unavailable repository: fix

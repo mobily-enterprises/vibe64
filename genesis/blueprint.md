@@ -38,7 +38,11 @@ work, so the project's main names exactly what it was saved with; dependencies
 reach Staging and Production only as published versions, which Save adopts in the
 project's manifest and lock. A Save stopped after a copy pushed says so and is
 retried by saving again. The unsaved badge, the check for newer saved work,
-turn checkpoints, archive recovery and renewal cover the copies too.
+turn checkpoints, archive recovery and renewal cover the copies too. A session
+that cannot Save because its main has moved on is told so plainly, the same way
+on the page, in Save's answer and to its AI: how many newer saved versions, when,
+which session saved them (only as Save recorded it) and how many files, with
+Update, then Save, as the fix and never a merge.
 
 Applications in Preview can request the person's microphone and play audio
 through the browser's ordinary permission controls, on HTTPS or localhost.

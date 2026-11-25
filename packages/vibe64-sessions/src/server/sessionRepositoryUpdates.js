@@ -8,6 +8,7 @@ import {
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { sessionHasActiveAgentRun } from "./sessionRenewalRules.js";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
+import { nameIncomingVersions } from "./sessionNewerSaved.js";
 import { sessionResult } from "./sessionResults.js";
 import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -189,12 +190,14 @@ function createSessionRepositoryUpdates({
         const previousCanonicalCommit = normalizeText(
           session?.metadata?.canonical_commit || session?.metadata?.base_commit
         );
-        const result = await terminals.checkSessionUpdates(sessionId, {
+        const checked = await terminals.checkSessionUpdates(sessionId, {
           ...input,
           operationId: crypto.randomUUID(),
           runtime,
           session
         });
+        // Which session saved each newer version, as Save recorded it.
+        const result = { ...checked, incomingVersions: await nameIncomingVersions(runtime, checked.incomingVersions) };
         await recordObservedCanonical(runtime, sessionId, {
           canonicalCommit: result.canonicalCommit,
           connected: result.connected || [],

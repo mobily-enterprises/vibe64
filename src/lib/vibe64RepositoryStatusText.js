@@ -1,5 +1,6 @@
 import { repositoryUpdateRelationship } from "@local/vibe64-core/shared";
 import { formatVersionDate } from "@/lib/vibe64RepositoryVersionLabels.js";
+import { newerSavedText } from "@/lib/vibe64NewerSavedText.js";
 
 // What the repository workspace says about a session's saved work and its updates, read from the workspace's state:
 // the session, its current changes, its update check and the project history, the newest repository status either
@@ -36,7 +37,7 @@ function summaryTitle({ sessionId, changes, updates }) {
 }
 
 /** @param {RepositoryStatusState} state */
-function summaryDetail({ sessionId, changes, updates, repositoryStatus, sessionUpdateLabel }) {
+function summaryDetail({ sessionId, changes, updates, repositoryStatus }) {
   if (!sessionId) {
     return "Select a session to see its work. Saved project history remains available.";
   }
@@ -53,13 +54,9 @@ function summaryDetail({ sessionId, changes, updates, repositoryStatus, sessionU
     return "Check for updates to compare this session with the project’s saved version.";
   }
   const count = Number(changes.payload?.totalCount || 0);
-  const behind = Number(repositoryStatus?.behind || 0);
-  if (behind > 0) {
-    if (changes.payload?.unsaved === true) {
-      return `${behind} newer saved ${behind === 1 ? "version is" : "versions are"} available. Updating this session will preserve its unsaved work.`;
-    }
-    return `${behind} newer saved ${behind === 1 ? "version is" : "versions are"} available. ${sessionUpdateLabel} to use ${behind === 1 ? "it" : "them"}.`;
-  }
+  // How many newer saved versions main has, when, from whom and how many files, then Update and Save.
+  const newer = newerSavedText(repositoryStatus, { selfSessionId: sessionId, unsaved: changes.payload?.unsaved === true });
+  if (newer) return newer;
   if (count > 0) {
     return `${count} ${count === 1 ? "file differs" : "files differ"} from the project’s saved version.`;
   }
@@ -147,10 +144,7 @@ function updateDetail({ sessionId, changes, updates, history, repositoryStatus }
     return `Someone saved new project work after this session started, and this session also has its own saved work. Vibe64 cannot simply move it forward. Updating this session will try to combine both without discarding either. If the same files conflict, nothing changes and Fix it with AI can help.${checked}`;
   }
   if (behind > 0) {
-    const updateEffect = changes.payload?.unsaved === true
-      ? "will replay its unsaved work on the latest saved version before Save is allowed"
-      : "will move it to the latest saved version";
-    return `This session is ${behind} saved ${behind === 1 ? "version" : "versions"} behind. Updating this session ${updateEffect}.${checked}`;
+    return `${newerSavedText(repositoryStatus, { selfSessionId: sessionId, unsaved: changes.payload?.unsaved === true })}${checked}`;
   }
   if (relationship === "ahead" && ahead > 0) {
     return `There are no incoming updates. This session contains ${ahead} ${ahead === 1 ? "version" : "versions"} not yet in the saved project.${checked}`;

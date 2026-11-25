@@ -49,6 +49,7 @@
     "./server/watch-observations": "./src/server/watchObservations.js",
     "./server/projectState": "./src/server/projectState.js",
     "./server/projectPromptHints": "./src/server/projectPromptHints.js",
+    "./server/savedVersions": "./src/server/savedVersions.js",
     "./server/projectRecordMetadata": "./src/server/projectRecordMetadata.js",
     "./server/projectRuntimeOpenState": "./src/server/projectRuntimeOpenState.js",
     "./server/projectRuntimeIdentity": "./src/server/projectRuntimeIdentity.js",

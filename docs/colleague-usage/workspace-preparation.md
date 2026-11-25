@@ -191,8 +191,8 @@ belong to the coding assistant or the person, not Colleague.
 
 ## Project setup waits for Update
 
-When the session's Update has failed, is running or is waiting (the session is
-behind its saved version), **Project setup needs attention** shows why, for
+When the session's Update has failed, is running or is waiting (the project's
+main has newer saved versions), **Project setup needs attention** shows why, for
 example *This session's Update needs repair first*. It does not offer
 **Fix it with AI** for setup, and workspace preparation's **Fix it with AI** is
 unavailable. Setup is often blocked only by local work that the saved version

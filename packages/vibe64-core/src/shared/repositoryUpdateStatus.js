@@ -1,4 +1,5 @@
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { normalizeSavedBy } from "./newerSavedVersions.js";
 
 // The session metadata entry holding its last saved-version check.
 const REPOSITORY_UPDATE_CHECK_METADATA = "repository_update_check";
@@ -24,13 +25,16 @@ function normalizeIncomingVersion(value = {}) {
   if (!/^[a-f0-9]{40,64}$/u.test(commit)) {
     return null;
   }
+  // Which session saved it, when Save recorded that (savedVersions.js); never read from the commit.
+  const savedBy = normalizeSavedBy(value.savedBy);
   return {
     author: boundedText(value.author, 200),
     committedAt: boundedText(value.committedAt, 100),
     commit,
     isMerge: value.isMerge === true,
     message: boundedText(value.message, 1000),
-    shortCommit: commit.slice(0, 8)
+    shortCommit: commit.slice(0, 8),
+    ...(savedBy ? { savedBy } : {})
   };
 }
 
@@ -70,11 +74,16 @@ function normalizeRepositoryUpdateCheck(value = {}, checkedAt = new Date().toISO
       name: normalizeText(copy.name)
     }))
     : [];
+  // How many files the newer saved versions change together, and the branch they are on, when the check read them.
+  const incomingFileCount = Number(value.incomingFileCount);
+  const branch = boundedText(value.branch, 256);
   return {
     ahead,
     behind,
+    ...(branch ? { branch } : {}),
     canonicalCommit: normalizeText(value.canonicalCommit),
     checkedAt: normalizeText(checkedAt),
+    ...(behind > 0 && Number.isSafeInteger(incomingFileCount) && incomingFileCount >= 0 ? { incomingFileCount } : {}),
     incomingVersions,
     incomingVersionsTruncated:
       value.incomingVersionsTruncated === true || behind > incomingVersions.length,

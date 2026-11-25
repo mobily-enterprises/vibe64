@@ -1,5 +1,6 @@
 import { CONNECTIONS_LOCK_FILE } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { SESSION_WORK_PROBLEM_LABEL, sessionWorkProblem } from "@local/vibe64-terminals/shared/sessionWorkProblem";
+import { newerSavedText } from "@/lib/vibe64NewerSavedText.js";
 
 // One owner for a session's repository work state: the derivation from the
 // session work snapshot, and the label and icon each state is shown with.
@@ -85,10 +86,13 @@ function sessionRepositoryWorkState(workState = null) {
     };
   }
   const changedCount = Array.isArray(source.changedPaths) ? source.changedPaths.length : 0;
+  // What main's newer saved versions are, for the tab to say when Update is available.
+  const newer = source.updateAvailable === true && source.newerSaved ? { newerSaved: source.newerSaved } : {};
   if (source.unsaved === true) {
     return {
       changedCount,
       ...freshness,
+      ...newer,
       ...(source.pinsToRecord?.length ? { pinsToRecord: source.pinsToRecord } : {}),
       state: "unsaved",
       updateAvailable: source.updateAvailable === true
@@ -96,6 +100,7 @@ function sessionRepositoryWorkState(workState = null) {
   }
   return {
     ...freshness,
+    ...(source.error ? {} : newer),
     state: source.error
       ? "unavailable"
       : (source.updateAvailable === true ? "update_available" : "saved")
@@ -140,8 +145,12 @@ function repositoryWorkStateDescription(sessionItem = {}) {
   const problem = repositoryWorkStateProblem(sessionItem);
   if (problem) return `${label}: ${problem.message} ${problem.nextStep}`;
   const state = repositoryWorkState(sessionItem);
-  const reason = state === "fixing" ? sessionItem.repositoryWorkState?.repositoryAiTask?.message
-    : state === "unsaved" ? sessionPinsToRecordLabel(sessionItem.repositoryWorkState) : "";
+  const workState = sessionItem.repositoryWorkState;
+  // Update available: how many newer saved versions main has, when, from whom and how many files, then Update.
+  const newer = ["unsaved", "update_available"].includes(state)
+    ? newerSavedText(workState?.newerSaved, { selfSessionId: sessionItem.sessionId, unsaved: state === "unsaved" }) : "";
+  const reason = state === "fixing" ? workState?.repositoryAiTask?.message
+    : state === "unsaved" ? [sessionPinsToRecordLabel(workState), newer].filter(Boolean).join(" ") : newer;
   return reason ? `${label}: ${reason}` : label;
 }
 
