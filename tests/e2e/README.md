@@ -3,6 +3,11 @@
 `npm run test:e2e` runs the self-contained smoke, direct-chat, and managed-preview specs. The specs
 mock Studio API responses before loading the app.
 
+Playwright only transpiles the specs and their support files, so `npm run lint` is their one check:
+ESLint reads them with the TypeScript parser and the types `tests/e2e/tsconfig.json` names, applies the
+rules of the JavaScript beside them (typescript-eslint's `no-unused-vars` in place of ESLint's), and
+reports a Playwright call left without `await` (`@typescript-eslint/no-floating-promises`).
+
 `playwright.config.mjs` is JSKIT's browser-test harness, `browserTestConfig()` from
 `@jskit-ai/jskit-catalog/browser-tests`. A local run tests the app's production build in `dist/`,
 which it makes once and reuses while the app's sources and installed JSKIT packages are unchanged, so
