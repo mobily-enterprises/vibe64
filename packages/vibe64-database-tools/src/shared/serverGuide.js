@@ -49,18 +49,46 @@ const SERVERS = Object.freeze({
 const { quoteIdentifier: mysqlName, stringLiteral: mysqlString } = SQL_QUOTING.mysql;
 const { quoteIdentifier: pgName, stringLiteral: pgString } = SQL_QUOTING.postgresql;
 
-// The longest database name a GRANT takes, each escaping \ counted.
+// The longest database name a GRANT takes, each escaping \ counted: MariaDB refuses a longer one or, in some
+// versions, keeps its first 64 characters, so that once it reloads its grants it grants another name.
 const GRANT_NAME_LENGTH = 64;
 
 /**
+ * A database as a GRANT names it exactly. In a GRANT's database name `_` matches any one character, `%` any
+ * characters, and `\_`, `\%` and `\\` only themselves, so a grant naming `shop_dev` as it is also reaches `shopxdev`:
+ * each `\`, `_` and `%` is escaped. CREATE DATABASE takes the name as it is.
+ */
+function grantName(name) {
+  return name.replace(/[\\_%]/gu, "\\$&");
+}
+
+/**
  * The GRANT names of a test database's numbered copies, which a JSKIT test run makes for each test file or browser
- * worker running at once (`<name>_1`, `<name>_2`, ...). In a GRANT's database name `_` matches any one character, `%`
- * any characters, and `\_` and `\%` only themselves, so `<name>\__` and `<name>\___` are the name, a literal `_` and
- * one or two characters: copies 1 to 99. None when the escaped name is too long for a GRANT.
+ * worker running at once (`<name>_1`, `<name>_2`, ...): `<name>\__` and `<name>\___` are the name escaped, a literal
+ * `_` and one or two characters, so copies 1 to 99. None when the escaped name is too long for a GRANT.
  */
 function copyGrantNames(name) {
-  const escaped = name.replace(/[\\_%]/gu, "\\$&");
+  const escaped = grantName(name);
   return [...escaped].length + 4 > GRANT_NAME_LENGTH ? [] : [`${escaped}\\__`, `${escaped}\\___`];
+}
+
+/**
+ * Why there is no MariaDB command, naming the fix: the database or a test database is longer than a GRANT can name
+ * exactly once escaped. A test database Vibe64 guesses is named from the database, so the database is the one to
+ * shorten. Empty when every name fits.
+ */
+function grantRefusal({ database, testDatabases, testDeclared, databaseVariable, testDatabaseVariable }) {
+  const databaseName = databaseVariable || "the database name";
+  for (const [name, what] of [[database, "database"], ...testDatabases.map((name) => [name, "test database"])]) {
+    const length = [...grantName(name)].length;
+    if (length <= GRANT_NAME_LENGTH) continue;
+    const fix = what === "database" ? `Shorten ${databaseName} to fit.`
+      : testDeclared ? `Shorten ${testDatabaseVariable || "the test database name"} in Env to fit.`
+        : `Shorten ${databaseName} to fit: its test databases are named from it.`;
+    return `MariaDB can't grant the ${what} “${name}” exactly: a grant names at most ${GRANT_NAME_LENGTH} characters, `
+      + `each _, % and \\ counting as two, and this one needs ${length}. ${fix}`;
+  }
+  return "";
 }
 
 function mysqlStatements({ database, username, password, testDatabases }) {
@@ -69,8 +97,8 @@ function mysqlStatements({ database, username, password, testDatabases }) {
     `CREATE DATABASE IF NOT EXISTS ${mysqlName(database)} CHARACTER SET utf8mb4;`,
     `CREATE USER IF NOT EXISTS ${user} IDENTIFIED BY ${mysqlString(password)};`,
     `ALTER USER ${user} IDENTIFIED BY ${mysqlString(password)};`,
-    ...[database, ...testDatabases, ...testDatabases.flatMap(copyGrantNames)]
-      .map((name) => `GRANT ALL PRIVILEGES ON ${mysqlName(name)}.* TO ${user};`)
+    ...[database, ...testDatabases].map((name) => `GRANT ALL PRIVILEGES ON ${mysqlName(grantName(name))}.* TO ${user};`),
+    ...testDatabases.flatMap(copyGrantNames).map((copies) => `GRANT ALL PRIVILEGES ON ${mysqlName(copies)}.* TO ${user};`)
   ];
 }
 
@@ -98,16 +126,24 @@ function testDatabaseNames(database = "", testDatabase = "") {
  * The commands for one server kind on this computer's family ("apt", "brew"
  * or ""). `create` is null until a database, a non-administrator user and a
  * password are known; `password` may be a stand-in shown to the person.
+ * `refusal` says why a MariaDB command can't be given and which value to
+ * shorten, by its Env name when `databaseVariable` or `testDatabaseVariable`
+ * gives it.
  */
-function databaseServerGuide({ kind, family = "", database = "", username = "", password = "", testDatabase = "" } = {}) {
+function databaseServerGuide({ kind, family = "", database = "", username = "", password = "", testDatabase = "", databaseVariable = "", testDatabaseVariable = "" } = {}) {
   const server = SERVERS[kind];
   if (!server) return null;
   const lines = server[family] || null;
   const admin = (lines || server.other).admin;
-  const ready = Boolean(database && username && password && !isAdminUser(username));
+  const testDatabases = testDatabaseNames(database, testDatabase);
+  const testDeclared = Boolean(String(testDatabase || "").trim());
+  const refusal = kind === "mysql" && database
+    ? grantRefusal({ database, testDatabases, testDeclared, databaseVariable, testDatabaseVariable })
+    : "";
+  const ready = Boolean(database && username && password && !isAdminUser(username) && !refusal);
   const statements = !ready ? []
     : kind === "mysql"
-      ? mysqlStatements({ database, username, password, testDatabases: testDatabaseNames(database, testDatabase) })
+      ? mysqlStatements({ database, username, password, testDatabases })
       : postgresqlStatements({ database, username, password });
   const sudo = (command) => command.startsWith("sudo ");
   return {
@@ -117,7 +153,8 @@ function databaseServerGuide({ kind, family = "", database = "", username = "", 
     start: lines ? { command: lines.start, note: sudo(lines.start) ? SUDO_NOTE : "" } : null,
     create: ready
       ? { command: [`${admin} <<'SQL'`, ...statements, "SQL"].join("\n"), note: sudo(admin) ? SUDO_NOTE : "" }
-      : null
+      : null,
+    refusal
   };
 }
 

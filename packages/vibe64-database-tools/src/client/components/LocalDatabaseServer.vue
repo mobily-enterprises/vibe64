@@ -171,6 +171,7 @@
                   {{ createHint(database) }}
                 </p>
                 <v-btn
+                  v-if="!grantRefusal(database)"
                   class="db-server__suggest"
                   prepend-icon="$autoFix"
                   rounded="pill"
@@ -334,22 +335,35 @@ function guide(database) {
   return databaseServerGuide({ kind: database.kind, family: report.value.family || "" });
 }
 
-function createCommand(database) {
-  const password = value(database, "password");
-  const input = {
+// The guide for the values in the form, its refusals naming the Env names the person sees.
+function loginGuide(database, password = value(database, "password")) {
+  return databaseServerGuide({
     kind: database.kind,
     family: report.value.family || "",
     database: value(database, "database"),
     username: value(database, "username"),
-    testDatabase: database.testDatabase?.value || ""
-  };
-  const copied = databaseServerGuide({ ...input, password })?.create;
+    password,
+    testDatabase: database.testDatabase?.value || "",
+    databaseVariable: database.fields.find((field) => field.semantic === "database")?.name || "",
+    testDatabaseVariable: database.testDatabase?.name || ""
+  });
+}
+
+function createCommand(database) {
+  const password = value(database, "password");
+  const copied = loginGuide(database, password)?.create;
   if (!copied) return null;
-  const shown = databaseServerGuide({ ...input, password: "•".repeat(Math.min(Math.max(password.length, 8), 16)) }).create;
+  const shown = loginGuide(database, "•".repeat(Math.min(Math.max(password.length, 8), 16))).create;
   return { shown: shown.command, copied: copied.command, note: copied.note };
 }
 
+function grantRefusal(database) {
+  return loginGuide(database)?.refusal || "";
+}
+
 function createHint(database) {
+  const refusal = grantRefusal(database);
+  if (refusal) return refusal;
   if (isAdminUser(value(database, "username"))) {
     return `“${value(database, "username")}” is the server's administrator. Give this project its own user: Vibe64 can suggest one with a strong password.`;
   }
