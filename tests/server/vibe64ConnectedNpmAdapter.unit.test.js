@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 
 import {
@@ -405,6 +406,19 @@ test("npm: a dependency no registry version satisfies refuses the swap and says 
   assert.equal(proof.inEffect, false);
 });
 
+/** Every file and folder below `dir` (nested node_modules included) with its mode, and each file's digest. */
+async function exactly(dir, prefix = "") {
+  const lines = [];
+  for (const entry of (await readdir(path.join(dir, prefix), { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const info = await lstat(path.join(dir, relative));
+    const mode = (info.mode & 0o7777).toString(8);
+    if (entry.isDirectory()) lines.push(`${relative}/ ${mode}`, ...await exactly(dir, relative));
+    else lines.push(`${relative} ${mode} ${createHash("sha256").update(await readFile(path.join(dir, relative))).digest("hex")}`);
+  }
+  return lines;
+}
+
 /** The version of `name` Node loads for the installed @proof/lib at the top of the app. */
 function versionFromLib(f, name) {
   return f.node(`console.log(require('node:module').createRequire(require.resolve('@proof/lib'))('${name}/package.json').version)`);
@@ -455,6 +469,7 @@ test("npm: when the connected package stops accepting a version nested in its co
   });
   const top = path.join(f.app, "node_modules", "@proof", "lib");
   assert.equal(await installedVersion(path.join(top, "node_modules", "pinned")), "1.0.0");
+  const published = await exactly(top);
   assert.equal((await f.step("apply")).ok, true);
   // ^1.0.0 accepts the nested 1.0.0, so it stays where npm put it.
   assert.equal(await versionFromLib(f, "pinned"), "1.0.0");
@@ -470,8 +485,9 @@ test("npm: when the connected package stops accepting a version nested in its co
   assert.equal(await versionFromLib(f, "pinned"), "1.1.0");
   assert.equal((await f.proof()).inEffect, true);
 
+  // Disconnecting gives back exactly the published copy npm installed, its nested node_modules folder included.
   await restoreDisconnected({ repositories: [], sessionSourceRoot: f.app });
-  assert.equal(await installedVersion(top), "1.0.0");
+  assert.deepEqual(await exactly(top), published);
   assert.equal(await versionFromLib(f, "pinned"), "1.0.0");
 });
 
