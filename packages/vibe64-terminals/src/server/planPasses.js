@@ -9,6 +9,7 @@ import { workPlanAtPasses, workPlanPassItems, withWorkPlanPasses, withWorkPlanPa
 import { manageWorkPlan, readWorkPlan } from "./assistantWorkPlan.js";
 import { afterPlanBase, rememberAfterPlanBase } from "./afterPlanBase.js";
 import { failure } from "./assistantRoutingRequests.js";
+import { planError } from "./assistantWorkPlanFiles.js";
 
 // After a plan: the changes since the session's after-plan base, read when the pass runs.
 const PLAN_CHANGES = "the plan's changes";
@@ -18,20 +19,83 @@ const RUN_SCOPES = Object.freeze({ whole: "whole app", "since-last": "since last
 const SINCE_COMMIT = /^the changes since ([a-f0-9]{7,64})$/u;
 const SECTION = /^this section of the app: (.+)$/u;
 const PASS_ACTIONS = Object.freeze(["continue", "again", "restart"]);
+const noListing = async () => null;
 
 const passLine = (title, scope) => `- [ ] ${title}: ${scope}`;
 const titleList = (titles) => titles.length < 2 ? titles.join("") : `${titles.slice(0, -1).join(", ")} and ${titles.at(-1)}`;
+// One name per pass: a Passes item names a pass by Genesis's exact title (case aside), never a short name.
+const passTitled = (listing, title) => listing.passes.find((entry) => entry.title.toLowerCase() === title.toLowerCase());
+const quoted = (texts) => titleList(texts.map((text) => `“${text}”`));
+
+/**
+ * Genesis's passes as a refusal names them: each exact title, quoted, in Genesis's order.
+ * @param {{ passes: { title: string }[] }} listing
+ */
+function genesisPassTitles(listing) {
+  return quoted(listing.passes.map(({ title }) => title));
+}
+
+/**
+ * The plan write's refusal for Passes items that name no pass Genesis has: it names each item and
+ * every title Genesis offers, and how to put it right in the same turn.
+ * @param {{ text: string }[]} items
+ * @param {{ passes: { title: string }[] }} listing
+ */
+function unknownPlanPassesError(items, listing) {
+  const several = items.length > 1;
+  return planError(
+    `The plan's Passes ${several ? "items" : "item"} ${quoted(items.map((item) => item.text))} ` +
+      `${several ? "name passes" : "names a pass"} Genesis doesn't have: nothing changed. Genesis's passes are ${genesisPassTitles(listing)}. ` +
+      `Rename ${several ? "each item" : "the item"} to one of them exactly, keeping its scope (- [ ] <title>: <scope>), and write the plan again.`,
+    "vibe64_work_plan_pass_unknown",
+    { items: items.map((item) => item.text), passes: listing.passes.map(({ title }) => title) }
+  );
+}
+
+/**
+ * Genesis's pass list for a plan command, read at most once and only when asked: for a new plan's After a
+ * plan passes, or a Passes item a write adds or changes.
+ * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} listPasses
+ * @param {string} projectRoot the session's source
+ * @returns {() => Promise<{ passes: object[] }>}
+ */
+function planPassListing(listPasses, projectRoot) {
+  let listing = null;
+  return () => (listing ??= listPasses({ projectRoot }));
+}
+
+/**
+ * Refuses a plan write whose added or changed Passes items name a pass Genesis doesn't have (the
+ * plan command's check, through manageWorkPlan). An item the current plan already holds, word for
+ * word, is not checked again: Genesis may have changed since it was written, and the plan's pass
+ * turn says so when it reaches the item (resolvePlanPass), so a write that only ticks never fails on
+ * it. Genesis's list is read only when the write adds or changes a Passes item; when it can't be
+ * read the write goes ahead, and the pass turn checks the item when it reaches it.
+ * @param {() => Promise<{ passes: object[] }>} readListing
+ * @returns {(text: string, current: string) => Promise<void>} current: the current plan's text ("" for none)
+ */
+function planPassItemsCheck(readListing) {
+  return async (text, current) => {
+    const kept = new Set(workPlanPassItems(current).map((item) => item.text));
+    const written = workPlanPassItems(text).filter((item) => !kept.has(item.text));
+    if (!written.length) return;
+    const listing = await readListing().catch(() => null);
+    const unknown = listing ? written.filter((item) => !passTitled(listing, item.title)) : [];
+    if (unknown.length) throw unknownPlanPassesError(unknown, listing);
+  };
+}
 
 /**
  * A new plan's text with the Passes items it starts with: the chat's After a plan ticks, in Genesis's
- * Master pass order, each over the plan's changes, deeply where Deeply is ticked. A plan that lists
- * passes already keeps them (the person asked for other passes).
+ * Master pass order, each over the plan's changes, deeply where Deeply is ticked, each named by
+ * Genesis's own title. A plan that lists passes already keeps them (the person asked for other passes).
  * @param {string} text
  * @param {{ readMetadataValue: (sessionId: string, name: string) => Promise<string> }} store
  * @param {string} sessionId
+ * @param {() => Promise<{ passes: { id: string, title: string }[] }>} [readListing] Genesis's pass list
  * @returns {Promise<string>}
  */
-async function withAfterPlanPasses(text, store, sessionId) {
+async function withAfterPlanPasses(text, store, sessionId, readListing = noListing) {
   if (typeof text !== "string" || workPlanPassItems(text).length) {
     return text;
   }
@@ -42,8 +106,11 @@ async function withAfterPlanPasses(text, store, sessionId) {
   } catch {
     // Unreadable preferences give the defaults; the chat's settings say why when opened.
   }
+  // Each pass by Genesis's own title; the chat setting's name only while Genesis's list can't be read.
+  const listing = await readListing().catch(() => null);
+  const titleOf = (id) => listing?.passes.find((pass) => pass.id === id)?.title || AFTER_PLAN_PASS_TITLES[id];
   return withWorkPlanPasses(text, inAfterPlanOrder(choice.afterPlan).map((id) =>
-    passLine(AFTER_PLAN_PASS_TITLES[id], PLAN_CHANGES + (choice.afterPlanDeep.includes(id) ? DEEPLY : ""))));
+    passLine(titleOf(id), PLAN_CHANGES + (choice.afterPlanDeep.includes(id) ? DEEPLY : ""))));
 }
 
 /**
@@ -53,12 +120,19 @@ async function withAfterPlanPasses(text, store, sessionId) {
  * @param {{ text: string, title: string, scope: string }} item
  * @param {{ passes: object[] }} listing Genesis's pass list
  * @param {{ sessionId: string, metadata?: Record<string, string> }} session
- * @returns {Promise<{ id?: string, title: string, item: string, request?: string, problem?: string }>}
+ * @returns {Promise<{ id?: string, title: string, item: string, request?: string, problem?: string, fix?: string }>}
+ *   fix: how to put the problem right, when it is not the usual change to the plan's Passes
  */
 async function resolvePlanPass(item, listing, session) {
-  const pass = listing.passes.find((entry) => entry.title.toLowerCase() === item.title.toLowerCase());
+  const pass = passTitled(listing, item.title);
   const named = { title: pass?.title || item.title, item: item.text };
-  if (!pass) return { ...named, problem: `${item.title} isn't a pass this project's Genesis offers.` };
+  if (!pass) {
+    return {
+      ...named,
+      problem: `the plan names “${item.title}”, a pass Genesis doesn't have. Genesis's passes are ${genesisPassTitles(listing)}.`,
+      fix: `Rename the plan's Passes item “${item.text}” to one of them, then choose Continue in Passes.`
+    };
+  }
   if (pass.unavailable) return { ...named, problem: pass.unavailable };
   const run = (id) => pass.runs.find((entry) => entry.id === id)?.request || "";
   const deeply = item.scope.endsWith(DEEPLY);
@@ -339,7 +413,7 @@ function planPassesView(plan, request, listing) {
     title: plan.title,
     atPasses: workPlanAtPasses(plan),
     passes: items.map((item) => ({
-      id: listing.passes.find((pass) => pass.title.toLowerCase() === item.title.toLowerCase())?.id || "",
+      id: passTitled(listing, item.title)?.id || "",
       title: item.title,
       scope: item.scope,
       item: item.text,
@@ -353,6 +427,8 @@ export {
   applyPlanPasses,
   nextPlanPass,
   passesInMessage,
+  planPassItemsCheck,
+  planPassListing,
   planPassRequest,
   planPassesView,
   readPassRequest,

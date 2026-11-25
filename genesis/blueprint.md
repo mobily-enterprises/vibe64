@@ -1737,10 +1737,14 @@ outside it when the session can, puts only what needs the person or what the
 session can't reach on the plan's Leftovers list (never a failing or flaky test,
 which the plan command refuses there), and ends Done, ticking its item, or Needs
 you, with numbered questions; the person's reply goes straight back to that
-pass on Senior. Stop pauses the plan at its pass. A pass the Genesis serving the
-project can't run, or a plan's changes without a known start commit, holds the
-plan at that pass with the reason, skipping nothing and never falling back to a
-whole-app run. The Passes list shows the open plan's passes and the state of
+pass on Senior. Stop pauses the plan at its pass. Each Passes item names its
+pass by Genesis's exact title, one name per pass: the AI is told those titles,
+and a plan written with any other name is refused there and then, naming the
+passes Genesis has, so the AI puts it right in the same turn. A pass the Genesis
+serving the project can't run, an item naming a pass Genesis doesn't have (it
+changed since), or a plan's changes without a known start commit, holds the
+plan at that pass with the reason and the fix, skipping nothing and never
+falling back to a whole-app run. The Passes list shows the open plan's passes and the state of
 each, with Continue, Run this pass again and Restart from the first pass. After
 the last pass Vibe64 completes and archives the plan and Automatically save
 changes runs Save; the last pass's reply is the plan's one closing message.

@@ -7,7 +7,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { manageWorkPlan } from "./assistantWorkPlan.js";
-import { withAfterPlanPasses } from "./planPasses.js";
+import { planPassItemsCheck, planPassListing, withAfterPlanPasses } from "./planPasses.js";
+import { listGenesisPasses } from "@local/vibe64-genesis/server";
 import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { readAgentSessionStatus } from "./agentSessionStatus.js";
@@ -226,6 +227,7 @@ function createAgentSessionCommandService({
   logger,
   project,
   publishSessionChanged,
+  listPasses = listGenesisPasses,
   runCommand = runVibe64Command,
   stopExecution = stopVibe64Execution,
   stopOwnedExecutions = stopVibe64OwnedExecutions
@@ -430,7 +432,7 @@ function createAgentSessionCommandService({
   }
 
   async function managePlan(sessionId, input) {
-    return runInSessionProject(sessionId, async ({ store, descriptor }) => {
+    return runInSessionProject(sessionId, async ({ store, descriptor, sourceRoot }) => {
       const request = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
       if (input.operation === "outcome") {
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
@@ -440,13 +442,17 @@ function createAgentSessionCommandService({
       }
       // A plan's pass ticks only its own Passes item, and a new plan in a chat whose plans run passes gets them.
       const role = assistantPlanRole(request);
+      const readListing = planPassListing(listPasses, sourceRoot);
       const planInput = input.operation === "new" && request?.afterPlan && ["senior", "review"].includes(role)
-        ? { ...input, text: await withAfterPlanPasses(input.text, store, sessionId) } : input;
+        ? { ...input, text: await withAfterPlanPasses(input.text, store, sessionId, readListing) } : input;
       let result;
       try {
         // The AI's change records the session's source as it is now: the plan view counts the files changed since.
         result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, planInput, role, {
-          ...(role === "pass" ? { passItem: request.pass.item } : {}), sourceState: () => sessionSourceState(store, sessionId, descriptor), agent: true
+          ...(role === "pass" ? { passItem: request.pass.item } : {}),
+          sourceState: () => sessionSourceState(store, sessionId, descriptor),
+          agent: true,
+          checkPassItems: planPassItemsCheck(readListing)
         });
       } catch (error) {
         throw await refusedPlanChange({ sessionId, request, input, error, handPlanToSenior, logger });

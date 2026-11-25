@@ -47,7 +47,9 @@ to get the change: ask for it in a new message once the pass ends, or in a
 The plan's last section, **Passes**, lists the passes that run once Senior has
 reviewed it, one item each, such as **Security pass: the plan's changes**. It
 starts with the passes ticked under **After a plan** in [Passes](passes.md);
-ask Senior to change it, or start a pass from the Passes list to add one.
+ask Senior to change it, or start a pass from the Passes list to add one. Each
+item names its pass by Genesis's exact title: Vibe64 refuses any other name
+when the plan is written, so Senior puts it right in the same turn.
 
 ## Read the current plan
 

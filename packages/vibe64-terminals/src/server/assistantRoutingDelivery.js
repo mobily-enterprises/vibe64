@@ -1,5 +1,7 @@
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
-import { readWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
+import { readWorkPlan } from "./assistantWorkPlan.js";
+import { workPlanInstructions } from "./assistantWorkPlanInstructions.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
   serializeVibe64AssistantSelection,
@@ -62,6 +64,8 @@ const FOLLOWUP_OVERTAKEN_CODES = Object.freeze([
  * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
  * @param {import("./types.js").ServerRun} dependencies.serverRun This editor process's run, which each delivery names
+ * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} dependencies.listPasses The passes Genesis
+ *   offers for the session's source, whose exact titles a turn that may write a plan's Passes is told
  */
 function createAssistantRoutingDelivery({
   routingState,
@@ -72,8 +76,23 @@ function createAssistantRoutingDelivery({
   dispatch,
   prepareSelection,
   interrupt,
+  listPasses,
   logger
 }) {
+  /**
+   * The exact title of each pass Genesis offers the session's source, for the plan guidance of a turn that may write
+   * the plan's Passes (any role but Junior, which never changes them); null when Genesis's list can't be read, and the
+   * guidance then says the plan command lists them when it refuses a name.
+   */
+  async function passTitlesFor(context, role) {
+    if (role === "junior") return null;
+    try {
+      return (await listPasses({ projectRoot: sessionSourcePath(context.session) })).passes.map(({ title }) => title);
+    } catch {
+      return null;
+    }
+  }
+
   async function deliver(sessionId, context, state, followup = false, inspectionOnly = false) {
     if (!routingState.allowAuto && state.mode === "auto") {
       throw failure("Auto is available in Main chat only. Cancel this request and choose Senior or Junior.", "vibe64_assistant_routing_auto_delivery_unavailable");
@@ -235,7 +254,8 @@ function createAssistantRoutingDelivery({
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
       planInstructions: pass ? passInstructions
         : checks ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata) })
-          : includePlanInstructions ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto" }) : ""
+          : includePlanInstructions
+            ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto", passTitles: await passTitlesFor(context, role) }) : ""
     });
     // A pass renders its own Genesis task, and a review Genesis's review task. Senior's
     // check of a plan Junior implemented is not a pass: it renders no task of its own.

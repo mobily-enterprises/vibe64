@@ -184,6 +184,13 @@ plan](whole-project-checks.md).
   pass, skipping nothing: **User experience pass can't run:** followed by the
   reason, then **Change the plan's Passes, or put it right and choose Continue
   in Passes.**
+- An item whose name isn't one of Genesis's passes (Genesis changed since the
+  plan was written, say) holds the plan at that item, naming Genesis's passes
+  and the fix: **UX pass can't run: the plan names “UX pass”, a pass Genesis
+  doesn't have. Genesis's passes are “Deslop”, “UI pass”, … and “Review”.
+  Rename the plan's Passes item “UX pass: the plan's changes” to one of them,
+  then choose Continue in Passes.** Ask Senior to rename it, then select
+  **Continue**.
 - When Vibe64 can't tell where the plan's work started, a pass over the plan's
   changes holds the plan the same way: **Review can't run: Vibe64 can't tell
   where this plan's work started in the session's history.** Vibe64 never runs
@@ -199,6 +206,12 @@ ticked passes, which check the plan's changes, each in its own turn, once
 Senior has reviewed the plan. To change one plan's passes, change that plan.**
 A plan Senior writes with its own Passes section, because you asked for other
 passes, keeps it.
+
+Each item names its pass by Genesis's exact title, as this list shows it:
+**User experience pass: the plan's changes**, never **UX pass**. When Senior
+writes an item with any other name, Vibe64 refuses that change of the plan at
+once, naming the item and every pass Genesis has, and Senior renames the item
+in the same turn: the plan you see only names passes that can run.
 
 - **Review** and **Security pass** are always ticked and can't be unticked:
   each says **Always in a new plan's Passes.**

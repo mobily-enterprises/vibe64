@@ -3,7 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { manageWorkPlan, readWorkPlan, readWorkPlanPage, workPlanInstructions } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { manageWorkPlan, readWorkPlan, readWorkPlanPage } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { workPlanInstructions } from "../../packages/vibe64-terminals/src/server/assistantWorkPlanInstructions.js";
 import { ASSISTANT_PLAN_COMPLETION_MESSAGE, assistantPassInstructions } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { assistantModePrompt } from "@local/vibe64-runtime/shared/assistantRouting";
 
