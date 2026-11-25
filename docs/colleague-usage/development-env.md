@@ -213,6 +213,11 @@ not a promise that the process survives a workspace restart. Use the project's
 declared managed outputs/services for persistent application servers. If a task
 unexpectedly runs in the foreground or times out, report its requested settings
 and returned task ID rather than starting a duplicate or detaching another copy.
+On a managed host, nothing a command leaves running outlives it: whatever it
+started in the background without waiting for it (`&`, `nohup`, `setsid`,
+`disown`, `screen -dm`) stops when the command ends, so a test suite detached
+that way stops at once. Work the coding tool keeps in its own background mode
+is unaffected.
 
 The coding agent can read `vibe64-helper session status --json` for current
 resource readiness, environment names, declared Workspace setup commands and

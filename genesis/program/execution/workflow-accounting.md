@@ -70,6 +70,15 @@ installation and credential policy. Public execution supplies its normal project
 environment and runtime paths; it neither stores separate EB credentials nor
 installs the tool for standalone users.
 
+A managed execution's unit runs while any of its processes does
+(`ExitType=cgroup`), except a detached job, an agent's session command, whose
+unit ends when its runner ends (`ExitType=main`, `managedExecutionExitType`):
+systemd then stops whatever the command left running (`&`, `nohup`, `setsid`,
+`disown`, a double fork, `screen -dm`), so nothing a command starts outlives
+it. Work the agent's own tool keeps in its background mode is still that
+command running. A service's first process may leave the rest of it running,
+and a finite capture's or terminal's caller waits for its descendants.
+
 Managed execution Stop asks systemd to stop the exact unit before attempting
 forced cgroup cleanup. This lets host-owned ExecStop hooks drain delegated
 resources before their processes receive termination signals. The stop job is
