@@ -426,15 +426,16 @@ function versionFromLib(f, name) {
 
 test("npm: what npm nests in the published copy for its own exact pin goes aside with that copy, so the connected package reaches the version it needs", { timeout: 120_000 }, async t => {
   // As a published JSKIT package pinning json-rest-api 3.3.2 exactly, where the connected one pins
-  // 3.3.3: the install of 1.1.0 at the top makes npm nest 1.0.0 in the published copy. `kept` is
-  // nested for both, and stays.
+  // 3.3.3: the install of 1.1.0 at the top makes npm nest 1.0.0 in the published copy, and in the
+  // app's `consumer`, which pins 1.0.0 too and keeps it. `kept` is nested for both, and stays.
   const f = await fixture(t, {
-    published: [["pinned", "1.0.0"], ["pinned", "1.1.0"], ["kept", "1.0.0"], ["kept", "2.0.0"]],
+    published: [["pinned", "1.0.0"], ["pinned", "1.1.0"], ["kept", "1.0.0"], ["kept", "2.0.0"], ["consumer", "1.0.0", { pinned: "1.0.0" }]],
     publishedLibDependencies: { shared: "^1.0.0", pinned: "1.0.0", kept: "1.0.0" },
     libDependencies: { shared: "^1.0.0", extra: "^1.0.0", pinned: "1.1.0", kept: "^1.0.0" },
-    appDependencies: { "@proof/lib": "1.0.0", shared: "1.0.0", kept: "2.0.0" }
+    appDependencies: { "@proof/lib": "1.0.0", shared: "1.0.0", kept: "2.0.0", consumer: "1.0.0" }
   });
   const top = path.join(f.app, "node_modules", "@proof", "lib");
+  const fromConsumer = () => f.node("console.log(require('node:module').createRequire(require.resolve('consumer'))('pinned/package.json').version)");
   assert.equal(await installedVersion(path.join(f.app, "node_modules", "pinned")), "1.0.0");
   assert.equal(await installedVersion(path.join(top, "node_modules", "kept")), "1.0.0");
 
@@ -446,6 +447,7 @@ test("npm: what npm nests in the published copy for its own exact pin goes aside
   assert.equal(await installedVersion(path.join(f.app, "node_modules", "pinned")), "1.1.0");
   assert.equal(await installedVersion(path.join(top, "node_modules", "pinned")).catch(() => null), null);
   assert.deepEqual([await versionFromLib(f, "pinned"), await versionFromLib(f, "kept")], ["1.1.0", "1.0.0"]);
+  assert.equal(await fromConsumer(), "1.0.0");
   assert.equal((await f.proof()).inEffect, true);
 
   f.calls.length = 0;
@@ -457,6 +459,7 @@ test("npm: what npm nests in the published copy for its own exact pin goes aside
   await restoreDisconnected({ repositories: [], sessionSourceRoot: f.app });
   assert.equal(await installedVersion(top), "1.0.0");
   assert.deepEqual([await versionFromLib(f, "pinned"), await versionFromLib(f, "kept")], ["1.0.0", "1.0.0"]);
+  assert.equal(await fromConsumer(), "1.0.0");
 });
 
 test("npm: when the connected package stops accepting a version nested in its copy, applying again moves it aside without an install", { timeout: 120_000 }, async t => {
@@ -529,6 +532,39 @@ test("npm: a version another package nested in the same published copy still nee
   assert.match(applied.error, /@proof\/lib needs pinned@1\.1\.0, found 1\.0\.0\. npm installed it without saving, but the copy still cannot reach a compatible version; align the versions/u);
   assert.equal(await installedVersion(top), "1.0.0");
   assert.equal(await installedVersion(path.join(top, "node_modules", "pinned")), "1.0.0");
+});
+
+test("npm: a connected package nested beside a published copy's old pin is judged as the connected package the swap puts there, not by the published pin it replaces", { timeout: 120_000 }, async t => {
+  // npm nests the published @proof/other 1.0.0 in the published @proof/lib 1.0.0 (the app's is 2.0.0),
+  // beside the pinned 1.0.0 both published versions pin. The swap replaces both with the connected
+  // packages, which need pinned 1.1.0 (the app's): no package left there needs the 1.0.0.
+  const f = await fixture(t, {
+    published: [["pinned", "1.0.0"], ["pinned", "1.1.0"], ["@proof/other", "2.0.0"]],
+    publishedLibDependencies: { shared: "^1.0.0", pinned: "1.0.0", "@proof/other": "1.0.0" },
+    otherDependencies: { pinned: "1.0.0" },
+    libDependencies: { shared: "^1.0.0", pinned: "1.1.0", "@proof/other": "^1.0.0" },
+    appDependencies: { "@proof/lib": "1.0.0", "@proof/other": "2.0.0", shared: "1.0.0", pinned: "1.1.0" }
+  });
+  await writePackage(path.join(f.copy, "packages", "other"), {
+    name: "@proof/other", version: "1.1.0", main: "index.js", files: ["index.js"], dependencies: { pinned: "^1.1.0" }
+  }, { "index.js": "module.exports = require('pinned/package.json').version;\n" });
+  const top = path.join(f.app, "node_modules", "@proof", "lib");
+  const besideOther = path.join(top, "node_modules", "@proof", "other");
+  assert.deepEqual([await installedVersion(besideOther), await installedVersion(path.join(top, "node_modules", "pinned"))], ["1.0.0", "1.0.0"]);
+  const published = await exactly(top);
+
+  const applied = await f.step("apply");
+  assert.equal(applied.ok, true, applied.error);
+  assert.equal(f.calls.some(call => call[0] === "npm" && call[1] === "install"), false);
+  assert.equal(await installedVersion(besideOther), "1.1.0");
+  assert.equal(await versionFromLib(f, "pinned"), "1.1.0");
+  // The connected @proof/other nested in the copy loads the app's pinned too.
+  assert.equal(await f.node("console.log(require('node:module').createRequire(require.resolve('@proof/lib'))('@proof/other'))"), "1.1.0");
+  assert.equal((await f.proof()).inEffect, true);
+
+  await restoreDisconnected({ repositories: [], sessionSourceRoot: f.app });
+  assert.deepEqual(await exactly(top), published);
+  assert.equal(await versionFromLib(f, "pinned"), "1.0.0");
 });
 
 test("npm: a save after an install put the published copies back puts the connection in effect again, its dependencies included", { timeout: 120_000 }, async t => {

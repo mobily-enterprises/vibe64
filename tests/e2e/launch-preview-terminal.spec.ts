@@ -1847,6 +1847,29 @@ for (const status of ["required", "failed"]) {
   });
 }
 
+// A refusal Vibe64 words for the person ends with what to do, so a phone shows all of it; a failure
+// of several lines (a stack trace) shows its first three until Expand.
+for (const [kind, diagnostic, cut] of [
+  ["refusal", "Connected JSKIT: @jskit-ai/resource-runtime needs json-rest-api@3.3.3, found 3.3.2. npm installed it " +
+    "without saving, but the copy still cannot reach a compatible version; align the versions in the connected repository or the application.", false],
+  ["stack trace", ["TypeError: Cannot read properties of undefined (reading 'version')",
+    ...Array.from({ length: 8 }, (_, index) => `    at step${index} (file:///srv/app/tooling/prepare.mjs:${index + 10}:7)`)].join("\n"), true]
+] as const) {
+  test(`@preparation-notice a failed preparation's ${kind} ${cut ? "shows three lines until Expand" : "reads whole"} on a phone`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockLaunchTerminalSocket(page);
+    const session = { ...sessionPayload(), workspaceSetup: { status: "failed", updatedAt: "2026-09-29T07:00:00Z",
+      transcript: "Previous setup output.", diagnostic } };
+    await mockLaunchSession(page, { session });
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
+    const notice = page.locator(".vibe64-temporary-action-terminal:visible").filter({ hasText: /Workspace preparation/ });
+    const line = notice.getByRole("alert", { name: "Project dependency preparation", exact: true });
+    await expect(line).toBeVisible();
+    await notice.screenshot({ path: testInfo.outputPath(`preparation-${kind.replace(" ", "-")}.png`) });
+    expect(await line.evaluate((element) => element.scrollHeight > element.clientHeight + 1)).toBe(cut);
+  });
+}
+
 test("@preview-lifecycle Codex interactive terminal keeps one attachment queue and retries handoff", async ({ page }) => {
   await showUploadMotion(page);
   await page.setViewportSize({ height: 900, width: 960 });
