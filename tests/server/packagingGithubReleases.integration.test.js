@@ -3,7 +3,9 @@
 // released to a throwaway private repository's GitHub Releases, read back
 // through the API's asset digests, re-run idempotently, protected against a
 // mismatched re-upload, and an earlier release is made latest again. The
-// repository is deleted whatever happens.
+// repository is deleted whatever happens. The ordinary suite proves the same
+// request shapes against a stand-in GitHub instead
+// (packagingGithubReleasesStandIn.unit.test.js).
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
