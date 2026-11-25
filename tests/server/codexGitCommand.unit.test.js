@@ -666,6 +666,9 @@ test("Git wrapper distinguishes absent control, stale identity and a lost comman
     const options = { cwd: root, env: { ...process.env, ...prepared.env } };
     const refusedSocket = path.join(root, "not-a-socket");
     await writeFile(refusedSocket, "not a socket");
+    // Absent control: neither the environment nor the session's control file names it (a child with a blanked token
+    // otherwise takes the file's; agentControlChildEnvironment.unit.test.js).
+    await rm(path.join(prepared.hostWrapperDir, "controls", "git.json"));
     for (const [override, expected] of [
       [{ VIBE64_CODEX_GIT_COMMAND_SOCKET: path.join(root, "missing.sock") }, /connection failed \(ENOENT\)/u],
       [{ VIBE64_CODEX_GIT_COMMAND_SOCKET: refusedSocket }, /connection failed \((?:ECONNREFUSED|ENOTSOCK)\)/u],

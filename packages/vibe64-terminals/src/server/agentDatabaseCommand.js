@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { agentControlEnvironmentIdentitySource, agentControlFilePath, writeAgentControlFile } from "@local/vibe64-execution/server";
+
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   logOperationalEvent
@@ -96,19 +98,18 @@ function validateCommand(parsed = {}) {
   return null;
 }
 
-function commandWrapperSource() {
+/** @param {string} controlFilePath the session's database control file (agentControlIdentity.js) */
+function commandWrapperSource(controlFilePath) {
   return `#!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
 
 const commandName = path.basename(process.argv[1] || "");
 const expectedVersion = ${JSON.stringify(AGENT_DATABASE_COMMAND_CONTRACT_VERSION)};
-const socketPath = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV} || "").trim();
-const sessionId = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV} || "").trim();
-const token = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV} || "").trim();
-const generationId = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV} || "").trim();
-const version = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV} || "").trim();
+${agentControlEnvironmentIdentitySource({ controlFilePath, envPrefix: "VIBE64_AGENT_DATABASE_COMMAND" })}const { generationId, sessionId, socketPath, token } = controlIdentity;
+const version = String(controlIdentity.contractVersion || "").trim();
 
 function fail(message, code = 1) {
   process.stderr.write(String(message || "Vibe64 database command failed.") + "\\n");
@@ -320,11 +321,19 @@ async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wra
   const normalizedWrapperHostDir = toText(wrapperHostDir);
   if (!normalizedSessionId || !normalizedWrapperHostDir) return { env: {}, ok: false };
   await commandService.bindSession(normalizedSessionId);
-  await writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource());
+  const controlFilePath = agentControlFilePath(normalizedWrapperHostDir, "database");
+  await writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource(controlFilePath));
   const server = await commandServers.ensure({
     commandService,
     sessionId: normalizedSessionId,
     socketPath: commandSocketHostPath(normalizedWrapperHostDir)
+  });
+  await writeAgentControlFile(controlFilePath, {
+    contractVersion: AGENT_DATABASE_COMMAND_CONTRACT_VERSION,
+    generationId: server.generationId,
+    sessionId: normalizedSessionId,
+    socketPath: server.socketPath,
+    token: server.token
   });
   return {
     env: {

@@ -1,18 +1,23 @@
+import { agentControlEnvironmentIdentitySource } from "./agentControlIdentity.js";
+
+/**
+ * @param {{ contractVersion?: string, controlFilePath?: string }} [options] controlFilePath: the session's Env control
+ * file (agentControlIdentity.js)
+ */
 function agentEnvWrapperSource({
-  contractVersion = "1"
+  contractVersion = "1",
+  controlFilePath = ""
 } = {}) {
   return `#!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import process from "node:process";
 
 const commandName = path.basename(process.argv[1] || "");
 const contractVersion = ${JSON.stringify(String(contractVersion || "1"))};
-const socketPath = String(process.env.VIBE64_AGENT_ENV_COMMAND_SOCKET || "").trim();
-const sessionId = String(process.env.VIBE64_AGENT_ENV_COMMAND_SESSION_ID || "").trim();
-const token = String(process.env.VIBE64_AGENT_ENV_COMMAND_TOKEN || "").trim();
-const generationId = String(process.env.VIBE64_AGENT_ENV_COMMAND_GENERATION || "").trim();
-const activeContractVersion = String(process.env.VIBE64_AGENT_ENV_COMMAND_CONTRACT_VERSION || "").trim();
+${agentControlEnvironmentIdentitySource({ controlFilePath, envPrefix: "VIBE64_AGENT_ENV_COMMAND" })}const { generationId, sessionId, socketPath, token } = controlIdentity;
+const activeContractVersion = String(controlIdentity.contractVersion || "").trim();
 
 function fail(message, code = 1) {
   process.stderr.write(String(message || "Vibe64 Env command failed.") + "\\n");

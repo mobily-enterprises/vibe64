@@ -5,6 +5,7 @@ import { open, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { prepareSessionTempFolder } from "@local/vibe64-runtime/server/sessionTempFolder";
+import { agentControlIdentitySource } from "@local/vibe64-execution/server";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandLineFailure } from "./commandFailure.js";
 
@@ -119,10 +120,13 @@ process.exit(Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok
 `;
 }
 
-function sessionRenameCommandSource() {
+/** @param {string} controlFilePath the session control file (agentControlIdentity.js), never the shell-execution token's */
+function sessionRenameCommandSource(controlFilePath) {
   return `#!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import http from "node:http";
 
+${agentControlIdentitySource(controlFilePath)}
 const args = process.argv.slice(2);
 const usage = [
   'Usage: vibe64-helper session status [--json] | setup retry | rename "Name" | list-project <project> [--json]',
@@ -165,7 +169,7 @@ if (!status && !setupRetry && !listProject && !messageProject && !projectPreview
 }
 const route = listProject ? "list-project" : messageProject ? "message-project" : projectPreview ? "project-preview" : status ? "status" : setupRetry ? "setup-retry" : update ? "update" : save ? "save" : "rename";
 try {
-  const control = JSON.parse(process.env.${SESSION_RENAME_CONTROL_ENV} || "null");
+  const control = sessionControlIdentity(JSON.parse(process.env.${SESSION_RENAME_CONTROL_ENV} || "null") || {});
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) {
     throw new Error("Session control is unavailable. Reconnect the assistant.");
   }

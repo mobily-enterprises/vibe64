@@ -22,6 +22,7 @@ import {
   commandHostDir,
   commandSocketHostPath,
   VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
+  writeControlFile,
   writeWrappers
 } from "./codexGitCommandWrappers.js";
 import {
@@ -685,35 +686,16 @@ async function prepareCodexGitCommand({
   await prepareCodexAttachmentRoot({
     env
   });
-  await writeWrappers({
-    env,
-    sessionId: normalizedSessionId,
-    stateRoot
-  });
-  const server = await commandServers.ensure({
-    commandService,
-    sessionId: normalizedSessionId,
-    socketPath: commandSocketHostPath({ env, sessionId: normalizedSessionId, stateRoot })
-  });
+  const options = { env, sessionId: normalizedSessionId, stateRoot };
+  await writeWrappers(options);
+  const socketPath = commandSocketHostPath(options);
+  const server = await commandServers.ensure({ commandService, sessionId: normalizedSessionId, socketPath });
+  await writeControlFile(options, server);
   return {
     controlGenerationId: server.generationId,
-    env: commandEnvironment({
-      env,
-      generationId: server.generationId,
-      sessionId: normalizedSessionId,
-      stateRoot,
-      token: server.token
-    }),
-    hostSocketPath: commandSocketHostPath({
-      env,
-      sessionId: normalizedSessionId,
-      stateRoot
-    }),
-    hostWrapperDir: commandHostDir({
-      env,
-      sessionId: normalizedSessionId,
-      stateRoot
-    }),
+    env: commandEnvironment({ ...options, generationId: server.generationId, token: server.token }),
+    hostSocketPath: socketPath,
+    hostWrapperDir: commandHostDir(options),
     ok: true
   };
 }

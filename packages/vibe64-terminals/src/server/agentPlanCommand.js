@@ -1,11 +1,17 @@
+import { agentControlIdentitySource } from "@local/vibe64-execution/server";
+
 /**
- * This client uses the existing session control socket and identity. Plan writes
- * stay in the server owner, where the admitted model role is available.
+ * This client uses the existing session control socket and identity: the control environment variable's, else the
+ * session control file's. Plan writes stay in the server owner, where the admitted model role is available.
+ * @param {string} controlEnvironmentName
+ * @param {string} controlFilePath
  */
-function planCommandSource(controlEnvironmentName) {
+function planCommandSource(controlEnvironmentName, controlFilePath) {
   return `#!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import http from "node:http";
 
+${agentControlIdentitySource(controlFilePath)}
 const [operation, ...extra] = process.argv.slice(2);
 if (!operation || ["--help", "-h"].includes(operation)) {
   console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|checked|complete|archive|reopen|outcome|handoff>\\n'
@@ -31,7 +37,7 @@ try {
     if (Buffer.byteLength(text) > 512 * 1024) throw new Error('Plan input is too large.');
   }
   const input = text.trim() ? JSON.parse(text) : {};
-  const control = JSON.parse(process.env[${JSON.stringify(controlEnvironmentName)}] || 'null');
+  const control = sessionControlIdentity(JSON.parse(process.env[${JSON.stringify(controlEnvironmentName)}] || 'null') || {});
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) throw new Error('Plan controls are unavailable. Reconnect the assistant.');
   const body = JSON.stringify({ ...input, operation, token: control.token, sessionId: control.sessionId, generationId: control.generationId });
   const result = await new Promise((resolve, reject) => {

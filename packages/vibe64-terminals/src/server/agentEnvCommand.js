@@ -17,8 +17,10 @@ import {
   vibe64ErrorResponse
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  agentControlFilePath,
   agentEnvWrapperSource,
-  shellQuote
+  shellQuote,
+  writeAgentControlFile
 } from "@local/vibe64-execution/server";
 import { envValueWithoutFinalLineEnding } from "@local/vibe64-project/shared/contracts";
 import {
@@ -632,7 +634,8 @@ async function prepareAgentEnvCommand({
   await writeExecutableFileIfChanged(
     commandWrapperHostPath(normalizedWrapperHostDir),
     agentEnvWrapperSource({
-      contractVersion: AGENT_ENV_COMMAND_CONTRACT_VERSION
+      contractVersion: AGENT_ENV_COMMAND_CONTRACT_VERSION,
+      controlFilePath: agentControlFilePath(normalizedWrapperHostDir, "env")
     })
   );
   if (commandService.offersStaging) {
@@ -647,6 +650,13 @@ async function prepareAgentEnvCommand({
     commandService,
     sessionId: normalizedSessionId,
     socketPath: commandSocketHostPath(normalizedWrapperHostDir)
+  });
+  await writeAgentControlFile(agentControlFilePath(normalizedWrapperHostDir, "env"), {
+    contractVersion: AGENT_ENV_COMMAND_CONTRACT_VERSION,
+    generationId: server.generationId,
+    sessionId: normalizedSessionId,
+    socketPath: server.socketPath,
+    token: server.token
   });
   return {
     controlGenerationId: server.generationId,
