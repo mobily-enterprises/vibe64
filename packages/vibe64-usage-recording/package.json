@@ -75,10 +75,10 @@
   },
   "dependencies": {
     "@babel/parser": "^7.29.0",
-    "@jskit-ai/http-web": "0.2.58",
+    "@jskit-ai/http-web": "0.2.59",
     "@jskit-ai/kernel": "0.2.33",
-    "@jskit-ai/realtime": "0.2.52",
-    "@jskit-ai/shell-web": "0.2.49",
+    "@jskit-ai/realtime": "0.2.53",
+    "@jskit-ai/shell-web": "0.2.50",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-execution": "0.1.0",
     "@local/vibe64-genesis": "0.1.0",
