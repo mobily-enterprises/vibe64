@@ -54,13 +54,11 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
-  __testables as launchRestartRulesTestables,
   launchRestartRulesMatcher
 } from "../../packages/vibe64-core/src/server/launchRestartRules.js";
 
 const { launchRestartState } = launchRestartTestables;
 const { commandWithHttpReadiness, httpReadinessProbeCommand } = launchTargetTerminalTestables;
-const { launchRestartRulesMatcherSource } = launchRestartRulesTestables;
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 const execFileAsync = promisify(execFile);
@@ -929,27 +927,23 @@ async function installPreviewIdentityExecutable(targetRoot, {
   await chmod(executablePath, 0o755);
 }
 
-test("serialized launch restart rules use the canonical matcher", () => {
-  const generatedMatcherFactory = Function(
-    `"use strict";\n${launchRestartRulesMatcherSource()}\nreturn vibe64LaunchRestartRulesMatcher;`
-  )();
-  const rules = {
-    exclude: ["node_modules/**", ".git/**"],
+test("launch restart rules match their include globs, less their exclude globs", () => {
+  const matcher = launchRestartRulesMatcher({
+    exclude: ["node_modules/**", ".git/**", "server/generated/"],
     include: ["src/**/*.server.js", "server/**", ".env.*"]
+  });
+  const paths = {
+    "src/direct.server.js": true,
+    "src/nested/direct.server.js": true,
+    "src/page.js": false,
+    "server/routes/index.js": true,
+    "server/generated/routes.js": false,
+    ".env.local": true,
+    "node_modules/server/index.js": false,
+    ".git/server/index.js": false
   };
-  const canonicalMatcher = launchRestartRulesMatcher(rules);
-  const generatedMatcher = generatedMatcherFactory(rules);
-  const paths = [
-    "src/direct.server.js",
-    "src/nested/direct.server.js",
-    "src/page.js",
-    "server/routes/index.js",
-    ".env.local",
-    "node_modules/server/index.js",
-    ".git/server/index.js"
-  ];
 
-  assert.deepEqual(paths.map(generatedMatcher), paths.map(canonicalMatcher));
+  assert.deepEqual(Object.fromEntries(Object.keys(paths).map((filePath) => [filePath, matcher(filePath)])), paths);
 });
 
 function createSpec({

@@ -5,6 +5,7 @@
 import path from "node:path";
 
 import { agentControlEnvironmentIdentitySource, agentControlFilePath, writeAgentControlFile } from "@local/vibe64-execution/server";
+import { embeddedFunctions } from "@local/vibe64-execution/shared/embeddedFunctions";
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
@@ -75,7 +76,7 @@ function usageText() {
 
 /**
  * The command line, as both the wrapper (to find the files to read) and the
- * service read it. The wrapper embeds this function's source.
+ * service read it. The wrapper embeds this function (embeddedFunctions), so it uses nothing but its argument.
  * @param {unknown} args
  */
 function parsePagesArgs(args) {
@@ -176,8 +177,7 @@ function fail(message, code = 1) {
   process.exit(code);
 }
 
-${parsePagesArgs.toString()}
-
+${embeddedFunctions({ parsePagesArgs })}
 function requestSocket(body) {
   const requestBody = JSON.stringify(body);
   return new Promise((resolve, reject) => {

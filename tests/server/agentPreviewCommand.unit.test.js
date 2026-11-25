@@ -90,9 +90,9 @@ test("a project without Playwright uses the Playwright command installed on this
     // The browser worker embeds the same lookup and loads that module when the
     // project cannot resolve its own Playwright.
     const workerSource = agentPreviewBrowserWorkerSource({ playwrightProjectRoot: path.join(root, "project") });
-    const embedded = workerSource.match(/const computerPlaywrightModulePath = ([\s\S]*?);\nfunction loadPlaywright/u)?.[1];
+    const embedded = workerSource.match(/const playwrightModuleOnPath = ([\s\S]*?);\n+function loadPlaywright/u)?.[1];
     assert.ok(embedded);
-    assert.match(workerSource, /computerPlaywrightModulePath\(process\.env\.PATH, \{ existsSync, realpathSync \}, path\)/u);
+    assert.match(workerSource, /playwrightModuleOnPath\(process\.env\.PATH, \{ existsSync, realpathSync \}, path\)/u);
     const lookup = new Function(`return (${embedded});`)();
     const found = lookup(searchPath, { existsSync, realpathSync }, path);
     assert.equal(createRequire(import.meta.url)(found).chromium, "computer chromium");

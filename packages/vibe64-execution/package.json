@@ -14,7 +14,8 @@
     "./server/processEnded": "./src/server/runtime/processEnded.js",
     "./server/serverStop": "./src/server/serverStop.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
-    "./server/types": "./src/server/types.js"
+    "./server/types": "./src/server/types.js",
+    "./shared/embeddedFunctions": "./src/shared/embeddedFunctions.js"
   },
   "jskit": {
     "kind": "runtime",

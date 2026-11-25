@@ -19,7 +19,7 @@ async function fixture(t, options = {}) {
   const player = createTrainingVisualPlayer({ iframe, resource: alternateVisualResource(), attemptId: "attempt-one", onState() {}, ...options });
   t.after(() => { player.dispose(); for (const { port } of transfers) port.close(); });
   function handshake(overrides = {}, source = iframe.contentWindow) {
-    const payload = JSON.parse(iframe.srcdoc.match(/\)\((\{"playerInstanceId".*), url => import\(url\)\);<\/script>/u)[1]);
+    const payload = JSON.parse(iframe.srcdoc.match(/\nbootstrap\((\{"playerInstanceId".*), url => import\(url\)\);<\/script>/u)[1]);
     const data = { type: "vibe64-visual-handshake", protocolVersion: 1, playerInstanceId: payload.playerInstanceId, token: payload.token, ...overrides };
     for (const listener of [...listeners]) listener({ source, data });
   }
