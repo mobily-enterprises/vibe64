@@ -80,58 +80,68 @@ async function browserWorkerRequest({
   );
 }
 
-async function registeredProcessGroupIsAlive(entry, {
+// "alive", "gone" or "unknown". A registration names its group by the
+// leader's start identity: a leader that has exited, or whose id another
+// process now holds, ends what it can identify. A leader that could not be
+// read proves nothing.
+async function registeredProcessGroupState(entry, {
   readStart = readProcessStart,
   hasLiveMember = processGroupHasLiveMember
 } = {}) {
   const groupId = Number(entry?.groupId);
   const leader = await readStart(groupId);
+  if (leader.status === "ambiguous") {
+    return "unknown";
+  }
   if (
     leader.status !== "exact" ||
     leader.groupId !== groupId ||
     leader.startTimeTicks !== normalizeText(entry?.startTimeTicks)
   ) {
-    return false;
+    return "gone";
   }
-  return hasLiveMember(groupId);
+  return await hasLiveMember(groupId) ? "alive" : "gone";
 }
 
+// True once the group is proven gone. Only a group identified alive is
+// signalled; an unknown answer is asked again until the deadline, and a group
+// never proven gone is reported, never counted as drained.
 async function drainRegisteredProcessGroup(entry = {}, {
   readStart = readProcessStart,
   hasLiveMember = processGroupHasLiveMember,
   signal = (groupId, name) => process.kill(-groupId, name),
   wait = delay
 } = {}) {
-  const isAlive = () => registeredProcessGroupIsAlive(entry, { readStart, hasLiveMember });
-  if (!await isAlive()) {
-    return true;
-  }
-  try {
-    signal(Number(entry.groupId), "SIGTERM");
-    // The worker stops its browser between commands; a stopped process acts
-    // on SIGTERM only once continued.
-    signal(Number(entry.groupId), "SIGCONT");
-  } catch (error) {
-    if (error?.code !== "ESRCH") {
-      throw error;
-    }
-  }
-  for (let attempt = 0; attempt < 60 && await isAlive(); attempt += 1) {
-    await wait(50);
-  }
-  if (await isAlive()) {
+  const groupState = () => registeredProcessGroupState(entry, { readStart, hasLiveMember });
+  const send = (name) => {
     try {
-      signal(Number(entry.groupId), "SIGKILL");
+      signal(Number(entry.groupId), name);
     } catch (error) {
       if (error?.code !== "ESRCH") {
         throw error;
       }
     }
+  };
+  const settle = async (state, attempts, until) => {
+    for (let attempt = 0; attempt < attempts && !until(state); attempt += 1) {
+      await wait(50);
+      state = await groupState();
+    }
+    return state;
+  };
+  let state = await settle(await groupState(), 60, (current) => current !== "unknown");
+  if (state === "alive") {
+    send("SIGTERM");
+    // The worker stops its browser between commands; a stopped process acts
+    // on SIGTERM only once continued.
+    send("SIGCONT");
+    state = await settle(state, 60, (current) => current === "gone");
   }
-  for (let attempt = 0; attempt < 20 && await isAlive(); attempt += 1) {
-    await wait(50);
+  if (state === "alive") {
+    send("SIGKILL");
   }
-  return !await isAlive();
+  state = await settle(state, 20, (current) => current === "gone");
+  return state === "gone";
 }
 
 async function registeredWorkerMetadata(descriptor = {}) {
