@@ -594,6 +594,7 @@ async function inspectVibe64ResourceEstimates(options = {}) {
  * @param {object} request
  * @param {object} [request.action] the prompt task: its genesisTask, id and label
  * @param {RuntimeEnv} [request.environment] the Env the session's commands receive (resource inputs are checked against it)
+ * @param {{ component: string, id: string }[]} [request.pendingResources] managed resources its first command creates
  * @param {object} [request.input] the request text and its options; automaticGenesisTask
  *   marks a task Vibe64 chose itself, which never falls back to the Blueprint's task
  * @param {(error: Error) => void} [request.onGenesisUnavailable] reports why the request goes as written
@@ -605,17 +606,14 @@ async function renderGenesisPrompt({
   environment,
   input = {},
   onGenesisUnavailable = ignoreGenesisUnavailable,
+  pendingResources = [],
   projectRoot,
   timeoutMs = GENESIS_USER_PATH_TIMEOUT_MS
 }) {
   const requestedTask = genesisPromptTask(action);
   const request = genesisPromptRequest(input, action);
   const generate = (promptTask) => runGenesisOperation(generatePrompt, {
-    environment,
-    projectRoot,
-    request,
-    sessionContextInstalled: true,
-    task: promptTask
+    environment, pendingResources, projectRoot, request, sessionContextInstalled: true, task: promptTask
   }, { prompt: true });
   const compose = async () => {
     try {

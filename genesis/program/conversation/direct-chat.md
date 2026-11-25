@@ -4674,10 +4674,14 @@ these account-setup operations do not create a conversation runner.
   text insertion. Read, resize, subscription and close use the existing PTY owner.
 - `Vibe64SessionRuntime.renderPrompt()` owns Genesis prompt composition. It
   gives Genesis the Env that session's commands receive
-  (`resolveSessionEnvironment()`, from the project's `sessionCommandEnvironment()`:
-  the session's managed resources, Stack defaults and Env, never the editor's
-  own environment), so the prompt's resource inputs are those commands' inputs;
-  a runtime that cannot tell gives none, and Genesis reports them unknown.
+  (`resolveSessionPromptEnvironment()`, from the project's
+  `sessionPromptEnvironment()`: the session's managed resources, Stack defaults
+  and Env, never the editor's own environment), so the prompt's resource inputs
+  are those commands' inputs, with `pendingResources`, the managed resources
+  the host has not created yet (`normalizeResourceEnvironment()` skips them while
+  the provider reports nothing prepared), which Genesis reports as created at
+  the session's first command instead of missing; a runtime that cannot tell
+  gives none, and Genesis reports the inputs unknown.
   Codex and OpenCode call it for the opening request and an explicitly marked
   Deslop request; later ordinary messages are sent without rebuilding the full
   Genesis prompt, and Codex steering continues through its existing direct

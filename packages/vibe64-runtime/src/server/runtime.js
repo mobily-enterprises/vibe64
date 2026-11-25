@@ -52,6 +52,11 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/**
+ * @typedef {object} SessionPromptEnvironment
+ * @property {RuntimeEnv} environment the Env the session's commands receive
+ * @property {{ component: string, id: string }[]} pendingResources managed resources its first command creates
+ */
 /** @typedef {import("./sessionRuntimeRenewal.js").RenewalSessionRequest} RenewalSessionRequest */
 
 
@@ -82,9 +87,9 @@ class Vibe64SessionRuntime {
    * @param {RuntimeEnv | (() => RuntimeEnv | Promise<RuntimeEnv>)} options.promptEnvironment the environment prompts
    *   render with, or a function that reads it once
    * @param {typeof renderGenesisPrompt} [options.promptRenderer]
-   * @param {((session: object) => RuntimeEnv | Promise<RuntimeEnv>) | null} [options.sessionEnvironment] the Env a
-   *   session's commands receive, which its prompts check the Stack's resource inputs against; without it Genesis
-   *   reports them unknown
+   * @param {((session: object) => SessionPromptEnvironment | Promise<SessionPromptEnvironment>) | null}
+   *   [options.sessionPromptEnvironment] what a session's prompts check the Stack's resource inputs against: the Env
+   *   its commands receive and the managed resources its first command creates; without it Genesis reports them unknown
    * @param {boolean} [options.sourceInspectionAvailable]
    * @param {object | null} [options.sourceInspectionError]
    * @param {Vibe64SessionStore} [options.store]
@@ -100,7 +105,7 @@ class Vibe64SessionRuntime {
     projectSessionSourceRoot = "",
     promptEnvironment,
     promptRenderer = renderGenesisPrompt,
-    sessionEnvironment = null,
+    sessionPromptEnvironment = null,
     sourceInspectionAvailable = true,
     sourceInspectionError = null,
     store = undefined
@@ -118,7 +123,7 @@ class Vibe64SessionRuntime {
     this.projectSessionSourceRoot = toText(projectSessionSourceRoot);
     this.promptEnvironment = promptEnvironment;
     this.promptRenderer = promptRenderer;
-    this.sessionEnvironment = sessionEnvironment;
+    this.sessionPromptEnvironment = sessionPromptEnvironment;
     this.sourceInspectionAvailable = sourceInspectionAvailable;
     this.sourceInspectionError = sourceInspectionError;
     this.projectContextRoot = projectContextRoot;
@@ -214,9 +219,13 @@ class Vibe64SessionRuntime {
     return this.promptEnvironment;
   }
 
-  /** The Env a session's commands receive, or undefined when this runtime cannot tell. */
-  async resolveSessionEnvironment(session) {
-    return this.sessionEnvironment ? this.sessionEnvironment(session) : undefined;
+  /**
+   * The Env a session's commands receive and the managed resources its first command creates; nothing when this
+   * runtime cannot tell.
+   * @returns {Promise<Partial<SessionPromptEnvironment>>}
+   */
+  async resolveSessionPromptEnvironment(session) {
+    return this.sessionPromptEnvironment ? this.sessionPromptEnvironment(session) : {};
   }
 
   async getSession(sessionId, retiredOptions) {
@@ -377,14 +386,16 @@ class Vibe64SessionRuntime {
         genesisTask = "start";
       }
     }
+    // Checked against what the session's commands get, never the project-level Env without the session's resources.
+    const { environment, pendingResources } = await this.resolveSessionPromptEnvironment(session);
     const rendered = await this.promptRenderer({
       action: {
         genesisTask,
         id: genesisTask,
         label: toText(request) || genesisTask
       },
-      // Checked against what the session's commands get, never the project-level Env without the session's resources.
-      environment: await this.resolveSessionEnvironment(session),
+      environment,
+      pendingResources,
       input: {
         ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
         ...(toText(request) ? { request: toText(request) } : {})
